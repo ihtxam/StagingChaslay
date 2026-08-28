@@ -3,12 +3,13 @@ import { ChevronDown, ChevronRight, Code } from 'lucide-react'
 import type { BlockConfig, BlockType } from '@/blocks/types'
 import { useConfigStore } from '@/store/configStore'
 import { CatalogIdPicker } from '@/editor/CatalogIdPicker'
+import { ImageUrlField, isImageItemKey } from '@/editor/ImageUrlField'
 import { parseIdList } from '@/lib/id-list'
 
 interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items' | 'catalog-categories' | 'catalog-products'
+  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items' | 'catalog-categories' | 'catalog-products' | 'image-url'
   options?: string[]
   /** Only render when block props match (e.g. source=pos). */
   when?: (props: Record<string, unknown>) => boolean
@@ -21,7 +22,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
         title: 'Content',
         fields: [
           { key: 'logo', label: 'Logo Text', type: 'text' },
-          { key: 'logoImage', label: 'Logo Image URL', type: 'text' },
+          { key: 'logoImage', label: 'Logo image', type: 'image-url' },
           { key: 'ctaText', label: 'CTA Button', type: 'text' },
           { key: 'links', label: 'Nav Links', type: 'array-strings' },
         ],
@@ -46,7 +47,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
           { key: 'primaryCtaUrl', label: 'Primary CTA URL', type: 'text' },
           { key: 'secondaryCta', label: 'Secondary CTA', type: 'text' },
           { key: 'secondaryCtaUrl', label: 'Secondary CTA URL', type: 'text' },
-          { key: 'heroImage', label: 'Hero Image URL', type: 'text' },
+          { key: 'heroImage', label: 'Hero image', type: 'image-url' },
         ],
       },
       {
@@ -123,7 +124,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
         title: 'Content',
         fields: [
           { key: 'logo', label: 'Logo Text', type: 'text' },
-          { key: 'logoImage', label: 'Logo Image URL', type: 'text' },
+          { key: 'logoImage', label: 'Logo image', type: 'image-url' },
           { key: 'copyright', label: 'Copyright', type: 'text' },
           { key: 'links', label: 'Links', type: 'array-strings' },
         ],
@@ -251,7 +252,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
       {
         title: 'Content',
         fields: [
-          { key: 'src', label: 'Image URL', type: 'text' },
+          { key: 'src', label: 'Image', type: 'image-url' },
           { key: 'alt', label: 'Alt Text', type: 'text' },
           { key: 'title', label: 'Title', type: 'text' },
           { key: 'subtitle', label: 'Subtitle', type: 'text' },
@@ -429,6 +430,15 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
   }
 
   switch (field.type) {
+    case 'image-url':
+      return (
+        <ImageUrlField
+          label={field.label}
+          value={String(value || '')}
+          onChange={(url) => onChange(url)}
+        />
+      )
+
     case 'text':
       return (
         <div className="mb-2.5">
@@ -518,11 +528,12 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
         }
         // Fallback templates by block type + field key
         const blockTemplates: Partial<Record<string, Record<string, Record<string, string>>>> = {
-          testimonials: { items: { name: '', role: '', quote: '' } },
+          testimonials: { items: { name: '', role: '', quote: '', avatar: '' } },
           stats: { items: { value: '', label: '' } },
           faq: { items: { question: '', answer: '' } },
-          team: { members: { name: '', role: '' } },
-          features: { items: { title: '', description: '' } },
+          team: { members: { name: '', role: '', avatar: '' } },
+          features: { items: { title: '', description: '', image: '' } },
+          featured: { items: { title: '', description: '', image: '' } },
           image: { images: { src: '', alt: '' } },
           gallery: { images: { src: '', alt: '', caption: '' } },
         }
@@ -545,17 +556,32 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
               </div>
               {Object.entries(item).map(([key, val]) => (
                 <div key={key} className="mb-1">
-                  <label className="block text-[10px] text-text-3 mb-0.5">{key}</label>
-                  <input
-                    type="text"
-                    value={String(val)}
-                    onChange={(e) => {
-                      const updated = [...items]
-                      updated[i] = { ...updated[i], [key]: e.target.value }
-                      onChange(updated)
-                    }}
-                    className="w-full px-1.5 py-1 rounded border border-border-subtle bg-bg-3 text-text-0 text-[11px] outline-none focus:border-green"
-                  />
+                  {isImageItemKey(key) ? (
+                    <ImageUrlField
+                      label={key}
+                      value={String(val)}
+                      onChange={(url) => {
+                        const updated = [...items]
+                        updated[i] = { ...updated[i], [key]: url }
+                        onChange(updated)
+                      }}
+                      compact
+                    />
+                  ) : (
+                    <>
+                      <label className="block text-[10px] text-text-3 mb-0.5">{key}</label>
+                      <input
+                        type="text"
+                        value={String(val)}
+                        onChange={(e) => {
+                          const updated = [...items]
+                          updated[i] = { ...updated[i], [key]: e.target.value }
+                          onChange(updated)
+                        }}
+                        className="w-full px-1.5 py-1 rounded border border-border-subtle bg-bg-3 text-text-0 text-[11px] outline-none focus:border-green"
+                      />
+                    </>
+                  )}
                 </div>
               ))}
             </div>
