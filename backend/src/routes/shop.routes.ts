@@ -34,6 +34,7 @@ import {
 } from "@/lib/shop-delivery-pricing";
 import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
 import { TableSessionService } from "@/services/table-session.service";
+import { resolvePublicAssetUrl } from "@/lib/public-url";
 
 const router = Router();
 
@@ -138,6 +139,24 @@ function mapShopProduct(
     comboSlots: isCombo ? comboSlots : [],
     loyaltyRewardPoints:
       rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
+  };
+}
+
+function withPublicShopImageUrls(
+  req: Request,
+  item: ReturnType<typeof mapShopProduct>
+): ReturnType<typeof mapShopProduct> {
+  const comboSlots = item.comboSlots?.map((slot) => ({
+    ...slot,
+    options: slot.options.map((opt) => ({
+      ...opt,
+      image: resolvePublicAssetUrl(req, opt.image) || opt.image,
+    })),
+  }));
+  return {
+    ...item,
+    image: resolvePublicAssetUrl(req, item.image) || item.image,
+    comboSlots: comboSlots ?? item.comboSlots,
   };
 }
 
@@ -594,8 +613,8 @@ router.get("/:slug", async (req: Request, res: Response) => {
         phone: merchant.phone,
         latitude: merchant.latitude,
         longitude: merchant.longitude,
-        shopLogoUrl: merchant.shopLogoUrl,
-        shopBannerUrl: merchant.shopBannerUrl,
+        shopLogoUrl: resolvePublicAssetUrl(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
+        shopBannerUrl: resolvePublicAssetUrl(req, merchant.shopBannerUrl) || merchant.shopBannerUrl,
         taxTakeawayRate: merchant.taxTakeawayRate,
         taxDineInRate: merchant.taxDineInRate,
         taxDeliveryRate: merchant.taxDeliveryRate,
@@ -862,12 +881,15 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
     const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
 
     const toItem = (p: (typeof visibleProducts)[number]) =>
-      mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct);
+      withPublicShopImageUrls(
+        req,
+        mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
+      );
 
     const menu = visibleCategories.map((cat) => ({
       id: cat.id,
       name: cat.name,
-      image: (cat as { imageUrl?: string | null }).imageUrl || null,
+      image: resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null,
       isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
       deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
       extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,

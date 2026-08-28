@@ -557,6 +557,9 @@ export default function OnlineShop() {
               />
               Show product photos
             </label>
+            <p className="text-xs text-stone-500">
+              Photos uploaded on Products appear on the online shop menu. Uncheck to hide them (POS keeps its own display).
+            </p>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

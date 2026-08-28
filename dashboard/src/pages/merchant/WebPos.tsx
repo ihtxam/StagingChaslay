@@ -1351,6 +1351,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     if (access.canOpenPanel) {
       window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      navigate('/merchant');
       return;
     }
     navigate(backOfficeHomePath(access.permissions, false));

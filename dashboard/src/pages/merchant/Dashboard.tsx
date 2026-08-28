@@ -325,6 +325,10 @@ function MerchantShell() {
         return;
       }
       setPosAppMode(false);
+      const path = location.pathname.replace(/\/$/, '') || '/merchant';
+      if (path === '/merchant/pos' || path === '/merchant/waiter') {
+        navigate('/merchant');
+      }
     };
     const enterApp = () => setPosAppMode(true);
     window.addEventListener('webpos:show-panel', showPanel);
@@ -333,7 +337,7 @@ function MerchantShell() {
       window.removeEventListener('webpos:show-panel', showPanel);
       window.removeEventListener('webpos:enter-app', enterApp);
     };
-  }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate]);
+  }, [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, t, navigate, location.pathname]);
 
   // Restricted PIN: stay on role app (POS, driver, storekeeper) unless they may open panel pages.
   useEffect(() => {

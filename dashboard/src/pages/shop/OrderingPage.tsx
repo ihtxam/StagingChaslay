@@ -1720,7 +1720,7 @@ export default function OrderingPage() {
                             <ProductCard
                               key={product.id}
                               product={product}
-                              showImage={showProductImages}
+                              showImage={showProductImages && !!product.image}
                               price={catalog}
                               salePrice={sale}
                               offerBadge={
