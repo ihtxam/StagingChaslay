@@ -122,38 +122,6 @@ function Write-PrintLog {
     } catch { }
 }
 
-function Test-ComPortPrinter {
-    param(
-        [string]$Printer,
-        [string]$PortName
-    )
-    if (Get-Command Extract-ComPort -ErrorAction SilentlyContinue) {
-        if (Extract-ComPort -Text $PortName) { return $true }
-        if (Extract-ComPort -Text $Printer) { return $true }
-    } elseif ($PortName -match '^COM\d+$') {
-        return $true
-    }
-    if ($Printer -match '\(COM\d+\)') { return $true }
-    $lower = "$Printer $PortName".ToLowerInvariant()
-    if ($lower -match 'bluetooth|bt spp|serial|rfcomm') { return $true }
-    return $false
-}
-
-function Resolve-BtSlowMode {
-    param(
-        [string]$Mode,
-        [string]$Printer,
-        [string]$PortName
-    )
-    switch ($Mode) {
-        "on" { return $true }
-        "off" { return $false }
-        default {
-            return (Test-ComPortPrinter -Printer $Printer -PortName $PortName)
-        }
-    }
-}
-
 function Split-CutSuffix {
     param([byte[]]$Data)
 
