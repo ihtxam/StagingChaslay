@@ -1594,7 +1594,7 @@ function buildKitchenTicketLines(
   lines.push({ kind: 'normal', text: thin });
   lines.push({ kind: 'normal', text: `${L.totalItems}: ${totalQty}` });
   lines.push({ kind: 'normal', text: thin });
-  lines.push({ kind: 'normal', text: `${user}, ${timeStr} | ${source}`, blankAfter: 3 });
+  lines.push({ kind: 'normal', text: `${user}, ${timeStr} | ${source}`, blankAfter: 0 });
 
   return { width: footWidth, L, lines };
 }
@@ -1628,6 +1628,9 @@ function escAlign(mode: 0 | 1 | 2): Uint8Array {
 function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
 }
+
+/** Minimal feed + full cut for kitchen tickets (avoids ESC d bulk feed + partial-cut padding). */
+const KITCHEN_TICKET_CUT = new Uint8Array([0x0a, 0x0a, 0x1d, 0x56, 0x00]);
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
@@ -1727,8 +1730,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     escKitchenSize(1),
     escBold(false),
     escUnderline(false),
-    new Uint8Array([0x1b, 0x64, 0x04]),
-    new Uint8Array([0x1d, 0x56, 0x41, 0x10])
+    KITCHEN_TICKET_CUT
   );
   return concatBytes(...parts);
 }
@@ -1770,7 +1772,7 @@ function buildKitchenMessageTicketLines(
   lines.push({
     kind: 'normal',
     text: `${user}, ${timeStr} | ${source}`,
-    blankAfter: 3,
+    blankAfter: 0,
   });
   return { width, L, lines };
 }
@@ -1831,8 +1833,7 @@ export function generateKitchenMessageTicketEscPos(opts: KitchenMessageTicketOpt
     escKitchenSize(1),
     escBold(false),
     escUnderline(false),
-    new Uint8Array([0x1b, 0x64, 0x04]),
-    new Uint8Array([0x1d, 0x56, 0x41, 0x10])
+    KITCHEN_TICKET_CUT
   );
   return concatBytes(...parts);
 }

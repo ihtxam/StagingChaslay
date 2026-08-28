@@ -100,6 +100,45 @@ export function syncMainTillAutoPrintKitchen(enabled: boolean): void {
   }
 }
 
+export type PosAutoPrintSettings = {
+  autoPrintReceipt?: boolean;
+  autoPrintKitchen?: boolean;
+};
+
+/** Merchant Settings → Receipts: master gate for customer receipt auto-print. */
+export function isMerchantAutoPrintReceiptEnabled(
+  printSettings?: PosAutoPrintSettings | null
+): boolean {
+  return printSettings?.autoPrintReceipt !== false;
+}
+
+/** Merchant Settings → Receipts: master gate for kitchen auto-print. */
+export function isMerchantAutoPrintKitchenEnabled(
+  printSettings?: PosAutoPrintSettings | null
+): boolean {
+  return printSettings?.autoPrintKitchen !== false;
+}
+
+/** Device + merchant toggles for customer receipt auto-print at checkout. */
+export function shouldAutoPrintReceipt(
+  printSettings?: PosAutoPrintSettings | null,
+  deviceEnabled = readMainTillAutoPrintReceipt()
+): boolean {
+  if (!isMerchantAutoPrintReceiptEnabled(printSettings)) return false;
+  return deviceEnabled;
+}
+
+/** Device + merchant toggles for kitchen auto-print (send / checkout). */
+export function shouldAutoPrintKitchen(
+  printSettings?: PosAutoPrintSettings | null,
+  deviceEnabled?: boolean
+): boolean {
+  if (!isMerchantAutoPrintKitchenEnabled(printSettings)) return false;
+  if (deviceEnabled === false) return false;
+  if (deviceEnabled === true) return true;
+  return readDeviceAutoPrintKitchen(true);
+}
+
 /** Queue raw ESC/POS for the main till (browser with Print Agent online). */
 export async function enqueueEscPosPrintJob(opts: {
   dataBase64: string;
@@ -222,8 +261,7 @@ function shouldPrintRelayedJob(
   if (!remote) return true;
   if (jobKind === 'eod') return true;
   if (jobKind === 'kitchen') return readMainTillAutoPrintKitchen();
-  // Explicit ESC/POS receipt jobs from waiter phones / mobile WebPOS are always intentional.
-  if (jobKind === 'receipt') return true;
+  if (jobKind === 'receipt') return readMainTillAutoPrintReceipt();
   return true;
 }
 

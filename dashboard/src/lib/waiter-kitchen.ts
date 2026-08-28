@@ -12,7 +12,7 @@ import {
 } from '@/lib/webpos-receipt';
 import {
   printViaAgentOrQueue,
-  readDeviceAutoPrintKitchen,
+  shouldAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
@@ -27,8 +27,7 @@ export async function printWaiterKitchen(opts: {
   t: (key: string) => string;
 }): Promise<void> {
   const { lines, channel, printSettings, locale, staffName, tableLabel, orderNumber, t } = opts;
-  if (printSettings?.autoPrintKitchen === false) return;
-  if (!readDeviceAutoPrintKitchen(true)) return;
+  if (!shouldAutoPrintKitchen(printSettings)) return;
 
   const filtered = lines.filter(
     (l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_')
