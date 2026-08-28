@@ -503,6 +503,10 @@ stop_conflicting_http_stacks
 
 echo "=== Docker build & start ==="
 export_stack_caddyfile
+migrate_project="$(compose_project_name "$REPO_DIR")"
+# Interrupted deploys can leave hash-prefixed migrate containers that block recreate.
+docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
+docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
   APP_URL="https://app.rebornsense.com"
   API_URL="https://api.rebornsense.com"
@@ -545,8 +549,8 @@ sleep 20
 
 echo "=== Database migrate / seed ==="
 # Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
-migrate_project="$(compose_project_name "$REPO_DIR")"
-docker rm -f "${migrate_project}-migrate-1" 2>/dev/null || true
+docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
+docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
 dc run --rm migrate
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
