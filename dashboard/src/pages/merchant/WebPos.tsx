@@ -3837,10 +3837,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (job.kind === 'kitchen' && job.lineIds?.length) {
         setKitchenPrintFailedForLines(job.lineIds, true);
       }
-      notifyPrintErrorRef.current(
-        job.lastError,
-        job.kind === 'kitchen' ? 'webPosKitchenPrintFailed' : 'webPosPrintFailed'
-      );
+      // Background auto-retry exhaustion is surfaced in the print-issues modal — no entry toast.
     });
   }, [setKitchenPrintFailedForLines]);
 

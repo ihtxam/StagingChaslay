@@ -128,6 +128,9 @@ function Send-RawToPrinter {
     try {
         if (-not [RawPrinterHelper]::StartDocPrinter($handle, 1, [ref]$docInfo)) {
             $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            if ($err -eq 1801 -or $err -eq 1905 -or $err -eq 1906) {
+                throw "Printer '$Printer' not found or disconnected"
+            }
             throw "StartDocPrinter failed for '$Printer' (Win32=$err)."
         }
         try {

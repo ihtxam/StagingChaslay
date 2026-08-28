@@ -243,10 +243,25 @@ export function extractPrinterNameFromError(msg: string, fallback?: string): str
   return (m?.[1] || m?.[0] || fallback || '').trim();
 }
 
-/** Win32 1801 / invalid name / GLPrinter80 — agent is up, printer is not. */
+/** Win32 printer spooler codes: invalid name, deleted queue, bad state. */
+const WIN32_PRINTER_UNAVAILABLE = new Set([1801, 1905, 1906]);
+
+function win32CodeFromPrintError(msg: string): number {
+  const m =
+    msg.match(/OpenPrinter failed for '[^']+' \(Win32=(\d+)\)/i) ||
+    msg.match(/StartDocPrinter failed for '[^']+' \(Win32=(\d+)\)/i) ||
+    msg.match(/StartPagePrinter failed for '[^']+' \(Win32=(\d+)\)/i) ||
+    msg.match(/WritePrinter failed for '[^']+' \(Win32=(\d+)\)/i);
+  if (m) return Number(m[1]) || 0;
+  const generic = msg.match(/Win32\s*[=:]?\s*(\d+)/i);
+  return generic ? Number(generic[1]) || 0 : 0;
+}
+
+/** Win32 1801/1905/1906 — agent is up, printer queue is missing or unusable. */
 export function isPrinterDisconnectedError(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
-  return /win32\s*[=:]?\s*1801|\b1801\b|error_invalid_printer_name|not found or disconnected|openprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
+  if (WIN32_PRINTER_UNAVAILABLE.has(win32CodeFromPrintError(msg))) return true;
+  return /error_invalid_printer_name|error_printer_deleted|error_invalid_printer_state|not found or disconnected|openprinter failed|startdocprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
     msg
   );
 }
@@ -284,10 +299,9 @@ export function isPrintAgentVersionOutdated(version?: string | null): boolean {
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
   if (!msg) return 'Print failed';
-  const open = msg.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
   const name = extractPrinterNameFromError(msg, printerName);
-  const code = open ? Number(open[2]) : Number((msg.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
-  if (code === 1801 || isPrinterDisconnectedError(msg)) {
+  const code = win32CodeFromPrintError(msg);
+  if (WIN32_PRINTER_UNAVAILABLE.has(code) || isPrinterDisconnectedError(msg)) {
     return name ? `Printer '${name}' not found or disconnected` : 'Printer not found or disconnected';
   }
   if (isNoisyPrintAgentDump(msg)) {

@@ -530,16 +530,24 @@ function sanitizePrintAgentError(error, printerName, fallback) {
   const raw = [error && error.stderr, error && error.message, error && error.stdout]
     .filter(Boolean)
     .join("\n");
-  const open = raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const win32 =
+    raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+    raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+    raw.match(/StartPagePrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+    raw.match(/WritePrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
   const named = raw.match(/Printer '([^']+)' not found/i);
   const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
-  const name = (open && open[1]) || (named && named[1]) || printerName || gl || "";
-  const code = open
-    ? Number(open[2])
+  const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
+  const code = win32
+    ? Number(win32[2])
     : Number((raw.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
   if (
     code === 1801 ||
-    /ERROR_INVALID_PRINTER_NAME|OpenPrinter failed|\bGLPrinter\b/i.test(raw)
+    code === 1905 ||
+    code === 1906 ||
+    /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|OpenPrinter failed|StartDocPrinter failed|\bGLPrinter\b/i.test(
+      raw
+    )
   ) {
     return name
       ? `Printer '${name}' not found or disconnected`
