@@ -14,6 +14,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$comHelper = Join-Path $PSScriptRoot "win-com-raw-print.ps1"
+if (Test-Path -LiteralPath $comHelper) {
+    . $comHelper
+}
+
 # Ensure .NET / pipeline strings stay Unicode regardless of OEM code page.
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -168,7 +173,9 @@ function Split-CutSuffix {
         @(0x0a, 0x0a, 0x1d, 0x56, 0x00),
         @(0x1d, 0x56, 0x41, 0x10),
         @(0x1d, 0x56, 0x01),
-        @(0x1d, 0x56, 0x00)
+        @(0x1d, 0x56, 0x00),
+        @(0x1b, 0x69),
+        @(0x1b, 0x6d)
     )
 
     foreach ($pat in $patterns) {
@@ -262,8 +269,8 @@ function Send-RawToPrinter {
     )
 
     $portName = Get-PrinterPortName -Printer $Printer
-    $chunkSize = if ($SlowBluetooth) { 128 } else { 512 }
-    $delayMs = if ($SlowBluetooth) { 75 } else { 25 }
+    $chunkSize = if ($SlowBluetooth) { 64 } else { 512 }
+    $delayMs = if ($SlowBluetooth) { 150 } else { 25 }
     $split = Split-CutSuffix -Data $Data
     $body = $split.body
     $cut = $split.cut
@@ -304,8 +311,9 @@ function Send-RawToPrinter {
 
             if ($null -ne $cut -and $cut.Length -gt 0) {
                 Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs -BeforeCut
+                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 500 } else { 200 })
                 [void](Write-RawChunks -Handle $handle -Data $cut -ChunkSize $cut.Length -DelayMs 0 -Printer $Printer -Label "cut")
-                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 400 } else { 200 })
+                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 500 } else { 200 })
             } elseif ($body.Length -le $chunkSize -and $body.Length -gt 0) {
                 Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 250 } else { 80 })
             }
@@ -323,6 +331,15 @@ function Send-RawToPrinter {
 
 $portForMode = Get-PrinterPortName -Printer $PrinterName
 $slowBt = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $PrinterName -PortName $portForMode
-Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
+$comPort = ""
+if ($portForMode -match '(COM\d+)') {
+    $comPort = $Matches[1].ToUpperInvariant()
+}
+
+if ((Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and (Test-UseComDirect -PortName $comPort -SlowBluetooth $slowBt)) {
+    Send-RawViaComPort -PortName $comPort -Data $bytes -Printer $PrinterName -ChunkSize 64 -DelayMs 150 -CutDelayMs 500
+} else {
+    Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
+}
 # Console OutputEncoding is UTF-8 above so Node receives accents intact.
 Write-Output $PrinterName

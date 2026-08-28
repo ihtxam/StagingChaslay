@@ -6,6 +6,11 @@
 
 $ErrorActionPreference = "Stop"
 
+$comHelper = Join-Path $PSScriptRoot "win-com-raw-print.ps1"
+if (Test-Path -LiteralPath $comHelper) {
+    . $comHelper
+}
+
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -130,7 +135,9 @@ function Split-CutSuffix {
         @(0x0a, 0x0a, 0x1d, 0x56, 0x00),
         @(0x1d, 0x56, 0x41, 0x10),
         @(0x1d, 0x56, 0x01),
-        @(0x1d, 0x56, 0x00)
+        @(0x1d, 0x56, 0x00),
+        @(0x1b, 0x69),
+        @(0x1b, 0x6d)
     )
 
     foreach ($pat in $patterns) {
@@ -225,8 +232,18 @@ function Send-RawToPrinter {
 
     $portName = Get-PrinterPortName -Printer $Printer
     $slowBluetooth = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $Printer -PortName $portName
-    $chunkSize = if ($slowBluetooth) { 128 } else { 512 }
-    $delayMs = if ($slowBluetooth) { 75 } else { 25 }
+    $comPort = ""
+    if ($portName -match '(COM\d+)') {
+        $comPort = $Matches[1].ToUpperInvariant()
+    }
+
+    if ((Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and (Test-UseComDirect -PortName $comPort -SlowBluetooth $slowBluetooth)) {
+        Send-RawViaComPort -PortName $comPort -Data $Data -Printer $Printer -ChunkSize 64 -DelayMs 150 -CutDelayMs 500
+        return
+    }
+
+    $chunkSize = if ($slowBluetooth) { 64 } else { 512 }
+    $delayMs = if ($slowBluetooth) { 150 } else { 25 }
     $split = Split-CutSuffix -Data $Data
     $body = $split.body
     $cut = $split.cut
@@ -265,8 +282,9 @@ function Send-RawToPrinter {
             }
             if ($null -ne $cut -and $cut.Length -gt 0) {
                 Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs -BeforeCut
+                Start-Sleep -Milliseconds $(if ($slowBluetooth) { 500 } else { 200 })
                 [void](Write-RawChunks -Handle $handle -Data $cut -ChunkSize $cut.Length -DelayMs 0 -Printer $Printer -Label "cut")
-                Start-Sleep -Milliseconds $(if ($slowBluetooth) { 400 } else { 200 })
+                Start-Sleep -Milliseconds $(if ($slowBluetooth) { 500 } else { 200 })
             } elseif ($body.Length -le $chunkSize -and $body.Length -gt 0) {
                 Start-Sleep -Milliseconds $(if ($slowBluetooth) { 250 } else { 80 })
             }

@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.3";
+const VERSION = "1.8.4";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -216,16 +216,20 @@ function assetPath(filename) {
 }
 
 function ensurePs1OnDisk() {
-  const dest = path.join(runtimeDir(), "win-raw-print.ps1");
-  const bundled = path.join(__dirname, "win-raw-print.ps1");
-  if (fs.existsSync(bundled)) {
-    try {
-      fs.copyFileSync(bundled, dest);
-    } catch {
-      /* keep existing dest if copy fails (locked) */
+  const dir = runtimeDir();
+  const scripts = ["win-raw-print.ps1", "win-com-raw-print.ps1"];
+  for (const name of scripts) {
+    const dest = path.join(dir, name);
+    const bundled = path.join(__dirname, name);
+    if (fs.existsSync(bundled)) {
+      try {
+        fs.copyFileSync(bundled, dest);
+      } catch {
+        /* keep existing dest if copy fails (locked) */
+      }
     }
   }
-  return dest;
+  return path.join(dir, "win-raw-print.ps1");
 }
 
 /** Resolve win-scale-read.ps1 (install dir, pkg asset dir, or dev source). */
@@ -368,17 +372,20 @@ async function doInstall() {
     appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
-  const ps1Src = path.join(__dirname, "win-raw-print.ps1");
-  const ps1Dest = path.join(dir, "win-raw-print.ps1");
-  if (fs.existsSync(ps1Src)) {
-    try {
-      fs.copyFileSync(ps1Src, ps1Dest);
-    } catch {
-      copyFileRetry(ps1Src, ps1Dest);
+  const ps1Scripts = ["win-raw-print.ps1", "win-com-raw-print.ps1"];
+  for (const ps1Name of ps1Scripts) {
+    const ps1Src = path.join(__dirname, ps1Name);
+    const ps1Dest = path.join(dir, ps1Name);
+    if (fs.existsSync(ps1Src)) {
+      try {
+        fs.copyFileSync(ps1Src, ps1Dest);
+      } catch {
+        copyFileRetry(ps1Src, ps1Dest);
+      }
+      appendInstallLog(`Copied ${ps1Name}`);
+    } else {
+      appendInstallLog(`WARNING: ${ps1Name} missing at ${ps1Src}`);
     }
-    appendInstallLog(`Copied win-raw-print.ps1`);
-  } else {
-    appendInstallLog(`WARNING: win-raw-print.ps1 missing at ${ps1Src}`);
   }
 
   const scalePs1Src = path.join(__dirname, "win-scale-read.ps1");
@@ -798,6 +805,7 @@ function startServer() {
         "device-name-match",
         "bt-com-chunked-raw",
         "bt-com-cut-split",
+        "bt-com-direct-serial",
       ],
     });
   });
