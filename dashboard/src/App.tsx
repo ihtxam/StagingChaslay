@@ -351,6 +351,14 @@ function App() {
                 }
               />
               <Route
+                path="/:merchantSlug/table/:tableId"
+                element={
+                  <ShopRoutes>
+                    <TableOrderPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/:merchantSlug/checkout"
                 element={
                   <ShopRoutes>
@@ -437,6 +445,14 @@ function App() {
                 }
               />
               <Route
+                path="/table/:tableId"
+                element={
+                  <ShopRoutes>
+                    <TableOrderPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/checkout"
                 element={
                   <ShopRoutes>
@@ -519,6 +535,14 @@ function App() {
                 element={
                   <ShopRoutes>
                     <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/table/:tableId"
+                element={
+                  <ShopRoutes>
+                    <TableOrderPage />
                   </ShopRoutes>
                 }
               />

@@ -504,10 +504,16 @@ export function buildTableShopUrl(
   tableId: string,
   origin?: string
 ): string {
-  const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com')).replace(/\/$/, '');
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
-  return `${base}/shop/${slug}/table/${table}`;
+  const base = String(
+    origin ||
+      (typeof window !== 'undefined' ? window.location.origin : 'https://shop.rebornsense.com')
+  ).replace(/\/$/, '');
+  if (/\/shop$/i.test(base) || /app\.(rebornsense|chaslay)\.com$/i.test(base)) {
+    return `${base}/shop/${slug}/table/${table}`;
+  }
+  return `${base}/${slug}/table/${table}`;
 }
 
 /** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */
