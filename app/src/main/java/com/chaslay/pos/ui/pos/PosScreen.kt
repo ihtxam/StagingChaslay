@@ -500,6 +500,7 @@ fun PosScreen(
                 PosMainTab.TABLES -> {
                     OdooTablesScreen(
                         tables = state.tables,
+                        tableFloors = state.tableFloors,
                         floorElementsByFloorId = state.floorElementsByFloorId,
                         currencySymbol = state.currencySymbol,
                         activeTableName = state.activeTableName,
@@ -1230,6 +1231,7 @@ private fun ProductGridFilterMenu(
 @Composable
 private fun OdooTablesScreen(
     tables: List<TableWithOrderInfo>,
+    tableFloors: List<com.chaslay.pos.data.local.entity.TableFloorEntity>,
     floorElementsByFloorId: Map<Long, List<com.chaslay.pos.data.local.entity.FloorPlanElementEntity>>,
     currencySymbol: String,
     activeTableName: String?,
@@ -1239,31 +1241,47 @@ private fun OdooTablesScreen(
     onSelectTable: (Long) -> Unit,
     onWalkIn: () -> Unit
 ) {
-    val mainFloorLabel = stringResource(R.string.main_floor)
-    val patioLabel = stringResource(R.string.patio_floor)
-    val floorGroups = remember(tables, mainFloorLabel, patioLabel) {
-        val grouped = tables.groupBy { it.floorId }.toList().sortedBy { it.first }
-        if (grouped.isEmpty()) {
-            listOf(mainFloorLabel to tables)
+    val floorTabs = remember(tables, tableFloors) {
+        val sortedFloors = tableFloors.filter { it.isActive }.sortedBy { it.sortOrder }
+        if (sortedFloors.isNotEmpty()) {
+            sortedFloors.map { floor ->
+                Triple(floor, floor.name, tables.filter { it.floorId == floor.id })
+            }
         } else {
-            grouped.map { (floorId, floorTables) ->
-                val name = when (floorId) {
-                    1L -> mainFloorLabel
-                    2L -> patioLabel
-                    else -> "Floor $floorId"
+            val grouped = tables.groupBy { it.floorId }.toList().sortedBy { it.first }
+            if (grouped.isEmpty()) {
+                listOf(
+                    Triple(
+                        com.chaslay.pos.data.local.entity.TableFloorEntity(id = 1L, name = "Tables"),
+                        "Tables",
+                        tables
+                    )
+                )
+            } else {
+                grouped.map { (floorId, floorTables) ->
+                    Triple(
+                        com.chaslay.pos.data.local.entity.TableFloorEntity(id = floorId, name = "Floor $floorId"),
+                        "Floor $floorId",
+                        floorTables
+                    )
                 }
-                name to floorTables
             }
         }
     }
     val resolvedFloorId = selectedFloorId?.takeIf { id ->
-        floorGroups.any { group -> group.second.firstOrNull()?.floorId == id }
-    } ?: floorGroups.firstOrNull()?.second?.firstOrNull()?.floorId
-    val safeFloorIndex = floorGroups.indexOfFirst { group ->
-        group.second.firstOrNull()?.floorId == resolvedFloorId
+        floorTabs.any { (floor, _, _) -> floor.id == id }
+    } ?: floorTabs.firstOrNull()?.first?.id
+    val safeFloorIndex = floorTabs.indexOfFirst { (floor, _, _) ->
+        floor.id == resolvedFloorId
     }.takeIf { it >= 0 } ?: 0
-    val floorTables = floorGroups.getOrNull(safeFloorIndex)?.second.orEmpty()
-    val floorId = floorTables.firstOrNull()?.floorId ?: 1L
+    val (currentFloor, _, floorTables) = floorTabs.getOrElse(safeFloorIndex) {
+        floorTabs.first()
+    }
+    val floorId = currentFloor.id
+    val designCanvasWidth = currentFloor.canvasWidth.coerceAtLeast(320)
+    val designCanvasHeight = currentFloor.canvasHeight.coerceAtLeast(240)
+    val planViewAvailable = !currentFloor.remoteId.isNullOrBlank() ||
+        floorTables.any { it.hasPlanPosition }
     val planElements = floorElementsByFloorId[floorId].orEmpty().map { element ->
         FloorPlanElementDisplay(
             id = element.id,
@@ -1276,8 +1294,8 @@ private fun OdooTablesScreen(
             rotation = element.rotation
         )
     }
-    var usePlanView by remember(floorTables) {
-        mutableStateOf(floorTables.any { it.hasPlanPosition })
+    var usePlanView by remember(floorId, planViewAvailable) {
+        mutableStateOf(planViewAvailable)
     }
 
     Column(
@@ -1287,17 +1305,17 @@ private fun OdooTablesScreen(
             .padding(12.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            floorGroups.forEachIndexed { index, (name, _) ->
+            floorTabs.forEachIndexed { index, (_, name, _) ->
                 FilterChip(
                     selected = safeFloorIndex == index,
                     onClick = {
-                        floorGroups.getOrNull(index)?.second?.firstOrNull()?.floorId?.let(onSelectFloor)
+                        floorTabs.getOrNull(index)?.first?.id?.let(onSelectFloor)
                     },
                     label = { Text(name, fontSize = 12.sp) }
                 )
             }
         }
-        if (floorTables.any { it.hasPlanPosition }) {
+        if (planViewAvailable) {
             Spacer(modifier = Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -1334,7 +1352,7 @@ private fun OdooTablesScreen(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        if (usePlanView && floorTables.any { it.hasPlanPosition }) {
+        if (usePlanView && planViewAvailable) {
             FloorPlanCanvas(
                 tables = floorTables.map { it.toFloorPlanDisplay(activeTableName, currencySymbol) },
                 elements = planElements,
@@ -1342,6 +1360,8 @@ private fun OdooTablesScreen(
                 selectedTableId = null,
                 onTableClick = onSelectTable,
                 onTableMoved = null,
+                designCanvasWidth = designCanvasWidth,
+                designCanvasHeight = designCanvasHeight,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)

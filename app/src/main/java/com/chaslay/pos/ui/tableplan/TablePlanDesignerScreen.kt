@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -114,6 +112,11 @@ fun TablePlanDesignerContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = vectronColors()
     val context = LocalContext.current
+    val selectedFloor = state.floors.find { it.id == state.selectedFloorId }
+    val isCloudManaged = !selectedFloor?.remoteId.isNullOrBlank() ||
+        state.tables.any { !it.remoteId.isNullOrBlank() }
+    val designCanvasWidth = selectedFloor?.canvasWidth?.coerceAtLeast(320) ?: 1000
+    val designCanvasHeight = selectedFloor?.canvasHeight?.coerceAtLeast(240) ?: 700
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
@@ -159,6 +162,7 @@ fun TablePlanDesignerContent(
             }
             Button(
                 onClick = viewModel::addTable,
+                enabled = !isCloudManaged,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                 contentPadding = ButtonDefaults.ContentPadding
             ) {
@@ -166,18 +170,27 @@ fun TablePlanDesignerContent(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.add_table), fontSize = 13.sp)
             }
-            OutlinedButton(onClick = viewModel::autoLayout) {
+            OutlinedButton(onClick = viewModel::autoLayout, enabled = !isCloudManaged) {
                 Icon(Icons.Default.GridView, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.auto_layout), fontSize = 13.sp)
             }
-            OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.WALL) }) {
+            OutlinedButton(
+                onClick = { viewModel.addElement(FloorPlanElementType.WALL) },
+                enabled = !isCloudManaged
+            ) {
                 Text(stringResource(R.string.add_wall), fontSize = 12.sp)
             }
-            OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.DOOR) }) {
+            OutlinedButton(
+                onClick = { viewModel.addElement(FloorPlanElementType.DOOR) },
+                enabled = !isCloudManaged
+            ) {
                 Text(stringResource(R.string.add_door), fontSize = 12.sp)
             }
-            OutlinedButton(onClick = { viewModel.addElement(FloorPlanElementType.BAR) }) {
+            OutlinedButton(
+                onClick = { viewModel.addElement(FloorPlanElementType.BAR) },
+                enabled = !isCloudManaged
+            ) {
                 Text(stringResource(R.string.add_bar), fontSize = 12.sp)
             }
             OutlinedTextField(
@@ -185,95 +198,104 @@ fun TablePlanDesignerContent(
                 onValueChange = viewModel::updateNewFloorName,
                 label = { Text(stringResource(R.string.new_floor_name), fontSize = 11.sp) },
                 singleLine = true,
+                enabled = !isCloudManaged,
                 colors = fieldColors,
                 modifier = Modifier.width(160.dp)
             )
-            OutlinedButton(onClick = viewModel::addFloor) {
+            OutlinedButton(onClick = viewModel::addFloor, enabled = !isCloudManaged) {
                 Text(stringResource(R.string.add_floor), fontSize = 12.sp)
             }
         }
 
+        if (isCloudManaged) {
+            Text(
+                stringResource(R.string.table_plan_cloud_managed),
+                fontSize = 11.sp,
+                color = Color(0xFF00897B),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+            )
+        }
+
         Text(
-            stringResource(R.string.table_plan_help),
+            stringResource(
+                if (isCloudManaged) R.string.table_plan_cloud_help else R.string.table_plan_help
+            ),
             fontSize = 11.sp,
             color = colors.textSecondary,
-            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+            modifier = Modifier.padding(bottom = 6.dp)
         )
 
-        Row(
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .heightIn(min = 360.dp)
+                .heightIn(min = 280.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, colors.gridGap, RoundedCornerShape(10.dp))
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, colors.gridGap, RoundedCornerShape(10.dp))
-            ) {
-                FloorPlanCanvas(
-                    tables = state.tables.map { table ->
-                        FloorPlanTableDisplay(
-                            id = table.id,
-                            name = table.name,
-                            seatCapacity = table.seatCapacity,
-                            planX = table.planX,
-                            planY = table.planY,
-                            planWidth = table.planWidth,
-                            planHeight = table.planHeight,
-                            shape = table.shape,
-                            rotation = table.rotation,
-                            isActive = table.id == state.selectedTableId
-                        )
-                    },
-                    elements = state.elements.map { element ->
-                        FloorPlanElementDisplay(
-                            id = element.id,
-                            elementType = element.elementType,
-                            label = element.label,
-                            planX = element.planX,
-                            planY = element.planY,
-                            planWidth = element.planWidth,
-                            planHeight = element.planHeight,
-                            rotation = element.rotation,
-                            isSelected = element.id == state.selectedElementId
-                        )
-                    },
-                    editable = true,
-                    selectedTableId = state.selectedTableId,
-                    selectedElementId = state.selectedElementId,
-                    onTableClick = viewModel::selectTable,
-                    onTableMoved = viewModel::moveTable,
-                    onTableResized = viewModel::resizeTable,
-                    onElementClick = viewModel::selectElement,
-                    onElementMoved = viewModel::moveElement,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            FloorPlanCanvas(
+                tables = state.tables.map { table ->
+                    FloorPlanTableDisplay(
+                        id = table.id,
+                        name = table.name,
+                        seatCapacity = table.seatCapacity,
+                        planX = table.planX,
+                        planY = table.planY,
+                        planWidth = table.planWidth,
+                        planHeight = table.planHeight,
+                        shape = table.shape,
+                        rotation = table.rotation,
+                        isActive = table.id == state.selectedTableId
+                    )
+                },
+                elements = state.elements.map { element ->
+                    FloorPlanElementDisplay(
+                        id = element.id,
+                        elementType = element.elementType,
+                        label = element.label,
+                        planX = element.planX,
+                        planY = element.planY,
+                        planWidth = element.planWidth,
+                        planHeight = element.planHeight,
+                        rotation = element.rotation,
+                        isSelected = element.id == state.selectedElementId
+                    )
+                },
+                editable = !isCloudManaged,
+                selectedTableId = state.selectedTableId,
+                selectedElementId = state.selectedElementId,
+                onTableClick = viewModel::selectTable,
+                onTableMoved = if (isCloudManaged) null else viewModel::moveTable,
+                onTableResized = if (isCloudManaged) null else viewModel::resizeTable,
+                onElementClick = viewModel::selectElement,
+                onElementMoved = if (isCloudManaged) null else viewModel::moveElement,
+                designCanvasWidth = designCanvasWidth,
+                designCanvasHeight = designCanvasHeight,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
-            if (state.selectedTableId != null || state.selectedElementId != null) {
-                Spacer(modifier = Modifier.width(12.dp))
-                TableEditSidePanel(
-                    state = state,
-                    fieldColors = fieldColors,
-                    onClose = viewModel::clearSelection,
-                    onNameChange = viewModel::updateEditName,
-                    onSeatsChange = viewModel::updateEditSeats,
-                    onShapeChange = viewModel::updateEditShape,
-                    onPlanWidthChange = viewModel::updateEditPlanWidthPct,
-                    onPlanHeightChange = viewModel::updateEditPlanHeightPct,
-                    onElementLabelChange = viewModel::updateEditElementLabel,
-                    onSaveTable = viewModel::saveSelectedTable,
-                    onDeleteTable = viewModel::deleteSelectedTable,
-                    onSaveElement = viewModel::saveSelectedElement,
-                    onDeleteElement = viewModel::deleteSelectedElement,
-                    modifier = Modifier
-                        .width(300.dp)
-                        .fillMaxHeight()
-                )
-            }
+        if (state.selectedTableId != null || state.selectedElementId != null) {
+            TableEditBottomPanel(
+                state = state,
+                fieldColors = fieldColors,
+                readOnlyLayout = isCloudManaged,
+                onClose = viewModel::clearSelection,
+                onNameChange = viewModel::updateEditName,
+                onSeatsChange = viewModel::updateEditSeats,
+                onShapeChange = viewModel::updateEditShape,
+                onPlanWidthChange = viewModel::updateEditPlanWidthPct,
+                onPlanHeightChange = viewModel::updateEditPlanHeightPct,
+                onElementLabelChange = viewModel::updateEditElementLabel,
+                onSaveTable = viewModel::saveSelectedTable,
+                onDeleteTable = viewModel::deleteSelectedTable,
+                onSaveElement = viewModel::saveSelectedElement,
+                onDeleteElement = viewModel::deleteSelectedElement,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
@@ -297,14 +319,14 @@ fun TablePlanDesignerContent(
                 color = colors.textSecondary,
                 modifier = Modifier.weight(1f).padding(end = 8.dp)
             )
-            if (state.selectedTableId != null) {
+            if (!isCloudManaged && state.selectedTableId != null) {
                 Button(
                     onClick = viewModel::saveSelectedTable,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                 ) {
                     Text(stringResource(R.string.save))
                 }
-            } else if (state.selectedElementId != null) {
+            } else if (!isCloudManaged && state.selectedElementId != null) {
                 Button(
                     onClick = viewModel::saveSelectedElement,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
@@ -317,9 +339,10 @@ fun TablePlanDesignerContent(
 }
 
 @Composable
-private fun TableEditSidePanel(
+private fun TableEditBottomPanel(
     state: TablePlanUiState,
     fieldColors: androidx.compose.material3.TextFieldColors,
+    readOnlyLayout: Boolean,
     onClose: () -> Unit,
     onNameChange: (String) -> Unit,
     onSeatsChange: (String) -> Unit,
@@ -340,38 +363,32 @@ private fun TableEditSidePanel(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(colors.panelLight)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    if (editingTable) stringResource(R.string.edit_table)
-                    else stringResource(R.string.edit_floor_element),
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-                Text(
-                    stringResource(R.string.table_plan_edit_hint),
-                    color = colors.textSecondary,
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                if (editingTable) stringResource(R.string.edit_table)
+                else stringResource(R.string.edit_floor_element),
+                color = colors.textPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
             IconButton(onClick = onClose) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel), tint = colors.textPrimary)
             }
         }
 
-        Column(
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (editingTable) {
                 OutlinedTextField(
@@ -380,7 +397,7 @@ private fun TableEditSidePanel(
                     label = { Text(stringResource(R.string.table_name)) },
                     singleLine = true,
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.width(140.dp)
                 )
                 OutlinedTextField(
                     value = state.editSeats,
@@ -388,52 +405,46 @@ private fun TableEditSidePanel(
                     label = { Text(stringResource(R.string.seat_capacity)) },
                     singleLine = true,
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.width(100.dp)
                 )
-                Text(
-                    stringResource(R.string.table_shape),
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TableShape.entries.forEach { shape ->
-                        FilterChip(
-                            selected = state.editShape == shape,
-                            onClick = { onShapeChange(shape) },
-                            label = {
-                                Text(
-                                    when (shape) {
-                                        TableShape.ROUND -> stringResource(R.string.shape_round)
-                                        TableShape.SQUARE -> stringResource(R.string.shape_square)
-                                        TableShape.RECT -> stringResource(R.string.shape_rect)
-                                    }
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentTeal,
-                                selectedLabelColor = Color.White,
-                                containerColor = colors.panelDark,
-                                labelColor = colors.textPrimary
+                TableShape.entries.forEach { shape ->
+                    FilterChip(
+                        selected = state.editShape == shape,
+                        onClick = { onShapeChange(shape) },
+                        label = {
+                            Text(
+                                when (shape) {
+                                    TableShape.ROUND -> stringResource(R.string.shape_round)
+                                    TableShape.SQUARE -> stringResource(R.string.shape_square)
+                                    TableShape.RECT -> stringResource(R.string.shape_rect)
+                                },
+                                fontSize = 11.sp
                             )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentTeal,
+                            selectedLabelColor = Color.White,
+                            containerColor = colors.panelDark,
+                            labelColor = colors.textPrimary
                         )
-                    }
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!readOnlyLayout) {
                     OutlinedTextField(
                         value = state.editPlanWidthPct,
                         onValueChange = onPlanWidthChange,
-                        label = { Text("Width %", fontSize = 11.sp) },
+                        label = { Text("W %", fontSize = 11.sp) },
                         singleLine = true,
                         colors = fieldColors,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.width(72.dp)
                     )
                     OutlinedTextField(
                         value = state.editPlanHeightPct,
                         onValueChange = onPlanHeightChange,
-                        label = { Text("Height %", fontSize = 11.sp) },
+                        label = { Text("H %", fontSize = 11.sp) },
                         singleLine = true,
                         colors = fieldColors,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.width(72.dp)
                     )
                 }
             } else {
@@ -442,8 +453,9 @@ private fun TableEditSidePanel(
                     onValueChange = onElementLabelChange,
                     label = { Text(stringResource(R.string.element_label_optional)) },
                     singleLine = true,
+                    enabled = !readOnlyLayout,
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.width(220.dp)
                 )
             }
         }
@@ -452,20 +464,25 @@ private fun TableEditSidePanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = if (editingTable) onDeleteTable else onDeleteElement) {
-                Text(stringResource(R.string.delete), color = Color(0xFFE57373))
+            if (!readOnlyLayout) {
+                TextButton(onClick = if (editingTable) onDeleteTable else onDeleteElement) {
+                    Text(stringResource(R.string.delete), color = Color(0xFFE57373))
+                }
             }
             Spacer(modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onClose) {
                 Text(stringResource(R.string.cancel))
             }
-            Button(
-                onClick = if (editingTable) onSaveTable else onSaveElement,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-            ) {
-                Text(stringResource(R.string.save))
+            if (!readOnlyLayout) {
+                Button(
+                    onClick = if (editingTable) onSaveTable else onSaveElement,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Text(stringResource(R.string.save))
+                }
             }
         }
     }

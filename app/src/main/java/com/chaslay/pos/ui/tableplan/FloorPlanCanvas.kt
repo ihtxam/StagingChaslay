@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -163,6 +166,10 @@ fun TableWithOrderInfo.toFloorPlanDisplay(activeTableName: String?, currencySymb
         hasReservation = hasReservation
     )
 
+/**
+ * Renders a floor plan on a fixed-size scrollable canvas (same coordinate model as Web POS / merchant panel).
+ * [designCanvasWidth] x [designCanvasHeight] match the saved plan size (typically 1000×700).
+ */
 @Composable
 fun FloorPlanCanvas(
     tables: List<FloorPlanTableDisplay>,
@@ -175,86 +182,105 @@ fun FloorPlanCanvas(
     onTableResized: ((Long, Float, Float, Float, Float) -> Unit)? = null,
     onElementClick: ((Long) -> Unit)? = null,
     onElementMoved: ((Long, Float, Float) -> Unit)? = null,
+    designCanvasWidth: Int = 1000,
+    designCanvasHeight: Int = 700,
     modifier: Modifier = Modifier
 ) {
+    val canvasW = designCanvasWidth.coerceAtLeast(320).toFloat()
+    val canvasH = designCanvasHeight.coerceAtLeast(240).toFloat()
+    val hScroll = rememberScrollState()
+    val vScroll = rememberScrollState()
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFECEFF1))
-            .border(1.dp, Color(0xFFB0BEC5))
     ) {
-        val canvasW = maxWidth
-        val canvasH = maxHeight
-        // Guard against zero-size layout (parent Column without weight).
-        if (canvasW.value < 8f || canvasH.value < 8f) return@BoxWithConstraints
+        if (maxWidth.value < 8f || maxHeight.value < 8f) return@BoxWithConstraints
 
-        val selectedElement = elements.find { it.id == selectedElementId }
-        val backgroundElements = if (selectedElement != null) {
-            elements.filter { it.id != selectedElementId }
-        } else {
-            elements
-        }
-
-        backgroundElements.forEach { element ->
-            DraggablePlanItem(
-                planX = element.planX,
-                planY = element.planY,
-                planWidth = element.planWidth,
-                planHeight = element.planHeight,
-                rotation = element.rotation,
-                canvasW = canvasW.value,
-                canvasH = canvasH.value,
-                editable = editable && onElementMoved != null,
-                isSelected = element.isSelected,
-                onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
-                onClick = { onElementClick?.invoke(element.id) }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .horizontalScroll(hScroll)
+                .verticalScroll(vScroll)
+                .padding(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = canvasW.dp, height = canvasH.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color(0xFFB0BEC5), RoundedCornerShape(8.dp))
             ) {
-                FloorPlanElementChip(element = element)
-            }
-        }
-
-        tables.forEach { table ->
-            DraggablePlanItem(
-                planX = table.planX,
-                planY = table.planY,
-                planWidth = table.planWidth,
-                planHeight = table.planHeight,
-                rotation = table.rotation,
-                canvasW = canvasW.value,
-                canvasH = canvasH.value,
-                editable = editable && onTableMoved != null,
-                isSelected = table.id == selectedTableId,
-                onResized = if (editable && onTableResized != null && table.id == selectedTableId) {
-                    { x, y, w, h -> onTableResized(table.id, x, y, w, h) }
+                val selectedElement = elements.find { it.id == selectedElementId }
+                val backgroundElements = if (selectedElement != null) {
+                    elements.filter { it.id != selectedElementId }
                 } else {
-                    null
-                },
-                onMoved = { x, y -> onTableMoved?.invoke(table.id, x, y) },
-                onClick = { onTableClick(table.id) }
-            ) {
-                FloorPlanTableChip(
-                    table = table,
-                    isSelected = table.id == selectedTableId
-                )
-            }
-        }
+                    elements
+                }
 
-        selectedElement?.let { element ->
-            DraggablePlanItem(
-                planX = element.planX,
-                planY = element.planY,
-                planWidth = element.planWidth,
-                planHeight = element.planHeight,
-                rotation = element.rotation,
-                canvasW = canvasW.value,
-                canvasH = canvasH.value,
-                editable = editable && onElementMoved != null,
-                isSelected = true,
-                onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
-                onClick = { onElementClick?.invoke(element.id) },
-                modifier = Modifier.zIndex(1f)
-            ) {
-                FloorPlanElementChip(element = element)
+                backgroundElements.forEach { element ->
+                    DraggablePlanItem(
+                        planX = element.planX,
+                        planY = element.planY,
+                        planWidth = element.planWidth,
+                        planHeight = element.planHeight,
+                        rotation = element.rotation,
+                        canvasW = canvasW,
+                        canvasH = canvasH,
+                        editable = editable && onElementMoved != null,
+                        isSelected = element.isSelected,
+                        onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
+                        onClick = { onElementClick?.invoke(element.id) }
+                    ) {
+                        FloorPlanElementChip(element = element)
+                    }
+                }
+
+                tables.forEach { table ->
+                    DraggablePlanItem(
+                        planX = table.planX,
+                        planY = table.planY,
+                        planWidth = table.planWidth,
+                        planHeight = table.planHeight,
+                        rotation = table.rotation,
+                        canvasW = canvasW,
+                        canvasH = canvasH,
+                        editable = editable && onTableMoved != null,
+                        isSelected = table.id == selectedTableId,
+                        onResized = if (editable && onTableResized != null && table.id == selectedTableId) {
+                            { x, y, w, h -> onTableResized(table.id, x, y, w, h) }
+                        } else {
+                            null
+                        },
+                        onMoved = { x, y -> onTableMoved?.invoke(table.id, x, y) },
+                        onClick = { onTableClick(table.id) }
+                    ) {
+                        FloorPlanTableChip(
+                            table = table,
+                            isSelected = table.id == selectedTableId
+                        )
+                    }
+                }
+
+                selectedElement?.let { element ->
+                    DraggablePlanItem(
+                        planX = element.planX,
+                        planY = element.planY,
+                        planWidth = element.planWidth,
+                        planHeight = element.planHeight,
+                        rotation = element.rotation,
+                        canvasW = canvasW,
+                        canvasH = canvasH,
+                        editable = editable && onElementMoved != null,
+                        isSelected = true,
+                        onMoved = { x, y -> onElementMoved?.invoke(element.id, x, y) },
+                        onClick = { onElementClick?.invoke(element.id) },
+                        modifier = Modifier.zIndex(1f)
+                    ) {
+                        FloorPlanElementChip(element = element)
+                    }
+                }
             }
         }
     }
@@ -300,7 +326,6 @@ private fun DraggablePlanItem(
             }
             .rotate(rotation)
             .pointerInput(displayX, displayY, editable, isSelected, onResized) {
-                // Single gesture handler: tap selects, drag moves (no clickable conflict).
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var totalDrag = 0f
