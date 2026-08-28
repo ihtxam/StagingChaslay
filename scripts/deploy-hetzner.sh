@@ -521,6 +521,9 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
+# Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
+migrate_project="$(compose_project_name "$REPO_DIR")"
+docker rm -f "${migrate_project}-migrate-1" 2>/dev/null || true
 dc run --rm migrate
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
