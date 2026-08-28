@@ -3845,28 +3845,6 @@ export default function Settings() {
                       </label>
                     </div>
                   ) : null}
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={settings.posPrintSettings?.bluetoothPrinterSlowMode === true}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          posPrintSettings: {
-                            ...(settings.posPrintSettings || {}),
-                            bluetoothPrinterSlowMode: e.target.checked,
-                          },
-                        })
-                      }
-                    />
-                    <span>
-                      <span className="font-medium">{t('bluetoothPrinterSlowMode')}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
-                        {t('bluetoothPrinterSlowModeHint')}
-                      </span>
-                    </span>
-                  </label>
                 </div>
                 <label className="mt-3 flex items-start gap-2 text-sm">
                   <input

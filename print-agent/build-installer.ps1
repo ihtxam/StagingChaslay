@@ -38,11 +38,15 @@ try {
   # Also keep non-setup agent binary available
   Copy-Item -Force (Join-Path $Dist "chaslay-print-agent.exe") (Join-Path $Downloads "chaslay-print-agent.exe")
 
+  $pkg = Get-Content -Raw (Join-Path $Root "package.json") | ConvertFrom-Json
+  $agentVersion = [string]$pkg.version
+  if ([string]::IsNullOrWhiteSpace($agentVersion)) { $agentVersion = "0.0.0" }
+
   # Write a small version marker for the dashboard
   @"
 {
   "name": "chaslayreborn-print-agent",
-  "version": "1.3.1",
+  "version": "$agentVersion",
   "setupFile": "chaslayreborn-print-agent-setup.exe",
   "builtAt": "$(Get-Date -Format o)",
   "platform": "win32-x64",

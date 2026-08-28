@@ -25,9 +25,9 @@ chaslay-print-agent.exe --uninstall
 USB scales (CH340 / ?CH 43?) and Bluetooth COM printers often get a **new COM number** after each plug-in or Windows restart.
 
 - **Scale:** Settings ? Print ? Scan scale lists the manufacturer/model (for example `USB-SERIAL CH340 ? COM7`). That name is saved. On the next sale the agent finds the current COM port from the name.
-- **Printer:** Pick the Windows printer by its real name. The agent ignores changing `(COMx)` suffixes when printing.
+- **Printer:** Pick the Windows printer by its real name. Pair Bluetooth thermal printers as **BLE** (not a Bluetooth COM/serial port). COM pairing is an install mistake and is not needed for Print Agent.
 
-Reinstall the agent after this update (v1.7.0+) so those lookups work.
+Reinstall the agent after this update (v1.8.9+) so those lookups work.
 
 ## Dev (Node)
 

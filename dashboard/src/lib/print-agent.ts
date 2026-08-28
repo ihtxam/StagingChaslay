@@ -333,8 +333,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.8.8+ restores spooler-only WritePrinter after the 1.8.4–1.8.7 COM-direct regression. */
-export const MIN_PRINT_AGENT_VERSION = '1.8.8';
+/** 1.8.9+ is the simple spooler-only WritePrinter agent (no COM-direct / BT slow-mode). */
+export const MIN_PRINT_AGENT_VERSION = '1.8.9';
 
 function asPrintText(value: unknown): string {
   if (value == null) return '';
@@ -540,32 +540,10 @@ export type PrintViaAgentResult = {
   printer?: string;
 };
 
-export type BtSlowMode = 'auto' | 'on' | 'off';
-export type ComDirectMode = 'auto' | 'on' | 'off';
-
-const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
-
-/** Resolve Bluetooth/COM slow print mode for the Windows print agent. */
-export function resolveBtSlowMode(explicit?: BtSlowMode): BtSlowMode {
-  if (explicit === 'on' || explicit === 'off') return explicit;
-  try {
-    const raw = localStorage.getItem(MERCHANT_AUTOPRINT_CACHE_KEY);
-    if (!raw) return 'auto';
-    const parsed = JSON.parse(raw) as { bluetoothPrinterSlowMode?: boolean };
-    if (parsed.bluetoothPrinterSlowMode === true) return 'on';
-  } catch {
-    /* ignore */
-  }
-  return 'auto';
-}
-
 export async function printViaAgent(opts: {
   printerName?: string;
   dataBase64: string;
   text?: string;
-  btSlowMode?: BtSlowMode;
-  /** Ignored since agent v1.8.8 (always spooler-only WritePrinter). */
-  comDirectMode?: ComDirectMode;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
@@ -595,8 +573,6 @@ export async function printViaAgent(opts: {
         printerName: opts.printerName || undefined,
         dataBase64: opts.dataBase64,
         text: opts.text,
-        btSlowMode: resolveBtSlowMode(opts.btSlowMode),
-        comDirectMode: opts.comDirectMode || 'off',
       }),
     },
     name

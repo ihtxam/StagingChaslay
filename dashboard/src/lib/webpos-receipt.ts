@@ -261,8 +261,6 @@ export type PosPrintSettingsClient = {
   kitchenPrintRetryAttempts?: number;
   /** Seconds between kitchen print retries (default 5). */
   kitchenPrintRetryIntervalSec?: number;
-  /** Force slower chunked writes for Bluetooth/COM thermal printers (auto-detects COM ports when unset). */
-  bluetoothPrinterSlowMode?: boolean;
   /** Print Agent USB scale COM port (WebPOS). */
   scaleComPort?: string | null;
   scaleDeviceName?: string | null;
