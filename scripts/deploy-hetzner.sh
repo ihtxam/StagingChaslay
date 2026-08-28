@@ -374,8 +374,9 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
-      rm -rf /project/.gradle /tmp/gradle-home
-      mkdir -p /opt/android-sdk/.android
+      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+      rm -rf /project/.gradle /project/app/build /tmp/gradle-home /tmp/gradle-project-cache
+      mkdir -p /opt/android-sdk/.android /tmp/gradle-home /tmp/gradle-project-cache
       if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
         keytool -genkeypair -v \
           -keystore /opt/android-sdk/.android/debug.keystore \
@@ -384,7 +385,10 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
           -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
       fi
       chmod +x ./gradlew
-      ./gradlew assembleRelease --no-daemon --no-build-cache
+      ./gradlew --stop 2>/dev/null || true
+      ./gradlew assembleRelease --no-daemon --no-build-cache \
+        -g /tmp/gradle-home \
+        --project-cache-dir=/tmp/gradle-project-cache
       APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
       test -n "$APK"
       cp -f "$APK" /out/reborn-print-bridge.apk
