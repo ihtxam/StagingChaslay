@@ -175,6 +175,8 @@ export interface SyncSalePayload {
   masterOrderId?: string | null;
   /** 1-based split check number */
   splitCheckNumber?: number | null;
+  /** Total split parts when masterOrderId is set (defer held/table release until last part). */
+  splitPartCount?: number | null;
   /** Adyen POI transaction id from terminal payment */
   adyenReference?: string | null;
   adyenPoiTransactionTimestamp?: string | null;
@@ -186,6 +188,20 @@ export interface SyncSalePayload {
   pointsRedeemed?: number | null;
   pointsDiscount?: number | null;
   items: SyncSaleItem[];
+}
+
+/** True when it is safe to release held rows and free the table (non-split or final split part). */
+function splitBillFullyPaid(sale: Pick<
+  SyncSalePayload,
+  "masterOrderId" | "splitCheckNumber" | "splitPartCount"
+>): boolean {
+  const master = String(sale.masterOrderId || "").trim();
+  if (!master) return true;
+  const part = Number(sale.splitCheckNumber);
+  const total = Number(sale.splitPartCount);
+  if (!Number.isFinite(part) || part <= 0) return false;
+  if (!Number.isFinite(total) || total <= 0) return false;
+  return part >= total;
 }
 
 function normalizeFulfillmentChannel(
@@ -784,7 +800,7 @@ export class SyncService {
         });
       }
 
-      if (sale.tableId) {
+      if (sale.tableId && splitBillFullyPaid(sale)) {
         try {
           await FloorPlanService.setTableStatus(merchantId, sale.tableId, "available", null);
         } catch {
@@ -820,15 +836,17 @@ export class SyncService {
         } catch (invErr) {
           console.warn("[sync] inventory deduct failed:", invErr);
         }
-        try {
-          const { PosOrdersService } = await import("@/services/pos-orders.service");
-          await PosOrdersService.releaseHeldByIdentity(merchantId, {
-            ticketDisplay: sale.ticketDisplay,
-            tabNumber: sale.tabNumber,
-            tableId: sale.tableId,
-          });
-        } catch (heldErr) {
-          console.warn("[sync] held release failed:", heldErr);
+        if (splitBillFullyPaid(sale)) {
+          try {
+            const { PosOrdersService } = await import("@/services/pos-orders.service");
+            await PosOrdersService.releaseHeldByIdentity(merchantId, {
+              ticketDisplay: sale.ticketDisplay,
+              tabNumber: sale.tabNumber,
+              tableId: sale.tableId,
+            });
+          } catch (heldErr) {
+            console.warn("[sync] held release failed:", heldErr);
+          }
         }
       }
 
