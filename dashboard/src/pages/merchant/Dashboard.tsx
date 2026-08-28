@@ -68,6 +68,8 @@ import {
   isCatalogPanelPath,
   isDeliveryDriverOnlyStaff,
   isStorekeeperOnlyStaff,
+  isStorekeeperRestrictedStaff,
+  isStorekeeperPanelPath,
   isFloorWaiterStaff,
   storekeeperHomePath,
   isOrdersPanelPath,
@@ -162,10 +164,6 @@ function MerchantShell() {
     () => jwtHasPanelAccess(user?.permissions as Permission[] | undefined, jwtIsOwner, user?.role),
     [user?.permissions, user?.role, jwtIsOwner]
   );
-  const hideChrome =
-    (((isPosRoute || isWaiterRoute) && posAppMode) ||
-      (isStorekeeperRoute && posAppMode && !managerPanelAccess)) ||
-    isPosEmbed;
 
   // Reconcile PIN session with JWT + staff roster on load (drop stale localStorage persist).
   useEffect(() => {
@@ -221,6 +219,15 @@ function MerchantShell() {
       }),
     [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession, location.pathname]
   );
+
+  const storekeeperRestricted = useMemo(
+    () => !jwtIsOwner && isStorekeeperRestrictedStaff(effective.permissions, false),
+    [jwtIsOwner, effective.permissions]
+  );
+  const hideChrome =
+    (((isPosRoute || isWaiterRoute) && posAppMode) ||
+      (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted))) ||
+    isPosEmbed;
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
   const isAllowedPinAppRoute = useMemo(() => {
@@ -424,14 +431,23 @@ function MerchantShell() {
     }
   }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
 
+  // Storekeeper staff without full panel access — mobile intake (+ optional inventory) only.
+  useEffect(() => {
+    if (jwtIsOwner || user?.role !== 'staff') return;
+    const perms = effective.permissions;
+    if (!isStorekeeperRestrictedStaff(perms, false)) return;
+    if (isStorekeeperPanelPath(location.pathname, perms)) return;
+    navigate(storekeeperHomePath(), { replace: true });
+  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+
   // Storekeeper-only staff use the mobile intake app, not the full panel.
   useEffect(() => {
-    if (managerPanelAccess) return;
+    if (jwtIsOwner) return;
     if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
-  }, [managerPanelAccess, effective.permissions, location.pathname, navigate]);
+  }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
 
   // PIN-scoped staff without back-office access cannot browse the manager panel.
   useEffect(() => {
@@ -477,7 +493,7 @@ function MerchantShell() {
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
 
-  const menuItems = [
+  const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
     { label: t('orders'), path: '/merchant/orders', icon: '📦' },
     ...(allow('/merchant/sales/reservations')
@@ -584,6 +600,36 @@ function MerchantShell() {
       return false;
     });
 
+  const menuItems = storekeeperRestricted
+    ? [
+        ...(allowStorekeeper('/merchant/storekeeper')
+          ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
+          : []),
+        ...(allowInventory('/merchant/inventory')
+          ? [
+              {
+                id: 'inventory',
+                label: t('invTitle'),
+                icon: '📦',
+                children: fullMenuItems
+                  .find((entry) => 'id' in entry && entry.id === 'inventory')
+                  ?.children?.filter((item) => {
+                    if ('heading' in item && item.heading) return true;
+                    const path = 'path' in item ? item.path : '';
+                    return path && allowInventory(path);
+                  }),
+              },
+            ].filter((entry) => (entry.children?.length ?? 0) > 0)
+          : []),
+      ].filter((entry) => {
+        if ('children' in entry && Array.isArray(entry.children)) {
+          return entry.children.length > 0;
+        }
+        if (entry.path) return allow(entry.path);
+        return false;
+      })
+    : fullMenuItems;
+
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
       {!hideChrome && (
@@ -595,19 +641,28 @@ function MerchantShell() {
           registerDisplay={registerDisplay}
           showStaffSwitch={hasStaffPins}
           quickAction={
-            showWebPosQuickAction
+            !storekeeperRestricted && showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
               : null
           }
           language={locale}
           onLanguageChange={changeLanguage}
           profileMenu={{
-            settingsPath: allow('/merchant/settings') ? '/merchant/settings' : undefined,
-            billingPath: allow('/merchant/billing') ? '/merchant/billing' : undefined,
-            supportPath: allow('/merchant/support') ? '/merchant/support' : undefined,
+            settingsPath:
+              !storekeeperRestricted && allow('/merchant/settings')
+                ? '/merchant/settings'
+                : undefined,
+            billingPath:
+              !storekeeperRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
+            supportPath:
+              !storekeeperRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
           }}
           shopName={merchantShopName}
-          shopPath={allow('/merchant/platform-shop') ? '/merchant/platform-shop' : null}
+          shopPath={
+            !storekeeperRestricted && allow('/merchant/platform-shop')
+              ? '/merchant/platform-shop'
+              : null
+          }
         />
       )}
 

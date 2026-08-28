@@ -274,6 +274,34 @@ export function isStorekeeperOnlyStaff(
   return true;
 }
 
+/**
+ * Storekeeper staff without full panel access — may use the mobile intake app
+ * and (optionally) inventory pages, but not CMS, users, sales, etc.
+ */
+export function isStorekeeperRestrictedStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  return true;
+}
+
+export function isStorekeeperPanelPath(
+  pathname: string,
+  permissions: Permission[] | undefined
+): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  if (path === '/merchant/storekeeper' || path.startsWith('/merchant/storekeeper/')) {
+    return true;
+  }
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) {
+    return path === '/merchant/inventory' || path.startsWith('/merchant/inventory/');
+  }
+  return false;
+}
+
 export function storekeeperHomePath(): string {
   return '/merchant/storekeeper';
 }
@@ -320,6 +348,7 @@ export function canStaffOpenBackOffice(
   if (isOwner) return true;
   if (normalizeStaffLoginHome(loginHome) === 'pos') return false;
   if (isFloorWaiterStaff(permissions, false)) return false;
+  if (isStorekeeperRestrictedStaff(permissions, false)) return false;
   return jwtHasPanelAccess(permissions, false, 'staff');
 }
 

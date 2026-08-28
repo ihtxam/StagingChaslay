@@ -11,6 +11,7 @@ import {
   toAndroidPermissions,
   waiterBlockedPermissions,
   waiterSystemKind,
+  storekeeperBlockedPermissions,
   type Permission,
 } from "@/lib/permissions";
 import {
@@ -72,6 +73,7 @@ export class StaffService {
     await this.ensureManagerViewAllSales(merchantId);
     // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
+    await this.enforceStorekeeperPanelRestrictions(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
@@ -187,6 +189,51 @@ export class StaffService {
     }
   }
 
+  /** Storekeeper staff should use the mobile intake app, not the merchant panel. */
+  static async syncStorekeeperLoginHome(merchantId: string) {
+    const db = getDb();
+    const staffRows = await db.query.merchantStaff.findMany({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+    });
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const roleById = new Map(roles.map((r) => [r.id, r]));
+    for (const member of staffRows) {
+      const role = roleById.get(member.roleId);
+      if (!role || role.name.trim().toLowerCase() !== "storekeeper") continue;
+      if (normalizeStaffLoginHome(member.loginHome) === "pos") continue;
+      await db
+        .update(schema.merchantStaff)
+        .set({ loginHome: "pos", updatedAt: new Date() })
+        .where(eq(schema.merchantStaff.id, member.id));
+    }
+  }
+
+  /**
+   * Strip full panel access from the system Storekeeper role.
+   * Mobile intake only — inventory managers should use a different role.
+   */
+  static async enforceStorekeeperPanelRestrictions(merchantId: string) {
+    await this.ensureStorekeeperSystemRole(merchantId);
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
+    });
+    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
+    const expected = template ? encodePermissions(template.permissions) : encodePermissions(["STOREKEEPER_INTAKE"]);
+    for (const role of roles) {
+      if (role.name.trim().toLowerCase() !== "storekeeper") continue;
+      if (role.permissions !== expected) {
+        await db
+          .update(schema.merchantRoles)
+          .set({ permissions: expected, updatedAt: new Date() })
+          .where(eq(schema.merchantRoles.id, role.id));
+      }
+    }
+    await this.syncStorekeeperLoginHome(merchantId);
+  }
+
   static async listRoles(merchantId: string) {
     await this.ensureDefaultRoles(merchantId);
     const db = getDb();
@@ -223,6 +270,7 @@ export class StaffService {
       .where(eq(schema.merchantRoles.id, roleId))
       .returning();
     await this.enforceWaiterFloorRestrictions(merchantId);
+    await this.enforceStorekeeperPanelRestrictions(merchantId);
     return (
       (await db.query.merchantRoles.findFirst({
         where: eq(schema.merchantRoles.id, roleId),

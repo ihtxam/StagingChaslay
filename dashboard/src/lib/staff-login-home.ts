@@ -15,9 +15,11 @@ export function loginHomeFromPermissions(
     permissions.includes('ACCESS_PANEL') ||
     permissions.includes('MANAGE_PRODUCTS') ||
     permissions.includes('VIEW_ORDER_HISTORY') ||
-    permissions.includes('MANAGE_INVENTORY') ||
-    permissions.includes('STOREKEEPER_INTAKE');
+    permissions.includes('MANAGE_INVENTORY');
   if (hasPos && !hasPanel) return 'pos';
   if (hasPanel) return 'panel';
+  if (permissions.includes('STOREKEEPER_INTAKE') || permissions.includes('DELIVERY_ORDERS')) {
+    return 'pos';
+  }
   return hasPos ? 'pos' : 'panel';
 }

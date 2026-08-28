@@ -16,11 +16,11 @@ function requireStaffManage(req: Request, res: Response, next: () => void) {
   return res.status(403).json({ error: "Staff management permission required" });
 }
 
-router.get("/permissions", (_req: Request, res: Response) => {
+router.get("/permissions", requireStaffManage, (_req: Request, res: Response) => {
   res.json({ success: true, permissions: ALL_PERMISSIONS });
 });
 
-router.get("/roles", async (req: Request, res: Response) => {
+router.get("/roles", requireStaffManage, async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const roles = await StaffService.listRoles(merchantId);
@@ -77,8 +77,26 @@ router.delete("/roles/:roleId", requireStaffManage, async (req: Request, res: Re
 router.get("/staff", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
+    const canManage =
+      req.user?.role === "merchant" ||
+      (req.user?.permissions || []).some((p) => p === "MANAGE_STAFF" || p === "MANAGE_ROLES");
     const staff = await StaffService.listStaff(merchantId);
-    res.json({ success: true, staff });
+    if (canManage) {
+      res.json({ success: true, staff });
+      return;
+    }
+    res.json({
+      success: true,
+      staff: staff.map((s) => ({
+        id: s.id,
+        name: s.name,
+        roleId: s.roleId,
+        roleName: s.roleName,
+        permissions: s.permissions,
+        isActive: s.isActive,
+        pinSet: s.pinSet,
+      })),
+    });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list staff" });
   }

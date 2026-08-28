@@ -288,3 +288,36 @@ export function waiterBlockedPermissions(kind: WaiterSystemKind): Permission[] {
   }
   return blocked;
 }
+
+const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
+  "ACCESS_PANEL",
+  "VIEW_REPORTS",
+  "VIEW_ALL_SALES",
+  "MANAGE_STAFF",
+  "MANAGE_ROLES",
+  "MANAGE_BILLING",
+  "MANAGE_SETTINGS",
+  "MANAGE_CUSTOMERS",
+  "MANAGE_OFFERS",
+  "MANAGE_ONLINE_SHOP",
+  "MANAGE_PRODUCTS",
+  "VIEW_ORDER_HISTORY",
+  "USE_WEBPOS",
+  "USE_POS",
+  "PROCESS_PAYMENTS",
+  "APPLY_DISCOUNTS",
+  "OPEN_CASH_DRAWER",
+  "SEND_KITCHEN",
+  "MANAGE_TABLES",
+  "TAKEAWAY_ORDERS",
+  "DELIVERY_ORDERS",
+  "VIEW_DELIVERY_TRACKING",
+  "CANCEL_ORDERS",
+  "REFUND_ORDERS",
+  "END_OF_DAY",
+  "MANAGE_INVENTORY",
+];
+
+export function storekeeperBlockedPermissions(): Permission[] {
+  return [...STOREKEEPER_PRIVILEGED_BLOCKED];
+}
