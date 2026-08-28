@@ -45,7 +45,6 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
     if (!open) return;
     setQ('');
     setShowCreate(false);
-    void load('');
   }, [open]);
 
   const load = async (search: string) => {
@@ -64,7 +63,9 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
 
   useEffect(() => {
     if (!open) return;
-    const id = setTimeout(() => void load(q.trim()), 250);
+    const search = q.trim();
+    const delay = search ? 250 : 0;
+    const id = setTimeout(() => void load(search), delay);
     return () => clearTimeout(id);
   }, [q, open]);
 
