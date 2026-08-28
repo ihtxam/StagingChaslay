@@ -36,6 +36,8 @@ const emptyForm = () => ({
   date: ymdZurich(),
   time: '19:00',
   notes: '',
+  status: 'confirmed',
+  source: 'pos',
 });
 
 export default function WebPosBookingsView() {
@@ -173,7 +175,8 @@ export default function WebPosBookingsView() {
       await api.post('/merchant/reservations', {
         ...form,
         partySize: Number(form.partySize),
-        source: 'pos',
+        source: form.source || 'pos',
+        status: form.status || 'confirmed',
         skipSlotCheck: true,
       });
       toast.success(t('created'));
@@ -444,6 +447,32 @@ export default function WebPosBookingsView() {
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs block">
+                <span className="mb-1 block text-stone-500">{t('reservationsStatus')}</span>
+                <select
+                  className="input w-full"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  <option value="confirmed">{t('reservationsConfirmed')}</option>
+                  <option value="pending">{t('reservationsPending')}</option>
+                </select>
+              </label>
+              <label className="text-xs block">
+                <span className="mb-1 block text-stone-500">{t('reservationsSource')}</span>
+                <select
+                  className="input w-full"
+                  value={form.source}
+                  onChange={(e) => setForm({ ...form, source: e.target.value })}
+                >
+                  <option value="pos">{t('settingsPos')}</option>
+                  <option value="phone">{t('reservationsSourcePhone')}</option>
+                  <option value="walk_in">{t('reservationsSourceWalkIn')}</option>
+                  <option value="online">{t('reservationsSourceOnline')}</option>
+                </select>
+              </label>
+            </div>
             <p className="text-xs text-stone-500">{t('reservationsSendConfirmEmail')}</p>
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)} disabled={createBusy}>
