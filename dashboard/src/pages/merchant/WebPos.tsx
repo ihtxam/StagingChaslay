@@ -8441,17 +8441,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const printerMissing = printerDisconnected || printerNameMissing;
 
-  const suggestedPrinters = useMemo(() => {
-    if (!printerMissing) return [];
-    const fromWebPos = findPrinterHealCandidates(printerName, printers);
-    if (fromWebPos.length) return fromWebPos;
-    for (const n of configuredPrinterNames) {
-      const found = findPrinterHealCandidates(n, printers);
-      if (found.length) return found;
-    }
-    return [];
-  }, [printerMissing, printerName, printers, configuredPrinterNames]);
-
   const notificationOrders = useMemo(() => {
     const online = onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id));
     const local = localPosOrderAlerts.filter((o) => localPosOrderIdsRef.current.has(o.id));
@@ -8751,33 +8740,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         settingsPanel={
           <WebPosSettingsDropdown
-            printerName={printerName}
-            printers={printers}
             agentOk={agentOk}
             printerMissing={printerMissing}
-            suggestedPrinters={suggestedPrinters}
             agentOutdated={agentOutdated}
             isLocalPrintStation={isLocalPrint}
             mainTillOnline={mainTillOnline}
             mainTillPrintAgentOnline={mainTillPrintAgentOnline}
             postSuccessTarget={postSuccessTarget}
-            onPrinterChange={(name) => {
-              setPrinterName(name);
-              setPrinterDisconnected(false);
-              const profiles = printSettings?.printers;
-              if (!name || !profiles?.length) return;
-              let changed = false;
-              const nextProfiles = profiles.map((p) => {
-                const current = (p.name || '').trim();
-                if (!current || !isConfiguredPrinterMissing(current, printers)) return p;
-                changed = true;
-                return { ...p, name };
-              });
-              if (!changed) return;
-              const next = { ...printSettings, printers: nextProfiles };
-              setPrintSettings(next);
-              void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
-            }}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();

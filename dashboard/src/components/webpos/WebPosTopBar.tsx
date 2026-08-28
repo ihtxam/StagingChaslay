@@ -23,7 +23,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
-import { isUnsuitableRawPrinter } from '@/lib/print-agent';
 import type { PosTab, PosView } from './types';
 
 export type WebPosColorTheme = 'teal' | 'green' | 'blue' | 'violet' | 'mono';
@@ -597,17 +596,13 @@ export default function WebPosTopBar({
 }
 
 export function WebPosSettingsDropdown({
-  printerName,
-  printers,
   agentOk,
   printerMissing = false,
-  suggestedPrinters = [],
   agentOutdated = false,
   isLocalPrintStation = true,
   mainTillOnline = false,
   mainTillPrintAgentOnline = false,
   postSuccessTarget,
-  onPrinterChange,
   onPostSuccessChange,
   onRefreshPrinters,
   onReloadCatalog,
@@ -646,17 +641,13 @@ export function WebPosSettingsDropdown({
   selectedTerminalId = '',
   onTerminalChange,
 }: {
-  printerName: string;
-  printers: Array<{ name: string; isDefault?: boolean }>;
   agentOk: boolean;
   printerMissing?: boolean;
-  suggestedPrinters?: Array<{ name: string }>;
   agentOutdated?: boolean;
   isLocalPrintStation?: boolean;
   mainTillOnline?: boolean;
   mainTillPrintAgentOnline?: boolean;
   postSuccessTarget: 'register' | 'tables';
-  onPrinterChange: (name: string) => void;
   onPostSuccessChange: (v: 'register' | 'tables') => void;
   onRefreshPrinters: () => void;
   onReloadCatalog: () => void;
@@ -1016,41 +1007,11 @@ export function WebPosSettingsDropdown({
             <MoreHorizontal size={14} />
             {t('webPosPrinting')}
           </div>
-          <label className="block space-y-1 text-xs">
-            <span className="text-[11px] text-stone-500">{t('webPosPrinter')}</span>
-            <select
-              className="input w-full text-xs"
-              value={
-                printerName &&
-                printers.some((p) => p.name === printerName)
-                  ? printerName
-                  : ''
-              }
-              onChange={(e) => onPrinterChange(e.target.value)}
-              disabled={!agentOk}
-            >
-              <option value="">{t('webPosDefaultPrinter')}</option>
-              {printers.map((p) => {
-                const bad = isUnsuitableRawPrinter(p.name);
-                return (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                    {p.isDefault ? t('webPosDefaultSuffix') : ''}
-                    {bad ? t('webPosPrinterNotThermal') : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-          {printerMissing && printerName ? (
-            <p className="text-[10px] leading-snug text-amber-800">
-              {t('webPosPrinterNotFound').replace('{name}', printerName)}
-            </p>
-          ) : null}
           <button
             type="button"
             className="btn-secondary justify-start w-full text-xs"
             onClick={onRefreshPrinters}
+            disabled={!agentOk}
           >
             <RefreshCw size={14} />
             {t('webPosRefreshPrinters')}
@@ -1072,25 +1033,6 @@ export function WebPosSettingsDropdown({
           </p>
           {agentOk && printerMissing ? (
             <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
-          ) : null}
-          {printerMissing && agentOk ? (
-            <div className="space-y-1.5">
-              {suggestedPrinters
-                .filter((p) => p.name && p.name !== printerName)
-                .map((p) => (
-                  <button
-                    key={p.name}
-                    type="button"
-                    className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
-                    onClick={() => onPrinterChange(p.name)}
-                  >
-                    {t('webPosUsePrinter').replace('{name}', p.name)}
-                  </button>
-                ))}
-            </div>
-          ) : null}
-          {printerName && isUnsuitableRawPrinter(printerName) ? (
-            <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
           ) : null}
         </div>
       ) : (

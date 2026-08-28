@@ -104,10 +104,25 @@ function Send-RawToPrinter {
                 $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "StartPagePrinter failed for '$Printer' (Win32=$err)."
             }
-            $written = 0
-            if (-not [RawPrinterHelper]::WritePrinter($handle, $Data, $Data.Length, [ref]$written)) {
-                $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-                throw "WritePrinter failed for '$Printer' (Win32=$err)."
+            $chunkSize = 512
+            $offset = 0
+            while ($offset -lt $Data.Length) {
+                $len = [Math]::Min($chunkSize, $Data.Length - $offset)
+                $slice = New-Object byte[] $len
+                [Array]::Copy($Data, $offset, $slice, 0, $len)
+                $written = 0
+                if (-not [RawPrinterHelper]::WritePrinter($handle, $slice, $len, [ref]$written)) {
+                    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                    throw "WritePrinter failed for '$Printer' (Win32=$err)."
+                }
+                $offset += $len
+                if ($Data.Length -gt $chunkSize -and $offset -lt $Data.Length) {
+                    Start-Sleep -Milliseconds 25
+                }
+            }
+            if ($Data.Length -gt $chunkSize) {
+                $waitMs = [Math]::Min(4000, [Math]::Max(100, [int]($Data.Length / $chunkSize * 80)))
+                Start-Sleep -Milliseconds $waitMs
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
