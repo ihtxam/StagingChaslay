@@ -95,6 +95,9 @@ export default function CheckoutPage() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [deliveryAddressOpen, setDeliveryAddressOpen] = useState(false);
   const [channelBeforeDelivery, setChannelBeforeDelivery] = useState<ShopChannel | null>(null);
+  const [voucherInputOpen, setVoucherInputOpen] = useState(false);
+  const [voucherInput, setVoucherInput] = useState('');
+  const [applyingVoucher, setApplyingVoucher] = useState(false);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -470,6 +473,64 @@ export default function CheckoutPage() {
   const pointsCoverFullOrder = payWithPoints && pointsDiscount > 0 && total <= 0.001;
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
+
+  const applyVoucher = async () => {
+    const code = voucherInput.trim();
+    if (!code) return;
+    setApplyingVoucher(true);
+    setError(null);
+    try {
+      const token = loadCustomerToken(shopKey);
+      const res = await axios.post(
+        `/api/shop/${shopKey}/vouchers/validate`,
+        { code, subtotal },
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      patch({
+        voucherCode: res.data.code,
+        voucherDiscount: Number(res.data.discount) || 0,
+        voucherName: res.data.name || res.data.code,
+      });
+      setVoucherInputOpen(false);
+      setVoucherInput('');
+    } catch (e: any) {
+      setError(e.response?.data?.error || t('shopVoucherInvalid'));
+    } finally {
+      setApplyingVoucher(false);
+    }
+  };
+
+  const removeVoucher = () => {
+    patch({ voucherCode: '', voucherDiscount: 0, voucherName: '' });
+    setVoucherInput('');
+    setVoucherInputOpen(false);
+  };
+
+  useEffect(() => {
+    if (!draft.voucherCode || voucherDiscount <= 0) return;
+    const token = loadCustomerToken(shopKey);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.post(
+          `/api/shop/${shopKey}/vouchers/validate`,
+          { code: draft.voucherCode, subtotal },
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        );
+        if (cancelled) return;
+        const nextDiscount = Number(res.data.discount) || 0;
+        if (nextDiscount !== voucherDiscount) {
+          patch({ voucherDiscount: nextDiscount, voucherName: res.data.name || draft.voucherCode });
+        }
+      } catch {
+        if (!cancelled) removeVoucher();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal, draft.voucherCode]);
 
   const setLineQty = (lineId: string, quantity: number) => {
     setDraft((d) => {
@@ -1377,14 +1438,48 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              <div className="border-t border-stone-100 pt-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('shopOffers')}</p>
+                {draft.voucherCode && voucherDiscount > 0 ? (
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-teal-800">
+                      {draft.voucherName || draft.voucherCode}: − CHF {voucherDiscount.toFixed(2)}
+                    </span>
+                    <button type="button" className="text-xs font-semibold text-stone-600" onClick={removeVoucher}>
+                      {t('shopRemoveVoucher')}
+                    </button>
+                  </div>
+                ) : voucherInputOpen ? (
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 border border-stone-300 px-3 py-2 text-sm uppercase"
+                      placeholder={t('shopEnterDiscountCode')}
+                      value={voucherInput}
+                      onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
+                    />
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-sm font-semibold bg-stone-900 text-white disabled:opacity-40"
+                      disabled={applyingVoucher || !voucherInput.trim()}
+                      onClick={() => void applyVoucher()}
+                    >
+                      {applyingVoucher ? t('shopChecking') : t('shopApplyVoucher')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="w-full border border-stone-300 text-sm font-semibold py-2"
+                    onClick={() => setVoucherInputOpen(true)}
+                  >
+                    {t('shopEnterDiscountCode')}
+                  </button>
+                )}
+              </div>
+
               {offerDiscount > 0 ? (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 px-3 py-2">
                   {(offerLabels.join(', ') || t('shopOffer')) + `: - CHF ${offerDiscount.toFixed(2)}`}
-                </p>
-              ) : null}
-              {voucherDiscount > 0 && draft.voucherCode ? (
-                <p className="text-sm text-teal-800 bg-teal-50 border border-teal-100 px-3 py-2">
-                  {(draft.voucherName || draft.voucherCode) + `: - CHF ${voucherDiscount.toFixed(2)}`}
                 </p>
               ) : null}
 

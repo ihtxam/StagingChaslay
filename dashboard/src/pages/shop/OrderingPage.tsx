@@ -19,7 +19,7 @@ import {
   type ShopComboSelection,
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
-import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
+import { roundMoney2 } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopProductModifiersModal, {
@@ -35,7 +35,6 @@ import ShopComboWizard, {
 import { CalendarDays, ChevronDown, Info, Plus, ShoppingBag, User } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
-import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
@@ -48,7 +47,6 @@ import ShopOfferPicker, {
 } from '@/components/shop/ShopOfferPicker';
 import { findNextOpen, type StoreHours } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
-import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -123,7 +121,6 @@ export default function OrderingPage() {
   const prevItemCountRef = useRef(0);
   const hasAutoOpenedCartRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
-  const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
@@ -160,10 +157,6 @@ export default function OrderingPage() {
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   /** true = every category expanded; false = headers only */
   const [allCategoriesOpen, setAllCategoriesOpen] = useState(true);
-  const [voucherInputOpen, setVoucherInputOpen] = useState(false);
-  const [voucherInput, setVoucherInput] = useState('');
-  const [applyingVoucher, setApplyingVoucher] = useState(false);
-
   useEffect(() => {
     if (!shopKey) {
       setLoading(false);
@@ -334,12 +327,6 @@ export default function OrderingPage() {
     );
   const catalogUnitPrice = (productPrice: number, categoryId?: string | null) =>
     roundMoney2(productPrice + itemDeliveryMarkup(categoryId));
-  const taxRate = useMemo(() => {
-    if (!merchant) return 0;
-    if (channel === 'dine_in') return Number(merchant.taxDineInRate ?? merchant.vatRate ?? 0);
-    if (channel === 'delivery') return Number(merchant.taxDeliveryRate ?? merchant.vatRate ?? 0);
-    return Number(merchant.taxTakeawayRate ?? merchant.vatRate ?? 0);
-  }, [merchant, channel]);
 
   /** Keep cart line prices in sync when switching takeaway ↔ delivery (markup). */
   useEffect(() => {
@@ -422,19 +409,6 @@ export default function OrderingPage() {
   }, [channel, deliveryMenuMarkup, merchant, shopOffers, categoryDeliveryMap, categoryPricingEnabled]);
 
   const cartTotal = roundMoney2(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
-  const voucherDiscount = roundMoney2(Math.max(0, Number(draft.voucherDiscount) || 0));
-  const discountedSubtotal = roundMoney2(Math.max(0, cartTotal - voucherDiscount));
-  const effectiveDeliveryInfo = useMemo(
-    () => withDeliveryMinOrderStatus(deliveryInfo, cartTotal),
-    [deliveryInfo, cartTotal]
-  );
-  const deliveryFee = roundMoney2(
-    channel === 'delivery' ? Number(effectiveDeliveryInfo?.zone?.deliveryFee || 0) : 0
-  );
-  const tax = roundMoney2(((discountedSubtotal + deliveryFee) * taxRate) / 100);
-  const rawTotal = discountedSubtotal + deliveryFee + tax;
-  const rounding = roundingAdjustment(rawTotal);
-  const total = roundTo005(rawTotal);
   const channelMeta = channels[channel];
   const itemCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartLayout = merchant?.cartLayout === 'sticky_right' ? 'sticky_right' : 'hidden_slide';
@@ -764,95 +738,6 @@ export default function OrderingPage() {
     }));
   };
 
-  const applyVoucher = async () => {
-    const code = voucherInput.trim();
-    if (!code) return;
-    setApplyingVoucher(true);
-    setError(null);
-    try {
-      const token = loadCustomerToken(shopKey);
-      const res = await axios.post(
-        `/api/shop/${shopKey}/vouchers/validate`,
-        { code, subtotal: cartTotal },
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
-      patch({
-        voucherCode: res.data.code,
-        voucherDiscount: Number(res.data.discount) || 0,
-        voucherName: res.data.name || res.data.code,
-      });
-      setVoucherInputOpen(false);
-      setVoucherInput('');
-    } catch (e: any) {
-      setError(e.response?.data?.error || t('shopVoucherInvalid'));
-    } finally {
-      setApplyingVoucher(false);
-    }
-  };
-
-  const removeVoucher = () => {
-    patch({ voucherCode: '', voucherDiscount: 0, voucherName: '' });
-    setVoucherInput('');
-    setVoucherInputOpen(false);
-  };
-
-  useEffect(() => {
-    if (!draft.voucherCode || voucherDiscount <= 0) return;
-    const token = loadCustomerToken(shopKey);
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await axios.post(
-          `/api/shop/${shopKey}/vouchers/validate`,
-          { code: draft.voucherCode, subtotal: cartTotal },
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-        );
-        if (cancelled) return;
-        const nextDiscount = Number(res.data.discount) || 0;
-        if (nextDiscount !== voucherDiscount) {
-          patch({ voucherDiscount: nextDiscount, voucherName: res.data.name || draft.voucherCode });
-        }
-      } catch {
-        if (!cancelled) removeVoucher();
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartTotal, draft.voucherCode]);
-
-  const checkDeliveryPreview = async () => {
-    if (!draft.address.trim()) {
-      setError(t('shopEnterDeliveryAddress'));
-      return;
-    }
-    setCheckingDelivery(true);
-    setError(null);
-    try {
-      const query = `${draft.address}, ${draft.zipCode} ${draft.city || merchant?.city || ''} Switzerland`;
-      const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, { query });
-      const lat = geoRes.data.found ? Number(geoRes.data.lat) : undefined;
-      const lng = geoRes.data.found ? Number(geoRes.data.lng) : undefined;
-      if (lat != null && lng != null) patch({ lat, lng });
-      const res = await axios.post(`/api/shop/${shopKey}/check-delivery`, {
-        lat,
-        lng,
-        zipCode: draft.zipCode,
-        subtotal: cartTotal,
-      });
-      setDeliveryInfo(res.data);
-      patch({ deliveryInfo: res.data });
-      if (!res.data.deliverable) setError(res.data.error || t('shopOutsideDelivery'));
-    } catch (e: any) {
-      setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
-      setDeliveryInfo(null);
-      patch({ deliveryInfo: undefined });
-    } finally {
-      setCheckingDelivery(false);
-    }
-  };
-
   const goCheckout = () => {
     if (!cart.length) return;
     if (merchant?.acceptingOrders === false) {
@@ -866,14 +751,6 @@ export default function OrderingPage() {
     const allowScheduled = merchant?.scheduledOrdersEnabled !== false;
     if (!channelMeta?.open && !allowScheduled) {
       setError(t('shopOrdersOnlyWhenOpen'));
-      return;
-    }
-    if (channel === 'delivery' && effectiveDeliveryInfo && !effectiveDeliveryInfo.deliverable) {
-      setError(t('shopOutsideDeliverySwitch'));
-      return;
-    }
-    if (channel === 'delivery' && effectiveDeliveryInfo && !effectiveDeliveryInfo.meetsMinOrder) {
-      setError(effectiveDeliveryInfo.message || t('shopMinOrderNotMet'));
       return;
     }
     // Closed now is OK when scheduled orders are enabled - checkout offers later slots.
@@ -1026,10 +903,6 @@ export default function OrderingPage() {
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
-
-  const fulfillmentLocked =
-    !!draft.fulfillmentConfirmed &&
-    (channel !== 'delivery' || (!!draft.address.trim() && !!effectiveDeliveryInfo?.deliverable));
 
   const Basket = (
     <aside className="bg-white border border-stone-200 flex flex-col max-h-[calc(100dvh-6rem)] min-h-[12rem]">
@@ -1200,159 +1073,7 @@ export default function OrderingPage() {
       </div>
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
-        {channel === 'delivery' && (
-          fulfillmentLocked ? (
-            <div className="space-y-1 pb-2 border-b border-stone-100">
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-                {t('shopDeliverTo')}
-              </p>
-              <p className="text-sm font-medium text-stone-900">
-                {draft.address}
-                {draft.zipCode || draft.city
-                  ? `, ${[draft.zipCode, draft.city].filter(Boolean).join(' ')}`
-                  : ''}
-              </p>
-              {effectiveDeliveryInfo?.deliverable && (
-                <p className={`text-xs ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
-                  {effectiveDeliveryInfo.zone?.name}: {t('shopFee')} CHF{' '}
-                  {Number(effectiveDeliveryInfo.zone?.deliveryFee || 0).toFixed(2)}
-                  {Number(effectiveDeliveryInfo.zone?.minOrderAmount || 0) > 0
-                    ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone?.minOrderAmount).toFixed(2)}`
-                    : ''}
-                </p>
-              )}
-              <button
-                type="button"
-                className="text-xs font-semibold text-stone-600 underline"
-                onClick={() => openChannelPrompt()}
-              >
-                {t('edit')}
-              </button>
-            </div>
-          ) : (
-          <div className="space-y-2 pb-2 border-b border-stone-100">
-            <p className="text-xs text-stone-500">{t('shopCheckDeliverHint')}</p>
-            <input
-              className="w-full border border-stone-300 px-3 py-2 text-sm"
-              placeholder={t('shopStreetAddress')}
-              value={draft.address}
-              onChange={(e) => patch({ address: e.target.value, fulfillmentConfirmed: false, deliveryInfo: undefined })}
-            />
-            <ZipCityFields
-              shopKey={shopKey}
-              zipCode={draft.zipCode}
-              city={draft.city}
-              onZipChange={(zipCode) => patch({ zipCode, fulfillmentConfirmed: false, deliveryInfo: undefined })}
-              onCityChange={(city) => patch({ city, fulfillmentConfirmed: false, deliveryInfo: undefined })}
-              zipClassName="w-full border border-stone-300 px-3 py-2 text-sm"
-              cityClassName="w-full border border-stone-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => void checkDeliveryPreview()}
-              className="w-full border border-stone-900 text-sm font-semibold py-2"
-              disabled={checkingDelivery}
-            >
-              {checkingDelivery ? t('shopChecking') : t('shopCheckDeliveryZone')}
-            </button>
-            {effectiveDeliveryInfo?.deliverable && (
-              <p className={`text-xs ${effectiveDeliveryInfo.meetsMinOrder ? 'text-teal-800' : 'text-amber-800'}`}>
-                {effectiveDeliveryInfo.zone.name}: {t('shopFee')} CHF {Number(effectiveDeliveryInfo.zone.deliveryFee).toFixed(2)}
-                {effectiveDeliveryInfo.zone.minOrderAmount > 0
-                  ? ` · ${t('shopMin')} CHF ${Number(effectiveDeliveryInfo.zone.minOrderAmount).toFixed(2)}`
-                  : ''}
-                {!effectiveDeliveryInfo.meetsMinOrder && effectiveDeliveryInfo.message
-                  ? ` · ${effectiveDeliveryInfo.message}`
-                  : ''}
-              </p>
-            )}
-          </div>
-          )
-        )}
-
-        <div className="border-t border-stone-100 pt-3 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('shopOffers')}</p>
-          {draft.voucherCode && voucherDiscount > 0 ? (
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="text-teal-800">
-                {draft.voucherName || draft.voucherCode}: − CHF {voucherDiscount.toFixed(2)}
-              </span>
-              <button type="button" className="text-xs font-semibold text-stone-600" onClick={removeVoucher}>
-                {t('shopRemoveVoucher')}
-              </button>
-            </div>
-          ) : voucherInputOpen ? (
-            <div className="flex gap-2">
-              <input
-                className="flex-1 border border-stone-300 px-3 py-2 text-sm uppercase"
-                placeholder={t('shopEnterDiscountCode')}
-                value={voucherInput}
-                onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
-              />
-              <button
-                type="button"
-                className="px-3 py-2 text-sm font-semibold bg-stone-900 text-white disabled:opacity-40"
-                disabled={applyingVoucher || !voucherInput.trim()}
-                onClick={() => void applyVoucher()}
-              >
-                {applyingVoucher ? t('shopChecking') : t('shopApplyVoucher')}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="w-full border border-stone-300 text-sm font-semibold py-2"
-              onClick={() => setVoucherInputOpen(true)}
-            >
-              {t('shopEnterDiscountCode')}
-            </button>
-          )}
-        </div>
-
-        <div className="text-sm space-y-1 pt-1">
-          <div className="flex justify-between">
-            <span className="text-stone-500">{t('shopSubtotal')}</span>
-            <span>CHF {cartTotal.toFixed(2)}</span>
-          </div>
-          {voucherDiscount > 0 && (
-            <div className="flex justify-between text-teal-800">
-              <span>{t('shopVoucherDiscount')}</span>
-              <span>− CHF {voucherDiscount.toFixed(2)}</span>
-            </div>
-          )}
-          {deliveryFee > 0 && (
-            <div className="flex justify-between">
-              <span className="text-stone-500">{t('shopDelivery')}</span>
-              <span>CHF {deliveryFee.toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-stone-500">{t('shopTax')} ({taxRate}%)</span>
-            <span>CHF {tax.toFixed(2)}</span>
-          </div>
-          {rounding !== 0 && (
-            <div className="flex justify-between">
-              <span className="text-stone-500">{t('shopRounding')}</span>
-              <span>
-                {rounding > 0 ? '+' : ''}CHF {rounding.toFixed(2)}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between font-bold text-base pt-1">
-            <span>{t('shopEstTotal')}</span>
-            <span>CHF {total.toFixed(2)}</span>
-          </div>
-        </div>
-
         {error && <p className="text-red-600 text-sm">{error}</p>}
-        {!channelMeta?.open && (
-          <p className="text-amber-700 text-sm">
-            {t('shopClosedNow')} · {channelMeta?.todayLabel || '-'}
-            {allowScheduledOrders
-              ? ` - ${t('shopContinueScheduleLater')}`
-              : ` - ${t('shopOrdersOnlyWhenOpen')}`}
-          </p>
-        )}
 
         <button
           type="button"
@@ -1375,9 +1096,6 @@ export default function OrderingPage() {
                 ? t('shopGoCheckout')
                 : t('shopScheduleCheckout')}
         </button>
-        <p className="text-[11px] text-stone-400 text-center">
-          {vacationActive ? t('shopVacationOrdersBlocked') : t('shopCheckoutHint')}
-        </p>
       </div>
     </aside>
   );
