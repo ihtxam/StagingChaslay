@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -10,6 +10,7 @@ import {
   Globe2,
   Languages,
   Mail,
+  MapPin,
   Monitor,
   Package,
   Percent,
@@ -19,6 +20,7 @@ import {
   Search,
   SlidersHorizontal,
   Truck,
+  Users,
   UtensilsCrossed,
   ChefHat,
 } from 'lucide-react';
@@ -70,6 +72,10 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
+import Staff from './Staff';
+import DeliveryTrackingPage from './DeliveryTracking';
+import { useAuthStore } from '@/store/auth';
+import { canAccessRoute } from '@/lib/permissions';
 
 interface SettingsData {
   name: string;
@@ -273,13 +279,58 @@ type TabId =
   | 'tables'
   | 'shop'
   | 'delivery'
+  | 'delivery-map'
   | 'hours'
   | 'reservations'
   | 'pos'
   | 'payments'
   | 'receipt'
+  | 'kds'
+  | 'ods'
   | 'email'
-  | 'language';
+  | 'language'
+  | 'users';
+
+const SETTINGS_TAB_IDS: TabId[] = [
+  'business',
+  'taxes',
+  'tables',
+  'shop',
+  'delivery',
+  'delivery-map',
+  'hours',
+  'reservations',
+  'pos',
+  'payments',
+  'receipt',
+  'kds',
+  'ods',
+  'email',
+  'language',
+  'users',
+];
+
+function parseSettingsTabFromSearch(search: string): TabId {
+  try {
+    const params = new URLSearchParams(search);
+    const q = params.get('tab');
+    if (q && SETTINGS_TAB_IDS.includes(q as TabId)) return q as TabId;
+    if (q === 'payments') return 'payments';
+    if (q === 'tables') return 'tables';
+    const section = params.get('section');
+    if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
+    if (q === 'taxes') return 'taxes';
+    if (q === 'pos' || q === 'operations') return 'pos';
+    if (q === 'shop') return 'shop';
+    if (q === 'delivery') return 'delivery';
+    if (q === 'hours') return 'hours';
+    if (q === 'reservations') return 'reservations';
+    if (q === 'business') return 'business';
+  } catch {
+    /* ignore */
+  }
+  return 'business';
+}
 
 type SettingsSearchEntry = {
   id: string;
@@ -406,6 +457,9 @@ function LocalizedFields({
 
 export default function Settings() {
   const { t, setLocale, locale } = useI18n();
+  const user = useAuthStore((s) => s.user);
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [adyen, setAdyen] = useState<AdyenCreds>({});
   const [merchantAccount, setMerchantAccount] = useState('');
@@ -466,25 +520,7 @@ export default function Settings() {
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
   const [settingsQuery, setSettingsQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>(() => {
-    try {
-      const q = new URLSearchParams(window.location.search).get('tab');
-      if (q === 'payments') return 'payments';
-      if (q === 'tables') return 'tables';
-      const section = new URLSearchParams(window.location.search).get('section');
-      if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
-      if (q === 'taxes') return 'taxes';
-      if (q === 'pos' || q === 'operations') return 'pos';
-      if (q === 'shop') return 'shop';
-      if (q === 'delivery') return 'delivery';
-      if (q === 'hours') return 'hours';
-      if (q === 'reservations') return 'reservations';
-      if (q === 'business') return 'business';
-    } catch {
-      /* ignore */
-    }
-    return 'business';
-  });
+  const [tab, setTab] = useState<TabId>(() => parseSettingsTabFromSearch(window.location.search));
 
   const tabs = useMemo(
     () =>
@@ -494,6 +530,7 @@ export default function Settings() {
         { id: 'tables' as const, label: t('settingsTables'), icon: UtensilsCrossed },
         { id: 'shop' as const, label: t('shop'), icon: Globe2 },
         { id: 'delivery' as const, label: t('settingsDeliveryPlatforms'), icon: Truck },
+        { id: 'delivery-map' as const, label: t('deliveryMapNav'), icon: MapPin },
         { id: 'hours' as const, label: t('settingsHours'), icon: Clock },
         { id: 'reservations' as const, label: t('settingsReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), icon: Monitor },
@@ -502,10 +539,52 @@ export default function Settings() {
         { id: 'kds' as const, label: t('kdsSettingsTitle'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), icon: Monitor },
         { id: 'email' as const, label: t('settingsEmail'), icon: Mail },
+        { id: 'users' as const, label: t('staffPageTitle'), icon: Users },
         { id: 'language' as const, label: t('language'), icon: Languages },
       ] as const,
     [t]
   );
+
+  const canOpenSettingsTab = useCallback(
+    (tabId: TabId) => {
+      if (tabId === 'users') {
+        return canAccessRoute('/merchant/users', user?.permissions, jwtIsOwner);
+      }
+      if (tabId === 'delivery-map') {
+        return canAccessRoute('/merchant/delivery', user?.permissions, jwtIsOwner);
+      }
+      return canAccessRoute('/merchant/settings', user?.permissions, jwtIsOwner);
+    },
+    [jwtIsOwner, user?.permissions]
+  );
+
+  const visibleTabs = useMemo(
+    () => tabs.filter((item) => canOpenSettingsTab(item.id)),
+    [canOpenSettingsTab, tabs]
+  );
+
+  const selectTab = useCallback(
+    (nextTab: TabId) => {
+      if (!canOpenSettingsTab(nextTab)) return;
+      setTab(nextTab);
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (nextTab === 'business') params.delete('tab');
+          else params.set('tab', nextTab);
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [canOpenSettingsTab, setSearchParams]
+  );
+
+  useEffect(() => {
+    const fromUrl = parseSettingsTabFromSearch(searchParams.toString());
+    if (!canOpenSettingsTab(fromUrl)) return;
+    setTab((current) => (current === fromUrl ? current : fromUrl));
+  }, [canOpenSettingsTab, searchParams]);
 
   const searchIndex = useMemo<SettingsSearchEntry[]>(
     () => [
@@ -781,7 +860,7 @@ export default function Settings() {
       return;
     }
     const best = matches[0];
-    setTab(best.tab);
+    selectTab(best.tab);
     setHighlightId(best.id);
     const timer = window.setTimeout(() => {
       document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1340,40 +1419,44 @@ export default function Settings() {
         </p>
       ) : null}
 
-      <div className="card !p-0 overflow-x-clip">
-        <div className="border-b border-[var(--border)] overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-          <nav className="flex min-w-max gap-0.5 px-2 py-2" aria-label={t('settings')}>
-            {tabs.map((item) => {
-              const Icon = item.icon;
-              const active = tab === item.id;
-              const searchHit = normalizedQuery ? matchedTabs.has(item.id) : false;
-              const searchMiss = normalizedQuery ? !searchHit : false;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setTab(item.id);
-                    if (normalizedQuery) {
-                      const first = matchedSearch.find((m) => m.tab === item.id);
-                      if (first) setHighlightId(first.id);
-                    }
-                  }}
-                  className={`flex min-w-[4.75rem] flex-col items-center gap-1 rounded-md px-3 py-2 text-[11px] font-medium transition-colors ${
-                    active
-                      ? 'bg-[var(--bg-muted)] text-[var(--text)]'
-                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
-                  } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''} ${searchMiss ? 'opacity-45' : ''}`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="whitespace-nowrap">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+      <div className="card !p-0 overflow-hidden">
+        <div className="flex flex-col lg:flex-row min-h-[60vh]">
+          <aside className="shrink-0 border-b border-[var(--border)] lg:w-56 lg:border-b-0 lg:border-r">
+            <nav
+              className="flex gap-0.5 overflow-x-auto overscroll-x-contain p-2 lg:flex-col lg:overflow-x-visible [-webkit-overflow-scrolling:touch]"
+              aria-label={t('settings')}
+            >
+              {visibleTabs.map((item) => {
+                const Icon = item.icon;
+                const active = tab === item.id;
+                const searchHit = normalizedQuery ? matchedTabs.has(item.id) : false;
+                const searchMiss = normalizedQuery ? !searchHit : false;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      selectTab(item.id);
+                      if (normalizedQuery) {
+                        const first = matchedSearch.find((m) => m.tab === item.id);
+                        if (first) setHighlightId(first.id);
+                      }
+                    }}
+                    className={`flex min-w-[8.5rem] items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors lg:min-w-0 lg:w-full ${
+                      active
+                        ? 'bg-[var(--bg-muted)] text-[var(--text)]'
+                        : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
+                    } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''} ${searchMiss ? 'opacity-45' : ''}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
 
-        <div className="p-4 sm:p-5 pb-24 sm:pb-5">
+          <div className="min-w-0 flex-1 p-4 sm:p-5 pb-24 sm:pb-5">
           {tab === 'business' && (
             <SettingsBusinessTab
               settings={settings}
@@ -1684,6 +1767,20 @@ export default function Settings() {
 
           {tab === 'delivery' && <SettingsDeliveryPlatformsTab />}
 
+          {tab === 'delivery-map' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('deliveryMapNav')} subtitle={t('deliveryMapHint')} />
+              <DeliveryTrackingPage embedded />
+            </div>
+          )}
+
+          {tab === 'users' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHint')} />
+              <Staff embedded />
+            </div>
+          )}
+
           {tab === 'hours' && <SettingsHoursTab />}
 
           {tab === 'reservations' && <SettingsReservationsTab />}
@@ -1700,7 +1797,7 @@ export default function Settings() {
               isSectionHighlight={isSectionHighlight}
               onGoToPosTab={(query, sectionId) => {
                 setSettingsQuery(query);
-                setTab('pos');
+                selectTab('pos');
                 setHighlightId(sectionId);
               }}
             />
@@ -2488,7 +2585,7 @@ export default function Settings() {
                       className="font-medium text-[var(--text)] underline underline-offset-2"
                       onClick={() => {
                         setSettingsQuery('express');
-                        setTab('pos');
+                        selectTab('pos');
                         setHighlightId('pos-payments');
                       }}
                     >
@@ -4156,6 +4253,11 @@ export default function Settings() {
               </Section>
             </div>
           )}
+
+          {tab === 'users' && <Staff />}
+
+          {tab === 'delivery-map' && <DeliveryTrackingPage />}
+          </div>
         </div>
       </div>
       <p className="text-center text-xs text-stone-400">{dashboardVersionLabel}</p>

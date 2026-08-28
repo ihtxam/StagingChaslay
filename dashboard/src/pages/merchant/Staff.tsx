@@ -54,7 +54,7 @@ const emptyCreateForm = {
   loginHome: 'panel' as 'panel' | 'pos',
 };
 
-export default function StaffPage() {
+export default function StaffPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const authUser = useAuthStore((s) => s.user);
   const ownerEmail =
@@ -273,12 +273,14 @@ export default function StaffPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-xl font-semibold">{t('staffPageTitle')}</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffPageHint')}</p>
-        <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffWaiterTemplateHint')}</p>
-      </div>
+    <div className={`space-y-6 ${embedded ? '' : 'max-w-4xl'}`}>
+      {!embedded ? (
+        <div>
+          <h1 className="text-xl font-semibold">{t('staffPageTitle')}</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffPageHint')}</p>
+          <p className="text-sm text-[var(--text-muted)] mt-1">{t('staffWaiterTemplateHint')}</p>
+        </div>
+      ) : null}
 
       <div className="flex gap-2 border-b border-[var(--border)]">
         {(['staff', 'roles'] as const).map((tabId) => (

@@ -47,7 +47,7 @@ const driverIcon = L.divIcon({
   iconAnchor: [14, 14],
 });
 
-export default function DeliveryTrackingPage() {
+export default function DeliveryTrackingPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
@@ -134,11 +134,13 @@ export default function DeliveryTrackingPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">{t('deliveryMapTitle')}</h1>
-        <p className="mt-1 text-sm text-stone-600">{t('deliveryMapHint')}</p>
-      </div>
+    <div className={embedded ? 'space-y-4' : 'mx-auto max-w-6xl space-y-4 p-4'}>
+      {!embedded ? (
+        <div>
+          <h1 className="text-xl font-bold text-stone-900">{t('deliveryMapTitle')}</h1>
+          <p className="mt-1 text-sm text-stone-600">{t('deliveryMapHint')}</p>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">

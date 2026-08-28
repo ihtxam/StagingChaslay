@@ -36,14 +36,12 @@ import Settings from './Settings';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
 import Billing from './Billing';
-import Staff from './Staff';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import WaiterApp from './WaiterApp';
-import DeliveryTrackingPage from './DeliveryTracking';
 import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
@@ -102,6 +100,14 @@ function LegacyReservationsRedirect() {
     return <Navigate to="/merchant/settings?tab=reservations" replace />;
   }
   return <Navigate to="/merchant/sales/reservations" replace />;
+}
+
+function LegacyUsersRedirect() {
+  return <Navigate to="/merchant/settings?tab=users" replace />;
+}
+
+function LegacyDeliveryMapRedirect() {
+  return <Navigate to="/merchant/settings?tab=delivery-map" replace />;
 }
 
 function LegacyTablesRedirect({ section }: { section?: 'settings' | 'layout' | 'qr' }) {
@@ -495,17 +501,15 @@ function MerchantShell() {
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
-    { label: t('orders'), path: '/merchant/orders', icon: '📦' },
-    ...(allow('/merchant/sales/reservations')
-      ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
-      : []),
     {
       id: 'sales',
       label: t('navSales'),
       icon: '📈',
-      children: [{ label: t('reports'), path: '/merchant/reports', icon: '📈' }].filter((item) =>
-        allow(item.path)
-      ),
+      children: [
+        { label: t('orders'), path: '/merchant/orders', icon: '📦' },
+        { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
+        { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+      ].filter((item) => allow(item.path)),
     },
     {
       id: 'catalog',
@@ -584,12 +588,6 @@ function MerchantShell() {
     },
     ...(allowSignage('/merchant/signage')
       ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
-      : []),
-    ...(allow('/merchant/users')
-      ? [{ label: t('staffPageTitle'), path: '/merchant/users', icon: '👤' }]
-      : []),
-    ...(allow('/merchant/delivery')
-      ? [{ label: t('deliveryMapNav'), path: '/merchant/delivery', icon: '🛵' }]
       : []),
   ]
     .filter((entry) => {
@@ -704,14 +702,7 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route
-              path="delivery"
-              element={
-                <PanelRouteGuard path="/merchant/delivery" allow={allow}>
-                  <DeliveryTrackingPage />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="delivery" element={<LegacyDeliveryMapRedirect />} />
             <Route
               path="delivery/driver"
               element={
@@ -924,14 +915,7 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route
-              path="users"
-              element={
-                <PanelRouteGuard path="/merchant/users" allow={allow}>
-                  <Staff />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="users" element={<LegacyUsersRedirect />} />
             <Route
               path="support"
               element={

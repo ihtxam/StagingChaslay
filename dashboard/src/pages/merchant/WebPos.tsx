@@ -8048,7 +8048,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const openSetStaffPin = () => {
     dismissSetPinHint();
     window.dispatchEvent(new CustomEvent('webpos:show-panel'));
-    navigate('/merchant/users');
+    navigate('/merchant/settings?tab=users');
   };
 
   const findProductByScanCode = useCallback(
