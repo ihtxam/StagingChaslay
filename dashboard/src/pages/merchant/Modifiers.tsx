@@ -12,6 +12,8 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
+import { bulkDeleteByIds } from '@/lib/bulk-delete';
 
 type PricingType = 'free' | 'fixed' | 'toppings_by_size';
 type SelectionType = 'optional' | 'required';
@@ -118,6 +120,10 @@ export default function Modifiers() {
   const [productSearch, setProductSearch] = useState('');
   const [inventoryOn, setInventoryOn] = useState(false);
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -161,6 +167,25 @@ export default function Modifiers() {
         g.products.some((p) => p.name.toLowerCase().includes(q))
     );
   }, [groups, search]);
+
+  const filteredIds = useMemo(() => filtered.map((g) => g.id), [filtered]);
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.includes(id));
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const filteredSet = new Set(filteredIds);
+        return prev.filter((id) => !filteredSet.has(id));
+      }
+      return [...new Set([...prev, ...filteredIds])];
+    });
+  };
 
   const linkedProducts = useMemo(
     () => products.filter((p) => form.productIds.includes(p.id)),
@@ -281,16 +306,34 @@ export default function Modifiers() {
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (!confirm(t('deleteModifierConfirm'))) return;
-    try {
+  const openDeleteConfirm = (ids: string[]) => {
+    if (!ids.length) return;
+    setDeleteTargetIds(ids);
+    setBulkDeleteOpen(true);
+  };
+
+  const onConfirmBulkDelete = async () => {
+    if (!deleteTargetIds.length) return;
+    setBulkDeleting(true);
+    const { ok, failed } = await bulkDeleteByIds(deleteTargetIds, async (id) => {
       await api.delete(`/merchant/modifiers/${id}`);
-      toast.success(t('deletedOk'));
-      if (editingId === id) closeEditor();
-      await load();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('deleteFailed'));
+    });
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    if (failed === 0) {
+      toast.success(t('bulkDeleteSuccess').replace('{n}', String(ok)));
+    } else {
+      toast.error(
+        t('bulkDeletePartial')
+          .replace('{ok}', String(ok))
+          .replace('{total}', String(deleteTargetIds.length))
+          .replace('{failed}', String(failed))
+      );
     }
+    if (deleteTargetIds.includes(editingId || '')) closeEditor();
+    setSelectedIds((prev) => prev.filter((id) => !deleteTargetIds.includes(id)));
+    setDeleteTargetIds([]);
+    await load();
   };
 
   if (loading) {
@@ -324,6 +367,46 @@ export default function Modifiers() {
         />
       </div>
 
+      {filtered.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+          <label className="inline-flex items-center gap-2 font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected;
+              }}
+              onChange={toggleSelectAllFiltered}
+            />
+            {t('selectAllFiltered')}
+          </label>
+          {selectedIds.length > 0 ? (
+            <span className="text-slate-500">
+              {t('selectedCount').replace('{n}', String(selectedIds.length))}
+            </span>
+          ) : null}
+          {selectedIds.length > 0 ? (
+            <button
+              type="button"
+              className="text-sm text-slate-500 underline"
+              onClick={() => setSelectedIds([])}
+            >
+              {t('deselectAll')}
+            </button>
+          ) : null}
+          {selectedIds.length > 0 ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-semibold text-red-600 hover:bg-red-100"
+              onClick={() => openDeleteConfirm(selectedIds)}
+            >
+              <Trash2 size={14} />
+              {t('deleteSelected')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="space-y-3">
         {filtered.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
@@ -345,7 +428,15 @@ export default function Modifiers() {
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
           >
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-              <div>
+              <div className="flex gap-3 min-w-0">
+                <label className="flex shrink-0 items-start pt-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(group.id)}
+                    onChange={() => toggleSelected(group.id)}
+                  />
+                </label>
+                <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-slate-900">{group.title}</h3>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
                   <Badge>
@@ -368,6 +459,7 @@ export default function Modifiers() {
                 <p className="mt-2 text-sm text-slate-500 line-clamp-1">
                   {group.options.map((o) => o.name).join(' · ') || t('noOptions')}
                 </p>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
@@ -379,7 +471,7 @@ export default function Modifiers() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void onDelete(group.id)}
+                  onClick={() => openDeleteConfirm([group.id])}
                   className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                 >
                   {t('delete')}
@@ -863,6 +955,19 @@ export default function Modifiers() {
           </div>
         </div>
       )}
+
+      <BulkDeleteConfirmModal
+        open={bulkDeleteOpen}
+        count={deleteTargetIds.length}
+        itemTypeLabel={t('modifiers').toLowerCase()}
+        busy={bulkDeleting}
+        onCancel={() => {
+          if (bulkDeleting) return;
+          setBulkDeleteOpen(false);
+          setDeleteTargetIds([]);
+        }}
+        onConfirm={() => void onConfirmBulkDelete()}
+      />
 
       <style>{`
         .field {

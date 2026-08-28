@@ -21,6 +21,8 @@ import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
+import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
+import { bulkDeleteByIds } from '@/lib/bulk-delete';
 import {
   labelMetaLine,
   normalizeLabelOptions,
@@ -278,6 +280,9 @@ export default function Products() {
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
@@ -939,16 +944,34 @@ export default function Products() {
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (!confirm(t('deleteProductConfirm'))) return;
-    try {
+  const openDeleteConfirm = (ids: string[]) => {
+    if (!ids.length) return;
+    setDeleteTargetIds(ids);
+    setBulkDeleteOpen(true);
+  };
+
+  const onConfirmBulkDelete = async () => {
+    if (!deleteTargetIds.length) return;
+    setBulkDeleting(true);
+    const { ok, failed } = await bulkDeleteByIds(deleteTargetIds, async (id) => {
       await api.delete(`/merchant/products/${id}`);
-      toast.success(t('deletedOk'));
-      if (editingId === id) closeModal();
-      await load();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('deleteFailed'));
+    });
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    if (failed === 0) {
+      toast.success(t('bulkDeleteSuccess').replace('{n}', String(ok)));
+    } else {
+      toast.error(
+        t('bulkDeletePartial')
+          .replace('{ok}', String(ok))
+          .replace('{total}', String(deleteTargetIds.length))
+          .replace('{failed}', String(failed))
+      );
     }
+    if (deleteTargetIds.includes(editingId || '')) closeModal();
+    setSelectedIds((prev) => prev.filter((id) => !deleteTargetIds.includes(id)));
+    setDeleteTargetIds([]);
+    await load();
   };
 
   const downloadTemplate = async () => {
@@ -1278,6 +1301,16 @@ export default function Products() {
                 {t('deselectAll')}
               </button>
             ) : null}
+            {selectedIds.length > 0 ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+                onClick={() => openDeleteConfirm(selectedIds)}
+              >
+                <Trash2 size={14} />
+                {t('deleteSelected')}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {filteredProducts.length === 0 && (
@@ -1449,7 +1482,7 @@ export default function Products() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void onDelete(product.id)}
+                    onClick={() => openDeleteConfirm([product.id])}
                     className="rounded-lg p-2 text-red-600 hover:bg-red-50"
                     title={t('delete')}
                   >
@@ -2546,6 +2579,19 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      <BulkDeleteConfirmModal
+        open={bulkDeleteOpen}
+        count={deleteTargetIds.length}
+        itemTypeLabel={t('products').toLowerCase()}
+        busy={bulkDeleting}
+        onCancel={() => {
+          if (bulkDeleting) return;
+          setBulkDeleteOpen(false);
+          setDeleteTargetIds([]);
+        }}
+        onConfirm={() => void onConfirmBulkDelete()}
+      />
 
       <style>{`
         .field-input {

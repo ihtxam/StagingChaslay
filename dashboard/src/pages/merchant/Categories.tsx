@@ -3,6 +3,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
+import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
+import { bulkDeleteByIds } from '@/lib/bulk-delete';
 import {
   CATEGORY_PALETTE,
   categoryColor,
@@ -36,6 +38,9 @@ export default function Categories() {
   const [color, setColor] = useState('');
   const [uploading, setUploading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const allSelected = categories.length > 0 && categories.every((c) => selectedIds.includes(c.id));
@@ -174,16 +179,34 @@ export default function Categories() {
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (!confirm(t('categoryDeleteConfirm'))) return;
-    try {
+  const openDeleteConfirm = (ids: string[]) => {
+    if (!ids.length) return;
+    setDeleteTargetIds(ids);
+    setBulkDeleteOpen(true);
+  };
+
+  const onConfirmBulkDelete = async () => {
+    if (!deleteTargetIds.length) return;
+    setBulkDeleting(true);
+    const { ok, failed } = await bulkDeleteByIds(deleteTargetIds, async (id) => {
       await api.delete(`/merchant/categories/${id}`);
-      toast.success(t('categoryToastDeleted'));
-      if (editingId === id) reset();
-      await load();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || t('categoryToastDeleteFailed'));
+    });
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    if (failed === 0) {
+      toast.success(t('bulkDeleteSuccess').replace('{n}', String(ok)));
+    } else {
+      toast.error(
+        t('bulkDeletePartial')
+          .replace('{ok}', String(ok))
+          .replace('{total}', String(deleteTargetIds.length))
+          .replace('{failed}', String(failed))
+      );
     }
+    if (deleteTargetIds.includes(editingId || '')) reset();
+    setSelectedIds((prev) => prev.filter((id) => !deleteTargetIds.includes(id)));
+    setDeleteTargetIds([]);
+    await load();
   };
 
   const onReorder = async (next: Category[]) => {
@@ -328,6 +351,15 @@ export default function Categories() {
                 {t('deselectAll')}
               </button>
             ) : null}
+            {selectedIds.length > 0 ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-semibold text-red-700 hover:bg-red-100"
+                onClick={() => openDeleteConfirm(selectedIds)}
+              >
+                {t('deleteSelected')}
+              </button>
+            ) : null}
           </div>
         ) : null}
         <table className="w-full text-sm min-w-[480px]">
@@ -401,7 +433,7 @@ export default function Categories() {
                       <button
                         type="button"
                         className="text-sm text-[var(--danger)] hover:underline"
-                        onClick={() => void onDelete(category.id)}
+                        onClick={() => openDeleteConfirm([category.id])}
                       >
                         {t('delete')}
                       </button>
@@ -413,6 +445,19 @@ export default function Categories() {
           </SortableContainer>
         </table>
       </div>
+
+      <BulkDeleteConfirmModal
+        open={bulkDeleteOpen}
+        count={deleteTargetIds.length}
+        itemTypeLabel={t('categories').toLowerCase()}
+        busy={bulkDeleting}
+        onCancel={() => {
+          if (bulkDeleting) return;
+          setBulkDeleteOpen(false);
+          setDeleteTargetIds([]);
+        }}
+        onConfirm={() => void onConfirmBulkDelete()}
+      />
     </div>
   );
 }
