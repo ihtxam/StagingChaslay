@@ -69,7 +69,6 @@ import WebPosSplitBillModal, {
 import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
-  findPrinterHealCandidates,
   formatScalePortLabel,
   getPrintAgentHealth,
   isConfiguredPrinterMissing,
