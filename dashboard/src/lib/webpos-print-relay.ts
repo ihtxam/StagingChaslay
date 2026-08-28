@@ -139,6 +139,16 @@ export function shouldAutoPrintKitchen(
   return readDeviceAutoPrintKitchen(true);
 }
 
+/** Align per-device kitchen auto-print with merchant Settings (master switch). */
+export function syncKitchenAutoPrintFromMerchant(
+  merchantEnabled: boolean,
+  opts?: { syncMainTill?: boolean }
+): boolean {
+  writeDeviceAutoPrintKitchen(merchantEnabled);
+  if (opts?.syncMainTill) syncMainTillAutoPrintKitchen(merchantEnabled);
+  return merchantEnabled;
+}
+
 /** Queue raw ESC/POS for the main till (browser with Print Agent online). */
 export async function enqueueEscPosPrintJob(opts: {
   dataBase64: string;

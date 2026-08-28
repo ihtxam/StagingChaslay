@@ -17,7 +17,7 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
-  readDeviceAutoPrintKitchen,
+  syncKitchenAutoPrintFromMerchant,
   writeDeviceAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
 import {
@@ -110,7 +110,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autoPrintKitchen, setAutoPrintKitchen] = useState(() => readDeviceAutoPrintKitchen(true));
+  const [autoPrintKitchen, setAutoPrintKitchen] = useState(true);
   const [isPhoneLayout, setIsPhoneLayout] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
   );
@@ -185,7 +185,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
         const ps = configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean } | undefined;
         if (ps?.autoPrintKitchen != null) {
-          setAutoPrintKitchen(readDeviceAutoPrintKitchen(ps.autoPrintKitchen !== false));
+          const synced = syncKitchenAutoPrintFromMerchant(ps.autoPrintKitchen !== false);
+          setAutoPrintKitchen(synced);
         }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
@@ -688,6 +689,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         staffName: staff?.name,
         tableLabel,
         orderNumber: ticket.display,
+        deviceAutoPrintKitchen: autoPrintKitchen,
         t,
       });
       const savedId = await persistWaiterHeldOrder({

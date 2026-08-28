@@ -89,6 +89,7 @@ import {
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
   shouldAutoPrintReceipt,
+  syncKitchenAutoPrintFromMerchant,
   syncMainTillAutoPrintKitchen,
   writeDeviceAutoPrintKitchen,
   writeDeviceAutoPrintReceipt,
@@ -2091,18 +2092,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         if (cfg.posPrintSettings?.autoPrintKitchen != null) {
           try {
-            if (cfg.posPrintSettings.autoPrintKitchen === false) {
-              setAutoPrintKitchenDevice(false);
-              writeDeviceAutoPrintKitchen(false);
-              if (isLocalPrint) syncMainTillAutoPrintKitchen(false);
-            } else {
-              const stored = localStorage.getItem('manupos_webpos_autoprint_kitchen_device');
-              if (stored === null) {
-                setAutoPrintKitchenDevice(
-                  readDeviceAutoPrintKitchen(cfg.posPrintSettings.autoPrintKitchen !== false)
-                );
-              }
-            }
+            const merchantKitchenOn = cfg.posPrintSettings.autoPrintKitchen !== false;
+            const synced = syncKitchenAutoPrintFromMerchant(merchantKitchenOn, {
+              syncMainTill: isLocalPrint,
+            });
+            setAutoPrintKitchenDevice(synced);
           } catch {
             /* keep device dropdown preference */
           }
