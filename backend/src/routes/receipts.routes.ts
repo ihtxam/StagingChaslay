@@ -21,7 +21,6 @@ type ReceiptOrderRow = {
   id: string;
   clientId: string | null;
   orderNumber: string;
-  tabNumber: string | null;
   notes: string | null;
   customerName: string | null;
   fulfillmentChannel: string | null;
@@ -87,7 +86,6 @@ async function findReceiptOrder(ref: string): Promise<ReceiptOrderRow | null> {
         id: schema.orders.id,
         clientId: schema.orders.clientId,
         orderNumber: schema.orders.orderNumber,
-        tabNumber: schema.orders.tabNumber,
         notes: schema.orders.notes,
         customerName: schema.orders.customerName,
         fulfillmentChannel: schema.orders.fulfillmentChannel,
@@ -129,7 +127,6 @@ async function findReceiptOrder(ref: string): Promise<ReceiptOrderRow | null> {
         id: schema.orders.id,
         clientId: schema.orders.clientId,
         orderNumber: schema.orders.orderNumber,
-        tabNumber: schema.orders.tabNumber,
         notes: schema.orders.notes,
         customerName: schema.orders.customerName,
         fulfillmentChannel: schema.orders.fulfillmentChannel,
@@ -189,7 +186,6 @@ async function findReceiptByKitchenShout(ref: string): Promise<ReceiptOrderRow |
         id: schema.orders.id,
         clientId: schema.orders.clientId,
         orderNumber: schema.orders.orderNumber,
-        tabNumber: schema.orders.tabNumber,
         notes: schema.orders.notes,
         customerName: schema.orders.customerName,
         fulfillmentChannel: schema.orders.fulfillmentChannel,
@@ -320,7 +316,7 @@ router.get("/:ref", async (req: Request, res: Response) => {
     const pointsBalance = ptsBalMatch?.[1] != null ? Number(ptsBalMatch[1]) : null;
     const meta = parseOrderMetaFromNotes(notes);
     const orderDisplay = meta.ticketDisplay || null;
-    const tabNumber = order.tabNumber || meta.tabNumber || null;
+    const tabNumber = meta.tabNumber || null;
     const guestNumber = guestOrderNumber({
       orderNumber: order.orderNumber,
       orderDisplay,

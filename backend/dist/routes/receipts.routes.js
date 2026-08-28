@@ -33,7 +33,6 @@ async function findReceiptOrder(ref) {
         id: db_1.schema.orders.id,
         clientId: db_1.schema.orders.clientId,
         orderNumber: db_1.schema.orders.orderNumber,
-        tabNumber: db_1.schema.orders.tabNumber,
         notes: db_1.schema.orders.notes,
         customerName: db_1.schema.orders.customerName,
         fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -73,7 +72,6 @@ async function findReceiptOrder(ref) {
         id: db_1.schema.orders.id,
         clientId: db_1.schema.orders.clientId,
         orderNumber: db_1.schema.orders.orderNumber,
-        tabNumber: db_1.schema.orders.tabNumber,
         notes: db_1.schema.orders.notes,
         customerName: db_1.schema.orders.customerName,
         fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -134,7 +132,6 @@ async function findReceiptByKitchenShout(ref) {
             id: db_1.schema.orders.id,
             clientId: db_1.schema.orders.clientId,
             orderNumber: db_1.schema.orders.orderNumber,
-            tabNumber: db_1.schema.orders.tabNumber,
             notes: db_1.schema.orders.notes,
             customerName: db_1.schema.orders.customerName,
             fulfillmentChannel: db_1.schema.orders.fulfillmentChannel,
@@ -256,7 +253,7 @@ router.get("/:ref", async (req, res) => {
         const pointsBalance = ptsBalMatch?.[1] != null ? Number(ptsBalMatch[1]) : null;
         const meta = (0, guest_order_number_1.parseOrderMetaFromNotes)(notes);
         const orderDisplay = meta.ticketDisplay || null;
-        const tabNumber = order.tabNumber || meta.tabNumber || null;
+        const tabNumber = meta.tabNumber || null;
         const guestNumber = (0, guest_order_number_1.guestOrderNumber)({
             orderNumber: order.orderNumber,
             orderDisplay,
