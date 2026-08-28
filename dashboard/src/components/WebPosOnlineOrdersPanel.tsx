@@ -7,7 +7,6 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
-  canAdminCollectPayment,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
   orderStatusBadgeClass,
@@ -164,10 +163,6 @@ export default function WebPosOnlineOrdersPanel({
           onOrderActioned?.(order.id);
         }
         await onRefresh();
-        if (action === 'mark_ready') {
-          const fresh = updated || { ...order, status: 'ready' };
-          await finalizeWhenReady(fresh);
-        }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));
       } finally {
@@ -334,17 +329,7 @@ export default function WebPosOnlineOrdersPanel({
                       </button>
                     </>
                   ) : null}
-                  {o.status === 'accepted' ? (
-                    <button
-                      type="button"
-                      className="btn-primary flex-1 text-xs"
-                      disabled={busyId === o.id}
-                      onClick={() => void run(o, 'start_preparing')}
-                    >
-                      {t('webPosSendToKitchen')}
-                    </button>
-                  ) : null}
-                  {o.status === 'preparing' ? (
+                  {o.status === 'accepted' || o.status === 'preparing' ? (
                     <button
                       type="button"
                       className="btn-primary flex-1 text-xs"
@@ -352,22 +337,6 @@ export default function WebPosOnlineOrdersPanel({
                       onClick={() => void run(o, 'mark_ready')}
                     >
                       {t('webPosMarkReady')}
-                    </button>
-                  ) : null}
-                  {canAdminCollectPayment(o as MerchantOrder) &&
-                  o.status !== 'ready' &&
-                  o.status !== 'out_for_delivery' &&
-                  !isNew(o.status) ? (
-                    <button
-                      type="button"
-                      className="btn-secondary flex-1 text-xs"
-                      disabled={busyId === o.id}
-                      onClick={() => {
-                        onClose();
-                        onCollectPayment?.(o);
-                      }}
-                    >
-                      {t('webPosCollectNow')}
                     </button>
                   ) : null}
                   {o.status === 'ready' && o.fulfillmentChannel === 'delivery' ? (

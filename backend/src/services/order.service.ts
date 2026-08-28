@@ -564,7 +564,7 @@ export class OrderService {
         if (!awaitingApproval) throw new Error("Order is not awaiting approval");
         const estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
         const accepted = await set({
-          status: "accepted",
+          status: "preparing",
           estimatedReadyAt,
         });
         if (order.orderSource === "justeat" || order.orderSource === "ubereats") {
@@ -604,7 +604,7 @@ export class OrderService {
           )
           .catch(() => {});
         void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
-        return set({ status: "preparing" });
+        return accepted;
       }
       case "start_preparing": {
         if (status !== "accepted" && !awaitingApproval) {

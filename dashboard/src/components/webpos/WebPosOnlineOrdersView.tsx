@@ -6,7 +6,6 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
-  canAdminCollectPayment,
   canCollectPayment,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
@@ -109,9 +108,6 @@ export default function WebPosOnlineOrdersView({
         }
         toast.success(t('updated'));
         await onRefresh();
-        if (action === 'mark_ready' && isAwaitingPaymentOrder(order as MerchantOrder)) {
-          onCollectPayment?.(order);
-        }
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('actionFailed'));
       } finally {
@@ -208,16 +204,6 @@ export default function WebPosOnlineOrdersView({
           >
             {t('webPosWorkflowReady')}
           </button>
-          {canAdminCollectPayment(o as MerchantOrder) && onCollectPayment ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-              onClick={() => onCollectPayment(o)}
-            >
-              {t('webPosCollectNow')}
-            </button>
-          ) : null}
         </div>
       );
     }

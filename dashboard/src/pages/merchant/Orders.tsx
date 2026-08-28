@@ -8,6 +8,7 @@ import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   canAdminCollectPayment,
+  canCollectPayment,
   canMarkReadyOrder,
   showsKitchenFulfillmentStages,
   formatOrderPaymentDisplay,
@@ -933,7 +934,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           {(
             [
               ['all', t('ordersTabAll')],
-              ['kitchen', t('ordersTabKitchen')],
               ['delivery', t('delivery')],
               ['takeaway', t('takeaway')],
               ['dine_in', t('dineIn')],
@@ -1305,7 +1305,21 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                       {t('ordersActionSendDelivery')}
                     </button>
                   ) : null}
-                  {canAdminCollectPayment(selected) ? (
+                  {isOnlineShopOrder(selected) &&
+                  isPaidOrder(selected) &&
+                  (selected.status === 'ready' || selected.status === 'out_for_delivery') ? (
+                    <button
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={() => void runOrderAction(selected, 'complete')}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-stone-800 px-3 py-2.5 text-sm font-bold text-white hover:bg-stone-900 disabled:opacity-50"
+                    >
+                      {t('webPosCompleteOrder')}
+                    </button>
+                  ) : null}
+                  {(isOnlineShopOrder(selected)
+                    ? canCollectPayment(selected)
+                    : canAdminCollectPayment(selected)) ? (
                     isInvoiceOrder(selected) ? (
                       <div className="space-y-1.5">
                         <button

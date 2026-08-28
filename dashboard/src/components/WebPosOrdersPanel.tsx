@@ -1985,16 +1985,6 @@ export default function WebPosOrdersPanel({
                         </button>
                       </>
                     ) : null}
-                    {isOpenOnlineFulfillment(selectedOrder) && selectedOrder.status === 'accepted' ? (
-                      <button
-                        type="button"
-                        className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900 disabled:opacity-50"
-                        disabled={onlineActionBusy === selectedOrder.id}
-                        onClick={() => void runOnlineAction(selectedOrder, 'start_preparing')}
-                      >
-                        {t('webPosSendToKitchen')}
-                      </button>
-                    ) : null}
                     {canMarkReadyOrder(selectedOrder) ? (
                       <button
                         type="button"
@@ -2030,21 +2020,6 @@ export default function WebPosOrdersPanel({
                         {isUnpaidOnline(selectedOrder) || canCollectPayment(selectedOrder)
                           ? `${t('webPosTakePayment')} · ${money(selectedOrder.total)}`
                           : t('webPosCompleteOrder')}
-                      </button>
-                    ) : null}
-                    {canAdminCollectPayment(selectedOrder) &&
-                    selectedOrder.status !== 'ready' &&
-                    selectedOrder.status !== 'out_for_delivery' ? (
-                      <button
-                        type="button"
-                        className="w-full rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-                        disabled={onlineActionBusy === selectedOrder.id}
-                        onClick={() => startCollectPayment(selectedOrder)}
-                      >
-                        {(selectedOrder.paymentMethod === 'invoice' || selectedOrder.invoiceNumber
-                          ? t('webPosRecordInvoicePayment')
-                          : t('webPosCollectNow'))}{' '}
-                        · {money(selectedOrder.total)}
                       </button>
                     ) : null}
                   </div>
