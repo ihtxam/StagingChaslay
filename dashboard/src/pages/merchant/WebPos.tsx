@@ -8751,17 +8751,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         settingsPanel={
           <WebPosSettingsDropdown
-            agentOk={agentOk}
-            printerMissing={printerMissing}
-            agentOutdated={agentOutdated}
-            isLocalPrintStation={isLocalPrint}
-            mainTillOnline={mainTillOnline}
-            mainTillPrintAgentOnline={mainTillPrintAgentOnline}
-            onRefreshPrinters={() => {
-              void refreshAgent();
-              setSettingsOpen(false);
-              toast.success(t('webPosPrintersRefreshed'));
-            }}
             onReloadCatalog={() => {
               void load();
               setSettingsOpen(false);

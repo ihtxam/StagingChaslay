@@ -8,7 +8,6 @@ import {
   Menu,
   Minimize2,
   Moon,
-  MoreHorizontal,
   PanelLeft,
   Pencil,
   RefreshCw,
@@ -596,13 +595,6 @@ export default function WebPosTopBar({
 }
 
 export function WebPosSettingsDropdown({
-  agentOk,
-  printerMissing = false,
-  agentOutdated = false,
-  isLocalPrintStation = true,
-  mainTillOnline = false,
-  mainTillPrintAgentOnline = false,
-  onRefreshPrinters,
   onReloadCatalog,
   shiftsEnabled,
   shiftOpen,
@@ -639,13 +631,6 @@ export function WebPosSettingsDropdown({
   selectedTerminalId = '',
   onTerminalChange,
 }: {
-  agentOk: boolean;
-  printerMissing?: boolean;
-  agentOutdated?: boolean;
-  isLocalPrintStation?: boolean;
-  mainTillOnline?: boolean;
-  mainTillPrintAgentOnline?: boolean;
-  onRefreshPrinters: () => void;
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -996,63 +981,6 @@ export function WebPosSettingsDropdown({
           </>
         ) : null}
       </div>
-
-      {isLocalPrintStation ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            <MoreHorizontal size={14} />
-            {t('webPosPrinting')}
-          </div>
-          <button
-            type="button"
-            className="btn-secondary justify-start w-full text-xs"
-            onClick={onRefreshPrinters}
-            disabled={!agentOk}
-          >
-            <RefreshCw size={14} />
-            {t('webPosRefreshPrinters')}
-          </button>
-          <p
-            className={`text-[10px] leading-snug ${
-              !agentOk || printerMissing || agentOutdated
-                ? 'text-amber-800'
-                : 'text-center text-emerald-700'
-            }`}
-          >
-            {!agentOk
-              ? t('webPosAgentOffline')
-              : printerMissing
-                ? t('webPosPrinterDisconnectedShort')
-                : agentOutdated
-                  ? t('webPosPrintAgentOutdatedHint')
-                  : t('webPosAgentOnline')}
-          </p>
-          {agentOk && printerMissing ? (
-            <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            <MoreHorizontal size={14} />
-            {t('webPosPrinting')}
-          </div>
-          <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
-            <p className="text-[10px] leading-snug text-stone-600">{t('webPosRemotePrintHint')}</p>
-            <p
-              className={`text-[10px] font-semibold leading-snug ${
-                !mainTillOnline || !mainTillPrintAgentOnline ? 'text-amber-800' : 'text-emerald-700'
-              }`}
-            >
-              {!mainTillOnline
-                ? t('webPosMainTillOfflineShort')
-                : !mainTillPrintAgentOnline
-                  ? t('webPosMainTillPrintOfflineShort')
-                  : t('webPosMainTillPrintRunningShort')}
-            </p>
-          </div>
-        </div>
-      )}
 
       {onSendLogs ? (
         <button
