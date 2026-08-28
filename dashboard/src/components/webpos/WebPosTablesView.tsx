@@ -203,7 +203,7 @@ export default function WebPosTablesView({
                   style={{
                     backgroundColor: `${statusColor}22`,
                     borderColor: statusColor,
-                    color: '#1c1917',
+                    color: 'var(--webpos-text)',
                   }}
                 >
                   <span>{table.label}</span>
