@@ -9968,10 +9968,22 @@ const de: Dict = {
 
 const dictionaries: Record<Locale, Dict> = { en, fr, de };
 
+export type I18nParams = Record<string, string | number>;
+
+export function translate(locale: Locale, key: string, params?: I18nParams): string {
+  let text = dictionaries[locale][key] || dictionaries.en[key] || key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+  }
+  return text;
+}
+
 interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: I18nParams) => string;
   formatDate: typeof formatDateDDMMYYYY;
   formatDateTime: typeof formatDateTimeDDMMYYYY;
   formatTime: typeof formatTimeHHMM;
@@ -10050,7 +10062,7 @@ export function I18nProvider({
     () => ({
       locale,
       setLocale,
-      t: (key: string) => dictionaries[locale][key] || dictionaries.en[key] || key,
+      t: (key: string, params?: I18nParams) => translate(locale, key, params),
       formatDate: formatDateDDMMYYYY,
       formatDateTime: formatDateTimeDDMMYYYY,
       formatTime: formatTimeHHMM,
@@ -10067,7 +10079,7 @@ export function useI18n() {
     return {
       locale: 'en' as Locale,
       setLocale: (_locale: Locale) => undefined,
-      t: (key: string) => dictionaries.en[key] || key,
+      t: (key: string, params?: I18nParams) => translate('en', key, params),
       formatDate: formatDateDDMMYYYY,
       formatDateTime: formatDateTimeDDMMYYYY,
       formatTime: formatTimeHHMM,
