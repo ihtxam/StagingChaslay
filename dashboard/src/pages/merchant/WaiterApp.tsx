@@ -17,6 +17,7 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
+  cacheMerchantAutoPrintSettings,
   syncKitchenAutoPrintFromMerchant,
   writeDeviceAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
@@ -184,6 +185,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
         const ps = configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean } | undefined;
+        cacheMerchantAutoPrintSettings(ps || null);
         if (ps?.autoPrintKitchen != null) {
           const synced = syncKitchenAutoPrintFromMerchant(ps.autoPrintKitchen !== false);
           setAutoPrintKitchen(synced);

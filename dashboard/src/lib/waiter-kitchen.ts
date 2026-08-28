@@ -11,9 +11,12 @@ import {
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
 import {
+  isLocalPrintStation,
   printViaAgentOrQueue,
+  resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
+import { isPrintAgentAvailable } from '@/lib/print-agent';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
 export async function printWaiterKitchen(opts: {
@@ -78,6 +81,9 @@ export async function printWaiterKitchen(opts: {
   const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
     (j) => (j.printerName || '').trim()
   );
+  const agentOnline = await isPrintAgentAvailable();
+  const retryLocally = resolvePrintRetryLocally(agentOnline);
+  const forceQueue = !isLocalPrintStation(agentOnline);
   if (printJobs.length) {
     for (const job of printJobs) {
       const paperWidthMm = job.paperWidthMm;
@@ -96,7 +102,8 @@ export async function printWaiterKitchen(opts: {
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
-        retryLocally: false,
+        retryLocally,
+        forceQueue,
         jobKind: 'kitchen',
         jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
       });

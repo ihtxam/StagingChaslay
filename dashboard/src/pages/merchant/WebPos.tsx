@@ -89,6 +89,7 @@ import {
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
   shouldAutoPrintReceipt,
+  cacheMerchantAutoPrintSettings,
   syncKitchenAutoPrintFromMerchant,
   syncMainTillAutoPrintKitchen,
   writeDeviceAutoPrintKitchen,
@@ -2064,6 +2065,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (cfg.posPrintSettings) {
           nextPrintSettings = cfg.posPrintSettings;
           setPrintSettings(cfg.posPrintSettings);
+          cacheMerchantAutoPrintSettings(cfg.posPrintSettings);
         }
         const staffId = loadWebPosStaffSession()?.id;
         const terminalId = resolveActiveTerminalId(cfg.terminals, {

@@ -40,6 +40,7 @@ export type EscPosPrintJobPayload = {
 const AUTO_PRINT_RECEIPT_KEY = 'manupos_webpos_autoprint';
 const AUTO_PRINT_KITCHEN_KEY = 'manupos_webpos_autoprint_kitchen';
 const AUTO_PRINT_KITCHEN_DEVICE_KEY = 'manupos_webpos_autoprint_kitchen_device';
+const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
 
 /** Main till: auto-print customer receipts (local sales + relayed jobs). */
 export function readMainTillAutoPrintReceipt(): boolean {
@@ -149,6 +150,35 @@ export function syncKitchenAutoPrintFromMerchant(
   return merchantEnabled;
 }
 
+/** Cache merchant auto-print flags so relay polling matches checkout gates. */
+export function cacheMerchantAutoPrintSettings(printSettings?: PosAutoPrintSettings | null): void {
+  try {
+    localStorage.setItem(
+      MERCHANT_AUTOPRINT_CACHE_KEY,
+      JSON.stringify({
+        autoPrintReceipt: isMerchantAutoPrintReceiptEnabled(printSettings),
+        autoPrintKitchen: isMerchantAutoPrintKitchenEnabled(printSettings),
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readCachedMerchantAutoPrintSettings(): PosAutoPrintSettings {
+  try {
+    const raw = localStorage.getItem(MERCHANT_AUTOPRINT_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as PosAutoPrintSettings;
+    return {
+      autoPrintReceipt: parsed.autoPrintReceipt !== false,
+      autoPrintKitchen: parsed.autoPrintKitchen !== false,
+    };
+  } catch {
+    return {};
+  }
+}
+
 /** Queue raw ESC/POS for the main till (browser with Print Agent online). */
 export async function enqueueEscPosPrintJob(opts: {
   dataBase64: string;
@@ -227,8 +257,10 @@ export async function printViaAgentOrQueue(opts: {
     });
   };
 
-  const agentReady = !opts.forceQueue && (await isPrintAgentAvailable());
-  if (agentReady) {
+  const agentOnline = !opts.forceQueue && (await isPrintAgentAvailable());
+  const canPrintLocally =
+    agentOnline && (retryLocally || isLocalPrintStation(agentOnline));
+  if (canPrintLocally) {
     try {
       await printViaAgent({
         printerName: opts.printerName,
@@ -270,8 +302,13 @@ function shouldPrintRelayedJob(
   const remote = !!job.sourceDeviceId && job.sourceDeviceId !== localDeviceId;
   if (!remote) return true;
   if (jobKind === 'eod') return true;
-  if (jobKind === 'kitchen') return readMainTillAutoPrintKitchen();
-  if (jobKind === 'receipt') return readMainTillAutoPrintReceipt();
+  const merchant = readCachedMerchantAutoPrintSettings();
+  if (jobKind === 'kitchen') {
+    return shouldAutoPrintKitchen(merchant, readMainTillAutoPrintKitchen());
+  }
+  if (jobKind === 'receipt') {
+    return shouldAutoPrintReceipt(merchant, readMainTillAutoPrintReceipt());
+  }
   return true;
 }
 
@@ -335,12 +372,14 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
         }
         if (p.kind === 'auto_print_order' && p.orderId) {
           const payload = p as AutoPrintOrderPayload;
-          const allowKitchen = payload.printKitchen === true && readMainTillAutoPrintKitchen();
+          const allowKitchen =
+            payload.printKitchen === true &&
+            shouldAutoPrintKitchen(readCachedMerchantAutoPrintSettings(), readMainTillAutoPrintKitchen());
           const allowReceiptLike =
             (payload.printReceipt === true ||
               payload.printNotification === true ||
               payload.printDeliveryReceipt === true) &&
-            readMainTillAutoPrintReceipt();
+            shouldAutoPrintReceipt(readCachedMerchantAutoPrintSettings(), readMainTillAutoPrintReceipt());
           if (!allowKitchen && !allowReceiptLike) {
             await ackPrintJob(job.id, 'DONE');
             continue;
