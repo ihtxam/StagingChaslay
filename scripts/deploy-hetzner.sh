@@ -362,17 +362,21 @@ fi
 
 echo "=== Build Print Bridge Android APK ==="
 BRIDGE_APK="$DOWNLOADS_DIR/reborn-print-bridge.apk"
+BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/build.gradle.kts" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
+[[ -n "$BRIDGE_VERSION" ]] || BRIDGE_VERSION="0.0.0"
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   if docker run --rm \
     -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
+    -e "GRADLE_USER_HOME=/tmp/gradle-home" \
     -v "$REPO_DIR/print-agent-android:/project" \
     -v "$DOWNLOADS_DIR:/out" \
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
+      rm -rf /project/.gradle /tmp/gradle-home
       chmod +x ./gradlew
-      ./gradlew assembleRelease --no-daemon
+      ./gradlew assembleRelease --no-daemon --no-build-cache
       APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
       test -n "$APK"
       cp -f "$APK" /out/reborn-print-bridge.apk
@@ -382,13 +386,13 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     printf '%s\n' \
       "{" \
       "  \"name\": \"reborn-print-bridge\"," \
-        "  \"version\": \"0.2.0\"," \
+      "  \"version\": \"${BRIDGE_VERSION}\"," \
       "  \"apkFile\": \"reborn-print-bridge.apk\"," \
       "  \"builtAt\": \"${BUILT_AT}\"," \
       "  \"platform\": \"android\"," \
       "  \"signed\": false" \
       "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
-    echo "Print Bridge APK ready: $BRIDGE_APK ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
+    echo "Print Bridge APK ready: $BRIDGE_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
   else
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
     echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
@@ -497,10 +501,17 @@ fi
 echo "CADDYFILE=$CADDYFILE"
 dc up -d --build
 
-# Caddyfile is bind-mounted; force reload so host/site changes apply immediately
+# Caddyfile is bind-mounted; reload in place (avoid --force-recreate name conflicts)
 echo "=== Reload Caddy ==="
-dc up -d --force-recreate caddy
-dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+caddy_project="$(compose_project_name "$REPO_DIR")"
+docker ps -aq --filter "name=${caddy_project}-caddy" --filter "status=exited" | xargs -r docker rm -f 2>/dev/null || true
+dc up -d caddy
+if dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
+  echo "Caddy reloaded"
+else
+  echo "Caddy reload failed; restarting container"
+  dc restart caddy 2>/dev/null || true
+fi
 
 echo "=== Verify Caddy TLS config ==="
 CADDY_CONTAINER="$(dc ps -q caddy 2>/dev/null | head -1)"
@@ -521,6 +532,9 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
+# Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
+migrate_project="$(compose_project_name "$REPO_DIR")"
+docker rm -f "${migrate_project}-migrate-1" 2>/dev/null || true
 dc run --rm migrate
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
@@ -608,7 +622,8 @@ BRIDGE_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-bridge.apk" || true)"
 BRIDGE_LEN="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
 BRIDGE_CT="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
 BRIDGE_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-print-bridge.apk" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
-echo "print-bridge download: Content-Type=${BRIDGE_CT:-?} Content-Length=${BRIDGE_LEN:-?} magic=${BRIDGE_MAGIC:-?}"
+BRIDGE_JSON_VERSION="$(curl -sf "${APP_URL}/downloads/reborn-print-bridge.json" 2>/dev/null | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+echo "print-bridge download: Content-Type=${BRIDGE_CT:-?} Content-Length=${BRIDGE_LEN:-?} magic=${BRIDGE_MAGIC:-?} version=${BRIDGE_JSON_VERSION:-?}"
 if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; then
   echo "WARNING: print-bridge download is not a valid APK (expected PK / >100KB) or not published yet"
 else
