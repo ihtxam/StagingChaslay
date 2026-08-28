@@ -764,7 +764,21 @@ export default function Settings() {
       {
         id: 'shop-online',
         tab: 'shop',
-        keywords: ['shop', 'online', 'domain', 'subdomain', t('shop')],
+        keywords: [
+          'shop',
+          'online',
+          'domain',
+          'subdomain',
+          'photo',
+          'photos',
+          'image',
+          'images',
+          'product photo',
+          'menu photo',
+          t('shop'),
+          t('shopShowProductPhotos'),
+          t('shopMenuPhotos'),
+        ],
       },
       {
         id: 'delivery-platforms',
@@ -1090,6 +1104,8 @@ export default function Settings() {
         acceptingOrders: settings.acceptingOrders !== false,
         acceptingReservations: settings.acceptingReservations !== false,
         cartLayout: settings.cartLayout || 'hidden_slide',
+        menuShowProductImages: settings.menuShowProductImages !== false,
+        menuShowCategoryBanners: settings.menuShowCategoryBanners !== false,
         floorPlanEnabled: !!settings.floorPlanEnabled,
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
         coursesEnabled: !!settings.coursesEnabled,
@@ -1811,6 +1827,42 @@ export default function Settings() {
                     <option value="sticky_right">{t('shopCartLayoutStickyRight')}</option>
                   </select>
                 </Field>
+
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/50 p-3 space-y-2">
+                  <p className="text-sm font-medium">{t('shopMenuPhotos')}</p>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.menuShowProductImages !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, menuShowProductImages: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('shopShowProductPhotos')}</span>
+                      <span className="text-[11px] muted">{t('shopShowProductPhotosHint')}</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.menuShowCategoryBanners !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, menuShowCategoryBanners: e.target.checked })
+                      }
+                    />
+                    <span className="font-medium">{t('shopShowCategoryBanners')}</span>
+                  </label>
+                </div>
+
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/50 p-3 space-y-2">
+                  <p className="text-sm font-medium">{t('shopOnlineShopMore')}</p>
+                  <Link to="/merchant/online-shop" className="btn-secondary text-sm inline-flex">
+                    {t('shopOnlineShopMoreLink')}
+                  </Link>
+                </div>
               </Section>
               <SettingsSaveBar saving={saving} />
             </form>

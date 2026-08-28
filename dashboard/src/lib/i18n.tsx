@@ -2879,6 +2879,13 @@ const en: Dict = {
     'Hidden slide-in cart (Deliverect-style) or always-visible sticky sidebar on desktop.',
   shopCartLayoutHiddenSlide: 'Hidden — slides in when items are added',
   shopCartLayoutStickyRight: 'Sticky sidebar (always visible on desktop)',
+  shopMenuPhotos: 'Menu photos',
+  shopShowProductPhotos: 'Show product photos',
+  shopShowProductPhotosHint:
+    'Photos uploaded on Products appear on the online shop menu. Uncheck to hide them (POS keeps its own display).',
+  shopShowCategoryBanners: 'Show category banner photos',
+  shopOnlineShopMore: 'Delivery zones, branding, and channel options',
+  shopOnlineShopMoreLink: 'Open Online Shop settings',
   languageSaved: 'Language saved',
   acceptingMenuTitle: 'Accepting now',
   acceptingMenuHint: 'Pause online orders or reservations. The website stays open with a “please call us” message.',
@@ -6186,6 +6193,13 @@ const fr: Dict = {
     'Panier coulissant (style Deliverect) ou barre latérale fixe toujours visible sur ordinateur.',
   shopCartLayoutHiddenSlide: 'Masqué — s’ouvre à l’ajout d’articles',
   shopCartLayoutStickyRight: 'Barre latérale fixe (toujours visible sur ordinateur)',
+  shopMenuPhotos: 'Photos du menu',
+  shopShowProductPhotos: 'Afficher les photos produits',
+  shopShowProductPhotosHint:
+    'Les photos ajoutées sur Produits apparaissent sur le menu de la boutique en ligne. Décochez pour les masquer (le POS garde son affichage).',
+  shopShowCategoryBanners: 'Afficher les bannières de catégories',
+  shopOnlineShopMore: 'Zones de livraison, image de marque et canaux',
+  shopOnlineShopMoreLink: 'Ouvrir les réglages Boutique en ligne',
   languageSaved: 'Langue enregistrée',
   acceptingMenuTitle: 'Acceptation en cours',
   acceptingMenuHint:
@@ -9494,6 +9508,13 @@ const de: Dict = {
     'Ausblendbarer Slide-in-Warenkorb (Deliverect-Stil) oder dauerhaft sichtbare Seitenleiste am Desktop.',
   shopCartLayoutHiddenSlide: 'Ausgeblendet — öffnet sich beim Hinzufügen',
   shopCartLayoutStickyRight: 'Fixe Seitenleiste (am Desktop immer sichtbar)',
+  shopMenuPhotos: 'Menüfotos',
+  shopShowProductPhotos: 'Produktfotos anzeigen',
+  shopShowProductPhotosHint:
+    'Auf Produkte hochgeladene Fotos erscheinen im Online-Shop-Menü. Abwählen zum Ausblenden (POS behält eigene Anzeige).',
+  shopShowCategoryBanners: 'Kategorie-Bannerfotos anzeigen',
+  shopOnlineShopMore: 'Lieferzonen, Branding und Kanaloptionen',
+  shopOnlineShopMoreLink: 'Online-Shop-Einstellungen öffnen',
   languageSaved: 'Sprache gespeichert',
   acceptingMenuTitle: 'Aktuell geöffnet',
   acceptingMenuHint:
