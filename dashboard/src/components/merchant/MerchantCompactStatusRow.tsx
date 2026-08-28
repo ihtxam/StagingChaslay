@@ -3,7 +3,6 @@ import { ArrowLeft, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AcceptingMenu from '@/components/AcceptingMenu';
-import StaffSwitchButton from '@/components/StaffSwitchButton';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -13,7 +12,6 @@ interface MerchantCompactStatusRowProps {
   onMenuClick?: () => void;
   showMenuButton?: boolean;
   registerDisplay?: { name: string; roleLabel: string };
-  showStaffSwitch?: boolean;
 }
 
 /**
@@ -24,7 +22,6 @@ export default function MerchantCompactStatusRow({
   onMenuClick,
   showMenuButton = false,
   registerDisplay,
-  showStaffSwitch = false,
 }: MerchantCompactStatusRowProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -134,8 +131,6 @@ export default function MerchantCompactStatusRow({
         const BellSlot = platformUi.Bell;
         return <BellSlot />;
       })() : null}
-
-      {showStaffSwitch ? <StaffSwitchButton /> : null}
 
       <AcceptingMenu />
     </div>

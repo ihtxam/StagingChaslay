@@ -430,12 +430,6 @@ export default function Sidebar({
             </button>
           )}
 
-          {showStaffSwitch ? (
-            <div className="px-1">
-              <StaffSwitchButton className="w-full justify-center border-white/20 bg-white/10 text-white hover:bg-white/20" />
-            </div>
-          ) : null}
-
           {profileMenu ? (
             <div className="relative" ref={profileRef}>
               <button
@@ -456,6 +450,12 @@ export default function Sidebar({
               </button>
               {profileOpen ? (
                 <div className="mt-1 rounded-lg border border-white/15 bg-black/35 overflow-hidden">
+                  {showStaffSwitch ? (
+                    <StaffSwitchButton
+                      variant="menu"
+                      onOpen={() => setProfileOpen(false)}
+                    />
+                  ) : null}
                   {profileMenu.supportPath ? (
                     <Link
                       to={profileMenu.supportPath}

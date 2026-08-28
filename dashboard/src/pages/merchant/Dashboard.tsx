@@ -671,7 +671,6 @@ function MerchantShell() {
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
             registerDisplay={registerDisplay}
-            showStaffSwitch={hasStaffPins}
           />
         )}
 
