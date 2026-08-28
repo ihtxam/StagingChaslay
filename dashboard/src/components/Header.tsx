@@ -17,8 +17,6 @@ interface HeaderProps {
   compact?: boolean;
   /** Active register user (PIN session when clocked in, else JWT account). */
   registerDisplay?: { name: string; roleLabel: string };
-  /** Show switch-user PIN button (merchant panel). */
-  showStaffSwitch?: boolean;
 }
 
 export default function Header({
@@ -27,7 +25,6 @@ export default function Header({
   showAcceptingMenu = false,
   compact = false,
   registerDisplay,
-  showStaffSwitch = false,
 }: HeaderProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -58,7 +55,7 @@ export default function Header({
             <Menu className="w-5 h-5" />
           </button>
           <div className="min-w-0 flex-1 flex items-center justify-end">
-            <MerchantCompactStatusRow registerDisplay={registerDisplay} showStaffSwitch={showStaffSwitch} />
+            <MerchantCompactStatusRow registerDisplay={registerDisplay} />
           </div>
         </div>
       </header>
