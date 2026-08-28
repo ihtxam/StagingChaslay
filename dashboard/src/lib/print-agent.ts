@@ -139,6 +139,111 @@ function scorePrinterSimilarity(configured: string, candidate: string): number {
   return score;
 }
 
+function scoreDeviceMatch(configured: string, candidate: string): number {
+  const cfg = stableDeviceKey(configured);
+  const cand = stableDeviceKey(candidate);
+  if (!cfg || !cand) return 0;
+  if (cfg === cand) return 20;
+  if (cand.includes(cfg) || cfg.includes(cand)) return 12;
+  return 0;
+}
+
+/** Map a saved Windows name to the live queue name (exact, case, or device-key match). */
+export function resolveAgentPrinterName(
+  configuredName: string,
+  printers: AgentPrinter[]
+): string | null {
+  const want = String(configuredName || '').trim();
+  if (!want) return null;
+  const exact = printers.find((p) => p.name === want);
+  if (exact) return exact.name;
+  const ci = printers.find((p) => p.name.toLowerCase() === want.toLowerCase());
+  if (ci) return ci.name;
+  const wantPort = want.toUpperCase().match(/^COM\d+$/)?.[0] || '';
+  if (wantPort) {
+    const byPort = printers.find((p) => String(p.portName || '').toUpperCase() === wantPort);
+    if (byPort) return byPort.name;
+  }
+  const scored = printers
+    .map((p) => ({
+      p,
+      score: Math.max(
+        scoreDeviceMatch(want, p.name),
+        scoreDeviceMatch(want, p.matchHint || ''),
+        scoreDeviceMatch(want, p.driverName || ''),
+        scoreDeviceMatch(want, p.portName || '')
+      ),
+    }))
+    .filter((x) => x.score >= 12)
+    .sort((a, b) => b.score - a.score);
+  return scored[0]?.p.name || null;
+}
+
+/** Dedupe agent enumeration by exact Windows queue name. */
+export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
+  const seen = new Set<string>();
+  const out: AgentPrinter[] = [];
+  for (const p of printers) {
+    const name = String(p.name || '').trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({
+      ...p,
+      name,
+      unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(name),
+    });
+  }
+  return out;
+}
+
+export type PosPrinterProfileLike = {
+  id?: string;
+  name: string;
+  portName?: string | null;
+  matchHint?: string | null;
+  enabled?: boolean;
+};
+
+/**
+ * After a live /printers refresh: heal renamed queues, clear names that no longer exist.
+ * Keeps profile rows so kitchen routing / category links are not lost.
+ */
+export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
+  profiles: T[],
+  livePrinters: AgentPrinter[]
+): { profiles: T[]; changed: boolean } {
+  let changed = false;
+  const next = profiles.map((p) => {
+    const name = String(p.name || '').trim();
+    if (!name) return p;
+    const resolved = resolveAgentPrinterName(name, livePrinters);
+    if (resolved) {
+      if (resolved === name) return p;
+      const picked = livePrinters.find((ap) => ap.name === resolved);
+      changed = true;
+      return {
+        ...p,
+        name: resolved,
+        portName: picked?.portName ?? p.portName ?? null,
+        matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+      };
+    }
+    const heal = suggestPrinterAutoHeal(name, livePrinters);
+    if (heal) {
+      changed = true;
+      return {
+        ...p,
+        name: heal.name,
+        portName: heal.portName ?? p.portName ?? null,
+        matchHint: heal.matchHint ?? heal.driverName ?? p.matchHint ?? null,
+      };
+    }
+    changed = true;
+    return { ...p, name: '' };
+  });
+  return { profiles: next, changed };
+}
+
 /** Agent is up but the stored Windows name is gone (rename / 1801). */
 export function isConfiguredPrinterMissing(
   configuredName: string,
@@ -149,7 +254,7 @@ export function isConfiguredPrinterMissing(
   if (!name) return false;
   if (opts?.agentOk === false) return false;
   if (opts?.printersReady === false) return false;
-  return !printerNameInList(name, printers);
+  return !resolveAgentPrinterName(name, printers as AgentPrinter[]);
 }
 
 /** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */
@@ -363,16 +468,20 @@ export async function isPrintAgentAvailable(): Promise<boolean> {
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {
   if (window.manuposDesktop?.listPrinters) {
     const list = await window.manuposDesktop.listPrinters();
-    return (list || []).map((p) => ({
-      ...p,
-      unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
-    }));
+    return normalizeAgentPrinterList(
+      (list || []).map((p) => ({
+        ...p,
+        unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+      }))
+    );
   }
   const data = await agentFetch('/printers');
-  return (data.printers || []).map((p: AgentPrinter) => ({
-    ...p,
-    unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
-  }));
+  return normalizeAgentPrinterList(
+    (data.printers || []).map((p: AgentPrinter) => ({
+      ...p,
+      unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+    }))
+  );
 }
 
 export type PrintViaAgentResult = {

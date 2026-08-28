@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.0";
+const VERSION = "1.8.1";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -611,7 +611,9 @@ async function listPrinters() {
   const ps = `
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
-$items = Get-CimInstance -ClassName Win32_Printer | ForEach-Object {
+$items = Get-CimInstance -ClassName Win32_Printer | Where-Object {
+  $_.WorkOffline -ne $true -and [int]$_.PrinterStatus -ne 7
+} | ForEach-Object {
   $hint = [regex]::Replace([string]$_.Name, '\s*\(COM\d+\)\s*', ' ')
   $hint = $hint.Trim()
   [PSCustomObject]@{
@@ -639,14 +641,21 @@ $json = ($items | ConvertTo-Json -Compress -Depth 4)
   const cleaned = raw.replace(/^\uFEFF/, "");
   const parsed = JSON.parse(cleaned);
   const list = Array.isArray(parsed) ? parsed : [parsed];
-  return list.map((p) => ({
-    ...p,
-    name: String(p.name || ""),
-    portName: p.portName ? String(p.portName) : "",
-    driverName: p.driverName ? String(p.driverName) : "",
-    matchHint: p.matchHint ? String(p.matchHint) : String(p.name || "").replace(/\s*\(COM\d+\)\s*/gi, " ").trim(),
-    unsuitableForRaw: isUnsuitableRawPrinter(p.name),
-  }));
+  const seen = new Set();
+  return list
+    .map((p) => ({
+      ...p,
+      name: String(p.name || ""),
+      portName: p.portName ? String(p.portName) : "",
+      driverName: p.driverName ? String(p.driverName) : "",
+      matchHint: p.matchHint ? String(p.matchHint) : String(p.name || "").replace(/\s*\(COM\d+\)\s*/gi, " ").trim(),
+      unsuitableForRaw: isUnsuitableRawPrinter(p.name),
+    }))
+    .filter((p) => {
+      if (!p.name || seen.has(p.name)) return false;
+      seen.add(p.name);
+      return true;
+    });
 }
 
 function stableDeviceKey(name) {

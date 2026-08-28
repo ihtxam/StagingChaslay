@@ -16,7 +16,7 @@ import {
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
-import { isPrintAgentAvailable } from '@/lib/print-agent';
+import { isPrintAgentAvailable, listAgentPrinters, resolveAgentPrinterName } from '@/lib/print-agent';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
 export async function printWaiterKitchen(opts: {
@@ -83,8 +83,24 @@ export async function printWaiterKitchen(opts: {
   const agentOnline = await isPrintAgentAvailable();
   const retryLocally = resolvePrintRetryLocally(agentOnline);
   const forceQueue = !isLocalPrintStation(agentOnline);
+  let livePrinters: Awaited<ReturnType<typeof listAgentPrinters>> = [];
+  if (agentOnline) {
+    try {
+      livePrinters = await listAgentPrinters();
+    } catch {
+      livePrinters = [];
+    }
+  }
   if (printJobs.length) {
+    let printedAny = false;
     for (const job of printJobs) {
+      const configuredName = (job.printerName || '').trim();
+      const resolvedName =
+        livePrinters.length > 0
+          ? resolveAgentPrinterName(configuredName, livePrinters)
+          : configuredName;
+      if (!resolvedName) continue;
+      printedAny = true;
       const paperWidthMm = job.paperWidthMm;
       const escpos = generateKitchenTicketEscPos({
         ...kitchenOpts,
@@ -97,7 +113,7 @@ export async function printWaiterKitchen(opts: {
         paperWidthMm,
       });
       const mode = await printViaAgentOrQueue({
-        printerName: job.printerName || undefined,
+        printerName: resolvedName,
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
@@ -107,6 +123,10 @@ export async function printWaiterKitchen(opts: {
         jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
       });
       if (mode === 'queued') queuedAny = true;
+    }
+    if (!printedAny) {
+      toast.error(t('webPosNoKitchenPrinterConfigured'));
+      return;
     }
     if (queuedAny) toast.success(t('webPosPrintQueuedMainTill'));
     return;

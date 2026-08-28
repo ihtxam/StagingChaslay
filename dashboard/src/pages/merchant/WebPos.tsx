@@ -78,6 +78,8 @@ import {
   isUnsuitableRawPrinter,
   listAgentPrinters,
   printViaAgent,
+  reconcilePosPrinterProfiles,
+  resolveAgentPrinterName,
   suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
@@ -1835,17 +1837,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const list = await listAgentPrinters();
       setPrinters(list);
       setPrintersReady(true);
-      if (!printerName && list.length) {
-        const def = list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
-          list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
-          list[0];
-        setPrinterName(def.name);
-      }
+      setPrinterName((current) => {
+        const trimmed = (current || '').trim();
+        if (!trimmed) {
+          if (!list.length) return current;
+          const def =
+            list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
+            list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
+            list[0];
+          return def?.name || current;
+        }
+        return resolveAgentPrinterName(trimmed, list) || '';
+      });
+      setPrintSettings((ps) => {
+        if (!ps?.printers?.length) return ps;
+        const { profiles, changed } = reconcilePosPrinterProfiles(ps.printers, list);
+        if (!changed) return ps;
+        const next = { ...ps, printers: profiles };
+        void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+        return next;
+      });
     } catch {
       setPrinters([]);
       setPrintersReady(false);
     }
-  }, [printerName]);
+  }, []);
 
   const shiftsEnabledRef = useRef(shiftsEnabled);
   shiftsEnabledRef.current = shiftsEnabled;
@@ -6621,7 +6637,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     let queuedOk = 0;
     let lastOkName = '';
     for (const name of names) {
-      const label = (name || '').trim();
+      const configured = (name || '').trim();
+      const label =
+        configured && printers.length > 0
+          ? resolveAgentPrinterName(configured, printers) || ''
+          : configured;
+      if (!label) continue;
       if (label && isUnsuitableRawPrinter(label)) {
         if (opts.role === 'eod') {
           browserPrintText(text);
@@ -6962,9 +6983,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const crossFooters = buildKitchenCrossStationFooters(printJobs);
     const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
+      let printedAny = false;
       for (const job of printJobs) {
+        const configuredName = (job.printerName || '').trim();
+        const resolvedName =
+          printers.length > 0
+            ? resolveAgentPrinterName(configuredName, printers)
+            : configuredName;
+        if (!resolvedName) continue;
+        printedAny = true;
         const paperWidthMm = job.paperWidthMm;
-        const otherItems = crossFooters.get((job.printerName || '').trim()) || [];
+        const otherItems = crossFooters.get(configuredName) || [];
         const ticketOpts = {
           ...kitchenOpts,
           items: job.items,
@@ -6975,7 +7004,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const escpos = generateKitchenTicketEscPos(ticketOpts);
         const text = generateKitchenTicketText(ticketOpts);
         const mode = await printViaAgentOrQueue({
-          printerName: job.printerName || undefined,
+          printerName: resolvedName,
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
@@ -6983,6 +7012,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
+      }
+      if (!printedAny) {
+        toast.error(t('webPosNoKitchenPrinterConfigured'));
+        return;
       }
       setPrinterDisconnected(false);
       if (queuedAny) toastPrintQueuedMainTill();

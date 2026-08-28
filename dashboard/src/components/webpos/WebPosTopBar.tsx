@@ -1011,6 +1011,112 @@ export function WebPosSettingsDropdown({
       </div>
 
       {isLocalPrintStation ? (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            <MoreHorizontal size={14} />
+            {t('webPosPrinting')}
+          </div>
+          <label className="block space-y-1 text-xs">
+            <span className="text-[11px] text-stone-500">{t('webPosPrinter')}</span>
+            <select
+              className="input w-full text-xs"
+              value={
+                printerName &&
+                printers.some((p) => p.name === printerName)
+                  ? printerName
+                  : ''
+              }
+              onChange={(e) => onPrinterChange(e.target.value)}
+              disabled={!agentOk}
+            >
+              <option value="">{t('webPosDefaultPrinter')}</option>
+              {printers.map((p) => {
+                const bad = isUnsuitableRawPrinter(p.name);
+                return (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                    {p.isDefault ? t('webPosDefaultSuffix') : ''}
+                    {bad ? t('webPosPrinterNotThermal') : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          {printerMissing && printerName ? (
+            <p className="text-[10px] leading-snug text-amber-800">
+              {t('webPosPrinterNotFound').replace('{name}', printerName)}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="btn-secondary justify-start w-full text-xs"
+            onClick={onRefreshPrinters}
+          >
+            <RefreshCw size={14} />
+            {t('webPosRefreshPrinters')}
+          </button>
+          <p
+            className={`text-[10px] leading-snug ${
+              !agentOk || printerMissing || agentOutdated
+                ? 'text-amber-800'
+                : 'text-center text-emerald-700'
+            }`}
+          >
+            {!agentOk
+              ? t('webPosAgentOffline')
+              : printerMissing
+                ? t('webPosPrinterDisconnectedShort')
+                : agentOutdated
+                  ? t('webPosPrintAgentOutdatedHint')
+                  : t('webPosAgentOnline')}
+          </p>
+          {agentOk && printerMissing ? (
+            <p className="text-[10px] leading-snug text-amber-800">{t('webPosPrinterRenamedHint')}</p>
+          ) : null}
+          {printerMissing && agentOk ? (
+            <div className="space-y-1.5">
+              {suggestedPrinters
+                .filter((p) => p.name && p.name !== printerName)
+                .map((p) => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                    onClick={() => onPrinterChange(p.name)}
+                  >
+                    {t('webPosUsePrinter').replace('{name}', p.name)}
+                  </button>
+                ))}
+            </div>
+          ) : null}
+          {printerName && isUnsuitableRawPrinter(printerName) ? (
+            <p className="text-[10px] leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="space-y-2 border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            <MoreHorizontal size={14} />
+            {t('webPosPrinting')}
+          </div>
+          <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
+            <p className="text-[10px] leading-snug text-stone-600">{t('webPosRemotePrintHint')}</p>
+            <p
+              className={`text-[10px] font-semibold leading-snug ${
+                !mainTillOnline || !mainTillPrintAgentOnline ? 'text-amber-800' : 'text-emerald-700'
+              }`}
+            >
+              {!mainTillOnline
+                ? t('webPosMainTillOfflineShort')
+                : !mainTillPrintAgentOnline
+                  ? t('webPosMainTillPrintOfflineShort')
+                  : t('webPosMainTillPrintRunningShort')}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isLocalPrintStation ? (
         <label className="block space-y-1 text-xs">
           <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
           <select

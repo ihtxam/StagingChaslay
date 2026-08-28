@@ -48,6 +48,7 @@ import {
   isUnsuitableRawPrinter,
   listAgentPrinters,
   listScaleDevices,
+  reconcilePosPrinterProfiles,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -996,6 +997,18 @@ export default function Settings() {
       }
       const list = await listAgentPrinters();
       setAgentPrinters(list);
+      setSettings((prev) => {
+        if (!prev?.posPrintSettings?.printers?.length) return prev;
+        const { profiles, changed } = reconcilePosPrinterProfiles(
+          prev.posPrintSettings.printers,
+          list
+        );
+        if (!changed) return prev;
+        return {
+          ...prev,
+          posPrintSettings: { ...prev.posPrintSettings, printers: profiles },
+        };
+      });
     } catch {
       setPrintAgentOk(false);
       setPrintAgentOutdated(false);
@@ -3908,7 +3921,7 @@ export default function Settings() {
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={p.name}
+                          value={savedNameMissing ? '' : p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
                             const picked = agentPrinters.find((ap) => ap.name === e.target.value);
@@ -3925,9 +3938,6 @@ export default function Settings() {
                           }}
                         >
                           <option value="">{t('webPosDefaultPrinter')}</option>
-                          {savedNameMissing ? (
-                            <option value={p.name}>{p.name}</option>
-                          ) : null}
                           {agentPrinters.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (
