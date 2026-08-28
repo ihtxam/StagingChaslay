@@ -84,16 +84,10 @@ import {
   isLocalPrintStation,
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
-  readDeviceAutoPrintKitchen,
-  readMainTillAutoPrintKitchen,
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
   shouldAutoPrintReceipt,
   cacheMerchantAutoPrintSettings,
-  syncKitchenAutoPrintFromMerchant,
-  syncMainTillAutoPrintKitchen,
-  writeDeviceAutoPrintKitchen,
-  writeDeviceAutoPrintReceipt,
 } from '@/lib/webpos-print-relay';
 import {
   applyKitchenPrintRetryFromSettings,
@@ -849,20 +843,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printersReady, setPrintersReady] = useState(false);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
-  const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('manupos_webpos_autoprint') !== '0');
-  const [autoPrintKitchenDevice, setAutoPrintKitchenDevice] = useState(() => {
-    try {
-      if (localStorage.getItem('manupos_webpos_autoprint_kitchen_device') != null) {
-        return readDeviceAutoPrintKitchen(true);
-      }
-      if (localStorage.getItem('manupos_webpos_autoprint_kitchen') != null) {
-        return readMainTillAutoPrintKitchen();
-      }
-    } catch {
-      /* ignore */
-    }
-    return readDeviceAutoPrintKitchen(true);
-  });
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
   const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
@@ -2077,32 +2057,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const first = ['cash', 'card', 'terminal'] as const;
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
-        if (cfg.posPrintSettings?.autoPrintReceipt != null) {
-          try {
-            if (cfg.posPrintSettings.autoPrintReceipt === false) {
-              setAutoPrint(false);
-              writeDeviceAutoPrintReceipt(false);
-            } else {
-              const stored = localStorage.getItem('manupos_webpos_autoprint');
-              if (stored === null) {
-                setAutoPrint(cfg.posPrintSettings.autoPrintReceipt !== false);
-              }
-            }
-          } catch {
-            /* keep device dropdown preference */
-          }
-        }
-        if (cfg.posPrintSettings?.autoPrintKitchen != null) {
-          try {
-            const merchantKitchenOn = cfg.posPrintSettings.autoPrintKitchen !== false;
-            const synced = syncKitchenAutoPrintFromMerchant(merchantKitchenOn, {
-              syncMainTill: isLocalPrint,
-            });
-            setAutoPrintKitchenDevice(synced);
-          } catch {
-            /* keep device dropdown preference */
-          }
-        }
       }
       const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
       setStaffRoster(staffList);
@@ -2743,32 +2697,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [printSettings]
   );
-
-  useEffect(() => {
-    localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
-  }, [autoPrint]);
-
-  useEffect(() => {
-    writeDeviceAutoPrintKitchen(autoPrintKitchenDevice);
-    if (isLocalPrint) syncMainTillAutoPrintKitchen(autoPrintKitchenDevice);
-  }, [autoPrintKitchenDevice, isLocalPrint]);
-
-  useEffect(() => {
-    if (!isLocalPrint) return;
-    try {
-      if (
-        localStorage.getItem('manupos_webpos_autoprint_kitchen') != null ||
-        localStorage.getItem('manupos_webpos_autoprint_kitchen_device') != null
-      ) {
-        return;
-      }
-    } catch {
-      /* ignore */
-    }
-    const def = printSettings?.autoPrintKitchen !== false;
-    setAutoPrintKitchenDevice(def);
-    syncMainTillAutoPrintKitchen(def);
-  }, [printSettings?.autoPrintKitchen, isLocalPrint]);
 
   const ensureShift = useCallback(
     async (action: () => void) => {
@@ -6258,7 +6186,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
         const skipThermal =
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
-        if (!skipThermal && shouldAutoPrintReceipt(printSettings, autoPrint)) {
+        if (!skipThermal && shouldAutoPrintReceipt(printSettings)) {
           try {
             await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
           } catch (e: unknown) {
@@ -6879,7 +6807,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
 
-    if (!shouldAutoPrintKitchen(printSettings, autoPrintKitchenDevice) && !opts?.forcePrint && !opts?.cancelled) {
+    if (!shouldAutoPrintKitchen(printSettings) && !opts?.forcePrint && !opts?.cancelled) {
       return;
     }
     const receiptItems = filteredLines.map((l) =>
@@ -7590,7 +7518,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       !opts?.skipReceiptPrint &&
       method !== 'invoice' &&
       method !== 'pay_later' &&
-      shouldAutoPrintReceipt(printSettings, autoPrint);
+      shouldAutoPrintReceipt(printSettings);
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
@@ -8651,8 +8579,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             isLocalPrintStation={isLocalPrint}
             mainTillOnline={mainTillOnline}
             mainTillPrintAgentOnline={mainTillPrintAgentOnline}
-            autoPrint={autoPrint}
-            autoPrintKitchen={autoPrintKitchenDevice}
             postSuccessTarget={postSuccessTarget}
             onPrinterChange={(name) => {
               setPrinterName(name);
@@ -8671,11 +8597,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setPrintSettings(next);
               void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
             }}
-            onAutoPrintChange={(v) => {
-              setAutoPrint(v);
-              writeDeviceAutoPrintReceipt(v);
-            }}
-            onAutoPrintKitchenChange={(v) => setAutoPrintKitchenDevice(v)}
             onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();
@@ -8932,7 +8853,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             embedded
             open
             kitchenEnabled={kitchenEnabled}
-            autoPrintReceipt={autoPrint}
+            autoPrintReceipt={shouldAutoPrintReceipt(printSettings)}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

@@ -18,8 +18,6 @@ import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
 import {
   cacheMerchantAutoPrintSettings,
-  syncKitchenAutoPrintFromMerchant,
-  writeDeviceAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
 import {
   backOfficeHomePath,
@@ -68,7 +66,6 @@ import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
-import WaiterSettingsDropdown from '@/components/webpos/WaiterSettingsDropdown';
 import type { CartLine, Category, PosCategoryId, PosChannel, Product } from '@/components/webpos/types';
 import type { Permission } from '@/lib/permissions';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
@@ -110,8 +107,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [orderNote, setOrderNote] = useState('');
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [sending, setSending] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autoPrintKitchen, setAutoPrintKitchen] = useState(true);
   const [isPhoneLayout, setIsPhoneLayout] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
   );
@@ -184,12 +179,9 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         setCategories(catRes.data?.categories || []);
         setProducts(prodRes.data?.products || []);
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
-        const ps = configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean } | undefined;
-        cacheMerchantAutoPrintSettings(ps || null);
-        if (ps?.autoPrintKitchen != null) {
-          const synced = syncKitchenAutoPrintFromMerchant(ps.autoPrintKitchen !== false);
-          setAutoPrintKitchen(synced);
-        }
+        cacheMerchantAutoPrintSettings(
+          (configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean } | undefined) || null
+        );
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       } finally {
@@ -204,10 +196,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (!loading && pinRequired) setPinGateOpen(true);
   }, [loading, pinRequired]);
-
-  useEffect(() => {
-    writeDeviceAutoPrintKitchen(autoPrintKitchen);
-  }, [autoPrintKitchen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -691,7 +679,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         staffName: staff?.name,
         tableLabel,
         orderNumber: ticket.display,
-        deviceAutoPrintKitchen: autoPrintKitchen,
         t,
       });
       const savedId = await persistWaiterHeldOrder({
@@ -741,13 +728,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           <p className="truncate font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <WaiterSettingsDropdown
-            open={settingsOpen}
-            onToggle={() => setSettingsOpen((v) => !v)}
-            onClose={() => setSettingsOpen(false)}
-            autoPrintKitchen={autoPrintKitchen}
-            onAutoPrintKitchenChange={setAutoPrintKitchen}
-          />
           {showBackOffice ? (
             <button
               type="button"

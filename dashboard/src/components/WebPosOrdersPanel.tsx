@@ -263,7 +263,7 @@ type Props = {
   canSalesAdjust?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
-  /** Device dropdown — auto-print receipt after collect payment */
+  /** Merchant Settings — auto-print receipt after collect payment */
   autoPrintReceipt?: boolean;
 };
 

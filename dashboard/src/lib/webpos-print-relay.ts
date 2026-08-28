@@ -33,73 +33,11 @@ export type EscPosPrintJobPayload = {
   dataBase64: string;
   printerName?: string;
   text?: string;
-  /** Used by the main till to honour local auto-print toggles for relayed jobs. */
+  /** Kitchen / receipt / EOD classification for relay auto-print gates. */
   jobKind?: PrintJobKind;
 };
 
-const AUTO_PRINT_RECEIPT_KEY = 'manupos_webpos_autoprint';
-const AUTO_PRINT_KITCHEN_KEY = 'manupos_webpos_autoprint_kitchen';
-const AUTO_PRINT_KITCHEN_DEVICE_KEY = 'manupos_webpos_autoprint_kitchen_device';
 const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
-
-/** Main till: auto-print customer receipts (local sales + relayed jobs). */
-export function readMainTillAutoPrintReceipt(): boolean {
-  try {
-    return localStorage.getItem(AUTO_PRINT_RECEIPT_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-/** Per-device receipt auto-print (mobile / waiter WebPOS checkout). */
-export function readDeviceAutoPrintReceipt(): boolean {
-  return readMainTillAutoPrintReceipt();
-}
-
-export function writeDeviceAutoPrintReceipt(enabled: boolean): void {
-  try {
-    localStorage.setItem(AUTO_PRINT_RECEIPT_KEY, enabled ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Main till: auto-print kitchen tickets relayed from waiter phones / mobile WebPOS. */
-export function readMainTillAutoPrintKitchen(): boolean {
-  try {
-    return localStorage.getItem(AUTO_PRINT_KITCHEN_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-/** Per-device kitchen auto-print when sending from phone / waiter app. */
-export function readDeviceAutoPrintKitchen(merchantDefault = true): boolean {
-  try {
-    const v = localStorage.getItem(AUTO_PRINT_KITCHEN_DEVICE_KEY);
-    if (v === '0') return false;
-    if (v === '1') return true;
-    return merchantDefault;
-  } catch {
-    return merchantDefault;
-  }
-}
-
-export function writeDeviceAutoPrintKitchen(enabled: boolean): void {
-  try {
-    localStorage.setItem(AUTO_PRINT_KITCHEN_DEVICE_KEY, enabled ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
-
-export function syncMainTillAutoPrintKitchen(enabled: boolean): void {
-  try {
-    localStorage.setItem(AUTO_PRINT_KITCHEN_KEY, enabled ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
 
 export type PosAutoPrintSettings = {
   autoPrintReceipt?: boolean;
@@ -120,34 +58,14 @@ export function isMerchantAutoPrintKitchenEnabled(
   return printSettings?.autoPrintKitchen !== false;
 }
 
-/** Device + merchant toggles for customer receipt auto-print at checkout. */
-export function shouldAutoPrintReceipt(
-  printSettings?: PosAutoPrintSettings | null,
-  deviceEnabled = readMainTillAutoPrintReceipt()
-): boolean {
-  if (!isMerchantAutoPrintReceiptEnabled(printSettings)) return false;
-  return deviceEnabled;
+/** Merchant Settings gate for customer receipt auto-print at checkout. */
+export function shouldAutoPrintReceipt(printSettings?: PosAutoPrintSettings | null): boolean {
+  return isMerchantAutoPrintReceiptEnabled(printSettings);
 }
 
-/** Device + merchant toggles for kitchen auto-print (send / checkout). */
-export function shouldAutoPrintKitchen(
-  printSettings?: PosAutoPrintSettings | null,
-  deviceEnabled?: boolean
-): boolean {
-  if (!isMerchantAutoPrintKitchenEnabled(printSettings)) return false;
-  if (deviceEnabled === false) return false;
-  if (deviceEnabled === true) return true;
-  return readDeviceAutoPrintKitchen(true);
-}
-
-/** Align per-device kitchen auto-print with merchant Settings (master switch). */
-export function syncKitchenAutoPrintFromMerchant(
-  merchantEnabled: boolean,
-  opts?: { syncMainTill?: boolean }
-): boolean {
-  writeDeviceAutoPrintKitchen(merchantEnabled);
-  if (opts?.syncMainTill) syncMainTillAutoPrintKitchen(merchantEnabled);
-  return merchantEnabled;
+/** Merchant Settings gate for kitchen auto-print (send / checkout). */
+export function shouldAutoPrintKitchen(printSettings?: PosAutoPrintSettings | null): boolean {
+  return isMerchantAutoPrintKitchenEnabled(printSettings);
 }
 
 /** Cache merchant auto-print flags so relay polling matches checkout gates. */
@@ -304,10 +222,10 @@ function shouldPrintRelayedJob(
   if (jobKind === 'eod') return true;
   const merchant = readCachedMerchantAutoPrintSettings();
   if (jobKind === 'kitchen') {
-    return shouldAutoPrintKitchen(merchant, readMainTillAutoPrintKitchen());
+    return shouldAutoPrintKitchen(merchant);
   }
   if (jobKind === 'receipt') {
-    return shouldAutoPrintReceipt(merchant, readMainTillAutoPrintReceipt());
+    return shouldAutoPrintReceipt(merchant);
   }
   return true;
 }
@@ -374,12 +292,12 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           const payload = p as AutoPrintOrderPayload;
           const allowKitchen =
             payload.printKitchen === true &&
-            shouldAutoPrintKitchen(readCachedMerchantAutoPrintSettings(), readMainTillAutoPrintKitchen());
+            shouldAutoPrintKitchen(readCachedMerchantAutoPrintSettings());
           const allowReceiptLike =
             (payload.printReceipt === true ||
               payload.printNotification === true ||
               payload.printDeliveryReceipt === true) &&
-            shouldAutoPrintReceipt(readCachedMerchantAutoPrintSettings(), readMainTillAutoPrintReceipt());
+            shouldAutoPrintReceipt(readCachedMerchantAutoPrintSettings());
           if (!allowKitchen && !allowReceiptLike) {
             await ackPrintJob(job.id, 'DONE');
             continue;

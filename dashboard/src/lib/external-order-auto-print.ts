@@ -16,8 +16,8 @@ import {
 import { isRetailPosMode } from '@/lib/pos-checkout';
 import {
   printViaAgentOrQueue,
-  readMainTillAutoPrintKitchen,
-  readMainTillAutoPrintReceipt,
+  isMerchantAutoPrintKitchenEnabled,
+  isMerchantAutoPrintReceiptEnabled,
 } from '@/lib/webpos-print-relay';
 
 export type AutoPrintOrderPayload = {
@@ -196,14 +196,12 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
   if (
     payload.printKitchen === true &&
     !isRetailPosMode(settings.posCheckoutSettings) &&
-    printSettings?.autoPrintKitchen !== false &&
-    readMainTillAutoPrintKitchen()
+    isMerchantAutoPrintKitchenEnabled(printSettings)
   ) {
     await printKitchenTickets(order, orderId, source, printSettings, lang);
   }
 
-  const receiptAutoPrintAllowed =
-    printSettings?.autoPrintReceipt !== false && readMainTillAutoPrintReceipt();
+  const receiptAutoPrintAllowed = isMerchantAutoPrintReceiptEnabled(printSettings);
 
   if (delivery && payload.printDeliveryReceipt === true && receiptAutoPrintAllowed) {
     await printDeliveryReceiptForOrder(orderId, {
