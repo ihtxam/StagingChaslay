@@ -392,6 +392,11 @@ import {
 } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
+import {
+  posSaleToNotificationOrder,
+  subscribeWebPosOrderCompleted,
+  subscribeWebPosReservationCreated,
+} from '@/lib/webpos-notifications';
 
 type SplitReceiptPart = {
   id: string;
@@ -889,9 +894,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const localHeldBellSuppressRef = useRef<Map<string, number>>(new Map());
   const onlinePanelOpenRef = useRef(false);
   const [reservationPendingCount, setReservationPendingCount] = useState(0);
-  const [pendingReservationAlerts, setPendingReservationAlerts] = useState<
-    WebPosReservationAlert[]
-  >([]);
+  const unactionedReservationIdsRef = useRef<Set<string>>(new Set());
+  const [unactionedReservationCount, setUnactionedReservationCount] = useState(0);
+  const [reservationAlertById, setReservationAlertById] = useState<
+    Record<string, WebPosReservationAlert>
+  >({});
+  const localPosOrderIdsRef = useRef<Set<string>>(new Set());
+  const [localPosOrderAlerts, setLocalPosOrderAlerts] = useState<OnlineOrder[]>([]);
+  const [localPosOrderCount, setLocalPosOrderCount] = useState(0);
   const [reservationAlertUntil, setReservationAlertUntil] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
@@ -2450,11 +2460,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const markOnlineOrderActioned = useCallback((orderId: string) => {
     unactionedOrderIdsRef.current.delete(orderId);
+    localPosOrderIdsRef.current.delete(orderId);
+    setLocalPosOrderCount(localPosOrderIdsRef.current.size);
     setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
     setNewOrderAlertQueue((prev) => prev.filter((o) => o.id !== orderId));
     if (unactionedOrderIdsRef.current.size === 0) {
       stopOrderAlertLoop();
     }
+  }, []);
+
+  const pushLocalPosOrderNotification = useCallback((order: OnlineOrder) => {
+    localPosOrderIdsRef.current.add(order.id);
+    setLocalPosOrderCount(localPosOrderIdsRef.current.size);
+    setLocalPosOrderAlerts((prev) => {
+      const next = [order, ...prev.filter((row) => row.id !== order.id)];
+      return next.slice(0, 20);
+    });
+  }, []);
+
+  const pushReservationNotification = useCallback((reservation: WebPosReservationAlert) => {
+    if (!['pending', 'confirmed'].includes(reservation.status)) return;
+    knownReservationIdsRef.current ??= new Set<string>();
+    knownReservationIdsRef.current.add(reservation.id);
+    unactionedReservationIdsRef.current.add(reservation.id);
+    setReservationAlertById((prev) => ({ ...prev, [reservation.id]: reservation }));
+    setUnactionedReservationCount(unactionedReservationIdsRef.current.size);
+    playReservationTillBellOnce();
+    window.setTimeout(() => playReservationTillBellOnce(), 950);
+    setReservationAlertUntil(Date.now() + 10000);
+  }, []);
+
+  const markReservationActioned = useCallback((reservationId?: string) => {
+    if (reservationId) {
+      unactionedReservationIdsRef.current.delete(reservationId);
+    } else {
+      unactionedReservationIdsRef.current.clear();
+    }
+    setUnactionedReservationCount(unactionedReservationIdsRef.current.size);
   }, []);
 
   const dismissNewOrderAlert = useCallback((orderId: string) => {
@@ -2469,8 +2511,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [dismissNewOrderAlert, markOnlineOrderActioned]
   );
 
-  const openOnlineOrdersInTab = useCallback((orderId?: string | null) => {
-    setOrdersChannelPref('online');
+  const openOnlineOrdersInTab = useCallback((orderId?: string | null, channel: 'online' | 'all' = 'online') => {
+    setOrdersChannelPref(channel === 'online' ? 'online' : null);
     setHighlightOrderId(orderId ?? null);
     setPosTab('orders');
     setPosView('orders');
@@ -2543,21 +2585,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }>;
       const actionable = rows.filter((r) => r.status === 'pending' || r.status === 'confirmed');
       const pending = rows.filter((r) => r.status === 'pending');
-      setReservationPendingCount(pending.length);
-      setPendingReservationAlerts(
-        pending.map((r) => ({
-          id: r.id,
-          code: r.code,
-          guestName: r.guestName,
-          partySize: r.partySize,
-          reservedAt: r.reservedAt,
-          status: r.status,
-        }))
+      const alertById = Object.fromEntries(
+        actionable.map((r) => [
+          r.id,
+          {
+            id: r.id,
+            code: r.code,
+            guestName: r.guestName,
+            partySize: r.partySize,
+            reservedAt: r.reservedAt,
+            status: r.status,
+          } satisfies WebPosReservationAlert,
+        ])
       );
+      setReservationPendingCount(pending.length);
+      setReservationAlertById(alertById);
+
+      for (const id of [...unactionedReservationIdsRef.current]) {
+        if (!alertById[id]) unactionedReservationIdsRef.current.delete(id);
+      }
+      setUnactionedReservationCount(unactionedReservationIdsRef.current.size);
 
       const alertIds = actionable.map((r) => r.id);
       if (knownReservationIdsRef.current == null) {
         knownReservationIdsRef.current = new Set(alertIds);
+        for (const id of alertIds) unactionedReservationIdsRef.current.add(id);
+        setUnactionedReservationCount(unactionedReservationIdsRef.current.size);
         return;
       }
 
@@ -2565,6 +2618,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       for (const id of alertIds) knownReservationIdsRef.current.add(id);
 
       if (fresh.length > 0) {
+        for (const id of fresh) unactionedReservationIdsRef.current.add(id);
+        setUnactionedReservationCount(unactionedReservationIdsRef.current.size);
         playReservationTillBellOnce();
         window.setTimeout(() => playReservationTillBellOnce(), 950);
         setReservationAlertUntil(Date.now() + 10000);
@@ -2595,8 +2650,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         unactionedOrderIdsRef.current.clear();
         setUnactionedOrderCount(0);
         setNewOrderAlertQueue([]);
-        setPendingReservationAlerts([]);
+        setReservationAlertById({});
         setReservationPendingCount(0);
+        unactionedReservationIdsRef.current.clear();
+        setUnactionedReservationCount(0);
+        localPosOrderIdsRef.current.clear();
+        setLocalPosOrderAlerts([]);
+        setLocalPosOrderCount(0);
         stopOrderAlertLoop();
       }
       return;
@@ -2612,7 +2672,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (!reservationsPosUiEnabled || pinGateRequired || loading) {
       setReservationPendingCount(0);
-      setPendingReservationAlerts([]);
+      setReservationAlertById({});
+      unactionedReservationIdsRef.current.clear();
+      setUnactionedReservationCount(0);
       if (!reservationsPosUiEnabled) {
         knownReservationIdsRef.current = null;
       }
@@ -2622,6 +2684,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const id = setInterval(() => void pollReservations(), 8000);
     return () => clearInterval(id);
   }, [pollReservations, reservationsPosUiEnabled, pinGateRequired, loading]);
+
+  useEffect(() => {
+    const unsubReservation = subscribeWebPosReservationCreated((reservation) => {
+      pushReservationNotification(reservation);
+    });
+    const unsubOrder = subscribeWebPosOrderCompleted((order) => {
+      pushLocalPosOrderNotification(order);
+    });
+    return () => {
+      unsubReservation();
+      unsubOrder();
+    };
+  }, [pushLocalPosOrderNotification, pushReservationNotification]);
 
   // Browsers block audio until a user gesture - unlock AudioContext on first tap
   useEffect(() => {
@@ -6241,6 +6316,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
       if (orderForReceipt && isPaidOrder(orderForReceipt)) dismissOdsForOrder(orderForReceipt);
+      pushLocalPosOrderNotification(
+        posSaleToNotificationOrder({
+          id: String(orderForReceipt?.id || ctx.id),
+          orderNumber: orderForReceipt?.orderNumber || ctx.orderNumber,
+          total: ctx.total,
+          customerName: orderForReceipt?.customerName || null,
+          items: (orderForReceipt?.items || cart).map((item) => {
+            const line = item as {
+              name?: string;
+              productName?: string | null;
+              quantity?: string | number;
+            };
+            return {
+              name: line.name || line.productName || '',
+              quantity: Number(line.quantity || 1),
+            };
+          }),
+        })
+      );
       setPosView('success');
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
@@ -7563,6 +7657,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (method === 'invoice' && backendOrderId) {
       void openInvoicePdf(backendOrderId);
     }
+    if (!payLater && !moreSplits) {
+      pushLocalPosOrderNotification(
+        posSaleToNotificationOrder({
+          id: backendOrderId || clientId,
+          orderNumber: ticket.orderNumber || ticket.display || sale.orderNumber,
+          total: paidTotal,
+          customerName: sale.customerName,
+          items: saleLines.map((line) => ({ name: line.name, quantity: line.quantity })),
+        })
+      );
+    }
   };
 
   const guardOfflineCheckout = (
@@ -8307,9 +8412,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return [];
   }, [printerMissing, printerName, printers, configuredPrinterNames]);
 
-  const notificationOrders = useMemo(
-    () => onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id)),
-    [onlineOrders, unactionedOrderCount]
+  const notificationOrders = useMemo(() => {
+    const online = onlineOrders.filter((o) => unactionedOrderIdsRef.current.has(o.id));
+    const local = localPosOrderAlerts.filter((o) => localPosOrderIdsRef.current.has(o.id));
+    const seen = new Set<string>();
+    return [...local, ...online].filter((order) => {
+      if (seen.has(order.id)) return false;
+      seen.add(order.id);
+      return true;
+    });
+  }, [onlineOrders, unactionedOrderCount, localPosOrderAlerts, localPosOrderCount]);
+
+  const pendingReservationAlerts = useMemo(
+    () =>
+      [...unactionedReservationIdsRef.current]
+        .map((id) => reservationAlertById[id])
+        .filter((row): row is WebPosReservationAlert => !!row),
+    [reservationAlertById, unactionedReservationCount]
   );
 
   if (loading) {
@@ -8402,7 +8521,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const onlinePendingCount = unactionedOrderCount;
   const notificationCount =
     unactionedOrderCount +
-    (reservationsPosUiEnabled ? reservationPendingCount : 0);
+    localPosOrderCount +
+    (reservationsPosUiEnabled ? unactionedReservationCount : 0);
   const orderAlertRing = unactionedOrderCount > 0;
   const reservationAlertRing = reservationAlertUntil > Date.now();
   const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
@@ -8532,10 +8652,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             showBookings={reservationsPosUiEnabled}
             onOpenOrder={(orderId) => {
               setNotificationsOpen(false);
-              openOnlineOrdersInTab(orderId);
+              const isLocalPosOrder = localPosOrderIdsRef.current.has(orderId);
+              openOnlineOrdersInTab(orderId, isLocalPosOrder ? 'all' : 'online');
+              markOnlineOrderActioned(orderId);
             }}
             onOpenBookings={() => {
               setNotificationsOpen(false);
+              markReservationActioned();
               setPosTab('bookings');
               setPosView('bookings');
             }}

@@ -11,6 +11,7 @@ import {
   zurichDayEndFromYmd,
   zurichDayStartFromYmd,
 } from '@/lib/date-format';
+import { dispatchWebPosReservationCreated } from '@/lib/webpos-notifications';
 
 type Reservation = {
   id: string;
@@ -172,13 +173,24 @@ export default function WebPosBookingsView() {
     }
     setCreateBusy(true);
     try {
-      await api.post('/merchant/reservations', {
+      const res = await api.post('/merchant/reservations', {
         ...form,
         partySize: Number(form.partySize),
         source: form.source || 'pos',
         status: form.status || 'confirmed',
         skipSlotCheck: true,
       });
+      const created = res.data?.reservation as Reservation | undefined;
+      if (created?.id) {
+        dispatchWebPosReservationCreated({
+          id: created.id,
+          code: created.code,
+          guestName: created.guestName,
+          partySize: created.partySize,
+          reservedAt: created.reservedAt,
+          status: created.status || form.status || 'confirmed',
+        });
+      }
       toast.success(t('created'));
       setCreateOpen(false);
       setForm(emptyForm());
