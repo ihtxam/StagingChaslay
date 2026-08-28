@@ -52,6 +52,8 @@ import {
   normalizePosCheckoutSettings,
   type PosCheckoutSettings,
 } from '@/lib/pos-checkout';
+import { normalizeBusinessModule } from '@/lib/business-module';
+import { showPosScaleFeature } from '@/lib/edition-features';
 import WebPosFulfillmentModal, {
   type FulfillmentWhen,
 } from '@/components/WebPosFulfillmentModal';
@@ -1480,6 +1482,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const editionFeatures = paymentConfig?.editionFeatures;
   const editionAllows = (key: string) =>
     editionFeatures == null || editionFeatures.includes(key);
+  const scaleFeatureEnabled = showPosScaleFeature(
+    editionFeatures,
+    normalizeBusinessModule(merchant?.businessCategory)
+  );
   const posMode = checkoutSettings.posMode === 'retail' ? 'retail' : 'restaurant';
   const isRetail = posMode === 'retail';
   const retailTakeawayEnabled =
@@ -2761,7 +2767,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const healScalePort = useCallback(
     (resolvedPort: string) => {
-      if (!printSettings) return;
+      if (!scaleFeatureEnabled || !printSettings) return;
       const want = formatScalePortLabel(resolvedPort);
       const have = formatScalePortLabel(printSettings.scaleComPort || '');
       if (!want || want === have) return;
@@ -2771,7 +2777,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPrintSettings(next);
       void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
     },
-    [printSettings]
+    [printSettings, scaleFeatureEnabled]
   );
 
   const ensureShift = useCallback(
@@ -3051,6 +3057,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return;
       }
       if (isWeighedProduct(p)) {
+        if (!scaleFeatureEnabled) {
+          addConfiguredProduct(p, Number(p.price) || 0);
+          return;
+        }
         setPendingWeighed(p);
         return;
       }
@@ -9848,7 +9858,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       />
 
       <WebPosWeightModal
-        open={!!pendingWeighed}
+        open={scaleFeatureEnabled && !!pendingWeighed}
         productName={pendingWeighed?.name || ''}
         pricePerKg={Number(pendingWeighed?.price) || 0}
         weightUnit={pendingWeighed?.weightUnit}

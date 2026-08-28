@@ -40,7 +40,9 @@ export class EditionService {
       .limit(1);
     if (existing.length) return;
 
-    const restaurantFeatures = ALL_EDITION_FEATURES.filter((k) => k !== "pos_retail");
+    const restaurantFeatures = ALL_EDITION_FEATURES.filter(
+      (k) => k !== "pos_retail" && k !== "pos_scale"
+    );
     const retailFeatures = ALL_EDITION_FEATURES.filter(
       (k) => !["pos_tables", "pos_courses", "pos_kitchen", "reservations"].includes(k)
     );

@@ -13,6 +13,7 @@ export type EditionFeatureKey =
   | "pos_cash_drawer"
   | "pos_tips"
   | "pos_gift_cards"
+  | "pos_scale"
   | "channel_takeaway"
   | "channel_delivery"
   | "channel_online_orders"
@@ -50,6 +51,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: "pos_cash_drawer", label: "Cash drawer" },
       { key: "pos_tips", label: "Tips" },
       { key: "pos_gift_cards", label: "Gift cards at POS" },
+      { key: "pos_scale", label: "Balance / scale (weighed products)" },
     ],
   },
   {
@@ -152,6 +154,18 @@ export function canAccessEditionRoute(
   const required = EDITION_ROUTE_FEATURES[path];
   if (!required?.length) return true;
   return hasAnyEditionFeature(features, required);
+}
+
+/** Balance/scale: retail by default; restaurant only when pos_scale is on the edition. */
+export function showPosScaleFeature(
+  features: EditionFeatureKey[] | null | undefined,
+  businessModule?: "retail" | "restaurant" | null
+): boolean {
+  if (businessModule === "restaurant") {
+    if (features == null) return false;
+    return features.includes("pos_scale");
+  }
+  return hasEditionFeature(features, "pos_scale");
 }
 
 /** Defaults applied when assigning a retail-oriented edition */

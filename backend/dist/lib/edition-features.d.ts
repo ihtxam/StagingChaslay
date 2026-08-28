@@ -2,7 +2,7 @@
  * SaaS edition feature catalog ? capability gates (not staff RBAC).
  * Keep in sync with dashboard/src/lib/edition-features.ts
  */
-export type EditionFeatureKey = "pos_tables" | "pos_courses" | "pos_shifts" | "pos_kitchen" | "pos_express" | "pos_retail" | "pos_cash_drawer" | "pos_tips" | "pos_gift_cards" | "channel_takeaway" | "channel_delivery" | "channel_online_orders" | "online_shop" | "online_payments" | "gift_cards" | "loyalty" | "offers" | "reports" | "staff_roles" | "reservations" | "website_cms" | "inventory" | "digital_signage" | "kds" | "ods";
+export type EditionFeatureKey = "pos_tables" | "pos_courses" | "pos_shifts" | "pos_kitchen" | "pos_express" | "pos_retail" | "pos_cash_drawer" | "pos_tips" | "pos_gift_cards" | "pos_scale" | "channel_takeaway" | "channel_delivery" | "channel_online_orders" | "online_shop" | "online_payments" | "gift_cards" | "loyalty" | "offers" | "reports" | "staff_roles" | "reservations" | "website_cms" | "inventory" | "digital_signage" | "kds" | "ods";
 export type EditionFeatureGroup = {
     id: string;
     label: string;
@@ -24,6 +24,8 @@ export declare function normalizeEditionFeatures(input: unknown): EditionFeature
 export declare function hasEditionFeature(features: EditionFeatureKey[] | null | undefined, required: EditionFeatureKey): boolean;
 export declare function hasAnyEditionFeature(features: EditionFeatureKey[] | null | undefined, required: EditionFeatureKey[]): boolean;
 export declare function canAccessEditionRoute(path: string, features: EditionFeatureKey[] | null | undefined): boolean;
+/** Balance/scale: retail by default; restaurant only when pos_scale is on the edition. */
+export declare function showPosScaleFeature(features: EditionFeatureKey[] | null | undefined, businessModule?: "retail" | "restaurant" | null): boolean;
 /** Defaults applied when assigning a retail-oriented edition */
 export declare function retailDefaultsFromFeatures(features: EditionFeatureKey[]): {
     floorPlanEnabled: boolean;

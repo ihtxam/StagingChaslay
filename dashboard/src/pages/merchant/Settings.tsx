@@ -76,6 +76,8 @@ import Staff from './Staff';
 import DeliveryTrackingPage from './DeliveryTracking';
 import { useAuthStore } from '@/store/auth';
 import { canAccessRoute } from '@/lib/permissions';
+import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
+import { normalizeBusinessModule } from '@/lib/business-module';
 
 interface SettingsData {
   name: string;
@@ -114,6 +116,7 @@ interface SettingsData {
   inventoryWasteFactor?: number;
   inventoryAutoReorderEmailEnabled?: boolean;
   businessCategory?: 'retail' | 'restaurant' | null;
+  editionFeatures?: EditionFeatureKey[] | null;
   inventoryExpiryAlertDays?: number;
   posColorTheme?: string;
   posCheckoutSettings?: {
@@ -1399,6 +1402,17 @@ export default function Settings() {
     );
   }
 
+  const showScaleSettings =
+    !!settings &&
+    showPosScaleFeature(
+      settings.editionFeatures,
+      normalizeBusinessModule(settings.businessCategory)
+    );
+  const posRetailMode =
+    settings?.businessCategory === 'retail' ||
+    (!settings?.businessCategory &&
+      (settings?.posCheckoutSettings?.posMode || 'restaurant') === 'retail');
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1831,8 +1845,8 @@ export default function Settings() {
                 id="pos-mode"
                 icon={Monitor}
                 accent={settingsDash.accent}
-                title={t('posMode')}
-                description={t('posModeHint')}
+                title={t('settingsTablesFeatures')}
+                description={t('posTablesEnabledHint')}
                 highlight={isSectionHighlight('pos-mode')}
                 dimmed={normalizedQuery ? !isSectionVisible('pos-mode') : false}
               >
@@ -1845,54 +1859,8 @@ export default function Settings() {
                           : t('businessModuleRestaurant'),
                     })}
                   </p>
-                ) : (
-                <Field label={t('posMode')} hint={t('posModeHint')}>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {(
-                      [
-                        ['restaurant', t('posModeRestaurant'), t('posModeRestaurantHint')],
-                        ['retail', t('posModeRetail'), t('posModeRetailHint')],
-                      ] as const
-                    ).map(([mode, label, hint]) => {
-                      const active =
-                        (settings.posCheckoutSettings?.posMode || 'restaurant') === mode;
-                      return (
-                        <label
-                          key={mode}
-                          className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
-                            active
-                              ? 'border-[var(--text)] bg-[var(--bg-muted)]'
-                              : 'border-[var(--border)]'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="posMode"
-                            className="mt-0.5"
-                            checked={active}
-                            onChange={() =>
-                              setSettings({
-                                ...settings,
-                                posCheckoutSettings: {
-                                  ...(settings.posCheckoutSettings || {}),
-                                  posMode: mode,
-                                },
-                              })
-                            }
-                          />
-                          <span>
-                            <span className="font-medium block">{label}</span>
-                            <span className="text-xs muted">{hint}</span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </Field>
-                )}
-                {(settings.businessCategory === 'retail' ||
-                  (!settings.businessCategory &&
-                    (settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail')) ? (
+                ) : null}
+                {posRetailMode ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(
                       [
@@ -1958,7 +1926,7 @@ export default function Settings() {
                     className="mt-0.5"
                     checked={
                       settings.posCheckoutSettings?.requireTableForDineIn === undefined
-                        ? (settings.posCheckoutSettings?.posMode || 'restaurant') !== 'retail'
+                        ? !posRetailMode
                         : settings.posCheckoutSettings.requireTableForDineIn !== false
                     }
                     onChange={(e) =>
@@ -2077,8 +2045,7 @@ export default function Settings() {
                           : settings.posCheckoutSettings?.postSuccessTarget || 'register'
                       }
                       disabled={
-                        (settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail' ||
-                        settings.posCheckoutSettings?.tablesEnabled === false
+                        posRetailMode || settings.posCheckoutSettings?.tablesEnabled === false
                       }
                       onChange={(e) =>
                         setSettings({
@@ -2091,8 +2058,7 @@ export default function Settings() {
                       }
                     >
                       <option value="register">{t('webPosTabRegister')}</option>
-                      {settings.posCheckoutSettings?.tablesEnabled !== false &&
-                      (settings.posCheckoutSettings?.posMode || 'restaurant') !== 'retail' ? (
+                      {settings.posCheckoutSettings?.tablesEnabled !== false && !posRetailMode ? (
                         <option value="tables">{t('webPosTabTables')}</option>
                       ) : null}
                     </select>
@@ -3381,6 +3347,8 @@ export default function Settings() {
                     <option value={58}>58mm</option>
                   </select>
                 </Field>
+                {showScaleSettings ? (
+                  <>
                 <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
                   <div className="space-y-3">
                     {settings.posPrintSettings?.scaleComPort || settings.posPrintSettings?.scaleDeviceName ? (
@@ -3472,6 +3440,8 @@ export default function Settings() {
                     }
                   />
                 </Field>
+                  </>
+                ) : null}
                 <Field label={t('receiptLogoUpload')} hint={t('receiptLogoUploadHint')}>
                   <div className="space-y-2">
                     {(settings.posPrintSettings?.receiptLogoUrl || settings.shopLogoUrl) && (
