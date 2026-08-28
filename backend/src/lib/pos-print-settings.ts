@@ -66,6 +66,8 @@ export type PosPrintSettings = {
   kitchenPrintRetryAttempts?: number;
   /** Seconds between kitchen print retries (default 5). */
   kitchenPrintRetryIntervalSec?: number;
+  /** Force slower chunked writes for Bluetooth/COM thermal printers. */
+  bluetoothPrinterSlowMode?: boolean;
   /** Last-known WebPOS / Print Agent COM port (e.g. COM3). May change after USB replug. */
   scaleComPort?: string | null;
   /** Friendly USB/Bluetooth name (e.g. USB-SERIAL CH340) used to find the new COM port. */
@@ -122,6 +124,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     kitchenPrintRetryEnabled: true,
     kitchenPrintRetryAttempts: 5,
     kitchenPrintRetryIntervalSec: 5,
+    bluetoothPrinterSlowMode: false,
     scaleComPort: null,
     scaleDeviceName: null,
     scaleDeviceId: null,
@@ -266,6 +269,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
     kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),
     kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),
+    bluetoothPrinterSlowMode: src.bluetoothPrinterSlowMode === true,
     scaleComPort:
       src.scaleComPort === null || src.scaleComPort === undefined
         ? null

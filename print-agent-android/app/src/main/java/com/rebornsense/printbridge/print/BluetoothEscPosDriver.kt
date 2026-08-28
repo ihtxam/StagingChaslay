@@ -41,15 +41,20 @@ class BluetoothEscPosDriver : PrinterDriver {
             try {
                 val out = socket.outputStream
                 var offset = 0
-                val chunk = 4096
+                val chunk = 256
+                val delayMs = 25L
                 while (offset < data.size) {
                     val len = minOf(chunk, data.size - offset)
                     out.write(data, offset, len)
+                    out.flush()
                     offset += len
+                    if (offset < data.size) {
+                        Thread.sleep(delayMs)
+                    }
                 }
                 out.flush()
-                // Let the printer drain before closing — avoids "Read failed, socket might closed".
-                Thread.sleep(400)
+                // Let the printer drain before closing — avoids truncation and cut loss.
+                Thread.sleep(500)
                 Result.success(Unit)
             } finally {
                 runCatching { socket.close() }

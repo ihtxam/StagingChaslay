@@ -261,6 +261,8 @@ export type PosPrintSettingsClient = {
   kitchenPrintRetryAttempts?: number;
   /** Seconds between kitchen print retries (default 5). */
   kitchenPrintRetryIntervalSec?: number;
+  /** Force slower chunked writes for Bluetooth/COM thermal printers (auto-detects COM ports when unset). */
+  bluetoothPrinterSlowMode?: boolean;
   /** Print Agent USB scale COM port (WebPOS). */
   scaleComPort?: string | null;
   scaleDeviceName?: string | null;
@@ -1629,8 +1631,8 @@ function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
 }
 
-/** Minimal feed + full cut for kitchen tickets (avoids ESC d bulk feed + partial-cut padding). */
-const KITCHEN_TICKET_CUT = new Uint8Array([0x0a, 0x0a, 0x1d, 0x56, 0x00]);
+/** Minimal feed + full cut for kitchen tickets (extra feed helps BT/COM printers). */
+const KITCHEN_TICKET_CUT = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {

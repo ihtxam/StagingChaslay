@@ -42,6 +42,7 @@ const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
 export type PosAutoPrintSettings = {
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  bluetoothPrinterSlowMode?: boolean;
 };
 
 /** Merchant Settings → Receipts: master gate for customer receipt auto-print. */
@@ -76,6 +77,7 @@ export function cacheMerchantAutoPrintSettings(printSettings?: PosAutoPrintSetti
       JSON.stringify({
         autoPrintReceipt: isMerchantAutoPrintReceiptEnabled(printSettings),
         autoPrintKitchen: isMerchantAutoPrintKitchenEnabled(printSettings),
+        bluetoothPrinterSlowMode: printSettings?.bluetoothPrinterSlowMode === true,
       })
     );
   } catch {

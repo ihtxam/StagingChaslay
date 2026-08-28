@@ -1437,6 +1437,9 @@ const en: Dict = {
   kitchenPrintRetryEnabled: 'Retry kitchen print before showing error',
   kitchenPrintRetryEnabledHint:
     'When a kitchen ticket fails to print, Reborn retries automatically on the register PC before alerting staff.',
+  bluetoothPrinterSlowMode: 'Bluetooth/COM printer slow mode',
+  bluetoothPrinterSlowModeHint:
+    'Use smaller print chunks and longer pauses for Bluetooth serial kitchen printers (COM3/COM4). Auto-enabled for COM ports; turn on if tickets still truncate.',
   kitchenPrintRetryAttempts: 'Max print attempts',
   kitchenPrintRetryIntervalSec: 'Seconds between retries',
   printAgentDownload: 'Reborn Print Agent',
@@ -4795,6 +4798,9 @@ const fr: Dict = {
   kitchenPrintRetryEnabled: 'Réessayer l’impression cuisine avant l’alerte',
   kitchenPrintRetryEnabledHint:
     'Si un ticket cuisine ne s’imprime pas, Reborn réessaie automatiquement sur la caisse avant d’alerter le personnel.',
+  bluetoothPrinterSlowMode: 'Mode lent imprimante Bluetooth/COM',
+  bluetoothPrinterSlowModeHint:
+    'Réduit la taille des blocs et allonge les pauses pour les imprimantes cuisine Bluetooth (COM3/COM4). Activé automatiquement sur les ports COM.',
   kitchenPrintRetryAttempts: 'Nombre max. de tentatives',
   kitchenPrintRetryIntervalSec: 'Secondes entre les tentatives',
   printAgentDownload: 'Reborn Print Agent',
@@ -8118,6 +8124,9 @@ const de: Dict = {
   kitchenPrintRetryEnabled: 'Küchendruck vor Fehlermeldung wiederholen',
   kitchenPrintRetryEnabledHint:
     'Wenn ein Küchenticket nicht druckt, versucht Reborn automatisch erneut an der Kasse, bevor das Personal benachrichtigt wird.',
+  bluetoothPrinterSlowMode: 'Bluetooth/COM-Drucker Langsammodus',
+  bluetoothPrinterSlowModeHint:
+    'Kleinere Datenblöcke und längere Pausen für Bluetooth-Küchendrucker (COM3/COM4). Bei COM-Ports automatisch aktiv.',
   kitchenPrintRetryAttempts: 'Max. Druckversuche',
   kitchenPrintRetryIntervalSec: 'Sekunden zwischen Versuchen',
   printAgentDownload: 'Reborn Print Agent',
