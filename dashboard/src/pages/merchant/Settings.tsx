@@ -25,6 +25,7 @@ import {
   ChefHat,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
+import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
@@ -54,6 +55,7 @@ import {
 } from '@/lib/print-agent';
 import {
   fetchPrintBridgeManifest,
+  fetchPrintAgentManifest,
   isAndroidDevice,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
@@ -509,7 +511,9 @@ export default function Settings() {
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
+  const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
+  const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
@@ -982,7 +986,12 @@ export default function Settings() {
   }, [loadSettings]);
 
   useEffect(() => {
-    void fetchPrintBridgeManifest().then(setPrintBridgeManifest);
+    void Promise.all([fetchPrintBridgeManifest(), fetchPrintAgentManifest()]).then(
+      ([bridge, agent]) => {
+        setPrintBridgeManifest(bridge);
+        setPrintAgentManifest(agent);
+      }
+    );
   }, []);
 
   const refreshPrintAgentPrinters = useCallback(async () => {
@@ -990,8 +999,10 @@ export default function Settings() {
     try {
       const health = await getPrintAgentHealth();
       setPrintAgentOk(health.ok);
+      setInstalledPrintCompanionVersion(health.ok && health.version ? String(health.version) : null);
       setPrintAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
       if (!health.ok) {
+        setInstalledPrintCompanionVersion(null);
         setAgentPrinters([]);
         return;
       }
@@ -1012,6 +1023,7 @@ export default function Settings() {
     } catch {
       setPrintAgentOk(false);
       setPrintAgentOutdated(false);
+      setInstalledPrintCompanionVersion(null);
       setAgentPrinters([]);
     } finally {
       setRefreshingPrinters(false);
@@ -3827,32 +3839,51 @@ export default function Settings() {
                 title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentDownload')}
                 description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  {preferredPrintCompanion() !== 'android-bridge' ? (
-                    <a
-                      className="btn-primary inline-flex"
-                      href={printAgentDownloadUrl()}
-                      download="reborn-print-agent-setup.exe"
-                    >
-                      {t('downloadPrintAgent')}
-                    </a>
-                  ) : null}
-                  {preferredPrintCompanion() !== 'windows-agent' ? (
-                    printBridgeManifest?.available === false ? (
-                      <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                        {printBridgeManifest.message ||
-                          'Print Bridge APK is not published on this server yet. Contact support or try again after the next platform update.'}
-                      </p>
-                    ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {preferredPrintCompanion() !== 'android-bridge' ? (
                       <a
-                        className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                        href={printBridgeDownloadUrl()}
-                        download="reborn-print-bridge.apk"
+                        className="btn-primary inline-flex"
+                        href={printAgentDownloadUrl()}
+                        download="reborn-print-agent-setup.exe"
                       >
-                        {t('downloadPrintBridge')}
+                        {t('downloadPrintAgent')}
                       </a>
-                    )
-                  ) : null}
+                    ) : null}
+                    {preferredPrintCompanion() !== 'windows-agent' ? (
+                      printBridgeManifest?.available === false ? (
+                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          {printBridgeManifest.message ||
+                            'Print Bridge APK is not published on this server yet. Contact support or try again after the next platform update.'}
+                        </p>
+                      ) : (
+                        <a
+                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                          href={printBridgeDownloadUrl()}
+                          download="reborn-print-bridge.apk"
+                        >
+                          {t('downloadPrintBridge')}
+                        </a>
+                      )
+                    ) : null}
+                  </div>
+                  <div className="space-y-1">
+                    {preferredPrintCompanion() !== 'android-bridge' ? (
+                      <PrintCompanionVersionStatus
+                        kind="windows-agent"
+                        installedVersion={installedPrintCompanionVersion}
+                        serverVersion={printAgentManifest?.version}
+                      />
+                    ) : null}
+                    {preferredPrintCompanion() !== 'windows-agent' &&
+                    printBridgeManifest?.available !== false ? (
+                      <PrintCompanionVersionStatus
+                        kind="android-bridge"
+                        installedVersion={installedPrintCompanionVersion}
+                        serverVersion={printBridgeManifest?.version}
+                      />
+                    ) : null}
+                  </div>
                   <p className="text-sm text-[var(--muted)] max-w-xl m-0">
                     {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
                   </p>

@@ -1442,6 +1442,13 @@ const en: Dict = {
     'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Returns to WebPOS when the bridge shows ready (port 9101).',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
+  printAgentVersionStatusLabel: 'Print Agent',
+  printBridgeVersionStatusLabel: 'Print Bridge',
+  printAgentNotDetected: 'No Print Agent detected on this device.',
+  printBridgeNotInstalled: 'Print Bridge not installed on this device.',
+  printCompanionUpdateAvailable:
+    'Update available: v{latest} (you have v{installed}). Download and install the update.',
+  printCompanionUpToDate: 'Up to date (v{version}).',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
     'Pick the printer by its Windows / manufacturer name. Bluetooth COM numbers can change; the agent matches the printer name again on the next start.',
@@ -4778,6 +4785,13 @@ const fr: Dict = {
     'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis revenez au WebPOS (port 9101).',
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Fichiers dans %LOCALAPPDATA%\\RebornPrintAgent.',
+  printAgentVersionStatusLabel: 'Print Agent',
+  printBridgeVersionStatusLabel: 'Print Bridge',
+  printAgentNotDetected: 'Aucun Print Agent détecté sur cet appareil.',
+  printBridgeNotInstalled: 'Print Bridge non installé sur cet appareil.',
+  printCompanionUpdateAvailable:
+    'Mise à jour disponible : v{latest} (vous avez v{installed}). Téléchargez et installez la mise à jour.',
+  printCompanionUpToDate: 'À jour (v{version}).',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
     'Associez les noms Windows (print-agent) aux rôles reçu, cuisine ou fin de journée. Pour la cuisine, choisissez les catégories par imprimante.',
@@ -8079,6 +8093,13 @@ const de: Dict = {
     'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann zurück zum WebPOS (Port 9101).',
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien in %LOCALAPPDATA%\\RebornPrintAgent.',
+  printAgentVersionStatusLabel: 'Print Agent',
+  printBridgeVersionStatusLabel: 'Print Bridge',
+  printAgentNotDetected: 'Kein Print Agent auf diesem Gerät erkannt.',
+  printBridgeNotInstalled: 'Print Bridge ist auf diesem Gerät nicht installiert.',
+  printCompanionUpdateAvailable:
+    'Update verfügbar: v{latest} (installiert: v{installed}). Update herunterladen und installieren.',
+  printCompanionUpToDate: 'Aktuell (v{version}).',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:
     'Windows-Druckernamen (Print-Agent) Rollen zuweisen: Beleg, Küche, Tagesabschluss. Für Küche Kategorien pro Drucker wählen.',
