@@ -29,7 +29,7 @@ class EditionService {
             .limit(1);
         if (existing.length)
             return;
-        const restaurantFeatures = edition_features_1.ALL_EDITION_FEATURES.filter((k) => k !== "pos_retail");
+        const restaurantFeatures = edition_features_1.ALL_EDITION_FEATURES.filter((k) => k !== "pos_retail" && k !== "pos_scale");
         const retailFeatures = edition_features_1.ALL_EDITION_FEATURES.filter((k) => !["pos_tables", "pos_courses", "pos_kitchen", "reservations"].includes(k));
         await db.insert(db_1.schema.editions).values([
             {

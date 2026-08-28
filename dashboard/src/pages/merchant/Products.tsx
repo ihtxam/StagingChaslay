@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
+import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -292,7 +293,9 @@ export default function Products() {
   const [printOpen, setPrintOpen] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
+  const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const showBarcodeTools = businessModule !== 'restaurant';
+  const showWeighedTools = showPosScaleFeature(editionFeatures, businessModule);
   const [labelOpts, setLabelOpts] = useState<LabelPrintOptions>({
     heightMm: 20,
     widthMm: 40,
@@ -438,7 +441,11 @@ export default function Products() {
     void load();
     void api
       .get('/merchant/settings')
-      .then((r) => setBusinessModule(normalizeBusinessModule(r.data?.settings?.businessCategory)))
+      .then((r) => {
+        setBusinessModule(normalizeBusinessModule(r.data?.settings?.businessCategory));
+        const feats = r.data?.settings?.editionFeatures;
+        setEditionFeatures(Array.isArray(feats) ? feats : null);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -1625,7 +1632,9 @@ export default function Products() {
                     <option value="standard">{t('productTypeStandard')}</option>
                     <option value="combo">{t('comboMeal')}</option>
                     <option value="open_price">{t('openPriceItem')}</option>
-                    <option value="weighed">{t('weighingProduct')}</option>
+                    {showWeighedTools ? (
+                      <option value="weighed">{t('weighingProduct')}</option>
+                    ) : null}
                   </select>
                 </Field>
               </div>
@@ -2090,7 +2099,7 @@ export default function Products() {
                         }
                       />
                     </Field>
-                    {form.soldByWeight && !form.isCombo ? (
+                    {showWeighedTools && form.soldByWeight && !form.isCombo ? (
                       <Field label={t('webPosWeightUnit')}>
                         <select
                           className="field-input"
