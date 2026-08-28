@@ -351,12 +351,35 @@ export function collectPrintErrorText(raw: unknown): string {
     return [raw.message, (raw as Error & { stderr?: unknown }).stderr].filter(Boolean).join('\n').trim();
   }
   const obj = raw as {
-    response?: { data?: { error?: unknown } };
+    response?: {
+      data?: {
+        error?: unknown;
+        comReason?: unknown;
+        spoolerReason?: unknown;
+        comPort?: unknown;
+        printer?: unknown;
+      };
+    };
     message?: unknown;
     error?: unknown;
     stderr?: unknown;
+    comReason?: unknown;
+    spoolerReason?: unknown;
+    comPort?: unknown;
   };
+  const api = obj.response?.data;
+  const comPart =
+    api?.comReason || obj.comReason
+      ? `COM ${String(api?.comPort || obj.comPort || '').trim()}: ${String(api?.comReason || obj.comReason).trim()}`
+      : '';
+  const spoolPart =
+    api?.spoolerReason || obj.spoolerReason
+      ? `spooler: ${String(api?.spoolerReason || obj.spoolerReason).trim()}`
+      : '';
+  const structured = [comPart, spoolPart].filter(Boolean).join('; ');
   return [
+    structured,
+    asPrintText(api?.error),
     asPrintText(obj.response?.data?.error),
     asPrintText(obj.error),
     asPrintText(obj.message),
@@ -518,6 +541,7 @@ export type PrintViaAgentResult = {
 };
 
 export type BtSlowMode = 'auto' | 'on' | 'off';
+export type ComDirectMode = 'auto' | 'on' | 'off';
 
 const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
 
@@ -540,6 +564,8 @@ export async function printViaAgent(opts: {
   dataBase64: string;
   text?: string;
   btSlowMode?: BtSlowMode;
+  /** Default off (spooler-only). Use on/auto only when direct serial is required. */
+  comDirectMode?: ComDirectMode;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
@@ -570,6 +596,7 @@ export async function printViaAgent(opts: {
         dataBase64: opts.dataBase64,
         text: opts.text,
         btSlowMode: resolveBtSlowMode(opts.btSlowMode),
+        comDirectMode: opts.comDirectMode || 'off',
       }),
     },
     name

@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.6";
+const VERSION = "1.8.7";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -529,6 +529,20 @@ function isShellDump(text) {
   );
 }
 
+/** Parse combined COM + spooler failure from win-com-raw-print.ps1 */
+function parseComSpoolerFailure(raw) {
+  const m = String(raw || "").match(
+    /Print failed for '([^']+)': direct COM \((COM\d+)\) failed \(([^)]+)\); spooler also failed \((.+)\)/i
+  );
+  if (!m) return null;
+  return {
+    printer: m[1],
+    comPort: m[2],
+    comReason: m[3].trim(),
+    spoolerReason: m[4].trim(),
+  };
+}
+
 /** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. */
 function sanitizePrintAgentError(error, printerName, fallback) {
   const safeFallback = fallback || "Print failed";
@@ -540,6 +554,19 @@ function sanitizePrintAgentError(error, printerName, fallback) {
     raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
     raw.match(/StartPagePrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
     raw.match(/WritePrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const named = raw.match(/Printer '([^']+)' not found/i);
+  const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
+  const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
+  const combined = parseComSpoolerFailure(raw);
+  if (combined) {
+  const port = combined.comPort || "";
+  const comDetail = (combined.comReason || "").slice(0, 120);
+  const spoolDetail = (combined.spoolerReason || "").slice(0, 120);
+  const label = combined.printer || name;
+  return label
+    ? `Print failed for '${label}': COM ${port} (${comDetail}); spooler (${spoolDetail})`
+    : `COM ${port} (${comDetail}); spooler (${spoolDetail})`;
+  }
   const comOpen =
     raw.match(/Could not open serial port\s+(\S+)\s*:\s*(.+)/i) ||
     raw.match(/direct COM \((COM\d+)\) failed \(([^)]+)\)/i);
@@ -555,9 +582,6 @@ function sanitizePrintAgentError(error, printerName, fallback) {
       ? `Bluetooth COM port ${port} busy (${detail}). Retrying via Windows spooler…`
       : `Bluetooth COM port ${port} busy (${detail}). Retrying via spooler…`;
   }
-  const named = raw.match(/Printer '([^']+)' not found/i);
-  const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
-  const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
   const code = win32
     ? Number(win32[2])
     : Number((raw.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
@@ -729,7 +753,33 @@ function normalizeBtSlowMode(value) {
   return "auto";
 }
 
-async function printRaw({ printerName, dataBase64, btSlowMode }) {
+/** COM direct serial bypass — default off (spooler-only) since v1.8.7. */
+function normalizeComDirectMode(value) {
+  const raw = String(value || "off").trim().toLowerCase();
+  if (raw === "on" || raw === "true" || raw === "1") return "on";
+  if (raw === "auto") return "auto";
+  return "off";
+}
+
+function buildPrintErrorPayload(error, printerName) {
+  const raw = [error && error.stderr, error && error.message, error && error.stdout]
+    .filter(Boolean)
+    .join("\n");
+  const combined = parseComSpoolerFailure(raw);
+  const errorText = sanitizePrintAgentError(error, printerName);
+  const payload = { error: errorText };
+  if (combined) {
+    payload.comPort = combined.comPort;
+    payload.comReason = combined.comReason;
+    payload.spoolerReason = combined.spoolerReason;
+    if (combined.printer) payload.printer = combined.printer;
+  } else if (printerName) {
+    payload.printer = String(printerName).trim();
+  }
+  return payload;
+}
+
+async function printRaw({ printerName, dataBase64, btSlowMode, comDirectMode, dryRun }) {
   if (!isWindows()) {
     throw new Error("Reborn Print Agent supports Windows only.");
   }
@@ -750,9 +800,19 @@ async function printRaw({ printerName, dataBase64, btSlowMode }) {
 
   const bytes = Buffer.from(dataBase64, "base64");
   const slowMode = normalizeBtSlowMode(btSlowMode);
+  const comDirect = normalizeComDirectMode(comDirectMode);
   console.log(
-    `[print-agent] print ${bytes.length} bytes -> ${name || "default"} (btSlowMode=${slowMode})`
+    `[print-agent] print ${bytes.length} bytes -> ${name || "default"} (btSlowMode=${slowMode} comDirect=${comDirect})`
   );
+  if (dryRun) {
+    return {
+      printer: name || "default",
+      bytes: bytes.length,
+      btSlowMode: slowMode,
+      comDirectMode: comDirect,
+      dryRun: true,
+    };
+  }
   // 1.6.0+: reborn-print-* (older installed EXEs still used manupos-print-*).
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
   const tmpFile = path.join(tmpDir, "receipt.bin");
@@ -765,7 +825,7 @@ async function printRaw({ printerName, dataBase64, btSlowMode }) {
       throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
     }
     // Pass printer name via UTF-8 file (not argv) so OpenPrinterW gets real Unicode.
-    const args = ["-FilePath", tmpFile, "-BtSlowMode", slowMode];
+    const args = ["-FilePath", tmpFile, "-BtSlowMode", slowMode, "-ComDirectMode", comDirect];
     if (name) {
       // UTF-8 BOM so PowerShell/.NET always detect UTF-8 (accents/dashes intact).
       const bom = Buffer.from([0xef, 0xbb, 0xbf]);
@@ -822,6 +882,8 @@ function startServer() {
         "bt-com-cut-split",
         "bt-com-direct-serial",
         "bt-com-spooler-fallback",
+        "bt-com-direct-default-off",
+        "print-dry-run",
       ],
     });
   });
@@ -831,27 +893,53 @@ function startServer() {
       const printers = await listPrinters();
       res.json({ printers });
     } catch (error) {
-      const safe = sanitizePrintAgentError(error, undefined, "Failed to list printers");
-      console.error("[print-agent] list printers failed:", safe);
-      res.status(500).json({ error: safe });
+      const payload = buildPrintErrorPayload(error, undefined);
+      payload.error = payload.error || "Failed to list printers";
+      console.error("[print-agent] list printers failed:", payload.error);
+      res.status(500).json(payload);
     }
   });
 
   app.post("/print", async (req, res) => {
     try {
-      const usedPrinter = await printRaw({
-        ...(req.body || {}),
-        btSlowMode: (req.body && req.body.btSlowMode) || "auto",
+      const body = req.body || {};
+      const result = await printRaw({
+        ...body,
+        btSlowMode: body.btSlowMode || "auto",
+        comDirectMode: body.comDirectMode || "off",
+        dryRun: body.dryRun === true,
       });
+      if (result && typeof result === "object" && result.dryRun) {
+        res.json({ ok: true, ...result });
+        return;
+      }
+      const usedPrinter = result;
       res.json({
         ok: true,
         printer: usedPrinter,
         unsuitableForRaw: isUnsuitableRawPrinter(usedPrinter),
       });
     } catch (error) {
-      const safe = sanitizePrintAgentError(error, req.body && req.body.printerName);
-      console.error("[print-agent] print failed:", safe);
-      res.status(500).json({ error: safe });
+      const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
+      console.error("[print-agent] print failed:", payload.error, payload.comReason || "", payload.spoolerReason || "");
+      res.status(500).json(payload);
+    }
+  });
+
+  /** POST /print/dry-run — resolve printer name and payload size without sending bytes */
+  app.post("/print/dry-run", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await printRaw({
+        ...body,
+        btSlowMode: body.btSlowMode || "auto",
+        comDirectMode: body.comDirectMode || "off",
+        dryRun: true,
+      });
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
+      res.status(500).json(payload);
     }
   });
 

@@ -184,14 +184,15 @@ function Send-RawToPrinter {
     param(
         [string]$Printer,
         [byte[]]$Data,
-        [string]$BtSlowMode = "auto"
+        [string]$BtSlowMode = "auto",
+        [string]$ComDirectMode = "off"
     )
 
     $portName = Get-PrinterPortName -Printer $Printer
     $slowBluetooth = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $Printer -PortName $portName
 
     if (Get-Command Invoke-ComDirectOrSpooler -ErrorAction SilentlyContinue) {
-        Invoke-ComDirectOrSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth -SpoolerSend {
+        Invoke-ComDirectOrSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth -ComDirectMode $ComDirectMode -SpoolerSend {
             Send-RawToPrinterSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth
         }
         return
@@ -311,7 +312,9 @@ while ($true) {
         $bytes = [Convert]::FromBase64String($b64)
         $btMode = [string]($req.btSlowMode)
         if ([string]::IsNullOrWhiteSpace($btMode)) { $btMode = "auto" }
-        Send-RawToPrinter -Printer $printerName -Data $bytes -BtSlowMode $btMode
+        $comMode = [string]($req.comDirectMode)
+        if ([string]::IsNullOrWhiteSpace($comMode)) { $comMode = "off" }
+        Send-RawToPrinter -Printer $printerName -Data $bytes -BtSlowMode $btMode -ComDirectMode $comMode
         Write-JsonLine @{ ok = $true; printer = $printerName }
     }
     catch {

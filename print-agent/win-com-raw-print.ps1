@@ -219,8 +219,10 @@ function Send-RawViaComPort {
 function Test-UseComDirect {
     param(
         [string]$PortName,
-        [bool]$SlowBluetooth
+        [bool]$SlowBluetooth,
+        [string]$Mode = "off"
     )
+    if ($Mode -eq "off") { return $false }
     $com = Extract-ComPort -Text $PortName
     if (-not [string]::IsNullOrWhiteSpace($com)) { return $true }
     if ($SlowBluetooth -and -not [string]::IsNullOrWhiteSpace($PortName) -and $PortName -match 'COM\d+') {
@@ -242,6 +244,9 @@ function Invoke-ComDirectOrSpooler {
         [Parameter(Mandatory = $true)]
         [scriptblock]$SpoolerSend,
 
+        [ValidateSet("auto", "on", "off")]
+        [string]$ComDirectMode = "off",
+
         [int]$ChunkSize = 64,
         [int]$DelayMs = 150,
         [int]$CutDelayMs = 500
@@ -254,7 +259,7 @@ function Invoke-ComDirectOrSpooler {
     }
 
     $useComDirect = (Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and
-        (Test-UseComDirect -PortName $comPort -SlowBluetooth $SlowBluetooth)
+        (Test-UseComDirect -PortName $comPort -SlowBluetooth $SlowBluetooth -Mode $ComDirectMode)
 
     $comError = ""
     if ($useComDirect) {

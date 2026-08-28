@@ -79,3 +79,17 @@ test("Resolve-BtSlowMode on enables slow path for COM/BT printers", () => {
 test("Resolve-BtSlowMode off disables slow path even for COM printers", () => {
   assert.equal(resolveBtSlowMode("off", "cuisine · COM4", "COM4"), false);
 });
+
+/** Mirror of Test-UseComDirect default-off behavior */
+function testUseComDirect(portName, slowBluetooth, mode = "off") {
+  if (mode === "off") return false;
+  if (extractComPort(portName)) return true;
+  if (slowBluetooth && portName && /^COM\d+$/i.test(portName)) return true;
+  return false;
+}
+
+test("Test-UseComDirect defaults off — spooler-only for COM printers", () => {
+  assert.equal(testUseComDirect("COM4", true, "off"), false);
+  assert.equal(testUseComDirect("COM4", true, "auto"), true);
+  assert.equal(testUseComDirect("COM4", false, "on"), true);
+});

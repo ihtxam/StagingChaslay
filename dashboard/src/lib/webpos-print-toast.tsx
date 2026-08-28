@@ -36,6 +36,9 @@ export function shortPrintErrorMessage(
       ? t('webPosPrinterNotFound').replace('{name}', name)
       : t('webPosPrinterNotFoundGeneric');
   }
+  if (/COM COM\d+:/i.test(msg) || /spooler:/i.test(msg)) {
+    return msg.length > 180 ? `${msg.slice(0, 177)}…` : msg;
+  }
   if (isNoisyPrintAgentDump(msg)) {
     const name = extractPrinterNameFromError(msg);
     return name

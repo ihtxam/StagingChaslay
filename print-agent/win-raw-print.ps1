@@ -9,7 +9,11 @@ param(
 
     # Force Bluetooth/COM slow mode (smaller chunks + longer pauses). "auto" detects COM ports.
     [ValidateSet("auto", "on", "off")]
-    [string]$BtSlowMode = "auto"
+    [string]$BtSlowMode = "auto",
+
+    # Direct serial COM bypass (v1.8.4). Default "off" — spooler-only; "auto"/"on" try COM first.
+    [ValidateSet("auto", "on", "off")]
+    [string]$ComDirectMode = "off"
 )
 
 $ErrorActionPreference = "Stop"
@@ -290,7 +294,7 @@ $portForMode = Get-PrinterPortName -Printer $PrinterName
 $slowBt = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $PrinterName -PortName $portForMode
 
 if (Get-Command Invoke-ComDirectOrSpooler -ErrorAction SilentlyContinue) {
-    Invoke-ComDirectOrSpooler -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt -SpoolerSend {
+    Invoke-ComDirectOrSpooler -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt -ComDirectMode $ComDirectMode -SpoolerSend {
         Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
     }
 } else {

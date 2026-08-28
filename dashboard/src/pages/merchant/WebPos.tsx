@@ -6982,6 +6982,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         };
         const escpos = generateKitchenTicketEscPos(ticketOpts);
         const text = generateKitchenTicketText(ticketOpts);
+        if (typeof console !== 'undefined' && console.info) {
+          console.info(
+            '[kitchen-print]',
+            JSON.stringify({
+              configured: configuredName,
+              resolved: resolvedName,
+              bytes: escpos.length,
+            })
+          );
+        }
         const mode = await printViaAgentOrQueue({
           printerName: resolvedName,
           dataBase64: uint8ToBase64(escpos),
