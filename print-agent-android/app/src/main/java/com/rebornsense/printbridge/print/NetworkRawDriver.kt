@@ -24,11 +24,14 @@ class NetworkRawDriver : PrinterDriver {
         val port = endpoint.meta["port"]?.toIntOrNull() ?: 9100
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), 5000)
+                socket.tcpNoDelay = true
+                socket.connect(InetSocketAddress(host, port), 8000)
                 socket.getOutputStream().use { out ->
                     out.write(data)
                     out.flush()
                 }
+                // Brief pause so the printer receives all bytes before the socket closes.
+                Thread.sleep(200)
             }
             Result.success(Unit)
         } catch (e: Exception) {

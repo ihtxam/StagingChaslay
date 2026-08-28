@@ -7,10 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -18,13 +18,17 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.RecyclerView
 import com.rebornsense.printbridge.print.DriverRegistry
+import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.service.PrintBridgeService
 
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
     private var usbPermissionReceiver: BroadcastReceiver? = null
+    private lateinit var printerAdapter: PrinterListAdapter
+    private lateinit var emptyPrintersText: TextView
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
@@ -35,9 +39,15 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        emptyPrintersText = findViewById(R.id.emptyPrintersText)
+        printerAdapter = PrinterListAdapter(
+            onSetDefault = { endpoint -> setDefaultPrinter(endpoint) },
+            onTestPrint = { endpoint -> testPrint(endpoint) },
+        )
+        findViewById<RecyclerView>(R.id.printerRecycler).adapter = printerAdapter
         requestNeededPermissions()
         findViewById<Button>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
-        findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrint() }
+        findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrintDefault() }
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
     }
 
@@ -77,23 +87,14 @@ class MainActivity : AppCompatActivity() {
         requestUsbPermissionsForAttachedDevices()
         val printers = registry.refresh(applicationContext)
         val defaultId = PrinterPreferences.getDefaultPrinterId(this)
-        val lines = printers.map { ep ->
-            val mark = when {
-                ep.id == defaultId -> " [default]"
-                ep.isDefault && defaultId == null -> " [default]"
-                else -> ""
-            }
-            "• ${ep.name} (${ep.connectionType})$mark\n  tap to set default → id=${ep.id}"
-        }
-        findViewById<TextView>(R.id.printerListText).text =
-            if (lines.isEmpty()) getString(R.string.no_printers_yet) else lines.joinToString("\n\n")
+        printerAdapter.submit(printers, defaultId)
+        emptyPrintersText.visibility = if (printers.isEmpty()) View.VISIBLE else View.GONE
+    }
 
-        findViewById<TextView>(R.id.printerListText).setOnClickListener {
-            val first = printers.firstOrNull() ?: return@setOnClickListener
-            PrinterPreferences.setDefaultPrinterId(this, first.id)
-            Toast.makeText(this, "Default: ${first.name}", Toast.LENGTH_SHORT).show()
-            refreshPrinters()
-        }
+    private fun setDefaultPrinter(endpoint: PrinterEndpoint) {
+        PrinterPreferences.setDefaultPrinterId(this, endpoint.id)
+        Toast.makeText(this, getString(R.string.default_set, endpoint.name), Toast.LENGTH_SHORT).show()
+        refreshPrinters()
     }
 
     private fun addLanPrinter() {
@@ -107,34 +108,56 @@ class MainActivity : AppCompatActivity() {
         refreshPrinters()
     }
 
-    private fun testPrint() {
-        val endpoint = registry.findByName(null) ?: run {
+    private fun testPrintDefault() {
+        val defaultId = PrinterPreferences.getDefaultPrinterId(this)
+        val endpoint = defaultId?.let { registry.findById(it) }
+            ?: registry.findByName(null)
+        if (endpoint == null) {
             Toast.makeText(this, R.string.no_printers_yet, Toast.LENGTH_SHORT).show()
             return
         }
-        val driver = registry.driverFor(endpoint) ?: return
+        testPrint(endpoint)
+    }
+
+    private fun testPrint(endpoint: PrinterEndpoint) {
+        val driver = registry.driverFor(endpoint) ?: run {
+            Toast.makeText(this, R.string.test_print_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
         val sample = buildTestTicket()
+        findViewById<Button>(R.id.testPrintBtn).isEnabled = false
         Thread {
             val result = driver.print(applicationContext, endpoint, sample)
             runOnUiThread {
+                findViewById<Button>(R.id.testPrintBtn).isEnabled = true
                 if (result.isSuccess) {
                     Toast.makeText(this, getString(R.string.test_print_ok, endpoint.name), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(
-                        this,
-                        result.exceptionOrNull()?.message ?: getString(R.string.test_print_failed),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    val message = friendlyPrintError(result.exceptionOrNull())
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
+    }
+
+    private fun friendlyPrintError(error: Throwable?): String {
+        val raw = error?.message?.trim().orEmpty()
+        if (raw.isBlank()) return getString(R.string.test_print_failed)
+        return when {
+            raw.contains("socket", ignoreCase = true) && raw.contains("closed", ignoreCase = true) ->
+                getString(R.string.test_print_socket_closed)
+            raw.contains("Bluetooth", ignoreCase = true) ->
+                getString(R.string.test_print_bluetooth_failed, raw)
+            else -> raw
+        }
     }
 
     private fun buildTestTicket(): ByteArray {
         val text = "Reborn Print Bridge\nTest print OK\n\n"
         val init = byteArrayOf(0x1B, 0x40)
         val feed = byteArrayOf(0x0A, 0x0A, 0x0A)
-        return init + text.toByteArray(Charsets.UTF_8) + feed
+        val cut = byteArrayOf(0x1D, 0x56, 0x00)
+        return init + text.toByteArray(Charsets.UTF_8) + feed + cut
     }
 
     private fun requestUsbPermissionsForAttachedDevices() {

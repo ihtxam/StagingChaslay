@@ -34,7 +34,7 @@ class BridgeHttpServer(
                 jsonResponse(
                     JSONObject()
                         .put("ok", true)
-                        .put("version", "0.2.0")
+                        .put("version", "0.2.1")
                         .put("platform", "android")
                         .put("deviceProfile", detectProfile())
                         .put("manufacturer", Build.MANUFACTURER)

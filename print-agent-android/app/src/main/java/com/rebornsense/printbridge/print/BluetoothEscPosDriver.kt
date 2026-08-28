@@ -2,7 +2,9 @@ package com.rebornsense.printbridge.print
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.Context
 import java.util.UUID
 
@@ -34,26 +36,56 @@ class BluetoothEscPosDriver : PrinterDriver {
         val device = adapter.bondedDevices?.firstOrNull { it.address == address }
             ?: return Result.failure(IllegalStateException("Bluetooth printer not paired"))
         return try {
-            val socket = device.createRfcommSocketToServiceRecord(sppUuid)
-            socket.connect()
+            adapter.cancelDiscovery()
+            val socket = openBluetoothSocket(device)
             try {
-                socket.outputStream.use { out ->
-                    var offset = 0
-                    val chunk = 4096
-                    while (offset < data.size) {
-                        val len = minOf(chunk, data.size - offset)
-                        out.write(data, offset, len)
-                        offset += len
-                    }
-                    out.flush()
+                val out = socket.outputStream
+                var offset = 0
+                val chunk = 4096
+                while (offset < data.size) {
+                    val len = minOf(chunk, data.size - offset)
+                    out.write(data, offset, len)
+                    offset += len
                 }
+                out.flush()
+                // Let the printer drain before closing — avoids "Read failed, socket might closed".
+                Thread.sleep(400)
                 Result.success(Unit)
             } finally {
-                socket.close()
+                runCatching { socket.close() }
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openBluetoothSocket(device: BluetoothDevice): BluetoothSocket {
+        val errors = mutableListOf<Throwable>()
+        try {
+            val socket = device.createRfcommSocketToServiceRecord(sppUuid)
+            socket.connect()
+            return socket
+        } catch (e: Exception) {
+            errors += e
+        }
+        try {
+            val socket = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
+            socket.connect()
+            return socket
+        } catch (e: Exception) {
+            errors += e
+        }
+        try {
+            val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+            val socket = method.invoke(device, 1) as BluetoothSocket
+            socket.connect()
+            return socket
+        } catch (e: Exception) {
+            errors += e
+        }
+        val message = errors.lastOrNull()?.message ?: "Bluetooth connect failed"
+        throw IllegalStateException(message)
     }
 
     private fun bluetoothAdapter(context: Context): BluetoothAdapter? {
