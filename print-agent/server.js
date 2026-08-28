@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.4";
+const VERSION = "1.8.5";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -540,6 +540,21 @@ function sanitizePrintAgentError(error, printerName, fallback) {
     raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
     raw.match(/StartPagePrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
     raw.match(/WritePrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+  const comOpen =
+    raw.match(/Could not open serial port\s+(\S+)\s*:\s*(.+)/i) ||
+    raw.match(/direct COM \((COM\d+)\) failed \(([^)]+)\)/i);
+  if (comOpen) {
+    const port = comOpen[1] || "";
+    const detail = (comOpen[2] || "").trim().slice(0, 120);
+    if (/spooler also failed/i.test(raw)) {
+      return name
+        ? `Print failed for '${name}': Bluetooth COM port ${port} busy or unavailable (${detail}). Spooler retry also failed — check printer is on and paired.`
+        : `Bluetooth COM port ${port} busy or unavailable. Spooler retry also failed.`;
+    }
+    return name
+      ? `Bluetooth COM port ${port} busy (${detail}). Retrying via Windows spooler…`
+      : `Bluetooth COM port ${port} busy (${detail}). Retrying via spooler…`;
+  }
   const named = raw.match(/Printer '([^']+)' not found/i);
   const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
   const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
@@ -564,7 +579,7 @@ function sanitizePrintAgentError(error, printerName, fallback) {
     .find(
       (l) =>
         l &&
-        /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer/i.test(
+        /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer|Could not open serial port|direct COM/i.test(
           l
         ) &&
         !isShellDump(l)
@@ -806,6 +821,7 @@ function startServer() {
         "bt-com-chunked-raw",
         "bt-com-cut-split",
         "bt-com-direct-serial",
+        "bt-com-spooler-fallback",
       ],
     });
   });

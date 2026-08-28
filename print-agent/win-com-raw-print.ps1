@@ -1,6 +1,43 @@
 # Direct COM/serial ESC-POS writer — bypasses Windows print spooler (WritePrinter).
 # Dot-sourced by win-raw-print.ps1 and win-raw-print-worker.ps1.
 
+function Extract-ComPort {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+    $t = [string]$Text.Trim()
+    if ($t -match '(?i)\(COM(\d+)\)') {
+        return "COM$($Matches[1])"
+    }
+    if ($t -match '(?i)[·•\u00B7]\s*(COM\d+)\s*:?\s*$') {
+        return $Matches[1].ToUpperInvariant()
+    }
+    if ($t -match '(?i)(?:^|\\\\\.\\)(COM\d+)\s*:?\s*$') {
+        return $Matches[1].ToUpperInvariant()
+    }
+    if ($t -match '(?i)\b(COM\d+)\b') {
+        return $Matches[1].ToUpperInvariant()
+    }
+    return ""
+}
+
+function Get-PrinterPortName {
+    param([string]$Printer)
+    $wmiPort = ""
+    try {
+        $escaped = $Printer.Replace("'", "''")
+        $row = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$escaped'" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($row -and $row.PortName) {
+            $wmiPort = [string]$row.PortName
+        }
+    } catch { }
+    $com = Extract-ComPort -Text $wmiPort
+    if (-not [string]::IsNullOrWhiteSpace($com)) { return $com }
+    $com = Extract-ComPort -Text $Printer
+    if (-not [string]::IsNullOrWhiteSpace($com)) { return $com }
+    return $wmiPort.Trim()
+}
+
 function Normalize-ComPortName {
     param([string]$Port)
     $n = [string]$Port
@@ -156,9 +193,60 @@ function Test-UseComDirect {
         [string]$PortName,
         [bool]$SlowBluetooth
     )
-    if ($PortName -match '^COM\d+$') { return $true }
+    $com = Extract-ComPort -Text $PortName
+    if (-not [string]::IsNullOrWhiteSpace($com)) { return $true }
     if ($SlowBluetooth -and -not [string]::IsNullOrWhiteSpace($PortName) -and $PortName -match 'COM\d+') {
         return $true
     }
     return $false
+}
+
+function Invoke-ComDirectOrSpooler {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Printer,
+
+        [Parameter(Mandatory = $true)]
+        [byte[]]$Data,
+
+        [bool]$SlowBluetooth = $false,
+
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$SpoolerSend,
+
+        [int]$ChunkSize = 64,
+        [int]$DelayMs = 150,
+        [int]$CutDelayMs = 500
+    )
+
+    $portName = Get-PrinterPortName -Printer $Printer
+    $comPort = Extract-ComPort -Text $portName
+    if ([string]::IsNullOrWhiteSpace($comPort)) {
+        $comPort = Extract-ComPort -Text $Printer
+    }
+
+    $useComDirect = (Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and
+        (Test-UseComDirect -PortName $comPort -SlowBluetooth $SlowBluetooth)
+
+    $comError = ""
+    if ($useComDirect) {
+        try {
+            Send-RawViaComPort -PortName $comPort -Data $Data -Printer $Printer `
+                -ChunkSize $ChunkSize -DelayMs $DelayMs -CutDelayMs $CutDelayMs
+            Write-PrintLog "com-direct ok printer='$Printer' port='$comPort'"
+            return
+        } catch {
+            $comError = $_.Exception.Message
+            Write-PrintLog "com-direct FAILED printer='$Printer' port='$comPort' reason=$comError — retrying via Windows spooler (WritePrinter)"
+        }
+    }
+
+    try {
+        & $SpoolerSend
+    } catch {
+        if ($comError) {
+            throw "Print failed for '$Printer': direct COM ($comPort) failed ($comError); spooler also failed ($($_.Exception.Message))"
+        }
+        throw
+    }
 }

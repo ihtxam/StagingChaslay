@@ -84,28 +84,17 @@ function Write-PrintLog {
     } catch { }
 }
 
-function Get-PrinterPortName {
-    param([string]$Printer)
-    try {
-        $escaped = $Printer.Replace("'", "''")
-        $row = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$escaped'" -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($row -and $row.PortName) {
-            return [string]$row.PortName
-        }
-    } catch { }
-    if ($Printer -match '\(COM(\d+)\)') {
-        return "COM$($Matches[1])"
-    }
-    return ""
-}
-
 function Test-ComPortPrinter {
     param(
         [string]$Printer,
         [string]$PortName
     )
-    if ($PortName -match '^COM\d+$') { return $true }
+    if (Get-Command Extract-ComPort -ErrorAction SilentlyContinue) {
+        if (Extract-ComPort -Text $PortName) { return $true }
+        if (Extract-ComPort -Text $Printer) { return $true }
+    } elseif ($PortName -match '^COM\d+$') {
+        return $true
+    }
     if ($Printer -match '\(COM\d+\)') { return $true }
     $lower = "$Printer $PortName".ToLowerInvariant()
     if ($lower -match 'bluetooth|bt spp|serial|rfcomm') { return $true }
@@ -232,23 +221,32 @@ function Send-RawToPrinter {
 
     $portName = Get-PrinterPortName -Printer $Printer
     $slowBluetooth = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $Printer -PortName $portName
-    $comPort = ""
-    if ($portName -match '(COM\d+)') {
-        $comPort = $Matches[1].ToUpperInvariant()
-    }
 
-    if ((Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and (Test-UseComDirect -PortName $comPort -SlowBluetooth $slowBluetooth)) {
-        Send-RawViaComPort -PortName $comPort -Data $Data -Printer $Printer -ChunkSize 64 -DelayMs 150 -CutDelayMs 500
+    if (Get-Command Invoke-ComDirectOrSpooler -ErrorAction SilentlyContinue) {
+        Invoke-ComDirectOrSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth -SpoolerSend {
+            Send-RawToPrinterSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth
+        }
         return
     }
 
-    $chunkSize = if ($slowBluetooth) { 64 } else { 512 }
-    $delayMs = if ($slowBluetooth) { 150 } else { 25 }
+    Send-RawToPrinterSpooler -Printer $Printer -Data $Data -SlowBluetooth $slowBluetooth
+}
+
+function Send-RawToPrinterSpooler {
+    param(
+        [string]$Printer,
+        [byte[]]$Data,
+        [bool]$SlowBluetooth
+    )
+
+    $portName = Get-PrinterPortName -Printer $Printer
+    $chunkSize = if ($SlowBluetooth) { 64 } else { 512 }
+    $delayMs = if ($SlowBluetooth) { 150 } else { 25 }
     $split = Split-CutSuffix -Data $Data
     $body = $split.body
     $cut = $split.cut
 
-    Write-PrintLog "printer='$Printer' port='$portName' slowBt=$slowBluetooth bytes=$($Data.Length) body=$($body.Length) cut=$($cut.Length)"
+    Write-PrintLog "printer='$Printer' port='$portName' slowBt=$SlowBluetooth bytes=$($Data.Length) body=$($body.Length) cut=$($cut.Length)"
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
     $docInfo.pDocName = "Reborn Receipt"

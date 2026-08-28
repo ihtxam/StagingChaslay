@@ -1,6 +1,6 @@
 {
   "name": "reborn-print-agent",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "private": true,
   "description": "Local print service for Reborn - silent ESC/POS to Windows default printer",
   "main": "server.js",
@@ -9,7 +9,8 @@
     "start": "node server.js",
     "build:exe": "pkg . --targets node18-win-x64 --output dist/reborn-print-agent.exe",
     "build:setup": "pkg . --targets node18-win-x64 --output dist/reborn-print-agent-setup.exe",
-    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File ./build-installer.ps1"
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File ./build-installer.ps1",
+    "test": "node --test test/*.test.mjs"
   },
   "pkg": {
     "assets": [

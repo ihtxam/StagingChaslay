@@ -122,28 +122,17 @@ function Write-PrintLog {
     } catch { }
 }
 
-function Get-PrinterPortName {
-    param([string]$Printer)
-    try {
-        $escaped = $Printer.Replace("'", "''")
-        $row = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$escaped'" -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($row -and $row.PortName) {
-            return [string]$row.PortName
-        }
-    } catch { }
-    if ($Printer -match '\(COM(\d+)\)') {
-        return "COM$($Matches[1])"
-    }
-    return ""
-}
-
 function Test-ComPortPrinter {
     param(
         [string]$Printer,
         [string]$PortName
     )
-    if ($PortName -match '^COM\d+$') { return $true }
+    if (Get-Command Extract-ComPort -ErrorAction SilentlyContinue) {
+        if (Extract-ComPort -Text $PortName) { return $true }
+        if (Extract-ComPort -Text $Printer) { return $true }
+    } elseif ($PortName -match '^COM\d+$') {
+        return $true
+    }
     if ($Printer -match '\(COM\d+\)') { return $true }
     $lower = "$Printer $PortName".ToLowerInvariant()
     if ($lower -match 'bluetooth|bt spp|serial|rfcomm') { return $true }
@@ -331,13 +320,11 @@ function Send-RawToPrinter {
 
 $portForMode = Get-PrinterPortName -Printer $PrinterName
 $slowBt = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $PrinterName -PortName $portForMode
-$comPort = ""
-if ($portForMode -match '(COM\d+)') {
-    $comPort = $Matches[1].ToUpperInvariant()
-}
 
-if ((Get-Command Test-UseComDirect -ErrorAction SilentlyContinue) -and (Test-UseComDirect -PortName $comPort -SlowBluetooth $slowBt)) {
-    Send-RawViaComPort -PortName $comPort -Data $bytes -Printer $PrinterName -ChunkSize 64 -DelayMs 150 -CutDelayMs 500
+if (Get-Command Invoke-ComDirectOrSpooler -ErrorAction SilentlyContinue) {
+    Invoke-ComDirectOrSpooler -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt -SpoolerSend {
+        Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
+    }
 } else {
     Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
 }
