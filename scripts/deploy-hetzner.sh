@@ -356,6 +356,7 @@ if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
     node:20-bookworm \
     bash -c 'set -euo pipefail
       npm ci
+      AGENT_VERSION="$(node -p "require(\"./package.json\").version")"
       mkdir -p dist
       npx pkg . --targets node18-win-x64 --output dist/reborn-print-agent.exe
       cp -f dist/reborn-print-agent.exe dist/reborn-print-agent-setup.exe
@@ -365,13 +366,14 @@ if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
       printf "%s\n" \
         "{" \
         "  \"name\": \"reborn-print-agent\"," \
-        "  \"version\": \"1.8.0\"," \
+        "  \"version\": \"${AGENT_VERSION}\"," \
         "  \"setupFile\": \"reborn-print-agent-setup.exe\"," \
         "  \"builtAt\": \"${BUILT_AT}\"," \
         "  \"platform\": \"win32-x64\"," \
         "  \"signed\": false" \
         "}" > /out/reborn-print-agent.json
       cp -f /out/reborn-print-agent.json /out/chaslayreborn-print-agent.json
+      echo "Print-agent manifest version: ${AGENT_VERSION}"
       head -c 2 /out/reborn-print-agent-setup.exe | grep -q MZ
       ls -la /out/reborn-print-agent*.exe /out/chaslayreborn-print-agent-setup.exe 2>/dev/null || ls -la /out/*.exe
     '; then
