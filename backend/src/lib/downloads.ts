@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-export const DOWNLOADS_ROOT = path.join(__dirname, "..", "public", "downloads");
+export const DOWNLOADS_ROOT = path.join(__dirname, "..", "..", "public", "downloads");
 export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
 export const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";

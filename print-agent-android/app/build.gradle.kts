@@ -1,6 +1,7 @@
+import java.time.Instant
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
@@ -35,10 +36,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 dependencies {
@@ -50,7 +47,6 @@ dependencies {
 }
 
 val copyReleaseApk = tasks.register<Copy>("copyReleaseApkToDownloads") {
-    dependsOn("assembleRelease")
     from(layout.buildDirectory.dir("outputs/apk/release"))
     include("app-release.apk", "app-release-unsigned.apk")
     into(rootProject.projectDir.parentFile.resolve("backend/public/downloads"))
@@ -59,16 +55,25 @@ val copyReleaseApk = tasks.register<Copy>("copyReleaseApkToDownloads") {
         val manifest = rootProject.projectDir.parentFile
             .resolve("backend/public/downloads/reborn-print-bridge.json")
         if (manifest.exists()) {
+            val builtAt = Instant.now().toString()
             val text = manifest.readText()
             val updated = text.replace(
-                Regex("\"builtAt\"\\s*:\\s*null"),
-                "\"builtAt\": \"${java.time.Instant.now()}\""
+                Regex("\"builtAt\"\\s*:\\s*\"[^\"]*\"|\"builtAt\"\\s*:\\s*null"),
+                "\"builtAt\": \"$builtAt\""
+            ).replace(
+                Regex("\"signed\"\\s*:\\s*false"),
+                "\"signed\": true"
             )
             manifest.writeText(updated)
         }
     }
 }
 
-tasks.named("assembleRelease") {
-    finalizedBy(copyReleaseApk)
+afterEvaluate {
+    tasks.named("assembleRelease") {
+        finalizedBy(copyReleaseApk)
+    }
+    copyReleaseApk.configure {
+        dependsOn("assembleRelease")
+    }
 }

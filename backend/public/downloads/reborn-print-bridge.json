@@ -3,6 +3,6 @@
   "version": "0.2.0",
   "apkFile": "reborn-print-bridge.apk",
   "platform": "android",
-  "builtAt": null,
-  "signed": false
+  "builtAt": "2026-08-28T07:19:23.068757100Z",
+  "signed": true
 }

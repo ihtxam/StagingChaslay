@@ -20,6 +20,7 @@
 *.apk
 *.ap_
 *.aab
+.android-sdk/
 app/build/
 .kotlin/
 backend-chaslay-legacy/
