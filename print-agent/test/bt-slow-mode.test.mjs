@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** Mirror of Test-ComPortPrinter in win-com-raw-print.ps1 */
 function extractComPort(text) {
@@ -80,16 +85,47 @@ test("Resolve-BtSlowMode off disables slow path even for COM printers", () => {
   assert.equal(resolveBtSlowMode("off", "cuisine · COM4", "COM4"), false);
 });
 
-/** Mirror of Test-UseComDirect default-off behavior */
-function testUseComDirect(portName, slowBluetooth, mode = "off") {
-  if (mode === "off") return false;
-  if (extractComPort(portName)) return true;
-  if (slowBluetooth && portName && /^COM\d+$/i.test(portName)) return true;
-  return false;
+/** v1.8.8: COM-direct is hard-disabled. Server always normalizes to off. */
+function normalizeComDirectMode(_value) {
+  return "off";
 }
 
-test("Test-UseComDirect defaults off — spooler-only for COM printers", () => {
-  assert.equal(testUseComDirect("COM4", true, "off"), false);
-  assert.equal(testUseComDirect("COM4", true, "auto"), true);
-  assert.equal(testUseComDirect("COM4", false, "on"), true);
+test("v1.8.8 COM-direct is always off even if client sends on/auto", () => {
+  assert.equal(normalizeComDirectMode("on"), "off");
+  assert.equal(normalizeComDirectMode("auto"), "off");
+  assert.equal(normalizeComDirectMode("off"), "off");
+  assert.equal(normalizeComDirectMode(undefined), "off");
+});
+
+test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no SerialPort)", () => {
+  const src = fs.readFileSync(path.join(here, "..", "win-raw-print.ps1"), "utf8");
+  assert.equal(src.includes(". $comHelper"), false);
+  assert.match(src, /do NOT dotsource win-com-raw-print/);
+  assert.equal(src.includes("Invoke-ComDirectOrSpooler"), false);
+  assert.equal(src.includes("Send-RawViaComPort"), false);
+  assert.equal(src.includes("System.IO.Ports.SerialPort"), false);
+  assert.match(src, /function Get-PrinterPortName/);
+  assert.match(src, /function Resolve-BtSlowMode/);
+  assert.match(src, /Send-RawToPrinter -Printer \$PrinterName/);
+});
+
+test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
+  const src = fs.readFileSync(path.join(here, "..", "win-raw-print-worker.ps1"), "utf8");
+  assert.equal(src.includes("win-com-raw-print.ps1"), false);
+  assert.equal(src.includes("Invoke-ComDirectOrSpooler"), false);
+  assert.equal(src.includes("System.IO.Ports.SerialPort"), false);
+  assert.match(src, /function Get-PrinterPortName/);
+});
+
+test("print-agent version is 1.8.8 in package.json, server.js, and download manifest", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8"));
+  const server = fs.readFileSync(path.join(here, "..", "server.js"), "utf8");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(here, "..", "..", "backend", "public", "downloads", "reborn-print-agent.json"), "utf8")
+  );
+  assert.equal(pkg.version, "1.8.8");
+  assert.match(server, /const VERSION = "1.8.8"/);
+  assert.equal(manifest.version, "1.8.8");
+  assert.match(server, /spooler-only-writeprinter/);
+  assert.equal(server.includes("bt-com-direct-serial"), false);
 });

@@ -333,8 +333,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.7.0+ lists USB/Bluetooth devices by name so COM ports can change. */
-export const MIN_PRINT_AGENT_VERSION = '1.7.0';
+/** 1.8.8+ restores spooler-only WritePrinter after the 1.8.4–1.8.7 COM-direct regression. */
+export const MIN_PRINT_AGENT_VERSION = '1.8.8';
 
 function asPrintText(value: unknown): string {
   if (value == null) return '';
@@ -564,7 +564,7 @@ export async function printViaAgent(opts: {
   dataBase64: string;
   text?: string;
   btSlowMode?: BtSlowMode;
-  /** Default off (spooler-only). Use on/auto only when direct serial is required. */
+  /** Ignored since agent v1.8.8 (always spooler-only WritePrinter). */
   comDirectMode?: ComDirectMode;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';

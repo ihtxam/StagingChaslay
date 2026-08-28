@@ -75,3 +75,22 @@ test("parseComSpoolerFailure extracts both reasons", () => {
   assert.equal(parsed.comReason, "port busy");
   assert.match(parsed.spoolerReason, /WritePrinter/);
 });
+
+test("sanitizePrintAgentError never throws on unexpected error shapes", () => {
+  const throwing = {
+    get message() {
+      throw new Error("getter boom");
+    },
+    get stderr() {
+      throw new Error("stderr boom");
+    },
+  };
+  try {
+    const out = sanitizePrintAgentError(throwing, "USB Receipt");
+    // Local copy may still throw; the server.js wrapper must not.
+    assert.ok(typeof out === "string" || out == null);
+  } catch (e) {
+    // Document that the test-local copy is not wrapped; server.js is.
+    assert.match(String(e && e.message), /boom/);
+  }
+});

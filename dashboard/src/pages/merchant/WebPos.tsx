@@ -97,7 +97,6 @@ import {
 import {
   applyKitchenPrintRetryFromSettings,
   hasKitchenRetryPending,
-  listExhaustedPrintJobs,
   removePrintJobs,
   reprintPrintJobs,
   startPrintQueueAutoRetry,
@@ -3846,7 +3845,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (job.kind === 'kitchen' && job.lineIds?.length) {
         setKitchenPrintFailedForLines(job.lineIds, true);
       }
-      // Background auto-retry exhaustion is surfaced in the print-issues modal — no entry toast.
+      notifyPrintErrorRef.current(
+        job.lastError || 'Print failed',
+        job.kind === 'kitchen' ? 'webPosKitchenPrintFailed' : 'webPosPrintFailed'
+      );
     });
   }, [setKitchenPrintFailedForLines]);
 
@@ -3892,18 +3894,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const handleKitchenPrintFailure = (e: unknown, lineIds: Iterable<string>) => {
     const ids = [...lineIds];
-    if (hasKitchenRetryPending(ids)) {
-      toast(t('webPosKitchenPrintRetrying'), { duration: 3500 });
-      return;
-    }
-    const justExhausted = listExhaustedPrintJobs().some(
-      (j) =>
-        j.kind === 'kitchen' &&
-        (j.lineIds || []).some((id) => ids.includes(id))
-    );
-    if (justExhausted) return;
     setKitchenPrintFailedForLines(ids, true);
     notifyPrintError(e, 'webPosKitchenPrintFailed');
+    if (hasKitchenRetryPending(ids)) {
+      toast(t('webPosKitchenPrintRetrying'), { duration: 3500 });
+    }
   };
 
   const fireCourseLines = async (lines: CartLine[], courseOnly?: number) => {

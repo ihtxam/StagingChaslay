@@ -11,17 +11,15 @@ param(
     [ValidateSet("auto", "on", "off")]
     [string]$BtSlowMode = "auto",
 
-    # Direct serial COM bypass (v1.8.4). Default "off" — spooler-only; "auto"/"on" try COM first.
+    # Ignored since v1.8.8 — COM-direct is disabled. Kept so mixed client/agent versions still parse.
     [ValidateSet("auto", "on", "off")]
     [string]$ComDirectMode = "off"
 )
 
 $ErrorActionPreference = "Stop"
 
-$comHelper = Join-Path $PSScriptRoot "win-com-raw-print.ps1"
-if (Test-Path -LiteralPath $comHelper) {
-    . $comHelper
-}
+# v1.8.8: do NOT dotsource win-com-raw-print.ps1. A parse/load failure there
+# broke USB receipts as well as kitchen COM printers (v1.8.4–1.8.7).
 
 # Ensure .NET / pipeline strings stay Unicode regardless of OEM code page.
 try {
@@ -126,6 +124,50 @@ function Write-PrintLog {
     } catch { }
 }
 
+# Inlined from v1.8.3 so a missing/broken COM helper cannot fail USB prints.
+function Get-PrinterPortName {
+    param([string]$Printer)
+    try {
+        $escaped = $Printer.Replace("'", "''")
+        $row = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$escaped'" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($row -and $row.PortName) {
+            return [string]$row.PortName
+        }
+    } catch { }
+    if ($Printer -match '\(COM(\d+)\)') {
+        return "COM$($Matches[1])"
+    }
+    return ""
+}
+
+function Test-ComPortPrinter {
+    param(
+        [string]$Printer,
+        [string]$PortName
+    )
+    if ($PortName -match '^COM\d+$') { return $true }
+    if ($Printer -match '\(COM\d+\)') { return $true }
+    $lower = "$Printer $PortName".ToLowerInvariant()
+    if ($lower -match 'bluetooth|bt spp|serial|rfcomm') { return $true }
+    return $false
+}
+
+# v1.8.6 gate: mode=on still only slows COM/BT — never USB/LPT/network.
+function Resolve-BtSlowMode {
+    param(
+        [string]$Mode,
+        [string]$Printer,
+        [string]$PortName
+    )
+    $isComBt = Test-ComPortPrinter -Printer $Printer -PortName $PortName
+    switch ($Mode) {
+        "on" { return $isComBt }
+        "off" { return $false }
+        default { return $isComBt }
+    }
+}
+
 function Split-CutSuffix {
     param([byte[]]$Data)
 
@@ -198,7 +240,7 @@ function Write-RawChunks {
         $totalWritten += $written
         $offset += $len
         $chunkCount++
-        if ($offset -lt $Data.Length) {
+        if ($DelayMs -gt 0 -and $offset -lt $Data.Length) {
             Start-Sleep -Milliseconds $DelayMs
         }
     }
@@ -230,13 +272,10 @@ function Send-RawToPrinter {
     )
 
     $portName = Get-PrinterPortName -Printer $Printer
-    $chunkSize = if ($SlowBluetooth) { 64 } else { 512 }
-    $delayMs = if ($SlowBluetooth) { 150 } else { 25 }
-    $split = Split-CutSuffix -Data $Data
-    $body = $split.body
-    $cut = $split.cut
-
-    Write-PrintLog "printer='$Printer' port='$portName' slowBt=$SlowBluetooth bytes=$($Data.Length) body=$($body.Length) cut=$($cut.Length)"
+    # USB / LPT / network: large WritePrinter chunks, no COM-direct, no 64-byte throttling.
+    # COM/BT: v1.8.3 spooler chunking (128 bytes / 75ms) — never 1.8.4+ SerialPort bypass.
+    $chunkSize = if ($SlowBluetooth) { 128 } else { 4096 }
+    $delayMs = if ($SlowBluetooth) { 75 } else { 0 }
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
     $docInfo.pDocName = "Reborn Receipt"
@@ -265,18 +304,27 @@ function Send-RawToPrinter {
                 throw "StartPagePrinter failed for '$Printer' (Win32=$err)."
             }
 
-            if ($body.Length -gt 0) {
-                [void](Write-RawChunks -Handle $handle -Data $body -ChunkSize $chunkSize -DelayMs $delayMs -Printer $Printer -Label "body")
-                Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs
-            }
+            if ($SlowBluetooth) {
+                $split = Split-CutSuffix -Data $Data
+                $body = $split.body
+                $cut = $split.cut
+                Write-PrintLog "spooler printer='$Printer' port='$portName' slowBt=True bytes=$($Data.Length) body=$($body.Length) cut=$(if ($cut) { $cut.Length } else { 0 })"
 
-            if ($null -ne $cut -and $cut.Length -gt 0) {
-                Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs -BeforeCut
-                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 500 } else { 200 })
-                [void](Write-RawChunks -Handle $handle -Data $cut -ChunkSize $cut.Length -DelayMs 0 -Printer $Printer -Label "cut")
-                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 500 } else { 200 })
-            } elseif ($body.Length -le $chunkSize -and $body.Length -gt 0) {
-                Start-Sleep -Milliseconds $(if ($SlowBluetooth) { 250 } else { 80 })
+                if ($body.Length -gt 0) {
+                    [void](Write-RawChunks -Handle $handle -Data $body -ChunkSize $chunkSize -DelayMs $delayMs -Printer $Printer -Label "body")
+                    Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs
+                }
+                if ($null -ne $cut -and $cut.Length -gt 0) {
+                    Wait-PrinterDrain -PayloadBytes $body.Length -ChunkSize $chunkSize -DelayMs $delayMs -BeforeCut
+                    [void](Write-RawChunks -Handle $handle -Data $cut -ChunkSize $cut.Length -DelayMs 0 -Printer $Printer -Label "cut")
+                    Start-Sleep -Milliseconds 400
+                } elseif ($body.Length -le $chunkSize -and $body.Length -gt 0) {
+                    Start-Sleep -Milliseconds 250
+                }
+            } else {
+                Write-PrintLog "spooler printer='$Printer' port='$portName' slowBt=False bytes=$($Data.Length) chunk=$chunkSize"
+                [void](Write-RawChunks -Handle $handle -Data $Data -ChunkSize $chunkSize -DelayMs 0 -Printer $Printer -Label "payload")
+                Start-Sleep -Milliseconds 80
             }
 
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
@@ -292,13 +340,7 @@ function Send-RawToPrinter {
 
 $portForMode = Get-PrinterPortName -Printer $PrinterName
 $slowBt = Resolve-BtSlowMode -Mode $BtSlowMode -Printer $PrinterName -PortName $portForMode
-
-if (Get-Command Invoke-ComDirectOrSpooler -ErrorAction SilentlyContinue) {
-    Invoke-ComDirectOrSpooler -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt -ComDirectMode $ComDirectMode -SpoolerSend {
-        Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
-    }
-} else {
-    Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
-}
+Write-PrintLog "mode printer='$PrinterName' port='$portForMode' slowBt=$slowBt comDirect=off (v1.8.8 spooler-only)"
+Send-RawToPrinter -Printer $PrinterName -Data $bytes -SlowBluetooth $slowBt
 # Console OutputEncoding is UTF-8 above so Node receives accents intact.
 Write-Output $PrinterName

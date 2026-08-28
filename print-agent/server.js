@@ -20,7 +20,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.7";
+const VERSION = "1.8.8";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -543,83 +543,88 @@ function parseComSpoolerFailure(raw) {
   };
 }
 
-/** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. */
+/** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. Never throws. */
 function sanitizePrintAgentError(error, printerName, fallback) {
   const safeFallback = fallback || "Print failed";
-  const raw = [error && error.stderr, error && error.message, error && error.stdout]
-    .filter(Boolean)
-    .join("\n");
-  const win32 =
-    raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
-    raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
-    raw.match(/StartPagePrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
-    raw.match(/WritePrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
-  const named = raw.match(/Printer '([^']+)' not found/i);
-  const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
-  const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
-  const combined = parseComSpoolerFailure(raw);
-  if (combined) {
-  const port = combined.comPort || "";
-  const comDetail = (combined.comReason || "").slice(0, 120);
-  const spoolDetail = (combined.spoolerReason || "").slice(0, 120);
-  const label = combined.printer || name;
-  return label
-    ? `Print failed for '${label}': COM ${port} (${comDetail}); spooler (${spoolDetail})`
-    : `COM ${port} (${comDetail}); spooler (${spoolDetail})`;
-  }
-  const comOpen =
-    raw.match(/Could not open serial port\s+(\S+)\s*:\s*(.+)/i) ||
-    raw.match(/direct COM \((COM\d+)\) failed \(([^)]+)\)/i);
-  if (comOpen) {
-    const port = comOpen[1] || "";
-    const detail = (comOpen[2] || "").trim().slice(0, 120);
-    if (/spooler also failed/i.test(raw)) {
-      return name
-        ? `Print failed for '${name}': Bluetooth COM port ${port} busy or unavailable (${detail}). Spooler retry also failed — check printer is on and paired.`
-        : `Bluetooth COM port ${port} busy or unavailable. Spooler retry also failed.`;
+  try {
+    const raw = [error && error.stderr, error && error.message, error && error.stdout]
+      .filter(Boolean)
+      .join("\n");
+    const win32 =
+      raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+      raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+      raw.match(/StartPagePrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
+      raw.match(/WritePrinter failed for '([^']+)' \(Win32=(\d+)\)/i);
+    const named = raw.match(/Printer '([^']+)' not found/i);
+    const gl = /\bGLPrinter\b/i.test(raw) ? "GLPrinter" : "";
+    const name = (win32 && win32[1]) || (named && named[1]) || printerName || gl || "";
+    const combined = parseComSpoolerFailure(raw);
+    if (combined) {
+      const port = combined.comPort || "";
+      const comDetail = (combined.comReason || "").slice(0, 120);
+      const spoolDetail = (combined.spoolerReason || "").slice(0, 120);
+      const label = combined.printer || name;
+      return label
+        ? `Print failed for '${label}': COM ${port} (${comDetail}); spooler (${spoolDetail})`
+        : `COM ${port} (${comDetail}); spooler (${spoolDetail})`;
     }
-    return name
-      ? `Bluetooth COM port ${port} busy (${detail}). Retrying via Windows spooler…`
-      : `Bluetooth COM port ${port} busy (${detail}). Retrying via spooler…`;
+    const comOpen =
+      raw.match(/Could not open serial port\s+(\S+)\s*:\s*(.+)/i) ||
+      raw.match(/direct COM \((COM\d+)\) failed \(([^)]+)\)/i);
+    if (comOpen) {
+      const port = comOpen[1] || "";
+      const detail = (comOpen[2] || "").trim().slice(0, 120);
+      if (/spooler also failed/i.test(raw)) {
+        return name
+          ? `Print failed for '${name}': Bluetooth COM port ${port} busy or unavailable (${detail}). Spooler retry also failed — check printer is on and paired.`
+          : `Bluetooth COM port ${port} busy or unavailable. Spooler retry also failed.`;
+      }
+      return name
+        ? `Print failed for '${name}' (${port}: ${detail})`
+        : `Print failed (${port}: ${detail})`;
+    }
+    const code = win32
+      ? Number(win32[2])
+      : Number((raw.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
+    if (
+      code === 1801 ||
+      code === 1905 ||
+      code === 1906 ||
+      /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|OpenPrinter failed|StartDocPrinter failed|\bGLPrinter\b/i.test(
+        raw
+      )
+    ) {
+      return name
+        ? `Printer '${name}' not found or disconnected`
+        : "Printer not found or disconnected";
+    }
+    const cleanLine = raw
+      .split(/\r?\n/)
+      .map((l) => String(l).trim())
+      .find(
+        (l) =>
+          l &&
+          /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer|Could not open serial port|direct COM/i.test(
+            l
+          ) &&
+          !isShellDump(l)
+      );
+    if (cleanLine) {
+      return cleanLine.replace(/^.*Exception:\s*/i, "").slice(0, 220);
+    }
+    if (isShellDump(raw)) {
+      return name ? `Print failed for '${name}'` : safeFallback;
+    }
+    if (name && /print failed/i.test(raw)) return `Print failed for '${name}'`;
+    if (raw && !isShellDump(raw) && raw.length <= 220) {
+      return raw.split(/\r?\n/)[0].slice(0, 220);
+    }
+    if (name) return `Print failed for '${name}'`;
+    return safeFallback;
+  } catch {
+    const label = printerName ? String(printerName).trim() : "";
+    return label ? `Print failed for '${label}'` : safeFallback;
   }
-  const code = win32
-    ? Number(win32[2])
-    : Number((raw.match(/Win32\s*[=:]?\s*(\d+)/i) || [])[1] || 0);
-  if (
-    code === 1801 ||
-    code === 1905 ||
-    code === 1906 ||
-    /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|OpenPrinter failed|StartDocPrinter failed|\bGLPrinter\b/i.test(
-      raw
-    )
-  ) {
-    return name
-      ? `Printer '${name}' not found or disconnected`
-      : "Printer not found or disconnected";
-  }
-  const cleanLine = raw
-    .split(/\r?\n/)
-    .map((l) => String(l).trim())
-    .find(
-      (l) =>
-        l &&
-        /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer|Could not open serial port|direct COM/i.test(
-          l
-        ) &&
-        !isShellDump(l)
-    );
-  if (cleanLine) {
-    return cleanLine.replace(/^.*Exception:\s*/i, "").slice(0, 220);
-  }
-  if (isShellDump(raw)) {
-    return name ? `Print failed for '${name}'` : safeFallback;
-  }
-  if (name && /print failed/i.test(raw)) return `Print failed for '${name}'`;
-  if (raw && !isShellDump(raw) && raw.length <= 220) {
-    return raw.split(/\r?\n/)[0].slice(0, 220);
-  }
-  if (name) return `Print failed for '${name}'`;
-  return safeFallback;
 }
 
 async function runPowerShell(scriptPath, args, printerName) {
@@ -753,11 +758,8 @@ function normalizeBtSlowMode(value) {
   return "auto";
 }
 
-/** COM direct serial bypass — default off (spooler-only) since v1.8.7. */
-function normalizeComDirectMode(value) {
-  const raw = String(value || "off").trim().toLowerCase();
-  if (raw === "on" || raw === "true" || raw === "1") return "on";
-  if (raw === "auto") return "auto";
+/** COM direct serial bypass — always off since v1.8.8 (spooler-only WritePrinter). */
+function normalizeComDirectMode(_value) {
   return "off";
 }
 
@@ -880,9 +882,7 @@ function startServer() {
         "device-name-match",
         "bt-com-chunked-raw",
         "bt-com-cut-split",
-        "bt-com-direct-serial",
-        "bt-com-spooler-fallback",
-        "bt-com-direct-default-off",
+        "spooler-only-writeprinter",
         "print-dry-run",
       ],
     });

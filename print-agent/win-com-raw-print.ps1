@@ -1,5 +1,9 @@
-# Direct COM/serial ESC-POS writer — bypasses Windows print spooler (WritePrinter).
-# Dot-sourced by win-raw-print.ps1 and win-raw-print-worker.ps1.
+# Direct COM/serial ESC-POS writer — DISABLED as of v1.8.8.
+# v1.8.4–1.8.7 used this to bypass the Windows spooler for Bluetooth COM printers.
+# That experiment broke kitchen AND USB receipt printing (scripts required this
+# helper; COM open hung/failed; dual-path errors hid toasts).
+# Kept in the package for reference / optional opt-in later. Print scripts no
+# longer dotsource this file.
 
 function Extract-ComPort {
     param([string]$Text)
