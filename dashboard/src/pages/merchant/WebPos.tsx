@@ -117,6 +117,7 @@ import {
   type ShopComboSelection,
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
+import { isVisibleOnChannel, productVisibleOnChannel } from '@/lib/catalog-visibility';
 import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopModifierGroup,
@@ -478,12 +479,13 @@ type Product = {
   sku?: string | null;
   barcode?: string | null;
   allowExtras?: boolean;
+  visibility?: unknown;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
   modifierGroups?: ShopModifierGroup[];
   comboSlots?: ComboSlot[];
 };
 
-type Category = { id: string; name: string; color?: string | null };
+type Category = { id: string; name: string; color?: string | null; visibility?: unknown };
 
 type CartLine = {
   lineId: string;
@@ -1769,7 +1771,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     const bestsellerOrder = new Map(bestsellerIds.map((id, i) => [id, i]));
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
     const filtered = products.filter((p) => {
+      if (!productVisibleOnChannel(
+        p,
+        p.categoryId ? categoryById.get(p.categoryId) : null,
+        'pos'
+      )) {
+        return false;
+      }
       if (categoryId === POS_GIFT_CARDS_CATEGORY) {
         return false;
       } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
@@ -1795,7 +1805,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     }
     return filtered;
-  }, [products, categoryId, search, bestsellerIds, gridSort]);
+  }, [products, categories, categoryId, search, bestsellerIds, gridSort]);
+
+  const visibleCategories = useMemo(
+    () => categories.filter((c) => isVisibleOnChannel(c.visibility, 'pos')),
+    [categories]
+  );
 
   const refreshAgent = useCallback(async () => {
     const health = await getPrintAgentHealth();
@@ -9150,7 +9165,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             {(!isNarrowViewport || !mobileCartOpen) ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <WebPosProductArea
-                categories={categories}
+                categories={visibleCategories}
                 products={visibleProducts}
                 categoryId={categoryId}
                 onCategoryChange={setCategoryId}

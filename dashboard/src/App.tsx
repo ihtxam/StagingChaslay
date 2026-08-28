@@ -15,6 +15,7 @@ import MerchantDashboard from '@/pages/merchant/Dashboard';
 import ResellerDashboard from '@/pages/reseller/Dashboard';
 import OrderingPage from '@/pages/shop/OrderingPage';
 import CheckoutPage from '@/pages/shop/CheckoutPage';
+import TableOrderPage from '@/pages/shop/TableOrderPage';
 import OrderConfirmationPage from '@/pages/shop/OrderConfirmationPage';
 import GiftCardsPage from '@/pages/shop/GiftCardsPage';
 import GiftCardConfirmPage from '@/pages/shop/GiftCardConfirmPage';
@@ -270,6 +271,14 @@ function App() {
             element={
               <ShopRoutes>
                 <OrderingPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/table/:tableId"
+            element={
+              <ShopRoutes>
+                <TableOrderPage />
               </ShopRoutes>
             }
           />

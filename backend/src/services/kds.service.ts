@@ -276,7 +276,7 @@ export class KdsService {
     return this.pushKitchen(merchantId, {
       ticketKey: displayNum,
       orderNumber: displayNum,
-      tableLabel: order.customerName?.trim()?.slice(0, 120) || null,
+      tableLabel: (order.tableLabel || order.customerName)?.trim()?.slice(0, 120) || null,
       channel: order.fulfillmentChannel || "takeaway",
       items,
     });

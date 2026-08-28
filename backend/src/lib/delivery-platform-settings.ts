@@ -1,5 +1,5 @@
-/** Unified ordering channel for online shop + delivery aggregators. */
-export type OrderSource = "online_shop" | "justeat" | "ubereats";
+/** Unified ordering channel for online shop + delivery aggregators + QR table. */
+export type OrderSource = "online_shop" | "justeat" | "ubereats" | "qr_table";
 
 export type DeliveryPlatformKey = "justEat" | "uberEats";
 

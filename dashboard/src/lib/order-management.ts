@@ -203,6 +203,7 @@ export function orderSourceLabel(source?: string | null): string {
   if (s === 'justeat') return 'Just Eat';
   if (s === 'ubereats') return 'Uber Eats';
   if (s === 'online_shop') return 'Online shop';
+  if (s === 'qr_table') return 'QR table';
   return 'Online';
 }
 

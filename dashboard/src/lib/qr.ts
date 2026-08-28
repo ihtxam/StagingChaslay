@@ -507,7 +507,7 @@ export function buildTableShopUrl(
   const base = String(origin || (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com')).replace(/\/$/, '');
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
-  return `${base}/shop/${slug}/menu?channel=dine_in&table=${table}`;
+  return `${base}/shop/${slug}/table/${table}`;
 }
 
 /** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */

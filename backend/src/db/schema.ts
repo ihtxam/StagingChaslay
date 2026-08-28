@@ -804,6 +804,11 @@ export const categories = pgTable(
     imageUrl: varchar("image_url", { length: 500 }),
     /** Special shelf for promotional / offer products */
     isOffersCategory: boolean("is_offers_category").default(false).notNull(),
+    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery'] } */
+    visibility: json("visibility")
+      .$type<{ channels: string[] }>()
+      .default({ channels: ["pos", "shop", "qr_table", "delivery"] })
+      .notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -879,6 +884,11 @@ export const products = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     isActive: boolean("is_active").default(true).notNull(),
+    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery'] } */
+    visibility: json("visibility")
+      .$type<{ channels: string[] }>()
+      .default({ channels: ["pos", "shop", "qr_table", "delivery"] })
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1111,6 +1121,7 @@ export const orders = pgTable(
     // Dine-in table service
     tableId: uuid("table_id"),
     tableLabel: varchar("table_label", { length: 50 }),
+    tableSessionId: uuid("table_session_id"),
     guestCount: integer("guest_count"), // PAX / covers for this check
     // Split billing: equal /N or per-seat payments
     billSplits: json("bill_splits")
@@ -1159,6 +1170,7 @@ export const orders = pgTable(
     createdAtIdx: index("orders_created_at_idx").on(table.createdAt),
     clientIdIdx: index("orders_client_id_idx").on(table.clientId),
     tableIdIdx: index("orders_table_id_idx").on(table.tableId),
+    tableSessionIdIdx: index("orders_table_session_id_idx").on(table.tableSessionId),
     masterOrderIdIdx: index("orders_master_order_id_idx").on(table.masterOrderId),
     orderSourceIdx: index("orders_merchant_order_source_idx").on(table.merchantId, table.orderSource),
     externalOrderIdx: index("orders_merchant_external_order_idx").on(
@@ -1723,6 +1735,36 @@ export const tableQrCodes = pgTable(
   (table) => ({
     merchantIdIdx: index("table_qr_codes_merchant_id_idx").on(table.merchantId),
     tableIdIdx: index("table_qr_codes_table_id_idx").on(table.tableId),
+  })
+);
+
+/** Dine-in QR ordering session — one open session per table at a time. */
+export const tableSessions = pgTable(
+  "table_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => diningTables.id, { onDelete: "cascade" }),
+    sessionToken: varchar("session_token", { length: 64 }).notNull(),
+    /** open | closed | paid */
+    status: varchar("status", { length: 30 }).notNull().default("open"),
+    guestCount: integer("guest_count"),
+    openedAt: timestamp("opened_at").defaultNow().notNull(),
+    closedAt: timestamp("closed_at"),
+  },
+  (table) => ({
+    merchantIdIdx: index("table_sessions_merchant_id_idx").on(table.merchantId),
+    tableIdIdx: index("table_sessions_table_id_idx").on(table.tableId),
+    tokenUnique: uniqueIndex("table_sessions_token_uidx").on(table.sessionToken),
+    merchantTableOpenIdx: index("table_sessions_merchant_table_status_idx").on(
+      table.merchantId,
+      table.tableId,
+      table.status
+    ),
   })
 );
 
@@ -2701,6 +2743,12 @@ export const tableQrCodesRelations = relations(tableQrCodes, ({ one }) => ({
   table: one(diningTables, { fields: [tableQrCodes.tableId], references: [diningTables.id] }),
 }));
 
+export const tableSessionsRelations = relations(tableSessions, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [tableSessions.merchantId], references: [merchants.id] }),
+  table: one(diningTables, { fields: [tableSessions.tableId], references: [diningTables.id] }),
+  orders: many(orders),
+}));
+
 export const devicesRelations = relations(devices, ({ one, many }) => ({
   merchant: one(merchants, { fields: [devices.merchantId], references: [merchants.id] }),
   licenses: many(licenses),
@@ -2736,6 +2784,10 @@ export const productModifierGroupsRelations = relations(productModifierGroups, (
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   merchant: one(merchants, { fields: [orders.merchantId], references: [merchants.id] }),
   customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
+  tableSession: one(tableSessions, {
+    fields: [orders.tableSessionId],
+    references: [tableSessions.id],
+  }),
   items: many(orderItems),
   paymentTransactions: many(paymentTransactions),
   refunds: many(orderRefunds),

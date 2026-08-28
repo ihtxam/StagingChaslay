@@ -24,6 +24,12 @@ import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
+import {
+  filterCatalogForChannel,
+  shopMenuCatalogChannel,
+} from "@/lib/catalog-visibility";
+import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
+import { TableSessionService } from "@/services/table-session.service";
 
 const router = Router();
 
@@ -810,6 +816,10 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
     }
 
     const db = getDb();
+    const catalogChannel = shopMenuCatalogChannel(
+      String(req.query.channel || ""),
+      typeof req.query.table === "string" ? req.query.table : null
+    );
     const [categories, products] = await Promise.all([
       db.query.categories.findMany({
         where: eq(schema.categories.merchantId, merchant.id),
@@ -821,24 +831,28 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
       }),
     ]);
 
+    const filtered = filterCatalogForChannel(products, categories, catalogChannel);
+    const visibleProducts = filtered.products;
+    const visibleCategories = filtered.categories;
+
     const groupsByProduct = await loadModifierGroupsByProduct(
       merchant.id,
-      products.map((p) => p.id)
+      visibleProducts.map((p) => p.id)
     );
-    const catalogById = new Map(products.map((p) => [p.id, p]));
+    const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
 
-    const toItem = (p: (typeof products)[number]) =>
+    const toItem = (p: (typeof visibleProducts)[number]) =>
       mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct);
 
-    const menu = categories.map((cat) => ({
+    const menu = visibleCategories.map((cat) => ({
       id: cat.id,
       name: cat.name,
       image: (cat as { imageUrl?: string | null }).imageUrl || null,
       isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
-      items: products.filter((p) => p.categoryId === cat.id).map(toItem),
+      items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
     }));
 
-    const uncategorized = products.filter((p) => !p.categoryId);
+    const uncategorized = visibleProducts.filter((p) => !p.categoryId);
     if (uncategorized.length) {
       menu.push({
         id: "uncategorized",
@@ -875,9 +889,59 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
       success: true,
       data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
       offers: featured,
+      catalogChannel,
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/table/:tableId/session — open/resume QR table session + order history
+ */
+router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant || !merchant.shopEnabled) {
+      return res.status(404).json({ error: "Shop not found or closed" });
+    }
+    const tableId = String(req.params.tableId || "").trim();
+    if (!tableId) return res.status(400).json({ error: "Table is required" });
+
+    const { session, table } = await TableSessionService.openOrResume(merchant.id, tableId);
+    const summary = await TableSessionService.sessionSummary(merchant.id, session.id);
+    const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
+
+    res.json({
+      success: true,
+      session: {
+        id: session.id,
+        token: session.sessionToken,
+        status: session.status,
+        tableId: table.id,
+        tableLabel: table.label,
+      },
+      table: { id: table.id, label: table.label, capacity: table.capacity },
+      orders: summary.orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        total: Number(o.total),
+        createdAt: o.createdAt,
+        items: (o.items || []).map((i) => ({
+          name: i.productName,
+          quantity: Number(i.quantity),
+          totalPrice: Number(i.totalPrice),
+        })),
+      })),
+      runningTotal: summary.total,
+      settings: {
+        qrAutoApprove: qrSettings.qrAutoApprove,
+        qrPayAtTableEnabled: qrSettings.qrPayAtTableEnabled,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to open table session" });
   }
 });
 
@@ -1595,6 +1659,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       pointsToRedeem = 0,
       voucherCode,
       giftCardCode,
+      tableId,
+      tableSessionToken,
+      orderSource: requestedOrderSource,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -1620,6 +1687,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       pointsToRedeem?: number;
       voucherCode?: string;
       giftCardCode?: string;
+      tableId?: string;
+      tableSessionToken?: string;
+      orderSource?: string;
     };
 
     if (scheduledFor) {
@@ -1640,15 +1710,38 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     if (!items?.length) {
       return res.status(400).json({ error: "Order items are required" });
     }
-    if (!customerName?.trim() || !customerPhone?.trim()) {
+
+    const qrTableId = String(tableId || "").trim() || null;
+    const isQrTableOrder = !!qrTableId;
+    let resolvedTableSession: Awaited<ReturnType<typeof TableSessionService.assertOpenSession>> | null =
+      null;
+    let resolvedTableLabel: string | null = null;
+    if (isQrTableOrder) {
+      try {
+        resolvedTableSession = await TableSessionService.assertOpenSession(
+          merchant.id,
+          qrTableId,
+          tableSessionToken
+        );
+        const table = await TableSessionService.resolveTable(merchant.id, qrTableId);
+        resolvedTableLabel = table?.label || null;
+      } catch (err) {
+        return res.status(400).json({
+          error: err instanceof Error ? err.message : "Invalid table session",
+        });
+      }
+    }
+
+    if (!isQrTableOrder && (!customerName?.trim() || !customerPhone?.trim())) {
       return res.status(400).json({ error: "Name and phone are required" });
     }
 
     const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
     const payMethod =
       rawPay === "card" ? "card" : rawPay === "pay_later" ? "pay_later" : "cash";
-    const channel: FulfillmentChannel =
-      fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
+    const channel: FulfillmentChannel = isQrTableOrder
+      ? "dine_in"
+      : fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
         ? fulfillmentChannel
         : "takeaway";
 
@@ -2135,9 +2228,20 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     const { normalizeDeliveryPlatformSettings } = await import("@/lib/delivery-platform-settings");
-    const shopAutoAccept = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings)
-      .onlineShopAutoAccept;
-    const initialOrderStatus = shopAutoAccept ? "preparing" : "pending_approval";
+    const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
+    const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
+    const shopAutoAccept = deliverySettings.onlineShopAutoAccept;
+    const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
+    const initialOrderStatus = shopAutoAccept || qrAutoAccept ? "preparing" : "pending_approval";
+    const resolvedOrderSource = isQrTableOrder
+      ? "qr_table"
+      : requestedOrderSource === "qr_table"
+        ? "qr_table"
+        : "online_shop";
+    const resolvedCustomerName =
+      customerName?.trim() ||
+      (resolvedTableLabel ? `Table ${resolvedTableLabel}` : isQrTableOrder ? "Table guest" : "");
+    const resolvedCustomerPhone = customerPhone?.trim() || (isQrTableOrder ? "QR" : "");
 
     const [order] = await db
       .insert(schema.orders)
@@ -2146,7 +2250,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         orderNumber,
         customerId,
         orderType: "web_shop",
-        orderSource: "online_shop",
+        orderSource: resolvedOrderSource,
         fulfillmentChannel: channel,
         status: initialOrderStatus,
         subtotal: subtotal.toFixed(2),
@@ -2173,9 +2277,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         deliveryZoneId,
         scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
         estimatedReadyAt,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerName: resolvedCustomerName,
+        customerPhone: resolvedCustomerPhone,
         customerEmail: emailNorm || null,
+        tableId: qrTableId,
+        tableLabel: resolvedTableLabel,
+        tableSessionId: resolvedTableSession?.id ?? null,
         deliveryLatitude: deliveryLat,
         deliveryLongitude: deliveryLng,
         deliveryTrackingToken,

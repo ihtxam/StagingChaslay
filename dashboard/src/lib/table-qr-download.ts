@@ -223,6 +223,8 @@ export function mergeTableQrSettings(partial?: TableQrSettings | null): Required
     headerText: partial?.headerText?.trim() || DEFAULT_TABLE_QR_SETTINGS.headerText,
     subtitleText: partial?.subtitleText?.trim() || DEFAULT_TABLE_QR_SETTINGS.subtitleText,
     layoutTemplate: partial?.layoutTemplate || DEFAULT_TABLE_QR_SETTINGS.layoutTemplate,
+    qrAutoApprove: partial?.qrAutoApprove === true,
+    qrPayAtTableEnabled: partial?.qrPayAtTableEnabled !== false,
   };
 }
 

@@ -10,6 +10,12 @@ import {
   normalizeHexColor,
   paletteColorAt,
 } from '@/components/webpos/categoryColors';
+import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
+import {
+  DEFAULT_CATALOG_VISIBILITY,
+  normalizeCatalogVisibility,
+  type CatalogVisibility,
+} from '@/lib/catalog-visibility';
 
 interface Category {
   id: string;
@@ -18,6 +24,7 @@ interface Category {
   color?: string | null;
   imageUrl?: string | null;
   sortOrder?: number;
+  visibility?: CatalogVisibility;
 }
 
 const MAX_CATEGORY_NAME = 56;
@@ -36,6 +43,7 @@ export default function Categories() {
   const [color, setColor] = useState('');
   const [uploading, setUploading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [visibility, setVisibility] = useState<CatalogVisibility>({ ...DEFAULT_CATALOG_VISIBILITY });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const allSelected = categories.length > 0 && categories.every((c) => selectedIds.includes(c.id));
@@ -72,6 +80,7 @@ export default function Categories() {
     setDescription('');
     setImageUrl('');
     setColor('');
+    setVisibility({ ...DEFAULT_CATALOG_VISIBILITY });
     setEditingId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -83,6 +92,7 @@ export default function Categories() {
     setDescription(category.description || '');
     setImageUrl(category.imageUrl || '');
     setColor(categoryColor(category.id, index >= 0 ? index : 0, category.color));
+    setVisibility(normalizeCatalogVisibility(category.visibility));
   };
 
   const onUploadImage = async (file: File | null) => {
@@ -150,6 +160,7 @@ export default function Categories() {
           description: payload.description ?? '',
           imageUrl: imageUrl || null,
           color: payload.color,
+          visibility,
         });
         toast.success(t('categoryToastUpdated'));
       } else {
@@ -157,6 +168,7 @@ export default function Categories() {
           name: payload.name,
           description: payload.description,
           color: payload.color,
+          visibility,
         });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
@@ -265,6 +277,9 @@ export default function Categories() {
                 placeholder={paletteColorAt(categories.length)}
               />
             </div>
+          </div>
+          <div className="md:col-span-3">
+            <ChannelVisibilityEditor value={visibility} onChange={setVisibility} />
           </div>
           <div className="md:col-span-3 flex flex-wrap items-center gap-3">
             <label className="text-sm">

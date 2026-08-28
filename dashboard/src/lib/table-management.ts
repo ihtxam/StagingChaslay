@@ -36,12 +36,18 @@ export type TableQrSettings = {
   headerText?: string;
   subtitleText?: string;
   layoutTemplate?: QrLayoutTemplate;
+  /** Auto-accept QR table orders (skip pending_approval). */
+  qrAutoApprove?: boolean;
+  /** Allow pay-at-table from customer phone. */
+  qrPayAtTableEnabled?: boolean;
 };
 
 export const DEFAULT_TABLE_QR_SETTINGS: Required<TableQrSettings> = {
   headerText: 'MENU',
   subtitleText: 'Scan me to order',
   layoutTemplate: 'vertical',
+  qrAutoApprove: false,
+  qrPayAtTableEnabled: true,
 };
 
 /** Styled stand PNG heights (code_only uses plain QR sizing). */

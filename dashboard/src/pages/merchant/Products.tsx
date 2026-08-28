@@ -31,6 +31,13 @@ import {
   type LabelProduct,
   type LabelWidthMm,
 } from '@/lib/barcode-labels';
+import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
+import {
+  DEFAULT_CATALOG_VISIBILITY,
+  normalizeCatalogVisibility,
+  productVisibleOnChannel,
+  type CatalogVisibility,
+} from '@/lib/catalog-visibility';
 
 interface Extra {
   id: string;
@@ -96,6 +103,7 @@ interface Product {
   loyaltyRewardPoints?: number | null;
   sortOrder?: number;
   isTaxable?: boolean;
+  visibility?: CatalogVisibility;
   modifierGroups?: ModifierGroupSummary[];
   comboItems?: Array<{
     id?: string;
@@ -111,6 +119,7 @@ interface Product {
 interface Category {
   id: string;
   name: string;
+  visibility?: CatalogVisibility;
 }
 
 type FormState = {
@@ -134,6 +143,7 @@ type FormState = {
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
   loyaltyRewardPoints: string;
   isTaxable: boolean;
+  visibility: CatalogVisibility;
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -163,6 +173,7 @@ const emptyForm = (): FormState => ({
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
   isTaxable: true,
+  visibility: { ...DEFAULT_CATALOG_VISIBILITY },
 });
 
 function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotForm[] {
@@ -471,7 +482,15 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
     return products.filter((product) => {
+      if (!productVisibleOnChannel(
+        product,
+        product.categoryId ? categoryById.get(product.categoryId) : null,
+        'pos'
+      )) {
+        return false;
+      }
       if (selectedCategory === '__none__' && product.categoryId) return false;
       if (selectedCategory && selectedCategory !== '__none__' && product.categoryId !== selectedCategory) {
         return false;
@@ -592,6 +611,7 @@ export default function Products() {
             ? String(full.loyaltyRewardPoints)
             : '',
         isTaxable: full.isTaxable !== false,
+        visibility: normalizeCatalogVisibility(full.visibility),
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -628,6 +648,7 @@ export default function Products() {
             ? String(product.loyaltyRewardPoints)
             : '',
         isTaxable: product.isTaxable !== false,
+        visibility: normalizeCatalogVisibility(product.visibility),
       });
     }
   };
@@ -704,6 +725,7 @@ export default function Products() {
         return typeof parsed === 'number' ? parsed : null;
       })(),
       isTaxable: form.isTaxable,
+      visibility: form.visibility,
     };
   };
 
@@ -2131,6 +2153,11 @@ export default function Products() {
                     </label>
                     <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
                   </div>
+
+                  <ChannelVisibilityEditor
+                    value={form.visibility}
+                    onChange={(visibility) => setForm({ ...form, visibility })}
+                  />
 
                   <div>
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">

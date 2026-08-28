@@ -425,6 +425,38 @@ export default function TableQrCodes() {
                   ))}
                 </select>
               </label>
+              <label className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2.5">
+                <span>
+                  <span className="block text-sm font-medium">{t('tableQrAutoApprove')}</span>
+                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                    {t('tableQrAutoApproveHint')}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={draftSettings.qrAutoApprove}
+                  onChange={(e) =>
+                    setDraftSettings((s) => ({ ...s, qrAutoApprove: e.target.checked }))
+                  }
+                />
+              </label>
+              <label className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2.5">
+                <span>
+                  <span className="block text-sm font-medium">{t('tableQrPayAtTable')}</span>
+                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                    {t('tableQrPayAtTableHint')}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={draftSettings.qrPayAtTableEnabled}
+                  onChange={(e) =>
+                    setDraftSettings((s) => ({ ...s, qrPayAtTableEnabled: e.target.checked }))
+                  }
+                />
+              </label>
               <div className="flex justify-end gap-2">
                 <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
                   {t('cancel')}

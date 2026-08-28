@@ -151,6 +151,11 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
   merchant_staff_pin_display:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
+  products_visibility:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
+  categories_visibility:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
+  orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -202,6 +207,20 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS table_qr_codes_merchant_id_idx ON table_qr_codes(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS table_qr_codes_table_id_idx ON table_qr_codes(table_id)`,
+  `CREATE TABLE IF NOT EXISTS table_sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    table_id uuid NOT NULL REFERENCES dining_tables(id) ON DELETE CASCADE,
+    session_token varchar(64) NOT NULL,
+    status varchar(30) NOT NULL DEFAULT 'open',
+    guest_count integer,
+    opened_at timestamptz NOT NULL DEFAULT now(),
+    closed_at timestamptz
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS table_sessions_token_uidx ON table_sessions(session_token)`,
+  `CREATE INDEX IF NOT EXISTS table_sessions_merchant_id_idx ON table_sessions(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS table_sessions_table_id_idx ON table_sessions(table_id)`,
+  `CREATE INDEX IF NOT EXISTS table_sessions_merchant_table_status_idx ON table_sessions(merchant_id, table_id, status)`,
   `CREATE TABLE IF NOT EXISTS gift_card_purchases (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,

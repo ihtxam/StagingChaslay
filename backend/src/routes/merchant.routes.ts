@@ -8,6 +8,7 @@ import {
   requirePermission,
 } from "@/middleware/auth.middleware";
 import { requireRetailModule } from "@/middleware/business-module.middleware";
+import { normalizeCatalogVisibility } from "@/lib/catalog-visibility";
 import { ProductService } from "@/services/product.service";
 import { CategoryService } from "@/services/category.service";
 import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
@@ -451,6 +452,7 @@ router.post("/products", async (req: Request, res: Response) => {
       buttonColor,
       loyaltyRewardPoints,
       modifierGroupIds,
+      visibility,
     } = req.body;
 
     if (!merchantId) {
@@ -551,10 +553,18 @@ router.post("/products", async (req: Request, res: Response) => {
       );
     }
 
+    if (visibility !== undefined) {
+      await ProductService.updateProduct(merchantId, product.id, {
+        visibility: normalizeCatalogVisibility(visibility),
+      });
+    }
+
+    const saved = await ProductService.getProductById(merchantId, product.id);
+
     res.status(201).json({
       success: true,
       message: "Product created successfully",
-      product: { ...product, modifierGroups },
+      product: { ...saved, modifierGroups },
     });
   } catch (error) {
     console.error("Error creating product:", error);
@@ -624,6 +634,10 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
       if (updates.productType === "combo" || (updates.comboItems as unknown[]).length) {
         updates.productType = "combo";
       }
+    }
+
+    if (updates.visibility !== undefined) {
+      updates.visibility = normalizeCatalogVisibility(updates.visibility);
     }
 
     const product = await ProductService.updateProduct(merchantId, productId, updates);
@@ -910,7 +924,7 @@ router.put("/categories/reorder", async (req: Request, res: Response) => {
 router.post("/categories", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
-    const { name, description, color } = req.body;
+    const { name, description, color, visibility } = req.body;
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
@@ -945,10 +959,21 @@ router.post("/categories", async (req: Request, res: Response) => {
       normalizedColor
     );
 
+    if (visibility !== undefined) {
+      await CategoryService.updateCategory(merchantId, category.id, {
+        visibility: normalizeCatalogVisibility(visibility),
+      });
+    }
+    const saved =
+      visibility !== undefined
+        ? (await CategoryService.getCategories(merchantId)).find((c) => c.id === category.id) ||
+          category
+        : category;
+
     res.status(201).json({
       success: true,
       message: "Category created successfully",
-      category,
+      category: saved,
     });
   } catch (error) {
     console.error("Error creating category:", error);
@@ -998,6 +1023,10 @@ router.put("/categories/:categoryId", async (req: Request, res: Response) => {
       } else {
         updates.color = normalizeHexColor(String(updates.color));
       }
+    }
+
+    if (updates.visibility !== undefined) {
+      updates.visibility = normalizeCatalogVisibility(updates.visibility);
     }
 
     const category = await CategoryService.updateCategory(merchantId, categoryId, updates);
