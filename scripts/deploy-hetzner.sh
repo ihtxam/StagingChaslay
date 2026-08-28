@@ -375,6 +375,14 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
       rm -rf /project/.gradle /tmp/gradle-home
+      mkdir -p /opt/android-sdk/.android
+      if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
+        keytool -genkeypair -v \
+          -keystore /opt/android-sdk/.android/debug.keystore \
+          -storepass android -alias androiddebugkey -keypass android \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
+      fi
       chmod +x ./gradlew
       ./gradlew assembleRelease --no-daemon --no-build-cache
       APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
