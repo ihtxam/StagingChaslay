@@ -299,7 +299,34 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
   fi
   exit 1
 fi
-git fetch origin main
+
+# Concurrent deploys can race on refs/remotes/origin/main (cannot lock ref).
+git_fetch_main_with_retry() {
+  local attempt max_attempts=3 sleep_secs=2
+  local git_dir lock_file
+  git_dir="$(git rev-parse --git-dir)"
+  lock_file="$git_dir/refs/remotes/origin/main.lock"
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    if [[ -f "$lock_file" ]]; then
+      echo "Removing stale git ref lock: $lock_file"
+      rm -f "$lock_file"
+    fi
+    if git fetch --prune origin main; then
+      return 0
+    fi
+    local err="$?"
+    echo "git fetch attempt $attempt/$max_attempts failed (exit $err)"
+    if [[ "$attempt" -lt "$max_attempts" ]]; then
+      sleep "$sleep_secs"
+      sleep_secs=$((sleep_secs * 2))
+    fi
+  done
+  echo "ERROR: git fetch origin main failed after $max_attempts attempts"
+  return 1
+}
+
+git_fetch_main_with_retry
 git reset --hard origin/main
 chmod +x "$REPO_DIR/scripts/deploy-hetzner.sh" || true
 
