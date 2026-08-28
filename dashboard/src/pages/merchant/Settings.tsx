@@ -1366,10 +1366,19 @@ export default function Settings() {
     }
   };
 
-  if (loading) {
+  const settingsOptionalTab = tab === 'users' || tab === 'delivery-map';
+
+  useEffect(() => {
+    if (!visibleTabs.length) return;
+    if (!visibleTabs.some((item) => item.id === tab)) {
+      selectTab(visibleTabs[0].id);
+    }
+  }, [selectTab, tab, visibleTabs]);
+
+  if (loading && !settingsOptionalTab) {
     return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
   }
-  if (!settings) {
+  if (!settings && !settingsOptionalTab) {
     return (
       <div className="card space-y-3 text-center py-8">
         <p>{t('settingsLoadFailed')}</p>
@@ -1396,7 +1405,10 @@ export default function Settings() {
         <div>
           <h1 className="page-title">{t('settings')}</h1>
           <p className="page-sub">
-            {t('settingsFor')} <span className="font-medium text-[var(--text)]">{settings.name}</span>
+            {t('settingsFor')}{' '}
+            <span className="font-medium text-[var(--text)]">
+              {settings?.name || user?.name || '—'}
+            </span>
           </p>
         </div>
         <label className="relative block w-full sm:max-w-sm">
