@@ -805,10 +805,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const applyingRemoteHeldRef = useRef(false);
   /** Last kitchen shout printed for this cart — hurry/follow-up must reuse it. */
   const lastKitchenTicketRef = useRef<string | null>(bootActive?.ticketDisplay ?? null);
-  const [postSuccessTarget, setPostSuccessTarget] = useState<'register' | 'tables'>(() => {
-    const stored = localStorage.getItem('manupos_webpos_post_success');
-    return stored === 'tables' || stored === 'register' ? stored : 'register';
-  });
   const [successInfo, setSuccessInfo] = useState<{
     amount: number;
     changeDue: number | null;
@@ -1189,10 +1185,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return () => window.removeEventListener('webpos:staff-roster-changed', onRosterChanged);
   }, [refreshStaffRosterFromServer]);
 
-  useEffect(() => {
-    localStorage.setItem('manupos_webpos_post_success', postSuccessTarget);
-  }, [postSuccessTarget]);
-
   /** Persist open cart so refresh keeps items and returns to the cart page. */
   useEffect(() => {
     // Skip the very first paint so we don't race boot hydration with an empty write.
@@ -1534,6 +1526,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         (!!ticketDisplay || !!tableLabel || !!tabNumber || counterDineInEnabled)));
   const cartSide = checkoutSettings.cartSide === 'left' ? 'left' : 'right';
   const courseSendMode = checkoutSettings.courseSendMode || 'fire_per_course';
+  const postSuccessTarget =
+    !isRetail && tablesUiEnabled && checkoutSettings.postSuccessTarget === 'tables'
+      ? 'tables'
+      : 'register';
 
   const courseNumbers = useMemo(() => {
     const set = new Set<number>();
@@ -1546,20 +1542,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     return Array.from(set).sort((a, b) => a - b);
   }, [cart, activeCourse, coursesEnabled, courseCount]);
-
-  useEffect(() => {
-    const fromSettings = checkoutSettings.postSuccessTarget;
-    if (fromSettings === 'tables' || fromSettings === 'register') {
-      setPostSuccessTarget(tablesUiEnabled ? fromSettings : 'register');
-    }
-  }, [checkoutSettings.postSuccessTarget, tablesUiEnabled]);
-
-  // No tables UI — keep post-success on register.
-  useEffect(() => {
-    if (!tablesUiEnabled && postSuccessTarget === 'tables') {
-      setPostSuccessTarget('register');
-    }
-  }, [tablesUiEnabled, postSuccessTarget]);
 
   useEffect(() => {
     if (!tablesUiEnabled && posTab === 'tables') {
@@ -8745,8 +8727,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             isLocalPrintStation={isLocalPrint}
             mainTillOnline={mainTillOnline}
             mainTillPrintAgentOnline={mainTillPrintAgentOnline}
-            postSuccessTarget={postSuccessTarget}
-            onPostSuccessChange={setPostSuccessTarget}
             onRefreshPrinters={() => {
               void refreshAgent();
               setSettingsOpen(false);
@@ -8980,10 +8960,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setSuccessInfo(null);
               setLastSplitReceipts([]);
               splitReceiptsRef.current = [];
-              const next = isRetail ? 'register' : postSuccessTarget;
-              if (next === 'tables') setTablesRefreshToken((n) => n + 1);
-              setPosTab(next);
-              setPosView(next);
+              if (postSuccessTarget === 'tables') setTablesRefreshToken((n) => n + 1);
+              setPosTab(postSuccessTarget);
+              setPosView(postSuccessTarget);
             }}
           />
         ) : posView === 'tables' ? (

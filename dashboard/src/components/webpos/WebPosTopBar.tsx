@@ -602,8 +602,6 @@ export function WebPosSettingsDropdown({
   isLocalPrintStation = true,
   mainTillOnline = false,
   mainTillPrintAgentOnline = false,
-  postSuccessTarget,
-  onPostSuccessChange,
   onRefreshPrinters,
   onReloadCatalog,
   shiftsEnabled,
@@ -647,8 +645,6 @@ export function WebPosSettingsDropdown({
   isLocalPrintStation?: boolean;
   mainTillOnline?: boolean;
   mainTillPrintAgentOnline?: boolean;
-  postSuccessTarget: 'register' | 'tables';
-  onPostSuccessChange: (v: 'register' | 'tables') => void;
   onRefreshPrinters: () => void;
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -1058,19 +1054,6 @@ export function WebPosSettingsDropdown({
         </div>
       )}
 
-      {isLocalPrintStation ? (
-        <label className="block space-y-1 text-xs">
-          <span className="text-[11px] text-stone-500">{t('webPosPostSuccessNav')}</span>
-          <select
-            className="input w-full text-xs"
-            value={postSuccessTarget}
-            onChange={(e) => onPostSuccessChange(e.target.value as 'register' | 'tables')}
-          >
-            <option value="register">{t('webPosTabRegister')}</option>
-            <option value="tables">{t('webPosTabTables')}</option>
-          </select>
-        </label>
-      ) : null}
       {onSendLogs ? (
         <button
           type="button"
