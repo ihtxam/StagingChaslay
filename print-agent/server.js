@@ -883,6 +883,7 @@ function startServer() {
       res.json({
         ok: true,
         reading,
+        resolvedPort: parsed.resolvedPort ? String(parsed.resolvedPort) : parsed.port ? String(parsed.port) : undefined,
         message: reading ? undefined : "No stable frame yet — place item on scale",
       });
     } catch (error) {

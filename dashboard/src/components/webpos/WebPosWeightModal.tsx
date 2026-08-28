@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scale, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { roundMoney2 } from '@/lib/money';
@@ -21,12 +21,19 @@ type Props = {
   /** Friendly USB/Bluetooth name so we can find a new COM port after replug. */
   configuredDeviceName?: string | null;
   configuredDeviceId?: string | null;
+  /** Called when Print Agent resolves a different COM port (USB replug). */
+  onPortResolved?: (port: string) => void;
   onClose: () => void;
   onConfirm: (weightKg: number) => void;
 };
 
 function money(n: number) {
   return `CHF ${Number(n || 0).toFixed(2)}`;
+}
+
+function formatScaleBuffer(kg: number, unit: 'kg' | 'g'): string {
+  if (!Number.isFinite(kg) || kg <= 0) return '';
+  return unit === 'g' ? String(Math.round(kg * 1000)) : String(Math.round(kg * 1000) / 1000);
 }
 
 export default function WebPosWeightModal({
@@ -37,6 +44,7 @@ export default function WebPosWeightModal({
   configuredPort,
   configuredDeviceName,
   configuredDeviceId,
+  onPortResolved,
   onClose,
   onConfirm,
 }: Props) {
@@ -45,20 +53,56 @@ export default function WebPosWeightModal({
   const [entryUnit, setEntryUnit] = useState<'kg' | 'g'>('kg');
   const [scaleReading, setScaleReading] = useState<ScaleReading | null>(null);
   const [scaleMsg, setScaleMsg] = useState('');
+  const [activePort, setActivePort] = useState('');
   const [agentOk, setAgentOk] = useState(false);
+  const manualOverrideRef = useRef(false);
+  const entryUnitRef = useRef<'kg' | 'g'>('kg');
 
   const fixedPort = (configuredPort || '').trim();
-  const portLabel = fixedPort ? formatScalePortLabel(fixedPort) : '';
+  const portLabel = activePort || (fixedPort ? formatScalePortLabel(fixedPort) : '');
   const deviceHint = (configuredDeviceName || '').trim();
   const deviceId = (configuredDeviceId || '').trim();
   const scaleConfigured = !!(fixedPort || deviceHint || deviceId);
+
+  entryUnitRef.current = entryUnit;
+
+  const applyLiveReading = useCallback((reading: ScaleReading, unit: 'kg' | 'g') => {
+    if (manualOverrideRef.current) return;
+    if (reading.weightKg > 0) {
+      setBuffer(formatScaleBuffer(reading.weightKg, unit));
+    }
+  }, []);
+
+  const switchEntryUnit = useCallback(
+    (next: 'kg' | 'g') => {
+      setEntryUnit(next);
+      entryUnitRef.current = next;
+      manualOverrideRef.current = false;
+      const kg =
+        scaleReading && scaleReading.weightKg > 0
+          ? scaleReading.weightKg
+          : (() => {
+              const n = Number(buffer);
+              if (!Number.isFinite(n) || n <= 0) return 0;
+              return entryUnit === 'g' ? n / 1000 : n;
+            })();
+      if (kg > 0) {
+        setBuffer(formatScaleBuffer(kg, next));
+      }
+    },
+    [buffer, entryUnit, scaleReading]
+  );
 
   useEffect(() => {
     if (!open) return;
     setBuffer('');
     setScaleReading(null);
     setScaleMsg('');
-    setEntryUnit(weightUnit === 'g' ? 'g' : 'kg');
+    setActivePort('');
+    manualOverrideRef.current = false;
+    const initialUnit = weightUnit === 'g' ? 'g' : 'kg';
+    setEntryUnit(initialUnit);
+    entryUnitRef.current = initialUnit;
     if (!scaleConfigured) return;
     void (async () => {
       const ok = await isPrintAgentAvailable();
@@ -76,17 +120,15 @@ export default function WebPosWeightModal({
           deviceId: deviceId || null,
         });
         if (cancelled) return;
+        if (res.resolvedPort) {
+          const resolved = formatScalePortLabel(res.resolvedPort);
+          setActivePort(resolved);
+          onPortResolved?.(resolved);
+        }
         if (res.reading) {
           setScaleReading(res.reading);
           setScaleMsg('');
-          if (res.reading.status === 'STABLE' && res.reading.weightKg > 0) {
-            const kg = res.reading.weightKg;
-            setBuffer(
-              entryUnit === 'g'
-                ? String(Math.round(kg * 1000))
-                : String(Math.round(kg * 1000) / 1000)
-            );
-          }
+          applyLiveReading(res.reading, entryUnitRef.current);
         } else if (res.message) {
           setScaleMsg(res.message);
         }
@@ -100,7 +142,17 @@ export default function WebPosWeightModal({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [open, agentOk, portLabel, deviceHint, deviceId, entryUnit, t, scaleConfigured]);
+  }, [
+    open,
+    agentOk,
+    portLabel,
+    deviceHint,
+    deviceId,
+    t,
+    scaleConfigured,
+    applyLiveReading,
+    onPortResolved,
+  ]);
 
   const weightKg = useMemo(() => {
     const n = Number(buffer);
@@ -112,6 +164,8 @@ export default function WebPosWeightModal({
     () => roundMoney2(Math.max(0, weightKg) * Math.max(0, pricePerKg)),
     [weightKg, pricePerKg]
   );
+
+  const displayPort = activePort || (fixedPort ? formatScalePortLabel(fixedPort) : '');
 
   if (!open) return null;
 
@@ -141,10 +195,7 @@ export default function WebPosWeightModal({
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
-              onClick={() => {
-                setEntryUnit('kg');
-                setBuffer('');
-              }}
+              onClick={() => switchEntryUnit('kg')}
               className={`rounded-lg py-2 text-xs font-bold uppercase ${
                 entryUnit === 'kg'
                   ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
@@ -155,10 +206,7 @@ export default function WebPosWeightModal({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setEntryUnit('g');
-                setBuffer('');
-              }}
+              onClick={() => switchEntryUnit('g')}
               className={`rounded-lg py-2 text-xs font-bold uppercase ${
                 entryUnit === 'g'
                   ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
@@ -190,11 +238,23 @@ export default function WebPosWeightModal({
                 {t('webPosScaleAgentOffline')}
               </p>
             ) : (
-              <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
-                {scaleReading
-                  ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
-                  : scaleMsg || t('webPosScaleWaiting')}
-              </p>
+              <div className="space-y-0.5 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
+                <p>
+                  {scaleReading
+                    ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
+                    : scaleMsg || t('webPosScaleWaiting')}
+                </p>
+                {displayPort ? (
+                  <p>
+                    {t('webPosScalePort')}: {displayPort}
+                    {activePort &&
+                    fixedPort &&
+                    formatScalePortLabel(activePort) !== formatScalePortLabel(fixedPort)
+                      ? ` (${t('webPosScalePortReconnected')})`
+                      : ''}
+                  </p>
+                ) : null}
+              </div>
             )}
           </div>
 
@@ -202,12 +262,16 @@ export default function WebPosWeightModal({
             mode="price"
             onModeChange={() => undefined}
             buffer={buffer}
-            onBufferChange={setBuffer}
+            onBufferChange={(value) => {
+              manualOverrideRef.current = true;
+              setBuffer(value);
+            }}
             onApply={() => {
               if (weightKg <= 0) return;
               onConfirm(weightKg);
             }}
             showModeButtons={false}
+            integerOnly={entryUnit === 'g'}
             applyLabel={t('confirm')}
             applyDisabled={weightKg <= 0}
           />

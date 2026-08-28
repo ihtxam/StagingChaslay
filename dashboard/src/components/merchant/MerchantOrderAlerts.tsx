@@ -37,9 +37,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const [queue, setQueue] = useState<OnlineOrder[]>([]);
   const [busy, setBusy] = useState(false);
   const [autoAccept, setAutoAccept] = useState(false);
+  const [settingsReady, setSettingsReady] = useState(false);
   const knownIdsRef = useRef<Set<string> | null>(null);
   const unactionedRef = useRef<Set<string>>(new Set());
   const audioUnlockedRef = useRef(false);
+  const autoAcceptRef = useRef(autoAccept);
 
   useEffect(() => {
     document.documentElement.lang = speechLocale(locale);
@@ -58,12 +60,29 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
-    void api.get('/merchant/settings').then((res) => {
-      const s = res.data?.settings || res.data || {};
-      setAutoAccept(readDeliveryAutoAccept(s));
-    }).catch(() => {});
+    if (!enabled) {
+      setSettingsReady(false);
+      return;
+    }
+    setSettingsReady(false);
+    void api
+      .get('/merchant/settings')
+      .then((res) => {
+        const s = res.data?.settings || res.data || {};
+        setAutoAccept(readDeliveryAutoAccept(s));
+      })
+      .catch(() => {})
+      .finally(() => setSettingsReady(true));
   }, [enabled]);
+
+  /** Re-seed known IDs when auto-accept loads/changes — avoids false beeps for existing preparing orders. */
+  useEffect(() => {
+    if (!settingsReady) return;
+    if (autoAcceptRef.current !== autoAccept) {
+      autoAcceptRef.current = autoAccept;
+      knownIdsRef.current = null;
+    }
+  }, [autoAccept, settingsReady]);
 
   const markActioned = useCallback((orderId: string) => {
     unactionedRef.current.delete(orderId);
@@ -146,20 +165,22 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   }, [autoAccept, enabled, t]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !settingsReady) {
       stopOrderAlertLoop();
-      knownIdsRef.current = null;
-      unactionedRef.current.clear();
-      setQueue([]);
+      if (!enabled) {
+        knownIdsRef.current = null;
+        unactionedRef.current.clear();
+        setQueue([]);
+      }
       return;
     }
     void poll();
     const id = window.setInterval(() => void poll(), 8000);
     return () => {
-      window.clearInterval(id);
+      clearInterval(id);
       stopOrderAlertLoop();
     };
-  }, [enabled, poll]);
+  }, [enabled, settingsReady, poll]);
 
   useEffect(() => {
     if (!document.hidden && queue.length === 0) {

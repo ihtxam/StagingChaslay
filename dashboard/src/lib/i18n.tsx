@@ -1099,9 +1099,11 @@ const en: Dict = {
   webPosScaleAgentOffline: 'Start Print Agent on this PC to read the USB scale (manual entry still works).',
   webPosScalePortMissing: 'Configure the scale in Settings → Print (Scan scale and tap the device name).',
   webPosScaleReadFailed: 'Could not read scale',
+  webPosScalePort: 'Port',
+  webPosScalePortReconnected: 'reconnected',
   settingsScaleTitle: 'Scale (Aclas USB)',
   settingsScaleHint:
-    'Connect the scale to this PC, start Reborn Print Agent, then scan and tap the device (for example USB-SERIAL CH340). We remember the name, not just the COM port, so USB replugs keep working.',
+    'Connect the scale to this PC, start Reborn Print Agent, then scan and tap the device (for example USB-SERIAL CH340). We remember the device name and USB id — not just COM4 — so the POS reconnects automatically after unplug/replug even when Windows assigns a new port.',
   settingsScaleScan: 'Scan scale',
   settingsScaleScanning: 'Scanning…',
   settingsScaleNoPorts: 'No serial devices found — connect the scale via USB and scan again.',
@@ -4432,9 +4434,11 @@ const fr: Dict = {
   webPosScalePortMissing:
     'Configurez le port COM balance dans Paramètres → Impression (Scanner la balance).',
   webPosScaleReadFailed: 'Lecture balance impossible',
+  webPosScalePort: 'Port',
+  webPosScalePortReconnected: 'reconnecté',
   settingsScaleTitle: 'Balance (Aclas USB)',
   settingsScaleHint:
-    'Branchez la balance sur ce PC, démarrez l’agent d’impression, scannez puis touchez le port COM — enregistrement automatique.',
+    'Branchez la balance sur ce PC, démarrez l’agent d’impression, scannez puis touchez l’appareil (ex. USB-SERIAL CH340). Nous mémorisons le nom et l’id USB — pas seulement le COM — pour reconnecter automatiquement après débranchement.',
   settingsScaleScan: 'Scanner la balance',
   settingsScaleScanning: 'Scan en cours…',
   settingsScaleNoPorts: 'Aucun port COM — branchez la balance en USB et rescannez.',
@@ -7731,9 +7735,11 @@ const de: Dict = {
   webPosScalePortMissing:
     'COM-Port der Waage unter Einstellungen → Druck konfigurieren (Waage scannen).',
   webPosScaleReadFailed: 'Waage konnte nicht gelesen werden',
+  webPosScalePort: 'Port',
+  webPosScalePortReconnected: 'wieder verbunden',
   settingsScaleTitle: 'Waage (Aclas USB)',
   settingsScaleHint:
-    'Waage an diesen PC anschliessen, Druckagent starten, scannen und COM-Port antippen — wird automatisch gespeichert.',
+    'Waage an diesen PC anschliessen, Druckagent starten, Gerät scannen und antippen (z. B. USB-SERIAL CH340). Wir speichern Gerätename und USB-ID — nicht nur COM — damit die Kasse nach Abziehen automatisch wieder verbindet.',
   settingsScaleScan: 'Waage scannen',
   settingsScaleScanning: 'Scanne…',
   settingsScaleNoPorts: 'Keine COM-Ports gefunden — Waage per USB anschliessen und erneut scannen.',

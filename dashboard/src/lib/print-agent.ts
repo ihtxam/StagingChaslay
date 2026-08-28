@@ -564,7 +564,7 @@ export async function readScaleWeight(
   port: string,
   timeoutMs = 2500,
   opts?: { hint?: string | null; deviceId?: string | null }
-): Promise<{ reading: ScaleReading | null; message?: string }> {
+): Promise<{ reading: ScaleReading | null; message?: string; resolvedPort?: string }> {
   const normalized = normalizeScalePort(port);
   if (!normalized && !opts?.hint && !opts?.deviceId) {
     throw new Error('COM port required (e.g. COM3)');
@@ -579,6 +579,7 @@ export async function readScaleWeight(
   return {
     reading: (data?.reading as ScaleReading | null) || null,
     message: data?.message ? String(data.message) : undefined,
+    resolvedPort: data?.resolvedPort ? formatScalePortLabel(String(data.resolvedPort)) : undefined,
   };
 }
 

@@ -68,6 +68,7 @@ import { localDateTimeToIso, type StoreHours } from '@/lib/shop-hours';
 import {
   browserPrintText,
   findPrinterHealCandidates,
+  formatScalePortLabel,
   getPrintAgentHealth,
   isConfiguredPrinterMissing,
   isPrintAgentVersionOutdated,
@@ -893,6 +894,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [unactionedOrderCount, setUnactionedOrderCount] = useState(0);
   const [newOrderAlertQueue, setNewOrderAlertQueue] = useState<OnlineOrder[]>([]);
   const [deliveryAutoAccept, setDeliveryAutoAccept] = useState(false);
+  const [deliverySettingsReady, setDeliverySettingsReady] = useState(false);
+  const deliveryAutoAcceptRef = useRef(deliveryAutoAccept);
   const [alertRejectOrder, setAlertRejectOrder] = useState<OnlineOrder | null>(null);
   const [alertActionBusy, setAlertActionBusy] = useState(false);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
@@ -2369,14 +2372,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
+    setDeliverySettingsReady(false);
     void api
       .get('/merchant/settings')
       .then((res) => {
         const s = res.data?.settings || res.data || {};
         setDeliveryAutoAccept(readDeliveryAutoAccept(s));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDeliverySettingsReady(true));
   }, []);
+
+  useEffect(() => {
+    if (!deliverySettingsReady) return;
+    if (deliveryAutoAcceptRef.current !== deliveryAutoAccept) {
+      deliveryAutoAcceptRef.current = deliveryAutoAccept;
+      knownOnlineIdsRef.current = null;
+    }
+  }, [deliveryAutoAccept, deliverySettingsReady]);
 
   const pollOnlineOrders = useCallback(async () => {
     try {
@@ -2605,15 +2618,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [posView, ordersChannelPref]);
 
   useEffect(() => {
-    if (pinGateRequired || loading) {
-      knownOnlineIdsRef.current = null;
-      knownReservationIdsRef.current = null;
-      unactionedOrderIdsRef.current.clear();
-      setUnactionedOrderCount(0);
-      setNewOrderAlertQueue([]);
-      setPendingReservationAlerts([]);
-      setReservationPendingCount(0);
-      stopOrderAlertLoop();
+    if (pinGateRequired || loading || !deliverySettingsReady) {
+      if (pinGateRequired || loading) {
+        knownOnlineIdsRef.current = null;
+        knownReservationIdsRef.current = null;
+        unactionedOrderIdsRef.current.clear();
+        setUnactionedOrderCount(0);
+        setNewOrderAlertQueue([]);
+        setPendingReservationAlerts([]);
+        setReservationPendingCount(0);
+        stopOrderAlertLoop();
+      }
       return;
     }
     void pollOnlineOrders();
@@ -2622,7 +2637,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearInterval(id);
       stopOrderAlertLoop();
     };
-  }, [pinGateRequired, loading, pollOnlineOrders]);
+  }, [pinGateRequired, loading, deliverySettingsReady, pollOnlineOrders]);
 
   useEffect(() => {
     if (!reservationsPosUiEnabled || pinGateRequired || loading) {
@@ -2696,6 +2711,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPrintSettings(next);
     void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
   }, [agentOk, printersReady, printers, printerName, printSettings, t]);
+
+  const scalePortHealRef = useRef<string | null>(null);
+
+  const healScalePort = useCallback(
+    (resolvedPort: string) => {
+      if (!printSettings) return;
+      const want = formatScalePortLabel(resolvedPort);
+      const have = formatScalePortLabel(printSettings.scaleComPort || '');
+      if (!want || want === have) return;
+      if (scalePortHealRef.current === want) return;
+      scalePortHealRef.current = want;
+      const next = { ...printSettings, scaleComPort: want, scaleEnabled: true };
+      setPrintSettings(next);
+      void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+    },
+    [printSettings]
+  );
 
   useEffect(() => {
     localStorage.setItem('manupos_webpos_autoprint', autoPrint ? '1' : '0');
@@ -9749,6 +9781,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         configuredPort={printSettings?.scaleComPort}
         configuredDeviceName={printSettings?.scaleDeviceName}
         configuredDeviceId={printSettings?.scaleDeviceId}
+        onPortResolved={healScalePort}
         onClose={() => setPendingWeighed(null)}
         onConfirm={(weightKg) => {
           if (!pendingWeighed) return;
