@@ -5,42 +5,9 @@
 	}
 }
 
-# Marketing apex + www. Point Emergent/landing HTML here later; until then send visitors to the app.
+# Marketing apex + www — send visitors to the app until a landing page exists.
 rebornsense.com, www.rebornsense.com {
 	redir https://app.rebornsense.com{uri} permanent
-}
-
-# Reborn production — ManuPOS stack + Android /v1 API
-api.rebornsense.com {
-	handle /downloads/* {
-		reverse_proxy api:3000
-	}
-
-	encode gzip zstd
-
-	handle /health {
-		reverse_proxy api:3000
-	}
-
-	handle /v1/receipts* {
-		reverse_proxy api:3000
-	}
-
-	handle /v1/* {
-		reverse_proxy api:3000
-	}
-
-	handle /api/* {
-		reverse_proxy api:3000
-	}
-
-	handle /receipt/* {
-		reverse_proxy dashboard:80
-	}
-
-	handle {
-		reverse_proxy api:3000
-	}
 }
 
 app.rebornsense.com {
@@ -75,8 +42,28 @@ app.rebornsense.com {
 	}
 }
 
-admin.rebornsense.com {
-	redir https://app.rebornsense.com{uri} permanent
+api.rebornsense.com {
+	handle /downloads/* {
+		reverse_proxy api:3000
+	}
+
+	encode gzip zstd
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy api:3000
+	}
 }
 
 shop.rebornsense.com {

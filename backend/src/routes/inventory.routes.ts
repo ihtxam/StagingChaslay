@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, requirePermission, setMerchantContext } from "@/middleware/auth.middleware";
-import { requireRestaurantModule } from "@/middleware/business-module.middleware";
+import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { InventoryLicenseError, InventoryService } from "@/services/inventory.service";
 import { DemoInventoryService } from "@/services/demo-inventory.service";
 
@@ -10,6 +10,14 @@ router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
 router.use(requirePermission("MANAGE_INVENTORY"));
+router.use(requireRetailModule);
+
+function denyInventoryRecipes(_req: Request, res: Response) {
+  return res.status(403).json({
+    error: "Recipes and consumption reports are not available in retail inventory",
+    code: "INVENTORY_RECIPES_DISABLED",
+  });
+}
 
 function handleError(res: Response, error: unknown, fallback: string) {
   if (error instanceof InventoryLicenseError) {
@@ -91,8 +99,6 @@ router.put("/settings", async (req: Request, res: Response) => {
       wasteFactor: req.body?.wasteFactor != null ? Number(req.body.wasteFactor) : undefined,
       autoReorderEmailEnabled:
         req.body?.autoReorderEmailEnabled != null ? !!req.body.autoReorderEmailEnabled : undefined,
-      expiryAlertDays:
-        req.body?.expiryAlertDays != null ? Number(req.body.expiryAlertDays) : undefined,
     });
     res.json({ success: true, ...license });
   } catch (error) {
@@ -185,18 +191,7 @@ router.get("/low-stock", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/expiring-soon", async (req: Request, res: Response) => {
-  try {
-    const merchantId = req.merchantId;
-    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
-    const data = await InventoryService.listExpiringSoon(merchantId);
-    res.json({ success: true, ...data });
-  } catch (error) {
-    handleError(res, error, "Failed to load expiring stock");
-  }
-});
-
-router.get("/usage", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/usage", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const days = Number(req.query.days) || 30;
     const rows = await InventoryService.usageReport(req.merchantId!, days);
@@ -392,29 +387,7 @@ router.get("/purchase-report", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/dead-stock", async (req: Request, res: Response) => {
-  try {
-    const report = await InventoryService.deadStockReport(
-      req.merchantId!,
-      Number(req.query.days) || 90
-    );
-    res.json({ success: true, report });
-  } catch (error) {
-    handleError(res, error, "Failed to load dead stock report");
-  }
-});
-
-router.post("/stop-ordering", async (req: Request, res: Response) => {
-  try {
-    const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
-    const result = await InventoryService.stopOrderingItems(req.merchantId!, itemIds);
-    res.json({ success: true, ...result });
-  } catch (error) {
-    handleError(res, error, "Failed to update items");
-  }
-});
-
-router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/cookbook", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const entries = await InventoryService.listCookbook(req.merchantId!);
     res.json({ success: true, entries });
@@ -423,7 +396,7 @@ router.get("/cookbook", requireRestaurantModule, async (req: Request, res: Respo
   }
 });
 
-router.get("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
+router.get("/products/:productId/recipe", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.getRecipe(req.merchantId!, req.params.productId);
     res.json({ success: true, recipe });
@@ -432,7 +405,7 @@ router.get("/products/:productId/recipe", requireRestaurantModule, async (req: R
   }
 });
 
-router.put("/products/:productId/recipe", requireRestaurantModule, async (req: Request, res: Response) => {
+router.put("/products/:productId/recipe", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const recipe = await InventoryService.setRecipe(
       req.merchantId!,

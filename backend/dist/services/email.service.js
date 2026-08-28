@@ -83,6 +83,11 @@ class EmailService {
         const name = String(merchantName || "").trim();
         return name || "Shop";
     }
+    /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+    static merchantSenderName(merchantName) {
+        const name = String(merchantName || "").trim();
+        return name || "Shop";
+    }
     static async resolveConfig(merchantId) {
         let merchantName = null;
         let useOwnDelivery = false;
