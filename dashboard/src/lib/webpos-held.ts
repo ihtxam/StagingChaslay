@@ -13,6 +13,11 @@ export type HeldCartMeta = {
   kitchenTicketKey?: string | null;
   orderNote?: string | null;
   billDiscount?: { percent?: number; amount?: number } | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  shippingAddress?: string | null;
 };
 
 export function parseHeldCartJson(raw: unknown): HeldCartMeta {
@@ -47,6 +52,11 @@ export function parseHeldCartJson(raw: unknown): HeldCartMeta {
     kitchenTicketKey: typeof o.kitchenTicketKey === 'string' ? o.kitchenTicketKey : null,
     orderNote: typeof o.orderNote === 'string' ? o.orderNote : null,
     billDiscount: o.billDiscount && typeof o.billDiscount === 'object' ? (o.billDiscount as HeldCartMeta['billDiscount']) : null,
+    customerId: typeof o.customerId === 'string' ? o.customerId : null,
+    customerName: typeof o.customerName === 'string' ? o.customerName : null,
+    customerPhone: typeof o.customerPhone === 'string' ? o.customerPhone : null,
+    customerEmail: typeof o.customerEmail === 'string' ? o.customerEmail : null,
+    shippingAddress: typeof o.shippingAddress === 'string' ? o.shippingAddress : null,
   };
 }
 

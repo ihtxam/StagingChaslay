@@ -4434,6 +4434,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ]
       .filter(Boolean)
       .join(' · ');
+    const heldCustomerName = selectedCustomer
+      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(' ')
+      : null;
+    const heldShippingAddress = selectedCustomer
+      ? [
+          selectedCustomer.defaultAddress,
+          selectedCustomer.defaultZip,
+          selectedCustomer.defaultCity,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : null;
     const cartJson = {
       cart: cartLines,
       channel: persistChannel,
@@ -4445,6 +4457,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       kitchenTicketKey: ticket.display,
       billDiscount,
       orderNote,
+      customerId: selectedCustomer?.id || null,
+      customerName: heldCustomerName || null,
+      customerPhone: selectedCustomer?.phone || null,
+      customerEmail: selectedCustomer?.email || null,
+      shippingAddress: heldShippingAddress || null,
     };
 
     // Atomic server upsert — do not delete-then-insert (that lost kitchen tickets

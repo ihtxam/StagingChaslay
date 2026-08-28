@@ -108,7 +108,11 @@ function heldToMerchantOrder(h: HeldRow): MerchantOrder {
     refundAmount: 0,
     staffName: h.staffName || null,
     tableLabel: meta.tableLabel,
-    customerName: meta.tableLabel,
+    customerId: meta.customerId || null,
+    customerName: meta.customerName || null,
+    customerPhone: meta.customerPhone || null,
+    customerEmail: meta.customerEmail || null,
+    shippingAddress: meta.shippingAddress || null,
     createdAt: h.createdAt || h.updatedAt || new Date().toISOString(),
     items: lines.map((l, i) => ({
       id: l.lineId || `held-line-${i}`,
