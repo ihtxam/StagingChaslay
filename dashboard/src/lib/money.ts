@@ -8,6 +8,12 @@ export function roundMoney2(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
 
+/** Round weight to 3 decimal kg (gram precision). */
+export function roundWeightKg(kg: number): number {
+  if (!Number.isFinite(kg)) return 0;
+  return Math.round((kg + Number.EPSILON) * 1000) / 1000;
+}
+
 /** Round to nearest 0.05 CHF. */
 export function roundTo005(amount: number): number {
   if (!Number.isFinite(amount)) return 0;

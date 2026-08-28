@@ -36,6 +36,10 @@ function formatScaleBuffer(kg: number, unit: 'kg' | 'g'): string {
   return unit === 'g' ? String(Math.round(kg * 1000)) : String(Math.round(kg * 1000) / 1000);
 }
 
+const POLL_INTERVAL_MS = 700;
+const READ_TIMEOUT_MS = 1200;
+const REOPEN_SETTLE_MS = 350;
+
 export default function WebPosWeightModal({
   open,
   productName,
@@ -57,14 +61,17 @@ export default function WebPosWeightModal({
   const [agentOk, setAgentOk] = useState(false);
   const manualOverrideRef = useRef(false);
   const entryUnitRef = useRef<'kg' | 'g'>('kg');
+  const pollSessionRef = useRef(0);
+  const portRef = useRef('');
+  const onPortResolvedRef = useRef(onPortResolved);
 
   const fixedPort = (configuredPort || '').trim();
-  const portLabel = activePort || (fixedPort ? formatScalePortLabel(fixedPort) : '');
   const deviceHint = (configuredDeviceName || '').trim();
   const deviceId = (configuredDeviceId || '').trim();
   const scaleConfigured = !!(fixedPort || deviceHint || deviceId);
 
   entryUnitRef.current = entryUnit;
+  onPortResolvedRef.current = onPortResolved;
 
   const applyLiveReading = useCallback((reading: ScaleReading, unit: 'kg' | 'g') => {
     if (manualOverrideRef.current) return;
@@ -95,64 +102,81 @@ export default function WebPosWeightModal({
 
   useEffect(() => {
     if (!open) return;
+    const session = ++pollSessionRef.current;
     setBuffer('');
     setScaleReading(null);
     setScaleMsg('');
-    setActivePort('');
     manualOverrideRef.current = false;
     const initialUnit = weightUnit === 'g' ? 'g' : 'kg';
     setEntryUnit(initialUnit);
     entryUnitRef.current = initialUnit;
-    if (!scaleConfigured) return;
+    const initialPort = fixedPort ? formatScalePortLabel(fixedPort) : '';
+    portRef.current = initialPort;
+    setActivePort(initialPort);
+    if (!scaleConfigured) {
+      setAgentOk(false);
+      return;
+    }
+    setAgentOk(false);
     void (async () => {
       const ok = await isPrintAgentAvailable();
+      if (pollSessionRef.current !== session) return;
       setAgentOk(ok);
     })();
-  }, [open, weightUnit, scaleConfigured]);
+  }, [open, weightUnit, scaleConfigured, fixedPort]);
 
   useEffect(() => {
     if (!open || !scaleConfigured || !agentOk) return;
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const res = await readScaleWeight(portLabel, 800, {
-          hint: deviceHint || null,
-          deviceId: deviceId || null,
-        });
-        if (cancelled) return;
-        if (res.resolvedPort) {
-          const resolved = formatScalePortLabel(res.resolvedPort);
-          setActivePort(resolved);
-          onPortResolved?.(resolved);
+
+    const session = pollSessionRef.current;
+    let stopped = false;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+      });
+
+    const pollLoop = async () => {
+      await sleep(REOPEN_SETTLE_MS);
+      while (!stopped && pollSessionRef.current === session) {
+        const port = portRef.current;
+        try {
+          const res = await readScaleWeight(port, READ_TIMEOUT_MS, {
+            hint: deviceHint || null,
+            deviceId: deviceId || null,
+          });
+          if (stopped || pollSessionRef.current !== session) return;
+          if (res.resolvedPort) {
+            const resolved = formatScalePortLabel(res.resolvedPort);
+            if (resolved !== portRef.current) {
+              portRef.current = resolved;
+              setActivePort(resolved);
+              onPortResolvedRef.current?.(resolved);
+            }
+          }
+          if (res.reading) {
+            setScaleReading(res.reading);
+            setScaleMsg('');
+            applyLiveReading(res.reading, entryUnitRef.current);
+          } else if (res.message) {
+            setScaleMsg(res.message);
+          }
+        } catch (e: any) {
+          if (!stopped && pollSessionRef.current === session) {
+            setScaleMsg(e?.message || t('webPosScaleReadFailed'));
+          }
         }
-        if (res.reading) {
-          setScaleReading(res.reading);
-          setScaleMsg('');
-          applyLiveReading(res.reading, entryUnitRef.current);
-        } else if (res.message) {
-          setScaleMsg(res.message);
-        }
-      } catch (e: any) {
-        if (!cancelled) setScaleMsg(e?.message || t('webPosScaleReadFailed'));
+        if (stopped || pollSessionRef.current !== session) return;
+        await sleep(POLL_INTERVAL_MS);
       }
     };
-    void tick();
-    const id = window.setInterval(() => void tick(), 600);
+
+    void pollLoop();
+
     return () => {
-      cancelled = true;
-      window.clearInterval(id);
+      stopped = true;
     };
-  }, [
-    open,
-    agentOk,
-    portLabel,
-    deviceHint,
-    deviceId,
-    t,
-    scaleConfigured,
-    applyLiveReading,
-    onPortResolved,
-  ]);
+  }, [open, agentOk, deviceHint, deviceId, t, scaleConfigured, applyLiveReading]);
 
   const weightKg = useMemo(() => {
     const n = Number(buffer);
@@ -171,8 +195,8 @@ export default function WebPosWeightModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-sm rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-4 py-3">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-5 py-3">
           <div className="min-w-0">
             <h3 className="truncate font-semibold">
               {t('webPosEnterWeight')} — {productName}
@@ -191,15 +215,15 @@ export default function WebPosWeightModal({
           </button>
         </div>
 
-        <div className="space-y-3 p-4">
-          <div className="grid grid-cols-2 gap-1.5">
+        <div className="space-y-3 p-5">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => switchEntryUnit('kg')}
-              className={`rounded-lg py-2 text-xs font-bold uppercase ${
+              className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
                 entryUnit === 'kg'
                   ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                  : 'webpos-keypad-key !py-2 text-xs'
+                  : 'webpos-keypad-key !py-2.5 text-xs'
               }`}
             >
               kg
@@ -207,18 +231,18 @@ export default function WebPosWeightModal({
             <button
               type="button"
               onClick={() => switchEntryUnit('g')}
-              className={`rounded-lg py-2 text-xs font-bold uppercase ${
+              className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
                 entryUnit === 'g'
                   ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                  : 'webpos-keypad-key !py-2 text-xs'
+                  : 'webpos-keypad-key !py-2.5 text-xs'
               }`}
             >
               g
             </button>
           </div>
 
-          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-4 py-3 text-right">
-            <p className="text-2xl font-semibold tabular-nums">
+          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-5 py-4 text-right">
+            <p className="text-3xl font-semibold tabular-nums">
               {buffer || '0'} {entryUnit}
             </p>
             <p className="mt-1 text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
@@ -226,7 +250,7 @@ export default function WebPosWeightModal({
             </p>
           </div>
 
-          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] p-2">
+          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] p-3">
             <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--webpos-text-muted,var(--text-muted))]">
               <Scale size={14} />
               {t('webPosScale')}

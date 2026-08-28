@@ -29,6 +29,11 @@ import {
   type Product,
 } from './types';
 
+function formatCartQtyBadge(qty: number, weighed: boolean): string | number {
+  if (!weighed) return Math.round(qty);
+  return Number(qty.toFixed(3));
+}
+
 export type ProductGridTileSize = 'sm' | 'md' | 'lg';
 export type ProductGridSort = 'default' | 'alpha' | 'bestseller';
 
@@ -335,7 +340,7 @@ export default function WebPosProductArea({
                   <div className="relative h-1.5 w-full rounded-b-lg" style={{ backgroundColor: accent }} />
                   {qty > 0 ? (
                     <span className="absolute bottom-2 right-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md bg-stone-900 px-1 text-xs font-bold text-white">
-                      {qty}
+                      {formatCartQtyBadge(qty, isWeighed)}
                     </span>
                   ) : null}
                 </button>

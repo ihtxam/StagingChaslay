@@ -7,7 +7,7 @@ import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
-import { roundMoney2, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
+import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
@@ -1062,8 +1062,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const cartQtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
+    const weighedIds = new Set<string>();
     for (const l of cart) {
+      if (l.isWeighed) weighedIds.add(l.productId);
       map.set(l.productId, (map.get(l.productId) || 0) + l.quantity);
+    }
+    for (const productId of weighedIds) {
+      const total = map.get(productId);
+      if (total != null) map.set(productId, roundWeightKg(total));
     }
     return map;
   }, [cart]);
@@ -2999,7 +3005,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !!p.soldByWeight || p.productType === 'weighed';
 
   const pushWeighedProduct = (p: Product, weightKg: number) => {
-    const kg = roundMoney2(Math.max(0, weightKg));
+    const kg = roundWeightKg(Math.max(0, weightKg));
     if (kg <= 0) return;
     const pricePerKg = roundMoney2(Number(p.price) || 0);
     const lineTotal = roundMoney2(pricePerKg * kg);
