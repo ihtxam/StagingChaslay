@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.9.0";
+const VERSION = "1.9.1";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.9.0 in package.json, server.js, and download manifests", () => {
+test("print-agent version is 1.9.1 in package.json, server.js, and download manifests", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -32,6 +32,9 @@ test("print-agent version is 1.9.0 in package.json, server.js, and download mani
   assert.equal(legacy.version, VERSION);
   assert.match(server, /spooler-only-writeprinter/);
   assert.match(server, /cloud-relay/);
+  assert.match(server, /bt-com-paced-spooler/);
+  assert.match(server, /enqueuePrint/);
+  assert.match(server, /timeout: 180000/);
 });
 
 test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-mode)", () => {
@@ -45,6 +48,9 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.equal(src.includes("Wait-PrinterDrain"), false);
   assert.equal(src.includes("SlowBluetooth"), false);
   assert.match(src, /chunkSize = 4096/);
+  assert.match(src, /Test-NeedsPacedWrite/);
+  assert.match(src, /writeChunk = 192/);
+  assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
   assert.equal(/ChunkSize\s*=\s*64/.test(src), false);
   assert.equal(/ChunkSize\s*=\s*128/.test(src), false);
   assert.match(src, /Send-RawToPrinter -Printer \$PrinterName -Data \$bytes/);
@@ -60,6 +66,9 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.equal(src.includes("Resolve-BtSlowMode"), false);
   assert.equal(src.includes("btSlowMode"), false);
   assert.match(src, /chunkSize = 4096/);
+  assert.match(src, /Test-NeedsPacedWrite/);
+  assert.match(src, /writeChunk = 192/);
+  assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
 });
 
 test("server.js does not copy or invoke COM-direct / BT slow-mode", () => {

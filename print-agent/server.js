@@ -21,7 +21,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.0";
+const VERSION = "1.9.1";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -604,6 +604,7 @@ async function runPowerShell(scriptPath, args, printerName) {
       windowsHide: true,
       maxBuffer: 10 * 1024 * 1024,
       encoding: "utf8",
+      timeout: 180000,
     });
     if (stderr && stderr.trim()) {
       console.warn("[print-agent]", stderr.trim());
@@ -718,6 +719,17 @@ function buildPrintErrorPayload(error, printerName) {
   const payload = { error: errorText };
   if (printerName) payload.printer = String(printerName).trim();
   return payload;
+}
+
+let printChain = Promise.resolve();
+
+function enqueuePrint(task) {
+  const run = printChain.then(task, task);
+  printChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 async function printRaw({ printerName, dataBase64, dryRun }) {
@@ -906,7 +918,9 @@ async function drainCloudPrintJobs() {
       };
       if (p.kind === "escpos" && p.dataBase64) {
         try {
-          await printRaw({ printerName: p.printerName, dataBase64: p.dataBase64, text: p.text });
+          await enqueuePrint(() =>
+            printRaw({ printerName: p.printerName, dataBase64: p.dataBase64, text: p.text })
+          );
           if (p.alertKind === "reservation" || p.alertKind === "online_order" || p.jobKind === "kitchen") {
             beepAlert();
           }
@@ -972,6 +986,7 @@ function startServer() {
         "spooler-only-writeprinter",
         "print-dry-run",
         "cloud-relay",
+        "bt-com-paced-spooler",
       ],
     });
   });
@@ -1015,10 +1030,12 @@ function startServer() {
   app.post("/print", async (req, res) => {
     try {
       const body = req.body || {};
-      const result = await printRaw({
-        ...body,
-        dryRun: body.dryRun === true,
-      });
+      const result = await enqueuePrint(() =>
+        printRaw({
+          ...body,
+          dryRun: body.dryRun === true,
+        })
+      );
       if (result && typeof result === "object" && result.dryRun) {
         res.json({ ok: true, ...result });
         return;

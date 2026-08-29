@@ -333,8 +333,30 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.8.9+ is the simple spooler-only WritePrinter agent (no COM-direct / BT slow-mode). */
-export const MIN_PRINT_AGENT_VERSION = '1.9.0';
+/** 1.9.1+ paces Bluetooth / virtual-COM writes so kitchen tickets do not overflow the radio. */
+export const MIN_PRINT_AGENT_VERSION = '1.9.1';
+
+const BT_COM_PRINTER_RE = /com\d+|bth|bluetooth|ble\b|rfcomm|serial over/i;
+
+/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
+export const BLUETOOTH_KITCHEN_SETTLE_MS = 750;
+
+export function looksLikeBluetoothOrComPrinter(
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint'> | string | null
+): boolean {
+  if (!printer) return false;
+  if (typeof printer === 'string') return BT_COM_PRINTER_RE.test(printer);
+  return BT_COM_PRINTER_RE.test(
+    [printer.name, printer.portName, printer.driverName, printer.matchHint].filter(Boolean).join(' ')
+  );
+}
+
+export async function settleAfterBluetoothKitchenPrint(
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint'> | string | null
+): Promise<void> {
+  if (!looksLikeBluetoothOrComPrinter(printer)) return;
+  await new Promise((resolve) => setTimeout(resolve, BLUETOOTH_KITCHEN_SETTLE_MS));
+}
 
 /** Print Bridge APK uses 0.x semver; must not be compared to MIN_PRINT_AGENT_VERSION. */
 export function isBridgeVersion(version: string): boolean {

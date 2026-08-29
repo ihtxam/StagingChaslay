@@ -12,6 +12,9 @@ class BluetoothEscPosDriver : PrinterDriver {
     override val key: String = "bluetooth"
 
     private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private val sockets = HashMap<String, CachedSocket>()
+
+    private data class CachedSocket(val socket: BluetoothSocket, var lastUsedMs: Long)
 
     @SuppressLint("MissingPermission")
     override fun discover(context: Context): List<PrinterEndpoint> {
@@ -37,31 +40,68 @@ class BluetoothEscPosDriver : PrinterDriver {
             ?: return Result.failure(IllegalStateException("Bluetooth printer not paired"))
         return try {
             adapter.cancelDiscovery()
-            val socket = openBluetoothSocket(device)
+            evictStaleSockets()
+            val socket = reuseOrOpen(address, device)
             try {
-                val out = socket.outputStream
-                var offset = 0
-                val chunk = 256
-                val delayMs = 25L
-                while (offset < data.size) {
-                    val len = minOf(chunk, data.size - offset)
-                    out.write(data, offset, len)
-                    out.flush()
-                    offset += len
-                    if (offset < data.size) {
-                        Thread.sleep(delayMs)
-                    }
-                }
-                out.flush()
-                // Let the printer drain before closing — avoids truncation and cut loss.
-                Thread.sleep(500)
+                writePaced(socket, data)
+                sockets[address] = CachedSocket(socket, System.currentTimeMillis())
                 Result.success(Unit)
-            } finally {
-                runCatching { socket.close() }
+            } catch (first: Exception) {
+                closeSocket(address)
+                val retry = openBluetoothSocket(device)
+                try {
+                    writePaced(retry, data)
+                    sockets[address] = CachedSocket(retry, System.currentTimeMillis())
+                    Result.success(Unit)
+                } catch (second: Exception) {
+                    runCatching { retry.close() }
+                    Result.failure(second)
+                }
             }
         } catch (e: Exception) {
+            closeSocket(address)
             Result.failure(e)
         }
+    }
+
+    private fun writePaced(socket: BluetoothSocket, data: ByteArray) {
+        val out = socket.outputStream
+        var offset = 0
+        val chunk = 96
+        val delayMs = 40L
+        while (offset < data.size) {
+            val len = minOf(chunk, data.size - offset)
+            out.write(data, offset, len)
+            out.flush()
+            offset += len
+            if (offset < data.size) {
+                Thread.sleep(delayMs)
+            }
+        }
+        out.flush()
+        val drainMs = (400L + data.size / 16L).coerceAtMost(4_000L)
+        Thread.sleep(drainMs)
+    }
+
+    private fun reuseOrOpen(address: String, device: BluetoothDevice): BluetoothSocket {
+        val cached = sockets[address]
+        if (cached != null && cached.socket.isConnected) {
+            cached.lastUsedMs = System.currentTimeMillis()
+            return cached.socket
+        }
+        closeSocket(address)
+        return openBluetoothSocket(device)
+    }
+
+    private fun evictStaleSockets() {
+        val now = System.currentTimeMillis()
+        val stale = sockets.entries.filter { now - it.value.lastUsedMs > SOCKET_KEEP_MS }.map { it.key }
+        stale.forEach { closeSocket(it) }
+    }
+
+    private fun closeSocket(address: String) {
+        val cached = sockets.remove(address) ?: return
+        runCatching { cached.socket.close() }
     }
 
     @SuppressLint("MissingPermission")
@@ -96,5 +136,9 @@ class BluetoothEscPosDriver : PrinterDriver {
     private fun bluetoothAdapter(context: Context): BluetoothAdapter? {
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         return manager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+    }
+
+    companion object {
+        private const val SOCKET_KEEP_MS = 12_000L
     }
 }
