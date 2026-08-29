@@ -1,6 +1,6 @@
-# FoodTruckPOS (RebornPOS)
+# RebornPOS
 
-Native **Android POS** (`app/`) plus **ManuPOS** backend panel, online shop, and `/v1/*` API compatibility.
+Native **Android POS** backend panel, online shop, and `/v1/*` API compatibility.
 
 ## Stack
 
