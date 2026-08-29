@@ -6,7 +6,7 @@
  *   reborn-print-agent.exe              Run the agent (foreground)
  *   reborn-print-agent.exe --install    Install to LocalAppData + Windows Startup
  *   reborn-print-agent.exe --uninstall  Remove Startup entry (keeps files)
- *   chaslay-print-agent.exe --help
+ *   reborn-print-agent.exe --help
  */
 const cors = require("cors");
 const express = require("express");
@@ -47,11 +47,11 @@ async function hideConsoleForUi() {
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class ChaslayConsole {
+public class RebornConsole {
   [DllImport("kernel32.dll")] public static extern bool FreeConsole();
 }
 "@
-[void][ChaslayConsole]::FreeConsole()
+[void][RebornConsole]::FreeConsole()
 `;
     await execFileAsync(
       "powershell.exe",
@@ -193,6 +193,23 @@ function migrateLegacyInstallIfNeeded(targetDir) {
   }
 }
 
+async function retireLegacyInstall() {
+  const legacy = legacyInstallDir();
+  const target = installDir();
+  if (path.resolve(legacy) === path.resolve(target)) return;
+  const runKey = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+  await execFileAsync("reg", ["delete", runKey, "/v", LEGACY_RUN_VALUE_NAME, "/f"], {
+    windowsHide: true,
+  }).catch(() => {});
+  if (!fs.existsSync(legacy)) return;
+  try {
+    fs.rmSync(legacy, { recursive: true, force: true });
+    appendInstallLog(`Removed legacy install folder ${legacy}`);
+  } catch (e) {
+    appendInstallLog(`Legacy folder retained (delete manually): ${legacy} — ${e.message || e}`);
+  }
+}
+
 function installLogPath() {
   return path.join(installDir(), "install.log");
 }
@@ -318,6 +335,9 @@ async function setStartup(enabled, exePath) {
     await execFileAsync("reg", ["add", runKey, "/v", RUN_VALUE_NAME, "/t", "REG_SZ", "/d", quoted, "/f"], {
       windowsHide: true,
     });
+    await execFileAsync("reg", ["delete", runKey, "/v", LEGACY_RUN_VALUE_NAME, "/f"], {
+      windowsHide: true,
+    }).catch(() => {});
   } else {
     await execFileAsync("reg", ["delete", runKey, "/v", RUN_VALUE_NAME, "/f"], {
       windowsHide: true,
@@ -428,6 +448,7 @@ async function doInstall() {
   }
 
   if (running) {
+    await retireLegacyInstall();
     const msg =
       `Reborn Print Agent installed and running on port ${PORT}.\n\n` +
       `Installed to:\n${dir}\n\n` +

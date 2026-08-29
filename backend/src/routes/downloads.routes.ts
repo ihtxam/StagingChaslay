@@ -41,6 +41,11 @@ router.get("/chaslayreborn-print-agent.json", (_req: Request, res: Response) => 
   res.redirect(302, "/downloads/reborn-print-agent.json");
 });
 
+/** @deprecated legacy installer filename — redirect to Reborn download */
+router.get(`/${LEGACY_PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
+  res.redirect(302, `/downloads/${PRINT_AGENT_SETUP_FILE}`);
+});
+
 function sendPrintAgentExe(res: Response, downloadName: string) {
   const filePath = downloadsFilePath(PRINT_AGENT_SETUP_FILE);
   if (!fileMagicOk(filePath, "exe")) {
@@ -51,10 +56,6 @@ function sendPrintAgentExe(res: Response, downloadName: string) {
 
 router.get(`/${PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
   sendPrintAgentExe(res, PRINT_AGENT_SETUP_FILE);
-});
-
-router.get(`/${LEGACY_PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
-  sendPrintAgentExe(res, LEGACY_PRINT_AGENT_SETUP_FILE);
 });
 
 router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
