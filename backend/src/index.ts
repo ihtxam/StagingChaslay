@@ -151,7 +151,8 @@ async function handleSchemaRepair(_req: Request, res: Response) {
     const ok =
       result.missingAfter.length === 0 &&
       result.ordersMissing.length === 0 &&
-      result.orderItemsMissing.length === 0;
+      result.orderItemsMissing.length === 0 &&
+      result.productsMissing.length === 0;
     res.status(ok ? 200 : 500).json({
       status: ok ? "ok" : "error",
       repaired: true,
@@ -159,6 +160,7 @@ async function handleSchemaRepair(_req: Request, res: Response) {
       missingAfter: result.missingAfter,
       ordersMissing: result.ordersMissing,
       orderItemsMissing: result.orderItemsMissing,
+      productsMissing: result.productsMissing,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

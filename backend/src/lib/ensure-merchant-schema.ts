@@ -1329,6 +1329,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   missingAfter: string[];
   ordersMissing: string[];
   orderItemsMissing: string[];
+  productsMissing: string[];
 }> {
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
@@ -1383,14 +1384,32 @@ export async function ensureAllMerchantSchema(): Promise<{
     "order_items",
     REQUIRED_ORDER_ITEMS_COLUMNS
   ).catch(() => [] as string[]);
-  if (missingAfter.length || ordersMissing.length || orderItemsMissing.length) {
+  const stillProducts = await listMissingTableColumns("products", [
+    "visibility",
+    "recipe_yield",
+    "barcode",
+  ]).catch(() => [] as string[]);
+  for (const col of stillProducts) {
+    patchedColumns.delete(col);
+    patchedColumns.delete(`products_${col}`);
+    if (col === "visibility") await runPatch("products_visibility");
+    else if (col === "barcode") await runPatch("products_barcode");
+    else await runPatch("recipe_yield");
+  }
+  const productsMissing = await listMissingTableColumns("products", [
+    "visibility",
+    "recipe_yield",
+    "barcode",
+  ]).catch(() => [] as string[]);
+  if (missingAfter.length || ordersMissing.length || orderItemsMissing.length || productsMissing.length) {
     console.warn("[schema] still missing:", {
       merchants: missingAfter,
       orders: ordersMissing,
       orderItems: orderItemsMissing,
+      products: productsMissing,
     });
   }
-  return { missingBefore, missingAfter, ordersMissing, orderItemsMissing };
+  return { missingBefore, missingAfter, ordersMissing, orderItemsMissing, productsMissing };
 }
 
 /** Run schema patches at startup — await before accepting traffic. */

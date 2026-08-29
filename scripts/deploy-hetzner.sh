@@ -586,7 +586,8 @@ echo "=== Database migrate / seed ==="
 # Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
 docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
 docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
-dc run --rm migrate
+# drizzle-kit push can OOM (exit 137) on small VMs; schema-repair covers DDL.
+dc run --rm migrate || echo "WARNING: migrate job failed or OOM; continuing (schema-repair will patch columns)"
 
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
   echo "=== Apply Adyen feature SQL patches ==="
