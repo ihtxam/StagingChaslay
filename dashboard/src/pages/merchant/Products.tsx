@@ -36,9 +36,12 @@ import {
 } from '@/lib/barcode-labels';
 import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
 import {
+  ALL_CATALOG_CHANNELS,
+  CATALOG_CHANNEL_LABELS,
   DEFAULT_CATALOG_VISIBILITY,
   normalizeCatalogVisibility,
   productVisibleOnChannel,
+  type CatalogChannel,
   type CatalogVisibility,
 } from '@/lib/catalog-visibility';
 
@@ -282,6 +285,7 @@ export default function Products() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [channelFilter, setChannelFilter] = useState<CatalogChannel | ''>('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -496,11 +500,8 @@ export default function Products() {
     const q = search.trim().toLowerCase();
     const categoryById = new Map(categories.map((c) => [c.id, c]));
     return products.filter((product) => {
-      if (!productVisibleOnChannel(
-        product,
-        product.categoryId ? categoryById.get(product.categoryId) : null,
-        'pos'
-      )) {
+      const category = product.categoryId ? categoryById.get(product.categoryId) : null;
+      if (channelFilter && !productVisibleOnChannel(product, category, channelFilter)) {
         return false;
       }
       if (selectedCategory === '__none__' && product.categoryId) return false;
@@ -515,7 +516,7 @@ export default function Products() {
         categoryName(product.categoryId).toLowerCase().includes(q)
       );
     });
-  }, [products, selectedCategory, search, categories]);
+  }, [products, selectedCategory, search, categories, channelFilter]);
 
   const filteredIds = useMemo(() => filteredProducts.map((p) => p.id), [filteredProducts]);
   const allFilteredSelected =
@@ -1249,14 +1250,29 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 muted" size={14} />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('searchProductsPlaceholder')}
-          className="input pl-8"
-        />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 muted" size={14} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchProductsPlaceholder')}
+            className="input pl-8 w-full"
+          />
+        </div>
+        <select
+          className="input sm:w-48"
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value as CatalogChannel | '')}
+          aria-label={t('catalogFilterChannel')}
+        >
+          <option value="">{t('all')}</option>
+          {ALL_CATALOG_CHANNELS.map((ch) => (
+            <option key={ch} value={ch}>
+              {CATALOG_CHANNEL_LABELS[ch]}
+            </option>
+          ))}
+        </select>
       </div>
 
       <section className="card">

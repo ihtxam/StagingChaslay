@@ -44,6 +44,7 @@ export class PackageProvisioningService {
     patch.maxPosPosts = Math.max(0, maxPos);
     patch.maxWaiterPosts = Math.max(0, Number(plan.maxWaiterPosts ?? 0));
     patch.maxStaff = Math.max(0, Number(plan.maxStaff ?? 0));
+    patch.maxLocations = Math.max(1, Number(plan.maxLocations ?? 1));
 
     applyIncludedAddons(patch, plan.includedAddons);
 
@@ -103,6 +104,11 @@ export class PackageProvisioningService {
       case "extra_staff": {
         const current = Number(merchant.maxStaff || 0);
         patch.maxStaff = current === 0 ? qty : current + qty;
+        break;
+      }
+      case "extra_location": {
+        const current = Number(merchant.maxLocations || 0);
+        patch.maxLocations = current === 0 ? qty : current + qty;
         break;
       }
       default:

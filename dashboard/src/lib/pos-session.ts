@@ -1,5 +1,6 @@
 import api from '@/lib/api';
 import { webPosDeviceId } from '@/lib/webpos-print-relay';
+import { getSelectedLocationId } from '@/store/location';
 
 const SESSION_KEY = 'manupos_pos_session';
 
@@ -111,6 +112,7 @@ export async function registerPosSession(opts: {
   staffId?: string | null;
   staffName?: string | null;
   deviceLabel?: string;
+  locationId?: string | null;
 }): Promise<RegisterPosSessionResult> {
   try {
     const res = await api.post('/merchant/pos/sessions/register', {
@@ -120,6 +122,7 @@ export async function registerPosSession(opts: {
       deviceLabel: opts.deviceLabel || posSessionDeviceLabel(),
       staffId: opts.staffId || null,
       staffName: opts.staffName || null,
+      locationId: opts.locationId || getSelectedLocationId(),
     });
     const sessionId = String(res.data?.sessionId || '');
     if (!sessionId) {

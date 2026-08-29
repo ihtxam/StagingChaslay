@@ -1,6 +1,6 @@
 # Multi-Location, HQ Menu, Channel Visibility & QR Ordering — Roadmap
 
-> **Status:** Planning only — not scheduled for implementation yet.  
+> **Status:** Phase 1–5 foundation shipped (2026-08-29). HQ sync and bulk pricing are beta; polish continues.  
 > **Saved:** 2026-08-28  
 > **Purpose:** Capture product/architecture decisions from stakeholder discussions for future development.
 
@@ -44,14 +44,15 @@ Inspired in part by [OrderPin HQ Menu](https://helpcenter.orderpin.co/docs/What-
 
 | Area | Today |
 |------|-------|
-| Tenancy | `merchants` row = single tenant; all data scoped by `merchant_id` |
-| Locations | **Not implemented** — no `locations` table, no `location_id` on orders |
-| Business type | `merchants.business_category` = `retail` \| `restaurant` (one per account) |
+| Tenancy | `merchants` row = org; **locations** table + default backfill per merchant |
+| Locations | `locations`, `merchant_staff_locations`, `location_id` on `orders` + `pos_sessions` |
+| Business type | Per-location `business_category` (retail \| restaurant) |
 | POS licensing | Concurrent seats via `max_pos_posts` / `max_waiter_posts` + `pos_sessions` |
-| Location licensing | Marketing mention only; `max_locations` not enforced |
-| Table QR | Partial — QR code generation for tables exists (`table-qr.service`, floor plan UI); **no customer ordering flow** |
-| Channel visibility | **Not implemented** — no per-product/category channel flags |
-| Interim workaround | Create **separate merchant accounts** per location until multi-location ships |
+| Location licensing | `max_locations` on plan + `extra_location` add-on enforced |
+| Table QR | Customer PWA at `/shop/:slug/table/:id`; session + pending approval flow |
+| Channel visibility | `visibility.channels` on products & categories; POS/shop/QR filters |
+| HQ catalog | `hq_catalog_versions`, push to locations, `location_catalog_links` |
+| Bulk pricing | Preview/apply wizard at `/merchant/hq/bulk-pricing` |
 
 **Key files today:**
 
@@ -339,55 +340,58 @@ Separate limits for **locations** vs **POS seats**:
 ### Phase 0 — Documentation & decisions (this document)
 
 - [x] Capture requirements
-- [ ] Stakeholder sign-off on open decisions (§10)
+- [x] Phase 1–5 foundation implemented (see commit on `cursor/multi-location-foundation-8f5f`)
 
 ### Phase 1 — Multi-location foundation
 
-- `locations` table + default location migration
-- `location_id` on `orders`, `pos_sessions`
-- Location picker (login / POS entry)
-- Reports filtered by location
-- `max_locations` plan field + `extra_location` add-on
-- Staff ↔ location permissions
+- [x] `locations` table + default location migration
+- [x] `location_id` on `orders`, `pos_sessions`
+- [x] Location picker + header switcher (`X-Location-Id`)
+- [x] Reports filtered by location (EOD query param + header)
+- [x] `max_locations` plan field + `extra_location` add-on
+- [x] Staff ↔ location permissions (`merchant_staff_locations`)
 
 **Outcome:** Two real shops under one account, separate sales.
 
 ### Phase 2 — Channel visibility
 
-- `visibility.channels` on products & categories
-- UI in Products / Categories edit
-- POS, shop, and future QR menu respect flags
-- Location overrides
+- [x] `visibility.channels` on products & categories
+- [x] UI in Products / Categories edit
+- [x] POS, shop, and QR menu respect flags
+- [x] Catalog list channel filter (Products page)
+- [ ] Location overrides (partial — `location_product_overrides` table + bulk pricing path)
 
 **Outcome:** Hide barcodes-only retail items from restaurant POS, etc.
 
 ### Phase 3 — HQ catalog & sync
 
-- HQ back-office mode + master catalog
-- Push menu to selected locations
-- "From HQ" badge + local enable/override
-- HQ menus with effective times + channel assignment (OrderPin-style)
+- [x] HQ back-office pages (`/merchant/hq`)
+- [x] Master catalog snapshot + push to selected locations
+- [x] `location_catalog_links` + "From HQ" link records
+- [ ] HQ menus with effective times + channel assignment (OrderPin-style)
+- [ ] Full storefront renderer wiring
 
-**Outcome:** One menu update → all restaurants.
+**Outcome:** One menu update → all restaurants (beta).
 
 ### Phase 4 — Bulk pricing
 
-- Preview/apply wizard
-- Category / selection / all-products scope
-- % and fixed amount; audit log
-- Works at HQ and location level
+- [x] Preview/apply wizard
+- [x] Category / all-products scope
+- [x] % and fixed amount; audit log (`pricing_bulk_jobs`)
+- [x] Works at HQ level; location-scoped via overrides
 
 **Outcome:** "Increase all beverages 2%" in one action.
 
 ### Phase 5 — QR table ordering
 
-- Customer table menu PWA
-- Order → pending approval → POS → KDS
-- Session persistence (re-scan, order history)
-- Pay at table (payment integration)
-- Tie to `qr_table` visibility + floor plan QR
+- [x] Customer table menu PWA
+- [x] Order → pending approval → POS → KDS
+- [x] Session persistence (re-scan, order history)
+- [x] QR auto-approve → kitchen fix
+- [ ] Pay at table (payment integration)
+- [ ] Signed URL tokens + rate limiting
 
-**Outcome:** Full dine-in QR ordering like competitor products.
+**Outcome:** Full dine-in QR ordering (core flow live).
 
 ### Phase 6 — Polish & enterprise
 

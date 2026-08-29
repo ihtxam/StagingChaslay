@@ -2287,10 +2287,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       (resolvedTableLabel ? `Table ${resolvedTableLabel}` : isQrTableOrder ? "Table guest" : "");
     const resolvedCustomerPhone = customerPhone?.trim() || (isQrTableOrder ? "QR" : "");
 
+    const { LocationsService } = await import("@/services/locations.service");
+    const orderLocationId = await LocationsService.getDefaultId(merchant.id);
+
     const [order] = await db
       .insert(schema.orders)
       .values({
         merchantId: merchant.id,
+        locationId: orderLocationId,
         orderNumber,
         customerId,
         orderType: "web_shop",
@@ -2450,6 +2454,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       void enterKitchenFromOrder(merchant.id, order.id, {
         printKitchen: true,
         orderSource: "online_shop",
+      });
+    } else if (qrAutoAccept) {
+      const { enterKitchenFromOrder } = await import("@/services/kitchen-ingress.service");
+      void enterKitchenFromOrder(merchant.id, order.id, {
+        printKitchen: true,
+        orderSource: "qr_table",
       });
     }
 

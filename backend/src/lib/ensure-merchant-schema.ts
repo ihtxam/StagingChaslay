@@ -76,6 +76,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_waiter_posts integer NOT NULL DEFAULT 0",
   max_staff:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_staff integer NOT NULL DEFAULT 0",
+  max_locations:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
   webpos_invoice_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_invoice_enabled boolean NOT NULL DEFAULT true",
   bank_iban: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS bank_iban varchar(34)",
@@ -162,6 +164,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   categories_extra_delivery_price:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
+  orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
+  pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
+  subscription_plans_max_locations:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
 };
 
 /** Idempotent CREATE TABLE for features added after initial deploy. */
@@ -757,6 +763,86 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_slug_uq ON chaslay_homepage_builder_pages(homepage_builder_id, slug)`,
   `CREATE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_sort_idx ON chaslay_homepage_builder_pages(homepage_builder_id, sort_order)`,
+  `CREATE TABLE IF NOT EXISTS locations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    slug varchar(100) NOT NULL,
+    business_category varchar(20) NOT NULL DEFAULT 'restaurant',
+    address text,
+    city varchar(100),
+    country varchar(100),
+    timezone varchar(64) NOT NULL DEFAULT 'Europe/Zurich',
+    is_default boolean NOT NULL DEFAULT false,
+    status varchar(20) NOT NULL DEFAULT 'active',
+    settings jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS locations_merchant_slug_idx ON locations(merchant_id, slug)`,
+  `CREATE INDEX IF NOT EXISTS locations_merchant_id_idx ON locations(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS locations_merchant_default_idx ON locations(merchant_id, is_default)`,
+  `CREATE TABLE IF NOT EXISTS merchant_staff_locations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid NOT NULL REFERENCES merchant_staff(id) ON DELETE CASCADE,
+    location_id uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS merchant_staff_locations_staff_location_idx ON merchant_staff_locations(staff_id, location_id)`,
+  `CREATE INDEX IF NOT EXISTS merchant_staff_locations_merchant_staff_idx ON merchant_staff_locations(merchant_id, staff_id)`,
+  `CREATE TABLE IF NOT EXISTS hq_catalog_versions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    version integer NOT NULL DEFAULT 1,
+    name varchar(255) NOT NULL DEFAULT 'HQ Menu',
+    payload_json jsonb NOT NULL DEFAULT '{}',
+    created_by_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS hq_catalog_versions_merchant_idx ON hq_catalog_versions(merchant_id, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS location_catalog_links (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    location_id uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    hq_product_id uuid NOT NULL,
+    local_product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+    sync_status varchar(30) NOT NULL DEFAULT 'synced',
+    overrides_json jsonb NOT NULL DEFAULT '{}',
+    from_hq_version_id uuid REFERENCES hq_catalog_versions(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS location_catalog_links_loc_hq_product_idx ON location_catalog_links(location_id, hq_product_id)`,
+  `CREATE INDEX IF NOT EXISTS location_catalog_links_merchant_location_idx ON location_catalog_links(merchant_id, location_id)`,
+  `CREATE TABLE IF NOT EXISTS location_product_overrides (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    location_id uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    price_override numeric(10,2),
+    visibility jsonb,
+    is_available boolean,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS location_product_overrides_loc_product_idx ON location_product_overrides(location_id, product_id)`,
+  `CREATE TABLE IF NOT EXISTS pricing_bulk_jobs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    location_ids jsonb NOT NULL DEFAULT '[]',
+    category_ids jsonb NOT NULL DEFAULT '[]',
+    product_ids jsonb NOT NULL DEFAULT '[]',
+    operation varchar(20) NOT NULL,
+    value_type varchar(20) NOT NULL,
+    value numeric(12,4) NOT NULL,
+    round_to numeric(6,4),
+    affected_count integer NOT NULL DEFAULT 0,
+    created_by_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL,
+    created_by_name varchar(255),
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pricing_bulk_jobs_merchant_idx ON pricing_bulk_jobs(merchant_id, created_at DESC)`,
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS screen_size_in integer NOT NULL DEFAULT 32`,
   `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_short_code_uidx ON signage_screens(short_code) WHERE short_code IS NOT NULL`,
@@ -864,6 +950,45 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+/** Create one default location per merchant and backfill orders/POS sessions. */
+export async function backfillDefaultLocations(): Promise<void> {
+  const db = getDb();
+  try {
+    await db.execute(sql.raw(`
+      INSERT INTO locations (merchant_id, name, slug, business_category, address, city, country, is_default, status)
+      SELECT m.id,
+        COALESCE(NULLIF(TRIM(m.name), ''), 'Main location'),
+        'main',
+        COALESCE(NULLIF(m.business_category, ''), 'restaurant'),
+        m.address,
+        m.city,
+        m.country,
+        true,
+        'active'
+      FROM merchants m
+      WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.merchant_id = m.id)
+    `));
+    await db.execute(sql.raw(`
+      UPDATE orders o
+      SET location_id = l.id
+      FROM locations l
+      WHERE o.merchant_id = l.merchant_id
+        AND l.is_default = true
+        AND o.location_id IS NULL
+    `));
+    await db.execute(sql.raw(`
+      UPDATE pos_sessions ps
+      SET location_id = l.id
+      FROM locations l
+      WHERE ps.merchant_id = l.merchant_id
+        AND l.is_default = true
+        AND ps.location_id IS NULL
+    `));
+  } catch (err) {
+    console.warn("[schema] default location backfill failed:", err);
+  }
+}
+
 /** Apply all known optional merchant columns once at startup (non-blocking). */
 export function ensureMerchantSchemaAtStartup(): void {
   if (startupPatchPromise) return;
@@ -875,6 +1000,7 @@ export function ensureMerchantSchemaAtStartup(): void {
       await runPatch(column);
     }
     await ensureMerchantTables();
+    await backfillDefaultLocations();
   })().catch((err) => {
     console.warn("[schema] merchant startup patch failed:", err);
   });

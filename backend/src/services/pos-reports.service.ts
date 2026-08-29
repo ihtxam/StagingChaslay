@@ -137,6 +137,8 @@ export type SalesScopeOpts = {
   staffId?: string | null;
   /** Fallback match for legacy orders without staffId. */
   staffName?: string | null;
+  /** When set, filter orders to this branch location. */
+  locationId?: string | null;
 };
 
 export class PosReportsService {
@@ -214,6 +216,10 @@ export class PosReportsService {
     ];
     if (opts.channel && ["takeaway", "dine_in", "delivery"].includes(opts.channel)) {
       conditions.push(eq(schema.orders.fulfillmentChannel, opts.channel));
+    }
+    const scopeLocationId = opts.locationId ? String(opts.locationId).trim() : "";
+    if (scopeLocationId) {
+      conditions.push(eq(schema.orders.locationId, scopeLocationId));
     }
     const scopeStaffId = opts.staffId ? String(opts.staffId).trim() : "";
     const scopeStaffName = opts.staffName ? String(opts.staffName).trim() : "";

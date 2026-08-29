@@ -72,6 +72,7 @@ import {
   SettingsReportCard,
 } from '@/components/settings/SettingsReportUi';
 import SettingsBusinessTab from './settings/SettingsBusinessTab';
+import SettingsLocationsTab from './settings/SettingsLocationsTab';
 import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
@@ -285,6 +286,7 @@ interface TerminalRow {
 
 type TabId =
   | 'business'
+  | 'locations'
   | 'taxes'
   | 'tables'
   | 'shop'
@@ -303,6 +305,7 @@ type TabId =
 
 const SETTINGS_TAB_IDS: TabId[] = [
   'business',
+  'locations',
   'taxes',
   'tables',
   'shop',
@@ -538,6 +541,7 @@ export default function Settings() {
     () =>
       [
         { id: 'business' as const, label: t('settingsBusiness'), icon: Building2 },
+        { id: 'locations' as const, label: t('locationsTitle'), icon: MapPin },
         { id: 'taxes' as const, label: t('settingsTaxes'), icon: Percent },
         { id: 'tables' as const, label: t('settingsTables'), icon: UtensilsCrossed },
         { id: 'shop' as const, label: t('shop'), icon: Globe2 },
@@ -1545,6 +1549,8 @@ export default function Settings() {
               highlightId={highlightId}
             />
           )}
+
+          {tab === 'locations' && <SettingsLocationsTab />}
 
           {tab === 'taxes' && (
             <form onSubmit={onSave} className="space-y-5">

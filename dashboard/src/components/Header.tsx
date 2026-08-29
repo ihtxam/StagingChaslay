@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import AcceptingMenu from '@/components/AcceptingMenu';
+import { LocationSwitcherChip } from '@/components/merchant/LocationPicker';
 import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 
@@ -94,6 +95,7 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <LocationSwitcherChip />
           {showAcceptingMenu ? <AcceptingMenu /> : null}
 
           <button

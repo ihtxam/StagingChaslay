@@ -270,6 +270,8 @@ export const merchants = pgTable(
     maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
     /** Max staff accounts (merchant panel users). 0 = unlimited. */
     maxStaff: integer("max_staff").default(0).notNull(),
+    /** Max shop/branch locations. 0 = unlimited; default 1 when unset on plan. */
+    maxLocations: integer("max_locations").default(1).notNull(),
     /**
      * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
      */
@@ -474,6 +476,175 @@ export const merchantStaff = pgTable(
 );
 
 // ============================================================================
+// LOCATIONS (multi-branch under one merchant account)
+// ============================================================================
+
+export type LocationSettings = Record<string, unknown> | null;
+
+export const locations = pgTable(
+  "locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull(),
+    /** retail | restaurant */
+    businessCategory: varchar("business_category", { length: 20 }).default("restaurant").notNull(),
+    address: text("address"),
+    city: varchar("city", { length: 100 }),
+    country: varchar("country", { length: 100 }),
+    timezone: varchar("timezone", { length: 64 }).default("Europe/Zurich"),
+    isDefault: boolean("is_default").default(false).notNull(),
+    status: varchar("status", { length: 20 }).default("active").notNull(),
+    settings: json("settings").$type<LocationSettings>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("locations_merchant_id_idx").on(table.merchantId),
+    merchantSlugIdx: uniqueIndex("locations_merchant_slug_idx").on(table.merchantId, table.slug),
+    merchantDefaultIdx: index("locations_merchant_default_idx").on(table.merchantId, table.isDefault),
+  })
+);
+
+/** Staff ↔ location scope. Empty rows = all locations (owner/manager default). */
+export const merchantStaffLocations = pgTable(
+  "merchant_staff_locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => merchantStaff.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    staffLocationIdx: uniqueIndex("merchant_staff_locations_staff_location_idx").on(
+      table.staffId,
+      table.locationId
+    ),
+    merchantStaffIdx: index("merchant_staff_locations_merchant_staff_idx").on(
+      table.merchantId,
+      table.staffId
+    ),
+  })
+);
+
+/** HQ master catalog snapshot (OrderPin-style push to locations). */
+export const hqCatalogVersions = pgTable(
+  "hq_catalog_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    version: integer("version").default(1).notNull(),
+    name: varchar("name", { length: 255 }).default("HQ Menu").notNull(),
+    payloadJson: json("payload_json").$type<Record<string, unknown>>().default({}).notNull(),
+    createdByStaffId: uuid("created_by_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("hq_catalog_versions_merchant_idx").on(table.merchantId, table.createdAt),
+  })
+);
+
+export const locationCatalogLinks = pgTable(
+  "location_catalog_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    hqProductId: uuid("hq_product_id").notNull(),
+    localProductId: uuid("local_product_id").references(() => products.id, { onDelete: "set null" }),
+    syncStatus: varchar("sync_status", { length: 30 }).default("synced").notNull(),
+    overridesJson: json("overrides_json").$type<Record<string, unknown>>().default({}).notNull(),
+    fromHqVersionId: uuid("from_hq_version_id").references(() => hqCatalogVersions.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    locHqProductIdx: uniqueIndex("location_catalog_links_loc_hq_product_idx").on(
+      table.locationId,
+      table.hqProductId
+    ),
+    merchantLocationIdx: index("location_catalog_links_merchant_location_idx").on(
+      table.merchantId,
+      table.locationId
+    ),
+  })
+);
+
+/** Per-location product price/visibility overrides. */
+export const locationProductOverrides = pgTable(
+  "location_product_overrides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    priceOverride: decimal("price_override", { precision: 10, scale: 2 }),
+    visibility: json("visibility").$type<{ channels: string[] } | null>(),
+    isAvailable: boolean("is_available"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    locProductIdx: uniqueIndex("location_product_overrides_loc_product_idx").on(
+      table.locationId,
+      table.productId
+    ),
+  })
+);
+
+export const pricingBulkJobs = pgTable(
+  "pricing_bulk_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    locationIds: json("location_ids").$type<string[]>().default([]).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    operation: varchar("operation", { length: 20 }).notNull(),
+    valueType: varchar("value_type", { length: 20 }).notNull(),
+    value: decimal("value", { precision: 12, scale: 4 }).notNull(),
+    roundTo: decimal("round_to", { precision: 6, scale: 4 }),
+    affectedCount: integer("affected_count").default(0).notNull(),
+    createdByStaffId: uuid("created_by_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
+    createdByName: varchar("created_by_name", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("pricing_bulk_jobs_merchant_idx").on(table.merchantId, table.createdAt),
+  })
+);
+
+// ============================================================================
 // SUBSCRIPTION PLANS (platform SaaS tiers)
 // ============================================================================
 
@@ -508,6 +679,8 @@ export const subscriptionPlans = pgTable(
     maxWaiterPosts: integer("max_waiter_posts").default(0).notNull(),
     /** Max staff accounts. 0 = unlimited. */
     maxStaff: integer("max_staff").default(0).notNull(),
+    /** Max shop/branch locations. 0 = unlimited. */
+    maxLocations: integer("max_locations").default(1).notNull(),
     /** Addons bundled in this package */
     includedAddons: json("included_addons").$type<PackageIncludedAddons>().default({}),
     features: json("features").$type<string[]>().default([]),
@@ -537,7 +710,7 @@ export const subscriptionAddons = pgTable(
     slug: varchar("slug", { length: 50 }).notNull(),
     name: varchar("name", { length: 100 }).notNull(),
     description: text("description"),
-    /** inventory | signage | kds | ods | extra_pos_post | extra_waiter_post | extra_staff */
+    /** inventory | signage | kds | ods | extra_pos_post | extra_waiter_post | extra_staff | extra_location */
     addonKey: varchar("addon_key", { length: 40 }).notNull(),
     priceMonthly: decimal("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
     priceYearly: decimal("price_yearly", { precision: 10, scale: 2 }),
@@ -1067,6 +1240,8 @@ export const orders = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    /** Branch where the sale occurred (nullable for legacy rows). */
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
     customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     orderType: varchar("order_type", { length: 50 }).notNull(), // pos, web_shop
@@ -1174,6 +1349,7 @@ export const orders = pgTable(
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
+    locationIdIdx: index("orders_location_id_idx").on(table.locationId),
     orderNumberIdx: uniqueIndex("orders_order_number_idx").on(table.orderNumber),
     statusIdx: index("orders_status_idx").on(table.status),
     createdAtIdx: index("orders_created_at_idx").on(table.createdAt),
@@ -1228,6 +1404,7 @@ export const posSessions = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     /** main = register till; waiter = floor order entry */
     sessionKind: varchar("session_kind", { length: 20 }).default("main").notNull(),
     /** webpos | waiter_web | android */

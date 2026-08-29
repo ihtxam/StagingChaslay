@@ -94,6 +94,9 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import SignagePage from './SignagePage';
+import HqDashboardPage from './HqDashboard';
+import BulkPricingPage from './BulkPricingPage';
+import { useLocationStore } from '@/store/location';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
@@ -518,6 +521,11 @@ function MerchantShell() {
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
   useTillPrintHub({ enabled: !isPosLikeRoute });
+  const loadLocations = useLocationStore((s) => s.load);
+
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
@@ -539,6 +547,15 @@ function MerchantShell() {
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
+      ].filter((item) => allow(item.path)),
+    },
+    {
+      id: 'hq',
+      label: t('navHq'),
+      icon: '🏢',
+      children: [
+        { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
+        { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
       ].filter((item) => allow(item.path)),
     },
     {
@@ -932,6 +949,22 @@ function MerchantShell() {
                   <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
                     <ChaslayPageBuilderEditor />
                   </Suspense>
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq"
+              element={
+                <PanelRouteGuard path="/merchant/hq" allow={allow}>
+                  <HqDashboardPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq/bulk-pricing"
+              element={
+                <PanelRouteGuard path="/merchant/hq/bulk-pricing" allow={allow}>
+                  <BulkPricingPage />
                 </PanelRouteGuard>
               }
             />

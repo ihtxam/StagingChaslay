@@ -26,7 +26,10 @@ import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
+import locationsRoutes from "@/routes/locations.routes";
+import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
+import { setLocationContext } from "@/middleware/location.middleware";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -80,6 +83,7 @@ function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunc
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(setLocationContext);
 router.use(restrictStaffMerchantWrites);
 
 // ============================================================================
@@ -1160,7 +1164,8 @@ router.post("/orders", async (req: Request, res: Response) => {
       orderType || "pos",
       paymentMethod,
       discountAmount || 0,
-      notes
+      notes,
+      req.locationId || req.body?.locationId
     );
 
     res.status(201).json({
@@ -1866,6 +1871,9 @@ router.get(
         channel: req.query.channel ? String(req.query.channel) : undefined,
         staffId,
         staffName,
+        locationId: req.query.locationId
+          ? String(req.query.locationId)
+          : req.locationId || undefined,
       });
       res.json({ success: true, report });
     } catch (error) {
@@ -3051,6 +3059,8 @@ router.post("/platform-shop/confirm", async (req: Request, res: Response) => {
 });
 
 router.use(posSessionsRoutes);
+router.use(locationsRoutes);
+router.use(hqRoutes);
 router.use("/client-errors", clientErrorsRoutes);
 
 export default router;

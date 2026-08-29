@@ -267,7 +267,8 @@ export class OrderService {
     orderType: "pos" | "web_shop" = "pos",
     paymentMethod?: string,
     discountAmount: number = 0,
-    notes?: string
+    notes?: string,
+    locationId?: string | null
   ) {
     const db = getDb();
 
@@ -311,10 +312,14 @@ export class OrderService {
       // Create order
       const orderNumber = `ORD-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
 
+      const { LocationsService } = await import("@/services/locations.service");
+      const resolvedLocationId = await LocationsService.resolveLocationId(merchantId, locationId);
+
       const order = await db
         .insert(schema.orders)
         .values({
           merchantId,
+          locationId: resolvedLocationId,
           orderNumber,
           customerId,
           orderType,

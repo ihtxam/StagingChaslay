@@ -7,6 +7,7 @@ export type MerchantLimits = {
   maxPosPosts: number;
   maxWaiterPosts: number;
   maxStaff: number;
+  maxLocations: number;
   maxProducts: number | null;
   signageScreenLimit: number;
   planSlug: string | null;
@@ -22,6 +23,13 @@ export type StaffLimitInfo = {
 
 export type DeviceLicenseLimitInfo = {
   maxDevices: number;
+  currentCount: number;
+  planSlug: string | null;
+  planName: string | null;
+};
+
+export type LocationLimitInfo = {
+  maxLocations: number;
   currentCount: number;
   planSlug: string | null;
   planName: string | null;
@@ -47,6 +55,7 @@ export class MerchantEntitlementsService {
         maxPosPosts: true,
         maxWaiterPosts: true,
         maxStaff: true,
+        maxLocations: true,
         signageScreenLimit: true,
       },
     });
@@ -66,6 +75,11 @@ export class MerchantEntitlementsService {
     const planStaff = Math.max(0, Number(plan?.maxStaff) || 0);
     const maxStaff = merchantStaff > 0 ? merchantStaff : planStaff > 0 ? planStaff : 0;
 
+    const merchantLocations = Math.max(0, Number(merchant.maxLocations) || 0);
+    const planLocations = Math.max(0, Number(plan?.maxLocations) || 0);
+    const maxLocations =
+      merchantLocations > 0 ? merchantLocations : planLocations > 0 ? planLocations : 1;
+
     const maxRaw = plan?.maxProducts;
     const maxProducts =
       maxRaw === null || maxRaw === undefined ? null : Math.max(0, Number(maxRaw) || 0);
@@ -79,11 +93,44 @@ export class MerchantEntitlementsService {
       maxPosPosts,
       maxWaiterPosts,
       maxStaff,
+      maxLocations,
       maxProducts,
       signageScreenLimit: signage.screenLimit,
       planSlug: plan?.slug || planSlug,
       planName: plan?.name || null,
     };
+  }
+
+  static async countActiveLocations(merchantId: string): Promise<number> {
+    const { LocationsService } = await import("@/services/locations.service");
+    return LocationsService.countActive(merchantId);
+  }
+
+  static async getLocationLimitInfo(merchantId: string): Promise<LocationLimitInfo> {
+    const limits = await this.getLimits(merchantId);
+    const currentCount = await this.countActiveLocations(merchantId);
+    return {
+      maxLocations: limits.maxLocations,
+      currentCount,
+      planSlug: limits.planSlug,
+      planName: limits.planName,
+    };
+  }
+
+  static async assertCanAddLocation(merchantId: string, addCount = 1): Promise<LocationLimitInfo> {
+    const info = await this.getLocationLimitInfo(merchantId);
+    if (info.maxLocations <= 0) return info;
+    const next = info.currentCount + Math.max(1, addCount);
+    if (next > info.maxLocations) {
+      const err = new Error(
+        `Location limit reached (${info.maxLocations} on ${info.planName || info.planSlug || "your plan"}). Upgrade or add an extra location add-on.`
+      ) as Error & { statusCode?: number; code?: string; limit?: LocationLimitInfo };
+      err.statusCode = 403;
+      err.code = "LOCATION_LIMIT_REACHED";
+      err.limit = info;
+      throw err;
+    }
+    return info;
   }
 
   static async countActiveStaff(merchantId: string): Promise<number> {

@@ -40,6 +40,7 @@ export class PosSessionsService {
     });
     return rows.map((r) => ({
       id: r.id,
+      locationId: r.locationId,
       sessionKind: r.sessionKind as PosSessionKind,
       platform: r.platform as PosSessionPlatform,
       deviceId: r.deviceId,
@@ -123,6 +124,7 @@ export class PosSessionsService {
       deviceLabel?: string | null;
       staffId?: string | null;
       staffName?: string | null;
+      locationId?: string | null;
     }
   ) {
     const deviceId = String(input.deviceId || "").trim().slice(0, 128);
@@ -135,6 +137,11 @@ export class PosSessionsService {
 
     const db = getDb();
     const now = new Date();
+    const { LocationsService } = await import("@/services/locations.service");
+    const locationId = await LocationsService.resolveLocationId(
+      merchantId,
+      input.locationId
+    );
 
     const { row, kickedSessionIds } = await db.transaction(async (tx) => {
       const kickedSessionIds = await this.enforceLimit(
@@ -148,6 +155,7 @@ export class PosSessionsService {
         .insert(schema.posSessions)
         .values({
           merchantId,
+          locationId,
           sessionKind: input.sessionKind,
           platform: input.platform,
           deviceId,

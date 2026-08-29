@@ -35,6 +35,14 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  try {
+    const locationId = localStorage.getItem('manupos_selected_location');
+    if (locationId) {
+      config.headers['X-Location-Id'] = locationId;
+    }
+  } catch {
+    /* ignore */
+  }
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     const headers = config.headers as any;
     if (headers && typeof headers.delete === 'function') {

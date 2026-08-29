@@ -38,6 +38,7 @@ const VALID_ADDON_KEYS = new Set([
   "extra_pos_post",
   "extra_waiter_post",
   "extra_staff",
+  "extra_location",
 ]);
 
 export class SubscriptionAddonsService {
@@ -245,6 +246,16 @@ export class SubscriptionAddonsService {
         quantity: 1,
         sortOrder: 60,
       },
+      {
+        name: "Extra location",
+        slug: "extra-location",
+        addonKey: "extra_location",
+        description: "One additional shop or branch location",
+        priceMonthly: 15,
+        priceYearly: 150,
+        quantity: 1,
+        sortOrder: 65,
+      },
     ];
 
     for (const addon of defaults) {
@@ -287,6 +298,16 @@ export class SubscriptionAddonsService {
         priceMonthly: 15,
         priceYearly: 150,
         sortOrder: 15,
+      },
+      {
+        name: "Extra location",
+        slug: "extra-location",
+        addonKey: "extra_location",
+        description: "One additional shop or branch location",
+        priceMonthly: 15,
+        priceYearly: 150,
+        quantity: 1,
+        sortOrder: 65,
       },
     ];
 
