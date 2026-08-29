@@ -45,6 +45,38 @@ export function productVisibleOnChannel(
   return true;
 }
 
+/** Catalog rows saved before the kiosk channel existed (no explicit kiosk flag). */
+export function isPreKioskCatalogVisibility(visibility: unknown): boolean {
+  const normalized = normalizeCatalogVisibility(visibility);
+  return normalized.channels.length > 0 && !normalized.channels.includes("kiosk");
+}
+
+/** Kiosk menu visibility — honors kiosk channel, with shop/POS fallback for legacy catalogs. */
+export function productVisibleOnKioskChannel(
+  product: { visibility?: unknown; isActive?: boolean | null },
+  category: { visibility?: unknown } | null | undefined
+): boolean {
+  if (product.isActive === false) return false;
+  if (isVisibleOnChannel(product.visibility, "kiosk")) {
+    if (category && !isVisibleOnChannel(category.visibility, "kiosk")) return false;
+    return true;
+  }
+  if (!isPreKioskCatalogVisibility(product.visibility)) return false;
+  return (
+    productVisibleOnChannel(product, category, "shop") ||
+    productVisibleOnChannel(product, category, "pos")
+  );
+}
+
+export function categoryVisibleOnKioskChannel(category: { visibility?: unknown }): boolean {
+  if (isVisibleOnChannel(category.visibility, "kiosk")) return true;
+  if (!isPreKioskCatalogVisibility(category.visibility)) return false;
+  return (
+    isVisibleOnChannel(category.visibility, "shop") ||
+    isVisibleOnChannel(category.visibility, "pos")
+  );
+}
+
 export function filterCatalogForChannel<
   T extends { id: string; categoryId?: string | null; visibility?: unknown; isActive?: boolean | null },
   C extends { id: string; visibility?: unknown }
@@ -58,6 +90,26 @@ export function filterCatalogForChannel<
   );
   const visibleCategories = categories.filter(
     (c) => categoryIdsWithProducts.has(c.id) || isVisibleOnChannel(c.visibility, channel)
+  );
+  return { products: visibleProducts, categories: visibleCategories };
+}
+
+export function filterCatalogForKioskChannel<
+  T extends { id: string; categoryId?: string | null; visibility?: unknown; isActive?: boolean | null },
+  C extends { id: string; visibility?: unknown; isOffersCategory?: boolean | null }
+>(products: T[], categories: C[]): { products: T[]; categories: C[] } {
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const visibleProducts = products.filter((p) =>
+    productVisibleOnKioskChannel(p, p.categoryId ? categoryById.get(p.categoryId) : null)
+  );
+  const categoryIdsWithProducts = new Set(
+    visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
+  );
+  const visibleCategories = categories.filter(
+    (c) =>
+      categoryIdsWithProducts.has(c.id) ||
+      c.isOffersCategory ||
+      categoryVisibleOnKioskChannel(c)
   );
   return { products: visibleProducts, categories: visibleCategories };
 }

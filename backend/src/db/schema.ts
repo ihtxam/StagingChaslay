@@ -1020,10 +1020,10 @@ export const categories = pgTable(
     imageUrl: varchar("image_url", { length: 500 }),
     /** Special shelf for promotional / offer products */
     isOffersCategory: boolean("is_offers_category").default(false).notNull(),
-    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery'] } */
+    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery','kiosk'] } */
     visibility: json("visibility")
       .$type<{ channels: string[] }>()
-      .default({ channels: ["pos", "shop", "qr_table", "delivery"] })
+      .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
     /** When category_pricing_enabled on merchant, apply extra_delivery_price on delivery orders */
     deliveryPricingEnabled: boolean("delivery_pricing_enabled").default(false).notNull(),
@@ -1103,10 +1103,10 @@ export const products = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     clientId: varchar("client_id", { length: 64 }), // offline sync id from POS device
     isActive: boolean("is_active").default(true).notNull(),
-    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery'] } */
+    /** Per-channel visibility: { channels: ['pos','shop','qr_table','delivery','kiosk'] } */
     visibility: json("visibility")
       .$type<{ channels: string[] }>()
-      .default({ channels: ["pos", "shop", "qr_table", "delivery"] })
+      .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

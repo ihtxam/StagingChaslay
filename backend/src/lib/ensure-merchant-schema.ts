@@ -209,9 +209,9 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   merchant_staff_pin_display:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
   products_visibility:
-    "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   categories_visibility:
-    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\"]}'::jsonb",
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS delivery_pricing_enabled boolean NOT NULL DEFAULT false",
   categories_extra_delivery_price:
@@ -1499,6 +1499,58 @@ async function tableExists(table: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Add kiosk to catalog visibility for rows created before the kiosk channel existed. */
+export async function backfillKioskCatalogVisibility(): Promise<void> {
+  const appendKiosk = `
+    UPDATE products
+    SET visibility = jsonb_build_object(
+      'channels',
+      (
+        SELECT coalesce(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+        FROM (
+          SELECT jsonb_array_elements_text(coalesce(visibility->'channels', '[]'::jsonb)) AS elem
+          UNION ALL
+          SELECT 'kiosk'::text AS elem
+        ) merged
+      )
+    ),
+    updated_at = NOW()
+    WHERE NOT coalesce(visibility->'channels', '[]'::jsonb) ? 'kiosk'
+  `;
+  const appendKioskCategories = `
+    UPDATE categories
+    SET visibility = jsonb_build_object(
+      'channels',
+      (
+        SELECT coalesce(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+        FROM (
+          SELECT jsonb_array_elements_text(coalesce(visibility->'channels', '[]'::jsonb)) AS elem
+          UNION ALL
+          SELECT 'kiosk'::text AS elem
+        ) merged
+      )
+    ),
+    updated_at = NOW()
+    WHERE NOT coalesce(visibility->'channels', '[]'::jsonb) ? 'kiosk'
+  `;
+  try {
+    await execSql(
+      "ALTER TABLE products ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb"
+    );
+    await execSql(
+      "ALTER TABLE categories ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb"
+    );
+    const products = await getDdlPool().query(appendKiosk);
+    const categories = await getDdlPool().query(appendKioskCategories);
+    const total = (products.rowCount || 0) + (categories.rowCount || 0);
+    if (total > 0) {
+      console.log(`[schema] backfilled kiosk channel on ${total} catalog row(s)`);
+    }
+  } catch (err) {
+    console.warn("[schema] kiosk catalog visibility backfill failed:", err);
+  }
+}
+
 /** Apply all idempotent schema patches (safe to run on every boot). */
 export async function ensureAllMerchantSchema(): Promise<{
   missingBefore: string[];
@@ -1532,6 +1584,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   await ensureSubscriptionPlansSchema();
   await ensureLocationsSchema();
   await ensurePosSessionsSchema();
+  await backfillKioskCatalogVisibility();
 
   const stillMerchants = await listMissingMerchantColumns().catch(() => [] as string[]);
   for (const col of stillMerchants) {

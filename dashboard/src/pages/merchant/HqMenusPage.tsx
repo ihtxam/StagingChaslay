@@ -25,7 +25,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const emptyForm = (): Omit<HqMenu, 'id'> => ({
   name: '',
-  channels: ['shop', 'qr_table', 'pos'],
+  channels: ['shop', 'qr_table', 'pos', 'delivery', 'kiosk'],
   daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
   timeStart: '06:00',
   timeEnd: '11:00',

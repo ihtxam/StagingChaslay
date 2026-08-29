@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { filterCatalogForChannel } from "@/lib/catalog-visibility";
+import { filterCatalogForKioskChannel } from "@/lib/catalog-visibility";
 import { readKioskAddonEnabled } from "@/lib/kiosk-addon";
 import {
   ensureKioskAddonColumn,
@@ -124,7 +124,7 @@ export class KioskService {
       locationId,
       products
     );
-    const filtered = filterCatalogForChannel(withOverrides, categories, catalogChannel);
+    const filtered = filterCatalogForKioskChannel(withOverrides, categories);
     const menuProductIds = await HqMenuService.resolveActiveProductIds(
       merchant.id,
       locationId,

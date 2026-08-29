@@ -44,4 +44,5 @@ export const CATALOG_CHANNEL_LABELS: Record<CatalogChannel, string> = {
   shop: 'Online shop',
   qr_table: 'QR table ordering',
   delivery: 'Delivery',
+  kiosk: 'Self-order kiosk',
 };

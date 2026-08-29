@@ -70,7 +70,7 @@ export class HqMenuService {
       .values({
         merchantId,
         name,
-        channels: input.channels?.length ? input.channels : ["pos", "shop", "qr_table"],
+        channels: input.channels?.length ? input.channels : ["pos", "shop", "qr_table", "delivery", "kiosk"],
         daysOfWeek: input.daysOfWeek?.length ? input.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
         timeStart: input.timeStart || "00:00",
         timeEnd: input.timeEnd || "23:59",
