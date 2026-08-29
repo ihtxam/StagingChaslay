@@ -8185,19 +8185,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffName: session.name,
     });
     if (!reg.ok) {
-      setPosAuthAlert({
-        title: t('webPosPinErrorTitle'),
-        message: reg.error || t('webPosSessionRegisterFailed'),
-        variant: 'error',
-      });
-      setPinModalMode('gate');
-      setPinModalOpen(true);
-      return;
+      const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(
+        reg.error || ''
+      );
+      if (!schemaLag) {
+        setPosAuthAlert({
+          title: t('webPosPinErrorTitle'),
+          message: reg.error || t('webPosSessionRegisterFailed'),
+          variant: 'error',
+        });
+        setPinModalMode('gate');
+        setPinModalOpen(true);
+        return;
+      }
+      console.warn('[webpos] session register skipped (schema):', reg.error);
     }
     setWebposStaff(session);
     saveWebPosStaffSession(session);
     notifyWebPosStaffSessionChanged();
-    if (reg.kickedSessionIds.length > 0) {
+    if (reg.ok && reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }
     setPinModalOpen(false);

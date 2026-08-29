@@ -215,6 +215,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
+  pos_sessions_print_agent_online:
+    "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
   orders_order_source: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source varchar(50)",
   orders_fulfillment_channel:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_channel varchar(50) DEFAULT 'takeaway'",
@@ -1354,7 +1356,32 @@ export async function ensureLocationsSchema(): Promise<void> {
   await runPatch("pos_sessions_location_id");
   await runPatch("max_locations", "merchants");
   await runPatch("subscription_plans_max_locations");
+  await ensurePosSessionsSchema();
   await backfillDefaultLocations();
+}
+
+const REQUIRED_POS_SESSIONS_COLUMNS = ["location_id", "print_agent_online"];
+
+/** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
+export async function ensurePosSessionsSchema(): Promise<void> {
+  const statements = [
+    EXTRA_COLUMN_PATCHES.pos_sessions_location_id,
+    EXTRA_COLUMN_PATCHES.pos_sessions_print_agent_online,
+  ];
+  for (const statement of statements) {
+    if (!statement) continue;
+    try {
+      await execSql(statement);
+    } catch (err) {
+      console.warn("[schema] pos_sessions patch failed:", err);
+    }
+  }
+  patchedColumns.delete("pos_sessions.location_id");
+  patchedColumns.delete("pos_sessions.print_agent_online");
+  patchedColumns.delete("pos_sessions_location_id");
+  patchedColumns.delete("pos_sessions_print_agent_online");
+  await runPatch("location_id", "pos_sessions");
+  await runPatch("print_agent_online", "pos_sessions");
 }
 
 /** Create one default location per merchant and backfill orders/POS sessions. */
@@ -1467,6 +1494,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   productsMissing: string[];
   editionsMissing: string[];
   subscriptionPlansMissing: string[];
+  posSessionsMissing: string[];
 }> {
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
@@ -1489,6 +1517,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   await ensureMerchantTables();
   await ensureSubscriptionPlansSchema();
   await ensureLocationsSchema();
+  await ensurePosSessionsSchema();
 
   const stillMerchants = await listMissingMerchantColumns().catch(() => [] as string[]);
   for (const col of stillMerchants) {
@@ -1563,13 +1592,25 @@ export async function ensureAllMerchantSchema(): Promise<{
     "subscription_plans",
     REQUIRED_SUBSCRIPTION_PLAN_COLUMNS
   ).catch(() => REQUIRED_SUBSCRIPTION_PLAN_COLUMNS.slice());
+  let posSessionsMissingAfter = await listMissingTableColumns(
+    "pos_sessions",
+    REQUIRED_POS_SESSIONS_COLUMNS
+  ).catch(() => REQUIRED_POS_SESSIONS_COLUMNS.slice());
+  if (posSessionsMissingAfter.length) {
+    await ensurePosSessionsSchema();
+    posSessionsMissingAfter = await listMissingTableColumns(
+      "pos_sessions",
+      REQUIRED_POS_SESSIONS_COLUMNS
+    ).catch(() => REQUIRED_POS_SESSIONS_COLUMNS.slice());
+  }
   if (
     missingAfter.length ||
     ordersMissing.length ||
     orderItemsMissing.length ||
     productsMissing.length ||
     editionsMissingAfter.length ||
-    subscriptionPlansMissingAfter.length
+    subscriptionPlansMissingAfter.length ||
+    posSessionsMissingAfter.length
   ) {
     console.warn("[schema] still missing:", {
       merchants: missingAfter,
@@ -1578,6 +1619,7 @@ export async function ensureAllMerchantSchema(): Promise<{
       products: productsMissing,
       editions: editionsMissingAfter,
       subscriptionPlans: subscriptionPlansMissingAfter,
+      posSessions: posSessionsMissingAfter,
     });
   }
   return {
@@ -1588,6 +1630,7 @@ export async function ensureAllMerchantSchema(): Promise<{
     productsMissing,
     editionsMissing: editionsMissingAfter,
     subscriptionPlansMissing: subscriptionPlansMissingAfter,
+    posSessionsMissing: posSessionsMissingAfter,
   };
 }
 
@@ -1619,6 +1662,11 @@ function isSubscriptionSchemaError(raw: string): boolean {
   return isMissingSchemaError(raw) || /Failed query/i.test(raw);
 }
 
+function isPosSessionsSchemaError(raw: string): boolean {
+  if (!/pos_sessions|posSessions/i.test(raw)) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
 /** Retry a merchants query after applying missing-column/table patches. */
 export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1631,9 +1679,12 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
       const ordersColumnMissing = isOrdersColumnSchemaError(raw);
       const subscriptionMissing = isSubscriptionSchemaError(raw);
+      const posSessionsMissing = isPosSessionsSchemaError(raw);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();
+      } else if (posSessionsMissing) {
+        await ensurePosSessionsSchema();
       } else if (subscriptionMissing) {
         await ensureSubscriptionPlansSchema();
       } else if (merchantsColumnMissing) {
@@ -1652,7 +1703,8 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         !locationsMissing &&
         !merchantsColumnMissing &&
         !ordersColumnMissing &&
-        !subscriptionMissing
+        !subscriptionMissing &&
+        !posSessionsMissing
       ) {
         throw error;
       }
@@ -1670,6 +1722,10 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
   if (!isMissingSchemaError(raw)) return false;
   if (isLocationsSchemaError(raw)) {
     await ensureLocationsSchema();
+    return true;
+  }
+  if (isPosSessionsSchemaError(raw) || /pos_sessions|posSessions/i.test(raw)) {
+    await ensurePosSessionsSchema();
     return true;
   }
   if (isSubscriptionSchemaError(raw)) {
