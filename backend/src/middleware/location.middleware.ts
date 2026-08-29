@@ -12,7 +12,8 @@ declare global {
 
 /**
  * Reads X-Location-Id header, validates staff access, sets req.locationId.
- * Falls back to merchant default location when header absent.
+ * Unknown or stale headers fall back to the merchant default location
+ * so Settings / catalog keep working for single-shop merchants.
  */
 export async function setLocationContext(req: Request, res: Response, next: NextFunction) {
   try {
@@ -29,16 +30,27 @@ export async function setLocationContext(req: Request, res: Response, next: Next
     const staffId = req.user?.staffId || null;
 
     if (headerId) {
-      await LocationsService.assertStaffAccess(merchantId, headerId, { staffId, isOwner });
-      req.locationId = await LocationsService.resolveLocationId(merchantId, headerId);
-    } else {
-      req.locationId = await LocationsService.getDefaultId(merchantId);
+      const resolved = await LocationsService.resolveLocationIdOrNull(merchantId, headerId);
+      if (resolved) {
+        await LocationsService.assertStaffAccess(merchantId, resolved, { staffId, isOwner });
+        req.locationId = resolved;
+        return next();
+      }
     }
+    req.locationId = await LocationsService.getDefaultId(merchantId);
     next();
   } catch (error) {
-    res.status(403).json({
-      error: error instanceof Error ? error.message : "Invalid location",
-      code: "LOCATION_ACCESS_DENIED",
-    });
+    // Stale X-Location-Id / missing locations row must not blank Settings, Tables, or Reservations.
+    console.warn("[location] context failed, falling back to default:", error);
+    try {
+      if (req.merchantId) {
+        req.locationId = await LocationsService.getDefaultId(req.merchantId);
+        return next();
+      }
+    } catch (fallbackError) {
+      console.warn("[location] default location fallback failed:", fallbackError);
+    }
+    req.locationId = undefined;
+    next();
   }
 }

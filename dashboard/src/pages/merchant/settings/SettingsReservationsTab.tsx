@@ -71,6 +71,7 @@ function emptyWeek(): ChannelHours {
 export default function SettingsReservationsTab() {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [settings, setSettings] = useState<ResSettings | null>(null);
   const [dineInHours, setDineInHours] = useState<ChannelHours>(emptyWeek());
@@ -78,13 +79,16 @@ export default function SettingsReservationsTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await api.get('/merchant/reservations/config');
       setEnabled(!!res.data.config?.enabled);
       setSettings(res.data.config?.settings);
       if (res.data.config?.hours) setDineInHours(res.data.config.hours);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+      const msg = e.response?.data?.error || t('cmsLoadFailed');
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -115,8 +119,19 @@ export default function SettingsReservationsTab() {
     }
   };
 
-  if (loading || !settings) {
+  if (loading) {
     return <div className="p-4 text-sm text-[var(--text-muted)]">{t('loading')}</div>;
+  }
+
+  if (loadError || !settings) {
+    return (
+      <div className="space-y-3 p-4">
+        <p className="text-sm text-red-600">{loadError || t('cmsLoadFailed')}</p>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void load()}>
+          {t('settingsLoadRetry')}
+        </button>
+      </div>
+    );
   }
 
   const discountCount = settings.slotDiscounts?.length ?? 0;

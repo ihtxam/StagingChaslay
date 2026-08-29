@@ -83,7 +83,12 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
         hydrated: true,
       });
     } catch {
-      set({ hydrated: true });
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      set({ locationId: null, location: null, hydrated: true });
     } finally {
       set({ loading: false });
     }
