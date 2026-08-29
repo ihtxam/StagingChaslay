@@ -32,7 +32,9 @@ import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRou
 import api from '@/lib/api';
 import {
   RECEIPT_LOGO_WIDTH_PX_MAX,
+  buildPrinterTestEscPos,
   resizeImageFileForReceiptLogo,
+  uint8ToBase64,
 } from '@/lib/webpos-receipt';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -49,6 +51,7 @@ import {
   isUnsuitableRawPrinter,
   listAgentPrinters,
   listScaleDevices,
+  printViaAgent,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
@@ -521,6 +524,7 @@ export default function Settings() {
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
+  const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
   const [scanningScalePorts, setScanningScalePorts] = useState(false);
   const [scalePortsScanned, setScalePortsScanned] = useState(false);
@@ -1055,6 +1059,43 @@ export default function Settings() {
       setRefreshingPrinters(false);
     }
   }, [printAgentManifest?.version, printBridgeManifest?.version]);
+
+  const testPrinterProfile = useCallback(
+    async (profile: { id: string; name: string }) => {
+      const name = String(profile.name || '').trim();
+      if (!name) {
+        toast.error(t('testPrinterNeedName'));
+        return;
+      }
+      const health = await getPrintAgentHealth().catch(() => ({ ok: false }));
+      if (!health.ok && !printAgentOk) {
+        toast.error(t('testPrinterNeedAgent'));
+        return;
+      }
+      setTestingPrinterId(profile.id);
+      try {
+        const escpos = buildPrinterTestEscPos({
+          merchantName: settings?.name,
+          printerName: name,
+        });
+        await printViaAgent({
+          printerName: name,
+          dataBase64: uint8ToBase64(escpos),
+          text: `TEST PRINT\n${settings?.name || ''}\n${name}\n`,
+        });
+        toast.success(t('testPrinterOk').replace('{name}', name));
+      } catch (error: unknown) {
+        const msg =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message || '')
+            : '';
+        toast.error(msg || t('testPrinterFailed'));
+      } finally {
+        setTestingPrinterId(null);
+      }
+    },
+    [printAgentOk, settings?.name, t]
+  );
 
   const refreshScalePorts = useCallback(async () => {
     setScanningScalePorts(true);
@@ -4168,21 +4209,32 @@ export default function Settings() {
                         />
                       </div>
                     ) : null}
-                    <button
-                      type="button"
-                      className="text-xs text-red-600"
-                      onClick={() => {
-                        const printers = (settings.posPrintSettings?.printers || []).filter(
-                          (_, i) => i !== idx
-                        );
-                        setSettings({
-                          ...settings,
-                          posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                        });
-                      }}
-                    >
-                      {t('delete')}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-2 text-sm"
+                        disabled={!p.name?.trim() || testingPrinterId === p.id}
+                        onClick={() => void testPrinterProfile(p)}
+                      >
+                        <Printer size={14} />
+                        {testingPrinterId === p.id ? t('loading') : t('testPrinter')}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600"
+                        onClick={() => {
+                          const printers = (settings.posPrintSettings?.printers || []).filter(
+                            (_, i) => i !== idx
+                          );
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                          });
+                        }}
+                      >
+                        {t('delete')}
+                      </button>
+                    </div>
                   </div>
                   );
                 })}
