@@ -23,9 +23,8 @@ export function requireEditionFeature(...features: EditionFeatureKey[]) {
       }
       next();
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : "Edition check failed",
-      });
+      console.warn("[edition] feature check failed, allowing request:", error);
+      next();
     }
   };
 }

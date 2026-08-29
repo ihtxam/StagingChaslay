@@ -59,7 +59,27 @@ api.interceptors.request.use((config) => {
 // Handle responses
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const cfg = error.config as (typeof error.config & { _locationRetry?: boolean }) | undefined;
+    const locCode = error.response?.data?.code;
+    const locMsg = String(error.response?.data?.error || '');
+    if (
+      cfg &&
+      !cfg._locationRetry &&
+      (locCode === 'LOCATION_ACCESS_DENIED' || /location not found/i.test(locMsg))
+    ) {
+      try {
+        localStorage.removeItem('manupos_selected_location');
+      } catch {
+        /* ignore */
+      }
+      cfg._locationRetry = true;
+      if (cfg.headers) {
+        delete cfg.headers['X-Location-Id'];
+        delete cfg.headers['x-location-id'];
+      }
+      return api.request(cfg);
+    }
     if (error.response?.status === 401) {
       const path = window.location.pathname || '';
       const reqUrl = String(error.config?.url || '');

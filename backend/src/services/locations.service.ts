@@ -64,18 +64,28 @@ export class LocationsService {
     return row.id;
   }
 
+  static async resolveLocationIdOrNull(
+    merchantId: string,
+    locationId?: string | null
+  ): Promise<string | null> {
+    const id = String(locationId || "").trim();
+    if (!id) return null;
+    const db = getDb();
+    const row = await db.query.locations.findFirst({
+      where: and(eq(schema.locations.id, id), eq(schema.locations.merchantId, merchantId)),
+    });
+    return row?.id ?? null;
+  }
+
   static async resolveLocationId(
     merchantId: string,
     locationId?: string | null
   ): Promise<string> {
     const id = String(locationId || "").trim();
     if (!id) return this.getDefaultId(merchantId);
-    const db = getDb();
-    const row = await db.query.locations.findFirst({
-      where: and(eq(schema.locations.id, id), eq(schema.locations.merchantId, merchantId)),
-    });
-    if (!row) throw new Error("Location not found");
-    return row.id;
+    const resolved = await this.resolveLocationIdOrNull(merchantId, id);
+    if (!resolved) throw new Error("Location not found");
+    return resolved;
   }
 
   static async resolveBySlug(merchantId: string, slug: string) {
