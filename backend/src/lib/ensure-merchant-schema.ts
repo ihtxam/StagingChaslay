@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
+  dbErrorChain,
   isLocationsSchemaError,
   isMissingSchemaError,
-  missingColumnFromError,
+  missingColumnFromDbError,
 } from "@/lib/db-schema-errors";
 
 /**
@@ -66,6 +67,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cart_layout varchar(20) NOT NULL DEFAULT 'hidden_slide'",
   delivery_menu_markup:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_menu_markup numeric(10,2) DEFAULT 0",
+  min_pre_order_delay_minutes:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
   category_pricing_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
   webpos_gift_card_enabled:
@@ -1001,6 +1004,16 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+/** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
+export async function ensureMerchantColumnsSchema(): Promise<void> {
+  for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
+    await runPatch(column);
+  }
+  await runPatch("delivery_driver_pay_mode");
+  await runPatch("delivery_driver_hourly_rate");
+  await runPatch("delivery_per_order_fee");
+}
+
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
   const db = getDb();
@@ -1062,10 +1075,8 @@ export async function backfillDefaultLocations(): Promise<void> {
 export function ensureMerchantSchemaAtStartup(): void {
   if (startupPatchPromise) return;
   startupPatchPromise = (async () => {
-    for (const column of [
-      ...Object.keys(MERCHANT_COLUMN_PATCHES),
-      ...Object.keys(EXTRA_COLUMN_PATCHES),
-    ]) {
+    await ensureMerchantColumnsSchema();
+    for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
       await runPatch(column);
     }
     await ensureMerchantTables();
@@ -1075,24 +1086,40 @@ export function ensureMerchantSchemaAtStartup(): void {
   });
 }
 
+function isMerchantsColumnSchemaError(raw: string): boolean {
+  return (
+    isMissingSchemaError(raw) &&
+    (/relation ["']?merchants["']?/i.test(raw) ||
+      /from ["']?merchants["']?/i.test(raw) ||
+      /merchants\./i.test(raw))
+  );
+}
+
 /** Retry a merchants query after applying missing-column/table patches. */
 export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    const raw = error instanceof Error ? error.message : String(error ?? "");
-    const patched = await patchMerchantSchemaFromError(error);
-    const locationsMissing = isLocationsSchemaError(raw);
-    const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
-    if (locationsMissing) {
-      await ensureLocationsSchema();
-    } else if (inventoryTableMissing) {
-      patchedTables = false;
-      await ensureMerchantTables();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const raw = dbErrorChain(error);
+      const patched = await patchMerchantSchemaFromError(error);
+      const locationsMissing = isLocationsSchemaError(raw);
+      const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
+      const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
+      if (locationsMissing) {
+        await ensureLocationsSchema();
+      } else if (merchantsColumnMissing) {
+        await ensureMerchantColumnsSchema();
+      } else if (inventoryTableMissing) {
+        patchedTables = false;
+        await ensureMerchantTables();
+      }
+      if (!patched && !inventoryTableMissing && !locationsMissing && !merchantsColumnMissing) {
+        throw error;
+      }
     }
-    if (!patched && !inventoryTableMissing && !locationsMissing) throw error;
-    return fn();
   }
+  return fn();
 }
 
 /**
@@ -1100,13 +1127,17 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
  * Returns true when a patch was applied.
  */
 export async function patchMerchantSchemaFromError(error: unknown): Promise<boolean> {
-  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const raw = dbErrorChain(error);
   if (!isMissingSchemaError(raw)) return false;
   if (isLocationsSchemaError(raw)) {
     await ensureLocationsSchema();
     return true;
   }
-  const col = missingColumnFromError(raw);
+  if (isMerchantsColumnSchemaError(raw)) {
+    await ensureMerchantColumnsSchema();
+    return true;
+  }
+  const col = missingColumnFromDbError(error);
   if (!col) return false;
   return runPatch(col);
 }

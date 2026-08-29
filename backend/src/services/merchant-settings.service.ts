@@ -33,7 +33,7 @@ import {
   readJustEatAddonEnabled,
   readUberEatsAddonEnabled,
 } from "@/lib/delivery-platform-addon";
-import { patchMerchantSchemaFromError } from "@/lib/ensure-merchant-schema";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
@@ -90,15 +90,7 @@ function normalizeCartLayout(raw?: string | null): ShopCartLayout {
 
 export class MerchantSettingsService {
   static async getMerchantSettings(merchantId: string) {
-    try {
-      return await this.buildMerchantSettings(merchantId);
-    } catch (error) {
-      const patched = await patchMerchantSchemaFromError(error);
-      if (patched) {
-        return await this.buildMerchantSettings(merchantId);
-      }
-      throw error;
-    }
+    return withMerchantSchemaRetry(() => this.buildMerchantSettings(merchantId));
   }
 
   private static async buildMerchantSettings(merchantId: string) {

@@ -1,6 +1,28 @@
+/** Flatten DrizzleQueryError / pg error chains into one searchable string. */
+export function dbErrorChain(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current != null && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error) {
+      if (current.message) parts.push(current.message);
+      current = (current as Error & { cause?: unknown }).cause;
+      continue;
+    }
+    parts.push(String(current));
+    break;
+  }
+  return parts.join("\n");
+}
+
 /** Detect Postgres "undefined column/relation" errors from Drizzle/pg. */
 export function isMissingSchemaError(raw: string): boolean {
   return /does not exist|undefined column|unknown column|column .* does not exist/i.test(raw);
+}
+
+export function isMissingSchemaErrorFrom(error: unknown): boolean {
+  return isMissingSchemaError(dbErrorChain(error));
 }
 
 /** Extract snake_case column name from a Postgres missing-column error, if present. */
@@ -9,6 +31,10 @@ export function missingColumnFromError(raw: string): string | null {
     raw.match(/column "([a-z0-9_]+)" (?:of relation "[^"]+" )?does not exist/i) ||
     raw.match(/column ([a-z0-9_]+) does not exist/i);
   return m?.[1] ?? null;
+}
+
+export function missingColumnFromDbError(error: unknown): string | null {
+  return missingColumnFromError(dbErrorChain(error));
 }
 
 /** Detect missing multi-location tables (locations, HQ catalog, per-location stock, etc.). */
