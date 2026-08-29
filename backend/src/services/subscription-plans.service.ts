@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { PlatformResellerService } from "@/services/platform-reseller.service";
 
 export type PlanInput = {
@@ -88,20 +89,24 @@ export class SubscriptionPlansService {
   }
 
   static async getById(id: string) {
-    const db = getDb();
-    const plan = await db.query.subscriptionPlans.findFirst({
-      where: eq(schema.subscriptionPlans.id, id),
-      with: { edition: true },
+    const plan = await withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      return db.query.subscriptionPlans.findFirst({
+        where: eq(schema.subscriptionPlans.id, id),
+        with: { edition: true },
+      });
     });
     if (!plan) throw new Error("Plan not found");
     return plan;
   }
 
   static async getBySlug(slug: string) {
-    const db = getDb();
-    return db.query.subscriptionPlans.findFirst({
-      where: eq(schema.subscriptionPlans.slug, normalizeSlug(slug)),
-      with: { edition: true },
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      return db.query.subscriptionPlans.findFirst({
+        where: eq(schema.subscriptionPlans.slug, normalizeSlug(slug)),
+        with: { edition: true },
+      });
     });
   }
 

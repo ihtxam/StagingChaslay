@@ -1,5 +1,6 @@
 import { and, count, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { readSignageAddon, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
@@ -47,6 +48,10 @@ function pickStationLimit(merchantVal: number, planVal: number, planDevices: num
 
 export class MerchantEntitlementsService {
   static async getLimits(merchantId: string): Promise<MerchantLimits> {
+    return withMerchantSchemaRetry(() => this.loadLimits(merchantId));
+  }
+
+  private static async loadLimits(merchantId: string): Promise<MerchantLimits> {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),

@@ -1989,12 +1989,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const fetchOpts = { timeout: fetchTimeout };
 
     try {
+      let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
+      let staffFailed = false;
       const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
-        api.get('/merchant/categories', fetchOpts),
-        api.get('/merchant/products', { params: { limit: 500 }, ...fetchOpts }),
+        api.get('/merchant/categories', fetchOpts).catch(() => ({ data: { categories: [] } })),
+        api.get('/merchant/products', { params: { limit: 500 }, ...fetchOpts }).catch((error) => {
+          catalogError = error;
+          return { data: { products: [] } };
+        }),
         api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
-        api.get('/merchant/staff', fetchOpts).catch(() => ({ data: { staff: [] } })),
+        api.get('/merchant/staff', fetchOpts).catch(() => {
+          staffFailed = true;
+          return { data: { staff: [] } };
+        }),
         api
           .get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts })
           .catch(() => ({ data: { productIds: [] } })),
@@ -2075,8 +2083,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (pick) setPaymentMethod(pick);
       }
       const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
-      setStaffRoster(staffList);
-      applyStaffRoster(staffList, { openPinGate: true });
+      if (!staffFailed) {
+        setStaffRoster(staffList);
+        applyStaffRoster(staffList, { openPinGate: true });
+      }
+      if (catalogError) {
+        toast.error(
+          catalogError.response?.data?.error || catalogError.message || t('webPosLoadFailed')
+        );
+      }
       const prods = prodRes.data.products || prodRes.data || [];
       const mappedProducts = prods.map((p: any) => ({
         ...p,
@@ -8619,7 +8634,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           {t('webPosNewReservationAlert')}
         </div>
       ) : null}
-      {!staffConfigured && !setPinHintDismissed ? (
+      {staffPinsKnown && !staffConfigured && !setPinHintDismissed ? (
         <div
           className="shrink-0 flex items-center justify-between gap-3 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-950"
           role="status"

@@ -286,8 +286,75 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
 };
 
+/** subscription_plans columns added after the original packages table. */
+const SUBSCRIPTION_PLAN_COLUMN_PATCHES: Record<string, string> = {
+  subscription_plans_owner_type:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS owner_type varchar(20) NOT NULL DEFAULT 'platform'",
+  subscription_plans_owner_id:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS owner_id uuid",
+  subscription_plans_edition_id:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS edition_id uuid",
+  subscription_plans_max_pos_posts:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_pos_posts integer NOT NULL DEFAULT 0",
+  subscription_plans_max_waiter_posts:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_waiter_posts integer NOT NULL DEFAULT 0",
+  subscription_plans_max_staff:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_staff integer NOT NULL DEFAULT 0",
+  subscription_plans_max_locations:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
+  subscription_plans_included_addons:
+    "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS included_addons jsonb DEFAULT '{}'::jsonb",
+};
+
+const EDITIONS_COLUMN_PATCHES: Record<string, string> = {
+  editions_owner_type:
+    "ALTER TABLE editions ADD COLUMN IF NOT EXISTS owner_type varchar(20) NOT NULL DEFAULT 'platform'",
+  editions_owner_id: "ALTER TABLE editions ADD COLUMN IF NOT EXISTS owner_id uuid",
+  editions_note: "ALTER TABLE editions ADD COLUMN IF NOT EXISTS note text",
+  editions_business_category:
+    "ALTER TABLE editions ADD COLUMN IF NOT EXISTS business_category varchar(20) NOT NULL DEFAULT 'both'",
+  editions_features: "ALTER TABLE editions ADD COLUMN IF NOT EXISTS features jsonb NOT NULL DEFAULT '[]'::jsonb",
+  editions_is_active: "ALTER TABLE editions ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true",
+};
+
+const REQUIRED_SUBSCRIPTION_PLAN_COLUMNS = [
+  "owner_type",
+  "owner_id",
+  "edition_id",
+  "max_pos_posts",
+  "max_waiter_posts",
+  "max_staff",
+  "max_locations",
+  "included_addons",
+];
+
+const REQUIRED_EDITIONS_COLUMNS = [
+  "id",
+  "owner_type",
+  "owner_id",
+  "name",
+  "note",
+  "business_category",
+  "features",
+  "is_active",
+];
+
 /** Idempotent CREATE TABLE for features added after initial deploy. */
 const TABLE_PATCHES: string[] = [
+  `CREATE TABLE IF NOT EXISTS editions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_type varchar(20) NOT NULL DEFAULT 'platform',
+    owner_id uuid,
+    name varchar(150) NOT NULL,
+    note text,
+    business_category varchar(20) NOT NULL DEFAULT 'both',
+    features jsonb NOT NULL DEFAULT '[]'::jsonb,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS editions_owner_idx ON editions (owner_type, owner_id)`,
+  `CREATE INDEX IF NOT EXISTS editions_name_idx ON editions (name)`,
   `CREATE TABLE IF NOT EXISTS vouchers (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -1053,13 +1120,25 @@ let patchedColumns = new Set<string>();
 let patchedTables = false;
 
 function resolvePatchStatement(column: string, table?: string | null): string | undefined {
-  const direct = MERCHANT_COLUMN_PATCHES[column] || EXTRA_COLUMN_PATCHES[column];
+  const direct =
+    MERCHANT_COLUMN_PATCHES[column] ||
+    EXTRA_COLUMN_PATCHES[column] ||
+    SUBSCRIPTION_PLAN_COLUMN_PATCHES[column] ||
+    EDITIONS_COLUMN_PATCHES[column];
   if (direct) return direct;
   if (table) {
-    const scoped = EXTRA_COLUMN_PATCHES[`${table}_${column}`];
+    const scoped =
+      EXTRA_COLUMN_PATCHES[`${table}_${column}`] ||
+      SUBSCRIPTION_PLAN_COLUMN_PATCHES[`${table}_${column}`] ||
+      EDITIONS_COLUMN_PATCHES[`${table}_${column}`];
     if (scoped) return scoped;
   }
-  const all = { ...MERCHANT_COLUMN_PATCHES, ...EXTRA_COLUMN_PATCHES };
+  const all = {
+    ...MERCHANT_COLUMN_PATCHES,
+    ...EXTRA_COLUMN_PATCHES,
+    ...SUBSCRIPTION_PLAN_COLUMN_PATCHES,
+    ...EDITIONS_COLUMN_PATCHES,
+  };
   for (const sql of Object.values(all)) {
     if (sql.includes(`ADD COLUMN IF NOT EXISTS ${column} `)) return sql;
   }
@@ -1214,6 +1293,27 @@ async function runAlterTablePatches(): Promise<void> {
   }
 }
 
+/** Ensure editions + subscription_plans columns exist (plan lookup / POS entitlements). */
+export async function ensureSubscriptionPlansSchema(): Promise<void> {
+  for (const statement of TABLE_PATCHES) {
+    if (!/editions/i.test(statement)) continue;
+    try {
+      await execSql(statement);
+    } catch (err) {
+      console.warn("[schema] editions table patch failed:", err);
+    }
+  }
+  for (const column of Object.keys(EDITIONS_COLUMN_PATCHES)) {
+    await runPatch(column, "editions");
+  }
+  for (const column of Object.keys(SUBSCRIPTION_PLAN_COLUMN_PATCHES)) {
+    await runPatch(column, "subscription_plans");
+  }
+  await runPatch("max_locations", "subscription_plans");
+  await runPatch("edition_id", "subscription_plans");
+  await runPatch("included_addons", "subscription_plans");
+}
+
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
   for (const statement of TABLE_PATCHES) {
@@ -1323,6 +1423,15 @@ export async function listMissingMerchantColumns(): Promise<string[]> {
   return listMissingTableColumns("merchants", REQUIRED_MERCHANT_COLUMNS);
 }
 
+async function tableExists(table: string): Promise<boolean> {
+  const { rows } = await getDdlPool().query<{ table_name: string }>(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
+  );
+  return rows.length > 0;
+}
+
 /** Apply all idempotent schema patches (safe to run on every boot). */
 export async function ensureAllMerchantSchema(): Promise<{
   missingBefore: string[];
@@ -1330,6 +1439,8 @@ export async function ensureAllMerchantSchema(): Promise<{
   ordersMissing: string[];
   orderItemsMissing: string[];
   productsMissing: string[];
+  editionsMissing: string[];
+  subscriptionPlansMissing: string[];
 }> {
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
@@ -1350,6 +1461,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   await ensureOrdersColumnsSchema();
   await ensureOrderItemsColumnsSchema();
   await ensureMerchantTables();
+  await ensureSubscriptionPlansSchema();
   await ensureLocationsSchema();
 
   const stillMerchants = await listMissingMerchantColumns().catch(() => [] as string[]);
@@ -1401,15 +1513,51 @@ export async function ensureAllMerchantSchema(): Promise<{
     "recipe_yield",
     "barcode",
   ]).catch(() => [] as string[]);
-  if (missingAfter.length || ordersMissing.length || orderItemsMissing.length || productsMissing.length) {
+  const editionsExists = await tableExists("editions").catch(() => false);
+  const editionsMissing = editionsExists
+    ? await listMissingTableColumns("editions", REQUIRED_EDITIONS_COLUMNS).catch(() => [] as string[])
+    : ["<table>"];
+  const subscriptionPlansMissing = await listMissingTableColumns(
+    "subscription_plans",
+    REQUIRED_SUBSCRIPTION_PLAN_COLUMNS
+  ).catch(() => REQUIRED_SUBSCRIPTION_PLAN_COLUMNS.slice());
+  if (editionsMissing.length || subscriptionPlansMissing.length) {
+    patchedTables = false;
+    await ensureSubscriptionPlansSchema();
+  }
+  const editionsMissingAfter = (await tableExists("editions").catch(() => false))
+    ? await listMissingTableColumns("editions", REQUIRED_EDITIONS_COLUMNS).catch(() => [] as string[])
+    : ["<table>"];
+  const subscriptionPlansMissingAfter = await listMissingTableColumns(
+    "subscription_plans",
+    REQUIRED_SUBSCRIPTION_PLAN_COLUMNS
+  ).catch(() => REQUIRED_SUBSCRIPTION_PLAN_COLUMNS.slice());
+  if (
+    missingAfter.length ||
+    ordersMissing.length ||
+    orderItemsMissing.length ||
+    productsMissing.length ||
+    editionsMissingAfter.length ||
+    subscriptionPlansMissingAfter.length
+  ) {
     console.warn("[schema] still missing:", {
       merchants: missingAfter,
       orders: ordersMissing,
       orderItems: orderItemsMissing,
       products: productsMissing,
+      editions: editionsMissingAfter,
+      subscriptionPlans: subscriptionPlansMissingAfter,
     });
   }
-  return { missingBefore, missingAfter, ordersMissing, orderItemsMissing, productsMissing };
+  return {
+    missingBefore,
+    missingAfter,
+    ordersMissing,
+    orderItemsMissing,
+    productsMissing,
+    editionsMissing: editionsMissingAfter,
+    subscriptionPlansMissing: subscriptionPlansMissingAfter,
+  };
 }
 
 /** Run schema patches at startup — await before accepting traffic. */
@@ -1434,6 +1582,12 @@ function isMerchantsColumnSchemaError(raw: string): boolean {
   );
 }
 
+function isSubscriptionSchemaError(raw: string): boolean {
+  const mentionsPlans = /subscription_plans|subscriptionPlans|"editions"/i.test(raw);
+  if (!mentionsPlans) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
 /** Retry a merchants query after applying missing-column/table patches. */
 export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1445,9 +1599,12 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const locationsMissing = isLocationsSchemaError(raw);
       const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
       const ordersColumnMissing = isOrdersColumnSchemaError(raw);
+      const subscriptionMissing = isSubscriptionSchemaError(raw);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();
+      } else if (subscriptionMissing) {
+        await ensureSubscriptionPlansSchema();
       } else if (merchantsColumnMissing) {
         await ensureMerchantColumnsSchema();
       } else if (ordersColumnMissing) {
@@ -1463,7 +1620,8 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         !inventoryTableMissing &&
         !locationsMissing &&
         !merchantsColumnMissing &&
-        !ordersColumnMissing
+        !ordersColumnMissing &&
+        !subscriptionMissing
       ) {
         throw error;
       }
@@ -1481,6 +1639,10 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
   if (!isMissingSchemaError(raw)) return false;
   if (isLocationsSchemaError(raw)) {
     await ensureLocationsSchema();
+    return true;
+  }
+  if (isSubscriptionSchemaError(raw)) {
+    await ensureSubscriptionPlansSchema();
     return true;
   }
   if (isMerchantsColumnSchemaError(raw)) {
