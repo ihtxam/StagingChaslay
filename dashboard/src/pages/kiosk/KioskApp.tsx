@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Banknote,
+  Barcode,
   ChevronDown,
   CreditCard,
   Loader2,
@@ -19,6 +20,12 @@ import ShopProductModifiersModal, {
   type ShopProductForModifiers,
 } from '@/components/shop/ShopProductModifiersModal';
 import { startQrCameraScan } from '@/lib/qr-camera-scan';
+import {
+  buildKioskProductScanIndex,
+  findKioskProductByScanCode,
+  KIOSK_MEMBERSHIP_SCAN_FORMATS,
+  KIOSK_PRODUCT_SCAN_FORMATS,
+} from '@/lib/kiosk-scan';
 import {
   createKioskOrder,
   fetchKioskConfig,
@@ -73,6 +80,7 @@ export default function KioskApp() {
   const [badgeNumber, setBadgeNumber] = useState('');
   const [membership, setMembership] = useState<{ id: string; holderName?: string } | null>(null);
   const [scanningMembership, setScanningMembership] = useState(false);
+  const [scanningBarcode, setScanningBarcode] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [cart, setCart] = useState<KioskCartLine[]>([]);
   const [modifierProduct, setModifierProduct] = useState<ShopProductForModifiers | null>(null);
@@ -83,7 +91,10 @@ export default function KioskApp() {
   const [adminPin, setAdminPin] = useState('');
   const [adminPinSubmitting, setAdminPinSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const barcodeVideoRef = useRef<HTMLVideoElement>(null);
   const idleTimer = useRef<number | null>(null);
+  const scanBufferRef = useRef('');
+  const scanTimerRef = useRef<number | null>(null);
 
   const slides = config?.settings.promoSlides?.length
     ? config.settings.promoSlides
@@ -98,6 +109,8 @@ export default function KioskApp() {
   const activeCategory = menu.find((c) => c.id === activeCategoryId) || menu[0];
   const tableLabel =
     config?.tables.find((t) => t.id === selectedTableId)?.label || selectedTableId;
+
+  const productScanIndex = useMemo(() => buildKioskProductScanIndex(menu), [menu]);
 
   const resetSession = useCallback(() => {
     setStep('attract');
@@ -154,44 +167,7 @@ export default function KioskApp() {
     return () => events.forEach((e) => window.removeEventListener(e, handler));
   }, [bumpIdle]);
 
-  useEffect(() => {
-    if (!scanningMembership || !videoRef.current) return;
-    let stream: MediaStream | null = null;
-    let scanHandle: { stop: () => void } | null = null;
-    void (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false,
-        });
-        const video = videoRef.current!;
-        video.srcObject = stream;
-        await video.play();
-        scanHandle = startQrCameraScan(video, (raw) => {
-          void (async () => {
-            try {
-              const card = await lookupKioskMembership(token, raw.trim());
-              setMembership({ id: card.id, holderName: card.holderName || card.customerName });
-              setScanningMembership(false);
-              setStep('menu');
-            } catch {
-              toast.error('Membership not found');
-            }
-          })();
-          return true;
-        });
-      } catch {
-        toast.error('Camera access required for membership scan');
-        setScanningMembership(false);
-      }
-    })();
-    return () => {
-      scanHandle?.stop();
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [scanningMembership, token]);
-
-  const addProduct = (item: KioskMenuCategory['items'][number]) => {
+  const addProduct = useCallback((item: KioskMenuCategory['items'][number]) => {
     const asModifier: ShopProductForModifiers = {
       id: item.id,
       name: item.name,
@@ -222,7 +198,160 @@ export default function KioskApp() {
         },
       ];
     });
-  };
+  }, []);
+
+  const applyMembershipCode = useCallback(
+    async (raw: string) => {
+      const code = raw.trim();
+      if (!code) return;
+      try {
+        const card = await lookupKioskMembership(token, code);
+        setMembership({ id: card.id, holderName: card.holderName || card.customerName });
+        setScanningMembership(false);
+        setStep('menu');
+        toast.success('Membership linked');
+      } catch {
+        toast.error('Membership not found');
+      }
+    },
+    [token]
+  );
+
+  const handleProductScan = useCallback(
+    (raw: string) => {
+      const item = findKioskProductByScanCode(productScanIndex, raw);
+      if (!item) {
+        toast.error('Product not found for this barcode');
+        return;
+      }
+      addProduct(item);
+      setScanningBarcode(false);
+      toast.success(`Added ${item.name}`);
+    },
+    [productScanIndex, addProduct]
+  );
+
+  useEffect(() => {
+    if (!scanningMembership || !videoRef.current) return;
+    let stream: MediaStream | null = null;
+    let scanHandle: { stop: () => void } | null = null;
+    void (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false,
+        });
+        const video = videoRef.current!;
+        video.srcObject = stream;
+        await video.play();
+        scanHandle = startQrCameraScan(
+          video,
+          (raw) => {
+            void applyMembershipCode(raw);
+            return true;
+          },
+          KIOSK_MEMBERSHIP_SCAN_FORMATS
+        );
+      } catch {
+        toast.error('Camera access required for membership scan');
+        setScanningMembership(false);
+      }
+    })();
+    return () => {
+      scanHandle?.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [scanningMembership, applyMembershipCode]);
+
+  useEffect(() => {
+    if (!scanningBarcode || !barcodeVideoRef.current) return;
+    let stream: MediaStream | null = null;
+    let scanHandle: { stop: () => void } | null = null;
+    void (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false,
+        });
+        const video = barcodeVideoRef.current!;
+        video.srcObject = stream;
+        await video.play();
+        scanHandle = startQrCameraScan(
+          video,
+          (raw) => {
+            handleProductScan(raw);
+            return true;
+          },
+          KIOSK_PRODUCT_SCAN_FORMATS
+        );
+      } catch {
+        toast.error('Camera access required for barcode scan');
+        setScanningBarcode(false);
+      }
+    })();
+    return () => {
+      scanHandle?.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [scanningBarcode, handleProductScan]);
+
+  useEffect(() => {
+    if (step !== 'menu' && step !== 'membership') return;
+
+    const clearScanTimer = () => {
+      if (scanTimerRef.current != null) {
+        window.clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (scanningMembership || scanningBarcode || adminPinOpen || modifierProduct) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (e.key === 'Enter') {
+        const code = scanBufferRef.current.trim();
+        scanBufferRef.current = '';
+        clearScanTimer();
+        if (code.length >= 3) {
+          e.preventDefault();
+          if (step === 'menu') handleProductScan(code);
+          else if (step === 'membership') void applyMembershipCode(code);
+        }
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        scanBufferRef.current += e.key;
+        clearScanTimer();
+        scanTimerRef.current = window.setTimeout(() => {
+          scanBufferRef.current = '';
+          scanTimerRef.current = null;
+        }, 120);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      clearScanTimer();
+    };
+  }, [
+    step,
+    scanningMembership,
+    scanningBarcode,
+    adminPinOpen,
+    modifierProduct,
+    handleProductScan,
+    applyMembershipCode,
+  ]);
 
   const submitOrder = async (paymentMethod: 'cash' | 'card') => {
     if (!config || !cart.length) return;
@@ -470,7 +599,7 @@ export default function KioskApp() {
             <QrCode className="h-16 w-16 text-emerald-600" />
             <h2 className="mt-4 text-3xl font-bold">Member rewards</h2>
             <p className="mt-2 max-w-lg text-center text-stone-600">
-              Scan your membership QR code to earn points on this order.
+              Scan your membership QR code with the camera or a handheld scanner to earn points.
             </p>
             {scanningMembership ? (
               <video ref={videoRef} className="mt-6 max-h-64 w-full max-w-md rounded-2xl bg-black" muted playsInline />
@@ -480,7 +609,8 @@ export default function KioskApp() {
                 onClick={() => setScanningMembership(true)}
                 className="kiosk-btn-primary mt-8 min-w-[240px]"
               >
-                Scan QR code
+                <QrCode className="mr-2 inline h-5 w-5" />
+                Scan membership QR
               </button>
             )}
             <div className="mt-auto flex w-full max-w-lg gap-4 pt-8">
@@ -514,7 +644,40 @@ export default function KioskApp() {
             </nav>
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 md:p-6">
-                <h2 className="mb-4 text-2xl font-bold">{activeCategory?.name}</h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-2xl font-bold">{activeCategory?.name}</h2>
+                  {scanningBarcode ? (
+                    <button
+                      type="button"
+                      className="kiosk-btn-secondary text-sm"
+                      onClick={() => setScanningBarcode(false)}
+                    >
+                      Close scanner
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="kiosk-btn-secondary inline-flex items-center gap-2 text-sm"
+                      onClick={() => setScanningBarcode(true)}
+                    >
+                      <Barcode className="h-4 w-4" />
+                      Scan barcode
+                    </button>
+                  )}
+                </div>
+                {scanningBarcode ? (
+                  <div className="mb-4 overflow-hidden rounded-2xl border border-stone-200 bg-black">
+                    <video
+                      ref={barcodeVideoRef}
+                      className="mx-auto max-h-56 w-full max-w-lg"
+                      muted
+                      playsInline
+                    />
+                    <p className="bg-stone-900 px-4 py-2 text-center text-sm text-stone-200">
+                      Point at a product barcode — or use a USB scanner
+                    </p>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
                   {(activeCategory?.items || []).map((item) => (
                     <button

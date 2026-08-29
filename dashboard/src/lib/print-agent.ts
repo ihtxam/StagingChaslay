@@ -527,6 +527,7 @@ async function agentFetch(path: string, init?: RequestInit, printerName?: string
 export type PrintAgentHealth = {
   ok: boolean;
   version?: string;
+  printerReady?: boolean;
 };
 
 export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
@@ -543,6 +544,7 @@ export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
     return {
       ok: !!data.ok,
       version: data.version != null ? String(data.version) : undefined,
+      printerReady: data.printerReady === true,
     };
   } catch {
     return { ok: false };

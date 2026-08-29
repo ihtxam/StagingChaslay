@@ -60,6 +60,8 @@ export type KioskMenuCategory = {
     price: number;
     description?: string;
     image?: string;
+    barcode?: string;
+    sku?: string;
     modifierGroups?: unknown[];
   }>;
 };
