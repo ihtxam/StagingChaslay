@@ -7,6 +7,21 @@ export interface ShopModifierOption {
   price: number;
   isDefault?: boolean;
   image?: string | null;
+  imageUrl?: string | null;
+}
+
+function normalizeModifierOption(
+  o: ShopModifierOption & { imageUrl?: string | null }
+): ShopModifierOption {
+  const image = o.image ?? o.imageUrl ?? null;
+  return { ...o, image: image || null };
+}
+
+function normalizeModifierGroup(g: ShopModifierGroup): ShopModifierGroup {
+  return {
+    ...g,
+    options: (g.options || []).map((o) => normalizeModifierOption(o)),
+  };
 }
 
 export interface ShopModifierGroup {
@@ -74,7 +89,9 @@ function sizeGroupFromSpecifications(product: ShopProductForModifiers): ShopModi
 }
 
 function legacyExtrasGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
-  if (product.modifierGroups?.length) return product.modifierGroups;
+  if (product.modifierGroups?.length) {
+    return product.modifierGroups.map((g) => normalizeModifierGroup(g));
+  }
   if (product.allowExtras && product.extras?.length) {
     return [
       {
@@ -83,7 +100,7 @@ function legacyExtrasGroups(product: ShopProductForModifiers): ShopModifierGroup
         selectionType: 'optional',
         minSelectable: 0,
         maxSelectable: product.extras.length,
-        options: product.extras,
+        options: product.extras.map((o) => normalizeModifierOption(o)),
       },
     ];
   }

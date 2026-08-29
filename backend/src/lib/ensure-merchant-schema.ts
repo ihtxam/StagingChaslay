@@ -170,6 +170,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   products_barcode: "ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
+  modifier_option_image_url: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS image_url varchar(2048)",
   category_id: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS category_id uuid",
   inventory_items_barcode: "ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_items_is_demo:
@@ -723,6 +724,7 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1`,
   `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid`,
   `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0`,
+  `ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS image_url varchar(2048)`,
   `CREATE INDEX IF NOT EXISTS modifier_options_inventory_item_idx ON modifier_options(inventory_item_id)`,
   `CREATE TABLE IF NOT EXISTS inventory_categories (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

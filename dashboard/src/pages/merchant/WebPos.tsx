@@ -2115,6 +2115,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 ? g.options.map((o: any) => ({
                     ...o,
                     name: repairCatalogText(o?.name || ''),
+                    image: o.image || o.imageUrl || null,
                   }))
                 : g?.options,
             }))
@@ -2151,6 +2152,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                             ? g.options.map((o: any) => ({
                                 ...o,
                                 name: repairCatalogText(o?.name || ''),
+                                image: o.image || o.imageUrl || null,
                               }))
                             : g?.options,
                         }))

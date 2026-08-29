@@ -1168,6 +1168,7 @@ export const modifierOptions = pgTable(
     /** Optional ingredient consumed when this extra is selected on a paid sale. */
     inventoryItemId: uuid("inventory_item_id"),
     inventoryQty: decimal("inventory_qty", { precision: 14, scale: 4 }).default("0").notNull(),
+    imageUrl: varchar("image_url", { length: 2048 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

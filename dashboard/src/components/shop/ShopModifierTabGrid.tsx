@@ -13,6 +13,8 @@ type Props = {
   currency?: string;
   compact?: boolean;
   showProductImages?: boolean;
+  /** Larger option thumbnails for kiosk / touch screens */
+  touchLarge?: boolean;
 };
 
 function groupLabel(title: string, t: (k: string) => string) {
@@ -27,6 +29,7 @@ export default function ShopModifierTabGrid({
   currency = 'CHF',
   compact = false,
   showProductImages = true,
+  touchLarge = false,
 }: Props) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
@@ -45,6 +48,11 @@ export default function ShopModifierTabGrid({
   const selected = selection[activeGroup.id] || [];
   const max = groupMax(activeGroup);
   const cols = compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3';
+  const imageBoxClass = touchLarge
+    ? 'mb-2 h-16 w-16'
+    : compact
+      ? 'mb-1.5 h-12 w-12'
+      : 'mb-1.5 h-14 w-14';
 
   const handleToggle = (optionId: string) => {
     onSelectionChange((prev) => toggleGroupOption(activeGroup, optionId, prev));
@@ -92,7 +100,7 @@ export default function ShopModifierTabGrid({
           {activeGroup.options.map((opt) => {
             const checked = selected.includes(opt.id);
             const price = Number(opt.price) || 0;
-            const imageSrc = opt.image || null;
+            const imageSrc = opt.image || opt.imageUrl || null;
             return (
               <button
                 key={opt.id}
@@ -105,7 +113,7 @@ export default function ShopModifierTabGrid({
                 }`}
               >
                 {showProductImages && imageSrc ? (
-                  <div className="mb-1.5 h-10 w-10 shrink-0 overflow-hidden rounded-md bg-stone-100">
+                  <div className={`${imageBoxClass} shrink-0 overflow-hidden rounded-md bg-stone-100`}>
                     <img
                       src={imageSrc}
                       alt=""

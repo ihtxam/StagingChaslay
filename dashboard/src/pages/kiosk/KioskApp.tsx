@@ -657,6 +657,10 @@ export default function KioskApp() {
       {modifierProduct ? (
         <ShopProductModifiersModal
           product={modifierProduct}
+          wide
+          compact={false}
+          touchLarge
+          showProductImages
           onClose={() => setModifierProduct(null)}
           onConfirm={(extras, unitPrice, options) => {
             const qty = options?.qty ?? 1;

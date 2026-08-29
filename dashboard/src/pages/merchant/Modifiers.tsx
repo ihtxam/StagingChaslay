@@ -1,7 +1,9 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
+  ImagePlus,
+  Loader2,
   Plus,
   Search,
   Trash2,
@@ -9,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { compressImageIfNeeded } from '@/lib/compress-image';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -28,6 +31,7 @@ interface ModifierOption {
   sortOrder?: number;
   inventoryItemId?: string | null;
   inventoryQty?: number;
+  imageUrl?: string | null;
 }
 
 interface ModifierOptionForm {
@@ -40,6 +44,7 @@ interface ModifierOptionForm {
   sortOrder?: number;
   inventoryItemId?: string;
   inventoryQty?: string;
+  imageUrl?: string;
 }
 
 interface LinkedProduct {
@@ -91,6 +96,7 @@ const emptyOption = (): ModifierOptionForm => ({
   isDefault: false,
   inventoryItemId: '',
   inventoryQty: '',
+  imageUrl: '',
 });
 
 const emptyForm = (): FormState => ({
@@ -118,6 +124,8 @@ export default function Modifiers() {
   const [otherOpen, setOtherOpen] = useState(true);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [optionUploadIdx, setOptionUploadIdx] = useState<number | null>(null);
+  const optionFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [inventoryOn, setInventoryOn] = useState(false);
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -211,6 +219,32 @@ export default function Modifiers() {
     setEditorOpen(true);
   };
 
+  const uploadOptionImage = async (idx: number, file: File) => {
+    setOptionUploadIdx(idx);
+    try {
+      const compressed = await compressImageIfNeeded(file, {
+        maxBytes: 350 * 1024,
+        targetBytes: 350 * 1024,
+        maxWidth: 800,
+      });
+      const fd = new FormData();
+      fd.append('file', compressed);
+      const res = await api.post('/merchant/media', fd);
+      const url = (res.data?.url as string) || '';
+      if (!url) throw new Error('Upload failed');
+      const options = [...form.options];
+      options[idx] = { ...options[idx], imageUrl: url };
+      setForm({ ...form, options });
+      toast.success(t('imageUploaded'));
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message || t('uploadFailed'));
+    } finally {
+      setOptionUploadIdx(null);
+      if (optionFileRefs.current[idx]) optionFileRefs.current[idx]!.value = '';
+    }
+  };
+
   const openEdit = (group: ModifierGroup) => {
     setEditingId(group.id);
     setForm({
@@ -228,6 +262,7 @@ export default function Modifiers() {
             price: String(o.price ?? ''),
             inventoryItemId: o.inventoryItemId || '',
             inventoryQty: o.inventoryQty ? String(o.inventoryQty) : '',
+            imageUrl: o.imageUrl || '',
           }))
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
@@ -269,6 +304,7 @@ export default function Modifiers() {
         sortOrder: idx,
         inventoryItemId: o.inventoryItemId || null,
         inventoryQty: Number(o.inventoryQty) || 0,
+        imageUrl: o.imageUrl?.trim() || null,
       }))
       .filter((o) => o.name);
 
@@ -636,6 +672,61 @@ export default function Modifiers() {
                         >
                           {({ attributes, listeners }) => (
                             <div className="flex flex-col gap-2.5">
+                            <div className="flex items-center gap-3">
+                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                {opt.imageUrl ? (
+                                  <img
+                                    src={opt.imageUrl}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-slate-400">
+                                    Photo
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  ref={(el) => {
+                                    optionFileRefs.current[idx] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) void uploadOptionImage(idx, file);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                  disabled={optionUploadIdx === idx}
+                                  onClick={() => optionFileRefs.current[idx]?.click()}
+                                >
+                                  {optionUploadIdx === idx ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <ImagePlus className="h-3.5 w-3.5" />
+                                  )}
+                                  {opt.imageUrl ? 'Change photo' : 'Add photo'}
+                                </button>
+                                {opt.imageUrl ? (
+                                  <button
+                                    type="button"
+                                    className="text-xs font-medium text-red-600 hover:underline"
+                                    onClick={() => {
+                                      const options = [...form.options];
+                                      options[idx] = { ...options[idx], imageUrl: '' };
+                                      setForm({ ...form, options });
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
                             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:gap-3">
                               <div className="flex items-center gap-2 sm:contents">
                                 <div className="shrink-0 sm:pb-2">
