@@ -336,6 +336,11 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.8.9+ is the simple spooler-only WritePrinter agent (no COM-direct / BT slow-mode). */
 export const MIN_PRINT_AGENT_VERSION = '1.9.0';
 
+/** Print Bridge APK uses 0.x semver; must not be compared to MIN_PRINT_AGENT_VERSION. */
+export function isBridgeVersion(version: string): boolean {
+  return /^0\./.test(String(version || '').trim());
+}
+
 function asPrintText(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'string') return value;
@@ -445,10 +450,19 @@ export function compareAgentVersion(version: string, minimum: string): number {
 }
 
 /** HTTP agents below MIN (or no version) still use manupos-print-* temps. Electron bridge is current. */
-export function isPrintAgentVersionOutdated(version?: string | null): boolean {
+export function isPrintAgentVersionOutdated(
+  version?: string | null,
+  serverVersion?: string | null
+): boolean {
   if (typeof window !== 'undefined' && window.manuposDesktop) return false;
   if (!version || !String(version).trim()) return true;
-  return compareAgentVersion(String(version).trim(), MIN_PRINT_AGENT_VERSION) < 0;
+  const installed = String(version).trim();
+  if (isBridgeVersion(installed)) {
+    const latest = String(serverVersion || '').trim();
+    if (!latest) return false;
+    return compareAgentVersion(installed, latest) < 0;
+  }
+  return compareAgentVersion(installed, MIN_PRINT_AGENT_VERSION) < 0;
 }
 
 /** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
@@ -467,12 +481,14 @@ export function friendlyPrintAgentError(raw: unknown, printerName?: string): str
 }
 
 async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
+  const method = (init?.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+  if (method !== 'GET' && method !== 'HEAD' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(`${PRINT_AGENT_URL}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    headers,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

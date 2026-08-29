@@ -9,6 +9,7 @@ type Props = {
   kind: PrintCompanionKind;
   installedVersion?: string | null;
   serverVersion?: string | null;
+  downloadUrl?: string | null;
   className?: string;
 };
 
@@ -27,6 +28,7 @@ export default function PrintCompanionVersionStatus({
   kind,
   installedVersion,
   serverVersion,
+  downloadUrl,
   className = '',
 }: Props) {
   const { t } = useI18n();
@@ -54,9 +56,20 @@ export default function PrintCompanionVersionStatus({
   }
 
   return (
-    <p className={`text-sm m-0 max-w-xl ${statusClassName(status)} ${className}`.trim()}>
-      <span className="font-medium">{label}: </span>
-      {message}
-    </p>
+    <div className={`text-sm max-w-xl ${statusClassName(status)} ${className}`.trim()}>
+      <p className="m-0">
+        <span className="font-medium">{label}: </span>
+        {message}
+      </p>
+      {status.state === 'update_available' && downloadUrl ? (
+        <a
+          className="mt-1 inline-flex text-sm font-medium text-teal-700 underline hover:text-teal-900"
+          href={downloadUrl}
+          download={kind === 'android-bridge' ? 'reborn-print-bridge.apk' : 'reborn-print-agent-setup.exe'}
+        >
+          {kind === 'android-bridge' ? t('downloadPrintBridge') : t('downloadPrintAgent')}
+        </a>
+      ) : null}
+    </div>
   );
 }

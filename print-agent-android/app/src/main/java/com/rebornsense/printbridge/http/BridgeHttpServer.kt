@@ -2,6 +2,7 @@ package com.rebornsense.printbridge.http
 
 import android.content.Context
 import android.os.Build
+import com.rebornsense.printbridge.BuildConfig
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
 import com.rebornsense.printbridge.print.PrinterDriver
@@ -20,6 +21,12 @@ class BridgeHttpServer(
         val uri = session.uri ?: "/"
         val method = session.method
 
+        if (method == Method.OPTIONS) {
+            return corsResponse(
+                newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, ""),
+            )
+        }
+
         return when {
             uri == "/health" && method == Method.GET -> {
                 registry.refresh(appContext)
@@ -34,7 +41,7 @@ class BridgeHttpServer(
                 jsonResponse(
                     JSONObject()
                         .put("ok", true)
-                        .put("version", "0.2.1")
+                        .put("version", BuildConfig.VERSION_NAME)
                         .put("platform", "android")
                         .put("deviceProfile", detectProfile())
                         .put("manufacturer", Build.MANUFACTURER)
@@ -114,7 +121,9 @@ class BridgeHttpServer(
                 }
             }
 
-            else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
+            else -> corsResponse(
+                newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found"),
+            )
         }
     }
 
@@ -130,7 +139,15 @@ class BridgeHttpServer(
     }
 
     private fun jsonResponse(payload: JSONObject, status: Response.Status = Response.Status.OK): Response {
-        return newFixedLengthResponse(status, "application/json", payload.toString())
+        return corsResponse(newFixedLengthResponse(status, "application/json", payload.toString()))
+    }
+
+    /** Match Windows print-agent CORS so HTTPS WebPOS can call localhost:9101. */
+    private fun corsResponse(response: Response): Response {
+        response.addHeader("Access-Control-Allow-Origin", "*")
+        response.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        response.addHeader("Access-Control-Allow-Headers", "Content-Type")
+        return response
     }
 
     private fun detectProfile(): String {

@@ -2,7 +2,7 @@
  * Platform detection and download URLs for Print Agent (Windows) vs Print Bridge (Android).
  */
 
-import { compareAgentVersion } from '@/lib/print-agent';
+import { compareAgentVersion, isBridgeVersion } from '@/lib/print-agent';
 
 const PRINT_AGENT_SETUP_FILE = 'reborn-print-agent-setup.exe';
 const LEGACY_PRINT_AGENT_SETUP_FILE = 'chaslayreborn-print-agent-setup.exe';
@@ -122,11 +122,6 @@ export type PrintCompanionInstallStatus =
   | { state: 'not_installed' }
   | { state: 'update_available'; installed: string; latest: string }
   | { state: 'up_to_date'; installed: string };
-
-/** Print Bridge uses 0.x semver; Print Agent uses 1.x+. */
-export function isBridgeVersion(version: string): boolean {
-  return /^0\./.test(String(version || '').trim());
-}
 
 export function resolvePrintCompanionInstallStatus(
   kind: PrintCompanionKind,

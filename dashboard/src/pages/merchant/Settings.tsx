@@ -1021,8 +1021,11 @@ export default function Settings() {
     try {
       const health = await getPrintAgentHealth();
       setPrintAgentOk(health.ok);
+      const serverVersion = isAndroidDevice()
+        ? printBridgeManifest?.version
+        : printAgentManifest?.version;
       setInstalledPrintCompanionVersion(health.ok && health.version ? String(health.version) : null);
-      setPrintAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+      setPrintAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version, serverVersion));
       if (!health.ok) {
         setInstalledPrintCompanionVersion(null);
         setAgentPrinters([]);
@@ -1054,7 +1057,7 @@ export default function Settings() {
     } finally {
       setRefreshingPrinters(false);
     }
-  }, []);
+  }, [printAgentManifest?.version, printBridgeManifest?.version]);
 
   const refreshScalePorts = useCallback(async () => {
     setScanningScalePorts(true);
@@ -1086,7 +1089,7 @@ export default function Settings() {
     if (tab !== 'receipt') return;
     void refreshPrintAgentPrinters();
     void refreshScalePorts();
-  }, [tab, refreshPrintAgentPrinters, refreshScalePorts]);
+  }, [tab, printAgentManifest?.version, printBridgeManifest?.version, refreshPrintAgentPrinters, refreshScalePorts]);
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -3965,6 +3968,7 @@ export default function Settings() {
                         kind="windows-agent"
                         installedVersion={installedPrintCompanionVersion}
                         serverVersion={printAgentManifest?.version}
+                        downloadUrl={printAgentDownloadUrl()}
                       />
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' &&
@@ -3973,6 +3977,7 @@ export default function Settings() {
                         kind="android-bridge"
                         installedVersion={installedPrintCompanionVersion}
                         serverVersion={printBridgeManifest?.version}
+                        downloadUrl={printBridgeDownloadUrl()}
                       />
                     ) : null}
                   </div>
