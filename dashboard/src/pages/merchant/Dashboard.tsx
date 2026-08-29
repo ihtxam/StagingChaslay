@@ -157,7 +157,6 @@ function MerchantShell() {
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
-  const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
   const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute;
@@ -252,7 +251,7 @@ function MerchantShell() {
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
-    (((isPosRoute || isWaiterRoute || isOrderHubRoute) && posAppMode) ||
+    (((isPosRoute || isWaiterRoute) && posAppMode) ||
       (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted))) ||
     isPosEmbed;
 

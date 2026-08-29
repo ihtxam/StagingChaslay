@@ -3,7 +3,8 @@
  * Accept/reject online + QR table orders, kitchen print via till relay.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Check, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, Bell, Check, RefreshCw, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -12,6 +13,12 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
 import { playOrderAlertOnce } from '@/lib/order-alert';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
+import {
+  backOfficeHomePath,
+  hasPermission,
+  loadWebPosStaffSession,
+  type Permission,
+} from '@/lib/permissions';
 
 type HubOrder = {
   id: string;
@@ -33,6 +40,7 @@ function isOrderHubOrder(o: HubOrder): boolean {
 
 export default function MerchantOrderHub() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [orders, setOrders] = useState<HubOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,15 +103,39 @@ export default function MerchantOrderHub() {
     return t('shop');
   };
 
+  const goBack = () => {
+    const pinSession = loadWebPosStaffSession();
+    const permissions = (pinSession?.permissions || user?.permissions || []) as Permission[];
+    const isOwner = user?.isOwner === true;
+    const posHome = hasPermission(permissions, 'USE_WEBPOS', false);
+    const dest = posHome ? '/merchant/pos' : backOfficeHomePath(permissions, isOwner);
+    if (posHome || dest === '/merchant/waiter') {
+      window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+    } else {
+      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+    }
+    navigate(dest);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-panel)] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{t('orderHubTitle')}</p>
-            <h1 className="text-lg font-bold">{user?.name || t('merchant')}</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary shrink-0 p-2"
+              onClick={goBack}
+              aria-label={t('webPosBack')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{t('orderHubTitle')}</p>
+              <h1 className="truncate text-lg font-bold">{user?.name || t('merchant')}</h1>
+            </div>
           </div>
-          <button type="button" className="btn-secondary p-2" onClick={() => void load()} aria-label={t('refresh')}>
+          <button type="button" className="btn-secondary shrink-0 p-2" onClick={() => void load()} aria-label={t('refresh')}>
             <RefreshCw className="w-5 h-5" />
           </button>
         </div>

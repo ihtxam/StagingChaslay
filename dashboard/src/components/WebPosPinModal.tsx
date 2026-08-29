@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, Lock, UserCircle2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -174,8 +175,10 @@ export default function WebPosPinModal({
     </div>
   );
 
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
+
   if (isGate) {
-    return (
+    const gate = (
       <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-stone-950 px-4 py-8 text-white">
         <WebPosBlockingAlert
           open={!!error}
@@ -224,9 +227,10 @@ export default function WebPosPinModal({
         </div>
       </div>
     );
+    return portalTarget ? createPortal(gate, portalTarget) : gate;
   }
 
-  return (
+  const switchModal = (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <WebPosBlockingAlert
         open={!!error}
@@ -277,4 +281,5 @@ export default function WebPosPinModal({
       </div>
     </div>
   );
+  return portalTarget ? createPortal(switchModal, portalTarget) : switchModal;
 }

@@ -1197,6 +1197,17 @@ export default function WebPosOrdersPanel({
         }
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
+          {embedded ? (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs font-bold text-stone-700 hover:bg-stone-100"
+              onClick={onClose}
+              aria-label={t('webPosBack')}
+            >
+              <ChevronLeft size={16} aria-hidden />
+              <span className="hidden sm:inline">{t('webPosBack')}</span>
+            </button>
+          ) : null}
           <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
             {canSalesAdjust ? (
               <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
