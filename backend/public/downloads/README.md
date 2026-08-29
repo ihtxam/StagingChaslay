@@ -5,13 +5,13 @@ Served by the API at `GET /downloads/<filename>` and proxied on `app.rebornsense
 Check availability without downloading the binary:
 
 - `GET /downloads/reborn-print-bridge.json` — `{ available, version, downloadUrl }`
-- `GET /downloads/chaslayreborn-print-agent.json` — Windows agent manifest
+- `GET /downloads/reborn-print-agent.json` — Windows agent manifest
 
 ## Print agent (Windows EXE)
 
 `*.exe` files are **gitignored** (~40MB). They must be built and present on the server at:
 
-`backend/public/downloads/chaslayreborn-print-agent-setup.exe`
+`backend/public/downloads/reborn-print-agent-setup.exe`
 
 ### Build on Windows (local)
 
@@ -25,6 +25,8 @@ powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
 `scripts/deploy-hetzner.sh` cross-compiles with `pkg` in a `node:20-bookworm` container.
 
 Skip with `SKIP_PRINT_AGENT_BUILD=1` if you already uploaded a binary.
+
+Legacy `chaslayreborn-*` URLs redirect to the Reborn filenames.
 
 ## Print Bridge (Android APK)
 
@@ -61,11 +63,11 @@ curl -sI https://app.rebornsense.com/downloads/reborn-print-bridge.apk
 curl -sL https://app.rebornsense.com/downloads/reborn-print-bridge.json
 # available: true when APK is on the server
 
-curl -sI https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe
+curl -sI https://app.rebornsense.com/downloads/reborn-print-agent-setup.exe
 # Expect: 200, ~40MB, magic MZ
 ```
 
 Public URLs:
 
 - `https://app.rebornsense.com/downloads/reborn-print-bridge.apk`
-- `https://app.rebornsense.com/downloads/chaslayreborn-print-agent-setup.exe`
+- `https://app.rebornsense.com/downloads/reborn-print-agent-setup.exe`

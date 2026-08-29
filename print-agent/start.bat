@@ -2,9 +2,9 @@
 setlocal
 cd /d "%~dp0"
 
-if exist "dist\chaslay-print-agent.exe" (
+if exist "dist\reborn-print-agent.exe" (
   echo Starting installed-style EXE...
-  start "" "dist\chaslay-print-agent.exe" --run
+  start "" "dist\reborn-print-agent.exe" --run
   exit /b 0
 )
 

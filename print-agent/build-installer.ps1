@@ -1,4 +1,4 @@
-# Builds Chaslay Print Agent Windows EXE + copies installer to backend/public/downloads/
+# Builds Reborn Print Agent Windows EXE + copies installer to backend/public/downloads/
 # Usage (from print-agent/):
 #   powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
 $ErrorActionPreference = "Stop"
@@ -16,53 +16,46 @@ try {
   New-Item -ItemType Directory -Force -Path $Downloads | Out-Null
 
   Write-Host "==> Building runtime EXE (pkg)..."
-  npx pkg . --targets node18-win-x64 --output (Join-Path $Dist "chaslay-print-agent.exe")
+  npx pkg . --targets node18-win-x64 --output (Join-Path $Dist "reborn-print-agent.exe")
   if ($LASTEXITCODE -ne 0) { throw "pkg build (agent) failed" }
 
   Write-Host "==> Building setup EXE (same binary; auto-installs when filename contains 'setup')..."
-  Copy-Item -Force (Join-Path $Dist "chaslay-print-agent.exe") (Join-Path $Dist "chaslayreborn-print-agent-setup.exe")
+  Copy-Item -Force (Join-Path $Dist "reborn-print-agent.exe") (Join-Path $Dist "reborn-print-agent-setup.exe")
 
-  # Companion script for portable installs
   Copy-Item -Force (Join-Path $Root "win-raw-print.ps1") (Join-Path $Dist "win-raw-print.ps1")
 
-  $setupSrc = Join-Path $Dist "chaslayreborn-print-agent-setup.exe"
-  $setupDest = Join-Path $Downloads "chaslayreborn-print-agent-setup.exe"
+  $setupSrc = Join-Path $Dist "reborn-print-agent-setup.exe"
+  $setupDest = Join-Path $Downloads "reborn-print-agent-setup.exe"
 
-  # Reject empty / non-PE output (would surface as "corrupted" on Windows)
   $bytes = [System.IO.File]::ReadAllBytes($setupSrc)
   if ($bytes.Length -lt 1MB) { throw "Built EXE too small ($($bytes.Length) bytes) — pkg likely failed" }
   if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "Built EXE missing MZ (PE) header — not a Windows binary" }
 
   Copy-Item -Force $setupSrc $setupDest
-
-  # Also keep non-setup agent binary available
-  Copy-Item -Force (Join-Path $Dist "chaslay-print-agent.exe") (Join-Path $Downloads "chaslay-print-agent.exe")
+  Copy-Item -Force (Join-Path $Dist "reborn-print-agent.exe") (Join-Path $Downloads "reborn-print-agent.exe")
 
   $pkg = Get-Content -Raw (Join-Path $Root "package.json") | ConvertFrom-Json
   $agentVersion = [string]$pkg.version
   if ([string]::IsNullOrWhiteSpace($agentVersion)) { $agentVersion = "0.0.0" }
 
-  # Write a small version marker for the dashboard
   @"
 {
-  "name": "chaslayreborn-print-agent",
+  "name": "reborn-print-agent",
   "version": "$agentVersion",
-  "setupFile": "chaslayreborn-print-agent-setup.exe",
+  "setupFile": "reborn-print-agent-setup.exe",
   "builtAt": "$(Get-Date -Format o)",
   "platform": "win32-x64",
   "signed": false
 }
-"@ | Set-Content -Encoding utf8 (Join-Path $Downloads "chaslayreborn-print-agent.json")
+"@ | Set-Content -Encoding utf8 (Join-Path $Downloads "reborn-print-agent.json")
 
   Write-Host ""
   Write-Host "Build complete."
-  Write-Host "  Agent:  $(Join-Path $Dist 'chaslay-print-agent.exe')"
+  Write-Host "  Agent:  $(Join-Path $Dist 'reborn-print-agent.exe')"
   Write-Host "  Setup:  $setupDest ($([math]::Round($bytes.Length/1MB, 1)) MB, MZ OK)"
-  Write-Host "  URL:    /downloads/chaslayreborn-print-agent-setup.exe"
+  Write-Host "  URL:    /downloads/reborn-print-agent-setup.exe"
   Write-Host ""
   Write-Host "Note: EXE is unsigned. Windows SmartScreen may warn on first run."
-  Write-Host "Deploy: push these fixes, then run scripts/deploy-hetzner.sh on Hetzner"
-  Write-Host "  (or scp $setupDest to server backend/public/downloads/)."
 }
 finally {
   Pop-Location

@@ -345,7 +345,6 @@ echo "=== Build print-agent Windows EXE ==="
 DOWNLOADS_DIR="$REPO_DIR/backend/public/downloads"
 mkdir -p "$DOWNLOADS_DIR"
 SETUP_EXE="$DOWNLOADS_DIR/reborn-print-agent-setup.exe"
-LEGACY_SETUP_EXE="$DOWNLOADS_DIR/chaslayreborn-print-agent-setup.exe"
 if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   if docker run --rm \
@@ -362,7 +361,6 @@ if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
       cp -f dist/reborn-print-agent.exe dist/reborn-print-agent-setup.exe
       cp -f dist/reborn-print-agent.exe /out/reborn-print-agent.exe
       cp -f dist/reborn-print-agent-setup.exe /out/reborn-print-agent-setup.exe
-      cp -f /out/reborn-print-agent-setup.exe /out/chaslayreborn-print-agent-setup.exe
       printf "%s\n" \
         "{" \
         "  \"name\": \"reborn-print-agent\"," \
@@ -372,10 +370,9 @@ if [[ "${SKIP_PRINT_AGENT_BUILD:-0}" != "1" ]]; then
         "  \"platform\": \"win32-x64\"," \
         "  \"signed\": false" \
         "}" > /out/reborn-print-agent.json
-      cp -f /out/reborn-print-agent.json /out/chaslayreborn-print-agent.json
       echo "Print-agent manifest version: ${AGENT_VERSION}"
       head -c 2 /out/reborn-print-agent-setup.exe | grep -q MZ
-      ls -la /out/reborn-print-agent*.exe /out/chaslayreborn-print-agent-setup.exe 2>/dev/null || ls -la /out/*.exe
+      ls -la /out/reborn-print-agent*.exe 2>/dev/null || ls -la /out/*.exe
     '; then
     echo "Print-agent EXE ready: $SETUP_EXE ($(wc -c < "$SETUP_EXE" | tr -d " ") bytes)"
   else

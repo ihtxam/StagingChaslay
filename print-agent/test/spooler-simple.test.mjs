@@ -11,7 +11,7 @@ function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.9.2 in package.json, server.js, and download manifests", () => {
+test("print-agent version is 1.9.2 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -20,16 +20,11 @@ test("print-agent version is 1.9.2 in package.json, server.js, and download mani
       "utf8"
     )
   );
-  const legacy = JSON.parse(
-    fs.readFileSync(
-      path.join(here, "..", "..", "backend", "public", "downloads", "chaslayreborn-print-agent.json"),
-      "utf8"
-    )
-  );
   assert.equal(pkg.version, VERSION);
   assert.match(server, new RegExp(`const VERSION = "${VERSION}"`));
   assert.equal(manifest.version, VERSION);
-  assert.equal(legacy.version, VERSION);
+  assert.equal(manifest.name, "reborn-print-agent");
+  assert.equal(manifest.setupFile, "reborn-print-agent-setup.exe");
   assert.match(server, /spooler-only-writeprinter/);
   assert.match(server, /cloud-relay/);
   assert.match(server, /bt-com-paced-spooler/);
