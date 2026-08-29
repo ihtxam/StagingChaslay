@@ -1107,12 +1107,22 @@ router.get("/orders", async (req: Request, res: Response) => {
       undefined;
     const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
     const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+    const scopeRaw = String(req.query.scope || "").toLowerCase();
+    const scope = scopeRaw === "online" || scopeRaw === "incoming" ? "online" : "all";
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const orders = await OrderService.getOrders(merchantId, page, limit, status, startDate, endDate);
+    const orders = await OrderService.getOrders(
+      merchantId,
+      page,
+      limit,
+      status,
+      startDate,
+      endDate,
+      scope
+    );
 
     res.json({
       success: true,
@@ -1122,6 +1132,41 @@ router.get("/orders", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error getting orders:", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get orders" });
+  }
+});
+
+/**
+ * GET /api/merchant/orders/incoming
+ * Active online / QR / kiosk orders for Order Hub and Web POS polling.
+ */
+router.get("/orders/incoming", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    const limit = req.query.limit ? Number(req.query.limit) : 200;
+    const statuses =
+      (req.query.statuses as string) || (req.query.status as string) || undefined;
+    const since = req.query.since ? new Date(String(req.query.since)) : undefined;
+
+    const orders = await OrderService.getIncomingOrders(merchantId, {
+      limit,
+      statuses,
+      since: since && !Number.isNaN(since.getTime()) ? since : undefined,
+    });
+
+    res.json({
+      success: true,
+      orders,
+      pagination: { limit: Math.min(Math.max(limit, 1), 300) },
+    });
+  } catch (error) {
+    console.error("Error getting incoming orders:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to get incoming orders",
+    });
   }
 });
 

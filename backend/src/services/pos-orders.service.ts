@@ -180,8 +180,8 @@ export class PosOrdersService {
     const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
     const conditions = [
       eq(schema.orders.merchantId, merchantId),
-      // POS register sales + online shop orders (web_shop) for the Orders board
-      inArray(schema.orders.orderType, ["pos", "web_shop"]),
+      // POS register sales + online shop orders (web_shop + legacy online) for the Orders board
+      inArray(schema.orders.orderType, ["pos", "web_shop", "online"]),
     ];
 
     if (opts.status && opts.status !== "all") {
@@ -226,7 +226,8 @@ export class PosOrdersService {
         ilike(schema.orders.notes, `%[ticket:${bareQ}]%`),
         ilike(schema.orders.notes, `%[tab:${bareQ}]%`),
         ilike(schema.orders.notes, `%[ticket:#${bareQ}]%`),
-        ilike(schema.orders.notes, `%[tab:#${bareQ}]%`)
+        ilike(schema.orders.notes, `%[tab:#${bareQ}]%`),
+        ilike(schema.orders.orderNumber, `%WEB%-${bareQ}%`)
       );
       if (Number.isFinite(guestNum)) {
         searchParts.push(eq(schema.orders.guestCount, guestNum));

@@ -1,4 +1,5 @@
 const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
+const SCOPED_WEB_RE = /^WEB-([A-Z0-9]{4})-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
 const OPAQUE_ORDER_RE = /^(WP|DI|POS)-/i;
 const HEX_FRAGMENT_RE = /^[a-f0-9]{6,12}$/i;
@@ -15,6 +16,8 @@ export function formatOrderNumberDisplay(orderNumber: string | null | undefined)
   const n = String(orderNumber || '').trim();
   if (!n) return n;
   if (SHORT_WEB_RE.test(n)) return n;
+  const scoped = n.match(SCOPED_WEB_RE);
+  if (scoped) return `WEB-${scoped[2]}`;
   const legacy = n.match(LEGACY_WEB_RE);
   if (legacy) {
     if (legacy[2]) return `WEB-${legacy[2]}`;

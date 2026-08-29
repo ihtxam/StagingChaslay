@@ -12,6 +12,7 @@ import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
+import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 
 type Props = {
   enabled: boolean;
@@ -94,7 +95,9 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const poll = useCallback(async () => {
     if (!enabled) return;
     try {
-      const res = await api.get('/merchant/orders', { params: { limit: 80 } });
+      const res = await api.get('/merchant/orders/incoming', {
+        params: { limit: 200, statuses: INCOMING_ONLINE_ORDER_STATUSES_PARAM },
+      });
       const online = ((res.data.orders || []) as OnlineOrder[]).filter((o) =>
         isOnlineShopOrder(o)
       );
