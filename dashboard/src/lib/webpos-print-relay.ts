@@ -1,5 +1,11 @@
 import api from '@/lib/api';
-import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import {
+  isPrintAgentAvailable,
+  printViaAgent,
+  settleAfterBluetoothKitchenPrint,
+  type AgentPrinter,
+} from '@/lib/print-agent';
+import { escposFeedAndCut, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { enqueueFailedPrintJob } from '@/lib/webpos-print-queue';
 import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
@@ -208,6 +214,35 @@ export async function printViaAgentOrQueue(opts: {
   return 'queued';
 }
 
+/**
+ * Kitchen print, then a tiny feed+cut job on Bluetooth/COM so the blade runs
+ * even when the last packet of the ticket was dropped.
+ */
+export async function printKitchenViaAgentOrQueue(
+  opts: Parameters<typeof printViaAgentOrQueue>[0] & {
+    printers?: AgentPrinter[];
+    configuredName?: string | null;
+  }
+): Promise<'local' | 'queued'> {
+  const mode = await printViaAgentOrQueue(opts);
+  try {
+    await printViaAgentOrQueue({
+      printerName: opts.printerName,
+      dataBase64: uint8ToBase64(escposFeedAndCut()),
+      orderId: opts.orderId,
+      retryLocally: opts.retryLocally,
+      forceQueue: opts.forceQueue,
+      jobKind: 'kitchen',
+      jobLabel: opts.jobLabel ? `${opts.jobLabel} · cut` : 'Kitchen cut',
+    });
+  } catch {
+    /* ticket may already have cut; follow-up is best-effort */
+  }
+  const live = opts.printers?.find((p) => p.name === opts.printerName);
+  await settleAfterBluetoothKitchenPrint(live || opts.printerName || opts.configuredName || '');
+  return mode;
+}
+
 type PendingJob = {
   id: string;
   sourceDeviceId?: string;
@@ -345,6 +380,16 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
             dataBase64: p.dataBase64,
             text: p.text,
           });
+          if (relayKind === 'kitchen') {
+            try {
+              await printViaAgent({
+                printerName: p.printerName,
+                dataBase64: uint8ToBase64(escposFeedAndCut()),
+              });
+            } catch {
+              /* cut follow-up is best-effort */
+            }
+          }
           // Never mark FAILED after a successful physical print — retry DONE ack.
           await ackPrintJob(job.id, 'DONE');
           done += 1;

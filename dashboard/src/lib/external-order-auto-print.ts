@@ -15,6 +15,7 @@ import {
 } from '@/lib/webpos-receipt';
 import { isRetailPosMode } from '@/lib/pos-checkout';
 import {
+  printKitchenViaAgentOrQueue,
   printViaAgentOrQueue,
   isMerchantAutoPrintKitchenEnabled,
   isMerchantAutoPrintReceiptEnabled,
@@ -130,10 +131,11 @@ async function printKitchenTickets(
       items: job.items,
       paperWidthMm: paper,
     });
-    await printViaAgentOrQueue({
+    await printKitchenViaAgentOrQueue({
       printerName: job.printerName || undefined,
       dataBase64: uint8ToBase64(escpos),
       orderId,
+      configuredName: job.printerName,
     });
     printedAny = true;
   }
@@ -145,7 +147,7 @@ async function printKitchenTickets(
       items: receiptItems,
       paperWidthMm: paper,
     });
-    await printViaAgentOrQueue({
+    await printKitchenViaAgentOrQueue({
       printerName: localStorage.getItem('manupos_webpos_printer') || undefined,
       dataBase64: uint8ToBase64(escpos),
       orderId,

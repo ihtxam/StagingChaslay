@@ -12,16 +12,11 @@ import {
 } from '@/lib/webpos-receipt';
 import {
   isLocalPrintStation,
-  printViaAgentOrQueue,
+  printKitchenViaAgentOrQueue,
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
-import {
-  isPrintAgentAvailable,
-  listAgentPrinters,
-  resolveAgentPrinterName,
-  settleAfterBluetoothKitchenPrint,
-} from '@/lib/print-agent';
+import { isPrintAgentAvailable, listAgentPrinters, resolveAgentPrinterName } from '@/lib/print-agent';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
 export async function printWaiterKitchen(opts: {
@@ -117,7 +112,7 @@ export async function printWaiterKitchen(opts: {
         items: job.items,
         paperWidthMm,
       });
-      const mode = await printViaAgentOrQueue({
+      const mode = await printKitchenViaAgentOrQueue({
         printerName: resolvedName,
         dataBase64: uint8ToBase64(escpos),
         text,
@@ -126,10 +121,10 @@ export async function printWaiterKitchen(opts: {
         forceQueue,
         jobKind: 'kitchen',
         jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
+        printers: livePrinters,
+        configuredName,
       });
       if (mode === 'queued') queuedAny = true;
-      const livePrinter = livePrinters.find((p) => p.name === resolvedName);
-      await settleAfterBluetoothKitchenPrint(livePrinter || resolvedName || configuredName);
     }
     if (!printedAny) {
       toast.error(t('webPosNoKitchenPrinterConfigured'));

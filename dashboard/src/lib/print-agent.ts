@@ -333,13 +333,13 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.9.1+ paces Bluetooth / virtual-COM writes so kitchen tickets do not overflow the radio. */
-export const MIN_PRINT_AGENT_VERSION = '1.9.1';
+/** 1.9.2+ paces Bluetooth / virtual-COM writes and sends a feed+cut trailer. */
+export const MIN_PRINT_AGENT_VERSION = '1.9.2';
 
 const BT_COM_PRINTER_RE = /com\d+|bth|bluetooth|ble\b|rfcomm|serial over/i;
 
 /** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
-export const BLUETOOTH_KITCHEN_SETTLE_MS = 750;
+export const BLUETOOTH_KITCHEN_SETTLE_MS = 1200;
 
 export function looksLikeBluetoothOrComPrinter(
   printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint'> | string | null

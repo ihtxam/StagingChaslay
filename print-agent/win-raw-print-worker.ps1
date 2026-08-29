@@ -4,8 +4,8 @@
 #   {"cmd":"ping"}
 # Replies with one JSON line per request.
 #
-# v1.9.1: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Bluetooth / virtual-COM ports are paced (192-byte WritePrinter slices).
+# v1.9.2: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Bluetooth / virtual-COM ports are paced (96-byte FlushPrinter slices).
 
 $ErrorActionPreference = "Stop"
 
@@ -47,6 +47,9 @@ public class RawPrinterHelper {
 
     [DllImport("winspool.drv", EntryPoint = "WritePrinter", SetLastError = true)]
     public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool FlushPrinter(IntPtr hPrinter, byte[] pBuf, int cbBuf, out int pcWritten, int cSleep);
 }
 "@
 
@@ -98,7 +101,18 @@ function Get-WinPrinterPortName {
 function Test-NeedsPacedWrite {
     param([string]$Port, [string]$Printer)
     $blob = ("{0} {1}" -f $Port, $Printer).ToLowerInvariant()
-    return $blob -match 'com\d+|bth|bluetooth|ble\b|rfcomm|serial over'
+    return $blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over'
+}
+
+function Get-BtCutTrailer {
+    return [byte[]](
+        0x1B, 0x64, 0x08,
+        0x1D, 0x56, 0x41, 0x18,
+        0x1D, 0x56, 0x00,
+        0x1B, 0x69,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    )
 }
 
 function Write-RawChunks {
@@ -123,16 +137,29 @@ function Write-RawChunks {
         $slice = New-Object byte[] $len
         [Array]::Copy($Data, $offset, $slice, 0, $len)
         $written = 0
-        if (-not [RawPrinterHelper]::WritePrinter($Handle, $slice, $len, [ref]$written)) {
-            $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-            throw "WritePrinter failed for '$Printer' (Win32=$err)."
+        $usedFlush = $false
+        if ($DelayMs -gt 0) {
+            try {
+                $usedFlush = [RawPrinterHelper]::FlushPrinter($Handle, $slice, $len, [ref]$written, $DelayMs)
+            } catch {
+                $usedFlush = $false
+            }
+        }
+        if (-not $usedFlush) {
+            if (-not [RawPrinterHelper]::WritePrinter($Handle, $slice, $len, [ref]$written)) {
+                $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                throw "WritePrinter failed for '$Printer' (Win32=$err)."
+            }
+            if ($DelayMs -gt 0) {
+                Start-Sleep -Milliseconds $DelayMs
+            }
         }
         if ($written -lt $len) {
             throw "WritePrinter short write for '$Printer': $written of $len bytes."
         }
         $totalWritten += $written
         $offset += $len
-        if ($DelayMs -gt 0 -and $offset -lt $Data.Length) {
+        if ($DelayMs -gt 0 -and $offset -ge $Data.Length) {
             Start-Sleep -Milliseconds $DelayMs
         }
     }
@@ -150,8 +177,8 @@ function Send-RawToPrinter {
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
-        $writeChunk = 192
-        $writeDelay = 40
+        $writeChunk = 96
+        $writeDelay = 80
     }
     Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) chunk=$writeChunk delayMs=$writeDelay"
 
@@ -183,8 +210,10 @@ function Send-RawToPrinter {
             }
             [void](Write-RawChunks -Handle $handle -Data $Data -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay)
             if ($paced) {
-                $drainMs = [Math]::Min(400 + [int]([Math]::Floor($Data.Length / 16)), 4000)
+                $drainMs = [Math]::Min(800 + [int]([Math]::Floor($Data.Length / 8)), 8000)
                 Start-Sleep -Milliseconds $drainMs
+                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs 80)
+                Start-Sleep -Milliseconds 500
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
@@ -196,7 +225,7 @@ function Send-RawToPrinter {
         [RawPrinterHelper]::ClosePrinter($handle) | Out-Null
     }
     if ($paced) {
-        Start-Sleep -Milliseconds 350
+        Start-Sleep -Milliseconds 500
     }
 }
 
