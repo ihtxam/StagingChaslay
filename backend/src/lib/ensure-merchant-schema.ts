@@ -5,6 +5,7 @@ import {
   isLocationsSchemaError,
   isMissingSchemaError,
   missingColumnFromDbError,
+  missingTableColumnFromDbError,
 } from "@/lib/db-schema-errors";
 
 /**
@@ -116,6 +117,18 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
   storekeeper_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
+  loyalty_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_enabled boolean NOT NULL DEFAULT false",
+  loyalty_earn_points_per_chf:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_earn_points_per_chf numeric(8,3) DEFAULT 1",
+  loyalty_redeem_points_per_chf:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_redeem_points_per_chf integer DEFAULT 100",
+  loyalty_points_expiry_days:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_points_expiry_days integer DEFAULT 30",
+  reservation_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_settings jsonb",
+  vacation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vacation_settings jsonb",
+  marketing_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -173,6 +186,55 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
+  orders_order_source: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source varchar(50)",
+  orders_fulfillment_channel:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_channel varchar(50) DEFAULT 'takeaway'",
+  orders_external_order_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_order_id varchar(255)",
+  orders_customer_name: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name varchar(255)",
+  orders_customer_phone: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone varchar(40)",
+  orders_customer_email: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email varchar(255)",
+  orders_table_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_id uuid",
+  orders_table_label: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_label varchar(50)",
+  orders_scheduled_for: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS scheduled_for timestamptz",
+  orders_estimated_ready_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_ready_at timestamptz",
+  orders_print_count: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_count integer DEFAULT 0",
+  orders_payment_breakdown: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_breakdown jsonb",
+  orders_staff_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS staff_id uuid",
+  orders_staff_name: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS staff_name varchar(255)",
+  orders_rounding_amount:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS rounding_amount numeric(10,2) DEFAULT 0",
+  orders_points_discount:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_discount numeric(10,2) DEFAULT 0",
+  orders_points_earned: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_earned integer DEFAULT 0",
+  orders_points_redeemed: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_redeemed integer DEFAULT 0",
+  orders_card_fee: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS card_fee numeric(10,2) DEFAULT 0",
+  orders_amount_tendered: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_tendered numeric(10,2)",
+  orders_change_due: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS change_due numeric(10,2)",
+  orders_invoice_number: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number varchar(50)",
+  orders_invoice_issued_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_issued_at timestamptz",
+  orders_invoice_due_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_due_at timestamptz",
+  orders_master_order_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS master_order_id varchar(64)",
+  orders_split_check_number: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_check_number integer",
+  orders_guest_count: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_count integer",
+  orders_bill_splits: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_splits jsonb DEFAULT '[]'::jsonb",
+  orders_refund_amount: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_amount numeric(10,2) DEFAULT 0",
+  orders_refunded_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_at timestamptz",
+  orders_refund_reason: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_reason text",
+  orders_goodwill_amount: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS goodwill_amount numeric(10,2) DEFAULT 0",
+  orders_cancel_reason: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason text",
+  orders_cancelled_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz",
+  merchants_loyalty_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_enabled boolean NOT NULL DEFAULT false",
+  merchants_loyalty_earn_points_per_chf:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_earn_points_per_chf numeric(8,3) DEFAULT 1",
+  merchants_loyalty_redeem_points_per_chf:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_redeem_points_per_chf integer DEFAULT 100",
+  merchants_loyalty_points_expiry_days:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_points_expiry_days integer DEFAULT 30",
+  merchants_reservation_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_settings jsonb",
+  merchants_vacation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vacation_settings jsonb",
+  merchants_marketing_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_settings jsonb",
   subscription_plans_max_locations:
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
 };
@@ -906,14 +968,30 @@ let startupPatchPromise: Promise<void> | null = null;
 let patchedColumns = new Set<string>();
 let patchedTables = false;
 
-async function runPatch(column: string): Promise<boolean> {
-  const statement = MERCHANT_COLUMN_PATCHES[column] || EXTRA_COLUMN_PATCHES[column];
-  if (!statement || patchedColumns.has(column)) return false;
+function resolvePatchStatement(column: string, table?: string | null): string | undefined {
+  const direct = MERCHANT_COLUMN_PATCHES[column] || EXTRA_COLUMN_PATCHES[column];
+  if (direct) return direct;
+  if (table) {
+    const scoped = EXTRA_COLUMN_PATCHES[`${table}_${column}`];
+    if (scoped) return scoped;
+  }
+  const all = { ...MERCHANT_COLUMN_PATCHES, ...EXTRA_COLUMN_PATCHES };
+  for (const sql of Object.values(all)) {
+    if (sql.includes(`ADD COLUMN IF NOT EXISTS ${column} `)) return sql;
+  }
+  return undefined;
+}
+
+async function runPatch(column: string, table?: string | null): Promise<boolean> {
+  const cacheKey = table ? `${table}.${column}` : column;
+  if (patchedColumns.has(cacheKey)) return false;
+  const statement = resolvePatchStatement(column, table);
+  if (!statement) return false;
   const db = getDb();
   try {
     await db.execute(sql.raw(statement));
-    patchedColumns.add(column);
-    console.info(`[schema] patched column ${column}`);
+    patchedColumns.add(cacheKey);
+    console.info(`[schema] patched column ${cacheKey}`);
     return true;
   } catch (err) {
     console.warn(`[schema] failed to patch column ${column}:`, err);
@@ -1007,11 +1085,24 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
 export async function ensureMerchantColumnsSchema(): Promise<void> {
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
-    await runPatch(column);
+    await runPatch(column, "merchants");
   }
-  await runPatch("delivery_driver_pay_mode");
-  await runPatch("delivery_driver_hourly_rate");
-  await runPatch("delivery_per_order_fee");
+  await runPatch("delivery_driver_pay_mode", "merchants");
+  await runPatch("delivery_driver_hourly_rate", "merchants");
+  await runPatch("delivery_per_order_fee", "merchants");
+}
+
+/** Ensure optional orders columns exist (online shop, QR table, multi-location). */
+export async function ensureOrdersColumnsSchema(): Promise<void> {
+  for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
+    if (!column.startsWith("orders_")) continue;
+    const col = column.slice("orders_".length);
+    await runPatch(col, "orders");
+  }
+  await runPatch("location_id", "orders");
+  await runPatch("table_session_id", "orders");
+  await runPatch("order_source", "orders");
+  await runPatch("fulfillment_channel", "orders");
 }
 
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
@@ -1071,19 +1162,42 @@ export async function backfillDefaultLocations(): Promise<void> {
   }
 }
 
-/** Apply all known optional merchant columns once at startup (non-blocking). */
-export function ensureMerchantSchemaAtStartup(): void {
-  if (startupPatchPromise) return;
-  startupPatchPromise = (async () => {
-    await ensureMerchantColumnsSchema();
-    for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
+function isOrdersColumnSchemaError(raw: string): boolean {
+  return (
+    isMissingSchemaError(raw) &&
+    (/relation ["']?orders["']?/i.test(raw) ||
+      /from ["']?orders["']?/i.test(raw) ||
+      /column "[^"]+" of relation "orders"/i.test(raw))
+  );
+}
+
+/** Apply all idempotent schema patches (safe to run on every boot). */
+export async function ensureAllMerchantSchema(): Promise<void> {
+  await ensureMerchantColumnsSchema();
+  for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
+    if (column.startsWith("orders_")) {
+      await runPatch(column.slice("orders_".length), "orders");
+    } else if (column.startsWith("pos_sessions_")) {
+      await runPatch(column.slice("pos_sessions_".length), "pos_sessions");
+    } else if (column.startsWith("merchants_")) {
+      await runPatch(column.slice("merchants_".length), "merchants");
+    } else {
       await runPatch(column);
     }
-    await ensureMerchantTables();
-    await ensureLocationsSchema();
-  })().catch((err) => {
-    console.warn("[schema] merchant startup patch failed:", err);
-  });
+  }
+  await ensureMerchantTables();
+  await ensureLocationsSchema();
+}
+
+/** Run schema patches at startup — await before accepting traffic. */
+export function ensureMerchantSchemaAtStartup(): Promise<void> {
+  if (!startupPatchPromise) {
+    startupPatchPromise = ensureAllMerchantSchema().catch((err) => {
+      console.warn("[schema] merchant startup patch failed:", err);
+      startupPatchPromise = null;
+    });
+  }
+  return startupPatchPromise;
 }
 
 function isMerchantsColumnSchemaError(raw: string): boolean {
@@ -1105,16 +1219,25 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const patched = await patchMerchantSchemaFromError(error);
       const locationsMissing = isLocationsSchemaError(raw);
       const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
+      const ordersColumnMissing = isOrdersColumnSchemaError(raw);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();
       } else if (merchantsColumnMissing) {
         await ensureMerchantColumnsSchema();
+      } else if (ordersColumnMissing) {
+        await ensureOrdersColumnsSchema();
       } else if (inventoryTableMissing) {
         patchedTables = false;
         await ensureMerchantTables();
       }
-      if (!patched && !inventoryTableMissing && !locationsMissing && !merchantsColumnMissing) {
+      if (
+        !patched &&
+        !inventoryTableMissing &&
+        !locationsMissing &&
+        !merchantsColumnMissing &&
+        !ordersColumnMissing
+      ) {
         throw error;
       }
     }
@@ -1137,7 +1260,11 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
     await ensureMerchantColumnsSchema();
     return true;
   }
-  const col = missingColumnFromDbError(error);
-  if (!col) return false;
-  return runPatch(col);
+  if (isOrdersColumnSchemaError(raw)) {
+    await ensureOrdersColumnsSchema();
+    return true;
+  }
+  const { table, column } = missingTableColumnFromDbError(error);
+  if (!column) return false;
+  return runPatch(column, table);
 }

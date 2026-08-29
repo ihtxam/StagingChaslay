@@ -225,11 +225,19 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-app.listen(PORT, () => {
+void (async () => {
+  try {
+    console.log("[schema] applying merchant schema patches before listen…");
+    await ensureMerchantSchemaAtStartup();
+    console.log("[schema] merchant schema patches complete");
+  } catch (err) {
+    console.warn("[schema] startup patch error (continuing):", err);
+  }
+
+  app.listen(PORT, () => {
   console.log(`✅ ${APP_NAME} API running on port ${PORT}`);
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
-  ensureMerchantSchemaAtStartup();
   ensureLicensesSchemaAtStartup();
   ensureSubscriptionSchemaAtStartup();
   void import("@/services/platform-reseller.service").then(async ({ PlatformResellerService }) => {
@@ -306,6 +314,7 @@ app.listen(PORT, () => {
   };
   setTimeout(() => void tick(), 45_000);
   setInterval(() => void tick(), 60 * 60 * 1000);
-});
+  });
+})();
 
 export default app;

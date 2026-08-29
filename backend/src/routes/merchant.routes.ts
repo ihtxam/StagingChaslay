@@ -1094,7 +1094,10 @@ router.get("/orders", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const status = req.query.status as string;
+    const status =
+      (req.query.statuses as string) ||
+      (req.query.status as string) ||
+      undefined;
     const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
     const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
 
@@ -1461,8 +1464,10 @@ router.get("/settings", async (req: Request, res: Response) => {
       settings,
     });
   } catch (error) {
-    const raw = error instanceof Error ? error.message : "Failed to get settings";
-    const { formatDbMigrateError, migrateLogTag } = await import("@/lib/db-schema-errors");
+    const { dbErrorChain, formatDbMigrateError, migrateLogTag } = await import(
+      "@/lib/db-schema-errors"
+    );
+    const raw = dbErrorChain(error) || "Failed to get settings";
     const tag = migrateLogTag(raw);
     if (tag) {
       console.error(`[settings] schema missing (${tag}):`, raw);

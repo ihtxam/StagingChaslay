@@ -18,12 +18,18 @@ type HubOrder = {
   orderNumber: string;
   status: string;
   orderSource?: string | null;
+  orderType?: string | null;
   fulfillmentChannel?: string | null;
   customerName?: string | null;
   total: number | string;
   createdAt: string;
   items?: Array<{ productName?: string; name?: string; quantity: number }>;
 };
+
+function isOrderHubOrder(o: HubOrder): boolean {
+  if (String(o.orderSource || '').toLowerCase() === 'qr_table') return true;
+  return isOnlineShopOrder(o);
+}
 
 export default function MerchantOrderHub() {
   const { t } = useI18n();
@@ -38,12 +44,15 @@ export default function MerchantOrderHub() {
   const load = useCallback(async () => {
     try {
       const res = await api.get('/merchant/orders', {
-        params: { limit: 80, status: 'pending_approval,preparing,ready' },
+        params: {
+          limit: 80,
+          statuses: 'pending_approval,preparing,ready,pending',
+        },
       });
       const rows: HubOrder[] = res.data?.orders || res.data?.data || [];
-      const online = rows.filter((o) => isOnlineShopOrder(o as Parameters<typeof isOnlineShopOrder>[0]));
-      setOrders(online);
-      for (const o of online) {
+      const hubOrders = rows.filter((o) => isOrderHubOrder(o));
+      setOrders(hubOrders);
+      for (const o of hubOrders) {
         if (!knownRef.has(o.id) && isAwaitingApproval(o.status)) {
           playOrderAlertOnce();
         }

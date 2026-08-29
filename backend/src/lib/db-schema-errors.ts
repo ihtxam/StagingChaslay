@@ -37,6 +37,24 @@ export function missingColumnFromDbError(error: unknown): string | null {
   return missingColumnFromError(dbErrorChain(error));
 }
 
+/** Extract table name from Postgres missing-column / missing-relation errors. */
+export function missingTableFromError(raw: string): string | null {
+  const colRel = raw.match(/column "[^"]+" of relation "([a-z0-9_]+)" does not exist/i);
+  if (colRel?.[1]) return colRel[1];
+  const rel = raw.match(/relation ["']?([a-z0-9_]+)["']? does not exist/i);
+  return rel?.[1] ?? null;
+}
+
+export function missingTableColumnFromDbError(
+  error: unknown
+): { table: string | null; column: string | null } {
+  const raw = dbErrorChain(error);
+  return {
+    table: missingTableFromError(raw),
+    column: missingColumnFromError(raw),
+  };
+}
+
 /** Detect missing multi-location tables (locations, HQ catalog, per-location stock, etc.). */
 export function isLocationsSchemaError(raw: string): boolean {
   return /relation ["']?(locations|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers)["']? does not exist/i.test(

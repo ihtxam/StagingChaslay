@@ -1,10 +1,11 @@
 import { getDb, schema } from "@/db";
-import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { roundMoney2, roundTo005 } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -382,14 +383,21 @@ export class OrderService {
     startDate?: Date,
     endDate?: Date
   ) {
-    const db = getDb();
-
-    try {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
       const offset = (page - 1) * limit;
-      let whereConditions: any[] = [eq(schema.orders.merchantId, merchantId)];
+      const whereConditions: any[] = [eq(schema.orders.merchantId, merchantId)];
 
       if (status) {
-        whereConditions.push(eq(schema.orders.status, status));
+        const statuses = status
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (statuses.length === 1) {
+          whereConditions.push(eq(schema.orders.status, statuses[0]));
+        } else if (statuses.length > 1) {
+          whereConditions.push(inArray(schema.orders.status, statuses));
+        }
       }
 
       if (startDate && endDate) {
@@ -413,10 +421,7 @@ export class OrderService {
       });
 
       return orders.map((order) => withResolvedItemNames(order));
-    } catch (error) {
-      console.error("Error getting orders:", error);
-      throw error;
-    }
+    });
   }
 
   /**
