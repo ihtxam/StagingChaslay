@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { Pool } from "pg";
 import { getDb } from "@/db";
 import {
   dbErrorChain,
@@ -7,6 +7,21 @@ import {
   missingColumnFromDbError,
   missingTableColumnFromDbError,
 } from "@/lib/db-schema-errors";
+
+/** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
+let ddlPool: Pool | null = null;
+function getDdlPool(): Pool {
+  if (!ddlPool) {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error("DATABASE_URL environment variable is not set");
+    ddlPool = new Pool({ connectionString: databaseUrl, max: 2 });
+  }
+  return ddlPool;
+}
+
+async function execSql(statement: string): Promise<void> {
+  await getDdlPool().query(statement);
+}
 
 /**
  * Idempotent ALTER statements for merchant columns added after initial deploy.
@@ -1057,25 +1072,23 @@ async function runPatch(column: string, table?: string | null): Promise<boolean>
   if (patchedColumns.has(cacheKey)) return false;
   const statement = resolvePatchStatement(column, table);
   if (!statement) return false;
-  const db = getDb();
   try {
-    await db.execute(sql.raw(statement));
+    await execSql(statement);
     patchedColumns.add(cacheKey);
     console.info(`[schema] patched column ${cacheKey}`);
     return true;
   } catch (err) {
-    console.warn(`[schema] failed to patch column ${column}:`, err);
+    console.warn(`[schema] failed to patch column ${cacheKey}:`, err);
     return false;
   }
 }
 
 export async function ensureMerchantTables(): Promise<boolean> {
   if (patchedTables) return false;
-  const db = getDb();
   let applied = false;
   for (const statement of TABLE_PATCHES) {
     try {
-      await db.execute(sql.raw(statement));
+      await execSql(statement);
       applied = true;
     } catch (err) {
       console.warn("[schema] table patch failed:", err);
@@ -1084,14 +1097,14 @@ export async function ensureMerchantTables(): Promise<boolean> {
   patchedTables = true;
   if (applied) console.info("[schema] voucher/inventory tables ensured");
   try {
-    await db.execute(sql.raw(`
+    await execSql(`
       UPDATE merchants SET email_delivery_mode = 'own'
       WHERE email_delivery_mode = 'platform'
       AND (
         COALESCE((email_smtp_settings->>'enabled')::boolean, false) = true
         OR COALESCE((email_brevo_settings->>'enabled')::boolean, false) = true
       )
-    `));
+    `);
   } catch {
     /* column may not exist yet */
   }
@@ -1192,11 +1205,10 @@ export async function ensureOrderItemsColumnsSchema(): Promise<void> {
 
 /** Run idempotent ALTER TABLE statements from TABLE_PATCHES (always safe to repeat). */
 async function runAlterTablePatches(): Promise<void> {
-  const db = getDb();
   for (const statement of TABLE_PATCHES) {
     if (!/^\s*ALTER TABLE/i.test(statement)) continue;
     try {
-      await db.execute(sql.raw(statement));
+      await execSql(statement);
     } catch (err) {
       console.warn("[schema] alter table patch failed:", err);
     }
@@ -1205,27 +1217,25 @@ async function runAlterTablePatches(): Promise<void> {
 
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
-  const db = getDb();
   for (const statement of TABLE_PATCHES) {
     if (!LOCATIONS_SCHEMA_PATTERN.test(statement)) continue;
     try {
-      await db.execute(sql.raw(statement));
+      await execSql(statement);
     } catch (err) {
       console.warn("[schema] locations schema patch failed:", err);
     }
   }
   await runPatch("orders_location_id");
   await runPatch("pos_sessions_location_id");
-  await runPatch("max_locations");
+  await runPatch("max_locations", "merchants");
   await runPatch("subscription_plans_max_locations");
   await backfillDefaultLocations();
 }
 
 /** Create one default location per merchant and backfill orders/POS sessions. */
 export async function backfillDefaultLocations(): Promise<void> {
-  const db = getDb();
   try {
-    await db.execute(sql.raw(`
+    await execSql(`
       INSERT INTO locations (merchant_id, name, slug, business_category, address, city, country, is_default, status)
       SELECT m.id,
         COALESCE(NULLIF(TRIM(m.name), ''), 'Main location'),
@@ -1238,23 +1248,23 @@ export async function backfillDefaultLocations(): Promise<void> {
         'active'
       FROM merchants m
       WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.merchant_id = m.id)
-    `));
-    await db.execute(sql.raw(`
+    `);
+    await execSql(`
       UPDATE orders o
       SET location_id = l.id
       FROM locations l
       WHERE o.merchant_id = l.merchant_id
         AND l.is_default = true
         AND o.location_id IS NULL
-    `));
-    await db.execute(sql.raw(`
+    `);
+    await execSql(`
       UPDATE pos_sessions ps
       SET location_id = l.id
       FROM locations l
       WHERE ps.merchant_id = l.merchant_id
         AND l.is_default = true
         AND ps.location_id IS NULL
-    `));
+    `);
   } catch (err) {
     console.warn("[schema] default location backfill failed:", err);
   }
@@ -1279,8 +1289,23 @@ function isOrderItemsColumnSchemaError(raw: string): boolean {
   );
 }
 
+const REQUIRED_MERCHANT_COLUMNS = Object.keys(MERCHANT_COLUMN_PATCHES);
+
+export async function listMissingMerchantColumns(): Promise<string[]> {
+  const { rows } = await getDdlPool().query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'merchants'`
+  );
+  const have = new Set(rows.map((r) => r.column_name));
+  return REQUIRED_MERCHANT_COLUMNS.filter((c) => !have.has(c));
+}
+
 /** Apply all idempotent schema patches (safe to run on every boot). */
-export async function ensureAllMerchantSchema(): Promise<void> {
+export async function ensureAllMerchantSchema(): Promise<{
+  missingBefore: string[];
+  missingAfter: string[];
+}> {
+  const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
   await runAlterTablePatches();
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
@@ -1300,15 +1325,30 @@ export async function ensureAllMerchantSchema(): Promise<void> {
   await ensureOrderItemsColumnsSchema();
   await ensureMerchantTables();
   await ensureLocationsSchema();
+
+  // Force-add any merchant columns still missing (bypass in-memory cache).
+  const still = await listMissingMerchantColumns().catch(() => [] as string[]);
+  for (const col of still) {
+    patchedColumns.delete(`merchants.${col}`);
+    patchedColumns.delete(col);
+    await runPatch(col, "merchants");
+  }
+  const missingAfter = await listMissingMerchantColumns().catch(() => [] as string[]);
+  if (missingAfter.length) {
+    console.warn("[schema] still missing merchant columns:", missingAfter.join(", "));
+  }
+  return { missingBefore, missingAfter };
 }
 
 /** Run schema patches at startup — await before accepting traffic. */
 export function ensureMerchantSchemaAtStartup(): Promise<void> {
   if (!startupPatchPromise) {
-    startupPatchPromise = ensureAllMerchantSchema().catch((err) => {
-      console.warn("[schema] merchant startup patch failed:", err);
-      startupPatchPromise = null;
-    });
+    startupPatchPromise = ensureAllMerchantSchema()
+      .then(() => undefined)
+      .catch((err) => {
+        console.warn("[schema] merchant startup patch failed:", err);
+        startupPatchPromise = null;
+      });
   }
   return startupPatchPromise;
 }

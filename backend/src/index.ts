@@ -41,7 +41,10 @@ import { ensureUploadsRoot } from "@/services/media-upload.service";
 import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
-import { ensureMerchantSchemaAtStartup, ensureAllMerchantSchema } from "@/lib/ensure-merchant-schema";
+import {
+  ensureMerchantSchemaAtStartup,
+  ensureAllMerchantSchema,
+} from "@/lib/ensure-merchant-schema";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
@@ -144,8 +147,15 @@ app.get("/health", (_req: Request, res: Response) => {
 /** Idempotent DB column repair — GET or POST (browser-safe). */
 async function handleSchemaRepair(_req: Request, res: Response) {
   try {
-    await ensureAllMerchantSchema();
-    res.json({ status: "ok", repaired: true, timestamp: new Date().toISOString() });
+    const result = await ensureAllMerchantSchema();
+    const ok = result.missingAfter.length === 0;
+    res.status(ok ? 200 : 500).json({
+      status: ok ? "ok" : "error",
+      repaired: true,
+      missingBefore: result.missingBefore,
+      missingAfter: result.missingAfter,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error("[schema-repair] failed:", error);
     res.status(500).json({
