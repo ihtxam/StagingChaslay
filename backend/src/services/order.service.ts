@@ -572,7 +572,15 @@ export class OrderService {
     switch (action) {
       case "accept": {
         if (!awaitingApproval) throw new Error("Order is not awaiting approval");
-        const estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
+        let estimatedReadyAt: Date;
+        if (opts?.estimatedReadyAt) {
+          estimatedReadyAt = new Date(opts.estimatedReadyAt);
+        } else if (opts?.etaAdjustMinutes != null && Number(opts.etaAdjustMinutes) > 0) {
+          const base = order.scheduledFor ? new Date(order.scheduledFor) : new Date();
+          estimatedReadyAt = new Date(base.getTime() + Number(opts.etaAdjustMinutes) * 60 * 1000);
+        } else {
+          estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
+        }
         const accepted = await set({
           status: "preparing",
           estimatedReadyAt,
@@ -613,7 +621,7 @@ export class OrderService {
             })
           )
           .catch(() => {});
-        void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
+        void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", accepted || order);
         return accepted;
       }
       case "start_preparing": {

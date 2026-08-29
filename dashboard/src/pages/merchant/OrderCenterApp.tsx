@@ -24,7 +24,18 @@ import {
   isAwaitingApproval,
   isOnlineShopOrder,
 } from '@/lib/order-management';
-import { playOrderAlertOnce } from '@/lib/order-alert';
+import {
+  playOrderAlertOnce,
+  startOrderAlertLoop,
+  stopOrderAlertLoop,
+} from '@/lib/order-alert';
+import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
+import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
+import {
+  extractZipFromAddress,
+  onlineShopOrderSpeechLine,
+  speakDeliveryAlert,
+} from '@/lib/delivery-hub-alerts';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
@@ -51,6 +62,10 @@ type CenterOrder = {
   orderType?: string | null;
   fulfillmentChannel?: string | null;
   customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  shippingAddress?: string | null;
+  scheduledFor?: string | null;
   total: number | string;
   createdAt: string;
   printCount?: number | null;
@@ -115,8 +130,33 @@ export default function OrderCenterApp() {
   const [shopName, setShopName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const knownRef = useState<Set<string>>(() => new Set())[0];
+  const [alertQueue, setAlertQueue] = useState<CenterOrder[]>([]);
+  const [alertBusy, setAlertBusy] = useState(false);
+  const unactionedAlertRef = useState<Set<string>>(() => new Set())[0];
 
   useTillPrintHub({ enabled: true });
+
+  useEffect(() => {
+    const unlock = () => {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        void Notification.requestPermission();
+      }
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+
+  const markAlertDone = useCallback(
+    (orderId: string) => {
+      unactionedAlertRef.delete(orderId);
+      setAlertQueue((prev) => {
+        const next = prev.filter((o) => o.id !== orderId);
+        if (next.length === 0) stopOrderAlertLoop();
+        return next;
+      });
+    },
+    [unactionedAlertRef]
+  );
 
   useEffect(() => {
     let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"][data-order-center]');
@@ -174,18 +214,53 @@ export default function OrderCenterApp() {
       const rows: CenterOrder[] = res.data?.orders || res.data?.data || [];
       const filtered = rows.filter(isCenterOrder);
       setOrders(filtered);
-      for (const o of filtered) {
-        if (!knownRef.has(o.id) && isAwaitingApproval(o.status)) {
-          playOrderAlertOnce();
-        }
-        knownRef.add(o.id);
+
+      if (knownRef.size === 0) {
+        for (const o of filtered) knownRef.add(o.id);
+        return;
       }
+
+      const freshPending = filtered.filter(
+        (o) => !knownRef.has(o.id) && isAwaitingApproval(o.status)
+      );
+      for (const o of filtered) knownRef.add(o.id);
+
+      if (freshPending.length > 0) {
+        for (const o of freshPending) {
+          unactionedAlertRef.add(o.id);
+          const zip = extractZipFromAddress(o.shippingAddress);
+          speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              new Notification(t('webPosNewOrderAlert'), {
+                body: `#${formatOrderNumberDisplay(o.orderNumber)} · ${Number(o.total).toFixed(2)} CHF`,
+                tag: `order-center-${o.id}`,
+              });
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        setAlertQueue((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...freshPending.filter((o) => !seen.has(o.id))];
+        });
+        playOrderAlertOnce();
+        startOrderAlertLoop(4500);
+        if (document.hidden) {
+          document.title = `🔔 ${t('webPosNewOrderAlert')} — Reborn`;
+        }
+      }
+
+      setAlertQueue((prev) =>
+        prev.filter((o) => unactionedAlertRef.has(o.id) && isAwaitingApproval(o.status))
+      );
     } catch {
       toast.error(t('orderCenterLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [knownRef, t]);
+  }, [knownRef, t, unactionedAlertRef]);
 
   const loadEod = useCallback(async () => {
     setEodLoading(true);
@@ -243,11 +318,19 @@ export default function OrderCenterApp() {
   const runAction = async (
     orderId: string,
     action: string,
-    opts?: { printAfterAccept?: boolean; orderSource?: string | null }
+    opts?: {
+      printAfterAccept?: boolean;
+      orderSource?: string | null;
+      etaAdjustMinutes?: number;
+    }
   ) => {
     setBusyId(orderId);
     try {
-      await api.post(`/merchant/orders/${orderId}/action`, { action });
+      const body: Record<string, unknown> = { action };
+      if (action === 'accept' && opts?.etaAdjustMinutes != null) {
+        body.etaAdjustMinutes = opts.etaAdjustMinutes;
+      }
+      await api.post(`/merchant/orders/${orderId}/action`, body);
       if (action === 'accept') {
         toast.success(t('orderAccepted'));
         if (opts?.printAfterAccept !== false) {
@@ -266,6 +349,9 @@ export default function OrderCenterApp() {
         toast.success(t('orderCenterCompleted'));
       }
       await loadOrders();
+      if (action === 'accept' || action === 'reject') {
+        markAlertDone(orderId);
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('actionFailed'));
@@ -273,6 +359,29 @@ export default function OrderCenterApp() {
       setBusyId(null);
     }
   };
+
+  const acceptFromAlert = async (order: OnlineOrder, prepMinutes: number) => {
+    setAlertBusy(true);
+    try {
+      await runAction(order.id, 'accept', {
+        orderSource: order.orderSource,
+        etaAdjustMinutes: prepMinutes,
+      });
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
+  const rejectFromAlert = async (order: OnlineOrder) => {
+    setAlertBusy(true);
+    try {
+      await runAction(order.id, 'reject');
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
+  const currentAlert = alertQueue[0] ?? null;
 
   const printOrder = async (o: CenterOrder) => {
     setBusyId(o.id);
@@ -394,7 +503,7 @@ export default function OrderCenterApp() {
               type="button"
               disabled={busyId === o.id}
               className="btn-primary inline-flex flex-1 min-w-[7rem] items-center justify-center gap-2 py-3"
-              onClick={() => void runAction(o.id, 'accept', { orderSource: o.orderSource })}
+              onClick={() => void runAction(o.id, 'accept', { orderSource: o.orderSource, etaAdjustMinutes: 30 })}
             >
               <Check className="h-5 w-5" />
               {t('accept')}
@@ -606,6 +715,14 @@ export default function OrderCenterApp() {
           )
         ) : null}
       </main>
+
+      <OrderAcceptWithEtaModal
+        order={currentAlert as OnlineOrder | null}
+        queueCount={alertQueue.length}
+        busy={alertBusy || busyId === currentAlert?.id}
+        onAccept={(o, mins) => void acceptFromAlert(o, mins)}
+        onReject={(o) => void rejectFromAlert(o)}
+      />
     </div>
   );
 }

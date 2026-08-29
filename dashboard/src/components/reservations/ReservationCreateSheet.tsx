@@ -208,9 +208,15 @@ export default function ReservationCreateSheet({
   };
 
   const timeChips = useMemo(() => {
-    if (slots.length) return slots.map((s) => s.time);
-    return hoursSlots;
-  }, [slots, hoursSlots]);
+    const raw = slots.length ? slots.map((s) => s.time) : hoursSlots;
+    if (form.date !== ymdZurich()) return raw;
+    const [y, m, d] = form.date.split('-').map(Number);
+    const now = Date.now();
+    return raw.filter((slot) => {
+      const [hh, mm] = slot.split(':').map(Number);
+      return zonedLocalDate(y, m, d, hh, mm).getTime() > now;
+    });
+  }, [slots, hoursSlots, form.date]);
 
   const dateLabel = useMemo(() => {
     try {

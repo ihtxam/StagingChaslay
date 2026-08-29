@@ -350,6 +350,8 @@ import WebPosCancelModal, {
 import WebPosLicenseGate, {
   type WebPosEntitlement,
 } from '@/components/webpos/WebPosLicenseGate';
+import WebPosLaunchCheckModal from '@/components/webpos/WebPosLaunchCheckModal';
+import { isWindowsDevice } from '@/lib/print-agent-platform';
 import WebPosGiftCardModal, {
   type GiftCardCartMeta,
   type GiftCardPayResult,
@@ -872,6 +874,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   } | null>(null);
   const [reprintBusy, setReprintBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
+  const WEBPOS_LAUNCH_CHECK_KEY = 'webpos_launch_check_done';
+  const [launchCheckPassed, setLaunchCheckPassed] = useState(() => {
+    if (typeof sessionStorage === 'undefined' || !isWindowsDevice()) return true;
+    return !!sessionStorage.getItem(WEBPOS_LAUNCH_CHECK_KEY);
+  });
+  const [launchCheckOpen, setLaunchCheckOpen] = useState(() => {
+    if (typeof sessionStorage === 'undefined' || !isWindowsDevice()) return false;
+    return !sessionStorage.getItem(WEBPOS_LAUNCH_CHECK_KEY);
+  });
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const [tablesRefreshToken, setTablesRefreshToken] = useState(0);
   const [heldTableIds, setHeldTableIds] = useState<string[]>([]);
@@ -8504,6 +8515,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
         {t('webPosLoading')}
       </div>
+    );
+  }
+
+  if (appMode && isWindowsDevice() && !launchCheckPassed) {
+    return (
+      <WebPosLaunchCheckModal
+        open={launchCheckOpen}
+        printSettings={printSettings}
+        onContinue={() => {
+          try {
+            sessionStorage.setItem(WEBPOS_LAUNCH_CHECK_KEY, '1');
+          } catch {
+            /* ignore */
+          }
+          setLaunchCheckPassed(true);
+          setLaunchCheckOpen(false);
+        }}
+      />
     );
   }
 
