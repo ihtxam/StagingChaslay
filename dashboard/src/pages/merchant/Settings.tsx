@@ -542,22 +542,22 @@ export default function Settings() {
   const tabs = useMemo(
     () =>
       [
-        { id: 'business' as const, label: t('settingsBusiness'), icon: Building2 },
-        { id: 'taxes' as const, label: t('settingsTaxes'), icon: Percent },
-        { id: 'tables' as const, label: t('settingsTables'), icon: UtensilsCrossed },
-        { id: 'shop' as const, label: t('shop'), icon: Globe2 },
-        { id: 'delivery' as const, label: t('settingsDeliveryPlatforms'), icon: Truck },
-        { id: 'delivery-map' as const, label: t('deliveryMapNav'), icon: MapPin },
-        { id: 'hours' as const, label: t('settingsHours'), icon: Clock },
-        { id: 'reservations' as const, label: t('settingsReservations'), icon: CalendarClock },
-        { id: 'pos' as const, label: t('settingsPos'), icon: Monitor },
-        { id: 'payments' as const, label: t('settingsPayments'), icon: CreditCard },
-        { id: 'receipt' as const, label: t('settingsReceipt'), icon: Printer },
-        { id: 'kds' as const, label: t('kdsSettingsTitle'), icon: ChefHat },
-        { id: 'ods' as const, label: t('odsSettingsTitle'), icon: Monitor },
-        { id: 'email' as const, label: t('settingsEmail'), icon: Mail },
-        { id: 'users' as const, label: t('staffPageTitle'), icon: Users },
-        { id: 'language' as const, label: t('language'), icon: Languages },
+        { id: 'business' as const, label: t('settingsBusiness'), navLabel: t('settingsNavBusiness'), icon: Building2 },
+        { id: 'taxes' as const, label: t('settingsTaxes'), navLabel: t('settingsNavTaxes'), icon: Percent },
+        { id: 'tables' as const, label: t('settingsTables'), navLabel: t('settingsNavTables'), icon: UtensilsCrossed },
+        { id: 'shop' as const, label: t('shop'), navLabel: t('settingsNavShop'), icon: Globe2 },
+        { id: 'delivery' as const, label: t('settingsDeliveryPlatforms'), navLabel: t('settingsNavDelivery'), icon: Truck },
+        { id: 'delivery-map' as const, label: t('deliveryMapNav'), navLabel: t('settingsNavDeliveryMap'), icon: MapPin },
+        { id: 'hours' as const, label: t('settingsHours'), navLabel: t('settingsNavHours'), icon: Clock },
+        { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
+        { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
+        { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
+        { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
+        { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
+        { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
+        { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
+        { id: 'users' as const, label: t('staffPageTitle'), navLabel: t('settingsNavStaff'), icon: Users },
+        { id: 'language' as const, label: t('language'), navLabel: t('settingsNavLanguage'), icon: Languages },
       ] as const,
     [t]
   );
@@ -1546,7 +1546,7 @@ export default function Settings() {
         <div className="flex flex-col lg:flex-row min-h-[60vh]">
           <aside className="shrink-0 border-b border-[var(--border)] lg:w-56 lg:border-b-0 lg:border-r">
             <nav
-              className="flex gap-0.5 overflow-x-auto overscroll-x-contain p-2 lg:flex-col lg:overflow-x-visible [-webkit-overflow-scrolling:touch]"
+              className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-col lg:gap-0.5 lg:overflow-visible max-h-[min(42vh,320px)] overflow-y-auto overscroll-y-contain lg:max-h-none [-webkit-overflow-scrolling:touch]"
               aria-label={t('settings')}
             >
               {visibleTabs.map((item) => {
@@ -1554,6 +1554,7 @@ export default function Settings() {
                 const active = tab === item.id;
                 const searchHit = normalizedQuery ? matchedTabs.has(item.id) : false;
                 const searchMiss = normalizedQuery ? !searchHit : false;
+                const navText = item.navLabel ?? item.label;
                 return (
                   <button
                     key={item.id}
@@ -1565,14 +1566,19 @@ export default function Settings() {
                         if (first) setHighlightId(first.id);
                       }
                     }}
-                    className={`flex min-w-[8.5rem] items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors lg:min-w-0 lg:w-full ${
+                    aria-label={item.label}
+                    title={item.label}
+                    className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors lg:w-full lg:py-2 ${
                       active
                         ? 'bg-[var(--bg-muted)] text-[var(--text)]'
                         : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
                     } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''} ${searchMiss ? 'opacity-45' : ''}`}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap">{item.label}</span>
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="min-w-0 truncate lg:whitespace-normal">
+                      <span className="lg:hidden">{navText}</span>
+                      <span className="hidden lg:inline">{item.label}</span>
+                    </span>
                   </button>
                 );
               })}
