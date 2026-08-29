@@ -493,6 +493,43 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE order_items ADD COLUMN IF NOT EXISTS selected_extras jsonb DEFAULT '[]'::jsonb`,
   `ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seat_number integer`,
   `ALTER TABLE order_items ADD COLUMN IF NOT EXISTS refunded_quantity numeric(12,3) DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS pos_shifts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL,
+    staff_name varchar(255),
+    status varchar(20) NOT NULL DEFAULT 'open',
+    opened_at timestamp NOT NULL DEFAULT now(),
+    closed_at timestamp,
+    opening_cash numeric(12, 2) NOT NULL DEFAULT 0,
+    closing_cash_counted numeric(12, 2),
+    expected_cash numeric(12, 2),
+    cash_sales numeric(12, 2) DEFAULT 0,
+    card_sales numeric(12, 2) DEFAULT 0,
+    terminal_sales numeric(12, 2) DEFAULT 0,
+    other_sales numeric(12, 2) DEFAULT 0,
+    order_count integer DEFAULT 0,
+    variance numeric(12, 2),
+    notes text,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pos_shifts_merchant_idx ON pos_shifts (merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS pos_shifts_status_idx ON pos_shifts (merchant_id, status)`,
+  `CREATE INDEX IF NOT EXISTS pos_shifts_opened_idx ON pos_shifts (merchant_id, opened_at)`,
+  `CREATE TABLE IF NOT EXISTS pos_cash_movements (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    shift_id uuid NOT NULL REFERENCES pos_shifts(id) ON DELETE CASCADE,
+    staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL,
+    staff_name varchar(255),
+    type varchar(10) NOT NULL,
+    amount numeric(12, 2) NOT NULL,
+    reason text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pos_cash_movements_merchant_idx ON pos_cash_movements(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS pos_cash_movements_shift_idx ON pos_cash_movements(shift_id)`,
   `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30`,
   `CREATE UNIQUE INDEX IF NOT EXISTS orders_merchant_invoice_number_idx ON orders (merchant_id, invoice_number) WHERE invoice_number IS NOT NULL`,
   `UPDATE products SET barcode = NULL WHERE barcode IS NOT NULL AND btrim(barcode) = ''`,
@@ -995,7 +1032,7 @@ const TABLE_PATCHES: string[] = [
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
 const LOCATIONS_SCHEMA_PATTERN =
-  /\blocations\b|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers/;
+  /\blocations\b|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers|pos_shifts|pos_cash_movements/;
 
 let startupPatchPromise: Promise<void> | null = null;
 let patchedColumns = new Set<string>();

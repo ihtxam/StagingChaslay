@@ -57,7 +57,7 @@ export function missingTableColumnFromDbError(
 
 /** Detect missing multi-location tables (locations, HQ catalog, per-location stock, etc.). */
 export function isLocationsSchemaError(raw: string): boolean {
-  return /relation ["']?(locations|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers)["']? does not exist/i.test(
+  return /relation ["']?(locations|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers|pos_shifts|pos_cash_movements)["']? does not exist/i.test(
     raw
   );
 }
@@ -119,17 +119,15 @@ export function formatDbMigrateError(raw: string, fallback = "Failed to load set
   if (!isMissingSchemaError(raw)) return raw || fallback;
   const col = missingColumnFromError(raw);
   if (col && COLUMN_HINTS[col]) return COLUMN_HINTS[col].message;
-  for (const [key, hint] of Object.entries(COLUMN_HINTS)) {
-    if (raw.includes(key)) return hint.message;
-  }
+  const table = missingTableFromError(raw);
+  if (table && COLUMN_HINTS[table]) return COLUMN_HINTS[table].message;
   return raw || fallback;
 }
 
 export function migrateLogTag(raw: string): string | null {
   const col = missingColumnFromError(raw);
   if (col && COLUMN_HINTS[col]) return COLUMN_HINTS[col].logTag;
-  for (const [key, hint] of Object.entries(COLUMN_HINTS)) {
-    if (raw.includes(key)) return hint.logTag;
-  }
+  const table = missingTableFromError(raw);
+  if (table && COLUMN_HINTS[table]) return COLUMN_HINTS[table].logTag;
   return isMissingSchemaError(raw) ? "unknown_column" : null;
 }

@@ -141,8 +141,8 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
-/** Idempotent DB column repair — safe to call after deploy (no auth; alters only). */
-app.post("/health/schema-repair", async (_req: Request, res: Response) => {
+/** Idempotent DB column repair — GET or POST (browser-safe). */
+async function handleSchemaRepair(_req: Request, res: Response) {
   try {
     await ensureAllMerchantSchema();
     res.json({ status: "ok", repaired: true, timestamp: new Date().toISOString() });
@@ -153,7 +153,11 @@ app.post("/health/schema-repair", async (_req: Request, res: Response) => {
       error: error instanceof Error ? error.message : "Schema repair failed",
     });
   }
-});
+}
+app.get("/health/schema-repair", handleSchemaRepair);
+app.post("/health/schema-repair", handleSchemaRepair);
+app.get("/api/health/schema-repair", handleSchemaRepair);
+app.post("/api/health/schema-repair", handleSchemaRepair);
 
 /** Public status page data (no auth). */
 app.get("/api/public/status", async (_req: Request, res: Response) => {
