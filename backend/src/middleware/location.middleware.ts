@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { ensureLocationsSchema } from "@/lib/ensure-merchant-schema";
 import { LocationsService } from "@/services/locations.service";
 
 declare global {
@@ -17,6 +18,8 @@ export async function setLocationContext(req: Request, res: Response, next: Next
   try {
     const merchantId = req.merchantId;
     if (!merchantId) return next();
+
+    await ensureLocationsSchema();
 
     const headerId = String(req.headers["x-location-id"] || "").trim();
     const isOwner = req.user?.role === "merchant";

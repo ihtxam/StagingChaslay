@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { isMissingSchemaError, missingColumnFromError } from "@/lib/db-schema-errors";
+import {
+  isLocationsSchemaError,
+  isMissingSchemaError,
+  missingColumnFromError,
+} from "@/lib/db-schema-errors";
 
 /**
  * Idempotent ALTER statements for merchant columns added after initial deploy.
@@ -891,6 +895,10 @@ const TABLE_PATCHES: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_short_code_uidx ON signage_screens(short_code) WHERE short_code IS NOT NULL`,
 ];
 
+/** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
+const LOCATIONS_SCHEMA_PATTERN =
+  /\blocations\b|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers/;
+
 let startupPatchPromise: Promise<void> | null = null;
 let patchedColumns = new Set<string>();
 let patchedTables = false;
@@ -993,6 +1001,24 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+/** Ensure multi-location tables/columns exist and backfill default location per merchant. */
+export async function ensureLocationsSchema(): Promise<void> {
+  const db = getDb();
+  for (const statement of TABLE_PATCHES) {
+    if (!LOCATIONS_SCHEMA_PATTERN.test(statement)) continue;
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      console.warn("[schema] locations schema patch failed:", err);
+    }
+  }
+  await runPatch("orders_location_id");
+  await runPatch("pos_sessions_location_id");
+  await runPatch("max_locations");
+  await runPatch("subscription_plans_max_locations");
+  await backfillDefaultLocations();
+}
+
 /** Create one default location per merchant and backfill orders/POS sessions. */
 export async function backfillDefaultLocations(): Promise<void> {
   const db = getDb();
@@ -1043,7 +1069,7 @@ export function ensureMerchantSchemaAtStartup(): void {
       await runPatch(column);
     }
     await ensureMerchantTables();
-    await backfillDefaultLocations();
+    await ensureLocationsSchema();
   })().catch((err) => {
     console.warn("[schema] merchant startup patch failed:", err);
   });
@@ -1056,12 +1082,15 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error ?? "");
     const patched = await patchMerchantSchemaFromError(error);
+    const locationsMissing = isLocationsSchemaError(raw);
     const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
-    if (inventoryTableMissing) {
+    if (locationsMissing) {
+      await ensureLocationsSchema();
+    } else if (inventoryTableMissing) {
       patchedTables = false;
       await ensureMerchantTables();
     }
-    if (!patched && !inventoryTableMissing) throw error;
+    if (!patched && !inventoryTableMissing && !locationsMissing) throw error;
     return fn();
   }
 }
@@ -1073,6 +1102,10 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
 export async function patchMerchantSchemaFromError(error: unknown): Promise<boolean> {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   if (!isMissingSchemaError(raw)) return false;
+  if (isLocationsSchemaError(raw)) {
+    await ensureLocationsSchema();
+    return true;
+  }
   const col = missingColumnFromError(raw);
   if (!col) return false;
   return runPatch(col);

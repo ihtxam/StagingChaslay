@@ -11,6 +11,13 @@ export function missingColumnFromError(raw: string): string | null {
   return m?.[1] ?? null;
 }
 
+/** Detect missing multi-location tables (locations, HQ catalog, per-location stock, etc.). */
+export function isLocationsSchemaError(raw: string): boolean {
+  return /relation ["']?(locations|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers)["']? does not exist/i.test(
+    raw
+  );
+}
+
 type MigrateHint = { message: string; logTag: string };
 
 const COLUMN_HINTS: Record<string, MigrateHint> = {

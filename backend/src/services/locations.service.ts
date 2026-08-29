@@ -1,5 +1,9 @@
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import {
+  ensureLocationsSchema,
+  withMerchantSchemaRetry,
+} from "@/lib/ensure-merchant-schema";
 
 export type LocationRow = typeof schema.locations.$inferSelect;
 
@@ -15,40 +19,44 @@ function slugify(name: string): string {
 
 export class LocationsService {
   static async ensureDefaults(merchantId: string): Promise<LocationRow> {
-    const db = getDb();
-    const existing = await db.query.locations.findFirst({
-      where: eq(schema.locations.merchantId, merchantId),
-      orderBy: [asc(schema.locations.createdAt)],
-    });
-    if (existing) return existing;
+    return withMerchantSchemaRetry(async () => {
+      await ensureLocationsSchema();
 
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: {
-        name: true,
-        businessCategory: true,
-        address: true,
-        city: true,
-        country: true,
-      },
-    });
-    if (!merchant) throw new Error("Merchant not found");
+      const db = getDb();
+      const existing = await db.query.locations.findFirst({
+        where: eq(schema.locations.merchantId, merchantId),
+        orderBy: [asc(schema.locations.createdAt)],
+      });
+      if (existing) return existing;
 
-    const [row] = await db
-      .insert(schema.locations)
-      .values({
-        merchantId,
-        name: merchant.name?.trim() || "Main location",
-        slug: "main",
-        businessCategory: merchant.businessCategory || "restaurant",
-        address: merchant.address,
-        city: merchant.city,
-        country: merchant.country,
-        isDefault: true,
-        status: "active",
-      })
-      .returning();
-    return row;
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: {
+          name: true,
+          businessCategory: true,
+          address: true,
+          city: true,
+          country: true,
+        },
+      });
+      if (!merchant) throw new Error("Merchant not found");
+
+      const [row] = await db
+        .insert(schema.locations)
+        .values({
+          merchantId,
+          name: merchant.name?.trim() || "Main location",
+          slug: "main",
+          businessCategory: merchant.businessCategory || "restaurant",
+          address: merchant.address,
+          city: merchant.city,
+          country: merchant.country,
+          isDefault: true,
+          status: "active",
+        })
+        .returning();
+      return row;
+    });
   }
 
   static async getDefaultId(merchantId: string): Promise<string> {
