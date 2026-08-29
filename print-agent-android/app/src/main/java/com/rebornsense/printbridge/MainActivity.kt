@@ -27,6 +27,7 @@ import com.rebornsense.printbridge.service.PrintBridgeService
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
     private var usbPermissionReceiver: BroadcastReceiver? = null
+    private var pendingBluetoothTestPrint: PrinterEndpoint? = null
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
 
@@ -34,6 +35,19 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
             startBridge()
             refreshPrinters()
+            val endpoint = pendingBluetoothTestPrint
+            pendingBluetoothTestPrint = null
+            if (endpoint != null) {
+                if (hasBluetoothPermissions()) {
+                    performTestPrint(endpoint)
+                } else {
+                    Toast.makeText(
+                        this,
+                        R.string.test_print_bluetooth_permission_denied,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,17 +78,33 @@ class MainActivity : AppCompatActivity() {
         ) {
             needed += Manifest.permission.POST_NOTIFICATIONS
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            needed += Manifest.permission.BLUETOOTH_CONNECT
-        }
+        needed += bluetoothPermissionsNeeded()
         if (needed.isEmpty()) {
             startBridge()
         } else {
             permissionLauncher.launch(needed.toTypedArray())
         }
+    }
+
+    private fun hasBluetoothPermissions(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return bluetoothPermissionsNeeded().isEmpty()
+    }
+
+    private fun bluetoothPermissionsNeeded(): List<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return emptyList()
+        val needed = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed += Manifest.permission.BLUETOOTH_CONNECT
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed += Manifest.permission.BLUETOOTH_SCAN
+        }
+        return needed
     }
 
     private fun startBridge() {
@@ -120,6 +150,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun testPrint(endpoint: PrinterEndpoint) {
+        if (endpoint.connectionType == "bluetooth" && !hasBluetoothPermissions()) {
+            pendingBluetoothTestPrint = endpoint
+            permissionLauncher.launch(bluetoothPermissionsNeeded().toTypedArray())
+            return
+        }
+        performTestPrint(endpoint)
+    }
+
+    private fun performTestPrint(endpoint: PrinterEndpoint) {
         val driver = registry.driverFor(endpoint) ?: run {
             Toast.makeText(this, R.string.test_print_failed, Toast.LENGTH_SHORT).show()
             return
@@ -146,6 +185,9 @@ class MainActivity : AppCompatActivity() {
         return when {
             raw.contains("socket", ignoreCase = true) && raw.contains("closed", ignoreCase = true) ->
                 getString(R.string.test_print_socket_closed)
+            raw.contains("BLUETOOTH_SCAN", ignoreCase = true) ||
+                raw.contains("BLUETOOTH_CONNECT", ignoreCase = true) ->
+                getString(R.string.test_print_bluetooth_permission_denied)
             raw.contains("Bluetooth", ignoreCase = true) ->
                 getString(R.string.test_print_bluetooth_failed, raw)
             else -> raw
