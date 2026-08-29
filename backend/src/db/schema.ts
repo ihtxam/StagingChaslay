@@ -689,6 +689,7 @@ export type PackageIncludedAddons = {
   signage?: boolean;
   kds?: boolean;
   ods?: boolean;
+  kiosk?: boolean;
   signageScreenLimit?: number;
 };
 

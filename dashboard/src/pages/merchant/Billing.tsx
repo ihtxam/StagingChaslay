@@ -49,6 +49,7 @@ type MerchantBilling = {
   signageAddonEnabled?: boolean;
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
+  kioskAddonEnabled?: boolean;
   justEatAddonEnabled?: boolean;
   uberEatsAddonEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
@@ -296,6 +297,7 @@ export default function Billing() {
                   merchant.inventoryAddonEnabled && 'Inventory',
                   merchant.signageAddonEnabled && 'Signage',
                   merchant.kdsAddonEnabled && 'KDS',
+                  merchant.kioskAddonEnabled && 'Kiosk',
                   merchant.odsAddonEnabled && 'ODS',
                   merchant.justEatAddonEnabled && 'Just Eat',
                   merchant.uberEatsAddonEnabled && 'Uber Eats',

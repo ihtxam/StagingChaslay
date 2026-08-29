@@ -121,22 +121,40 @@ export class ResellerService {
 
   static async ensureChaslayAgency(createdBySuperadminId?: string | null) {
     const db = getDb();
-    const email = (process.env.SEED_RESELLER_EMAIL || "agency@rebornsense.com").toLowerCase();
-    const existing = await db.query.resellers.findFirst({
-      where: eq(schema.resellers.email, email),
+    const targetEmail = (process.env.SEED_RESELLER_EMAIL || "agency@chaslay.com").toLowerCase();
+    const legacyEmail = "agency@rebornsense.com";
+    const name = process.env.SEED_RESELLER_NAME || "Chaslay Agency";
+
+    let existing = await db.query.resellers.findFirst({
+      where: eq(schema.resellers.email, targetEmail),
     });
+
+    if (!existing) {
+      const legacy = await db.query.resellers.findFirst({
+        where: eq(schema.resellers.email, legacyEmail),
+      });
+      if (legacy) {
+        const [updated] = await db
+          .update(schema.resellers)
+          .set({ email: targetEmail, name, updatedAt: new Date() })
+          .where(eq(schema.resellers.id, legacy.id))
+          .returning();
+        existing = updated;
+      }
+    }
+
     if (existing) return serializeReseller(existing);
 
     const password = process.env.SEED_RESELLER_PASSWORD || "ChaslayAgency123!";
-    const name = process.env.SEED_RESELLER_NAME || "Reborn";
     const passwordHash = await AuthService.hashPassword(password);
     const [row] = await db
       .insert(schema.resellers)
       .values({
         name,
-        email,
+        email: targetEmail,
         passwordHash,
         status: "active",
+        licenseSeats: 9999,
         createdBySuperadminId: createdBySuperadminId || null,
       })
       .returning();
@@ -467,6 +485,7 @@ export class ResellerService {
       odsAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -482,6 +501,7 @@ export class ResellerService {
       odsAddonEnabled: limits.odsAddonEnabled,
       deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
+      kioskAddonEnabled: limits.kioskAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

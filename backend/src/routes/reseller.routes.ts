@@ -9,6 +9,7 @@ import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signag
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
+import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 
@@ -253,6 +254,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       odsEnabled,
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
+      kioskAddonEnabled,
+      kioskEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -293,6 +296,12 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
           storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(storekeeperAddonEnabled)
             : undefined,
+        kioskAddonEnabled:
+          kioskAddonEnabled != null
+            ? isKioskAddonEnabled(kioskAddonEnabled)
+            : kioskEnabled != null
+              ? isKioskAddonEnabled(kioskEnabled)
+              : undefined,
       }
     );
     res.json({ success: true, merchant });

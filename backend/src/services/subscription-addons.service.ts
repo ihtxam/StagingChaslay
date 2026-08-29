@@ -228,6 +228,15 @@ export class SubscriptionAddonsService {
         sortOrder: 40,
       },
       {
+        name: "Self-order kiosk",
+        slug: "kiosk",
+        addonKey: "kiosk",
+        description: "Customer-facing self-order kiosk with card and cash payments",
+        priceMonthly: 29,
+        priceYearly: 290,
+        sortOrder: 35,
+      },
+      {
         name: "Extra POS station",
         slug: "extra-pos",
         addonKey: "extra_pos_post",
@@ -309,6 +318,15 @@ export class SubscriptionAddonsService {
         priceYearly: 150,
         quantity: 1,
         sortOrder: 65,
+      },
+      {
+        name: "Self-order kiosk",
+        slug: "kiosk",
+        addonKey: "kiosk",
+        description: "Customer-facing self-order kiosk with card and cash payments",
+        priceMonthly: 29,
+        priceYearly: 290,
+        sortOrder: 35,
       },
     ];
 

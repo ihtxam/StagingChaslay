@@ -46,6 +46,15 @@ import {
   writeJustEatAddonEnabled,
   writeUberEatsAddonEnabled,
 } from "@/lib/delivery-platform-addon";
+import {
+  isKioskAddonEnabled,
+  readKioskAddonEnabled,
+  writeKioskAddonEnabled,
+} from "@/lib/kiosk-addon";
+import {
+  isStorekeeperAddonEnabled,
+  writeStorekeeperAddonEnabled,
+} from "@/lib/storekeeper-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -159,6 +168,7 @@ export class MerchantService {
         const signageOn = signage?.enabled ?? isSignageAddonEnabled(m.signageAddonEnabled);
         const kdsOn = kdsById.get(m.id) ?? isKdsAddonEnabled(m.kdsAddonEnabled);
         const odsOn = odsById.get(m.id) ?? isOdsAddonEnabled(m.odsAddonEnabled);
+        const kioskOn = isKioskAddonEnabled(m.kioskAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -188,6 +198,8 @@ export class MerchantService {
           kdsEnabled: kdsOn,
           odsAddonEnabled: odsOn,
           odsEnabled: odsOn,
+          kioskAddonEnabled: kioskOn,
+          kioskEnabled: kioskOn,
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -245,6 +257,9 @@ export class MerchantService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.odsAddonEnabled)
       );
+      const kioskOn = await readKioskAddonEnabled(merchantId).catch(() =>
+        isKioskAddonEnabled(merchant.kioskAddonEnabled)
+      );
       const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
         isJustEatAddonEnabled(merchant.justEatAddonEnabled)
       );
@@ -262,6 +277,8 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        kioskAddonEnabled: kioskOn,
+        kioskEnabled: kioskOn,
         justEatAddonEnabled: justEatOn,
         uberEatsAddonEnabled: uberEatsOn,
         deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
@@ -314,7 +331,9 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -379,6 +398,7 @@ export class MerchantService {
           signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
           kdsAddonEnabled: options?.kdsAddonEnabled === true,
           odsAddonEnabled: options?.odsAddonEnabled === true,
+          kioskAddonEnabled: options?.kioskAddonEnabled === true,
           justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
           uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         })
@@ -459,6 +479,9 @@ export class MerchantService {
       }
       if (options?.odsAddonEnabled === true) {
         await writeOdsAddonEnabled(created.id, true);
+      }
+      if (options?.kioskAddonEnabled === true) {
+        await writeKioskAddonEnabled(created.id, true);
       }
       if (options?.deliveryPlatformsAddonEnabled === true) {
         await writeJustEatAddonEnabled(created.id, true);
@@ -572,7 +595,9 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
+      storekeeperAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -615,9 +640,17 @@ export class MerchantService {
       await writeUberEatsAddonEnabled(merchantId, limits.deliveryPlatformsAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.kioskAddonEnabled !== undefined) {
+      await writeKioskAddonEnabled(merchantId, limits.kioskAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.storekeeperAddonEnabled !== undefined) {
+      await writeStorekeeperAddonEnabled(merchantId, limits.storekeeperAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, or deliveryPlatformsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, or deliveryPlatformsAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

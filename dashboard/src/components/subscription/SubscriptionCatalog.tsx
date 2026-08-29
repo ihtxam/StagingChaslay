@@ -23,6 +23,7 @@ type Plan = {
     signage?: boolean;
     kds?: boolean;
     ods?: boolean;
+    kiosk?: boolean;
     signageScreenLimit?: number;
   } | null;
   features?: string[] | null;
@@ -66,6 +67,7 @@ const emptyPlan = {
   includedSignage: false,
   includedKds: false,
   includedOds: false,
+  includedKiosk: false,
   signageScreenLimit: 2,
   featuresText: '',
   isActive: true,
@@ -155,6 +157,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
       includedSignage: !!plan.includedAddons?.signage,
       includedKds: !!plan.includedAddons?.kds,
       includedOds: !!plan.includedAddons?.ods,
+      includedKiosk: !!plan.includedAddons?.kiosk,
       signageScreenLimit: plan.includedAddons?.signageScreenLimit ?? 2,
       featuresText: (plan.features || []).join('\n'),
       isActive: plan.isActive,
@@ -191,6 +194,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
           signage: planForm.includedSignage,
           kds: planForm.includedKds,
           ods: planForm.includedOds,
+          kiosk: planForm.includedKiosk,
           signageScreenLimit: planForm.includedSignage ? Number(planForm.signageScreenLimit) || 2 : undefined,
         },
         features: planForm.featuresText
@@ -662,6 +666,14 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                     />
                     ODS
                   </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planForm.includedKiosk}
+                      onChange={(e) => setPlanForm({ ...planForm, includedKiosk: e.target.checked })}
+                    />
+                    Self-order kiosk
+                  </label>
                   {planForm.includedSignage ? (
                     <label className="flex items-center gap-2">
                       Screens
@@ -749,6 +761,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                   <option value="signage">Digital signage</option>
                   <option value="kds">Kitchen display (KDS)</option>
                   <option value="ods">Order display (ODS)</option>
+                  <option value="kiosk">Self-order kiosk</option>
                   <option value="just_eat">Just Eat integration</option>
                   <option value="uber_eats">Uber Eats integration</option>
                   <option value="extra_pos_post">Extra POS station</option>

@@ -4,8 +4,8 @@ export default function DirectSalesPackages() {
   return (
     <SubscriptionCatalog
       apiPrefix="superadmin"
-      title="Reborn Direct — packages & add-ons"
-      description="Manage the subscription catalog for merchants sold directly by Reborn. Superadmin acts as the platform reseller (Reborn Direct); agency merchants see their agency's catalog instead."
+      title="Chaslay Agency — packages & add-ons"
+      description="Manage the subscription catalog sold through Chaslay Agency (agency@chaslay.com). Merchants without an assigned agency use this catalog. Platform does not sell directly."
     />
   );
 }

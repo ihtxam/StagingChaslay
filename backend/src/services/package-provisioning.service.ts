@@ -20,6 +20,7 @@ function applyIncludedAddons(
   }
   if (addons.kds) patch.kdsAddonEnabled = true;
   if (addons.ods) patch.odsAddonEnabled = true;
+  if (addons.kiosk) patch.kioskAddonEnabled = true;
 }
 
 export class PackageProvisioningService {
@@ -84,6 +85,9 @@ export class PackageProvisioningService {
         break;
       case "ods":
         patch.odsAddonEnabled = true;
+        break;
+      case "kiosk":
+        patch.kioskAddonEnabled = true;
         break;
       case "just_eat":
         patch.justEatAddonEnabled = true;

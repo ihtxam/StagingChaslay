@@ -28,7 +28,8 @@ export type EditionFeatureKey =
   | 'inventory'
   | 'digital_signage'
   | 'kds'
-  | 'ods';
+  | 'ods'
+  | 'self_order_kiosk';
 
 export type EditionFeatureGroup = {
   id: string;
@@ -85,6 +86,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'digital_signage', label: 'Digital signage / menu boards (paid addon)' },
       { key: 'kds', label: 'Kitchen display / KDS (paid addon)' },
       { key: 'ods', label: 'Order display / ODS (paid addon)' },
+      { key: 'self_order_kiosk', label: 'Self-order kiosk (paid addon)' },
     ],
   },
 ];

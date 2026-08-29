@@ -47,6 +47,8 @@ interface Merchant {
   odsAddonEnabled?: boolean;
   odsEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
+  kioskAddonEnabled?: boolean;
+  kioskEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -108,6 +110,7 @@ const emptyForm = {
   odsAddonEnabled: false,
   deliveryPlatformsAddonEnabled: false,
   storekeeperAddonEnabled: false,
+  kioskAddonEnabled: false,
 };
 
 export default function Merchants() {
@@ -141,6 +144,7 @@ export default function Merchants() {
     odsAddonEnabled: false,
     deliveryPlatformsAddonEnabled: false,
     storekeeperAddonEnabled: false,
+    kioskAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [planForm, setPlanForm] = useState({
@@ -223,6 +227,7 @@ export default function Merchants() {
           res.data.merchant?.justEatAddonEnabled === true ||
           res.data.merchant?.uberEatsAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
+        kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
       });
     } catch {
       toast.error('Failed to load merchant details');
@@ -244,6 +249,7 @@ export default function Merchants() {
         odsAddonEnabled: !!posLimits.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: !!posLimits.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
+        kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
@@ -251,6 +257,7 @@ export default function Merchants() {
       const kdsOn = saved?.kdsAddonEnabled === true || saved?.kdsEnabled === true;
       const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
       const storekeeperOn = saved?.storekeeperAddonEnabled === true;
+      const kioskOn = saved?.kioskAddonEnabled === true || saved?.kioskEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
@@ -265,6 +272,7 @@ export default function Merchants() {
           saved?.justEatAddonEnabled === true ||
           saved?.uberEatsAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
+        kioskAddonEnabled: kioskOn,
       });
       setShowDetail((prev) =>
         prev
@@ -280,6 +288,8 @@ export default function Merchants() {
               odsAddonEnabled: odsOn,
               odsEnabled: odsOn,
               storekeeperAddonEnabled: storekeeperOn,
+              kioskAddonEnabled: kioskOn,
+              kioskEnabled: kioskOn,
             }
           : prev
       );
@@ -429,6 +439,7 @@ export default function Merchants() {
         odsAddonEnabled: !!form.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: !!form.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
+        kioskAddonEnabled: !!form.kioskAddonEnabled,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
@@ -1060,6 +1071,20 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.kioskAddonEnabled}
+                    onChange={(e) => setForm({ ...form, kioskAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Self-order kiosk</span>
+                    <span className="text-xs text-gray-500">
+                      Customer-facing touchscreen ordering with card and cash payments (paid extra).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.deliveryPlatformsAddonEnabled}
                     onChange={(e) =>
                       setForm({ ...form, deliveryPlatformsAddonEnabled: e.target.checked })
@@ -1434,6 +1459,31 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.odsAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.kioskAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, kioskAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Self-order kiosk</span>
+                      <span className="text-xs text-gray-500">
+                        Customer-facing touchscreen ordering (paid extra).
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.kioskAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.kioskAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

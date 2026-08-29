@@ -18,7 +18,8 @@ export type BillableFeatureKey =
   | "inventory"
   | "digital_signage"
   | "kds"
-  | "ods";
+  | "ods"
+  | "self_order_kiosk";
 
 export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "online_shop",
@@ -33,6 +34,7 @@ export const BILLABLE_FEATURE_KEYS: BillableFeatureKey[] = [
   "digital_signage",
   "kds",
   "ods",
+  "self_order_kiosk",
 ];
 
 export type ResellerBillingPrices = {
@@ -58,6 +60,7 @@ const DEFAULT_PRICES: ResellerBillingPrices = {
     digital_signage: 19,
     kds: 19,
     ods: 15,
+    self_order_kiosk: 29,
   },
 };
 
@@ -85,6 +88,7 @@ export function detectActiveBillableFeatures(merchant: {
   signageAddonEnabled?: boolean | null;
   kdsAddonEnabled?: boolean | null;
   odsAddonEnabled?: boolean | null;
+  kioskAddonEnabled?: boolean | null;
   adyenApiKey?: string | null;
   customDomain?: string | null;
   editionFeatures?: string[] | null;
@@ -112,6 +116,7 @@ export function detectActiveBillableFeatures(merchant: {
   if (merchant.signageAddonEnabled) out.push("digital_signage");
   if (merchant.kdsAddonEnabled) out.push("kds");
   if (merchant.odsAddonEnabled) out.push("ods");
+  if (merchant.kioskAddonEnabled) out.push("self_order_kiosk");
 
   return [...new Set(out)];
 }

@@ -17,6 +17,7 @@ import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signag
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
+import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 
 const router = Router();
 const imageUpload = multer({
@@ -372,6 +373,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odsAddonEnabled,
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
+      kioskAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -409,6 +411,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         odsAddonEnabled: isOdsAddonEnabled(odsAddonEnabled),
         deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
+        kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
       }
     );
 
@@ -475,7 +478,9 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.odsAddonEnabled != null ||
       updates.odsEnabled != null ||
       updates.deliveryPlatformsAddonEnabled != null ||
-      updates.storekeeperAddonEnabled != null
+      updates.storekeeperAddonEnabled != null ||
+      updates.kioskAddonEnabled != null ||
+      updates.kioskEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -517,6 +522,12 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(updates.storekeeperAddonEnabled)
             : undefined,
+        kioskAddonEnabled:
+          updates.kioskAddonEnabled != null
+            ? isKioskAddonEnabled(updates.kioskAddonEnabled)
+            : updates.kioskEnabled != null
+              ? isKioskAddonEnabled(updates.kioskEnabled)
+              : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -532,6 +543,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.odsEnabled;
       delete updates.deliveryPlatformsAddonEnabled;
       delete updates.storekeeperAddonEnabled;
+      delete updates.kioskAddonEnabled;
+      delete updates.kioskEnabled;
     }
 
     const merchant =

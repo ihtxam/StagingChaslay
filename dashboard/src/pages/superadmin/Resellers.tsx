@@ -68,6 +68,7 @@ const FEATURE_KEYS = [
   'digital_signage',
   'kds',
   'ods',
+  'self_order_kiosk',
 ] as const;
 
 export default function Resellers() {

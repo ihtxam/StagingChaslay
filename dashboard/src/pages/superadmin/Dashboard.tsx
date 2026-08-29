@@ -46,7 +46,7 @@ function SuperadminShell() {
         { label: t('licenses'), path: '/superadmin/licenses', icon: '🔑' },
         { label: t('posVersions'), path: '/superadmin/editions', icon: '📦' },
         { label: t('resellerManage'), path: '/superadmin/resellers', icon: '🤝' },
-        { label: 'Direct sales catalog', path: '/superadmin/direct-sales/packages', icon: '💳' },
+        { label: 'Chaslay catalog', path: '/superadmin/direct-sales/packages', icon: '💳' },
       ],
     },
     { label: t('analytics'), path: '/superadmin/analytics', icon: '📈' },
