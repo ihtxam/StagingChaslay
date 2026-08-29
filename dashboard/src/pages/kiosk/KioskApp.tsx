@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -9,9 +9,11 @@ import {
   CreditCard,
   Loader2,
   Plus,
+  Printer,
   QrCode,
   Settings,
   ShoppingBag,
+  Truck,
   UtensilsCrossed,
 } from 'lucide-react';
 import ShopProductModifiersModal, {
@@ -28,8 +30,10 @@ import {
   verifyKioskAdminPin,
   type KioskCartLine,
   type KioskConfig,
+  type KioskFulfillmentChannel,
   type KioskMenuCategory,
 } from '@/lib/kiosk-api';
+import { printKioskOrder, type KioskPrintContext } from '@/lib/kiosk-print';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { setKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
 
@@ -82,6 +86,9 @@ export default function KioskApp() {
   const [adminPinOpen, setAdminPinOpen] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [adminPinSubmitting, setAdminPinSubmitting] = useState(false);
+  const [fulfillmentChannel, setFulfillmentChannel] = useState<KioskFulfillmentChannel>('dine_in');
+  const [lastPrintCtx, setLastPrintCtx] = useState<KioskPrintContext | null>(null);
+  const [reprinting, setReprinting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const idleTimer = useRef<number | null>(null);
 
@@ -99,6 +106,71 @@ export default function KioskApp() {
   const tableLabel =
     config?.tables.find((t) => t.id === selectedTableId)?.label || selectedTableId;
 
+  const brandStyle = useMemo((): CSSProperties => {
+    const s = config?.settings;
+    return {
+      '--kiosk-primary': s?.brandPrimaryColor || '#059669',
+      '--kiosk-secondary': s?.brandSecondaryColor || '#047857',
+      '--kiosk-btn-text': s?.brandButtonTextColor || '#ffffff',
+    } as CSSProperties;
+  }, [config?.settings]);
+
+  const channelOptions = useMemo(() => {
+    const s = config?.settings;
+    if (!s) return [];
+    const opts: Array<{
+      channel: KioskFulfillmentChannel;
+      label: string;
+      hint: string;
+      Icon: typeof ShoppingBag;
+    }> = [];
+    if (s.takeawayEnabled !== false) {
+      opts.push({
+        channel: 'takeaway',
+        label: 'Takeaway',
+        hint: 'Pick up at the counter',
+        Icon: ShoppingBag,
+      });
+    }
+    if (s.deliveryEnabled) {
+      opts.push({
+        channel: 'delivery',
+        label: 'Delivery',
+        hint: 'We bring it to you',
+        Icon: Truck,
+      });
+    }
+    if (s.dineInEnabled !== false) {
+      opts.push({
+        channel: 'dine_in',
+        label: 'Dine in',
+        hint: 'Eat here — choose your table',
+        Icon: UtensilsCrossed,
+      });
+    }
+    return opts;
+  }, [config?.settings]);
+
+  const goBackFromMenu = () => {
+    if (config?.settings.membershipScanEnabled) {
+      setStep('membership');
+      return;
+    }
+    if (fulfillmentChannel === 'dine_in') {
+      setStep('table-badge');
+      return;
+    }
+    setStep('attract');
+  };
+
+  const goBackFromMembership = () => {
+    if (fulfillmentChannel === 'dine_in') {
+      setStep('table-badge');
+      return;
+    }
+    setStep('attract');
+  };
+
   const resetSession = useCallback(() => {
     setStep('attract');
     setTableMode('table');
@@ -109,6 +181,8 @@ export default function KioskApp() {
     setOrderId('');
     setOrderNumber('');
     setModifierProduct(null);
+    setFulfillmentChannel('dine_in');
+    setLastPrintCtx(null);
   }, []);
 
   const bumpIdle = useCallback(() => {
@@ -236,15 +310,21 @@ export default function KioskApp() {
           selectedExtras: (l.selectedExtras || []).map((e) => ({ id: e.id })),
         })),
         paymentMethod,
+        fulfillmentChannel,
         tableId: tableMode === 'table' ? selectedTableId : undefined,
         badgeNumber: tableMode === 'badge' ? badgeNumber : undefined,
         locationSlug: config.settings.locationSlug || undefined,
+        shippingAddress: fulfillmentChannel === 'delivery' ? 'Kiosk delivery — confirm at counter' : undefined,
         customerName:
           tableMode === 'badge' && badgeNumber
             ? `Badge ${badgeNumber}`
             : tableLabel
               ? `Table ${tableLabel}`
-              : membership?.holderName || 'Kiosk guest',
+              : fulfillmentChannel === 'takeaway'
+                ? 'Kiosk takeaway'
+                : fulfillmentChannel === 'delivery'
+                  ? 'Kiosk delivery'
+                  : membership?.holderName || 'Kiosk guest',
       });
       const oid = order?.id;
       const onum = order?.orderNumber || '';
@@ -254,6 +334,26 @@ export default function KioskApp() {
       if (paymentMethod === 'card') {
         await payKioskOrderAtTerminal(token, oid);
       }
+      const printCtx: KioskPrintContext = {
+        merchantName: config.merchant.name,
+        orderNumber: onum,
+        orderId: oid,
+        fulfillmentChannel,
+        cart: [...cart],
+        cartTotal,
+        tableLabel: tableLabel || undefined,
+        badgeNumber: badgeNumber || undefined,
+      };
+      setLastPrintCtx(printCtx);
+      if (config.settings.autoPrintKitchen !== false || config.settings.autoPrintReceipt) {
+        const printed = await printKioskOrder(printCtx, {
+          kitchen: config.settings.autoPrintKitchen !== false,
+          receipt: config.settings.autoPrintReceipt === true,
+        });
+        if (!printed.kitchen && !printed.receipt) {
+          toast.error('Could not print — check Print Bridge on this device');
+        }
+      }
       setStep('success');
       window.setTimeout(resetSession, 12000);
     } catch (e: unknown) {
@@ -261,6 +361,30 @@ export default function KioskApp() {
       toast.error(err.response?.data?.error || 'Order failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startWithChannel = (channel: KioskFulfillmentChannel) => {
+    setFulfillmentChannel(channel);
+    if (channel === 'dine_in') {
+      setStep('table-badge');
+      return;
+    }
+    setStep(config?.settings.membershipScanEnabled ? 'membership' : 'menu');
+  };
+
+  const reprintLastOrder = async () => {
+    if (!lastPrintCtx) return;
+    setReprinting(true);
+    try {
+      const printed = await printKioskOrder(lastPrintCtx, { kitchen: true, receipt: true });
+      if (printed.kitchen || printed.receipt) {
+        toast.success('Sent to printer');
+      } else {
+        toast.error('Print Bridge not available on this device');
+      }
+    } finally {
+      setReprinting(false);
     }
   };
 
@@ -298,21 +422,45 @@ export default function KioskApp() {
   }
 
   const slide = slides[slideIndex % slides.length];
+  const attractHeadline = config.settings.attractHeadline || config.merchant.name;
+  const attractSubheadline =
+    config.settings.attractSubheadline ||
+    'Order here — pay at the counter or by card on our terminal.';
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone-100 text-stone-900 select-none touch-manipulation">
+    <div
+      className="kiosk-branded flex min-h-screen flex-col bg-stone-100 text-stone-900 select-none touch-manipulation"
+      style={brandStyle}
+    >
       {/* Top bar: promo slider + language */}
       <header className="relative overflow-hidden bg-stone-950 text-white">
-        <div className="flex min-h-[120px] items-stretch">
+        {config.settings.slideBannerText ? (
+          <div className="relative z-20 border-b border-white/10 bg-black/50 px-6 py-2 text-center text-sm font-semibold tracking-wide md:text-base">
+            {config.settings.slideBannerText}
+          </div>
+        ) : null}
+        <div className="flex min-h-[140px] items-stretch">
           {slide.imageUrl ? (
-            <img
-              src={slide.imageUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover opacity-60"
-            />
+            <>
+              <img
+                src={slide.imageUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover opacity-70"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/20" />
+            </>
+          ) : null}
+          {slide.overlayText ? (
+            <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center px-16 py-6">
+              <p className="max-w-4xl text-center text-3xl font-black uppercase tracking-tight drop-shadow-lg md:text-5xl">
+                {slide.overlayText}
+              </p>
+            </div>
           ) : null}
           <div className="relative z-10 flex flex-1 flex-col justify-center px-6 py-4">
-            <p className="text-2xl font-bold tracking-tight md:text-3xl">{slide.title}</p>
+            {slide.title ? (
+              <p className="text-2xl font-bold tracking-tight md:text-3xl">{slide.title}</p>
+            ) : null}
             {slide.subtitle ? (
               <p className="mt-1 text-sm text-stone-200 md:text-base">{slide.subtitle}</p>
             ) : null}
@@ -355,7 +503,7 @@ export default function KioskApp() {
               ) : null}
             </div>
             {step !== 'attract' && step !== 'success' ? (
-              <div className="flex h-11 items-center rounded-full bg-emerald-500 px-4 text-sm font-bold text-white">
+              <div className="kiosk-cart-badge flex h-11 items-center rounded-full px-4 text-sm font-bold">
                 {money(cartTotal)}
                 <ShoppingBag className="ml-2 h-4 w-4" />
                 <span className="ml-1">{cartCount}</span>
@@ -378,18 +526,40 @@ export default function KioskApp() {
       <main className="flex flex-1 flex-col overflow-hidden">
         {step === 'attract' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-8 p-8">
-            <UtensilsCrossed className="h-20 w-20 text-emerald-600" strokeWidth={1.5} />
-            <h1 className="text-center text-4xl font-bold">{config.merchant.name}</h1>
-            <p className="max-w-md text-center text-lg text-stone-600">
-              Order here — pay at the counter or by card on our terminal.
-            </p>
-            <button
-              type="button"
-              onClick={() => setStep('table-badge')}
-              className="rounded-2xl bg-emerald-600 px-16 py-5 text-2xl font-bold text-white shadow-lg active:scale-[0.98]"
-            >
-              Start order
-            </button>
+            <h1 className="text-center text-4xl font-bold">{attractHeadline}</h1>
+            <p className="max-w-md text-center text-lg text-stone-600">{attractSubheadline}</p>
+            {channelOptions.length ? (
+              <div
+                className={`grid w-full max-w-3xl gap-4 ${
+                  channelOptions.length === 1
+                    ? 'grid-cols-1'
+                    : channelOptions.length === 2
+                      ? 'grid-cols-1 sm:grid-cols-2'
+                      : 'grid-cols-1 sm:grid-cols-3'
+                }`}
+              >
+                {channelOptions.map(({ channel, label, hint, Icon }) => (
+                  <button
+                    key={channel}
+                    type="button"
+                    onClick={() => startWithChannel(channel)}
+                    className="kiosk-btn-choice min-h-[180px]"
+                  >
+                    <Icon className="kiosk-btn-choice-icon h-16 w-16" strokeWidth={1.5} />
+                    <span className="text-2xl font-bold">{label}</span>
+                    <span className="text-sm text-stone-600">{hint}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => startWithChannel('dine_in')}
+                className="kiosk-btn-primary px-16 py-5 text-2xl"
+              >
+                Start order
+              </button>
+            )}
           </div>
         ) : null}
 
@@ -405,9 +575,7 @@ export default function KioskApp() {
                     type="button"
                     onClick={() => setTableMode(mode)}
                     className={`flex-1 rounded-xl border-2 py-4 text-lg font-semibold ${
-                      tableMode === mode
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                        : 'border-stone-200 bg-white'
+                      tableMode === mode ? 'kiosk-mode-active' : 'border-stone-200 bg-white'
                     }`}
                   >
                     {mode === 'table' ? 'Table' : 'Badge number'}
@@ -424,7 +592,7 @@ export default function KioskApp() {
                     onClick={() => setSelectedTableId(t.id)}
                     className={`rounded-xl border-2 py-6 text-xl font-bold ${
                       selectedTableId === t.id
-                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        ? 'kiosk-table-selected'
                         : 'border-stone-200 bg-white'
                     }`}
                   >
@@ -467,7 +635,7 @@ export default function KioskApp() {
 
         {step === 'membership' ? (
           <div className="flex flex-1 flex-col items-center p-6 md:p-10">
-            <QrCode className="h-16 w-16 text-emerald-600" />
+            <QrCode className="kiosk-btn-choice-icon h-16 w-16" />
             <h2 className="mt-4 text-3xl font-bold">Member rewards</h2>
             <p className="mt-2 max-w-lg text-center text-stone-600">
               Scan your membership QR code to earn points on this order.
@@ -484,7 +652,7 @@ export default function KioskApp() {
               </button>
             )}
             <div className="mt-auto flex w-full max-w-lg gap-4 pt-8">
-              <button type="button" onClick={() => setStep('table-badge')} className="kiosk-btn-secondary flex-1">
+              <button type="button" onClick={goBackFromMembership} className="kiosk-btn-secondary flex-1">
                 Back
               </button>
               <button type="button" onClick={() => setStep('menu')} className="kiosk-btn-secondary flex-1">
@@ -504,7 +672,7 @@ export default function KioskApp() {
                   onClick={() => setActiveCategoryId(cat.id)}
                   className={`block w-full border-b border-stone-100 px-3 py-4 text-left text-sm font-semibold md:px-4 md:text-base ${
                     activeCategory?.id === cat.id
-                      ? 'bg-emerald-600 text-white'
+                      ? 'kiosk-category-active'
                       : 'text-stone-700 hover:bg-stone-50'
                   }`}
                 >
@@ -532,7 +700,7 @@ export default function KioskApp() {
                       )}
                       <div className="flex flex-1 flex-col p-3">
                         <p className="font-semibold leading-tight">{item.name}</p>
-                        <p className="mt-auto pt-2 text-lg font-bold text-emerald-700">
+                        <p className="mt-auto pt-2 text-lg font-bold kiosk-text-accent">
                           {money(item.price)}
                         </p>
                       </div>
@@ -541,7 +709,7 @@ export default function KioskApp() {
                 </div>
               </div>
               <div className="flex items-center gap-3 border-t border-stone-200 bg-white p-4">
-                <button type="button" onClick={() => setStep('membership')} className="kiosk-btn-secondary">
+                <button type="button" onClick={goBackFromMenu} className="kiosk-btn-secondary">
                   Back
                 </button>
                 <button
@@ -595,7 +763,7 @@ export default function KioskApp() {
         {step === 'checkout' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 md:p-10">
             <h2 className="text-3xl font-bold">How would you like to pay?</h2>
-            <p className="text-4xl font-bold text-emerald-700">{money(cartTotal)}</p>
+            <p className="text-4xl font-bold kiosk-text-accent">{money(cartTotal)}</p>
             <div className="grid w-full max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
               {cashEnabled ? (
               <button
@@ -614,9 +782,9 @@ export default function KioskApp() {
                 type="button"
                 disabled={submitting}
                 onClick={() => void submitOrder('card')}
-                className="flex flex-col items-center gap-3 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-8 active:scale-[0.98]"
+                className="kiosk-checkout-card flex flex-col items-center gap-3 rounded-2xl border-2 p-8 active:scale-[0.98]"
               >
-                <CreditCard className="h-12 w-12 text-emerald-700" />
+                <CreditCard className="kiosk-btn-choice-icon h-12 w-12" />
                 <span className="text-xl font-bold">Pay by card</span>
                 <span className="text-sm text-stone-500">Use payment terminal</span>
               </button>
@@ -638,8 +806,8 @@ export default function KioskApp() {
 
         {step === 'success' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className="rounded-full bg-emerald-100 p-6">
-              <ShoppingBag className="h-16 w-16 text-emerald-600" />
+            <div className="kiosk-success-icon rounded-full p-6">
+              <ShoppingBag className="h-16 w-16" />
             </div>
             <h2 className="text-4xl font-bold">Thank you!</h2>
             {orderNumber ? (
@@ -650,6 +818,21 @@ export default function KioskApp() {
             <p className="max-w-md text-stone-600">
               Your order has been sent to the kitchen. Please wait for your number to be called.
             </p>
+            {lastPrintCtx ? (
+              <button
+                type="button"
+                disabled={reprinting}
+                onClick={() => void reprintLastOrder()}
+                className="kiosk-btn-secondary mt-2 min-w-[200px]"
+              >
+                {reprinting ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Printer className="mr-2 h-5 w-5" />
+                )}
+                Reprint ticket
+              </button>
+            ) : null}
           </div>
         ) : null}
       </main>
@@ -710,7 +893,7 @@ export default function KioskApp() {
                 type="button"
                 disabled={adminPin.length < 4 || adminPinSubmitting}
                 onClick={() => void submitAdminPin()}
-                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-semibold disabled:opacity-40"
+                className="kiosk-btn-primary flex-1 rounded-xl px-4 py-3 font-semibold disabled:opacity-40"
               >
                 {adminPinSubmitting ? 'Checking…' : 'Unlock'}
               </button>

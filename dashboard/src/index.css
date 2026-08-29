@@ -563,11 +563,56 @@ button {
   }
 
   /* Self-order kiosk touch buttons */
+  .kiosk-branded {
+    --kiosk-primary: #059669;
+    --kiosk-secondary: #047857;
+    --kiosk-btn-text: #ffffff;
+  }
   .kiosk-btn-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-bold text-white shadow-md disabled:opacity-40;
+    @apply inline-flex items-center justify-center rounded-2xl px-6 py-4 text-lg font-bold shadow-md disabled:opacity-40;
+    background-color: var(--kiosk-primary, #059669);
+    color: var(--kiosk-btn-text, #ffffff);
   }
   .kiosk-btn-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-6 py-4 text-lg font-semibold text-stone-800;
+    @apply inline-flex items-center justify-center rounded-2xl border-2 bg-white px-6 py-4 text-lg font-semibold text-stone-800;
+    border-color: color-mix(in srgb, var(--kiosk-primary, #059669) 25%, #e7e5e4);
+  }
+  .kiosk-btn-choice {
+    @apply flex flex-col items-center justify-center gap-4 rounded-3xl border-2 p-8 text-center shadow-lg active:scale-[0.98];
+    border-color: color-mix(in srgb, var(--kiosk-primary, #059669) 35%, #e7e5e4);
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 8%, white);
+  }
+  .kiosk-btn-choice-icon {
+    color: var(--kiosk-primary, #059669);
+  }
+  .kiosk-category-active {
+    background-color: var(--kiosk-primary, #059669) !important;
+    color: var(--kiosk-btn-text, #ffffff) !important;
+  }
+  .kiosk-text-accent {
+    color: var(--kiosk-primary, #059669);
+  }
+  .kiosk-cart-badge {
+    background-color: var(--kiosk-primary, #059669);
+    color: var(--kiosk-btn-text, #ffffff);
+  }
+  .kiosk-mode-active {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 10%, white) !important;
+    color: color-mix(in srgb, var(--kiosk-primary, #059669) 85%, black) !important;
+  }
+  .kiosk-table-selected {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background-color: var(--kiosk-primary, #059669) !important;
+    color: var(--kiosk-btn-text, #ffffff) !important;
+  }
+  .kiosk-checkout-card {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 8%, white) !important;
+  }
+  .kiosk-success-icon {
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 15%, white);
+    color: var(--kiosk-primary, #059669);
   }
 
   @media (pointer: coarse) {

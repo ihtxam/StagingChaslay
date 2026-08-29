@@ -24,6 +24,7 @@ import {
 } from '@/lib/kiosk-api';
 import { getPrintAgentHealth } from '@/lib/print-agent';
 import { getKioskAdminPin, isKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
+import KioskSlideEditor from '@/components/kiosk/KioskSlideEditor';
 
 export type { KioskAdminSettings };
 
@@ -257,18 +258,108 @@ export default function KioskAdminPanel({
 
       <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
         <h2 className="font-semibold">Attract screen slider</h2>
-        {(settings.promoSlides || []).map((slide, idx) => (
-          <div key={idx} className="grid gap-2 rounded-lg border border-[var(--border)] p-3 md:grid-cols-3">
-            <input className="input md:col-span-3" placeholder="Image URL" value={slide.imageUrl || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], imageUrl: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
-            <input className="input" placeholder="Title" value={slide.title || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], title: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
-            <input className="input md:col-span-2" placeholder="Subtitle" value={slide.subtitle || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], subtitle: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
-          </div>
-        ))}
-        {tokenModeEditable ? (
-          <button type="button" className="btn-secondary" onClick={() => setSettings({ ...settings, promoSlides: [...(settings.promoSlides || []), { title: '', subtitle: '' }] })}>
-            Add slide
-          </button>
-        ) : null}
+        <p className="text-sm text-stone-500">
+          Upload promo images, add large overlay text on each slide, and optional banner above the slider.
+        </p>
+        <label className="block">
+          <span className="text-sm font-semibold">Banner text (above slider)</span>
+          <input
+            className="input mt-1 w-full"
+            placeholder="e.g. Welcome — order here!"
+            value={settings.slideBannerText || ''}
+            disabled={!tokenModeEditable}
+            onChange={(e) => setSettings({ ...settings, slideBannerText: e.target.value })}
+          />
+        </label>
+        <KioskSlideEditor
+          slides={settings.promoSlides?.length ? settings.promoSlides : [{ title: '', subtitle: '' }]}
+          editable={tokenModeEditable}
+          mode={mode}
+          accessToken={accessToken}
+          onChange={(promoSlides) => setSettings({ ...settings, promoSlides })}
+        />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+        <h2 className="font-semibold">Branding &amp; main screen</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Attract headline</span>
+            <input
+              className="input mt-1 w-full"
+              placeholder={settings.name || 'Your restaurant name'}
+              value={settings.attractHeadline || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, attractHeadline: e.target.value })}
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Attract subheadline</span>
+            <input
+              className="input mt-1 w-full"
+              placeholder="Order here — pay at the counter or by card."
+              value={settings.attractSubheadline || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, attractSubheadline: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Primary button color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandPrimaryColor || '#059669'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandPrimaryColor: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Secondary / accent color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandSecondaryColor || '#047857'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandSecondaryColor: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Button text color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandButtonTextColor || '#ffffff'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandButtonTextColor: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-sm font-semibold">Order type buttons on main screen</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.takeawayEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, takeawayEnabled: e.target.checked })} />
+            <span className="text-sm">Takeaway</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.deliveryEnabled === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, deliveryEnabled: e.target.checked })} />
+            <span className="text-sm">Delivery</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.dineInEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, dineInEnabled: e.target.checked })} />
+            <span className="text-sm">Dine in (table / badge)</span>
+          </label>
+        </div>
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-sm font-semibold">Print from this kiosk tablet</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.autoPrintKitchen !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintKitchen: e.target.checked })} />
+            <span className="text-sm">Auto-print kitchen ticket after order</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.autoPrintReceipt === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintReceipt: e.target.checked })} />
+            <span className="text-sm">Auto-print guest receipt after order</span>
+          </label>
+        </div>
       </section>
 
       <section className="grid gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 md:grid-cols-2">
