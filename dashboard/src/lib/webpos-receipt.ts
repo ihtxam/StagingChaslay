@@ -2374,6 +2374,35 @@ export function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/** Short ESC/POS ticket used by Settings → Receipts & printers → Test printer. */
+export function buildPrinterTestEscPos(opts?: {
+  merchantName?: string | null;
+  printerName?: string | null;
+}): Uint8Array {
+  const shop = String(opts?.merchantName || '').trim() || APP_NAME;
+  const printer = String(opts?.printerName || '').trim();
+  const when = formatDateTimeDDMMYYYY(new Date());
+  const init = new Uint8Array([0x1b, 0x40]);
+  const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
+  const boldOn = new Uint8Array([0x1b, 0x45, 0x01]);
+  const boldOff = new Uint8Array([0x1b, 0x45, 0x00]);
+  const cut = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
+  return concatBytes(
+    init,
+    ESC_CODEPAGE_CP850,
+    alignCenter,
+    boldOn,
+    escposCp850Encode('*** TEST PRINT ***\n'),
+    boldOff,
+    escposCp850Encode(`${shop}\n`),
+    printer ? escposCp850Encode(`${printer}\n`) : new Uint8Array(),
+    escposCp850Encode(`${when}\n\n`),
+    escposCp850Encode('If you can read this,\n'),
+    escposCp850Encode('the printer works.\n'),
+    cut
+  );
+}
+
 export const RECEIPT_LOGO_WIDTH_PX_MAX = 200;
 export const RECEIPT_LOGO_WIDTH_PX_MIN = 48;
 export const RECEIPT_LOGO_WIDTH_PX_DEFAULT = 200;
