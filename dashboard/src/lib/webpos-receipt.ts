@@ -1629,8 +1629,23 @@ function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
 }
 
-/** Minimal feed + full cut for kitchen tickets (extra feed helps BT/COM printers). */
-const KITCHEN_TICKET_CUT = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
+/**
+ * Feed past the cutter, then full + partial cut variants.
+ * Cheap BLE printers often ignore GS V 0 unless paper has already reached the blade,
+ * and the last radio packet (the cut) is the one that gets dropped.
+ */
+export function escposFeedAndCut(): Uint8Array {
+  return new Uint8Array([
+    0x1b, 0x64, 0x08, // ESC d 8 — feed 8 lines past the print head
+    0x1d, 0x56, 0x41, 0x18, // GS V 65 24 — feed-and-full-cut (Epson / most clones)
+    0x1d, 0x56, 0x00, // GS V 0 full cut
+    0x1b, 0x69, // ESC i legacy cut
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  ]);
+}
+
+const KITCHEN_TICKET_CUT = escposFeedAndCut();
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
@@ -2386,7 +2401,7 @@ export function buildPrinterTestEscPos(opts?: {
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const boldOn = new Uint8Array([0x1b, 0x45, 0x01]);
   const boldOff = new Uint8Array([0x1b, 0x45, 0x00]);
-  const cut = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
+  const cut = escposFeedAndCut();
   return concatBytes(
     init,
     ESC_CODEPAGE_CP850,

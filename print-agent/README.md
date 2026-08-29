@@ -27,7 +27,7 @@ USB scales (CH340 / ?CH 43?) and Bluetooth COM printers often get a **new COM nu
 - **Scale:** Settings ? Print ? Scan scale lists the manufacturer/model (for example `USB-SERIAL CH340 ? COM7`). That name is saved. On the next sale the agent finds the current COM port from the name.
 - **Printer:** Pick the Windows printer by its real name. Bluetooth / virtual-COM (SPP) queues are paced automatically so multi-item kitchen tickets do not overflow the radio buffer.
 
-Reinstall the agent after this update (v1.9.1+) so Bluetooth / COM kitchen tickets stay paced.
+Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen tickets stay paced and cut.
 
 ## Dev (Node)
 

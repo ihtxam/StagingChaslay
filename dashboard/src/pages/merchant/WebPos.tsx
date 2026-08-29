@@ -82,13 +82,13 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
-  settleAfterBluetoothKitchenPrint,
   suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import {
   isLocalPrintStation,
+  printKitchenViaAgentOrQueue,
   printViaAgentOrQueue,
   processPendingEscPosPrintJobs,
   resolvePrintRetryLocally,
@@ -5232,12 +5232,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
       const escpos = generateKitchenMessageTicketEscPos(msgOpts);
       const text = generateKitchenMessageTicketText(msgOpts);
-      void printViaAgentOrQueue({
+      void printKitchenViaAgentOrQueue({
         printerName: printerName || undefined,
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
         retryLocally: printRetryLocally,
+        printers,
+        configuredName: printerName,
         jobKind: 'kitchen',
         jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
@@ -7005,17 +7007,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             })
           );
         }
-        const mode = await printViaAgentOrQueue({
+        const mode = await printKitchenViaAgentOrQueue({
           printerName: resolvedName,
           dataBase64: uint8ToBase64(escpos),
           text,
           orderId: opts?.orderNumber || null,
           retryLocally: printRetryLocally,
+          printers,
+          configuredName,
           ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
-        const livePrinter = printers.find((p) => p.name === resolvedName);
-        await settleAfterBluetoothKitchenPrint(livePrinter || resolvedName || configuredName);
       }
       if (!printedAny) {
         toast.error(t('webPosNoKitchenPrinterConfigured'));
