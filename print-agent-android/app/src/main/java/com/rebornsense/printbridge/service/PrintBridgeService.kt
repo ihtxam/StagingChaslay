@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.R
@@ -19,6 +21,13 @@ class PrintBridgeService : Service() {
     private var server: BridgeHttpServer? = null
     private val registry = DriverRegistry()
     private val queue = PrintJobQueue(registry)
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = object : Runnable {
+        override fun run() {
+            registry.refresh(applicationContext)
+            refreshHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -29,6 +38,7 @@ class PrintBridgeService : Service() {
         server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
             it.start(NanoTimeout, false)
         }
+        refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -37,6 +47,7 @@ class PrintBridgeService : Service() {
     }
 
     override fun onDestroy() {
+        refreshHandler.removeCallbacks(refreshRunnable)
         server?.stop()
         server = null
         queue.stop()
@@ -78,5 +89,6 @@ class PrintBridgeService : Service() {
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
+        private const val WATCHDOG_INTERVAL_MS = 30_000L
     }
 }

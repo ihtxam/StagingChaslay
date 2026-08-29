@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.switchmaterial.SwitchMaterial
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -22,7 +23,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
-import com.rebornsense.printbridge.service.PrintBridgeService
+import com.rebornsense.printbridge.PrintBridgeLauncher
 
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
@@ -59,6 +60,7 @@ class MainActivity : AppCompatActivity() {
             onTestPrint = { endpoint -> testPrint(endpoint) },
         )
         findViewById<RecyclerView>(R.id.printerRecycler).adapter = printerAdapter
+        setupAutoStartSwitch()
         requestNeededPermissions()
         findViewById<Button>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
         findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrintDefault() }
@@ -108,9 +110,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBridge() {
-        ContextCompat.startForegroundService(this, Intent(this, PrintBridgeService::class.java))
+        PrintBridgeLauncher.start(this)
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_ready)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.open_webpos)
+    }
+
+    private fun setupAutoStartSwitch() {
+        val autoStartSwitch = findViewById<SwitchMaterial>(R.id.autoStartSwitch)
+        autoStartSwitch.isChecked = PrinterPreferences.isAutoStartEnabled(this)
+        autoStartSwitch.setOnCheckedChangeListener { _, isChecked ->
+            PrinterPreferences.setAutoStartEnabled(this, isChecked)
+            if (isChecked) {
+                startBridge()
+                Toast.makeText(this, R.string.auto_start_enabled_toast, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, R.string.auto_start_disabled_toast, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun refreshPrinters() {

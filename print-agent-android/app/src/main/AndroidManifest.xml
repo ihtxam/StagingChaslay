@@ -12,6 +12,7 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
@@ -47,8 +48,20 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".boot.BootCompletedReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".service.PrintBridgeService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

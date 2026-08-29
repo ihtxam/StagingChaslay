@@ -26,4 +26,8 @@
     <string name="test_print_bluetooth_failed">Bluetooth print failed: %1$s</string>
     <string name="test_print_bluetooth_permission_denied">Bluetooth permission required. Allow Nearby devices for Reborn Print Bridge in Android Settings, then try again.</string>
     <string name="no_printers_yet">No printers found yet. Connect USB or pair Bluetooth, or add a LAN IP.</string>
+    <string name="auto_start_title">Start automatically on reboot</string>
+    <string name="auto_start_summary">Runs Print Bridge in the background after every restart and reconnects USB, Bluetooth, and Wi‑Fi printers.</string>
+    <string name="auto_start_enabled_toast">Print Bridge will start automatically after reboot</string>
+    <string name="auto_start_disabled_toast">Print Bridge will not start after reboot until you open this app</string>
 </resources>

@@ -4,6 +4,20 @@ import android.content.Context
 
 object PrinterPreferences {
     private const val PREFS = "reborn_print_bridge"
+    private const val KEY_AUTO_START = "auto_start_enabled"
+
+    /** Whether the print bridge should start automatically on device reboot. Defaults to true. */
+    fun isAutoStartEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_START, true)
+    }
+
+    fun setAutoStartEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AUTO_START, enabled)
+            .apply()
+    }
 
     fun getDefaultPrinterId(context: Context): String? {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
