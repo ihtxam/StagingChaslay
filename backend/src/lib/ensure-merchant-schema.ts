@@ -1128,19 +1128,24 @@ let startupPatchPromise: Promise<void> | null = null;
 let patchedColumns = new Set<string>();
 let patchedTables = false;
 
+function patchTargetsTable(statement: string, table: string): boolean {
+  return new RegExp(`ALTER TABLE\\s+${table}\\b`, "i").test(statement);
+}
+
 function resolvePatchStatement(column: string, table?: string | null): string | undefined {
   const direct =
     MERCHANT_COLUMN_PATCHES[column] ||
     EXTRA_COLUMN_PATCHES[column] ||
     SUBSCRIPTION_PLAN_COLUMN_PATCHES[column] ||
     EDITIONS_COLUMN_PATCHES[column];
-  if (direct) return direct;
+  if (direct && (!table || patchTargetsTable(direct, table))) return direct;
   if (table) {
     const scoped =
       EXTRA_COLUMN_PATCHES[`${table}_${column}`] ||
       SUBSCRIPTION_PLAN_COLUMN_PATCHES[`${table}_${column}`] ||
-      EDITIONS_COLUMN_PATCHES[`${table}_${column}`];
-    if (scoped) return scoped;
+      EDITIONS_COLUMN_PATCHES[`${table}_${column}`] ||
+      (table === "merchants" ? MERCHANT_COLUMN_PATCHES[column] : undefined);
+    if (scoped && patchTargetsTable(scoped, table)) return scoped;
   }
   const all = {
     ...MERCHANT_COLUMN_PATCHES,
@@ -1149,7 +1154,9 @@ function resolvePatchStatement(column: string, table?: string | null): string | 
     ...EDITIONS_COLUMN_PATCHES,
   };
   for (const sql of Object.values(all)) {
-    if (sql.includes(`ADD COLUMN IF NOT EXISTS ${column} `)) return sql;
+    if (!sql.includes(`ADD COLUMN IF NOT EXISTS ${column} `)) continue;
+    if (table && !patchTargetsTable(sql, table)) continue;
+    return sql;
   }
   return undefined;
 }
@@ -1315,8 +1322,18 @@ export async function ensureSubscriptionPlansSchema(): Promise<void> {
   for (const column of Object.keys(EDITIONS_COLUMN_PATCHES)) {
     await runPatch(column, "editions");
   }
-  for (const column of Object.keys(SUBSCRIPTION_PLAN_COLUMN_PATCHES)) {
-    await runPatch(column, "subscription_plans");
+  // Apply plan ALTERs directly — runPatch used to hit merchants.max_locations
+  // first and cache a false success for subscription_plans.max_locations.
+  for (const [key, statement] of Object.entries(SUBSCRIPTION_PLAN_COLUMN_PATCHES)) {
+    patchedColumns.delete(key);
+    patchedColumns.delete(`subscription_plans.${key}`);
+    patchedColumns.delete(`subscription_plans.${key.replace(/^subscription_plans_/, "")}`);
+    try {
+      await execSql(statement);
+      console.info(`[schema] patched ${key}`);
+    } catch (err) {
+      console.warn(`[schema] ${key} patch failed:`, err);
+    }
   }
   await runPatch("max_locations", "subscription_plans");
   await runPatch("edition_id", "subscription_plans");
