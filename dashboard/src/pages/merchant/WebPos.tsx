@@ -397,6 +397,7 @@ import {
   type MerchantOrder,
 } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
+import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 import {
   posSaleToNotificationOrder,
@@ -2395,7 +2396,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const pollOnlineOrders = useCallback(async () => {
     try {
-      const res = await api.get('/merchant/orders', { params: { limit: 80 } });
+      const res = await api.get('/merchant/orders/incoming', {
+        params: { limit: 200, statuses: INCOMING_ONLINE_ORDER_STATUSES_PARAM },
+      });
       const all = (res.data.orders || []) as OnlineOrder[];
       const online = all.filter((o) => isOnlineShopOrder(o));
       setOnlineOrders(online);

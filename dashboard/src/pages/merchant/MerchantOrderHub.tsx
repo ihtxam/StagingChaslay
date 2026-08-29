@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
+import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { playOrderAlertOnce } from '@/lib/order-alert';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 
@@ -43,10 +44,10 @@ export default function MerchantOrderHub() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/merchant/orders', {
+      const res = await api.get('/merchant/orders/incoming', {
         params: {
-          limit: 80,
-          statuses: 'pending_approval,preparing,ready,pending',
+          limit: 200,
+          statuses: INCOMING_ONLINE_ORDER_STATUSES_PARAM,
         },
       });
       const rows: HubOrder[] = res.data?.orders || res.data?.data || [];

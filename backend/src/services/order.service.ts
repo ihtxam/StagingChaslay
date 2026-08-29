@@ -6,6 +6,11 @@ import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import {
+  incomingOnlineOrdersWhere,
+  INCOMING_ONLINE_ORDER_STATUSES,
+  onlineOrderScopeCondition,
+} from "@/lib/online-order-scope";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -381,12 +386,17 @@ export class OrderService {
     limit: number = 20,
     status?: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    scope?: "online" | "all"
   ) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
       const offset = (page - 1) * limit;
       const whereConditions: any[] = [eq(schema.orders.merchantId, merchantId)];
+
+      if (scope === "online") {
+        whereConditions.push(onlineOrderScopeCondition());
+      }
 
       if (status) {
         const statuses = status
@@ -417,6 +427,49 @@ export class OrderService {
         },
         limit,
         offset,
+        orderBy: desc(schema.orders.createdAt),
+      });
+
+      return orders.map((order) => withResolvedItemNames(order));
+    });
+  }
+
+  /** Active online / QR / kiosk orders for Order Hub and Web POS polling. */
+  static async getIncomingOrders(
+    merchantId: string,
+    opts: {
+      limit?: number;
+      statuses?: string;
+      since?: Date;
+    } = {}
+  ) {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), 300);
+      const statusList = opts.statuses
+        ? opts.statuses
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [...INCOMING_ONLINE_ORDER_STATUSES];
+
+      const whereConditions = [incomingOnlineOrdersWhere(merchantId, statusList)];
+
+      if (opts.since) {
+        whereConditions.push(gte(schema.orders.createdAt, opts.since));
+      }
+
+      const orders = await db.query.orders.findMany({
+        where: and(...whereConditions),
+        with: {
+          items: {
+            with: {
+              product: true,
+            },
+          },
+          customer: true,
+        },
+        limit,
         orderBy: desc(schema.orders.createdAt),
       });
 
