@@ -96,6 +96,8 @@ import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import SignagePage from './SignagePage';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
+const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
+const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
 
 function LegacyReservationsRedirect() {
   const location = useLocation();
@@ -602,6 +604,7 @@ function MerchantShell() {
       children: [
         { label: t('shop'), path: '/merchant/online-shop', icon: '🛒' },
         { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
+        { label: 'Chaslay Page Builder (beta)', path: '/merchant/chaslay-page-builder', icon: '🧩' },
       ].filter((item) => allow(item.path)),
     },
     ...(allowSignage('/merchant/signage')
@@ -908,6 +911,26 @@ function MerchantShell() {
                 <PanelRouteGuard path="/merchant/website" allow={allow}>
                   <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
                     <WebsiteCms />
+                  </Suspense>
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="chaslay-page-builder"
+              element={
+                <PanelRouteGuard path="/merchant/chaslay-page-builder" allow={allow}>
+                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                    <ChaslayPageBuilderList />
+                  </Suspense>
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="chaslay-page-builder/edit"
+              element={
+                <PanelRouteGuard path="/merchant/chaslay-page-builder" allow={allow}>
+                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                    <ChaslayPageBuilderEditor />
                   </Suspense>
                 </PanelRouteGuard>
               }

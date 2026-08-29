@@ -7,6 +7,7 @@ import {
   boolean,
   decimal,
   integer,
+  serial,
   json,
   index,
   uniqueIndex,
@@ -2652,12 +2653,86 @@ export const cmsPages = pgTable(
 );
 
 // ============================================================================
+// CHASLAY CRAFT.JS PAGE BUILDER (test import — parallel to OpenPage CMS)
+// ============================================================================
+
+export const chaslayHomepageBuilders = pgTable(
+  "chaslay_homepage_builders",
+  {
+    id: serial("id").primaryKey(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull().default("Untitled"),
+    editorState: text("editor_state"),
+    isActive: boolean("is_active").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    merchantIdx: index("chaslay_homepage_builders_merchant_idx").on(table.merchantId),
+    activeIdx: index("chaslay_homepage_builders_active_idx").on(table.merchantId, table.isActive),
+  })
+);
+
+export const chaslayHomepageBuilderPages = pgTable(
+  "chaslay_homepage_builder_pages",
+  {
+    id: serial("id").primaryKey(),
+    homepageBuilderId: integer("homepage_builder_id")
+      .notNull()
+      .references(() => chaslayHomepageBuilders.id, { onDelete: "cascade" }),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull().default("Home"),
+    slug: varchar("slug", { length: 255 }).notNull().default("home"),
+    editorState: text("editor_state"),
+    isHomepage: boolean("is_homepage").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    builderSlugUq: uniqueIndex("chaslay_homepage_builder_pages_slug_uq").on(
+      table.homepageBuilderId,
+      table.slug
+    ),
+    builderSortIdx: index("chaslay_homepage_builder_pages_sort_idx").on(
+      table.homepageBuilderId,
+      table.sortOrder
+    ),
+  })
+);
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
 export const cmsPagesRelations = relations(cmsPages, ({ one }) => ({
   merchant: one(merchants, {
     fields: [cmsPages.merchantId],
+    references: [merchants.id],
+  }),
+}));
+
+export const chaslayHomepageBuildersRelations = relations(chaslayHomepageBuilders, ({ one, many }) => ({
+  merchant: one(merchants, {
+    fields: [chaslayHomepageBuilders.merchantId],
+    references: [merchants.id],
+  }),
+  pages: many(chaslayHomepageBuilderPages),
+}));
+
+export const chaslayHomepageBuilderPagesRelations = relations(chaslayHomepageBuilderPages, ({ one }) => ({
+  builder: one(chaslayHomepageBuilders, {
+    fields: [chaslayHomepageBuilderPages.homepageBuilderId],
+    references: [chaslayHomepageBuilders.id],
+  }),
+  merchant: one(merchants, {
+    fields: [chaslayHomepageBuilderPages.merchantId],
     references: [merchants.id],
   }),
 }));
@@ -2705,6 +2780,8 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   reservations: many(reservations),
   subscriptionPayments: many(subscriptionPayments),
   cmsPages: many(cmsPages),
+  chaslayHomepageBuilders: many(chaslayHomepageBuilders),
+  chaslayHomepageBuilderPages: many(chaslayHomepageBuilderPages),
   vouchers: many(vouchers),
   voucherRedemptions: many(voucherRedemptions),
 }));

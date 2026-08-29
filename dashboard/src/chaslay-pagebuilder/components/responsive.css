@@ -1,0 +1,166 @@
+/* Homepage Builder - Mobile Responsive Styles */
+
+/* Base responsive container */
+.hb-section {
+  box-sizing: border-box;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  /* Hero sections */
+  .hb-hero {
+    padding: 40px 16px !important;
+    min-height: 300px !important;
+  }
+
+  .hb-hero h1 {
+    font-size: 28px !important;
+    line-height: 1.3 !important;
+  }
+
+  .hb-hero p {
+    font-size: 16px !important;
+  }
+
+  .hb-hero-content {
+    padding: 0 8px !important;
+  }
+
+  /* Split layouts - stack on mobile */
+  .hb-split {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  .hb-split > div {
+    min-height: 250px !important;
+  }
+
+  /* Menu sections */
+  .hb-menu-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .hb-menu-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hb-menu-2col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* About sections */
+  .hb-about-split {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hours sections */
+  .hb-hours-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Footer sections */
+  .hb-footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+    text-align: center !important;
+  }
+
+  .hb-footer {
+    padding: 24px 16px !important;
+  }
+
+  .hb-footer-minimal {
+    flex-direction: column !important;
+    gap: 16px !important;
+    text-align: center !important;
+  }
+
+  /* General section padding */
+  .hb-section-padding {
+    padding: 48px 16px !important;
+  }
+
+  /* Text sizes */
+  .hb-title {
+    font-size: 28px !important;
+  }
+
+  .hb-subtitle {
+    font-size: 16px !important;
+  }
+
+  /* Navbar */
+  .hb-navbar {
+    padding: 12px 16px !important;
+  }
+
+  .hb-navbar-menu {
+    display: none !important;
+  }
+
+  /* Divider */
+  .hb-divider {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Gallery sections */
+  .hb-gallery-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .hb-gallery-masonry {
+    column-count: 2 !important;
+    column-gap: 8px !important;
+  }
+
+  .hb-gallery-carousel {
+    gap: 8px !important;
+  }
+
+  /* Testimonials sections */
+  .hb-testimonials-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* Scroll to top */
+  .hb-scroll-to-top {
+    /* Keep floating behavior */
+  }
+
+  /* Social media floating */
+  .hb-social-floating {
+    /* Keep floating behavior */
+  }
+}
+
+@media (max-width: 480px) {
+  .hb-hero h1 {
+    font-size: 24px !important;
+  }
+
+  .hb-hours-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hb-section-padding {
+    padding: 40px 12px !important;
+  }
+
+  .hb-gallery-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hb-gallery-masonry {
+    column-count: 1 !important;
+  }
+}
+
+/* Hide scrollbar for carousel components */
+.hb-gallery-carousel::-webkit-scrollbar {
+  display: none;
+}
