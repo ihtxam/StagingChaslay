@@ -36,6 +36,7 @@ export default function TableQrCodes() {
   const { t } = useI18n();
   const { sections, allTables, merchantSlug, loading, reload } = useTableManagement();
   const [qrCodes, setQrCodes] = useState<TableQrCodeRow[]>([]);
+  const [accessTokens, setAccessTokens] = useState<Record<string, string>>({});
   const [activeSectionId, setActiveSectionId] = useState<string | 'all'>('all');
   const [selected, setSelected] = useState<TableQrView | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -49,8 +50,12 @@ export default function TableQrCodes() {
 
   const loadQrCodes = useCallback(async () => {
     try {
-      const res = await api.get('/merchant/floor-plans/qr-codes');
-      setQrCodes(res.data.codes || []);
+      const [codesRes, tokensRes] = await Promise.all([
+        api.get('/merchant/floor-plans/qr-codes'),
+        api.get('/merchant/floor-plans/table-access-tokens').catch(() => ({ data: { tokens: {} } })),
+      ]);
+      setQrCodes(codesRes.data.codes || []);
+      setAccessTokens(tokensRes.data?.tokens || {});
     } catch {
       setQrCodes([]);
     }
@@ -85,7 +90,7 @@ export default function TableQrCodes() {
       const tableCodes = qrCodes.filter((c) => c.tableId === table.id);
       const staticCode = tableCodes.find((c) => c.codeType === 'static');
       const tempCode = tableCodes.find((c) => c.codeType === 'temporary');
-      const shopUrl = buildTableShopUrl(merchantSlug, table.id);
+      const shopUrl = buildTableShopUrl(merchantSlug, table.id, undefined, accessTokens[table.id]);
       const defaultPayload = shopUrl;
       const payload = staticCode?.code || tempCode?.code || defaultPayload;
       return {
@@ -100,7 +105,7 @@ export default function TableQrCodes() {
         codes: tableCodes,
       };
     });
-  }, [allTables, merchantSlug, qrCodes, sectionNameById]);
+  }, [allTables, merchantSlug, qrCodes, sectionNameById, accessTokens]);
 
   const filtered = useMemo(() => {
     if (activeSectionId === 'all') return rows;
@@ -123,8 +128,8 @@ export default function TableQrCodes() {
     try {
       const payload =
         codeType === 'temporary'
-          ? customCode.trim() || buildTableShopUrl(merchantSlug, selected.id)
-          : customCode.trim() || buildTableShopUrl(merchantSlug, selected.id);
+          ? customCode.trim() || buildTableShopUrl(merchantSlug, selected.id, undefined, accessTokens[selected.id])
+          : customCode.trim() || buildTableShopUrl(merchantSlug, selected.id, undefined, accessTokens[selected.id]);
 
       await api.post(`/merchant/floor-plans/tables/${selected.id}/qr-codes`, {
         codeType,

@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import { useLocationStore } from '@/store/location';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
@@ -36,6 +38,8 @@ const MAX_CATEGORY_DESC = 256;
 
 export default function Categories() {
   const { t } = useI18n();
+  const { locationId } = useLocationStore();
+  const [hqCategoryIds, setHqCategoryIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -88,6 +92,35 @@ export default function Categories() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!locationId) {
+      setHqCategoryIds(new Set());
+      return;
+    }
+    void (async () => {
+      try {
+        const [linksRes, productsRes] = await Promise.all([
+          api.get(`/merchant/hq/catalog/links/${locationId}`),
+          api.get('/merchant/products', { params: { limit: 500, page: 1 } }),
+        ]);
+        const productCategory = new Map<string, string>();
+        for (const p of productsRes.data?.products || []) {
+          if (p.categoryId) productCategory.set(p.id, p.categoryId);
+        }
+        const cats = new Set<string>();
+        for (const link of linksRes.data?.links || []) {
+          const catId = link.localProductId
+            ? productCategory.get(String(link.localProductId))
+            : null;
+          if (catId) cats.add(catId);
+        }
+        setHqCategoryIds(cats);
+      } catch {
+        setHqCategoryIds(new Set());
+      }
+    })();
+  }, [locationId]);
 
   const reset = () => {
     setName('');
@@ -485,6 +518,7 @@ export default function Categories() {
                           }}
                         />
                         {category.name}
+                        <HqCatalogBadge fromHq={hqCategoryIds.has(category.id)} />
                       </span>
                     </td>
                     <td className="py-2.5 px-2 muted">{category.description || '-'}</td>

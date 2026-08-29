@@ -19,6 +19,8 @@ import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { useI18n } from '@/lib/i18n';
+import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
@@ -261,6 +263,8 @@ type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
 
 export default function Products() {
   const { t } = useI18n();
+  const { locationId } = useLocationStore();
+  const [hqProductIds, setHqProductIds] = useState<Set<string>>(new Set());
   const productTypeLabel = (product: Product) => {
     if (product.productType === 'combo' || (product.comboItems && product.comboItems.length)) {
       return t('productTypeComboShort');
@@ -457,6 +461,23 @@ export default function Products() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!locationId) {
+      setHqProductIds(new Set());
+      return;
+    }
+    void api
+      .get(`/merchant/hq/catalog/links/${locationId}`)
+      .then((res) => {
+        const ids = new Set<string>();
+        for (const link of res.data?.links || []) {
+          if (link.localProductId) ids.add(String(link.localProductId));
+        }
+        setHqProductIds(ids);
+      })
+      .catch(() => setHqProductIds(new Set()));
+  }, [locationId]);
 
   const categoryName = (categoryId?: string | null) =>
     categories.find((c) => c.id === categoryId)?.name || t('uncategorized');
@@ -1439,6 +1460,7 @@ export default function Products() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate font-semibold text-lg text-slate-900">{product.name}</h3>
+                      <HqCatalogBadge fromHq={hqProductIds.has(product.id)} />
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                         {productTypeLabel(product)}
                       </span>

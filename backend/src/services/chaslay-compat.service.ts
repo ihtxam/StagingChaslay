@@ -9,6 +9,7 @@ import { receiptPublicUrl } from "@/lib/receipt-public-url";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { ModifierService } from "./modifier.service";
+import { filterCatalogForChannel, isVisibleOnChannel } from "@/lib/catalog-visibility";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -343,7 +344,12 @@ export class ChaslayCompatService {
     const allProducts = await db.query.products.findMany({
       where: eq(schema.products.merchantId, merchantId),
     });
-    const products = allProducts.filter((p) => p.isActive !== false);
+    const activeProducts = allProducts.filter((p) => p.isActive !== false);
+    const { products, categories: visibleCategories } = filterCatalogForChannel(
+      activeProducts,
+      categories,
+      "pos"
+    );
 
     const { FloorPlanService } = await import("@/services/floor-plan.service");
     const { ReservationService } = await import("@/services/reservation.service");
@@ -358,7 +364,7 @@ export class ChaslayCompatService {
     ];
 
     const categoryClientById = new Map(
-      categories.map((c) => [c.id, c.clientId || c.id] as const)
+      visibleCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
     const productClientById = new Map(
       allProducts.map((p) => [p.id, p.clientId || p.id] as const)
@@ -394,7 +400,7 @@ export class ChaslayCompatService {
         store_hours: merchant.storeHours || {},
         receipt_base_url: receiptPublicBaseUrl(),
       },
-      categories: categories.map((c) => this.mapCategory(c)),
+      categories: visibleCategories.map((c) => this.mapCategory(c)),
       products: products.map((p) =>
         this.mapProduct(p, false, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),
@@ -628,6 +634,9 @@ export class ChaslayCompatService {
     const allCategories = await db.query.categories.findMany({
       where: eq(schema.categories.merchantId, merchantId),
     });
+    const activeChangedProducts = products.filter((p) => p.isActive !== false);
+    const { products: visibleProducts, categories: visibleChangedCategories } =
+      filterCatalogForChannel(activeChangedProducts, categories, "pos");
     const categoryClientById = new Map(
       allCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
@@ -645,8 +654,8 @@ export class ChaslayCompatService {
 
     return {
       serverTime: Date.now(),
-      categories: categories.map((c) => this.mapCategory(c, true)),
-      products: products.map((p) =>
+      categories: visibleChangedCategories.map((c) => this.mapCategory(c, true)),
+      products: visibleProducts.map((p) =>
         this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),
     };
@@ -786,8 +795,8 @@ export class ChaslayCompatService {
       combo_items: comboItems,
       specifications,
       variants,
-      online_visible: p.isActive,
-      kiosk_visible: p.isActive,
+      online_visible: p.isActive && isVisibleOnChannel(p.visibility, "pos"),
+      kiosk_visible: p.isActive && isVisibleOnChannel(p.visibility, "pos"),
       updated_at: p.updatedAt?.toISOString(),
       ...(includeDeleted && !p.isActive ? { deleted_at: p.updatedAt?.toISOString() } : {}),
     };

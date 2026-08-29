@@ -96,6 +96,7 @@ import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import SignagePage from './SignagePage';
 import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
+import MerchantOrderHub from './MerchantOrderHub';
 import { useLocationStore } from '@/store/location';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
@@ -153,6 +154,7 @@ function MerchantShell() {
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
+  const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
   const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute;
@@ -244,7 +246,7 @@ function MerchantShell() {
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
-    (((isPosRoute || isWaiterRoute) && posAppMode) ||
+    (((isPosRoute || isWaiterRoute || isOrderHubRoute) && posAppMode) ||
       (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted))) ||
     isPosEmbed;
 
@@ -535,6 +537,7 @@ function MerchantShell() {
       icon: '📈',
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
+        { label: t('orderHubTitle'), path: '/merchant/order-hub', icon: '📲' },
         { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
       ].filter((item) => allow(item.path)),
@@ -762,6 +765,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant" allow={allow}>
                   <Overview />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="order-hub"
+              element={
+                <PanelRouteGuard path="/merchant/order-hub" allow={allow}>
+                  <MerchantOrderHub />
                 </PanelRouteGuard>
               }
             />

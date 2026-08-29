@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, ShoppingBag } from 'lucide-react';
+import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { resolveShopKey } from '@/lib/shop-cart';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
@@ -43,9 +43,19 @@ type CartLine = {
   selectedExtras?: Array<{ id: string; name: string; price: number }>;
 };
 
+type PaymentSession = {
+  id: string;
+  sessionData: string;
+  clientKey: string;
+  environment?: string;
+};
+
 export default function TableOrderPage() {
   const { t } = useI18n();
   const { merchantSlug, tableId } = useParams<{ merchantSlug: string; tableId: string }>();
+  const [searchParams] = useSearchParams();
+  const signedAccess = searchParams.get('s') || '';
+  const wantPay = searchParams.get('paid') === '1';
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
 
@@ -56,23 +66,33 @@ export default function TableOrderPage() {
   const [sessionToken, setSessionToken] = useState('');
   const [orders, setOrders] = useState<SessionOrder[]>([]);
   const [runningTotal, setRunningTotal] = useState(0);
+  const [payAtTableEnabled, setPayAtTableEnabled] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [modifierProduct, setModifierProduct] = useState<ShopProductForModifiers | null>(null);
   const [notes, setNotes] = useState('');
+  const [payOpen, setPayOpen] = useState(false);
+  const [session, setSession] = useState<PaymentSession | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const [payMsg, setPayMsg] = useState('');
+  const [paying, setPaying] = useState(false);
+  const dropinRef = useRef<HTMLDivElement | null>(null);
+  const dropinMounted = useRef(false);
 
   const loadSession = useCallback(async () => {
     if (!shopKey || !tableId) return;
+    const sessionParams = signedAccess ? { s: signedAccess } : undefined;
     const [sessionRes, menuRes] = await Promise.all([
-      axios.get(`/api/shop/${shopKey}/table/${tableId}/session`),
+      axios.get(`/api/shop/${shopKey}/table/${tableId}/session`, { params: sessionParams }),
       axios.get(`/api/shop/${shopKey}/menu`, { params: { channel: 'qr_table', table: tableId } }),
     ]);
-    const session = sessionRes.data;
-    setTableLabel(session.table?.label || tableId);
-    setSessionToken(session.session?.token || '');
-    setOrders(session.orders || []);
-    setRunningTotal(Number(session.runningTotal || 0));
+    const sessionData = sessionRes.data;
+    setTableLabel(sessionData.table?.label || tableId);
+    setSessionToken(sessionData.session?.token || '');
+    setOrders(sessionData.orders || []);
+    setRunningTotal(Number(sessionData.runningTotal || 0));
+    setPayAtTableEnabled(!!sessionData.settings?.qrPayAtTableEnabled);
     setMenu(menuRes.data.data || []);
-  }, [shopKey, tableId]);
+  }, [shopKey, tableId, signedAccess]);
 
   useEffect(() => {
     void (async () => {
@@ -86,6 +106,100 @@ export default function TableOrderPage() {
       }
     })();
   }, [loadSession, t]);
+
+  useEffect(() => {
+    if (wantPay && payAtTableEnabled && runningTotal > 0) {
+      setPayOpen(true);
+    }
+  }, [wantPay, payAtTableEnabled, runningTotal]);
+
+  useEffect(() => {
+    if (!payOpen || !payAtTableEnabled || !shopKey || !tableId || !sessionToken) return;
+    void (async () => {
+      try {
+        const res = await axios.post(`/api/shop/${shopKey}/table/${tableId}/payment-session`, {
+          tableSessionToken: sessionToken,
+        });
+        if (res.data.alreadyPaid) {
+          await loadSession();
+          setPayOpen(false);
+          return;
+        }
+        setSession(res.data.paymentSession);
+        setDemoMode(false);
+      } catch (e: unknown) {
+        setDemoMode(true);
+        const err = e as { response?: { data?: { error?: string } } };
+        setPayMsg(err.response?.data?.error || t('shopCardNotConfigured'));
+      }
+    })();
+  }, [payOpen, payAtTableEnabled, shopKey, tableId, sessionToken, loadSession, t]);
+
+  useEffect(() => {
+    if (!session?.sessionData || !session.clientKey || !dropinRef.current || dropinMounted.current) {
+      return;
+    }
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
+        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
+        if (cancelled || !dropinRef.current) return;
+
+        const checkout = await AdyenCheckout({
+          environment: session.environment === 'live' ? 'live' : 'test',
+          clientKey: session.clientKey,
+          session: { id: session.id, sessionData: session.sessionData },
+          onPaymentCompleted: async () => {
+            setPayMsg(t('shopPaymentCompleted'));
+            await axios.post(`/api/shop/${shopKey}/table/${tableId}/confirm-payment`, {
+              tableSessionToken: sessionToken,
+              resultCode: 'Authorised',
+            });
+            setPayOpen(false);
+            setSession(null);
+            dropinMounted.current = false;
+            await loadSession();
+          },
+          onError: (err: { message?: string }) =>
+            setPayMsg(err.message || t('shopPaymentFailed')),
+        } as Parameters<typeof AdyenCheckout>[0]);
+
+        checkout.create('dropin').mount(dropinRef.current);
+        dropinMounted.current = true;
+      } catch {
+        setDemoMode(true);
+        setPayMsg(t('shopCardFormUnavailable'));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, shopKey, tableId, sessionToken, loadSession, t]);
+
+  const confirmDemoPayment = async () => {
+    setPaying(true);
+    setPayMsg('');
+    try {
+      await axios.post(`/api/shop/${shopKey}/table/${tableId}/confirm-payment`, {
+        tableSessionToken: sessionToken,
+        resultCode: 'Authorised',
+        demo: true,
+      });
+      setPayMsg(t('shopPaymentConfirmed'));
+      setPayOpen(false);
+      setSession(null);
+      dropinMounted.current = false;
+      await loadSession();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setPayMsg(err.response?.data?.error || t('shopConfirmFailed'));
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const cartTotal = useMemo(
     () =>
@@ -194,9 +308,21 @@ export default function TableOrderPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-sm font-bold">
-              {t('tableOrderRunningTotal')}: {runningTotal.toFixed(2)}
-            </p>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-bold">
+                {t('tableOrderRunningTotal')}: {runningTotal.toFixed(2)}
+              </p>
+              {payAtTableEnabled && runningTotal > 0 ? (
+                <button
+                  type="button"
+                  className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm"
+                  onClick={() => setPayOpen(true)}
+                >
+                  <CreditCard size={16} />
+                  {t('tableOrderPayNow')}
+                </button>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
@@ -254,6 +380,42 @@ export default function TableOrderPage() {
               >
                 {submitting ? t('loading') : t('tableOrderSendToKitchen')}
               </button>
+            </div>
+          </div>
+        ) : null}
+
+        {payOpen ? (
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-bold">{t('tableOrderPayTitle')}</h2>
+                <button
+                  type="button"
+                  className="text-stone-500 hover:text-stone-800"
+                  onClick={() => {
+                    setPayOpen(false);
+                    setSession(null);
+                    dropinMounted.current = false;
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-stone-600">
+                {t('tableOrderPayAmount').replace('{amount}', runningTotal.toFixed(2))}
+              </p>
+              {payMsg ? <p className="mt-2 text-sm text-amber-700">{payMsg}</p> : null}
+              <div ref={dropinRef} className="mt-4 min-h-[120px]" />
+              {demoMode ? (
+                <button
+                  type="button"
+                  disabled={paying}
+                  className="btn-primary mt-4 w-full py-3"
+                  onClick={() => void confirmDemoPayment()}
+                >
+                  {paying ? t('loading') : t('tableOrderPayDemo')}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}

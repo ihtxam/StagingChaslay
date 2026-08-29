@@ -4,6 +4,7 @@ import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/a
 import { requireEditionFeature } from "@/middleware/edition.middleware";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { TableQrService } from "@/services/table-qr.service";
+import { signTableAccess } from "@/lib/table-qr-token";
 
 const router = Router();
 
@@ -41,6 +42,23 @@ router.get("/tables", async (req: Request, res: Response) => {
     res.json({ success: true, tables });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list tables" });
+  }
+});
+
+/** GET /api/merchant/floor-plans/table-access-tokens — signed QR tokens for all tables */
+router.get("/table-access-tokens", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const tables = await FloorPlanService.listTablesForSync(merchantId);
+    const tokens: Record<string, string> = {};
+    for (const table of tables) {
+      tokens[table.id] = signTableAccess(merchantId, table.id);
+    }
+    res.json({ success: true, tokens });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to build table access tokens",
+    });
   }
 });
 

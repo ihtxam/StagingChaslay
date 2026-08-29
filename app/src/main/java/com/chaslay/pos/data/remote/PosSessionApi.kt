@@ -10,6 +10,7 @@ data class PosSessionRegisterRequest(
     @SerializedName("deviceLabel") val deviceLabel: String? = null,
     @SerializedName("staffId") val staffId: String? = null,
     @SerializedName("staffName") val staffName: String? = null,
+    @SerializedName("locationId") val locationId: String? = null,
 )
 
 data class PosSessionRegisterResponse(

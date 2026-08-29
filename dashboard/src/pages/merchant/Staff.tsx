@@ -6,6 +6,7 @@ import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
 import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
+import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
 
 type RoleRow = {
@@ -42,6 +43,7 @@ type StaffEditForm = {
   deliveryHourlyRateOverride: string;
   deliveryPerOrderFeeOverride: string;
   loginHome: 'panel' | 'pos';
+  locationIds: string[];
 };
 
 const emptyCreateForm = {
@@ -56,6 +58,7 @@ const emptyCreateForm = {
 
 export default function StaffPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
+  const { locations, load: loadLocations } = useLocationStore();
   const authUser = useAuthStore((s) => s.user);
   const ownerEmail =
     authUser?.role === 'merchant' || authUser?.isOwner ? authUser.email : null;
@@ -151,8 +154,19 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
     }
   };
 
-  const openStaffEdit = (row: StaffRow) => {
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
+
+  const openStaffEdit = async (row: StaffRow) => {
     setEditingStaff(row);
+    let locationIds: string[] = [];
+    try {
+      const res = await api.get(`/merchant/locations/staff/${row.id}`);
+      locationIds = res.data?.locationIds || [];
+    } catch {
+      locationIds = [];
+    }
     setEditForm({
       name: row.name,
       roleId: row.roleId,
@@ -172,6 +186,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
             ) === 'pos'
             ? 'pos'
             : 'panel',
+      locationIds,
     });
   };
 
@@ -225,6 +240,11 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
         body.loginHome = editForm.loginHome;
       }
       await api.put(`/merchant/staff/${editingStaff.id}`, body);
+      if (locations.length > 1) {
+        await api.put(`/merchant/locations/staff/${editingStaff.id}`, {
+          locationIds: editForm.locationIds,
+        });
+      }
       toast.success(t('staffUserUpdated'));
       closeStaffEdit();
       notifyStaffRosterChanged();
@@ -723,6 +743,39 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                             <span className="font-medium block">{title}</span>
                             <span className="text-xs text-[var(--text-muted)]">{hint}</span>
                           </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
+              {locations.length > 1 ? (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">{t('staffLocationsTitle')}</legend>
+                  <p className="text-xs text-[var(--text-muted)]">{t('staffLocationsHint')}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {locations.map((loc: MerchantLocation) => {
+                      const checked = editForm.locationIds.includes(loc.id);
+                      return (
+                        <label
+                          key={loc.id}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 ${
+                            checked ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setEditForm({
+                                ...editForm,
+                                locationIds: checked
+                                  ? editForm.locationIds.filter((id) => id !== loc.id)
+                                  : [...editForm.locationIds, loc.id],
+                              });
+                            }}
+                          />
+                          <span className="text-sm">{loc.name}</span>
                         </label>
                       );
                     })}

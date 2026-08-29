@@ -98,6 +98,34 @@ export class TableSessionService {
     return row ?? null;
   }
 
+  /** Mark every unpaid order on an open table session as paid (pay-at-table checkout). */
+  static async markSessionOrdersPaid(
+    merchantId: string,
+    sessionId: string,
+    paymentMethod = "card"
+  ) {
+    const db = getDb();
+    const orders = await this.listSessionOrders(merchantId, sessionId);
+    const unpaid = orders.filter(
+      (o) => o.paymentStatus !== "completed" && o.paymentStatus !== "paid"
+    );
+    if (!unpaid.length) return { count: 0 };
+
+    const { OrderService } = await import("@/services/order.service");
+    for (const order of unpaid) {
+      await db
+        .update(schema.orders)
+        .set({
+          paymentStatus: "completed",
+          paymentMethod,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.orders.id, order.id), eq(schema.orders.merchantId, merchantId)));
+      await OrderService.updatePaymentStatus(merchantId, order.id, "completed");
+    }
+    return { count: unpaid.length };
+  }
+
   static async sessionSummary(merchantId: string, sessionId: string) {
     const orders = await this.listSessionOrders(merchantId, sessionId);
     const activeStatuses = new Set([

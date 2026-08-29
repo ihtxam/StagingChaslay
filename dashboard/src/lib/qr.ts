@@ -509,7 +509,8 @@ export function parseTableQrPayload(raw: string): ParsedTableQr | null {
 export function buildTableShopUrl(
   merchantSlug: string,
   tableId: string,
-  origin?: string
+  origin?: string,
+  signedToken?: string | null
 ): string {
   const slug = encodeURIComponent(merchantSlug);
   const table = encodeURIComponent(tableId);
@@ -517,10 +518,17 @@ export function buildTableShopUrl(
     origin ||
       (typeof window !== 'undefined' ? window.location.origin : 'https://shop.rebornsense.com')
   ).replace(/\/$/, '');
+  let url: string;
   if (/\/shop$/i.test(base) || /app\.(rebornsense|chaslay)\.com$/i.test(base)) {
-    return `${base}/shop/${slug}/table/${table}`;
+    url = `${base}/shop/${slug}/table/${table}`;
+  } else {
+    url = `${base}/${slug}/table/${table}`;
   }
-  return `${base}/${slug}/table/${table}`;
+  const token = String(signedToken || '').trim();
+  if (token) {
+    url += `${url.includes('?') ? '&' : '?'}s=${encodeURIComponent(token)}`;
+  }
+  return url;
 }
 
 /** Waiter ordering URL — opens waiter app on a specific table (not customer menu). */

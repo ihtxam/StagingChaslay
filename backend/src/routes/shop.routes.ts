@@ -33,6 +33,8 @@ import {
   resolveShopItemDeliveryMarkup,
 } from "@/lib/shop-delivery-pricing";
 import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
+import { verifyTableAccess } from "@/lib/table-qr-token";
+import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
 import { TableSessionService } from "@/services/table-session.service";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
 
@@ -952,6 +954,11 @@ router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) 
     const tableId = String(req.params.tableId || "").trim();
     if (!tableId) return res.status(400).json({ error: "Table is required" });
 
+    const signed = String(req.query.s || "").trim();
+    if (signed && !verifyTableAccess(merchant.id, tableId, signed)) {
+      return res.status(403).json({ error: "Invalid or expired table QR link" });
+    }
+
     const { session, table } = await TableSessionService.openOrResume(merchant.id, tableId);
     const summary = await TableSessionService.sessionSummary(merchant.id, session.id);
     const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
@@ -986,6 +993,76 @@ router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) 
     });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to open table session" });
+  }
+});
+
+/**
+ * POST /api/shop/:slug/table/:tableId/payment-session — pay entire open table session (card)
+ */
+router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
+    if (!qrSettings.qrPayAtTableEnabled) {
+      return res.status(400).json({ error: "Pay at table is not enabled for this venue" });
+    }
+    const tableId = String(req.params.tableId || "").trim();
+    const sessionToken = String(req.body?.tableSessionToken || "").trim();
+    const session = await TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
+    const summary = await TableSessionService.sessionSummary(merchant.id, session.id);
+    const unpaid = summary.orders.filter((o) => o.paymentStatus !== "completed");
+    if (!unpaid.length) {
+      return res.json({ success: true, alreadyPaid: true, total: 0 });
+    }
+    const total = unpaid.reduce((s, o) => s + Number(o.total || 0), 0);
+    const anchor = unpaid[0]!;
+    const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
+    const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/table/${tableId}?paid=1&s=${encodeURIComponent(sessionToken)}`;
+    const { AdyenService } = await import("@/services/adyen.service");
+    const paySession = await AdyenService.initializePaymentSession(
+      merchant.id,
+      anchor.id,
+      total,
+      "CHF",
+      returnUrl
+    );
+    res.json({
+      success: true,
+      sessionId: session.id,
+      total,
+      orderCount: unpaid.length,
+      paymentSession: {
+        id: paySession.id,
+        sessionData: paySession.sessionData,
+        clientKey: merchant.adyenClientId,
+        environment:
+          (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Table payment session failed",
+      demoConfirmAvailable: true,
+    });
+  }
+});
+
+/**
+ * POST /api/shop/:slug/table/:tableId/confirm-payment — mark all session orders paid
+ */
+router.post("/:slug/table/:tableId/confirm-payment", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const tableId = String(req.params.tableId || "").trim();
+    const sessionToken = String(req.body?.tableSessionToken || "").trim();
+    const session = await TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
+    await TableSessionService.markSessionOrdersPaid(merchant.id, session.id, "card");
+    await TableSessionService.markPaid(merchant.id, session.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Confirm payment failed" });
   }
 });
 
@@ -1676,6 +1753,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant || !merchant.shopEnabled) {
       return res.status(404).json({ error: "Shop not found or closed" });
+    }
+    const rateKey = `${req.ip || "unknown"}:${merchant.id}`;
+    const rate = checkShopOrderRateLimit(rateKey);
+    if (!rate.ok) {
+      return res.status(429).json({
+        error: "Too many orders. Please wait a moment and try again.",
+        retryAfterSec: rate.retryAfterSec,
+      });
     }
     if (isVacationActive(merchant.vacationSettings)) {
       return res.status(400).json({ error: VACATION_BLOCK_MESSAGE });
