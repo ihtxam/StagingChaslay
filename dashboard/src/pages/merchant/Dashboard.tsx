@@ -104,7 +104,7 @@ import KioskSettingsPage from './KioskSettingsPage';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
-import MerchantOrderHub from './MerchantOrderHub';
+import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
@@ -162,7 +162,7 @@ function MerchantShell() {
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
-  const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
+  const isOrderCenterRoute = /^\/merchant\/order-(center|hub)\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
   const isKioskRoute = /^\/merchant\/kiosk\/?$/.test(location.pathname);
@@ -262,7 +262,7 @@ function MerchantShell() {
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
-    (((isPosRoute || isWaiterRoute || isOrderHubRoute) && posAppMode) ||
+    (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted)) ||
       (isKioskRoute && (!managerPanelAccess || kioskRestricted))) ||
     isPosEmbed;
@@ -589,7 +589,7 @@ function MerchantShell() {
       icon: '📈',
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
-        { label: t('orderHubTitle'), path: '/merchant/order-hub', icon: '📲' },
+        { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
       ].filter((item) => allow(item.path)),
@@ -822,7 +822,7 @@ function MerchantShell() {
 
         <main
           className={
-            isPosLikeRoute && posAppMode
+            (isPosLikeRoute || isOrderCenterRoute) && posAppMode
               ? 'flex-1 overflow-hidden p-0 min-h-0'
               : 'panel-main flex-1 p-3 sm:p-4'
           }
@@ -837,13 +837,14 @@ function MerchantShell() {
               }
             />
             <Route
-              path="order-hub"
+              path="order-center"
               element={
-                <PanelRouteGuard path="/merchant/order-hub" allow={allow}>
-                  <MerchantOrderHub />
+                <PanelRouteGuard path="/merchant/order-center" allow={allow}>
+                  <OrderCenterApp />
                 </PanelRouteGuard>
               }
             />
+            <Route path="order-hub" element={<Navigate to="/merchant/order-center" replace />} />
             <Route
               path="orders"
               element={

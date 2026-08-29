@@ -29,6 +29,8 @@ export type AutoPrintOrderPayload = {
   printDeliveryReceipt?: boolean;
   printNotification?: boolean;
   orderSource?: string;
+  /** Manual reprint from Order Center — bypass merchant auto-print toggles */
+  force?: boolean;
 };
 
 type MerchantCtx = {
@@ -198,12 +200,13 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
   if (
     payload.printKitchen === true &&
     !isRetailPosMode(settings.posCheckoutSettings) &&
-    isMerchantAutoPrintKitchenEnabled(printSettings)
+    (payload.force || isMerchantAutoPrintKitchenEnabled(printSettings))
   ) {
     await printKitchenTickets(order, orderId, source, printSettings, lang);
   }
 
-  const receiptAutoPrintAllowed = isMerchantAutoPrintReceiptEnabled(printSettings);
+  const receiptAutoPrintAllowed =
+    payload.force || isMerchantAutoPrintReceiptEnabled(printSettings);
 
   if (delivery && payload.printDeliveryReceipt === true && receiptAutoPrintAllowed) {
     await printDeliveryReceiptForOrder(orderId, {

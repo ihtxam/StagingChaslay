@@ -71,6 +71,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant': ['VIEW_REPORTS', 'ACCESS_PANEL'],
   '/merchant/orders': ['VIEW_ORDER_HISTORY'],
   '/merchant/order-hub': ['VIEW_ORDER_HISTORY'],
+  '/merchant/order-center': ['VIEW_ORDER_HISTORY'],
   '/merchant/delivery': ['VIEW_DELIVERY_TRACKING'],
   '/merchant/delivery/driver': ['DELIVERY_ORDERS'],
   '/merchant/invoices': ['VIEW_REPORTS', 'VIEW_ALL_SALES', 'ACCESS_PANEL'],
@@ -137,7 +138,8 @@ export function isOrdersPanelPath(path: string): boolean {
   return (
     path === '/merchant/orders' ||
     path.startsWith('/merchant/orders/') ||
-    path === '/merchant/order-hub'
+    path === '/merchant/order-hub' ||
+    path === '/merchant/order-center'
   );
 }
 
