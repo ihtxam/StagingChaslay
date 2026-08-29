@@ -213,6 +213,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       },
       isOwner: true,
     };
@@ -225,7 +226,7 @@ export class AuthService {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, staff.merchantId),
-      columns: { status: true },
+      columns: { status: true, maxLocations: true },
     });
     if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
       throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
@@ -268,6 +269,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       },
       isOwner: false,
     };
@@ -497,6 +499,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       },
       impersonatedBy: superadminId,
     };
@@ -546,6 +549,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

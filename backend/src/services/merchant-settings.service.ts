@@ -174,6 +174,7 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
+      maxLocations: Math.max(0, Number((merchant as { maxLocations?: number }).maxLocations ?? 1)),
       inventoryAddonEnabled: inventoryOn,
       inventoryEnabled: inventoryOn,
       signageAddonEnabled: signage.enabled,

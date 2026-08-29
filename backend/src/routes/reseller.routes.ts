@@ -186,6 +186,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts,
       maxWaiterPosts,
+      maxLocations,
       inventoryAddonEnabled,
       signageAddonEnabled,
       signageScreenLimit,
@@ -214,6 +215,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
       maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+      maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
       inventoryAddonEnabled: inventoryAddonEnabled === true,
       signageAddonEnabled: signageAddonEnabled === true,
       signageScreenLimit:
@@ -237,6 +239,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
     const {
       maxPosPosts,
       maxWaiterPosts,
+      maxLocations,
       inventoryAddonEnabled,
       inventoryEnabled,
       signageAddonEnabled,
@@ -254,6 +257,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       {
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
         inventoryAddonEnabled:
           inventoryAddonEnabled != null
             ? isInventoryAddonEnabled(inventoryAddonEnabled)

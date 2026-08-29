@@ -347,6 +347,7 @@ export class ResellerService {
         shopEnabled: schema.merchants.shopEnabled,
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
+        maxLocations: schema.merchants.maxLocations,
         inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
         signageAddonEnabled: schema.merchants.signageAddonEnabled,
         signageScreenLimit: schema.merchants.signageScreenLimit,
@@ -389,6 +390,7 @@ export class ResellerService {
       sendInvite?: boolean;
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
@@ -433,6 +435,7 @@ export class ResellerService {
         businessCategory: input.businessCategory,
         maxPosPosts: input.maxPosPosts,
         maxWaiterPosts: input.maxWaiterPosts,
+        maxLocations: input.maxLocations,
         inventoryAddonEnabled: input.inventoryAddonEnabled,
         signageAddonEnabled: input.signageAddonEnabled,
         signageScreenLimit: input.signageScreenLimit,
@@ -450,6 +453,7 @@ export class ResellerService {
     limits: {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
@@ -463,6 +467,7 @@ export class ResellerService {
     await MerchantService.updatePosPostLimits(merchantId, {
       maxPosPosts: limits.maxPosPosts,
       maxWaiterPosts: limits.maxWaiterPosts,
+      maxLocations: limits.maxLocations,
       inventoryAddonEnabled: limits.inventoryAddonEnabled,
       signageAddonEnabled: limits.signageAddonEnabled,
       signageScreenLimit: limits.signageScreenLimit,

@@ -301,6 +301,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageEnabled: merchant.signageEnabled === true,
           signageScreenLimit: merchant.signageScreenLimit ?? 2,
           storekeeperAddonEnabled: merchant.storekeeperAddonEnabled === true,
+          maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
         },
         role: "merchant",
       });
@@ -346,6 +347,14 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageEnabled: signage.enabled,
           signageScreenLimit: signage.screenLimit,
           storekeeperAddonEnabled: storekeeperOn,
+          maxLocations: await (async () => {
+            try {
+              const merch = await AuthService.getMerchantById(req.user!.merchantId!);
+              return Math.max(0, Number(merch.maxLocations ?? 1));
+            } catch {
+              return 1;
+            }
+          })(),
         },
         role: "staff",
         token,

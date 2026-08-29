@@ -23,6 +23,7 @@ export interface User {
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
+  maxLocations?: number;
 }
 
 interface AuthStore {
@@ -135,6 +136,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
         signageAddonEnabled: !!(user.signageAddonEnabled || user.signageEnabled),
         storekeeperAddonEnabled: !!user.storekeeperAddonEnabled,
+        maxLocations: Math.max(0, Number(user.maxLocations ?? 1)),
       };
 
       if (refreshedToken) {

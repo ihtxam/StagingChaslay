@@ -364,6 +364,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       businessCategory,
       maxPosPosts,
       maxWaiterPosts,
+      maxLocations,
       inventoryAddonEnabled,
       signageAddonEnabled,
       signageScreenLimit,
@@ -398,6 +399,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         businessCategory,
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
         inventoryAddonEnabled: isInventoryAddonEnabled(inventoryAddonEnabled),
         signageAddonEnabled: isSignageAddonEnabled(signageAddonEnabled),
         signageScreenLimit:
@@ -460,6 +462,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
     if (
       updates.maxPosPosts != null ||
       updates.maxWaiterPosts != null ||
+      updates.maxLocations != null ||
       updates.inventoryAddonEnabled != null ||
       updates.inventoryEnabled != null ||
       updates.signageAddonEnabled != null ||
@@ -474,6 +477,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
         maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
+        maxLocations: updates.maxLocations != null ? Number(updates.maxLocations) : undefined,
         inventoryAddonEnabled:
           updates.inventoryAddonEnabled != null
             ? isInventoryAddonEnabled(updates.inventoryAddonEnabled)
@@ -509,6 +513,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
+      delete updates.maxLocations;
       delete updates.inventoryAddonEnabled;
       delete updates.inventoryEnabled;
       delete updates.signageAddonEnabled;

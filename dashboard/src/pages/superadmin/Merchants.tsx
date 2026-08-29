@@ -100,6 +100,7 @@ const emptyForm = {
   businessCategory: 'restaurant' as 'retail' | 'restaurant',
   maxPosPosts: 1,
   maxWaiterPosts: 0,
+  maxLocations: 1,
   inventoryAddonEnabled: false,
   signageAddonEnabled: false,
   signageScreenLimit: 2,
@@ -131,6 +132,7 @@ export default function Merchants() {
   const [posLimits, setPosLimits] = useState({
     maxPosPosts: 0,
     maxWaiterPosts: 0,
+    maxLocations: 1,
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
@@ -208,6 +210,7 @@ export default function Merchants() {
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
+        maxLocations: Math.max(0, Number(res.data.merchant?.maxLocations) || 1),
         inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
         signageAddonEnabled: res.data.merchant?.signageAddonEnabled === true,
         signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
@@ -227,6 +230,7 @@ export default function Merchants() {
       const res = await api.put(`/superadmin/merchants/${showDetail.id}`, {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
+        maxLocations: Number(posLimits.maxLocations) || 1,
         inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
         signageAddonEnabled: !!posLimits.signageAddonEnabled,
         signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
@@ -243,6 +247,7 @@ export default function Merchants() {
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
+        maxLocations: Math.max(0, Number(saved?.maxLocations ?? posLimits.maxLocations) || 1),
         inventoryAddonEnabled: inventoryOn,
         signageAddonEnabled: signageOn,
         signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
@@ -405,6 +410,7 @@ export default function Merchants() {
         businessCategory: form.businessCategory,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
+        maxLocations: Number(form.maxLocations) || 1,
         inventoryAddonEnabled: !!form.inventoryAddonEnabled,
         signageAddonEnabled: !!form.signageAddonEnabled,
         signageScreenLimit: Number(form.signageScreenLimit) || 2,
@@ -958,6 +964,18 @@ export default function Merchants() {
                     />
                     <span className="text-xs text-gray-500">0 = unlimited</span>
                   </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">{t('locationsMax')}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      className="input mt-1"
+                      value={form.maxLocations}
+                      onChange={(e) => setForm({ ...form, maxLocations: Number(e.target.value) })}
+                    />
+                    <span className="text-xs text-gray-500">{t('locationsAddonHint')}</span>
+                  </label>
                 </div>
                 <label className="flex items-start gap-2 text-sm pt-2">
                   <input
@@ -1252,6 +1270,23 @@ export default function Merchants() {
                           })
                         }
                       />
+                    </label>
+                    <label className="block text-xs col-span-2">
+                      {t('locationsMax')}
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        className="input mt-1"
+                        value={posLimits.maxLocations}
+                        onChange={(e) =>
+                          setPosLimits({
+                            ...posLimits,
+                            maxLocations: Number(e.target.value) || 1,
+                          })
+                        }
+                      />
+                      <span className="text-[10px] text-gray-500">{t('locationsAddonHint')}</span>
                     </label>
                   </div>
                   <label className="flex items-start gap-2 text-sm mt-3">

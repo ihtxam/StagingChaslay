@@ -290,6 +290,8 @@ export class MerchantService {
       maxPosPosts?: number;
       /** Concurrent waiter stations. 0 = unlimited. Agency-assigned. */
       maxWaiterPosts?: number;
+      /** Shop/branch locations. 1 = single shop; 0 = unlimited. Agency-assigned addon. */
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
@@ -353,6 +355,7 @@ export class MerchantService {
           businessCategory: lockedModule,
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
+          maxLocations: normalizePosPostLimit(options?.maxLocations ?? 1) || 1,
           inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
           signageAddonEnabled: options?.signageAddonEnabled === true,
           signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
@@ -536,6 +539,7 @@ export class MerchantService {
     limits: {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
@@ -549,6 +553,10 @@ export class MerchantService {
     }
     if (limits.maxWaiterPosts !== undefined) {
       patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
+    }
+    if (limits.maxLocations !== undefined) {
+      const n = normalizePosPostLimit(limits.maxLocations);
+      patch.maxLocations = n === 0 ? 0 : Math.max(1, n);
     }
     if (Object.keys(patch).length > 0) {
       await this.updateMerchant(merchantId, patch);
@@ -576,7 +584,7 @@ export class MerchantService {
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

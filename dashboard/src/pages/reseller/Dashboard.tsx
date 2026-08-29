@@ -108,6 +108,7 @@ function MerchantsPage() {
     customDays: 365,
     maxPosPosts: 1,
     maxWaiterPosts: 0,
+    maxLocations: 1,
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
@@ -120,6 +121,7 @@ function MerchantsPage() {
     name: string;
     maxPosPosts: number;
     maxWaiterPosts: number;
+    maxLocations: number;
     inventoryAddonEnabled: boolean;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
@@ -198,6 +200,7 @@ function MerchantsPage() {
         customDays: form.licenseType === 'custom' ? Number(form.customDays) : undefined,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
+        maxLocations: Number(form.maxLocations) || 1,
       });
       toast.success(t('resellerMerchantCreated'));
       setShowCreate(false);
@@ -251,6 +254,7 @@ function MerchantsPage() {
         kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
         odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
         storekeeperAddonEnabled: !!merchant.storekeeperAddonEnabled,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -266,6 +270,7 @@ function MerchantsPage() {
       await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
+        maxLocations: Number(limitsFor.maxLocations) || 1,
         inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
         signageAddonEnabled: !!limitsFor.signageAddonEnabled,
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
@@ -528,7 +533,21 @@ function MerchantsPage() {
                 }
               />
             </label>
+            <label className="text-sm">
+              {t('locationsMax')}
+              <input
+                type="number"
+                min={0}
+                max={99}
+                className="input mt-1"
+                value={form.maxLocations}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, maxLocations: Number(e.target.value) || 1 }))
+                }
+              />
+            </label>
             <p className="sm:col-span-2 text-xs text-stone-500">{t('posPostsHint')}</p>
+            <p className="sm:col-span-2 text-xs text-stone-500">{t('locationsAddonHint')}</p>
             <label className="sm:col-span-2 flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -712,6 +731,7 @@ function MerchantsPage() {
                         name: m.name,
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                        maxLocations: Math.max(0, Number(m.maxLocations) || 1),
                         inventoryAddonEnabled: m.inventoryAddonEnabled === true,
                         signageAddonEnabled: m.signageAddonEnabled === true,
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
@@ -802,8 +822,25 @@ function MerchantsPage() {
                   }
                 />
               </label>
+              <label className="text-sm col-span-2">
+                {t('locationsMax')}
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  className="input mt-1"
+                  value={limitsFor.maxLocations}
+                  onChange={(e) =>
+                    setLimitsFor({
+                      ...limitsFor,
+                      maxLocations: Number(e.target.value) || 1,
+                    })
+                  }
+                />
+              </label>
             </div>
             <p className="text-xs text-stone-500">{t('posPostsHint')}</p>
+            <p className="text-xs text-stone-500">{t('locationsAddonHint')}</p>
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"

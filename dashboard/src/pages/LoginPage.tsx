@@ -97,6 +97,7 @@ function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string 
       isOwner: !isStaff && data.isOwner !== false,
       inventoryAddonEnabled: !!(merchant.inventoryAddonEnabled || merchant.inventoryEnabled),
       signageAddonEnabled: !!(merchant.signageAddonEnabled || merchant.signageEnabled),
+      maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
     },
   };
 }
