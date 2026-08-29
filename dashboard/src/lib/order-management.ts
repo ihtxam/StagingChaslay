@@ -199,6 +199,20 @@ export function isOnlineShopOrder(o: {
   );
 }
 
+/** Web shop delivery or pickup (takeaway) — ETA accept popup applies; excludes kiosk/QR table. */
+export function isDeliveryOrPickupShopOrder(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  if (!isOnlineShopOrder(o)) return false;
+  const src = String(o.orderSource || '').toLowerCase();
+  if (src === 'kiosk' || src === 'qr_table') return false;
+  const ch = String(o.fulfillmentChannel || 'takeaway').toLowerCase();
+  return ch === 'delivery' || ch === 'takeaway';
+}
+
 export function orderSourceLabel(source?: string | null): string {
   const s = String(source || '').toLowerCase();
   if (s === 'justeat') return 'Just Eat';

@@ -36,6 +36,19 @@ export type Permission =
   | 'STOREKEEPER_INTAKE'
   | 'MANAGE_KIOSK';
 
+/** Permissions shown in role editor — hide kiosk when addon is off. */
+export function permissionsForMerchantAddon(
+  permissions: Permission[],
+  kioskLicensed: boolean
+): Permission[] {
+  if (kioskLicensed) return permissions;
+  return permissions.filter((p) => p !== 'MANAGE_KIOSK');
+}
+
+export function isKioskOperatorRoleName(name: string): boolean {
+  return name.trim().toLowerCase() === 'kiosk operator';
+}
+
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
   'USE_WEBPOS',

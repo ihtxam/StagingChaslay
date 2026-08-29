@@ -148,6 +148,7 @@ import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
 } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
+import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
 import WebPosNotificationsPanel, {
   type WebPosReservationAlert,
 } from '@/components/webpos/WebPosNotificationsPanel';
@@ -390,6 +391,7 @@ import type { TableHeldDisplay } from '@/components/webpos/WebPosTablesView';
 import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
+  isDeliveryOrPickupShopOrder,
   isInvoiceOrder,
   isOnlineShopOrder,
   isPaidOrder,
@@ -2553,13 +2555,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   const acceptFromNewOrderAlert = useCallback(
-    async (order: OnlineOrder) => {
+    async (order: OnlineOrder, prepMinutes: number) => {
       setAlertActionBusy(true);
       try {
-        await api.post(`/merchant/orders/${order.id}/action`, { action: 'accept' });
+        await api.post(`/merchant/orders/${order.id}/action`, {
+          action: 'accept',
+          etaAdjustMinutes: prepMinutes,
+        });
         markOnlineOrderActioned(order.id);
         dismissNewOrderAlert(order.id);
-        toast.success(t('updated'));
+        toast.success(t('orderAccepted'));
         void pollOnlineOrders();
         setOrdersRefreshToken((n) => n + 1);
         openOnlineOrdersInTab(order.id);
@@ -8627,6 +8632,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     deliveryAutoAccept &&
     !!currentNewOrderAlert &&
     !isAwaitingApproval(currentNewOrderAlert.status);
+  const newOrderAlertUseEtaModal =
+    !!currentNewOrderAlert &&
+    !newOrderAlertAcknowledgeOnly &&
+    isDeliveryOrPickupShopOrder(currentNewOrderAlert);
 
   const tableBadge =
     tableLabel || tabNumber
@@ -9996,20 +10005,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={closePaymentModal}
       />
 
-      <WebPosNewOrderAlertModal
-        order={currentNewOrderAlert}
-        queueCount={newOrderAlertQueue.length}
-        busy={alertActionBusy}
-        acknowledgeOnly={newOrderAlertAcknowledgeOnly}
-        onAcknowledge={acknowledgeNewOrderAlert}
-        onAccept={newOrderAlertAcknowledgeOnly ? undefined : acceptFromNewOrderAlert}
-        onReject={newOrderAlertAcknowledgeOnly ? undefined : rejectFromNewOrderAlert}
-        onOpen={
-          newOrderAlertAcknowledgeOnly
-            ? undefined
-            : (order) => openOnlineOrdersInTab(order.id)
-        }
-      />
+      {newOrderAlertUseEtaModal ? (
+        <OrderAcceptWithEtaModal
+          order={currentNewOrderAlert}
+          queueCount={newOrderAlertQueue.length}
+          busy={alertActionBusy}
+          onAccept={(order, mins) => void acceptFromNewOrderAlert(order, mins)}
+          onReject={rejectFromNewOrderAlert}
+        />
+      ) : (
+        <WebPosNewOrderAlertModal
+          order={currentNewOrderAlert}
+          queueCount={newOrderAlertQueue.length}
+          busy={alertActionBusy}
+          acknowledgeOnly={newOrderAlertAcknowledgeOnly}
+          onAcknowledge={acknowledgeNewOrderAlert}
+          onAccept={
+            newOrderAlertAcknowledgeOnly
+              ? undefined
+              : (order) => void acceptFromNewOrderAlert(order, 30)
+          }
+          onReject={newOrderAlertAcknowledgeOnly ? undefined : rejectFromNewOrderAlert}
+          onOpen={
+            newOrderAlertAcknowledgeOnly
+              ? undefined
+              : (order) => openOnlineOrdersInTab(order.id)
+          }
+        />
+      )}
 
       <WebPosRejectOrderModal
         open={!!alertRejectOrder}
