@@ -259,6 +259,38 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/l/:locationSlug/menu"
+            element={
+              <ShopRoutes>
+                <OrderingPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug"
+            element={
+              <ShopRoutes>
+                <ShopEntry />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug/checkout"
+            element={
+              <ShopRoutes>
+                <CheckoutPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug/order/:orderId"
+            element={
+              <ShopRoutes>
+                <OrderConfirmationPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug"
             element={
               <ShopRoutes>

@@ -502,6 +502,32 @@ async function resolveMerchant(slugOrHost: string) {
   return merchant;
 }
 
+async function resolveShopLocationId(
+  merchantId: string,
+  locationSlug?: string | null,
+  queryLocation?: string | null
+) {
+  const { LocationsService } = await import("@/services/locations.service");
+  const slug = String(locationSlug || queryLocation || "")
+    .trim()
+    .toLowerCase();
+  if (slug) {
+    const loc = await LocationsService.resolveBySlug(merchantId, slug);
+    if (!loc) throw new Error("Location not found");
+    return { locationId: loc.id, locationSlug: loc.slug, locationName: loc.name };
+  }
+  const defaultId = await LocationsService.getDefaultId(merchantId);
+  const db = getDb();
+  const defaultLoc = await db.query.locations.findFirst({
+    where: eq(schema.locations.id, defaultId),
+  });
+  return {
+    locationId: defaultId,
+    locationSlug: defaultLoc?.slug || null,
+    locationName: defaultLoc?.name || null,
+  };
+}
+
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {
   if (channel === "delivery") return merchant.deliveryEnabled;
   if (channel === "dine_in") return merchant.dineInEnabled;
@@ -847,96 +873,154 @@ router.get("/:slug/my-orders", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/shop/:slug/menu
+ * GET /api/shop/:slug/locations — public branch list for location picker
  */
-router.get("/:slug/menu", async (req: Request, res: Response) => {
+router.get("/:slug/locations", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant || !merchant.shopEnabled) {
       return res.status(404).json({ error: "Shop not found or closed" });
     }
+    const { LocationsService } = await import("@/services/locations.service");
+    const locations = await LocationsService.listPublicForShop(merchant.id);
+    res.json({ success: true, locations });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load locations" });
+  }
+});
 
-    const db = getDb();
-    const catalogChannel = shopMenuCatalogChannel(
-      String(req.query.channel || ""),
-      typeof req.query.table === "string" ? req.query.table : null
+async function handleShopMenu(req: Request, res: Response, locationSlugParam?: string) {
+  const merchant = await resolveMerchant(req.params.slug);
+  if (!merchant || !merchant.shopEnabled) {
+    return res.status(404).json({ error: "Shop not found or closed" });
+  }
+
+  const db = getDb();
+  const catalogChannel = shopMenuCatalogChannel(
+    String(req.query.channel || ""),
+    typeof req.query.table === "string" ? req.query.table : null
+  );
+  const { locationId, locationSlug, locationName } = await resolveShopLocationId(
+    merchant.id,
+    locationSlugParam,
+    typeof req.query.location === "string" ? req.query.location : null
+  );
+
+  const [categories, products] = await Promise.all([
+    db.query.categories.findMany({
+      where: eq(schema.categories.merchantId, merchant.id),
+      orderBy: [asc(schema.categories.sortOrder)],
+    }),
+    db.query.products.findMany({
+      where: and(eq(schema.products.merchantId, merchant.id), eq(schema.products.isActive, true)),
+      orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
+    }),
+  ]);
+
+  const { CatalogLocationService } = await import("@/services/catalog-location.service");
+  const { HqMenuService } = await import("@/services/hq-menu.service");
+  const withOverrides = await CatalogLocationService.applyLocationOverrides(
+    merchant.id,
+    locationId,
+    products
+  );
+  const filtered = filterCatalogForChannel(withOverrides, categories, catalogChannel);
+  const menuProductIds = await HqMenuService.resolveActiveProductIds(
+    merchant.id,
+    locationId,
+    catalogChannel
+  );
+  const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(
+    filtered.products,
+    menuProductIds
+  );
+  const categoryIdsWithProducts = new Set(
+    visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
+  );
+  const visibleCategories = filtered.categories.filter(
+    (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
+  );
+
+  const groupsByProduct = await loadModifierGroupsByProduct(
+    merchant.id,
+    visibleProducts.map((p) => p.id)
+  );
+  const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
+
+  const toItem = (p: (typeof visibleProducts)[number]) =>
+    withPublicShopImageUrls(
+      req,
+      mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
     );
-    const [categories, products] = await Promise.all([
-      db.query.categories.findMany({
-        where: eq(schema.categories.merchantId, merchant.id),
-        orderBy: [asc(schema.categories.sortOrder)],
-      }),
-      db.query.products.findMany({
-        where: and(eq(schema.products.merchantId, merchant.id), eq(schema.products.isActive, true)),
-        orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
-      }),
-    ]);
 
-    const filtered = filterCatalogForChannel(products, categories, catalogChannel);
-    const visibleProducts = filtered.products;
-    const visibleCategories = filtered.categories;
+  const menu = visibleCategories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    image: resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null,
+    isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
+    deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
+    extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
+    items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
+  }));
 
-    const groupsByProduct = await loadModifierGroupsByProduct(
-      merchant.id,
-      visibleProducts.map((p) => p.id)
-    );
-    const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
+  const uncategorized = visibleProducts.filter((p) => !p.categoryId);
+  if (uncategorized.length) {
+    menu.push({
+      id: "uncategorized",
+      name: "Other",
+      image: null,
+      isOffersCategory: false,
+      items: uncategorized.map(toItem),
+    });
+  }
 
-    const toItem = (p: (typeof visibleProducts)[number]) =>
-      withPublicShopImageUrls(
-        req,
-        mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
-      );
-
-    const menu = visibleCategories.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      image: resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null,
-      isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
-      deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
-      extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
-      items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
+  const activeOffers = await OffersService.listActivePublic(merchant.id);
+  const featured = activeOffers
+    .filter((o) => o.featured)
+    .map((o) => ({
+      id: o.id,
+      name: o.name,
+      description: o.description,
+      badgeLabel: o.badgeLabel,
+      offerType: o.offerType,
+      rules: o.rules,
+      productIds: o.productIds || [],
+      categoryIds: o.categoryIds || [],
+      channels: o.channels,
+      daysOfWeek: o.daysOfWeek,
+      timeStart: o.timeStart,
+      timeEnd: o.timeEnd,
+      scheduleMode: o.scheduleMode,
+      validFrom: o.validFrom,
+      validTo: o.validTo,
     }));
 
-    const uncategorized = visibleProducts.filter((p) => !p.categoryId);
-    if (uncategorized.length) {
-      menu.push({
-        id: "uncategorized",
-        name: "Other",
-        image: null,
-        isOffersCategory: false,
-        items: uncategorized.map(toItem),
-      });
-    }
+  res.json({
+    success: true,
+    data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
+    offers: featured,
+    catalogChannel,
+    location: { id: locationId, slug: locationSlug, name: locationName },
+  });
+}
 
-    // Active featured offers for the Offers shelf badges
-    const activeOffers = await OffersService.listActivePublic(merchant.id);
-    const featured = activeOffers
-      .filter((o) => o.featured)
-      .map((o) => ({
-        id: o.id,
-        name: o.name,
-        description: o.description,
-        badgeLabel: o.badgeLabel,
-        offerType: o.offerType,
-        rules: o.rules,
-        productIds: o.productIds || [],
-        categoryIds: o.categoryIds || [],
-        channels: o.channels,
-        daysOfWeek: o.daysOfWeek,
-        timeStart: o.timeStart,
-        timeEnd: o.timeEnd,
-        scheduleMode: o.scheduleMode,
-        validFrom: o.validFrom,
-        validTo: o.validTo,
-      }));
+/**
+ * GET /api/shop/:slug/l/:locationSlug/menu — per-location menu
+ */
+router.get("/:slug/l/:locationSlug/menu", async (req: Request, res: Response) => {
+  try {
+    await handleShopMenu(req, res, req.params.locationSlug);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+  }
+});
 
-    res.json({
-      success: true,
-      data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
-      offers: featured,
-      catalogChannel,
-    });
+/**
+ * GET /api/shop/:slug/menu
+ */
+router.get("/:slug/menu", async (req: Request, res: Response) => {
+  try {
+    await handleShopMenu(req, res);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
   }
@@ -2373,7 +2457,18 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const resolvedCustomerPhone = customerPhone?.trim() || (isQrTableOrder ? "QR" : "");
 
     const { LocationsService } = await import("@/services/locations.service");
-    const orderLocationId = await LocationsService.getDefaultId(merchant.id);
+    const orderLocationId = await (async () => {
+      try {
+        const resolved = await resolveShopLocationId(
+          merchant.id,
+          (req.body as { locationSlug?: string })?.locationSlug,
+          typeof req.query.location === "string" ? req.query.location : null
+        );
+        return resolved.locationId;
+      } catch {
+        return LocationsService.getDefaultId(merchant.id);
+      }
+    })();
 
     const [order] = await db
       .insert(schema.orders)

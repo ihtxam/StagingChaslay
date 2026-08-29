@@ -23,6 +23,7 @@ import {
   UnitsPage,
 } from './inventory/settings-pages';
 import { InventoryReportPage, ConsumptionReportPage, DeadStockReportPage } from './inventory/report-pages';
+import InventoryTransfersPage from './inventory/InventoryTransfersPage';
 import { InventoryHomePage } from './inventory/home-page';
 import Categories from './Categories';
 import Modifiers from './Modifiers';
@@ -95,6 +96,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import SignagePage from './SignagePage';
 import HqDashboardPage from './HqDashboard';
+import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
 import MerchantOrderHub from './MerchantOrderHub';
 import { useLocationStore } from '@/store/location';
@@ -558,6 +560,7 @@ function MerchantShell() {
       icon: '🏢',
       children: [
         { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
+        { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
         { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
       ].filter((item) => allow(item.path)),
     },
@@ -849,6 +852,7 @@ function MerchantShell() {
               <Route path="home" element={<InventoryHomePage />} />
               <Route path="list" element={<InventoryListPage />} />
               <Route path="inbound" element={<InboundStockPage />} />
+              <Route path="transfers" element={<InventoryTransfersPage />} />
               <Route path="outbound" element={<OutboundStockPage />} />
               <Route path="counting" element={<StockCountingPage />} />
               <Route path="history" element={<StockHistoryPage />} />
@@ -968,6 +972,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/hq" allow={allow}>
                   <HqDashboardPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq/menus"
+              element={
+                <PanelRouteGuard path="/merchant/hq/menus" allow={allow}>
+                  <HqMenusPage />
                 </PanelRouteGuard>
               }
             />

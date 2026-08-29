@@ -1965,6 +1965,12 @@ router.get(
         to: req.query.to ? String(req.query.to) : undefined,
         staffId: scope.staffId,
         staffName: scope.staffName,
+        locationId:
+          req.query.scope === "location"
+            ? (req.locationId as string | undefined) || undefined
+            : req.query.locationId
+              ? String(req.query.locationId)
+              : undefined,
       });
       res.json({ success: true, overview });
     } catch (error) {

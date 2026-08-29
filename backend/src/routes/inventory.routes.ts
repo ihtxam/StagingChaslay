@@ -419,4 +419,78 @@ router.put("/products/:productId/recipe", denyInventoryRecipes, async (req: Requ
   }
 });
 
+/** Cross-location inventory transfers */
+router.get("/transfers", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const transfers = await InventoryTransferService.list(req.merchantId!, status);
+    res.json({ success: true, transfers });
+  } catch (error) {
+    handleError(res, error, "Failed to list transfers");
+  }
+});
+
+router.post("/transfers", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const body = req.body || {};
+    const transfer = await InventoryTransferService.create(req.merchantId!, {
+      fromLocationId: String(body.fromLocationId || ""),
+      toLocationId: String(body.toLocationId || ""),
+      itemId: String(body.itemId || ""),
+      qty: Number(body.qty),
+      note: body.note,
+      staffId: req.user?.staffId || null,
+      staffName: req.user?.name || null,
+    });
+    res.json({ success: true, transfer });
+  } catch (error) {
+    handleError(res, error, "Failed to create transfer");
+  }
+});
+
+router.post("/transfers/:transferId/confirm", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const transfer = await InventoryTransferService.confirm(req.merchantId!, req.params.transferId);
+    res.json({ success: true, transfer });
+  } catch (error) {
+    handleError(res, error, "Failed to confirm transfer");
+  }
+});
+
+router.post("/transfers/:transferId/cancel", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const transfer = await InventoryTransferService.cancel(req.merchantId!, req.params.transferId);
+    res.json({ success: true, transfer });
+  } catch (error) {
+    handleError(res, error, "Failed to cancel transfer");
+  }
+});
+
+router.get("/location-stock/:locationId", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const stock = await InventoryTransferService.locationStockSummary(
+      req.merchantId!,
+      req.params.locationId
+    );
+    res.json({ success: true, stock });
+  } catch (error) {
+    handleError(res, error, "Failed to load location stock");
+  }
+});
+
+router.post("/backfill-location-stock", async (req: Request, res: Response) => {
+  try {
+    const { InventoryTransferService } = await import("@/services/inventory-transfer.service");
+    const result = await InventoryTransferService.backfillDefaultLocation(req.merchantId!);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    handleError(res, error, "Failed to backfill location stock");
+  }
+});
+
 export default router;

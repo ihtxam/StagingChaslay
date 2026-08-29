@@ -11,6 +11,7 @@ import {
   loadCustomerToken,
   removeOfferInstance,
   resolveShopKey,
+  resolveShopLocationSlug,
   saveCart,
   saveCustomerToken,
   shopBasePath,
@@ -58,8 +59,10 @@ const ADDRESS_LABELS = ['home', 'office', 'other'] as const;
 
 export default function CheckoutPage() {
   const { t, setLocale, locale, formatDateTime } = useI18n();
-  const { merchantSlug } = useParams<{ merchantSlug: string }>();
+  const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const locSlug = resolveShopLocationSlug({ locationSlug });
+  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const navigate = useNavigate();
   const cmsTheme = useShopCmsTheme(shopKey);
 
@@ -103,7 +106,7 @@ export default function CheckoutPage() {
     if (!shopKey) return;
     const stored = loadCart(shopKey);
     if (!stored?.items?.length) {
-      navigate(`${shopBasePath(shopKey) || '/'}`, { replace: true });
+      navigate(`${basePath || '/'}`, { replace: true });
       return;
     }
     setDraft(stored);
@@ -552,7 +555,7 @@ export default function CheckoutPage() {
       if (shopKey) saveCart(shopKey, next);
       if (!items.length) {
         clearCart(shopKey);
-        navigate(`${shopBasePath(shopKey) || '/'}`, { replace: true });
+        navigate(`${basePath || '/'}`, { replace: true });
       }
       return next;
     });
@@ -567,7 +570,7 @@ export default function CheckoutPage() {
       if (shopKey) saveCart(shopKey, next);
       if (!items.length) {
         clearCart(shopKey);
-        navigate(`${shopBasePath(shopKey) || '/'}`, { replace: true });
+        navigate(`${basePath || '/'}`, { replace: true });
       }
       return next;
     });
@@ -852,6 +855,7 @@ export default function CheckoutPage() {
           guestCheckout: draft.authMode === 'guest',
           voucherCode: draft.voucherCode?.trim() || undefined,
           giftCardCode: draft.giftCardCode?.trim() || undefined,
+          locationSlug: locSlug || undefined,
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -865,11 +869,11 @@ export default function CheckoutPage() {
         if (session?.sessionData && session?.clientKey) {
           sessionStorage.setItem(`manupos_pay_${order.id}`, JSON.stringify(session));
         }
-        navigate(`${shopBasePath(shopKey)}/order/${order.id}?pay=1`);
+        navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}?pay=1`);
         return;
       }
 
-      navigate(`${shopBasePath(shopKey)}/order/${order.id}`);
+      navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}`);
     } catch (err: any) {
       setError(err.response?.data?.error || t('shopCheckoutFailed'));
     } finally {
@@ -936,7 +940,7 @@ export default function CheckoutPage() {
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-          <Link to={`${shopBasePath(shopKey) || '/'}`} className="font-bold tracking-tight min-w-0 truncate">
+          <Link to={`${shopBasePath(shopKey, locSlug) || '/'}`} className="font-bold tracking-tight min-w-0 truncate">
             ← {merchant?.name || t('shopBackToMenu')}
           </Link>
           <div className="flex items-center gap-3 shrink-0">
@@ -977,7 +981,7 @@ export default function CheckoutPage() {
                 {draft.items.reduce((n, i) => n + (i.quantity || 1), 0)} · CHF {total.toFixed(2)}
               </p>
             </div>
-            <Link to={`${shopBasePath(shopKey)}/menu`} className="text-xs font-semibold underline shrink-0">
+            <Link to={`${shopBasePath(shopKey, locSlug)}/menu`} className="text-xs font-semibold underline shrink-0">
               {t('shopAddMore')}
             </Link>
           </div>
@@ -2027,7 +2031,7 @@ export default function CheckoutPage() {
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-bold text-lg">{t('shopYourOrder')}</h2>
             <Link
-              to={`${shopBasePath(shopKey)}/menu`}
+              to={`${shopBasePath(shopKey, locSlug)}/menu`}
               className="text-xs font-semibold underline text-stone-600"
             >
               {t('shopAddMore')}

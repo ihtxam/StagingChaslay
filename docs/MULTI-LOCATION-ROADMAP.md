@@ -360,6 +360,7 @@ Separate limits for **locations** vs **POS seats**:
 - [x] POS, shop, and QR menu respect flags
 - [x] Catalog list channel filter (Products page)
 - [ ] Location overrides (partial — `location_product_overrides` table + bulk pricing path)
++ [x] Location overrides applied in shop menu + location-scoped pricing
 
 **Outcome:** Hide barcodes-only retail items from restaurant POS, etc.
 
@@ -368,7 +369,7 @@ Separate limits for **locations** vs **POS seats**:
 - [x] HQ back-office pages (`/merchant/hq`)
 - [x] Master catalog snapshot + push to selected locations
 - [x] `location_catalog_links` + "From HQ" link records
-- [ ] HQ menus with effective times + channel assignment (OrderPin-style)
+- [x] HQ menus with effective times + channel assignment (OrderPin-style)
 - [ ] Full storefront renderer wiring
 
 **Outcome:** One menu update → all restaurants (beta).
@@ -388,17 +389,17 @@ Separate limits for **locations** vs **POS seats**:
 - [x] Order → pending approval → POS → KDS
 - [x] Session persistence (re-scan, order history)
 - [x] QR auto-approve → kitchen fix
-- [ ] Pay at table (payment integration)
-- [ ] Signed URL tokens + rate limiting
+- [x] Pay at table (payment integration)
+- [x] Signed URL tokens + rate limiting
 
 **Outcome:** Full dine-in QR ordering (core flow live).
 
 ### Phase 6 — Polish & enterprise
 
-- Cross-location inventory transfers
-- Org-wide analytics dashboard
-- Per-location online shop URLs
-- Android Print Bridge per location
+- [x] Cross-location inventory transfers
+- [x] Org-wide analytics dashboard
+- [x] Per-location online shop URLs (`/shop/:slug/l/:locationSlug`)
+- [ ] Android Print Bridge per location
 
 ---
 

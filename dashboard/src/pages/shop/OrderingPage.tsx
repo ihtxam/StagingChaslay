@@ -11,8 +11,10 @@ import {
   newOfferInstanceId,
   removeOfferInstance,
   resolveShopKey,
+  resolveShopLocationSlug,
   saveCart,
   shopBasePath,
+  shopMenuApiPath,
   type ShopCartItem,
   type ShopChannel,
   type ShopCheckoutDraft,
@@ -103,9 +105,11 @@ interface ChannelInfo {
 
 export default function OrderingPage() {
   const { t, setLocale, locale } = useI18n();
-  const { merchantSlug } = useParams<{ merchantSlug: string }>();
+  const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const locSlug = resolveShopLocationSlug({ locationSlug });
+  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
@@ -175,7 +179,7 @@ export default function OrderingPage() {
         const token = loadCustomerToken(shopKey);
         const [shopRes, menuRes, loyaltyRes] = await Promise.all([
           axios.get(`/api/shop/${shopKey}`),
-          axios.get(`/api/shop/${shopKey}/menu`),
+          axios.get(shopMenuApiPath(shopKey, locSlug)),
           axios.get(`/api/shop/${shopKey}/loyalty`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
         ]);
         const data = shopRes.data.data;
@@ -762,7 +766,7 @@ export default function OrderingPage() {
       next.scheduledFor = '';
     }
     saveCart(shopKey, next);
-    navigate(`${shopBasePath(shopKey)}/checkout`);
+    navigate(`${shopBasePath(shopKey, locSlug)}/checkout`);
   };
 
   const nextOpen = useMemo(() => {
@@ -898,8 +902,8 @@ export default function OrderingPage() {
   };
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
-  const accountPath = `${shopBasePath(shopKey)}/account`;
-  const reservationsPath = `${shopBasePath(shopKey)}/reservations`;
+  const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
+  const reservationsPath = `${shopBasePath(shopKey, locSlug)}/reservations`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
@@ -1107,7 +1111,7 @@ export default function OrderingPage() {
       <header className="sticky top-0 z-30 bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link
-            to={shopBasePath(shopKey) || '/'}
+            to={shopBasePath(shopKey, locSlug) || '/'}
             className="flex items-center gap-2.5 min-w-0 shrink"
             aria-label={merchant?.name || t('shopBackToMenu')}
           >

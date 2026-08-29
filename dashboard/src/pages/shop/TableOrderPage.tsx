@@ -4,7 +4,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { resolveShopKey } from '@/lib/shop-cart';
+import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug } from '@/lib/shop-cart';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ShopProductModifiersModal, {
@@ -52,10 +52,18 @@ type PaymentSession = {
 
 export default function TableOrderPage() {
   const { t } = useI18n();
-  const { merchantSlug, tableId } = useParams<{ merchantSlug: string; tableId: string }>();
+  const { merchantSlug, tableId, locationSlug: routeLocationSlug } = useParams<{
+    merchantSlug: string;
+    tableId: string;
+    locationSlug?: string;
+  }>();
   const [searchParams] = useSearchParams();
   const signedAccess = searchParams.get('s') || '';
   const wantPay = searchParams.get('paid') === '1';
+  const locationSlug =
+    resolveShopLocationSlug({ locationSlug: routeLocationSlug }) ||
+    searchParams.get('location')?.trim() ||
+    null;
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
 
@@ -83,7 +91,9 @@ export default function TableOrderPage() {
     const sessionParams = signedAccess ? { s: signedAccess } : undefined;
     const [sessionRes, menuRes] = await Promise.all([
       axios.get(`/api/shop/${shopKey}/table/${tableId}/session`, { params: sessionParams }),
-      axios.get(`/api/shop/${shopKey}/menu`, { params: { channel: 'qr_table', table: tableId } }),
+      axios.get(shopMenuApiPath(shopKey, locationSlug), {
+        params: { channel: 'qr_table', table: tableId },
+      }),
     ]);
     const sessionData = sessionRes.data;
     setTableLabel(sessionData.table?.label || tableId);
@@ -92,7 +102,7 @@ export default function TableOrderPage() {
     setRunningTotal(Number(sessionData.runningTotal || 0));
     setPayAtTableEnabled(!!sessionData.settings?.qrPayAtTableEnabled);
     setMenu(menuRes.data.data || []);
-  }, [shopKey, tableId, signedAccess]);
+  }, [shopKey, tableId, signedAccess, locationSlug]);
 
   useEffect(() => {
     void (async () => {
@@ -249,6 +259,7 @@ export default function TableOrderPage() {
         tableId,
         tableSessionToken: sessionToken,
         orderSource: 'qr_table',
+        locationSlug: locationSlug || undefined,
         customerName: tableLabel ? `Table ${tableLabel}` : 'Table guest',
         customerPhone: 'QR',
         notes: notes.trim() || undefined,

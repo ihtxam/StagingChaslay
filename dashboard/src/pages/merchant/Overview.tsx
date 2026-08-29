@@ -69,6 +69,7 @@ type OverviewData = {
   staff: Array<{ name: string; salesCount: number; total: number }>;
   businessName: string;
   eod?: Record<string, unknown>;
+  byLocation?: Array<{ locationId: string; name: string; revenue: number; orders: number }>;
 };
 
 const CHART_COLORS = ['#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#3b82f6', '#64748b'];
@@ -348,6 +349,30 @@ export default function Overview() {
           ))}
         </div>
       )}
+
+      {(data?.byLocation?.length || 0) > 1 ? (
+        <div className="card">
+          <h2 className="text-sm font-semibold mb-3">{t('ovByLocation')}</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[var(--text-muted)]">
+                <th className="py-1">{t('locationName')}</th>
+                <th className="py-1 text-right">{t('ovOrders')}</th>
+                <th className="py-1 text-right">{t('revenue')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.byLocation?.map((row) => (
+                <tr key={row.locationId} className="border-t border-[var(--border)]">
+                  <td className="py-1.5">{row.name}</td>
+                  <td className="py-1.5 text-right tabular-nums">{row.orders}</td>
+                  <td className="py-1.5 text-right tabular-nums">CHF {row.revenue.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
         <div className="card xl:col-span-2 min-h-[280px]">

@@ -333,14 +333,30 @@ export function resolveShopKey(paramSlug?: string) {
 }
 
 /** Frontend path prefix for a shop (Reborn shop hub vs /shop/:slug vs subdomain / custom domain root). */
-export function shopBasePath(shopKey: string) {
+export function shopBasePath(shopKey: string, locationSlug?: string | null) {
   const label = subdomainLabel();
-  if (label && !RESERVED_SUBDOMAINS.has(label)) return ''; // {slug}.domain → /
-  if (label === 'shop') return `/${shopKey}`; // shop.domain/{slug}
-  const host = window.location.hostname.toLowerCase();
-  const main = publicDomain();
-  if (host && host !== main && !host.endsWith(`.${main}`)) return ''; // custom domain → /
-  return `/shop/${shopKey}`;
+  let base: string;
+  if (label && !RESERVED_SUBDOMAINS.has(label)) base = '';
+  else if (label === 'shop') base = `/${shopKey}`;
+  else {
+    const host = window.location.hostname.toLowerCase();
+    const main = publicDomain();
+    base = host && host !== main && !host.endsWith(`.${main}`) ? '' : `/shop/${shopKey}`;
+  }
+  const loc = String(locationSlug || '').trim();
+  if (loc) return `${base}/l/${encodeURIComponent(loc)}`;
+  return base;
+}
+
+/** Menu API path — per-location when locationSlug is set. */
+export function shopMenuApiPath(shopKey: string, locationSlug?: string | null) {
+  const loc = String(locationSlug || '').trim();
+  if (loc) return `/api/shop/${shopKey}/l/${encodeURIComponent(loc)}/menu`;
+  return `/api/shop/${shopKey}/menu`;
+}
+
+export function resolveShopLocationSlug(params?: { locationSlug?: string }) {
+  return params?.locationSlug?.trim() || null;
 }
 
 const CUSTOMER_TOKEN_PREFIX = 'manupos_shop_customer:';

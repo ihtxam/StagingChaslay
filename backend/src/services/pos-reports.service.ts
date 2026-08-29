@@ -688,6 +688,7 @@ export class PosReportsService {
       to: prevTo,
       staffId: opts.staffId,
       staffName: opts.staffName,
+      locationId: opts.locationId,
     });
 
     const pctChange = (cur: number, prev: number) => {
@@ -708,6 +709,9 @@ export class PosReportsService {
       gte(schema.orders.createdAt, range.start),
       lte(schema.orders.createdAt, range.end),
     ];
+    if (opts.locationId) {
+      conditions.push(eq(schema.orders.locationId, String(opts.locationId)));
+    }
     const rows = await db.query.orders.findMany({
       where: and(...conditions),
       columns: {
@@ -841,6 +845,80 @@ export class PosReportsService {
         netSales: previous.netTotal,
         orders: previous.salesCount,
       },
+      byLocation: await this.getLocationBreakdown(merchantId, {
+        from: range.from,
+        to: range.to,
+        staffId: opts.staffId,
+        staffName: opts.staffName,
+      }),
+    };
+  }
+
+  /** Revenue and order count grouped by location (org-wide analytics). */
+  static async getLocationBreakdown(
+    merchantId: string,
+    opts: { from: string; to: string } & SalesScopeOpts
+  ) {
+    const range = resolveReportRange("custom", opts.from, opts.to);
+    const db = getDb();
+    const orders = await db.query.orders.findMany({
+      where: and(
+        eq(schema.orders.merchantId, merchantId),
+        gte(schema.orders.createdAt, range.start),
+        lte(schema.orders.createdAt, range.end)
+      ),
+      columns: {
+        locationId: true,
+        total: true,
+        tipAmount: true,
+        refundAmount: true,
+        status: true,
+        paymentStatus: true,
+      },
+    });
+    const completed = orders.filter((o) => isCountableSale(o));
+    const byLoc = new Map<string, { revenue: number; orders: number }>();
+    for (const o of completed) {
+      const key = o.locationId || "unknown";
+      const cur = byLoc.get(key) || { revenue: 0, orders: 0 };
+      cur.revenue += netTaxableSale(
+        Number(o.total || 0),
+        Number(o.tipAmount || 0),
+        Number(o.refundAmount || 0)
+      );
+      cur.orders += 1;
+      byLoc.set(key, cur);
+    }
+    const locations = await db.query.locations.findMany({
+      where: eq(schema.locations.merchantId, merchantId),
+      columns: { id: true, name: true, slug: true },
+    });
+    const nameById = new Map(locations.map((l) => [l.id, l.name]));
+    return [...byLoc.entries()].map(([locationId, stats]) => ({
+      locationId,
+      name: nameById.get(locationId) || "Unknown",
+      revenue: round2(stats.revenue),
+      orders: stats.orders,
+    }));
+  }
+
+  /** HQ dashboard — org-wide summary with per-location breakdown. */
+  static async getOrgAnalytics(
+    merchantId: string,
+    opts: { preset?: "today" | "yesterday" | "this_month" }
+  ) {
+    const preset = opts.preset || "today";
+    const current = await this.getEndOfDayReport(merchantId, { preset });
+    const byLocation = await this.getLocationBreakdown(merchantId, {
+      from: current.range.from,
+      to: current.range.to,
+    });
+    return {
+      range: current.range,
+      totalRevenue: current.revenue,
+      totalOrders: current.salesCount,
+      netTotal: current.netTotal,
+      byLocation,
     };
   }
 

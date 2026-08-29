@@ -33,13 +33,18 @@ export default function SettingsLocationsTab() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<LocationForm>(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [merchantSlug, setMerchantSlug] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/merchant/locations');
+      const [res, settingsRes] = await Promise.all([
+        api.get('/merchant/locations'),
+        api.get('/merchant/settings'),
+      ]);
       setLocations(res.data?.locations || []);
       setLimits(res.data?.limits || null);
+      setMerchantSlug(settingsRes.data?.merchant?.slug || settingsRes.data?.settings?.slug || '');
     } catch (e: unknown) {
       toast.error((e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load locations');
     } finally {
@@ -138,6 +143,17 @@ export default function SettingsLocationsTab() {
                     {loc.businessCategory}
                     {loc.city ? ` · ${loc.city}` : ''}
                   </div>
+                  {loc.slug && merchantSlug ? (
+                    <a
+                      className="text-xs text-sky-700 underline break-all"
+                      href={`${window.location.origin}/shop/${merchantSlug}/l/${loc.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('locationShopLink')}
+                    </a>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button type="button" className="btn-secondary text-xs" onClick={() => startEdit(loc)}>

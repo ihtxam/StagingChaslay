@@ -70,6 +70,44 @@ export class LocationsService {
     return row.id;
   }
 
+  static async resolveBySlug(merchantId: string, slug: string) {
+    const db = getDb();
+    const normalized = String(slug || "")
+      .trim()
+      .toLowerCase();
+    if (!normalized) return null;
+    return (
+      (await db.query.locations.findFirst({
+        where: and(
+          eq(schema.locations.merchantId, merchantId),
+          eq(schema.locations.slug, normalized),
+          eq(schema.locations.status, "active")
+        ),
+      })) ?? null
+    );
+  }
+
+  static async listPublicForShop(merchantId: string) {
+    await this.ensureDefaults(merchantId);
+    const db = getDb();
+    return db.query.locations.findMany({
+      where: and(
+        eq(schema.locations.merchantId, merchantId),
+        eq(schema.locations.status, "active")
+      ),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        businessCategory: true,
+        address: true,
+        city: true,
+        isDefault: true,
+      },
+      orderBy: [asc(schema.locations.isDefault), asc(schema.locations.name)],
+    });
+  }
+
   static async listForUser(
     merchantId: string,
     opts?: { staffId?: string | null; isOwner?: boolean }

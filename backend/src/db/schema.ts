@@ -644,6 +644,34 @@ export const pricingBulkJobs = pgTable(
   })
 );
 
+/** HQ time-based menus — breakfast/lunch windows per location + channel. */
+export const hqMenus = pgTable(
+  "hq_menus",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    channels: json("channels").$type<string[]>().default(["pos", "shop", "qr_table"]).notNull(),
+    daysOfWeek: json("days_of_week").$type<number[]>().default([0, 1, 2, 3, 4, 5, 6]).notNull(),
+    timeStart: varchar("time_start", { length: 5 }).default("00:00").notNull(),
+    timeEnd: varchar("time_end", { length: 5 }).default("23:59").notNull(),
+    locationIds: json("location_ids").$type<string[]>().default([]).notNull(),
+    hqVersionId: uuid("hq_version_id").references(() => hqCatalogVersions.id, {
+      onDelete: "set null",
+    }),
+    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("hq_menus_merchant_idx").on(table.merchantId, table.sortOrder),
+  })
+);
+
 // ============================================================================
 // SUBSCRIPTION PLANS (platform SaaS tiers)
 // ============================================================================
@@ -3412,6 +3440,65 @@ export const inventoryItems = pgTable(
     merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
     merchantBarcodeIdx: index("inventory_items_merchant_barcode_idx").on(table.merchantId, table.barcode),
     demoIdx: index("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
+  })
+);
+
+/** Per-location inventory on-hand (overlay on merchant-wide inventory_items). */
+export const inventoryLocationStock = pgTable(
+  "inventory_location_stock",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    locItemIdx: uniqueIndex("inventory_location_stock_loc_item_idx").on(
+      table.locationId,
+      table.itemId
+    ),
+    merchantIdx: index("inventory_location_stock_merchant_idx").on(table.merchantId),
+  })
+);
+
+/** Cross-location stock transfers between branches. */
+export const inventoryTransfers = pgTable(
+  "inventory_transfers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    fromLocationId: uuid("from_location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    toLocationId: uuid("to_location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    note: text("note"),
+    createdByStaffId: uuid("created_by_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
+    createdByName: varchar("created_by_name", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    confirmedAt: timestamp("confirmed_at"),
+  },
+  (table) => ({
+    merchantIdx: index("inventory_transfers_merchant_idx").on(table.merchantId, table.createdAt),
+    statusIdx: index("inventory_transfers_status_idx").on(table.merchantId, table.status),
   })
 );
 
