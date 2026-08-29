@@ -1734,6 +1734,11 @@ function isPosSessionsSchemaError(raw: string): boolean {
   return isMissingSchemaError(raw) || /Failed query/i.test(raw);
 }
 
+function isChaslayPagebuilderSchemaError(raw: string): boolean {
+  if (!/chaslay_homepage_builder/i.test(raw)) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
 /** Retry a merchants query after applying missing-column/table patches. */
 export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1747,6 +1752,7 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const ordersColumnMissing = isOrdersColumnSchemaError(raw);
       const subscriptionMissing = isSubscriptionSchemaError(raw);
       const posSessionsMissing = isPosSessionsSchemaError(raw);
+      const chaslayPagebuilderMissing = isChaslayPagebuilderSchemaError(raw);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();
@@ -1760,13 +1766,14 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         await ensureOrdersColumnsSchema();
         await ensureOrderItemsColumnsSchema();
         await runAlterTablePatches();
-      } else if (inventoryTableMissing) {
+      } else if (chaslayPagebuilderMissing || inventoryTableMissing) {
         patchedTables = false;
         await ensureMerchantTables();
       }
       if (
         !patched &&
         !inventoryTableMissing &&
+        !chaslayPagebuilderMissing &&
         !locationsMissing &&
         !merchantsColumnMissing &&
         !ordersColumnMissing &&
@@ -1810,6 +1817,13 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
     return true;
   }
   const { table, column } = missingTableColumnFromDbError(error);
-  if (!column) return false;
+  if (!column) {
+    if (table) {
+      patchedTables = false;
+      await ensureMerchantTables();
+      return true;
+    }
+    return false;
+  }
   return runPatch(column, table);
 }
