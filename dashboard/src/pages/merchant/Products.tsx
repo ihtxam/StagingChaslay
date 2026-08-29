@@ -392,8 +392,8 @@ export default function Products() {
 
       const [p, c, m] = await Promise.all([
         fetchAllProducts(),
-        api.get('/merchant/categories'),
-        api.get('/merchant/modifiers'),
+        api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
+        api.get('/merchant/modifiers').catch(() => ({ data: { groups: [] } })),
       ]);
       setProducts(p.products || []);
       setProductLimit(p.productLimit || null);

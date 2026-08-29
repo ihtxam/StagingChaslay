@@ -174,6 +174,7 @@ export class MerchantSettingsService {
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
       ),
+      maxLocations: Math.max(0, Number((merchant as { maxLocations?: number }).maxLocations ?? 1)),
       inventoryAddonEnabled: inventoryOn,
       inventoryEnabled: inventoryOn,
       signageAddonEnabled: signage.enabled,
@@ -185,6 +186,7 @@ export class MerchantSettingsService {
       odsEnabled: odsOn,
       justEatAddonEnabled: justEatOn,
       uberEatsAddonEnabled: uberEatsOn,
+      deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
       storekeeperAddonEnabled: storekeeperOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,

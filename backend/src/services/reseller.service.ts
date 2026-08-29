@@ -347,11 +347,14 @@ export class ResellerService {
         shopEnabled: schema.merchants.shopEnabled,
         maxPosPosts: schema.merchants.maxPosPosts,
         maxWaiterPosts: schema.merchants.maxWaiterPosts,
+        maxLocations: schema.merchants.maxLocations,
         inventoryAddonEnabled: schema.merchants.inventoryAddonEnabled,
         signageAddonEnabled: schema.merchants.signageAddonEnabled,
         signageScreenLimit: schema.merchants.signageScreenLimit,
         kdsAddonEnabled: schema.merchants.kdsAddonEnabled,
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
+        justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
+        uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -367,6 +370,8 @@ export class ResellerService {
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
       kdsAddonEnabled: r.kdsAddonEnabled === true,
       odsAddonEnabled: r.odsAddonEnabled === true,
+      deliveryPlatformsAddonEnabled:
+        r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
     }));
   }
 
@@ -389,11 +394,13 @@ export class ResellerService {
       sendInvite?: boolean;
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
     }
   ) {
@@ -433,11 +440,13 @@ export class ResellerService {
         businessCategory: input.businessCategory,
         maxPosPosts: input.maxPosPosts,
         maxWaiterPosts: input.maxWaiterPosts,
+        maxLocations: input.maxLocations,
         inventoryAddonEnabled: input.inventoryAddonEnabled,
         signageAddonEnabled: input.signageAddonEnabled,
         signageScreenLimit: input.signageScreenLimit,
         kdsAddonEnabled: input.kdsAddonEnabled,
         odsAddonEnabled: input.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
       }
     );
@@ -450,11 +459,13 @@ export class ResellerService {
     limits: {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
     }
   ) {
@@ -463,11 +474,13 @@ export class ResellerService {
     await MerchantService.updatePosPostLimits(merchantId, {
       maxPosPosts: limits.maxPosPosts,
       maxWaiterPosts: limits.maxWaiterPosts,
+      maxLocations: limits.maxLocations,
       inventoryAddonEnabled: limits.inventoryAddonEnabled,
       signageAddonEnabled: limits.signageAddonEnabled,
       signageScreenLimit: limits.signageScreenLimit,
       kdsAddonEnabled: limits.kdsAddonEnabled,
       odsAddonEnabled: limits.odsAddonEnabled,
+      deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);

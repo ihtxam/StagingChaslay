@@ -38,6 +38,14 @@ import {
   readOdsAddonEnabledMap,
   writeOdsAddonEnabled,
 } from "@/lib/ods-addon";
+import {
+  isJustEatAddonEnabled,
+  isUberEatsAddonEnabled,
+  readJustEatAddonEnabled,
+  readUberEatsAddonEnabled,
+  writeJustEatAddonEnabled,
+  writeUberEatsAddonEnabled,
+} from "@/lib/delivery-platform-addon";
 
 type AppVersionSighting = {
   appVersion?: string | null;
@@ -237,6 +245,12 @@ export class MerchantService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.odsAddonEnabled)
       );
+      const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
+        isJustEatAddonEnabled(merchant.justEatAddonEnabled)
+      );
+      const uberEatsOn = await readUberEatsAddonEnabled(merchantId).catch(() =>
+        isUberEatsAddonEnabled(merchant.uberEatsAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -248,6 +262,9 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        justEatAddonEnabled: justEatOn,
+        uberEatsAddonEnabled: uberEatsOn,
+        deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -290,11 +307,14 @@ export class MerchantService {
       maxPosPosts?: number;
       /** Concurrent waiter stations. 0 = unlimited. Agency-assigned. */
       maxWaiterPosts?: number;
+      /** Shop/branch locations. 1 = single shop; 0 = unlimited. Agency-assigned addon. */
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -353,11 +373,14 @@ export class MerchantService {
           businessCategory: lockedModule,
           maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
           maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
+          maxLocations: normalizePosPostLimit(options?.maxLocations ?? 1) || 1,
           inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
           signageAddonEnabled: options?.signageAddonEnabled === true,
           signageScreenLimit: normalizeSignageScreenLimit(options?.signageScreenLimit ?? 2),
           kdsAddonEnabled: options?.kdsAddonEnabled === true,
           odsAddonEnabled: options?.odsAddonEnabled === true,
+          justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+          uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         })
         .returning();
 
@@ -437,6 +460,10 @@ export class MerchantService {
       if (options?.odsAddonEnabled === true) {
         await writeOdsAddonEnabled(created.id, true);
       }
+      if (options?.deliveryPlatformsAddonEnabled === true) {
+        await writeJustEatAddonEnabled(created.id, true);
+        await writeUberEatsAddonEnabled(created.id, true);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -462,6 +489,9 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+        uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+        deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         issuedLicenses,
         invite,
         passwordSet: hasPassword,
@@ -536,11 +566,13 @@ export class MerchantService {
     limits: {
       maxPosPosts?: number;
       maxWaiterPosts?: number;
+      maxLocations?: number;
       inventoryAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -549,6 +581,10 @@ export class MerchantService {
     }
     if (limits.maxWaiterPosts !== undefined) {
       patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
+    }
+    if (limits.maxLocations !== undefined) {
+      const n = normalizePosPostLimit(limits.maxLocations);
+      patch.maxLocations = n === 0 ? 0 : Math.max(1, n);
     }
     if (Object.keys(patch).length > 0) {
       await this.updateMerchant(merchantId, patch);
@@ -574,9 +610,14 @@ export class MerchantService {
       await writeOdsAddonEnabled(merchantId, limits.odsAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.deliveryPlatformsAddonEnabled !== undefined) {
+      await writeJustEatAddonEnabled(merchantId, limits.deliveryPlatformsAddonEnabled);
+      await writeUberEatsAddonEnabled(merchantId, limits.deliveryPlatformsAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, or odsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, or deliveryPlatformsAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

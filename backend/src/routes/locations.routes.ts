@@ -23,10 +23,13 @@ router.get("/locations", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const ctx = userContext(req);
-    const [locations, limits] = await Promise.all([
-      LocationsService.listForUser(merchantId, ctx),
-      MerchantEntitlementsService.getLocationLimitInfo(merchantId),
-    ]);
+    const locations = await LocationsService.listForUser(merchantId, ctx);
+    const limits = await MerchantEntitlementsService.getLocationLimitInfo(merchantId).catch(() => ({
+      maxLocations: 1,
+      currentCount: locations.length,
+      planSlug: null,
+      planName: null,
+    }));
     res.json({ success: true, locations, limits });
   } catch (error) {
     res.status(500).json({

@@ -94,6 +94,7 @@ import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
+import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import SignagePage from './SignagePage';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
@@ -174,6 +175,9 @@ function MerchantShell() {
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
+  const [hqLicensed, setHqLicensed] = useState(() =>
+    isMultiLocationLicensed({ maxLocations: user?.maxLocations })
+  );
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
@@ -288,6 +292,7 @@ function MerchantShell() {
       storekeeperAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageEnabled?: boolean;
+      maxLocations?: number | null;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
@@ -295,6 +300,7 @@ function MerchantShell() {
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
+      setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
     };
     const load = () => {
@@ -310,6 +316,7 @@ function MerchantShell() {
           setInventoryLicensed(isInventoryLicensed(user));
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
+          setHqLicensed(isMultiLocationLicensed(user));
         });
     };
     load();
@@ -432,6 +439,15 @@ function MerchantShell() {
       signageLicensed &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
     [signageLicensed, effective.permissions, effective.isOwner, businessModule]
+  );
+
+  const { locations } = useLocationStore();
+  const showHq = hqLicensed || locations.length > 1;
+  const allowHq = useCallback(
+    (path: string) =>
+      showHq &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [showHq, effective.permissions, effective.isOwner, businessModule]
   );
 
   // Block direct URL access to panel pages the role may not open.
@@ -558,11 +574,13 @@ function MerchantShell() {
       id: 'hq',
       label: t('navHq'),
       icon: '🏢',
-      children: [
-        { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
-        { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
-        { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
-      ].filter((item) => allow(item.path)),
+      children: showHq
+        ? [
+            { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
+            { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
+            { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
+          ].filter((item) => allowHq(item.path))
+        : [],
     },
     {
       id: 'inventory',
@@ -970,7 +988,7 @@ function MerchantShell() {
             <Route
               path="hq"
               element={
-                <PanelRouteGuard path="/merchant/hq" allow={allow}>
+                <PanelRouteGuard path="/merchant/hq" allow={allowHq}>
                   <HqDashboardPage />
                 </PanelRouteGuard>
               }
@@ -978,7 +996,7 @@ function MerchantShell() {
             <Route
               path="hq/menus"
               element={
-                <PanelRouteGuard path="/merchant/hq/menus" allow={allow}>
+                <PanelRouteGuard path="/merchant/hq/menus" allow={allowHq}>
                   <HqMenusPage />
                 </PanelRouteGuard>
               }
@@ -986,7 +1004,7 @@ function MerchantShell() {
             <Route
               path="hq/bulk-pricing"
               element={
-                <PanelRouteGuard path="/merchant/hq/bulk-pricing" allow={allow}>
+                <PanelRouteGuard path="/merchant/hq/bulk-pricing" allow={allowHq}>
                   <BulkPricingPage />
                 </PanelRouteGuard>
               }

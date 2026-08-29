@@ -277,8 +277,13 @@ router.get("/products", async (req: Request, res: Response) => {
       ProductService.getProducts(merchantId, page, limit, search, categoryId),
       ProductService.countProducts(merchantId, search, categoryId),
       (async () => {
-        const { ProductEntitlementsService } = await import("@/services/product-entitlements.service");
-        return ProductEntitlementsService.getLimitInfo(merchantId);
+        try {
+          const { ProductEntitlementsService } = await import("@/services/product-entitlements.service");
+          return await ProductEntitlementsService.getLimitInfo(merchantId);
+        } catch (err) {
+          console.warn("Product limit lookup failed:", err);
+          return null;
+        }
       })(),
     ]);
     const pageList = products || [];
@@ -361,12 +366,14 @@ router.get("/products", async (req: Request, res: Response) => {
       success: true,
       products: withCatalog,
       pagination: { page, limit, total },
-      productLimit: {
-        maxProducts: productLimit.maxProducts,
-        currentCount: productLimit.currentCount,
-        planSlug: productLimit.planSlug,
-        planName: productLimit.planName,
-      },
+      productLimit: productLimit
+        ? {
+            maxProducts: productLimit.maxProducts,
+            currentCount: productLimit.currentCount,
+            planSlug: productLimit.planSlug,
+            planName: productLimit.planName,
+          }
+        : null,
     });
   } catch (error) {
     console.error("Error getting products:", error);
@@ -2895,10 +2902,10 @@ router.get("/entitlements", async (req: Request, res: Response) => {
       "@/services/product-entitlements.service"
     );
     const [limits, staff, devices, products] = await Promise.all([
-      MerchantEntitlementsService.getLimits(merchantId),
-      MerchantEntitlementsService.getStaffLimitInfo(merchantId),
-      MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId),
-      ProductEntitlementsService.getLimitInfo(merchantId),
+      MerchantEntitlementsService.getLimits(merchantId).catch(() => null),
+      MerchantEntitlementsService.getStaffLimitInfo(merchantId).catch(() => null),
+      MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId).catch(() => null),
+      ProductEntitlementsService.getLimitInfo(merchantId).catch(() => null),
     ]);
     res.json({ success: true, limits, staff, devices, products });
   } catch (error) {

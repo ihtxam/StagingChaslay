@@ -108,11 +108,13 @@ function MerchantsPage() {
     customDays: 365,
     maxPosPosts: 1,
     maxWaiterPosts: 0,
+    maxLocations: 1,
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    deliveryPlatformsAddonEnabled: false,
     storekeeperAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
@@ -120,11 +122,13 @@ function MerchantsPage() {
     name: string;
     maxPosPosts: number;
     maxWaiterPosts: number;
+    maxLocations: number;
     inventoryAddonEnabled: boolean;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
+    deliveryPlatformsAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
@@ -198,6 +202,7 @@ function MerchantsPage() {
         customDays: form.licenseType === 'custom' ? Number(form.customDays) : undefined,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
+        maxLocations: Number(form.maxLocations) || 1,
       });
       toast.success(t('resellerMerchantCreated'));
       setShowCreate(false);
@@ -251,6 +256,7 @@ function MerchantsPage() {
         kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
         odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
         storekeeperAddonEnabled: !!merchant.storekeeperAddonEnabled,
+        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       });
       toast.success(t('resellerOpenMerchant'));
       navigate('/merchant');
@@ -266,11 +272,13 @@ function MerchantsPage() {
       await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
+        maxLocations: Number(limitsFor.maxLocations) || 1,
         inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
         signageAddonEnabled: !!limitsFor.signageAddonEnabled,
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: !!limitsFor.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
@@ -528,7 +536,21 @@ function MerchantsPage() {
                 }
               />
             </label>
+            <label className="text-sm">
+              {t('locationsMax')}
+              <input
+                type="number"
+                min={0}
+                max={99}
+                className="input mt-1"
+                value={form.maxLocations}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, maxLocations: Number(e.target.value) || 1 }))
+                }
+              />
+            </label>
             <p className="sm:col-span-2 text-xs text-stone-500">{t('posPostsHint')}</p>
+            <p className="sm:col-span-2 text-xs text-stone-500">{t('locationsAddonHint')}</p>
             <label className="sm:col-span-2 flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -593,6 +615,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.deliveryPlatformsAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, deliveryPlatformsAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
               </span>
             </label>
             <label className="text-sm">
@@ -712,11 +748,16 @@ function MerchantsPage() {
                         name: m.name,
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                        maxLocations: Math.max(0, Number(m.maxLocations) || 1),
                         inventoryAddonEnabled: m.inventoryAddonEnabled === true,
                         signageAddonEnabled: m.signageAddonEnabled === true,
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                         kdsAddonEnabled: m.kdsAddonEnabled === true,
                         odsAddonEnabled: m.odsAddonEnabled === true,
+                        deliveryPlatformsAddonEnabled:
+                          m.deliveryPlatformsAddonEnabled === true ||
+                          m.justEatAddonEnabled === true ||
+                          m.uberEatsAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                       })
                     }
@@ -802,8 +843,25 @@ function MerchantsPage() {
                   }
                 />
               </label>
+              <label className="text-sm col-span-2">
+                {t('locationsMax')}
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  className="input mt-1"
+                  value={limitsFor.maxLocations}
+                  onChange={(e) =>
+                    setLimitsFor({
+                      ...limitsFor,
+                      maxLocations: Number(e.target.value) || 1,
+                    })
+                  }
+                />
+              </label>
             </div>
             <p className="text-xs text-stone-500">{t('posPostsHint')}</p>
+            <p className="text-xs text-stone-500">{t('locationsAddonHint')}</p>
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -872,6 +930,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.deliveryPlatformsAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, deliveryPlatformsAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
               </span>
             </label>
             <label className="text-sm">

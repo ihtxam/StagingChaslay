@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useLocationStore } from '@/store/location';
 import { shopBasePath } from '@/lib/shop-cart';
+import SettingsLocationsTab from './settings/SettingsLocationsTab';
 
 type HqVersion = {
   id: string;
@@ -103,6 +104,8 @@ export default function HqDashboardPage() {
         </h1>
         <p className="text-sm text-[var(--text-muted)] mt-1">{t('hqDashboardDescription')}</p>
       </div>
+
+      <SettingsLocationsTab />
 
       {analytics && multiLocation ? (
         <div className="rounded-lg border border-[var(--border)] p-4 space-y-3">

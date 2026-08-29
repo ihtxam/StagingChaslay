@@ -186,11 +186,13 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts,
       maxWaiterPosts,
+      maxLocations,
       inventoryAddonEnabled,
       signageAddonEnabled,
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
@@ -214,12 +216,14 @@ router.post("/merchants", async (req: Request, res: Response) => {
       sendInvite,
       maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
       maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+      maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
       inventoryAddonEnabled: inventoryAddonEnabled === true,
       signageAddonEnabled: signageAddonEnabled === true,
       signageScreenLimit:
         signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
       kdsAddonEnabled: kdsAddonEnabled === true,
       odsAddonEnabled: odsAddonEnabled === true,
+      deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
       storekeeperAddonEnabled: storekeeperAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
@@ -237,6 +241,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
     const {
       maxPosPosts,
       maxWaiterPosts,
+      maxLocations,
       inventoryAddonEnabled,
       inventoryEnabled,
       signageAddonEnabled,
@@ -246,6 +251,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       kdsEnabled,
       odsAddonEnabled,
       odsEnabled,
+      deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
@@ -254,6 +260,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       {
         maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
         maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+        maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
         inventoryAddonEnabled:
           inventoryAddonEnabled != null
             ? isInventoryAddonEnabled(inventoryAddonEnabled)
@@ -280,6 +287,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
             : odsEnabled != null
               ? isOdsAddonEnabled(odsEnabled)
               : undefined,
+        deliveryPlatformsAddonEnabled:
+          deliveryPlatformsAddonEnabled != null ? deliveryPlatformsAddonEnabled === true : undefined,
         storekeeperAddonEnabled:
           storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(storekeeperAddonEnabled)
