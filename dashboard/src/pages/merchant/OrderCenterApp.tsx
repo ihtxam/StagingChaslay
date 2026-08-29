@@ -102,9 +102,9 @@ type EodReport = {
   }>;
 };
 
-function isCenterOrder(o: CenterOrder): boolean {
+function isCenterOrder(o: CenterOrder, includeKiosk: boolean): boolean {
   if (String(o.orderSource || '').toLowerCase() === 'qr_table') return true;
-  if (String(o.orderSource || '').toLowerCase() === 'kiosk') return true;
+  if (String(o.orderSource || '').toLowerCase() === 'kiosk') return includeKiosk;
   return isOnlineShopOrder(o);
 }
 
@@ -129,6 +129,7 @@ export default function OrderCenterApp() {
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [shopName, setShopName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [kioskLicensed, setKioskLicensed] = useState(false);
   const knownRef = useState<Set<string>>(() => new Set())[0];
   const [alertQueue, setAlertQueue] = useState<CenterOrder[]>([]);
   const [alertBusy, setAlertBusy] = useState(false);
@@ -196,6 +197,7 @@ export default function OrderCenterApp() {
         setPrintSettings((s.posPrintSettings as PosPrintSettingsClient) || null);
         setShopName(String(s.name || user?.name || ''));
         setShopLogoUrl(s.shopLogoUrl || null);
+        setKioskLicensed(!!(s.kioskAddonEnabled || s.kioskEnabled));
       } catch {
         /* optional */
       }
@@ -212,7 +214,7 @@ export default function OrderCenterApp() {
         },
       });
       const rows: CenterOrder[] = res.data?.orders || res.data?.data || [];
-      const filtered = rows.filter(isCenterOrder);
+      const filtered = rows.filter((o) => isCenterOrder(o, kioskLicensed));
       setOrders(filtered);
 
       if (knownRef.size === 0) {
@@ -260,7 +262,7 @@ export default function OrderCenterApp() {
     } finally {
       setLoading(false);
     }
-  }, [knownRef, t, unactionedAlertRef]);
+  }, [knownRef, t, unactionedAlertRef, kioskLicensed]);
 
   const loadEod = useCallback(async () => {
     setEodLoading(true);

@@ -30,6 +30,13 @@ export type KioskDiagnostics = {
   adyenConfigured: boolean;
   cashPaymentEnabled?: boolean;
   cardPaymentEnabled?: boolean;
+  selectedTerminalId?: string | null;
+  terminals?: Array<{
+    id: string;
+    terminalId: string;
+    terminalName: string | null;
+    status: string;
+  }>;
   printAgentNote?: string;
 };
 

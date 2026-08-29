@@ -39,6 +39,7 @@ import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
+import { isKioskAddonEnabled, readKioskAddonEnabled } from "@/lib/kiosk-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -126,6 +127,9 @@ export class MerchantSettingsService {
       merchant.uberEatsAddonEnabled === true
     );
     const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
+    const kioskOn = await readKioskAddonEnabled(merchantId).catch(() =>
+      isKioskAddonEnabled(merchant.kioskAddonEnabled)
+    );
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -188,6 +192,8 @@ export class MerchantSettingsService {
       uberEatsAddonEnabled: uberEatsOn,
       deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
       storekeeperAddonEnabled: storekeeperOn,
+      kioskAddonEnabled: kioskOn,
+      kioskEnabled: kioskOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),

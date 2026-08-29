@@ -218,6 +218,13 @@ export default function ReservationCreateSheet({
     });
   }, [slots, hoursSlots, form.date]);
 
+  useEffect(() => {
+    if (!timeChips.length) return;
+    if (!timeChips.includes(form.time)) {
+      setForm((prev) => ({ ...prev, time: timeChips[0] }));
+    }
+  }, [timeChips, form.time]);
+
   const dateLabel = useMemo(() => {
     try {
       const [y, m, d] = form.date.split('-').map(Number);

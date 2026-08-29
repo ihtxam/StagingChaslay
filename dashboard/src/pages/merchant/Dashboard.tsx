@@ -99,6 +99,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
 import HqDashboardPage from './HqDashboard';
@@ -181,6 +182,7 @@ function MerchantShell() {
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
+  const [kioskLicensed, setKioskLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -305,6 +307,8 @@ function MerchantShell() {
       storekeeperAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
+      kioskEnabled?: boolean;
       maxLocations?: number | null;
     } | null) => {
       const feats = settings?.editionFeatures;
@@ -313,6 +317,7 @@ function MerchantShell() {
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
+      setKioskLicensed(isKioskLicensed(settings) || isKioskLicensed(user));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
     };
@@ -329,6 +334,7 @@ function MerchantShell() {
           setInventoryLicensed(isInventoryLicensed(user));
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
+          setKioskLicensed(isKioskLicensed(user));
           setHqLicensed(isMultiLocationLicensed(user));
         });
     };
@@ -454,6 +460,13 @@ function MerchantShell() {
     [signageLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
+  const allowKiosk = useCallback(
+    (path: string) =>
+      kioskLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
+  );
+
   const { locations } = useLocationStore();
   const showHq = hqLicensed || locations.length > 1;
   const allowHq = useCallback(
@@ -500,6 +513,14 @@ function MerchantShell() {
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
   }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
+
+  // Kiosk addon not licensed — hide setup route.
+  useEffect(() => {
+    if (kioskLicensed) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (!isKioskPanelPath(path)) return;
+    navigate(backOfficeHomePath(effective.permissions, effective.isOwner), { replace: true });
+  }, [kioskLicensed, location.pathname, effective.permissions, effective.isOwner, navigate]);
 
   // Kiosk operator staff — setup panel only, not full merchant back office.
   useEffect(() => {
@@ -685,7 +706,7 @@ function MerchantShell() {
     ...(allowSignage('/merchant/signage')
       ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
       : []),
-    ...(allow('/merchant/kiosk') ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }] : []),
+    ...(allowKiosk('/merchant/kiosk') ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }] : []),
   ]
     .filter((entry) => {
       if ('children' in entry && Array.isArray(entry.children)) {
@@ -727,7 +748,7 @@ function MerchantShell() {
 
   const menuItems = kioskRestricted
     ? [
-        ...(allow('/merchant/kiosk')
+        ...(allowKiosk('/merchant/kiosk')
           ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }]
           : []),
       ].filter((entry) => {
@@ -1068,7 +1089,7 @@ function MerchantShell() {
             <Route
               path="kiosk"
               element={
-                <PanelRouteGuard path="/merchant/kiosk" allow={allow}>
+                <PanelRouteGuard path="/merchant/kiosk" allow={allowKiosk}>
                   <KioskSettingsPage />
                 </PanelRouteGuard>
               }
