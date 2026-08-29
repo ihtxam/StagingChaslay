@@ -1,7 +1,10 @@
 import { and, count, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
-import { SubscriptionPlansService } from "@/services/subscription-plans.service";
+import {
+  SubscriptionPlansService,
+  type LegacyPlanLimits,
+} from "@/services/subscription-plans.service";
 import { readSignageAddon, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 
 export type MerchantLimits = {
@@ -48,7 +51,38 @@ function pickStationLimit(merchantVal: number, planVal: number, planDevices: num
 
 export class MerchantEntitlementsService {
   static async getLimits(merchantId: string): Promise<MerchantLimits> {
-    return withMerchantSchemaRetry(() => this.loadLimits(merchantId));
+    try {
+      return await withMerchantSchemaRetry(() => this.loadLimits(merchantId));
+    } catch (error) {
+      console.warn("[entitlements] getLimits failed, using merchant-row defaults:", error);
+      return this.loadLimitsFromMerchantOnly(merchantId);
+    }
+  }
+
+  private static async loadLimitsFromMerchantOnly(merchantId: string): Promise<MerchantLimits> {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: {
+        subscriptionPlan: true,
+        maxPosPosts: true,
+        maxWaiterPosts: true,
+        maxStaff: true,
+        maxLocations: true,
+        signageScreenLimit: true,
+      },
+    });
+    if (!merchant) throw new Error("Merchant not found");
+    return {
+      maxPosPosts: Math.max(0, Number(merchant.maxPosPosts) || 0),
+      maxWaiterPosts: Math.max(0, Number(merchant.maxWaiterPosts) || 0),
+      maxStaff: Math.max(0, Number(merchant.maxStaff) || 0),
+      maxLocations: Math.max(0, Number(merchant.maxLocations) || 1) || 1,
+      maxProducts: null,
+      signageScreenLimit: normalizeSignageScreenLimit(merchant.signageScreenLimit),
+      planSlug: merchant.subscriptionPlan || "free",
+      planName: null,
+    };
   }
 
   private static async loadLimits(merchantId: string): Promise<MerchantLimits> {
@@ -67,7 +101,13 @@ export class MerchantEntitlementsService {
     if (!merchant) throw new Error("Merchant not found");
 
     const planSlug = merchant.subscriptionPlan || "free";
-    const plan = (await SubscriptionPlansService.getBySlug(planSlug)) || null;
+    let plan: LegacyPlanLimits | null = null;
+    try {
+      plan = (await SubscriptionPlansService.getBySlugForLimits(planSlug)) || null;
+    } catch (error) {
+      console.warn("[entitlements] plan lookup skipped:", error);
+      plan = null;
+    }
 
     const maxPosPosts = pickStationLimit(
       merchant.maxPosPosts,

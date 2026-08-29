@@ -2902,10 +2902,10 @@ router.get("/entitlements", async (req: Request, res: Response) => {
       "@/services/product-entitlements.service"
     );
     const [limits, staff, devices, products] = await Promise.all([
-      MerchantEntitlementsService.getLimits(merchantId),
-      MerchantEntitlementsService.getStaffLimitInfo(merchantId),
-      MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId),
-      ProductEntitlementsService.getLimitInfo(merchantId),
+      MerchantEntitlementsService.getLimits(merchantId).catch(() => null),
+      MerchantEntitlementsService.getStaffLimitInfo(merchantId).catch(() => null),
+      MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId).catch(() => null),
+      ProductEntitlementsService.getLimitInfo(merchantId).catch(() => null),
     ]);
     res.json({ success: true, limits, staff, devices, products });
   } catch (error) {

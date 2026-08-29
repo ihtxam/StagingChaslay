@@ -1,8 +1,62 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
-import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { queryRaw, withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { PlatformResellerService } from "@/services/platform-reseller.service";
+
+/** Columns that existed on the original subscription_plans table (pre editions / addons). */
+export type LegacyPlanLimits = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  priceMonthly?: string | number;
+  priceYearly?: string | number | null;
+  currency?: string;
+  maxDevices: number;
+  maxProducts: number | null;
+  maxPosPosts: number;
+  maxWaiterPosts: number;
+  maxStaff: number;
+  maxLocations: number;
+  features?: string[];
+  isActive?: boolean;
+  isPublic?: boolean;
+  sortOrder?: number;
+  trialDays?: number;
+};
+
+function asLimit(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function mapLegacyPlanRow(row: Record<string, unknown>): LegacyPlanLimits {
+  const maxProductsRaw = row.max_products ?? row.maxProducts;
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    slug: String(row.slug ?? ""),
+    description: (row.description as string | null | undefined) ?? null,
+    priceMonthly: (row.price_monthly ?? row.priceMonthly) as string | number | undefined,
+    priceYearly: (row.price_yearly ?? row.priceYearly) as string | number | null | undefined,
+    currency: (row.currency as string | undefined) || "CHF",
+    maxDevices: asLimit(row.max_devices ?? row.maxDevices, 0),
+    maxProducts:
+      maxProductsRaw === null || maxProductsRaw === undefined
+        ? null
+        : asLimit(maxProductsRaw, 0),
+    maxPosPosts: asLimit(row.max_pos_posts ?? row.maxPosPosts, 0),
+    maxWaiterPosts: asLimit(row.max_waiter_posts ?? row.maxWaiterPosts, 0),
+    maxStaff: asLimit(row.max_staff ?? row.maxStaff, 0),
+    maxLocations: asLimit(row.max_locations ?? row.maxLocations, 1),
+    features: Array.isArray(row.features) ? (row.features as string[]) : [],
+    isActive: row.is_active !== false && row.isActive !== false,
+    isPublic: row.is_public !== false && row.isPublic !== false,
+    sortOrder: asLimit(row.sort_order ?? row.sortOrder, 0),
+    trialDays: asLimit(row.trial_days ?? row.trialDays, 0),
+  };
+}
 
 export type PlanInput = {
   name: string;
@@ -89,25 +143,134 @@ export class SubscriptionPlansService {
   }
 
   static async getById(id: string) {
-    const plan = await withMerchantSchemaRetry(async () => {
-      const db = getDb();
-      return db.query.subscriptionPlans.findFirst({
-        where: eq(schema.subscriptionPlans.id, id),
-        with: { edition: true },
+    try {
+      const plan = await withMerchantSchemaRetry(async () => {
+        const db = getDb();
+        return db.query.subscriptionPlans.findFirst({
+          where: eq(schema.subscriptionPlans.id, id),
+        });
       });
-    });
-    if (!plan) throw new Error("Plan not found");
-    return plan;
+      if (!plan) throw new Error("Plan not found");
+      return plan;
+    } catch (error) {
+      const legacy = await this.getByIdLegacy(id);
+      if (!legacy) throw error instanceof Error ? error : new Error("Plan not found");
+      return legacy as unknown as typeof schema.subscriptionPlans.$inferSelect;
+    }
+  }
+
+  /**
+   * Plan lookup for POS / product / staff limits.
+   * Never joins `editions` and never selects columns added after the original
+   * packages table — production catalog must load even when drizzle-kit OOM'd.
+   */
+  static async getBySlugForLimits(slug: string): Promise<LegacyPlanLimits | undefined> {
+    const normalized = normalizeSlug(slug);
+    if (!normalized) return undefined;
+
+    try {
+      const db = getDb();
+      const [row] = await db
+        .select({
+          id: schema.subscriptionPlans.id,
+          name: schema.subscriptionPlans.name,
+          slug: schema.subscriptionPlans.slug,
+          description: schema.subscriptionPlans.description,
+          priceMonthly: schema.subscriptionPlans.priceMonthly,
+          priceYearly: schema.subscriptionPlans.priceYearly,
+          currency: schema.subscriptionPlans.currency,
+          maxDevices: schema.subscriptionPlans.maxDevices,
+          maxProducts: schema.subscriptionPlans.maxProducts,
+          features: schema.subscriptionPlans.features,
+          isActive: schema.subscriptionPlans.isActive,
+          isPublic: schema.subscriptionPlans.isPublic,
+          sortOrder: schema.subscriptionPlans.sortOrder,
+          trialDays: schema.subscriptionPlans.trialDays,
+        })
+        .from(schema.subscriptionPlans)
+        .where(eq(schema.subscriptionPlans.slug, normalized))
+        .limit(1);
+      if (row) {
+        const extras = await this.selectNewerPlanColumns(normalized);
+        return mapLegacyPlanRow({ ...row, ...extras });
+      }
+    } catch (error) {
+      console.warn("[plans] drizzle core select failed, using legacy SQL:", error);
+    }
+
+    return this.getBySlugLegacy(normalized);
   }
 
   static async getBySlug(slug: string) {
-    return withMerchantSchemaRetry(async () => {
-      const db = getDb();
-      return db.query.subscriptionPlans.findFirst({
-        where: eq(schema.subscriptionPlans.slug, normalizeSlug(slug)),
-        with: { edition: true },
+    const normalized = normalizeSlug(slug);
+    try {
+      return await withMerchantSchemaRetry(async () => {
+        const db = getDb();
+        return db.query.subscriptionPlans.findFirst({
+          where: eq(schema.subscriptionPlans.slug, normalized),
+        });
       });
-    });
+    } catch (error) {
+      console.warn("[plans] getBySlug relational query failed, using legacy SQL:", error);
+      const legacy = await this.getBySlugLegacy(normalized);
+      return legacy as unknown as typeof schema.subscriptionPlans.$inferSelect | undefined;
+    }
+  }
+
+  /** Newer limit columns — queried separately so a missing column cannot abort the catalog. */
+  private static async selectNewerPlanColumns(slug: string): Promise<Record<string, unknown>> {
+    try {
+      const db = getDb();
+      const [row] = await db
+        .select({
+          maxPosPosts: schema.subscriptionPlans.maxPosPosts,
+          maxWaiterPosts: schema.subscriptionPlans.maxWaiterPosts,
+          maxStaff: schema.subscriptionPlans.maxStaff,
+          maxLocations: schema.subscriptionPlans.maxLocations,
+        })
+        .from(schema.subscriptionPlans)
+        .where(eq(schema.subscriptionPlans.slug, slug))
+        .limit(1);
+      return row || {};
+    } catch {
+      return {};
+    }
+  }
+
+  private static async getBySlugLegacy(slug: string): Promise<LegacyPlanLimits | undefined> {
+    try {
+      const rows = await queryRaw(
+        `SELECT id, name, slug, description, price_monthly, price_yearly, currency,
+                max_devices, max_products, features, is_active, is_public, sort_order, trial_days
+         FROM subscription_plans
+         WHERE slug = $1
+         LIMIT 1`,
+        [slug]
+      );
+      const row = rows[0];
+      return row ? mapLegacyPlanRow(row) : undefined;
+    } catch (error) {
+      console.warn("[plans] legacy slug lookup failed:", error);
+      return undefined;
+    }
+  }
+
+  private static async getByIdLegacy(id: string): Promise<LegacyPlanLimits | undefined> {
+    try {
+      const rows = await queryRaw(
+        `SELECT id, name, slug, description, price_monthly, price_yearly, currency,
+                max_devices, max_products, features, is_active, is_public, sort_order, trial_days
+         FROM subscription_plans
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+      const row = rows[0];
+      return row ? mapLegacyPlanRow(row) : undefined;
+    } catch (error) {
+      console.warn("[plans] legacy id lookup failed:", error);
+      return undefined;
+    }
   }
 
   static async create(input: PlanInput) {

@@ -22,6 +22,15 @@ async function execSql(statement: string): Promise<void> {
   await getDdlPool().query(statement);
 }
 
+/** Raw SELECT for paths that must work before drizzle-kit has added newer columns. */
+export async function queryRaw<T extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  const { rows } = await getDdlPool().query<T>(text, params);
+  return rows;
+}
+
 /**
  * Idempotent ALTER statements for merchant columns added after initial deploy.
  * Keeps GET /merchant/settings working when drizzle-kit push lags behind code.
