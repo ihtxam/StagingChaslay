@@ -1122,7 +1122,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.printAdyenReceiptOnTicket !== false) {
     r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
-  r += '\n\n';
+  r += '\n';
   return r;
 }
 
@@ -1630,22 +1630,34 @@ function escUnderline(on: boolean): Uint8Array {
 }
 
 /**
- * Feed past the cutter, then full + partial cut variants.
- * Cheap BLE printers often ignore GS V 0 unless paper has already reached the blade,
- * and the last radio packet (the cut) is the one that gets dropped.
+ * Trailing feed after kitchen ticket content.
+ * Cut is sent once via {@link escposKitchenCut} (follow-up job / BT trailer).
  */
-export function escposFeedAndCut(): Uint8Array {
+export function escposKitchenTicketEnd(): Uint8Array {
+  return new Uint8Array([0x1b, 0x64, 0x02]); // ESC d 2 — small gap before cut job
+}
+
+/**
+ * Single feed+cut for kitchen follow-up jobs and BT/COM safety cuts.
+ * Avoid stacking heavy feeds on the ticket body (was wasting ~30+ lines of paper).
+ */
+export function escposKitchenCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x08, // ESC d 8 — feed 8 lines past the print head
-    0x1d, 0x56, 0x41, 0x18, // GS V 65 24 — feed-and-full-cut (Epson / most clones)
-    0x1d, 0x56, 0x00, // GS V 0 full cut
-    0x1b, 0x69, // ESC i legacy cut
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x1b, 0x64, 0x03, // ESC d 3
+    0x1d, 0x56, 0x41, 0x0c, // GS V 65 12 — feed 12 dots + full cut
+    0x1d, 0x56, 0x00, // GS V 0 — backup full cut
   ]);
 }
 
-const KITCHEN_TICKET_CUT = escposFeedAndCut();
+/**
+ * Feed past the cutter, then full + partial cut variants.
+ * Used for test prints and other non-kitchen paths that need a reliable cut in one job.
+ */
+export function escposFeedAndCut(): Uint8Array {
+  return escposKitchenCut();
+}
+
+const KITCHEN_TICKET_CUT = escposKitchenTicketEnd();
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
@@ -2377,7 +2389,7 @@ export async function buildReceiptEscPos(
         paperWidthMm: paper,
       })) ||
       (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-      escposQrCode(qrData, paper === 58 ? 4 : 5);
+      escposQrCode(qrData, paper === 58 ? 5 : 5);
   }
 
   return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);

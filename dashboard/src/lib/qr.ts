@@ -144,8 +144,12 @@ export function qrImageUrl(
 
 /** Thermal receipt QR raster width — ~180px on 80mm (384-dot) paper. */
 export const RECEIPT_QR_RASTER_PX_80 = 180;
-/** 58mm thermal QR — same visual ratio as 80mm 180px (was 112 @ 150). */
-export const RECEIPT_QR_RASTER_PX_58 = 136;
+/** 58mm thermal QR — use most of the printable width (384-dot heads). */
+export const RECEIPT_QR_RASTER_PX_58 = 200;
+
+/** Labeled QR canvas width in pixels (matches printable dot width). */
+export const RECEIPT_QR_CANVAS_PX_80 = 384;
+export const RECEIPT_QR_CANVAS_PX_58 = 240;
 
 /** Delivery slip QR — full paper width (400px target; 80mm thermal caps at 384 dots). */
 export const DELIVERY_SLIP_QR_RASTER_PX_80 = 384;
@@ -153,6 +157,10 @@ export const DELIVERY_SLIP_QR_RASTER_PX_58 = 280;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+}
+
+export function receiptQrCanvasPx(paperWidthMm?: 58 | 80): number {
+  return paperWidthMm === 58 ? RECEIPT_QR_CANVAS_PX_58 : RECEIPT_QR_CANVAS_PX_80;
 }
 
 export function deliverySlipQrRasterPx(paperWidthMm?: 58 | 80): number {
@@ -281,12 +289,12 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
   const raw = String(opts.data || '').trim();
   if (!raw || typeof document === 'undefined') return null;
   const paper = opts.paperWidthMm ?? 80;
-  const canvasWidth = paper === 58 ? 280 : 384;
-  const qrSize = opts.qrSizePx ?? (paper === 58 ? 120 : 160);
-  const labelLineHeight = 14;
-  const gap = 6;
+  const canvasWidth = receiptQrCanvasPx(paper);
+  const qrSize = opts.qrSizePx ?? (paper === 58 ? 200 : 180);
+  const labelLineHeight = paper === 58 ? 13 : 14;
+  const gap = paper === 58 ? 4 : 6;
   try {
-    const img = await loadImage(qrImageUrl(raw, qrSize, { ecc: 'M', margin: 6 }));
+    const img = await loadImage(qrImageUrl(raw, qrSize, { ecc: 'M', margin: 8 }));
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;

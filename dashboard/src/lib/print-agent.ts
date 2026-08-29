@@ -333,8 +333,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.9.2+ paces Bluetooth / virtual-COM writes and sends a feed+cut trailer. */
-export const MIN_PRINT_AGENT_VERSION = '1.9.2';
+/** 1.9.3+ uses lighter kitchen cut trailer on Bluetooth / virtual-COM. */
+export const MIN_PRINT_AGENT_VERSION = '1.9.3';
 
 const BT_COM_PRINTER_RE = /com\d+|bth|bluetooth|ble\b|rfcomm|serial over/i;
 
