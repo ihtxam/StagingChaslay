@@ -4,8 +4,8 @@
 #   {"cmd":"ping"}
 # Replies with one JSON line per request.
 #
-# v1.8.9: self-contained spooler-only WritePrinter (4096-byte chunks).
-# No COM-direct, no Bluetooth slow-mode branching.
+# v1.9.1: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Bluetooth / virtual-COM ports are paced (192-byte WritePrinter slices).
 
 $ErrorActionPreference = "Stop"
 
@@ -82,11 +82,32 @@ function Write-PrintLog {
     } catch { }
 }
 
+function Get-WinPrinterPortName {
+    param([string]$Printer)
+    if ([string]::IsNullOrWhiteSpace($Printer)) { return "" }
+    try {
+        $safe = $Printer.Replace("'", "''")
+        $row = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$safe'" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        return [string]$row.PortName
+    } catch {
+        return ""
+    }
+}
+
+function Test-NeedsPacedWrite {
+    param([string]$Port, [string]$Printer)
+    $blob = ("{0} {1}" -f $Port, $Printer).ToLowerInvariant()
+    return $blob -match 'com\d+|bth|bluetooth|ble\b|rfcomm|serial over'
+}
+
 function Write-RawChunks {
     param(
         [IntPtr]$Handle,
         [byte[]]$Data,
-        [string]$Printer
+        [string]$Printer,
+        [int]$ChunkSize = 4096,
+        [int]$DelayMs = 0
     )
 
     if ($null -eq $Data -or $Data.Length -eq 0) {
@@ -94,6 +115,7 @@ function Write-RawChunks {
     }
 
     $chunkSize = 4096
+    if ($ChunkSize -gt 0) { $chunkSize = $ChunkSize }
     $offset = 0
     $totalWritten = 0
     while ($offset -lt $Data.Length) {
@@ -110,6 +132,9 @@ function Write-RawChunks {
         }
         $totalWritten += $written
         $offset += $len
+        if ($DelayMs -gt 0 -and $offset -lt $Data.Length) {
+            Start-Sleep -Milliseconds $DelayMs
+        }
     }
     return $totalWritten
 }
@@ -120,7 +145,15 @@ function Send-RawToPrinter {
         [byte[]]$Data
     )
 
-    Write-PrintLog "spooler printer='$Printer' bytes=$($Data.Length) chunk=4096"
+    $portName = Get-WinPrinterPortName -Printer $Printer
+    $paced = Test-NeedsPacedWrite -Port $portName -Printer $Printer
+    $writeChunk = 4096
+    $writeDelay = 0
+    if ($paced) {
+        $writeChunk = 192
+        $writeDelay = 40
+    }
+    Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) chunk=$writeChunk delayMs=$writeDelay"
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
     $docInfo.pDocName = "Reborn Receipt"
@@ -148,7 +181,11 @@ function Send-RawToPrinter {
                 $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "StartPagePrinter failed for '$Printer' (Win32=$err)."
             }
-            [void](Write-RawChunks -Handle $handle -Data $Data -Printer $Printer)
+            [void](Write-RawChunks -Handle $handle -Data $Data -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay)
+            if ($paced) {
+                $drainMs = [Math]::Min(400 + [int]([Math]::Floor($Data.Length / 16)), 4000)
+                Start-Sleep -Milliseconds $drainMs
+            }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
         finally {
@@ -157,6 +194,9 @@ function Send-RawToPrinter {
     }
     finally {
         [RawPrinterHelper]::ClosePrinter($handle) | Out-Null
+    }
+    if ($paced) {
+        Start-Sleep -Milliseconds 350
     }
 }
 

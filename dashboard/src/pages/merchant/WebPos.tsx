@@ -82,6 +82,7 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
+  settleAfterBluetoothKitchenPrint,
   suggestPrinterAutoHeal,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
@@ -7013,6 +7014,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ...printMeta,
         });
         if (mode === 'queued') queuedAny = true;
+        const livePrinter = printers.find((p) => p.name === resolvedName);
+        await settleAfterBluetoothKitchenPrint(livePrinter || resolvedName || configuredName);
       }
       if (!printedAny) {
         toast.error(t('webPosNoKitchenPrinterConfigured'));
