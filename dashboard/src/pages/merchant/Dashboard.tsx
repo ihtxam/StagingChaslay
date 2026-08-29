@@ -317,7 +317,7 @@ function MerchantShell() {
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
-      setKioskLicensed(isKioskLicensed(settings) || isKioskLicensed(user));
+      setKioskLicensed(isKioskLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
     };
@@ -334,7 +334,7 @@ function MerchantShell() {
           setInventoryLicensed(isInventoryLicensed(user));
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
-          setKioskLicensed(isKioskLicensed(user));
+          setKioskLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
         });
     };
