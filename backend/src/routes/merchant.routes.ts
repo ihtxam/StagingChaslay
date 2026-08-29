@@ -2299,7 +2299,23 @@ router.get("/pos/print-jobs/pending", async (req: Request, res: Response) => {
     const data = await ChaslayFloorService.listPendingPrintJobs(merchantId, limit, {
       jobTypes: [jobType],
     });
-    res.json({ success: true, ...data });
+    const { PrintJobExpandService } = await import("@/services/print-job-expand.service");
+    const jobs = [];
+    for (const job of data.jobs || []) {
+      const payload = await PrintJobExpandService.materializeRecipePayload(
+        merchantId,
+        (job.payload || {}) as Record<string, unknown>
+      );
+      if (payload && String(payload.kind) === "escpos" && payload.dataBase64) {
+        await ChaslayFloorService.updatePrintJobPayload(
+          merchantId,
+          job.id,
+          payload as Record<string, unknown>
+        );
+      }
+      jobs.push({ ...job, payload });
+    }
+    res.json({ success: true, ...data, jobs });
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Print jobs fetch failed",

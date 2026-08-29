@@ -35,6 +35,8 @@ export type EscPosPrintJobPayload = {
   text?: string;
   /** Kitchen / receipt / EOD classification for relay auto-print gates. */
   jobKind?: PrintJobKind;
+  /** Till bell: reservation | online_order */
+  alertKind?: string;
 };
 
 const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
@@ -274,9 +276,20 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
       let remoteKitchenDone = 0;
       let reservationDone = 0;
       for (const job of jobs) {
-        const p = (job.payload || {}) as Partial<
-          EscPosPrintJobPayload & AutoPrintOrderPayload & AutoPrintReservationPayload
-        >;
+        const p = (job.payload || {}) as {
+          kind?: string;
+          dataBase64?: string;
+          printerName?: string;
+          text?: string;
+          jobKind?: PrintJobKind;
+          alertKind?: string;
+          reservationId?: string;
+          orderId?: string;
+          printKitchen?: boolean;
+          printReceipt?: boolean;
+          printNotification?: boolean;
+          printDeliveryReceipt?: boolean;
+        };
         if (p.kind === 'auto_print_reservation' && p.reservationId) {
           try {
             await processAutoPrintReservationJob(p as AutoPrintReservationPayload);
@@ -335,6 +348,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           // Never mark FAILED after a successful physical print — retry DONE ack.
           await ackPrintJob(job.id, 'DONE');
           done += 1;
+          if (p.alertKind === 'reservation') reservationDone += 1;
           const remote =
             !!job.sourceDeviceId &&
             job.sourceDeviceId !== localDeviceId &&

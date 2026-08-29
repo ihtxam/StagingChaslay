@@ -334,7 +334,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 }
 
 /** 1.8.9+ is the simple spooler-only WritePrinter agent (no COM-direct / BT slow-mode). */
-export const MIN_PRINT_AGENT_VERSION = '1.8.9';
+export const MIN_PRINT_AGENT_VERSION = '1.9.0';
 
 function asPrintText(value: unknown): string {
   if (value == null) return '';
@@ -514,6 +514,24 @@ export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
 export async function isPrintAgentAvailable(): Promise<boolean> {
   const health = await getPrintAgentHealth();
   return health.ok;
+}
+
+/** Push API base + JWT so the Print Agent can drain till jobs while the browser is minimized. */
+export async function pairPrintAgentCloudRelay(): Promise<boolean> {
+  if (typeof window === 'undefined' || window.manuposDesktop) return false;
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  const env = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL) || '';
+  const apiBase = (env || `${window.location.origin}/api`).replace(/\/$/, '');
+  try {
+    const data = await agentFetch('/cloud-relay', {
+      method: 'POST',
+      body: JSON.stringify({ apiBase, token }),
+    });
+    return !!data?.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {

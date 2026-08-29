@@ -1,6 +1,6 @@
 {
   "name": "chaslayreborn-print-agent",
-  "version": "1.8.9",
+  "version": "1.9.0",
   "setupFile": "chaslayreborn-print-agent-setup.exe",
   "builtAt": null,
   "platform": "win32-x64",

@@ -24,6 +24,21 @@ router.get("/config", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/reservations/customers?q=
+ * Autocomplete from merchant customer DB (no MANAGE_CUSTOMERS required).
+ */
+router.get("/customers", async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || req.query.search || "");
+    const { CustomerService } = await import("@/services/customer.service");
+    const customers = await CustomerService.searchForAutocomplete(req.merchantId!, q, 8);
+    res.json({ success: true, customers });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Search failed" });
+  }
+});
+
+/**
  * PUT /api/merchant/reservations/config
  */
 router.put("/config", async (req: Request, res: Response) => {

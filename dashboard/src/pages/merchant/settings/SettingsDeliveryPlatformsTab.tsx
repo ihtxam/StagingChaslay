@@ -67,6 +67,7 @@ export default function SettingsDeliveryPlatformsTab() {
   const [merchantId, setMerchantId] = useState('');
   const [justEat, setJustEat] = useState<PlatformForm>(emptyPlatform());
   const [uberEats, setUberEats] = useState<PlatformForm>(emptyPlatform());
+  const [onlineShopAutoAccept, setOnlineShopAutoAccept] = useState(false);
   const [justEatLicensed, setJustEatLicensed] = useState(false);
   const [uberEatsLicensed, setUberEatsLicensed] = useState(false);
 
@@ -78,7 +79,10 @@ export default function SettingsDeliveryPlatformsTab() {
       setMerchantId(String(s.id || ''));
       setJustEatLicensed(isJustEatLicensed(s));
       setUberEatsLicensed(isUberEatsLicensed(s));
-      const dp = (s.deliveryPlatformSettings || {}) as DeliveryPlatformSettings;
+      const dp = (s.deliveryPlatformSettings || {}) as DeliveryPlatformSettings & {
+        onlineShopAutoAccept?: boolean;
+      };
+      setOnlineShopAutoAccept(!!dp.onlineShopAutoAccept);
       setJustEat({
         ...emptyPlatform(),
         enabled: !!dp.justEat?.enabled,
@@ -142,6 +146,7 @@ export default function SettingsDeliveryPlatformsTab() {
       const ueProd = hasUberProductionCreds(uberEats);
       await api.put('/merchant/settings', {
         deliveryPlatformSettings: {
+          onlineShopAutoAccept,
           justEat: {
             enabled: justEat.enabled,
             testMode: jeProd ? false : justEat.testMode,
@@ -387,6 +392,19 @@ export default function SettingsDeliveryPlatformsTab() {
         title={t('settingsDeliveryPlatforms')}
         subtitle={t('settingsDeliveryPlatformsHint')}
       />
+
+      <SettingsReportCard
+        title={t('deliveryPlatformChannelOnlineShop')}
+        icon={Truck}
+        accent={settingsDash.success}
+      >
+        <SettingsToggleRow
+          checked={onlineShopAutoAccept}
+          onChange={setOnlineShopAutoAccept}
+          title={t('onlineShopAutoAccept')}
+          hint={t('onlineShopAutoAcceptHint')}
+        />
+      </SettingsReportCard>
 
       {renderPlatform(
         t('deliveryPlatformJustEat'),

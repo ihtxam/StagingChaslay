@@ -37,6 +37,7 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
   minHoursBefore: 2,
   maxDaysAhead: 30,
   autoAccept: false,
+  autoPrintReservations: true,
   sendConfirmationEmail: true,
   sendStatusEmails: true,
   reminderEnabled: true,
@@ -74,6 +75,7 @@ export function normalizeReservationSettings(
     minHoursBefore: clampInt(s.minHoursBefore, 0, 72, 2),
     maxDaysAhead: clampInt(s.maxDaysAhead, 1, 180, 30),
     autoAccept: s.autoAccept !== false && s.autoAccept !== undefined ? !!s.autoAccept : !!s.autoAccept,
+    autoPrintReservations: s.autoPrintReservations !== false,
     sendConfirmationEmail: s.sendConfirmationEmail !== false,
     sendStatusEmails: s.sendStatusEmails !== false,
     maxCoversPerSlot:
@@ -532,12 +534,28 @@ export class ReservationService {
 
     const durationMinutes = settings.seatingDurationMinutes;
     const slotDeal = matchSlotDiscount(settings, reservedAt);
+
+    let customerId = input.customerId || null;
+    if (!customerId) {
+      try {
+        const { CustomerService } = await import("@/services/customer.service");
+        const customer = await CustomerService.upsertFromGuest(merchantId, {
+          name,
+          phone,
+          email,
+        });
+        customerId = customer?.id || null;
+      } catch (err) {
+        console.warn("Reservation customer upsert failed:", err);
+      }
+    }
+
     const [row] = await db
       .insert(schema.reservations)
       .values({
         merchantId,
         code: makeCode(),
-        customerId: input.customerId || null,
+        customerId,
         guestName: name,
         guestEmail: email,
         guestPhone: phone,
@@ -569,26 +587,32 @@ export class ReservationService {
       await this.sendAdminNotifyEmail(merchant, row, status === "confirmed" ? "confirmed" : "received");
     }
 
-    if (status === "pending" || status === "confirmed") {
+    if (status === "confirmed") {
       await ReservationService.enqueuePosAlert(merchantId, row.id);
     }
 
     return row;
   }
 
-  /** WebPOS auto-print + alert via floor print job queue. */
+  /** Till auto-print via floor print job queue (Print Agent can drain without POS). */
   static async enqueuePosAlert(merchantId: string, reservationId: string) {
     try {
-      await ChaslayFloorService.createPrintJob(merchantId, {
-        jobType: "ESCPOS",
-        payload: {
-          kind: "auto_print_reservation",
-          reservationId,
-        },
-        sourceDeviceId: "reservation",
-      });
+      const { PrintJobExpandService } = await import("@/services/print-job-expand.service");
+      await PrintJobExpandService.enqueueReservationPrint(merchantId, reservationId);
     } catch (err) {
       console.warn("Reservation POS alert enqueue failed:", err);
+      try {
+        await ChaslayFloorService.createPrintJob(merchantId, {
+          jobType: "ESCPOS",
+          payload: {
+            kind: "auto_print_reservation",
+            reservationId,
+          },
+          sourceDeviceId: "reservation",
+        });
+      } catch (fallbackErr) {
+        console.warn("Reservation POS alert fallback enqueue failed:", fallbackErr);
+      }
     }
   }
 

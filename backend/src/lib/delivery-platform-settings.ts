@@ -131,8 +131,10 @@ export function mergeDeliveryPlatformSettings(
     justEat: mergeOne("justEat", updates.justEat),
     uberEats: mergeOne("uberEats", updates.uberEats),
     onlineShopAutoAccept:
-      updates.onlineShopAutoAccept !== undefined
-        ? updates.onlineShopAutoAccept === true
+      updatesRaw &&
+      typeof updatesRaw === "object" &&
+      Object.prototype.hasOwnProperty.call(updatesRaw, "onlineShopAutoAccept")
+        ? (updatesRaw as { onlineShopAutoAccept?: unknown }).onlineShopAutoAccept === true
         : prev.onlineShopAutoAccept,
   };
 }

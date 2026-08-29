@@ -14,13 +14,14 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.8.9";
+const VERSION = "1.9.0";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -783,6 +784,162 @@ async function printRaw({ printerName, dataBase64, dryRun }) {
   }
 }
 
+const CLOUD_RELAY_FILE = "cloud-relay.json";
+let cloudRelayTimer = null;
+let cloudRelayBusy = false;
+
+function cloudRelayPath() {
+  return path.join(installDir(), CLOUD_RELAY_FILE);
+}
+
+function readCloudRelay() {
+  try {
+    const raw = fs.readFileSync(cloudRelayPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const apiBase = String(parsed.apiBase || "").replace(/\/$/, "");
+    const token = String(parsed.token || "");
+    if (!apiBase || !token) return null;
+    return { apiBase, token };
+  } catch {
+    return null;
+  }
+}
+
+function writeCloudRelay(apiBase, token) {
+  fs.mkdirSync(installDir(), { recursive: true });
+  fs.writeFileSync(
+    cloudRelayPath(),
+    JSON.stringify({ apiBase: String(apiBase).replace(/\/$/, ""), token: String(token), savedAt: Date.now() }),
+    "utf8"
+  );
+}
+
+function httpJson(method, urlStr, opts) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try {
+      url = new URL(urlStr);
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    const lib = url.protocol === "https:" ? https : http;
+    const payload = opts.body ? Buffer.from(JSON.stringify(opts.body)) : null;
+    const req = lib.request(
+      {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(payload ? { "Content-Type": "application/json", "Content-Length": payload.length } : {}),
+          ...(opts.headers || {}),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          let json = null;
+          try {
+            json = data ? JSON.parse(data) : {};
+          } catch {
+            json = { raw: data };
+          }
+          if (res.statusCode && res.statusCode >= 400) {
+            const err = new Error(`HTTP ${res.statusCode}`);
+            err.status = res.statusCode;
+            err.body = json;
+            reject(err);
+            return;
+          }
+          resolve(json);
+        });
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(opts.timeoutMs || 12000, () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function beepAlert() {
+  if (!isWindows()) return;
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-WindowStyle", "Hidden", "-Command", "[console]::beep(880,180); [console]::beep(1175,220)"],
+    { windowsHide: true, timeout: 4000 },
+    () => {}
+  );
+}
+
+async function drainCloudPrintJobs() {
+  if (cloudRelayBusy) return;
+  const cfg = readCloudRelay();
+  if (!cfg) return;
+  cloudRelayBusy = true;
+  try {
+    const data = await httpJson(
+      "GET",
+      `${cfg.apiBase}/merchant/pos/print-jobs/pending?jobType=ESCPOS&limit=15`,
+      { headers: { Authorization: `Bearer ${cfg.token}` }, timeoutMs: 15000 }
+    );
+    const jobs = (data && data.jobs) || [];
+    for (const job of jobs) {
+      const p = job.payload || {};
+      const ack = async (status) => {
+        try {
+          await httpJson("POST", `${cfg.apiBase}/merchant/pos/print-jobs/${job.id}/ack`, {
+            headers: { Authorization: `Bearer ${cfg.token}` },
+            body: { status },
+            timeoutMs: 8000,
+          });
+        } catch {
+          /* ignore */
+        }
+      };
+      if (p.kind === "escpos" && p.dataBase64) {
+        try {
+          await printRaw({ printerName: p.printerName, dataBase64: p.dataBase64, text: p.text });
+          if (p.alertKind === "reservation" || p.alertKind === "online_order" || p.jobKind === "kitchen") {
+            beepAlert();
+          }
+          await ack("DONE");
+        } catch (e) {
+          console.error("[print-agent] cloud print failed:", e.message || e);
+          await ack("FAILED");
+        }
+        continue;
+      }
+      // Leave recipe / unknown jobs for the browser drain (or stale reclaim).
+    }
+  } catch (e) {
+    if (e && e.status === 401) {
+      try {
+        fs.unlinkSync(cloudRelayPath());
+      } catch {
+        /* ignore */
+      }
+    }
+  } finally {
+    cloudRelayBusy = false;
+  }
+}
+
+function startCloudRelayPoller() {
+  if (cloudRelayTimer) return;
+  cloudRelayTimer = setInterval(() => {
+    void drainCloudPrintJobs();
+  }, 2500);
+  void drainCloudPrintJobs();
+}
+
 function startServer() {
   const app = express();
 
@@ -814,6 +971,7 @@ function startServer() {
         "device-name-match",
         "spooler-only-writeprinter",
         "print-dry-run",
+        "cloud-relay",
       ],
     });
   });
@@ -828,6 +986,30 @@ function startServer() {
       console.error("[print-agent] list printers failed:", payload.error);
       res.status(500).json(payload);
     }
+  });
+
+  /** POST /cloud-relay — WebPOS / merchant panel registers API credentials for background print. */
+  app.post("/cloud-relay", (req, res) => {
+    try {
+      const apiBase = String(req.body?.apiBase || "").trim();
+      const token = String(req.body?.token || "").trim();
+      if (!apiBase || !token) {
+        return res.status(400).json({ error: "apiBase and token required" });
+      }
+      if (!/^https?:\/\//i.test(apiBase)) {
+        return res.status(400).json({ error: "apiBase must be http(s)" });
+      }
+      writeCloudRelay(apiBase, token);
+      startCloudRelayPoller();
+      res.json({ ok: true, polling: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message || "cloud-relay failed" });
+    }
+  });
+
+  app.get("/cloud-relay", (_req, res) => {
+    const cfg = readCloudRelay();
+    res.json({ ok: true, paired: !!cfg, apiBase: cfg ? cfg.apiBase : null });
   });
 
   app.post("/print", async (req, res) => {
@@ -967,6 +1149,7 @@ function startServer() {
     if (!isWindows()) {
       console.warn("Warning: RAW thermal printing is only supported on Windows.");
     }
+    if (readCloudRelay()) startCloudRelayPoller();
   });
 }
 

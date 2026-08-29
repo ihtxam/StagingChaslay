@@ -484,6 +484,20 @@ export class DeliveryPlatformService {
     const platformNote = `[${source}:${payload.externalOrderId}]`;
     const notes = [platformNote, payload.notes].filter(Boolean).join("\n");
 
+    let customerId: string | null = null;
+    try {
+      const { CustomerService } = await import("@/services/customer.service");
+      const upserted = await CustomerService.upsertFromGuest(merchantId, {
+        name: payload.customerName,
+        phone: payload.customerPhone,
+        email: payload.customerEmail,
+        address: payload.shippingAddress,
+      });
+      customerId = upserted?.id || null;
+    } catch (custErr) {
+      console.warn("Platform order customer upsert failed:", custErr);
+    }
+
     const [order] = await db
       .insert(schema.orders)
       .values({
@@ -505,6 +519,7 @@ export class DeliveryPlatformService {
         notes,
         shippingAddress: payload.shippingAddress,
         scheduledFor: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
+        customerId,
         customerName: payload.customerName,
         customerPhone: payload.customerPhone,
         customerEmail: payload.customerEmail,
@@ -595,6 +610,35 @@ export class DeliveryPlatformService {
     const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
     const printNotification = opts?.printNotification === true;
     if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification) return;
+
+    try {
+      const { PrintJobExpandService } = await import("@/services/print-job-expand.service");
+      await PrintJobExpandService.enqueueOrderPrint(merchantId, orderId, {
+        printKitchen,
+        printNotification,
+        printDeliveryReceipt,
+        orderSource,
+      });
+      if (printReceipt && !printNotification && !printDeliveryReceipt) {
+        await ChaslayFloorService.createPrintJob(merchantId, {
+          jobType: "ESCPOS",
+          payload: {
+            kind: "auto_print_order",
+            orderId,
+            printKitchen: false,
+            printReceipt: true,
+            printDeliveryReceipt: false,
+            printNotification: false,
+            orderSource,
+          },
+          orderId,
+          sourceDeviceId: "delivery-platform",
+        });
+      }
+      return;
+    } catch (err) {
+      console.warn("Expanded auto-print enqueue failed, falling back to recipe job:", err);
+    }
 
     await ChaslayFloorService.createPrintJob(merchantId, {
       jobType: "ESCPOS",

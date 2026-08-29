@@ -1,5 +1,6 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { addDaysYmdZurich, ymdZurich } from '@/lib/date-format';
 import { dayKeyOf, zonedLocalDate, type DayKey } from '@/lib/shop-hours';
@@ -10,16 +11,6 @@ const MAX_NAME_LENGTH = 20;
 function sanitizePhoneInput(value: string): string {
   return value.replace(/\D/g, '').slice(0, MAX_PHONE_DIGITS);
 }
-
-const DAY_NUM: Record<DayKey, number> = {
-  sun: 0,
-  mon: 1,
-  tue: 2,
-  wed: 3,
-  thu: 4,
-  fri: 5,
-  sat: 6,
-};
 
 export type ReservationCreateForm = {
   guestLastName: string;
@@ -37,31 +28,21 @@ export type ReservationCreateForm = {
 
 type Table = { id: string; label: string; capacity: number };
 
-function nextThursdayYmd() {
-  const today = ymdZurich();
-  const [y, m, d] = today.split('-').map(Number);
-  const noon = zonedLocalDate(y, m, d, 12, 0);
-  const day = DAY_NUM[dayKeyOf(noon)];
-  const add = day <= 4 ? 4 - day : 7 - day + 4;
-  return addDaysYmdZurich(add || 7, noon);
-}
+type Slot = { time: string; available?: boolean };
 
-function buildTimeSlots(start = '18:00', count = 8, stepMin = 15) {
-  const [h, m] = start.split(':').map(Number);
-  const slots: string[] = [];
-  let mins = (h || 0) * 60 + (m || 0);
-  for (let i = 0; i < count; i++) {
-    const hh = Math.floor(mins / 60) % 24;
-    const mm = mins % 60;
-    slots.push(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
-    mins += stepMin;
-  }
-  return slots;
-}
+type CustomerHit = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  lastPartySize?: number | null;
+};
 
 type Props = {
   open: boolean;
   tables: Table[];
+  defaultSource?: string;
   onClose: () => void;
   onSubmit: (form: ReservationCreateForm) => Promise<void>;
 };
@@ -79,27 +60,158 @@ type FieldErrors = {
   guestPhone?: string;
 };
 
-const emptyForm = (): ReservationCreateForm => ({
+const emptyForm = (source = 'phone'): ReservationCreateForm => ({
   guestLastName: '',
   guestFirstName: '',
   guestPhone: '',
   guestEmail: '',
   partySize: 2,
   date: ymdZurich(),
-  time: '20:00',
+  time: '19:00',
   notes: '',
   tableId: '',
   status: 'confirmed',
-  source: 'phone',
+  source,
 });
 
-export default function ReservationCreateSheet({ open, tables, onClose, onSubmit }: Props) {
+function slotsFromHours(
+  hours: Partial<Record<DayKey, Array<{ open: string; close: string }>>> | undefined,
+  dateYmd: string,
+  interval = 30
+): string[] {
+  if (!hours) return [];
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  const day = dayKeyOf(zonedLocalDate(y, m, d, 12, 0));
+  const ranges = hours[day] || [];
+  const out: string[] = [];
+  for (const range of ranges) {
+    const [oh, om] = String(range.open || '11:00').split(':').map(Number);
+    const [ch, cm] = String(range.close || '22:00').split(':').map(Number);
+    let mins = (oh || 0) * 60 + (om || 0);
+    const end = (ch || 0) * 60 + (cm || 0);
+    const bound = end > mins ? end : mins + 60;
+    while (mins + 1 < bound) {
+      const hh = Math.floor(mins / 60) % 24;
+      const mm = mins % 60;
+      out.push(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+      mins += interval;
+    }
+  }
+  return out;
+}
+
+function customerLabel(c: CustomerHit) {
+  const name = [c.firstName, c.lastName].filter(Boolean).join(' ');
+  return [name || null, c.phone || null, c.email || null].filter(Boolean).join(' · ');
+}
+
+export default function ReservationCreateSheet({
+  open,
+  tables,
+  defaultSource = 'phone',
+  onClose,
+  onSubmit,
+}: Props) {
   const { t, formatDate } = useI18n();
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [form, setForm] = useState<ReservationCreateForm>(emptyForm);
+  const [form, setForm] = useState<ReservationCreateForm>(() => emptyForm(defaultSource));
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [hoursSlots, setHoursSlots] = useState<string[]>([]);
+  const [customerHits, setCustomerHits] = useState<CustomerHit[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState<'name' | 'phone' | null>(null);
+  const suggestTimer = useRef<number | null>(null);
 
-  const timeSlots = useMemo(() => buildTimeSlots('20:00', 4), []);
+  useEffect(() => {
+    if (!open) return;
+    setForm(emptyForm(defaultSource));
+    setFieldErrors({});
+    setCustomerHits([]);
+    setSuggestOpen(null);
+  }, [open, defaultSource]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cfg = await api.get('/merchant/reservations/config');
+        const hours = cfg.data?.config?.hours as
+          | Partial<Record<DayKey, Array<{ open: string; close: string }>>>
+          | undefined;
+        const interval = Number(cfg.data?.config?.settings?.slotIntervalMinutes) || 30;
+        if (!cancelled) setHoursSlots(slotsFromHours(hours, form.date, interval));
+      } catch {
+        if (!cancelled) setHoursSlots([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, form.date]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/merchant/reservations/slots', {
+          params: { date: form.date, partySize: form.partySize },
+        });
+        if (cancelled) return;
+        const next = ((res.data?.slots || []) as Slot[]).filter((s) => s.time);
+        setSlots(next);
+        if (next.length && !next.some((s) => s.time === form.time)) {
+          const firstOk = next.find((s) => s.available !== false) || next[0];
+          if (firstOk?.time) setForm((prev) => ({ ...prev, time: firstOk.time }));
+        }
+      } catch {
+        if (!cancelled) setSlots([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, form.date, form.partySize]);
+
+  const searchCustomers = (q: string, field: 'name' | 'phone') => {
+    if (suggestTimer.current) window.clearTimeout(suggestTimer.current);
+    if (q.trim().length < 2) {
+      setCustomerHits([]);
+      setSuggestOpen(null);
+      return;
+    }
+    suggestTimer.current = window.setTimeout(() => {
+      void api
+        .get('/merchant/reservations/customers', { params: { q: q.trim() } })
+        .then((res) => {
+          setCustomerHits(res.data?.customers || []);
+          setSuggestOpen(field);
+        })
+        .catch(() => {
+          setCustomerHits([]);
+        });
+    }, 220);
+  };
+
+  const applyCustomer = (c: CustomerHit) => {
+    setForm((prev) => ({
+      ...prev,
+      guestFirstName: (c.firstName || prev.guestFirstName).slice(0, MAX_NAME_LENGTH),
+      guestLastName: (c.lastName || prev.guestLastName).slice(0, MAX_NAME_LENGTH),
+      guestPhone: sanitizePhoneInput(c.phone || prev.guestPhone),
+      guestEmail: c.email || prev.guestEmail,
+      partySize: c.lastPartySize && c.lastPartySize > 0 ? c.lastPartySize : prev.partySize,
+    }));
+    setSuggestOpen(null);
+    setCustomerHits([]);
+  };
+
+  const timeChips = useMemo(() => {
+    if (slots.length) return slots.map((s) => s.time);
+    return hoursSlots;
+  }, [slots, hoursSlots]);
+
   const dateLabel = useMemo(() => {
     try {
       const [y, m, d] = form.date.split('-').map(Number);
@@ -144,13 +256,38 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
     setSaving(true);
     try {
       await onSubmit(form);
-      setForm(emptyForm());
+      setForm(emptyForm(defaultSource));
     } catch {
       // Keep entered values when the API rejects the save.
     } finally {
       setSaving(false);
     }
   };
+
+  const suggestList = (field: 'name' | 'phone') =>
+    suggestOpen === field && customerHits.length ? (
+      <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-lg">
+        {customerHits.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+              onMouseDown={(ev) => {
+                ev.preventDefault();
+                applyCustomer(c);
+              }}
+            >
+              <span className="font-medium">{customerLabel(c)}</span>
+              {c.lastPartySize ? (
+                <span className="ml-2 text-xs text-[var(--text-muted)]">
+                  {t('reservationsPartySize')}: {c.lastPartySize}
+                </span>
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    ) : null;
 
   return (
     <div
@@ -161,7 +298,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
     >
       <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
 
-      <div className="relative flex max-h-[min(92vh,640px)] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl sm:max-w-[48rem] sm:rounded-2xl">
+      <div className="relative flex max-h-[min(92vh,720px)] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl sm:max-w-[48rem] sm:rounded-2xl">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <h2 id="reservation-create-title" className="text-base font-semibold">
             {t('reservationsCreateTitle')}
@@ -198,7 +335,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                 {[
                   [ymdZurich(), t('reportsToday')],
                   [addDaysYmdZurich(1), t('reservationsTomorrow')],
-                  [nextThursdayYmd(), t('reservationsThisThursday')],
+                  [addDaysYmdZurich(2), t('reservationsDayAfterTomorrow')],
                 ].map(([d, label]) => (
                   <button
                     key={d}
@@ -227,17 +364,25 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                   />
                 </label>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {timeSlots.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setForm({ ...form, time: slot })}
-                    className={chipClass(form.time === slot)}
-                  >
-                    {slot}
-                  </button>
-                ))}
+              <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                {timeChips.length ? (
+                  timeChips.map((slot) => {
+                    const meta = slots.find((s) => s.time === slot);
+                    const unavailable = meta?.available === false;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => setForm({ ...form, time: slot })}
+                        className={`${chipClass(form.time === slot)} ${unavailable ? 'opacity-40' : ''}`}
+                      >
+                        {slot}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)]">{t('reservationsNoSlots')}</p>
+                )}
               </div>
               {isPast ? (
                 <p className="mt-2 text-xs text-amber-700">{t('reservationsDatePast')}</p>
@@ -281,20 +426,25 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                 {t('reservationsContactInfo')}
               </p>
               <div className="space-y-2">
-                <label className="block text-xs">
+                <label className="relative block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsLastName')}</span>
                   <input
                     className="input w-full py-2 text-sm"
                     value={form.guestLastName}
                     maxLength={MAX_NAME_LENGTH}
+                    autoComplete="off"
                     aria-invalid={!!fieldErrors.guestLastName}
                     onChange={(e) => {
-                      setForm({ ...form, guestLastName: e.target.value.slice(0, MAX_NAME_LENGTH) });
+                      const v = e.target.value.slice(0, MAX_NAME_LENGTH);
+                      setForm({ ...form, guestLastName: v });
+                      searchCustomers(`${form.guestFirstName} ${v}`.trim(), 'name');
                       if (fieldErrors.guestLastName) {
                         setFieldErrors((prev) => ({ ...prev, guestLastName: undefined }));
                       }
                     }}
+                    onBlur={() => setTimeout(() => setSuggestOpen((s) => (s === 'name' ? null : s)), 150)}
                   />
+                  {suggestList('name')}
                   <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
                     {t('maxCharacters').replace('{n}', String(MAX_NAME_LENGTH))}
                   </p>
@@ -302,43 +452,50 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestLastName}</p>
                   ) : null}
                 </label>
-                <label className="block text-xs">
+                <label className="relative block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsFirstName')}</span>
                   <input
                     className="input w-full py-2 text-sm"
                     value={form.guestFirstName}
                     maxLength={MAX_NAME_LENGTH}
+                    autoComplete="off"
                     aria-invalid={!!fieldErrors.guestFirstName}
                     onChange={(e) => {
-                      setForm({ ...form, guestFirstName: e.target.value.slice(0, MAX_NAME_LENGTH) });
+                      const v = e.target.value.slice(0, MAX_NAME_LENGTH);
+                      setForm({ ...form, guestFirstName: v });
+                      searchCustomers(`${v} ${form.guestLastName}`.trim(), 'name');
                       if (fieldErrors.guestFirstName) {
                         setFieldErrors((prev) => ({ ...prev, guestFirstName: undefined }));
                       }
                     }}
+                    onBlur={() => setTimeout(() => setSuggestOpen((s) => (s === 'name' ? null : s)), 150)}
                   />
-                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                    {t('maxCharacters').replace('{n}', String(MAX_NAME_LENGTH))}
-                  </p>
+                  {suggestList('name')}
                   {fieldErrors.guestFirstName ? (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestFirstName}</p>
                   ) : null}
                 </label>
-                <label className="block text-xs">
+                <label className="relative block text-xs">
                   <span className="mb-1 block text-[var(--text-muted)]">{t('reservationsPhone')}</span>
                   <input
                     className="input w-full py-2 text-sm"
                     type="tel"
                     inputMode="numeric"
                     maxLength={MAX_PHONE_DIGITS}
+                    autoComplete="off"
                     value={form.guestPhone}
                     aria-invalid={!!fieldErrors.guestPhone}
                     onChange={(e) => {
-                      setForm({ ...form, guestPhone: sanitizePhoneInput(e.target.value) });
+                      const v = sanitizePhoneInput(e.target.value);
+                      setForm({ ...form, guestPhone: v });
+                      searchCustomers(v, 'phone');
                       if (fieldErrors.guestPhone) {
                         setFieldErrors((prev) => ({ ...prev, guestPhone: undefined }));
                       }
                     }}
+                    onBlur={() => setTimeout(() => setSuggestOpen((s) => (s === 'phone' ? null : s)), 150)}
                   />
+                  {suggestList('phone')}
                   <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{t('customersPhoneHint')}</p>
                   {fieldErrors.guestPhone ? (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.guestPhone}</p>
@@ -379,6 +536,7 @@ export default function ReservationCreateSheet({ open, tables, onClose, onSubmit
                     value={form.source}
                     onChange={(e) => setForm({ ...form, source: e.target.value })}
                   >
+                    <option value="pos">{t('settingsPos')}</option>
                     <option value="phone">{t('reservationsSourcePhone')}</option>
                     <option value="walk_in">{t('reservationsSourceWalkIn')}</option>
                     <option value="online">{t('reservationsSourceOnline')}</option>

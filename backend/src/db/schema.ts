@@ -1797,6 +1797,8 @@ export type ReservationSettings = {
   maxDaysAhead?: number;
   /** If true, new web bookings become confirmed immediately */
   autoAccept?: boolean;
+  /** Print a till ticket for reservations (default true). */
+  autoPrintReservations?: boolean;
   sendConfirmationEmail?: boolean;
   sendStatusEmails?: boolean;
   /** Soft capacity per slot (covers). Null/0 = sum of table seats or unlimited */

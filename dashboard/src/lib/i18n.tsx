@@ -201,6 +201,8 @@ const en: Dict = {
   reservationsStatus: 'Status',
   reservationsSource: 'Source',
   reservationsTomorrow: 'Tomorrow',
+  reservationsDayAfterTomorrow: 'Day after tomorrow',
+  reservationsNoSlots: 'No opening slots for this date — pick a time above.',
   reservationsSearchCustomer: 'Search customer record',
   reservationsConfirmed: 'Confirmed',
   reservationsPending: 'Pending',
@@ -1334,6 +1336,9 @@ const en: Dict = {
     'Production credentials detected. Saving will disable test mode and require signed webhooks.',
   deliveryPlatformAutoAccept: 'Auto-accept orders',
   deliveryPlatformAutoAcceptHint: 'Skip manual approval and send straight to kitchen.',
+  onlineShopAutoAccept: 'Auto-accept online shop orders',
+  onlineShopAutoAcceptHint:
+    'Skip pending approval: new shop orders go straight to the kitchen and print when kitchen auto-print is on.',
   deliveryPlatformStoreId: 'Store / restaurant ID',
   deliveryPlatformApiKey: 'API key',
   deliveryPlatformApiSecret: 'API secret',
@@ -1431,6 +1436,10 @@ const en: Dict = {
   webPosGoodwillFailed: 'Goodwill compensation failed',
   autoPrintReceipt: 'Auto-print customer receipt',
   autoPrintKitchen: 'Auto-print kitchen ticket',
+  autoPrintReservations: 'Auto-print reservations',
+  autoPrintOnlineOrdersOnArrival: 'Print online orders on arrival',
+  autoPrintOnlineOrdersOnArrivalHint:
+    'Print the kitchen ticket as soon as an online order arrives. Off (default): print after accept, or immediately when auto-accept is on.',
   waiterTillBellEnabled: 'Bell on main till when waiter sends order',
   waiterTillBellEnabledHint:
     'Play a short chime on the register PC when a waiter phone or mobile WebPOS sends a kitchen order — after it is registered and sent to the printer.',
@@ -3559,6 +3568,8 @@ const fr: Dict = {
   reservationsStatus: 'Statut',
   reservationsSource: 'Source',
   reservationsTomorrow: 'Demain',
+  reservationsDayAfterTomorrow: 'Après-demain',
+  reservationsNoSlots: 'Aucun créneau d’ouverture pour cette date — choisissez une heure ci-dessus.',
   reservationsSearchCustomer: 'Rechercher une fiche client',
   reservationsConfirmed: 'Confirmée',
   reservationsPending: 'En attente',
@@ -4691,6 +4702,9 @@ const fr: Dict = {
     'Identifiants production détectés. L’enregistrement désactive le mode test et exige des webhooks signés.',
   deliveryPlatformAutoAccept: 'Accepter automatiquement',
   deliveryPlatformAutoAcceptHint: 'Envoyer directement en cuisine.',
+  onlineShopAutoAccept: 'Accepter auto les commandes boutique',
+  onlineShopAutoAcceptHint:
+    'Sans validation : les commandes boutique partent en cuisine et s’impriment si l’impression cuisine auto est activée.',
   deliveryPlatformStoreId: 'ID restaurant / magasin',
   deliveryPlatformApiKey: 'Clé API',
   deliveryPlatformApiSecret: 'Secret API',
@@ -4789,6 +4803,10 @@ const fr: Dict = {
   webPosGoodwillFailed: 'Échec du geste commercial',
   autoPrintReceipt: 'Impression auto du reçu',
   autoPrintKitchen: 'Impression auto cuisine',
+  autoPrintReservations: 'Impression auto des réservations',
+  autoPrintOnlineOrdersOnArrival: 'Imprimer les commandes en ligne à l’arrivée',
+  autoPrintOnlineOrdersOnArrivalHint:
+    'Imprimer le ticket cuisine dès qu’une commande en ligne arrive. Désactivé (défaut) : impression après acceptation, ou tout de suite si l’acceptation auto est activée.',
   waiterTillBellEnabled: 'Sonnerie caisse quand le serveur envoie',
   waiterTillBellEnabledHint:
     'Un signal sonore sur la caisse principale quand un serveur ou WebPOS mobile envoie en cuisine — une fois la commande enregistrée et envoyée à l’imprimante.',
@@ -6885,6 +6903,8 @@ const de: Dict = {
   reservationsStatus: 'Status',
   reservationsSource: 'Quelle',
   reservationsTomorrow: 'Morgen',
+  reservationsDayAfterTomorrow: 'Übermorgen',
+  reservationsNoSlots: 'Keine Öffnungszeiten für dieses Datum — wählen Sie eine Uhrzeit oben.',
   reservationsSearchCustomer: 'Kundenkartei suchen',
   reservationsConfirmed: 'Bestätigt',
   reservationsPending: 'Ausstehend',
@@ -8014,6 +8034,9 @@ const de: Dict = {
     'Produktionszugangsdaten erkannt. Beim Speichern wird der Testmodus deaktiviert; signierte Webhooks sind erforderlich.',
   deliveryPlatformAutoAccept: 'Automatisch annehmen',
   deliveryPlatformAutoAcceptHint: 'Direkt in die Küche, ohne Freigabe.',
+  onlineShopAutoAccept: 'Online-Shop-Bestellungen automatisch annehmen',
+  onlineShopAutoAcceptHint:
+    'Ohne Freigabe: Shop-Bestellungen gehen direkt in die Küche und drucken, wenn Küchen-Autodruck an ist.',
   deliveryPlatformStoreId: 'Store- / Restaurant-ID',
   deliveryPlatformApiKey: 'API-Schlüssel',
   deliveryPlatformApiSecret: 'API-Geheimnis',
@@ -8112,6 +8135,10 @@ const de: Dict = {
   webPosGoodwillFailed: 'Kulanz fehlgeschlagen',
   autoPrintReceipt: 'Kundenbeleg automatisch drucken',
   autoPrintKitchen: 'Küchenticket automatisch drucken',
+  autoPrintReservations: 'Reservationen automatisch drucken',
+  autoPrintOnlineOrdersOnArrival: 'Online-Bestellungen bei Eingang drucken',
+  autoPrintOnlineOrdersOnArrivalHint:
+    'Küchenticket drucken, sobald eine Online-Bestellung eintrifft. Aus (Standard): Druck nach Annahme, oder sofort bei Auto-Annahme.',
   waiterTillBellEnabled: 'Klingel an Hauptkasse bei Kellnersendung',
   waiterTillBellEnabledHint:
     'Kurzer Signalton an der Kasse, wenn ein Kellner-Handy oder mobiles WebPOS eine Küchenbestellung sendet — nach Registrierung und Druckauftrag.',

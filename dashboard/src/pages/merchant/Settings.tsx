@@ -231,6 +231,8 @@ interface SettingsData {
     receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    autoPrintReservations?: boolean;
+    autoPrintOnlineOrdersOnArrival?: boolean;
     waiterTillBellEnabled?: boolean;
     kitchenPrintRetryEnabled?: boolean;
     kitchenPrintRetryAttempts?: number;
@@ -1294,6 +1296,8 @@ export default function Settings() {
         ),
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
+        autoPrintReservations: ps.autoPrintReservations !== false,
+        autoPrintOnlineOrdersOnArrival: ps.autoPrintOnlineOrdersOnArrival === true,
         waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
         kitchenPrintRetryEnabled: ps.kitchenPrintRetryEnabled !== false,
         kitchenPrintRetryAttempts: Math.min(20, Math.max(1, Number(ps.kitchenPrintRetryAttempts) || 5)),
@@ -3760,6 +3764,7 @@ export default function Settings() {
                       ['receiptDeliveryDirectionsQr', t('receiptDeliveryDirectionsQr')],
                       ['autoPrintReceipt', t('autoPrintReceipt')],
                       ['autoPrintKitchen', t('autoPrintKitchen')],
+                      ['autoPrintReservations', t('autoPrintReservations')],
                     ] as const
                   ).map(([key, label]) => (
                     <label key={key} className="inline-flex items-center gap-2">
@@ -3865,6 +3870,28 @@ export default function Settings() {
                     <span className="font-medium">{t('waiterTillBellEnabled')}</span>
                     <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
                       {t('waiterTillBellEnabledHint')}
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.autoPrintOnlineOrdersOnArrival === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          autoPrintOnlineOrdersOnArrival: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('autoPrintOnlineOrdersOnArrival')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('autoPrintOnlineOrdersOnArrivalHint')}
                     </span>
                   </span>
                 </label>

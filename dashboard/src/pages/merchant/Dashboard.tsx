@@ -45,6 +45,7 @@ import WaiterApp from './WaiterApp';
 import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
+import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
 import Reports from './Reports';
 import api from '@/lib/api';
@@ -514,6 +515,7 @@ function MerchantShell() {
   );
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
+  useTillPrintHub({ enabled: !isPosLikeRoute });
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },

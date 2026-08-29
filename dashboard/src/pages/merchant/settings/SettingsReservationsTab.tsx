@@ -35,6 +35,7 @@ type ResSettings = {
   minHoursBefore: number;
   maxDaysAhead: number;
   autoAccept: boolean;
+  autoPrintReservations?: boolean;
   sendConfirmationEmail: boolean;
   sendStatusEmails: boolean;
   reminderEnabled: boolean;
@@ -300,6 +301,13 @@ export default function SettingsReservationsTab() {
             checked={settings.autoAccept}
             onChange={(autoAccept) => setSettings({ ...settings, autoAccept })}
             title={t('reservationsAutoAccept')}
+          />
+          <SettingsToggleRow
+            checked={settings.autoPrintReservations !== false}
+            onChange={(autoPrintReservations) =>
+              setSettings({ ...settings, autoPrintReservations })
+            }
+            title={t('autoPrintReservations')}
           />
           <SettingsToggleRow
             checked={settings.sendConfirmationEmail}

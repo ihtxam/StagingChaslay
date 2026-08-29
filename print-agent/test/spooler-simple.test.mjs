@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.8.9";
+const VERSION = "1.9.0";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.8.9 in package.json, server.js, and download manifests", () => {
+test("print-agent version is 1.9.0 in package.json, server.js, and download manifests", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -31,6 +31,7 @@ test("print-agent version is 1.8.9 in package.json, server.js, and download mani
   assert.equal(manifest.version, VERSION);
   assert.equal(legacy.version, VERSION);
   assert.match(server, /spooler-only-writeprinter/);
+  assert.match(server, /cloud-relay/);
 });
 
 test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-mode)", () => {

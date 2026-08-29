@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { playOrderAlertOnce, startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
+import { playOrderAlertOnce, playReservationTillBellOnce, startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
 import {
   extractZipFromAddress,
   onlineShopOrderSpeechLine,
@@ -39,6 +39,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const [autoAccept, setAutoAccept] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
   const knownIdsRef = useRef<Set<string> | null>(null);
+  const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const unactionedRef = useRef<Set<string>>(new Set());
   const audioUnlockedRef = useRef(false);
   const autoAcceptRef = useRef(autoAccept);
@@ -100,6 +101,39 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       const alertStatuses = onlineOrderAlertStatuses(autoAccept);
       const pending = online.filter((o) => alertStatuses.has(String(o.status || '').toLowerCase()));
       const pendingIds = pending.map((o) => o.id);
+
+      try {
+        const today = new Date();
+        const from = new Date(today.getTime() - 12 * 3600_000);
+        const to = new Date(today.getTime() + 48 * 3600_000);
+        const rRes = await api.get('/merchant/reservations', {
+          params: { from: from.toISOString(), to: to.toISOString(), status: 'all' },
+        });
+        const reservations = (rRes.data?.reservations || []) as Array<{
+          id: string;
+          status?: string;
+          guestName?: string;
+          code?: string;
+        }>;
+        const active = reservations.filter((r) =>
+          ['pending', 'confirmed'].includes(String(r.status || '').toLowerCase())
+        );
+        if (knownReservationIdsRef.current == null) {
+          knownReservationIdsRef.current = new Set(active.map((r) => r.id));
+        } else {
+          const freshRes = active.filter((r) => !knownReservationIdsRef.current!.has(r.id));
+          for (const r of active) knownReservationIdsRef.current.add(r.id);
+          if (freshRes.length > 0) {
+            playReservationTillBellOnce();
+            showBrowserNotification(
+              t('webPosNewReservationAlert'),
+              freshRes.map((r) => r.guestName || r.code || '').filter(Boolean).join(', ')
+            );
+          }
+        }
+      } catch {
+        /* reservations optional */
+      }
 
       if (knownIdsRef.current == null) {
         knownIdsRef.current = new Set(pendingIds);
@@ -169,6 +203,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       stopOrderAlertLoop();
       if (!enabled) {
         knownIdsRef.current = null;
+        knownReservationIdsRef.current = null;
         unactionedRef.current.clear();
         setQueue([]);
       }

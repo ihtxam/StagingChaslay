@@ -58,6 +58,13 @@ export type PosPrintSettings = {
   receiptLogoWidthPx?: number;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** Print a reservation ticket on the till (auto-accept: on arrival; manual: after accept). */
+  autoPrintReservations?: boolean;
+  /**
+   * When true, kitchen-print online shop orders as soon as they arrive (even if pending approval).
+   * When false (default), kitchen tickets print on accept / auto-accept.
+   */
+  autoPrintOnlineOrdersOnArrival?: boolean;
   /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
   waiterTillBellEnabled?: boolean;
   /** Auto-retry failed kitchen prints before showing an error (WebPOS local queue). */
@@ -120,6 +127,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    autoPrintReservations: true,
+    autoPrintOnlineOrdersOnArrival: false,
     waiterTillBellEnabled: true,
     kitchenPrintRetryEnabled: true,
     kitchenPrintRetryAttempts: 5,
@@ -265,6 +274,8 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     ),
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
+    autoPrintReservations: src.autoPrintReservations !== false,
+    autoPrintOnlineOrdersOnArrival: src.autoPrintOnlineOrdersOnArrival === true,
     waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
     kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
     kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),

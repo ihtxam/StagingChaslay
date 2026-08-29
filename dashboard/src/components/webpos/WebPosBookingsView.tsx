@@ -4,6 +4,9 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
+import ReservationCreateSheet, {
+  type ReservationCreateForm,
+} from '@/components/reservations/ReservationCreateSheet';
 import {
   addDaysYmdZurich,
   reservationFormParts,
@@ -29,18 +32,6 @@ type Reservation = {
 
 type Table = { id: string; label: string; capacity: number; status: string };
 
-const emptyForm = () => ({
-  guestName: '',
-  guestPhone: '',
-  guestEmail: '',
-  partySize: 2,
-  date: ymdZurich(),
-  time: '19:00',
-  notes: '',
-  status: 'confirmed',
-  source: 'pos',
-});
-
 export default function WebPosBookingsView() {
   const { t, formatDate, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -51,8 +42,6 @@ export default function WebPosBookingsView() {
   const [autoAccept, setAutoAccept] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
-  const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -165,19 +154,27 @@ export default function WebPosBookingsView() {
     });
   };
 
-  const createReservation = async (e: FormEvent) => {
-    e.preventDefault();
+  const createReservation = async (sheetForm: ReservationCreateForm) => {
     if (!enabled) {
       toast.error(t('reservationsDisabledHint'));
-      return;
+      throw new Error('reservations_disabled');
     }
-    setCreateBusy(true);
+    const guestName = [sheetForm.guestFirstName, sheetForm.guestLastName]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(' ');
     try {
       const res = await api.post('/merchant/reservations', {
-        ...form,
-        partySize: Number(form.partySize),
-        source: form.source || 'pos',
-        status: form.status || 'confirmed',
+        guestName,
+        guestPhone: sheetForm.guestPhone,
+        guestEmail: sheetForm.guestEmail || undefined,
+        date: sheetForm.date,
+        time: sheetForm.time,
+        partySize: Number(sheetForm.partySize),
+        notes: sheetForm.notes || undefined,
+        tableId: sheetForm.tableId || undefined,
+        source: sheetForm.source || 'pos',
+        status: sheetForm.status || 'confirmed',
         skipSlotCheck: true,
       });
       const created = res.data?.reservation as Reservation | undefined;
@@ -188,18 +185,16 @@ export default function WebPosBookingsView() {
           guestName: created.guestName,
           partySize: created.partySize,
           reservedAt: created.reservedAt,
-          status: created.status || form.status || 'confirmed',
+          status: created.status || sheetForm.status || 'confirmed',
         });
       }
       toast.success(t('created'));
       setCreateOpen(false);
-      setForm(emptyForm());
       await load();
     } catch (err: unknown) {
       const e2 = err as { response?: { data?: { error?: string } } };
       toast.error(e2.response?.data?.error || t('cmsSaveFailed'));
-    } finally {
-      setCreateBusy(false);
+      throw err;
     }
   };
 
@@ -394,109 +389,13 @@ export default function WebPosBookingsView() {
         )}
       </div>
 
-      {createOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={createReservation}
-            className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-4 shadow-xl space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold">{t('reservationsNew')}</h3>
-            <input
-              className="input w-full"
-              required
-              placeholder={t('name')}
-              value={form.guestName}
-              onChange={(e) => setForm({ ...form, guestName: e.target.value })}
-            />
-            <input
-              className="input w-full"
-              required
-              placeholder={t('phone')}
-              value={form.guestPhone}
-              onChange={(e) => setForm({ ...form, guestPhone: e.target.value })}
-            />
-            <input
-              className="input w-full"
-              type="email"
-              placeholder={`${t('email')} (${t('optional')})`}
-              value={form.guestEmail}
-              onChange={(e) => setForm({ ...form, guestEmail: e.target.value })}
-            />
-            <input
-              className="input w-full"
-              type="number"
-              min={1}
-              placeholder={t('reservationsGuests')}
-              value={form.partySize}
-              onChange={(e) => setForm({ ...form, partySize: Number(e.target.value) })}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs block">
-                {t('date')}
-                <input
-                  className="input mt-1 w-full"
-                  type="date"
-                  required
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                />
-              </label>
-              <label className="text-xs block">
-                {t('time')}
-                <input
-                  className="input mt-1 w-full"
-                  type="time"
-                  required
-                  value={form.time}
-                  onChange={(e) => setForm({ ...form, time: e.target.value })}
-                />
-              </label>
-            </div>
-            <textarea
-              className="input min-h-20 w-full"
-              placeholder={t('notes')}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs block">
-                <span className="mb-1 block text-stone-500">{t('reservationsStatus')}</span>
-                <select
-                  className="input w-full"
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  <option value="confirmed">{t('reservationsConfirmed')}</option>
-                  <option value="pending">{t('reservationsPending')}</option>
-                </select>
-              </label>
-              <label className="text-xs block">
-                <span className="mb-1 block text-stone-500">{t('reservationsSource')}</span>
-                <select
-                  className="input w-full"
-                  value={form.source}
-                  onChange={(e) => setForm({ ...form, source: e.target.value })}
-                >
-                  <option value="pos">{t('settingsPos')}</option>
-                  <option value="phone">{t('reservationsSourcePhone')}</option>
-                  <option value="walk_in">{t('reservationsSourceWalkIn')}</option>
-                  <option value="online">{t('reservationsSourceOnline')}</option>
-                </select>
-              </label>
-            </div>
-            <p className="text-xs text-stone-500">{t('reservationsSendConfirmEmail')}</p>
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)} disabled={createBusy}>
-                {t('cancel')}
-              </button>
-              <button type="submit" className="btn-primary" disabled={createBusy}>
-                {t('create')}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+      <ReservationCreateSheet
+        open={createOpen}
+        tables={tables}
+        defaultSource="pos"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={createReservation}
+      />
 
       {editId && editing ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

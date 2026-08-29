@@ -2139,37 +2139,19 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
     let customerId = authCustomer.customerId;
     const emailNorm = customerEmail?.trim().toLowerCase();
-    if (!customerId && emailNorm) {
-      let customer = await db.query.customers.findFirst({
-        where: and(eq(schema.customers.merchantId, merchant.id), eq(schema.customers.email, emailNorm)),
+    try {
+      const { CustomerService } = await import("@/services/customer.service");
+      const upserted = await CustomerService.upsertFromGuest(merchant.id, {
+        name: customerName,
+        phone: customerPhone,
+        email: emailNorm,
+        address: typeof shippingAddress === "string" ? shippingAddress : undefined,
+        zip: zipCode,
+        city,
       });
-      if (!customer) {
-        const [created] = await db
-          .insert(schema.customers)
-          .values({
-            merchantId: merchant.id,
-            email: emailNorm,
-            phone: customerPhone,
-            firstName: customerName?.split(" ")[0],
-            lastName: customerName?.split(" ").slice(1).join(" ") || undefined,
-            defaultAddress: typeof shippingAddress === "string" ? shippingAddress : undefined,
-            defaultZip: zipCode,
-            defaultCity: city,
-          })
-          .returning();
-        customer = created;
-      } else if (guestCheckout) {
-        await db
-          .update(schema.customers)
-          .set({
-            phone: customerPhone || customer.phone,
-            firstName: customerName?.split(" ")[0] || customer.firstName,
-            lastName: customerName?.split(" ").slice(1).join(" ") || customer.lastName,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.customers.id, customer.id));
-      }
-      customerId = customer.id;
+      if (!customerId && upserted?.id) customerId = upserted.id;
+    } catch (custErr) {
+      console.warn("Shop order customer upsert failed:", custErr);
     }
 
     const tip = roundTo005(Math.max(0, Number(tipAmount) || 0));
@@ -2471,14 +2453,18 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       });
     }
 
-    // Till notification on arrival; kitchen ticket when auto-accept or on manual Accept.
+    // Till notification on arrival; kitchen ticket when auto-accept, on-arrival setting, or later on Accept.
+    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const arrivalPrint = normalizePosPrintSettings(merchant.posPrintSettings);
+    const kitchenOnArrival =
+      !shopAutoAccept && arrivalPrint.autoPrintOnlineOrdersOnArrival === true;
 
     try {
       const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
       await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
         printDeliveryReceipt: order.fulfillmentChannel === "delivery",
         printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
-        printKitchen: false,
+        printKitchen: kitchenOnArrival,
         printReceipt: false,
       });
     } catch (printErr) {

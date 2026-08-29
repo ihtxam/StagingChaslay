@@ -77,6 +77,7 @@ import {
   isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
+  pairPrintAgentCloudRelay,
   printViaAgent,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
@@ -2261,6 +2262,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const tick = async () => {
       if (cancelled) return;
       try {
+        await pairPrintAgentCloudRelay();
         const result = await processPendingEscPosPrintJobs();
         if (result.remoteKitchenDone > 0) {
           ringWaiterTillBell(`remote-print-${Date.now()}`);
