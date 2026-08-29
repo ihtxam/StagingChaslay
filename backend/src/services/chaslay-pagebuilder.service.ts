@@ -1,6 +1,41 @@
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
+const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
+  ROOT: {
+    type: { resolvedName: "RootContainer" },
+    isCanvas: true,
+    props: { background: "#ffffff", minHeight: 600 },
+    displayName: "RootContainer",
+    custom: {},
+    hidden: false,
+    nodes: [],
+    linkedNodes: {},
+  },
+});
+
+function normalizeEditorState(state?: string | null): string | null {
+  if (state == null) return null;
+  const trimmed = state.trim();
+  if (!trimmed || trimmed === "{}") return null;
+  try {
+    JSON.parse(trimmed);
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+function editorStateForCreate(state?: string | null): string {
+  return normalizeEditorState(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
+}
+
+function editorStateForUpdate(state?: string): string | undefined {
+  if (state === undefined) return undefined;
+  const normalized = normalizeEditorState(state);
+  return normalized ?? DEFAULT_EMPTY_CANVAS_STATE;
+}
+
 export class ChaslayPagebuilderService {
   static async list(merchantId: string) {
     const db = getDb();
@@ -69,7 +104,7 @@ export class ChaslayPagebuilderService {
       .values({
         merchantId,
         name: input.name,
-        editorState: input.editor_state ?? null,
+        editorState: editorStateForCreate(input.editor_state),
         isActive: false,
       })
       .returning();
@@ -93,7 +128,7 @@ export class ChaslayPagebuilderService {
       updatedAt: new Date(),
     };
     if (input.name !== undefined) patch.name = input.name;
-    if (input.editor_state !== undefined) patch.editorState = input.editor_state;
+    if (input.editor_state !== undefined) patch.editorState = editorStateForUpdate(input.editor_state);
     const [row] = await db
       .update(schema.chaslayHomepageBuilders)
       .set(patch)
@@ -207,7 +242,7 @@ export class ChaslayPagebuilderService {
         merchantId,
         title: input.title,
         slug: input.slug,
-        editorState: input.editor_state ?? null,
+        editorState: editorStateForCreate(input.editor_state),
         isHomepage: input.is_homepage ?? false,
         sortOrder: input.sort_order ?? 0,
       })
@@ -270,7 +305,7 @@ export class ChaslayPagebuilderService {
     };
     if (input.title !== undefined) patch.title = input.title;
     if (input.slug !== undefined) patch.slug = input.slug;
-    if (input.editor_state !== undefined) patch.editorState = input.editor_state;
+    if (input.editor_state !== undefined) patch.editorState = editorStateForUpdate(input.editor_state);
     if (input.is_homepage !== undefined) patch.isHomepage = input.is_homepage;
     if (input.sort_order !== undefined) patch.sortOrder = input.sort_order;
     const [row] = await db

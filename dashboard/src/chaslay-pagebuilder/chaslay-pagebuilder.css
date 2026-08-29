@@ -43,3 +43,9 @@
 .chaslay-pagebuilder-root .border-border { border-color: hsl(var(--border)); }
 .chaslay-pagebuilder-root .border-input { border-color: hsl(var(--input)); }
 .chaslay-pagebuilder-root .ring-ring { --tw-ring-color: hsl(var(--ring)); }
+
+/* Portaled dialogs/editor sit above merchant panel chrome (sidebar z-40, banners, etc.) */
+.chaslay-pagebuilder-portal {
+  position: relative;
+  z-index: 200;
+}

@@ -20,6 +20,8 @@ import {
   DialogTitle,
 } from '@/chaslay-pagebuilder/ui/dialog';
 import { templates, type TemplateDefinition } from '@/chaslay-pagebuilder/data/templates';
+import { DEFAULT_EMPTY_CANVAS_STATE } from '@/chaslay-pagebuilder/constants';
+import { translateMessage } from '@/lib/chaslay-pagebuilder/i18n-stub';
 
 interface TemplateGalleryProps {
   open: boolean;
@@ -72,17 +74,24 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
         const res = await fetch(selectedTemplate.editorStateUrl);
         if (!res.ok) throw new Error('Failed to fetch template');
         const editorState = await res.text();
-        await onCreate(name.trim(), editorState);
+        const trimmed = editorState.trim();
+        await onCreate(
+          name.trim(),
+          trimmed && trimmed !== '{}' ? editorState : DEFAULT_EMPTY_CANVAS_STATE
+        );
       } catch (err) {
         console.error('Failed to load template:', err);
+        await onCreate(name.trim(), DEFAULT_EMPTY_CANVAS_STATE);
+      } finally {
         setIsFetchingTemplate(false);
-        return;
       }
-      setIsFetchingTemplate(false);
       return;
     }
 
-    await onCreate(name.trim(), selectedTemplate?.editorState);
+    const editorState = selectedTemplate?.editorState?.trim()
+      ? selectedTemplate.editorState
+      : DEFAULT_EMPTY_CANVAS_STATE;
+    await onCreate(name.trim(), editorState);
   }, [name, selectedTemplate, onCreate]);
 
   const isCreating = isSaving || isFetchingTemplate;
@@ -127,7 +136,7 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
                       <div className="aspect-[4/3] relative bg-muted overflow-hidden">
                         <img
                           src={template.thumbnail}
-                          alt={t(`${tplKey(template.id)}.name`)}
+                          alt={translateMessage(template.nameKey)}
                           className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform"
                         />
                         <Badge className="absolute top-2 right-2 capitalize" variant="secondary">
@@ -135,9 +144,9 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
                         </Badge>
                       </div>
                       <div className="p-3">
-                        <p className="font-medium text-sm">{t(`${tplKey(template.id)}.name`)}</p>
+                        <p className="font-medium text-sm">{translateMessage(template.nameKey)}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {t(`${tplKey(template.id)}.description`)}
+                          {translateMessage(template.descriptionKey)}
                         </p>
                       </div>
                     </CardContent>
@@ -159,16 +168,16 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
                   <div className="w-16 h-12 relative rounded overflow-hidden bg-background">
                     <img
                       src={selectedTemplate.thumbnail}
-                      alt={t(`${tplKey(selectedTemplate.id)}.name`)}
+                      alt={translateMessage(selectedTemplate.nameKey)}
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   </div>
                   <div>
                     <p className="font-medium text-sm">
-                      {t(`${tplKey(selectedTemplate.id)}.name`)}
+                      {translateMessage(selectedTemplate.nameKey)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {t(`${tplKey(selectedTemplate.id)}.description`)}
+                      {translateMessage(selectedTemplate.descriptionKey)}
                     </p>
                   </div>
                 </div>
@@ -200,9 +209,4 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
       </DialogContent>
     </Dialog>
   );
-}
-
-/** Converts template id like "grand-restaurant" to i18n key "grandRestaurant" */
-function tplKey(id: string): string {
-  return id.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 }

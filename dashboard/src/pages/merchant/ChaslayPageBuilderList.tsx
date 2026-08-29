@@ -213,7 +213,7 @@ export default function ChaslayPageBuilderList() {
       />
 
       {renamingHomepage && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg border p-6 w-full max-w-md space-y-4">
             <h2 className="font-semibold">Rename homepage</h2>
             <input
@@ -235,7 +235,7 @@ export default function ChaslayPageBuilderList() {
       )}
 
       {activatingHomepage && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg border p-6 w-full max-w-md space-y-4">
             <p>Activate &ldquo;{activatingHomepage.name}&rdquo;? Other layouts will be deactivated.</p>
             <div className="flex justify-end gap-2">
@@ -262,7 +262,7 @@ export default function ChaslayPageBuilderList() {
       )}
 
       {deactivatingHomepage && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg border p-6 w-full max-w-md space-y-4">
             <p>Deactivate &ldquo;{deactivatingHomepage.name}&rdquo;?</p>
             <div className="flex justify-end gap-2">
@@ -291,7 +291,7 @@ export default function ChaslayPageBuilderList() {
       )}
 
       {deletingId != null && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg border p-6 w-full max-w-md space-y-4">
             <p>Delete this homepage permanently?</p>
             <div className="flex justify-end gap-2">
