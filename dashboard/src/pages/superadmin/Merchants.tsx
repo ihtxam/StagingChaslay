@@ -1124,7 +1124,7 @@ export default function Merchants() {
 
       {showDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="text-xl font-bold">{showDetail.name}</h2>
               <button
