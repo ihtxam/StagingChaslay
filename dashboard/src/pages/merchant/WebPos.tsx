@@ -3842,6 +3842,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedLineId(null);
     setKeypadBuffer('');
     toast.success(`${t('webPosCourse')} ${next}`);
+    if (isNarrowViewport) setMobileCartOpen(false);
+    if (posView === 'checkout') {
+      setCheckoutOpen(false);
+      setPosView('register');
+      setPosTab('register');
+    }
   };
 
   const handleSelectCourse = (course: number) => {
@@ -6005,8 +6011,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     );
   };
 
+  const splitBillActive = () => splitQueue.length > 0 || !!splitMasterIdRef.current;
+
   /** Drop stale cart when the same ticket was paid on another till / orders tab. */
   const releasePaidCartSession = (order?: MerchantOrder | null) => {
+    if (splitBillActive()) return;
     const link = currentCartOrderLink();
     const draftKeys = [
       openCartDraftKey({ tableId, tabNumber, channel }),
@@ -6048,10 +6057,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const guardCartCheckout = async (): Promise<boolean> => {
     if (!cart.length || collectOrderRef) return true;
+    // Split-bill parts share one kitchen ticket but post separate payments — do not treat part 1 as "already paid".
+    if (splitBillActive()) return true;
     const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
     if (!hasSent && !resumedHeldIdRef.current && !ticketDisplay?.trim()) return true;
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 120 } });
+      if (splitBillActive()) return true;
       const orders = (res.data?.orders || []) as MerchantOrder[];
       const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
         requireSent: hasSent || !!resumedHeldIdRef.current,
@@ -6078,6 +6090,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const handleOrderPaidElsewhere = useCallback(
     (order: MerchantOrder) => {
+      if (splitQueue.length > 0 || splitMasterIdRef.current) return;
       if (isPaidOrder(order)) dismissOdsForOrder(order);
       if (collectOrderRef?.id === order.id) {
         clearCollectCheckout();
@@ -6101,6 +6114,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tableId,
       ticketOrderNumber,
       collectOrderRef,
+      splitQueue.length,
       t,
     ]
   );
@@ -6108,6 +6122,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Clear register cart when the same kitchen ticket was paid on another till. */
   useEffect(() => {
     if (collectOrderRef) return;
+    if (splitQueue.length > 0 || splitMasterIdRef.current) return;
     const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
     if (!hasSent && !resumedHeldIdRef.current && !cart.length) return;
     let cancelled = false;
@@ -6116,6 +6131,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (cancelled || (!cart.length && !orderSent)) return;
       try {
         const res = await api.get('/merchant/orders', { params: { limit: 120 } });
+        if (cancelled || splitMasterIdRef.current) return;
         const orders = (res.data?.orders || []) as MerchantOrder[];
         const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
           requireSent: hasSent || !!resumedHeldIdRef.current,
@@ -6145,6 +6161,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     tableId,
     ticketOrderNumber,
     collectOrderRef,
+    splitQueue.length,
     ordersRefreshToken,
     t,
   ]);

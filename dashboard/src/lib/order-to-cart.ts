@@ -68,6 +68,17 @@ export type CartCheckoutGuard =
   | { action: 'blocked'; order: MerchantOrder }
   | { action: 'collect'; order: MerchantOrder };
 
+function isActiveOrder(o: MerchantOrder): boolean {
+  return (o.status || '').toLowerCase() !== 'cancelled';
+}
+
+/** True when a masterOrderId group still has unpaid sibling checks (split-bill in progress). */
+function splitBillStillOpen(orders: MerchantOrder[], masterOrderId: string): boolean {
+  const siblings = orders.filter((o) => o.masterOrderId === masterOrderId);
+  if (siblings.length <= 1) return false;
+  return siblings.some((o) => isActiveOrder(o) && !isPaidOrder(o));
+}
+
 /** Block duplicate payment or redirect to collect on an existing unpaid ticket. */
 export function resolveCartCheckoutGuard(
   orders: MerchantOrder[],
@@ -76,12 +87,38 @@ export function resolveCartCheckoutGuard(
 ): CartCheckoutGuard {
   const matches = findOrdersMatchingCart(orders, link);
   if (!matches.length) return { action: 'ok' };
-  const paid = matches.find(
-    (o) => isPaidOrder(o) && (o.status || '').toLowerCase() !== 'cancelled'
-  );
-  if (paid) return { action: 'blocked', order: paid };
+
+  const active = matches.filter(isActiveOrder);
+  const paid = active.filter((o) => isPaidOrder(o));
+  const unpaid = active.filter((o) => !isPaidOrder(o));
+
+  // Split-bill parts share one kitchen ticket — one paid check must not block the rest.
+  if (paid.length > 0 && unpaid.length > 0 && paid.some((o) => o.masterOrderId)) {
+    if (opts?.requireSent) {
+      const open = unpaid.find(canCollectPayment);
+      if (open) return { action: 'collect', order: open };
+    }
+    return { action: 'ok' };
+  }
+
+  for (const o of active) {
+    const masterId = o.masterOrderId?.trim();
+    if (masterId && splitBillStillOpen(orders, masterId)) {
+      if (opts?.requireSent) {
+        const open = unpaid.find(canCollectPayment);
+        if (open) return { action: 'collect', order: open };
+      }
+      return { action: 'ok' };
+    }
+  }
+
+  const paidOrder = paid[0];
+  if (paidOrder && unpaid.length === 0) {
+    return { action: 'blocked', order: paidOrder };
+  }
+
   if (opts?.requireSent) {
-    const open = matches.find(canCollectPayment);
+    const open = unpaid.find(canCollectPayment);
     if (open) return { action: 'collect', order: open };
   }
   return { action: 'ok' };
