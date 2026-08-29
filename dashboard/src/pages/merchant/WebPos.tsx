@@ -287,6 +287,13 @@ function blurPosInputs() {
   }
 }
 import {
+  cycleCategoryLayout,
+  persistCategoryLayout,
+  readStoredCategoryLayout,
+  shouldShowCategoryLayoutPicker,
+  type WebPosCategoryLayoutMode,
+} from '@/lib/webpos-category-layout';
+import {
   clearPersistedWebPosCarts,
   draftsMapToRecord,
   loadPersistedWebPosCarts,
@@ -740,6 +747,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [gridTileSize, setGridTileSize] = useState<ProductGridTileSize>(() => readStoredGridTileSize());
   const [gridMobileLayout, setGridMobileLayout] = useState<MobileGridLayoutStep>(() =>
     readStoredMobileGridLayout()
+  );
+  const [categoryLayout, setCategoryLayout] = useState<WebPosCategoryLayoutMode>(() =>
+    readStoredCategoryLayout()
   );
   const [gridSort, setGridSort] = useState<ProductGridSort>(() => readStoredGridSort());
   const [openShift, setOpenShift] = useState<{
@@ -9334,7 +9344,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 tileSize={gridTileSize}
                 mobileGridStep={gridMobileLayout}
                 isPhoneLayout={isPhoneViewport}
+                categoryLayout={categoryLayout}
+                onCategoryLayoutChange={(mode) => {
+                  setCategoryLayout(mode);
+                  persistCategoryLayout(mode);
+                }}
                 onCycleTileSize={() => {
+                  const catCount =
+                    visibleCategories.length + (giftCardsEnabled ? 1 : 0) + 1;
+                  const catCols: 2 | 3 =
+                    isPhoneViewport && gridMobileLayout >= 1 ? 3 : isPhoneViewport ? 2 : 3;
+                  if (
+                    isPhoneViewport &&
+                    shouldShowCategoryLayoutPicker(catCount, catCols)
+                  ) {
+                    setCategoryLayout((cur) => {
+                      const next = cycleCategoryLayout(cur);
+                      persistCategoryLayout(next);
+                      return next;
+                    });
+                    return;
+                  }
                   if (isPhoneViewport) {
                     setGridMobileLayout((cur) => {
                       const next = ((cur + 1) % 3) as MobileGridLayoutStep;
