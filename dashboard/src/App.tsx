@@ -116,8 +116,12 @@ const MAIN_HOST = (
 /** Reserved hosts that must never be treated as a merchant shop subdomain. */
 const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status']);
 
+/** Local dev hosts should use panel routes (/login, /merchant), not shop subdomain mode. */
+const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
+
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
+  if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
