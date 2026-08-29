@@ -186,6 +186,7 @@ export function isOnlineShopOrder(o: {
     t === 'web_shop' ||
     t === 'online' ||
     src === 'online_shop' ||
+    src === 'kiosk' ||
     src === 'justeat' ||
     src === 'ubereats' ||
     ch.includes('uber') ||
@@ -204,6 +205,7 @@ export function orderSourceLabel(source?: string | null): string {
   if (s === 'ubereats') return 'Uber Eats';
   if (s === 'online_shop') return 'Online shop';
   if (s === 'qr_table') return 'QR table';
+  if (s === 'kiosk') return 'Self-order kiosk';
   return 'Online';
 }
 

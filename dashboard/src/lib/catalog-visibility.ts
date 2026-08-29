@@ -1,10 +1,10 @@
-export type CatalogChannel = 'pos' | 'shop' | 'qr_table' | 'delivery';
+export type CatalogChannel = 'pos' | 'shop' | 'qr_table' | 'delivery' | 'kiosk';
 
 export type CatalogVisibility = {
   channels: CatalogChannel[];
 };
 
-export const ALL_CATALOG_CHANNELS: CatalogChannel[] = ['pos', 'shop', 'qr_table', 'delivery'];
+export const ALL_CATALOG_CHANNELS: CatalogChannel[] = ['pos', 'shop', 'qr_table', 'delivery', 'kiosk'];
 
 export const DEFAULT_CATALOG_VISIBILITY: CatalogVisibility = {
   channels: [...ALL_CATALOG_CHANNELS],

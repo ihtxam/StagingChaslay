@@ -96,6 +96,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import SignagePage from './SignagePage';
+import KioskSettingsPage from './KioskSettingsPage';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -1017,6 +1018,7 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
+            <Route path="kiosk" element={<KioskSettingsPage />} />
             <Route
               path="terminals"
               element={

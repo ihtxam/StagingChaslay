@@ -1,11 +1,11 @@
 /** Where a product/category may appear in the catalog. */
-export type CatalogChannel = "pos" | "shop" | "qr_table" | "delivery";
+export type CatalogChannel = "pos" | "shop" | "qr_table" | "delivery" | "kiosk";
 
 export type CatalogVisibility = {
   channels: CatalogChannel[];
 };
 
-export const ALL_CATALOG_CHANNELS: CatalogChannel[] = ["pos", "shop", "qr_table", "delivery"];
+export const ALL_CATALOG_CHANNELS: CatalogChannel[] = ["pos", "shop", "qr_table", "delivery", "kiosk"];
 
 const CHANNEL_SET = new Set<string>(ALL_CATALOG_CHANNELS);
 
@@ -70,6 +70,7 @@ export function shopMenuCatalogChannel(
   if (tableId) return "qr_table";
   const c = String(channelParam || "").toLowerCase();
   if (c === "delivery") return "delivery";
+  if (c === "kiosk") return "kiosk";
   if (c === "dine_in") return "qr_table";
   return "shop";
 }
