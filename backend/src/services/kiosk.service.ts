@@ -94,6 +94,7 @@ export class KioskService {
         brandButtonTextColor: settings.brandButtonTextColor,
         autoPrintKitchen: settings.autoPrintKitchen !== false,
         autoPrintReceipt: settings.autoPrintReceipt === true,
+        screenSizeIn: settings.screenSizeIn === 27 ? 27 : 23,
       },
       tables,
     };

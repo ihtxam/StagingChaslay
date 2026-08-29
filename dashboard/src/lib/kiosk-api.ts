@@ -33,6 +33,7 @@ export type KioskConfig = {
     brandButtonTextColor?: string;
     autoPrintKitchen?: boolean;
     autoPrintReceipt?: boolean;
+    screenSizeIn?: 23 | 27;
   };
   tables: Array<{ id: string; label: string }>;
 };
@@ -74,6 +75,7 @@ export type KioskAdminSettings = {
   brandButtonTextColor?: string;
   autoPrintKitchen?: boolean;
   autoPrintReceipt?: boolean;
+  screenSizeIn?: 23 | 27;
 };
 
 export type KioskMenuCategory = {

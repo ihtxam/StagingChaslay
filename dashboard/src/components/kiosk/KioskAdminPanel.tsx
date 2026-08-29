@@ -333,6 +333,26 @@ export default function KioskAdminPanel({
               onChange={(e) => setSettings({ ...settings, brandButtonTextColor: e.target.value })}
             />
           </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Touch screen size (portrait)</span>
+            <select
+              className="input mt-1 w-full max-w-xs"
+              value={settings.screenSizeIn === 27 ? 27 : 23}
+              disabled={!tokenModeEditable}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  screenSizeIn: Number(e.target.value) === 27 ? 27 : 23,
+                })
+              }
+            >
+              <option value={23}>23&quot; vertical (1080×1920)</option>
+              <option value={27}>27&quot; vertical (1080×1920)</option>
+            </select>
+            <p className="mt-1 text-xs text-stone-500">
+              Scales buttons, text, and product tiles for your kiosk display. Use 27&quot; for larger touch targets.
+            </p>
+          </label>
         </div>
         <div className="space-y-2 border-t border-stone-200 pt-3">
           <p className="text-sm font-semibold">Order type buttons on main screen</p>

@@ -47,6 +47,8 @@ export type KioskSettings = {
   autoPrintKitchen?: boolean;
   /** Print guest receipt from kiosk tablet after order. */
   autoPrintReceipt?: boolean;
+  /** Portrait touch screen diagonal in inches — scales UI for 23" or 27" kiosks. */
+  screenSizeIn?: 23 | 27;
 };
 
 export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
@@ -69,6 +71,7 @@ export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
   brandButtonTextColor: "#ffffff",
   autoPrintKitchen: true,
   autoPrintReceipt: false,
+  screenSizeIn: 23,
 };
 
 export function generateKioskToken(): string {
@@ -157,7 +160,13 @@ export function normalizeKioskSettings(raw: unknown): KioskSettings {
     ),
     autoPrintKitchen: src.autoPrintKitchen !== false,
     autoPrintReceipt: src.autoPrintReceipt === true,
+    screenSizeIn: normalizeScreenSizeIn(src.screenSizeIn),
   };
+}
+
+function normalizeScreenSizeIn(value: unknown): 23 | 27 {
+  const n = Math.round(Number(value));
+  return n === 27 ? 27 : 23;
 }
 
 function normalizeAdminPin(value: unknown): string {
