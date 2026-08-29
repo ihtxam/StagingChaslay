@@ -1549,6 +1549,11 @@ export async function ensureAllMerchantSchema(): Promise<{
   ).catch(() => REQUIRED_SUBSCRIPTION_PLAN_COLUMNS.slice());
   if (editionsMissing.length || subscriptionPlansMissing.length) {
     patchedTables = false;
+    for (const col of subscriptionPlansMissing) {
+      patchedColumns.delete(col);
+      patchedColumns.delete(`subscription_plans.${col}`);
+      patchedColumns.delete(`subscription_plans_${col}`);
+    }
     await ensureSubscriptionPlansSchema();
   }
   const editionsMissingAfter = (await tableExists("editions").catch(() => false))
