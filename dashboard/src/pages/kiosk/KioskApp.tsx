@@ -781,7 +781,7 @@ export default function KioskApp() {
                 onClick={() => void submitOrder('card')}
                 className="kiosk-checkout-card flex min-h-[var(--kiosk-choice-min-h,140px)] flex-col items-center justify-center gap-3 rounded-2xl border-2 p-8 active:scale-[0.98]"
               >
-                <CreditCard className="kiosk-btn-choice-icon h-12 w-12" />
+                <CreditCard className="h-12 w-12 kiosk-text-accent" />
                 <span className="text-[1.25em] font-bold">Pay by card</span>
                 <span className="text-sm text-stone-500">Use payment terminal</span>
               </button>
