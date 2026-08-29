@@ -1,5 +1,4 @@
 import { Pool } from "pg";
-import { getDb } from "@/db";
 import {
   dbErrorChain,
   isLocationsSchemaError,
@@ -1291,19 +1290,45 @@ function isOrderItemsColumnSchemaError(raw: string): boolean {
 
 const REQUIRED_MERCHANT_COLUMNS = Object.keys(MERCHANT_COLUMN_PATCHES);
 
-export async function listMissingMerchantColumns(): Promise<string[]> {
+const REQUIRED_ORDERS_COLUMNS = Object.entries(EXTRA_COLUMN_PATCHES)
+  .filter(([k, sql]) => k.startsWith("orders_") || sql.includes("ALTER TABLE orders "))
+  .map(([k, sql]) => {
+    const m = sql.match(/ADD COLUMN IF NOT EXISTS ([a-z0-9_]+)/i);
+    return m?.[1] || k.replace(/^orders_/, "");
+  })
+  .filter((v, i, a) => a.indexOf(v) === i);
+
+const REQUIRED_ORDER_ITEMS_COLUMNS = Object.entries(EXTRA_COLUMN_PATCHES)
+  .filter(([k, sql]) => k.startsWith("order_items_") || sql.includes("ALTER TABLE order_items "))
+  .map(([k, sql]) => {
+    const m = sql.match(/ADD COLUMN IF NOT EXISTS ([a-z0-9_]+)/i);
+    return m?.[1] || k.replace(/^order_items_/, "");
+  })
+  .filter((v, i, a) => a.indexOf(v) === i);
+
+export async function listMissingTableColumns(
+  table: string,
+  required: string[]
+): Promise<string[]> {
   const { rows } = await getDdlPool().query<{ column_name: string }>(
     `SELECT column_name FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'merchants'`
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
   );
   const have = new Set(rows.map((r) => r.column_name));
-  return REQUIRED_MERCHANT_COLUMNS.filter((c) => !have.has(c));
+  return required.filter((c) => !have.has(c));
+}
+
+export async function listMissingMerchantColumns(): Promise<string[]> {
+  return listMissingTableColumns("merchants", REQUIRED_MERCHANT_COLUMNS);
 }
 
 /** Apply all idempotent schema patches (safe to run on every boot). */
 export async function ensureAllMerchantSchema(): Promise<{
   missingBefore: string[];
   missingAfter: string[];
+  ordersMissing: string[];
+  orderItemsMissing: string[];
 }> {
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
@@ -1326,18 +1351,46 @@ export async function ensureAllMerchantSchema(): Promise<{
   await ensureMerchantTables();
   await ensureLocationsSchema();
 
-  // Force-add any merchant columns still missing (bypass in-memory cache).
-  const still = await listMissingMerchantColumns().catch(() => [] as string[]);
-  for (const col of still) {
+  const stillMerchants = await listMissingMerchantColumns().catch(() => [] as string[]);
+  for (const col of stillMerchants) {
     patchedColumns.delete(`merchants.${col}`);
     patchedColumns.delete(col);
     await runPatch(col, "merchants");
   }
-  const missingAfter = await listMissingMerchantColumns().catch(() => [] as string[]);
-  if (missingAfter.length) {
-    console.warn("[schema] still missing merchant columns:", missingAfter.join(", "));
+  const stillOrders = await listMissingTableColumns("orders", REQUIRED_ORDERS_COLUMNS).catch(
+    () => [] as string[]
+  );
+  for (const col of stillOrders) {
+    patchedColumns.delete(`orders.${col}`);
+    patchedColumns.delete(`orders_${col}`);
+    await runPatch(col, "orders");
   }
-  return { missingBefore, missingAfter };
+  const stillItems = await listMissingTableColumns(
+    "order_items",
+    REQUIRED_ORDER_ITEMS_COLUMNS
+  ).catch(() => [] as string[]);
+  for (const col of stillItems) {
+    patchedColumns.delete(`order_items.${col}`);
+    patchedColumns.delete(`order_items_${col}`);
+    await runPatch(col, "order_items");
+  }
+
+  const missingAfter = await listMissingMerchantColumns().catch(() => [] as string[]);
+  const ordersMissing = await listMissingTableColumns("orders", REQUIRED_ORDERS_COLUMNS).catch(
+    () => [] as string[]
+  );
+  const orderItemsMissing = await listMissingTableColumns(
+    "order_items",
+    REQUIRED_ORDER_ITEMS_COLUMNS
+  ).catch(() => [] as string[]);
+  if (missingAfter.length || ordersMissing.length || orderItemsMissing.length) {
+    console.warn("[schema] still missing:", {
+      merchants: missingAfter,
+      orders: ordersMissing,
+      orderItems: orderItemsMissing,
+    });
+  }
+  return { missingBefore, missingAfter, ordersMissing, orderItemsMissing };
 }
 
 /** Run schema patches at startup — await before accepting traffic. */

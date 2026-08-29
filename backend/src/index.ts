@@ -148,12 +148,17 @@ app.get("/health", (_req: Request, res: Response) => {
 async function handleSchemaRepair(_req: Request, res: Response) {
   try {
     const result = await ensureAllMerchantSchema();
-    const ok = result.missingAfter.length === 0;
+    const ok =
+      result.missingAfter.length === 0 &&
+      result.ordersMissing.length === 0 &&
+      result.orderItemsMissing.length === 0;
     res.status(ok ? 200 : 500).json({
       status: ok ? "ok" : "error",
       repaired: true,
       missingBefore: result.missingBefore,
       missingAfter: result.missingAfter,
+      ordersMissing: result.ordersMissing,
+      orderItemsMissing: result.orderItemsMissing,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
