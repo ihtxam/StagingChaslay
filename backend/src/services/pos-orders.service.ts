@@ -16,6 +16,7 @@ import {
 import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { AdyenService } from "@/services/adyen.service";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
@@ -174,6 +175,7 @@ export class PosOrdersService {
       q?: string;
     } = {}
   ) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
     const conditions = [
@@ -405,6 +407,7 @@ export class PosOrdersService {
         };
       }),
     };
+    });
     });
   }
 

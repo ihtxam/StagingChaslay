@@ -41,7 +41,7 @@ import { ensureUploadsRoot } from "@/services/media-upload.service";
 import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
-import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
+import { ensureMerchantSchemaAtStartup, ensureAllMerchantSchema } from "@/lib/ensure-merchant-schema";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
@@ -139,6 +139,20 @@ app.get("/health", (_req: Request, res: Response) => {
     service: "reborn-backend",
     timestamp: new Date().toISOString(),
   });
+});
+
+/** Idempotent DB column repair — safe to call after deploy (no auth; alters only). */
+app.post("/health/schema-repair", async (_req: Request, res: Response) => {
+  try {
+    await ensureAllMerchantSchema();
+    res.json({ status: "ok", repaired: true, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error("[schema-repair] failed:", error);
+    res.status(500).json({
+      status: "error",
+      error: error instanceof Error ? error.message : "Schema repair failed",
+    });
+  }
 });
 
 /** Public status page data (no auth). */

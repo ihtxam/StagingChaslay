@@ -653,6 +653,11 @@ API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || dc exec -T api wget -qO- 
 echo "local api: ${API_HEALTH:-unreachable}"
 curl -sf "${API_URL}/health" || true
 echo
+echo "=== Schema repair (idempotent column patches) ==="
+curl -sf -X POST http://127.0.0.1:3000/health/schema-repair || \
+  dc exec -T api wget -qO- --post-data='' http://127.0.0.1:3000/health/schema-repair || true
+curl -sf -X POST "${API_URL}/health/schema-repair" || true
+echo
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
 PRINT_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-agent-setup.exe" || true)"

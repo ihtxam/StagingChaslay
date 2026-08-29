@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { ensureLocationsSchema, ensureMerchantColumnsSchema, ensureOrdersColumnsSchema } from "@/lib/ensure-merchant-schema";
+import { ensureLocationsSchema, ensureMerchantColumnsSchema, ensureOrdersColumnsSchema, ensureOrderItemsColumnsSchema } from "@/lib/ensure-merchant-schema";
 import { LocationsService } from "@/services/locations.service";
 
 declare global {
@@ -21,6 +21,7 @@ export async function setLocationContext(req: Request, res: Response, next: Next
 
     await ensureMerchantColumnsSchema();
     await ensureOrdersColumnsSchema();
+    await ensureOrderItemsColumnsSchema();
     await ensureLocationsSchema();
 
     const headerId = String(req.headers["x-location-id"] || "").trim();
