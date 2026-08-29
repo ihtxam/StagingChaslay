@@ -21,5 +21,6 @@ export function loginHomeFromPermissions(
   if (permissions.includes('STOREKEEPER_INTAKE') || permissions.includes('DELIVERY_ORDERS')) {
     return 'pos';
   }
+  if (permissions.includes('MANAGE_KIOSK')) return 'panel';
   return hasPos ? 'pos' : 'panel';
 }

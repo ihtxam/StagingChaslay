@@ -6,7 +6,9 @@ import {
   hasPermission,
   isDeliveryDriverOnlyStaff,
   isStorekeeperOnlyStaff,
+  isKioskOnlyStaff,
   isWaiterRestrictedStaff,
+  kioskHomePath,
   storekeeperHomePath,
   waiterRestrictedHomePath,
   type Permission,
@@ -27,6 +29,7 @@ export function homePathForUser(
   if (loginHome === 'panel') {
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
+    if (isKioskOnlyStaff(perms, user.isOwner === true)) return kioskHomePath();
     if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
       return waiterRestrictedHomePath(perms);
     }
@@ -51,6 +54,7 @@ export function homePathForUser(
 
   if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
   if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
+  if (isKioskOnlyStaff(perms, user.isOwner === true)) return kioskHomePath();
   if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
     return waiterRestrictedHomePath(perms);
   }

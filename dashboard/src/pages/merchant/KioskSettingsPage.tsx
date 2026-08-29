@@ -1,0 +1,6 @@
+import KioskAdminPanel from '@/components/kiosk/KioskAdminPanel';
+
+/** Merchant panel — kiosk operators with MANAGE_KIOSK land here after login. */
+export default function KioskSettingsPage() {
+  return <KioskAdminPanel mode="merchant" showOwnerExtras />;
+}

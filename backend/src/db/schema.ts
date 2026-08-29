@@ -16,6 +16,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
+import type { KioskSettings } from "../lib/kiosk-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -286,6 +287,13 @@ export const merchants = pgTable(
     kdsAddonEnabled: boolean("kds_addon_enabled").default(false).notNull(),
     /** Paid order display system (ODS) addon. Superadmin/reseller only. */
     odsAddonEnabled: boolean("ods_addon_enabled").default(false).notNull(),
+    /** Paid self-order kiosk addon. Superadmin/reseller only. */
+    kioskAddonEnabled: boolean("kiosk_addon_enabled").default(false).notNull(),
+    /**
+     * Self-order kiosk configuration:
+     * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
+     */
+    kioskSettings: json("kiosk_settings").$type<KioskSettings | null>(),
     /** Paid Just Eat / JET Connect order integration addon. */
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */

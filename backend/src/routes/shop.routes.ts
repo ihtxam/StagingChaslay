@@ -1875,6 +1875,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       tableId,
       tableSessionToken,
       orderSource: requestedOrderSource,
+      kioskToken,
+      badgeNumber,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -1903,6 +1905,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       tableId?: string;
       tableSessionToken?: string;
       orderSource?: string;
+      kioskToken?: string;
+      badgeNumber?: string;
     };
 
     if (scheduledFor) {
@@ -1926,6 +1930,28 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
     const qrTableId = String(tableId || "").trim() || null;
     const isQrTableOrder = !!qrTableId;
+    const resolvedKioskToken = String(kioskToken || "").trim();
+    const isKioskOrder =
+      requestedOrderSource === "kiosk" ||
+      (!!resolvedKioskToken && requestedOrderSource !== "online_shop");
+    let kioskSettings: Awaited<
+      ReturnType<typeof import("@/services/kiosk.service").KioskService.assertTokenForMerchant>
+    > | null = null;
+    if (isKioskOrder) {
+      try {
+        const { KioskService } = await import("@/services/kiosk.service");
+        kioskSettings = await KioskService.assertTokenForMerchant(
+          merchant.id,
+          resolvedKioskToken
+        );
+      } catch (err) {
+        return res.status(403).json({
+          error: err instanceof Error ? err.message : "Invalid kiosk access",
+        });
+      }
+    }
+    const kioskBadge = String(badgeNumber || "").trim();
+
     let resolvedTableSession: Awaited<ReturnType<typeof TableSessionService.assertOpenSession>> | null =
       null;
     let resolvedTableLabel: string | null = null;
@@ -1945,14 +1971,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       }
     }
 
-    if (!isQrTableOrder && (!customerName?.trim() || !customerPhone?.trim())) {
+    if (!isQrTableOrder && !isKioskOrder && (!customerName?.trim() || !customerPhone?.trim())) {
       return res.status(400).json({ error: "Name and phone are required" });
     }
 
     const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
     const payMethod =
       rawPay === "card" ? "card" : rawPay === "pay_later" ? "pay_later" : "cash";
-    const channel: FulfillmentChannel = isQrTableOrder
+    const channel: FulfillmentChannel = isQrTableOrder || isKioskOrder
       ? "dine_in"
       : fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
         ? fulfillmentChannel
@@ -2374,6 +2400,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const notesWithRounding =
       [
         notes || "",
+        isKioskOrder && kioskBadge ? `[Kiosk badge: ${kioskBadge}]` : "",
+        isKioskOrder ? "[Kiosk order]" : "",
         offerEval.applied.length
           ? `[Offers: ${offerEval.applied.map((a) => `${a.name} −CHF ${a.discount.toFixed(2)}`).join("; ")}]`
           : "",
@@ -2445,16 +2473,23 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
     const shopAutoAccept = deliverySettings.onlineShopAutoAccept;
     const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
-    const initialOrderStatus = shopAutoAccept || qrAutoAccept ? "preparing" : "pending_approval";
-    const resolvedOrderSource = isQrTableOrder
-      ? "qr_table"
-      : requestedOrderSource === "qr_table"
+    const kioskCashNeedsApproval = kioskSettings?.kioskCashNeedsApproval !== false;
+    const kioskAutoAcceptCash = isKioskOrder && payMethod === "cash" && !kioskCashNeedsApproval;
+    const initialOrderStatus =
+      shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash ? "preparing" : "pending_approval";
+    const resolvedOrderSource = isKioskOrder
+      ? "kiosk"
+      : isQrTableOrder
         ? "qr_table"
-        : "online_shop";
+        : requestedOrderSource === "qr_table"
+          ? "qr_table"
+          : "online_shop";
     const resolvedCustomerName =
       customerName?.trim() ||
-      (resolvedTableLabel ? `Table ${resolvedTableLabel}` : isQrTableOrder ? "Table guest" : "");
-    const resolvedCustomerPhone = customerPhone?.trim() || (isQrTableOrder ? "QR" : "");
+      (kioskBadge ? `Badge ${kioskBadge}` : null) ||
+      (resolvedTableLabel ? `Table ${resolvedTableLabel}` : isQrTableOrder ? "Table guest" : isKioskOrder ? "Kiosk guest" : "");
+    const resolvedCustomerPhone =
+      customerPhone?.trim() || (isKioskOrder ? "KIOSK" : isQrTableOrder ? "QR" : "");
 
     const { LocationsService } = await import("@/services/locations.service");
     const orderLocationId = await (async () => {

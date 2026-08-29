@@ -28,6 +28,8 @@ import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
+import KioskApp from '@/pages/kiosk/KioskApp';
+import KioskTokenAdminPage from '@/pages/kiosk/KioskTokenAdminPage';
 import SignageDisplayPage from '@/pages/SignageDisplayPage';
 import StatusPage from '@/pages/StatusPage';
 
@@ -243,6 +245,22 @@ function App() {
             element={
               <I18nProvider storageKey={PANEL_LANG_KEY}>
                 <KdsDisplayPage />
+              </I18nProvider>
+            }
+          />
+          <Route
+            path="/kiosk/:token"
+            element={
+              <I18nProvider storageKey="reborn-kiosk-lang">
+                <KioskApp />
+              </I18nProvider>
+            }
+          />
+          <Route
+            path="/kiosk/:token/admin"
+            element={
+              <I18nProvider storageKey="reborn-kiosk-lang">
+                <KioskTokenAdminPage />
               </I18nProvider>
             }
           />

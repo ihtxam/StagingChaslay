@@ -594,6 +594,7 @@ const en: Dict = {
   catalogChannel_shop: 'Online shop',
   catalogChannel_qr_table: 'QR table ordering',
   catalogChannel_delivery: 'Delivery',
+  catalogChannel_kiosk: 'Self-order kiosk',
   locationPickerTitle: 'Choose location',
   locationPickerHint: 'Sales, reports, and POS will be scoped to this branch.',
   locationPickerEmpty: 'No locations yet. Add one under HQ when multi-location is enabled.',
@@ -2916,6 +2917,10 @@ const en: Dict = {
   staffRoleStorekeeper: 'Storekeeper (mobile intake)',
   staffRoleStorekeeperHint:
     'Opens the mobile storekeeper app after PIN login — scan barcodes and receive stock. No full panel access.',
+  staffRoleKiosk: 'Kiosk operator',
+  staffRoleKioskHint:
+    'Opens kiosk setup only — configure sliders, payment methods, test connections, and launch customer mode. No full panel access.',
+  kioskNav: 'Self-order kiosk',
   staffRoleBackOfficeHint:
     'Access menu (catalogue) and Access orders open a limited back office. End of day is allowed for own sales. Full Sales / invoices / settings stay off unless granted.',
   staffEmailPanel: 'Email (official login)',
@@ -2982,6 +2987,7 @@ const en: Dict = {
     'End of day — print/view EOD (own sales unless “View all sales” is also granted)',
   perm_MANAGE_INVENTORY: 'Manage inventory (full stock panel)',
   perm_STOREKEEPER_INTAKE: 'Storekeeper mobile intake (barcode scan & receive stock)',
+  perm_MANAGE_KIOSK: 'Manage self-order kiosk',
   adyenSettingsHint:
     'One Swisspayout merchant account and API key for the online shop and all payment terminals.',
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
@@ -4084,6 +4090,7 @@ const fr: Dict = {
   catalogChannel_shop: 'Boutique en ligne',
   catalogChannel_qr_table: 'Commande QR à table',
   catalogChannel_delivery: 'Livraison',
+  catalogChannel_kiosk: 'Borne de commande',
   tableOrderTitle: 'Commande à table',
   tableOrderTableLabel: 'Table {label}',
   tableOrderHistory: 'Vos commandes',
@@ -6268,6 +6275,10 @@ const fr: Dict = {
   staffRoleStorekeeper: 'Magasinier (réception mobile)',
   staffRoleStorekeeperHint:
     'Ouvre l’app magasinier après le PIN — scan des codes-barres et réception stock. Pas d’accès au panneau.',
+  staffRoleKiosk: 'Opérateur borne',
+  staffRoleKioskHint:
+    'Accès à la configuration borne uniquement — sliders, paiements, tests de connexion et lancement du mode client. Pas d’accès au panneau complet.',
+  kioskNav: 'Borne de commande',
   staffRoleBackOfficeHint:
     'Accès menu et commandes = back-office limité. Fin de journée autorisée pour leurs ventes. Ventes complètes / factures / paramètres restent désactivés sauf droit explicite.',
   staffEmailPanel: 'E-mail (connexion officielle)',
@@ -6334,6 +6345,7 @@ const fr: Dict = {
     'Fin de journée — imprimer/voir l’EOD (ses ventes sauf si « Voir toutes les ventes »)',
   perm_MANAGE_INVENTORY: 'Gérer l’inventaire (panneau stock complet)',
   perm_STOREKEEPER_INTAKE: 'Réception magasinier mobile (scan code-barres et stock)',
+  perm_MANAGE_KIOSK: 'Gérer la borne de commande',
   notes: 'Notes',
   adyenSettingsHint:
     'Un seul compte marchand et clé API Swisspayout pour la boutique en ligne et tous les terminaux.',
@@ -7440,6 +7452,7 @@ const de: Dict = {
   catalogChannel_shop: 'Onlineshop',
   catalogChannel_qr_table: 'QR-Tischbestellung',
   catalogChannel_delivery: 'Lieferung',
+  catalogChannel_kiosk: 'Selbstbestell-Kiosk',
   tableOrderTitle: 'Tischbestellung',
   tableOrderTableLabel: 'Tisch {label}',
   tableOrderHistory: 'Ihre Bestellungen',
@@ -9624,6 +9637,10 @@ const de: Dict = {
   staffRoleStorekeeper: 'Lagerist (mobile Buchung)',
   staffRoleStorekeeperHint:
     'Öffnet die mobile Lageristen-App nach PIN-Login — Barcodes scannen und Bestand buchen. Kein volles Panel.',
+  staffRoleKiosk: 'Kiosk-Betreiber',
+  staffRoleKioskHint:
+    'Nur Kiosk-Einrichtung — Slider, Zahlungsarten, Verbindungstests und Start des Kundenmodus. Kein volles Panel.',
+  kioskNav: 'Selbstbestell-Kiosk',
   staffRoleBackOfficeHint:
     'Menü- und Bestellzugang = begrenztes Backoffice. Tagesabschluss für eigene Verkäufe erlaubt. Voller Verkauf / Rechnungen / Einstellungen nur mit explizitem Recht.',
   staffEmailPanel: 'E-Mail (offizielles Login)',
@@ -9690,6 +9707,7 @@ const de: Dict = {
     'Tagesabschluss — EOD drucken/ansehen (eigene Verkäufe außer mit „Alle Verkäufe ansehen“)',
   perm_MANAGE_INVENTORY: 'Inventar verwalten (volles Bestandspanel)',
   perm_STOREKEEPER_INTAKE: 'Mobile Lageristen-Buchung (Barcode-Scan & Wareneingang)',
+  perm_MANAGE_KIOSK: 'Selbstbestell-Kiosk verwalten',
   notes: 'Notizen',
   adyenSettingsHint:
     'Ein Swisspayout-Händlerkonto und API-Schlüssel für Online-Shop und alle Zahlungsterminals.',

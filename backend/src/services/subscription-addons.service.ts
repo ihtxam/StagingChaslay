@@ -33,6 +33,7 @@ const VALID_ADDON_KEYS = new Set([
   "signage",
   "kds",
   "ods",
+  "kiosk",
   "just_eat",
   "uber_eats",
   "extra_pos_post",

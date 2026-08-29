@@ -134,6 +134,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kds_addon_enabled boolean NOT NULL DEFAULT false",
   ods_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
+  kiosk_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_addon_enabled boolean NOT NULL DEFAULT false",
+  kiosk_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_settings jsonb",
   just_eat_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
   uber_eats_addon_enabled:
@@ -1243,6 +1247,16 @@ export async function ensureKdsAddonColumn(): Promise<void> {
 
 export async function ensureOdsAddonColumn(): Promise<void> {
   await runPatch("ods_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureKioskAddonColumn(): Promise<void> {
+  await runPatch("kiosk_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureKioskSettingsColumn(): Promise<void> {
+  await runPatch("kiosk_settings");
   await ensureMerchantTables();
 }
 
