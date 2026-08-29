@@ -154,7 +154,8 @@ async function handleSchemaRepair(_req: Request, res: Response) {
       result.orderItemsMissing.length === 0 &&
       result.productsMissing.length === 0 &&
       result.editionsMissing.length === 0 &&
-      result.subscriptionPlansMissing.length === 0;
+      result.subscriptionPlansMissing.length === 0 &&
+      result.posSessionsMissing.length === 0;
     res.status(ok ? 200 : 500).json({
       status: ok ? "ok" : "error",
       repaired: true,
@@ -165,6 +166,7 @@ async function handleSchemaRepair(_req: Request, res: Response) {
       productsMissing: result.productsMissing,
       editionsMissing: result.editionsMissing,
       subscriptionPlansMissing: result.subscriptionPlansMissing,
+      posSessionsMissing: result.posSessionsMissing,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

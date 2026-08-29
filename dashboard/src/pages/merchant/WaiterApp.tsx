@@ -618,19 +618,25 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       staffName: session.name,
     });
     if (!reg.ok) {
-      setPosAuthAlert({
-        title: t('webPosPinErrorTitle'),
-        message: reg.error || t('webPosSessionRegisterFailed'),
-        variant: 'error',
-      });
-      setPinGateOpen(true);
-      return;
+      const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(
+        reg.error || ''
+      );
+      if (!schemaLag) {
+        setPosAuthAlert({
+          title: t('webPosPinErrorTitle'),
+          message: reg.error || t('webPosSessionRegisterFailed'),
+          variant: 'error',
+        });
+        setPinGateOpen(true);
+        return;
+      }
+      console.warn('[waiter] session register skipped (schema):', reg.error);
     }
     saveWebPosStaffSession(session);
     setStaff(session);
     notifyWebPosStaffSessionChanged();
     setPinGateOpen(false);
-    if (reg.kickedSessionIds.length > 0) {
+    if (reg.ok && reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }
   };
