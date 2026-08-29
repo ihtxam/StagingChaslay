@@ -1,9 +1,22 @@
 import { Router, Request, Response } from "express";
+import multer from "multer";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { readKioskAddonEnabled, writeKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { KioskLicenseError, KioskService } from "@/services/kiosk.service";
+import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
 
 const router = Router();
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedImageMime(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only JPEG, PNG, WebP, or GIF images are allowed"));
+  },
+});
 
 function handleError(res: Response, error: unknown, fallback: string, status = 400) {
   if (error instanceof KioskLicenseError) {
@@ -109,6 +122,46 @@ router.put("/:token/admin-settings", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/:token/admin-media", (req: Request, res: Response, next) => {
+  imageUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Upload failed";
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  try {
+    const pin = String(req.body?.pin || "").trim();
+    const { merchant, settings } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    if (!KioskService.verifyAdminPin(settings, pin)) {
+      return res.status(403).json({ error: "Invalid admin code" });
+    }
+    if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
+
+    const saved = await saveMerchantImage({
+      merchantId: merchant.id,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname,
+    });
+
+    res.status(201).json({
+      success: true,
+      url: saved.url,
+      mimeType: saved.mimeType,
+      size: saved.size,
+    });
+  } catch (error) {
+    handleError(res, error, "Upload failed");
+  }
+});
+
 async function loadMerchantByTokenForDiagnostics(token: string) {
   const config = await KioskService.getPublicConfig(token);
   const settings = await KioskService.readSettingsForMerchant(config.merchant.id);
@@ -159,6 +212,43 @@ kioskMerchantRouter.post("/settings/regenerate-token", async (req: Request, res:
     res.json({ success: true, settings });
   } catch (error) {
     handleError(res, error, "Failed to regenerate token");
+  }
+});
+
+kioskMerchantRouter.post("/media", (req: Request, res: Response, next) => {
+  imageUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Upload failed";
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
+
+    const saved = await saveMerchantImage({
+      merchantId,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname,
+    });
+
+    res.status(201).json({
+      success: true,
+      url: saved.url,
+      mimeType: saved.mimeType,
+      size: saved.size,
+    });
+  } catch (error) {
+    handleError(res, error, "Upload failed");
   }
 });
 

@@ -822,7 +822,7 @@ function MerchantShell() {
 
         <main
           className={
-            isPosLikeRoute && posAppMode
+            isPosLikeRoute && !isKioskRoute && posAppMode
               ? 'flex-1 overflow-hidden p-0 min-h-0'
               : 'panel-main flex-1 p-3 sm:p-4'
           }

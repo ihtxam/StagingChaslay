@@ -151,3 +151,17 @@ export async function saveKioskAdminSettingsByToken(
   const res = await axios.put(`/api/kiosk/${token}/admin-settings`, { pin, settings });
   return res.data.settings as KioskAdminSettings;
 }
+
+export async function uploadKioskSlideImageByToken(
+  token: string,
+  pin: string,
+  file: File
+): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('pin', pin);
+  const res = await axios.post(`/api/kiosk/${token}/admin-media`, fd);
+  const url = res.data?.url as string;
+  if (!url) throw new Error('Upload failed');
+  return url;
+}

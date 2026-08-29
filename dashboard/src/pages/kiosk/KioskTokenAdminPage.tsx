@@ -76,14 +76,16 @@ export default function KioskTokenAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100">
-      <div className="flex items-center justify-between border-b border-stone-200 bg-white px-4 py-3">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-stone-100">
+      <div className="flex shrink-0 items-center justify-between border-b border-stone-200 bg-white px-4 py-3">
         <p className="font-semibold">Kiosk back panel</p>
         <button type="button" className="btn-secondary text-sm" onClick={() => navigate(`/kiosk/${token}`)}>
           Return to customer mode
         </button>
       </div>
-      <KioskAdminPanel mode="token" accessToken={token} showOwnerExtras={false} />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        <KioskAdminPanel mode="token" accessToken={token} showOwnerExtras={false} />
+      </div>
     </div>
   );
 }

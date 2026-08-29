@@ -2938,6 +2938,16 @@ const en: Dict = {
   staffRoleKioskHint:
     'Opens kiosk setup only — configure sliders, payment methods, test connections, and launch customer mode. No full panel access.',
   kioskNav: 'Self-order kiosk',
+  kioskAttractTitle: 'Attract screen slider',
+  kioskSlideImageHint:
+    'Recommended: 1920×1080 px (16:9 landscape), JPG/PNG/WebP, under 1 MB for fast loading on the kiosk.',
+  kioskSlideUploadImage: 'Upload image',
+  kioskSlideImageUrl: 'Or paste image URL',
+  kioskSlideTitle: 'Title',
+  kioskSlideSubtitle: 'Subtitle',
+  kioskAddSlide: 'Add slide',
+  kioskRemoveSlide: 'Remove slide',
+  kioskAdminSessionExpired: 'Admin session expired — unlock again',
   staffRoleBackOfficeHint:
     'Access menu (catalogue) and Access orders open a limited back office. End of day is allowed for own sales. Full Sales / invoices / settings stay off unless granted.',
   staffEmailPanel: 'Email (official login)',
@@ -6313,6 +6323,16 @@ const fr: Dict = {
   staffRoleKioskHint:
     'Accès à la configuration borne uniquement — sliders, paiements, tests de connexion et lancement du mode client. Pas d’accès au panneau complet.',
   kioskNav: 'Borne de commande',
+  kioskAttractTitle: 'Slider écran d’attente',
+  kioskSlideImageHint:
+    'Recommandé : 1920×1080 px (16:9 paysage), JPG/PNG/WebP, moins de 1 Mo pour un chargement rapide.',
+  kioskSlideUploadImage: 'Téléverser une image',
+  kioskSlideImageUrl: 'Ou coller l’URL de l’image',
+  kioskSlideTitle: 'Titre',
+  kioskSlideSubtitle: 'Sous-titre',
+  kioskAddSlide: 'Ajouter une slide',
+  kioskRemoveSlide: 'Supprimer la slide',
+  kioskAdminSessionExpired: 'Session admin expirée — déverrouillez à nouveau',
   staffRoleBackOfficeHint:
     'Accès menu et commandes = back-office limité. Fin de journée autorisée pour leurs ventes. Ventes complètes / factures / paramètres restent désactivés sauf droit explicite.',
   staffEmailPanel: 'E-mail (connexion officielle)',
@@ -9692,6 +9712,16 @@ const de: Dict = {
   staffRoleKioskHint:
     'Nur Kiosk-Einrichtung — Slider, Zahlungsarten, Verbindungstests und Start des Kundenmodus. Kein volles Panel.',
   kioskNav: 'Selbstbestell-Kiosk',
+  kioskAttractTitle: 'Startbildschirm-Slider',
+  kioskSlideImageHint:
+    'Empfohlen: 1920×1080 px (16:9 Querformat), JPG/PNG/WebP, unter 1 MB für schnelles Laden.',
+  kioskSlideUploadImage: 'Bild hochladen',
+  kioskSlideImageUrl: 'Oder Bild-URL einfügen',
+  kioskSlideTitle: 'Titel',
+  kioskSlideSubtitle: 'Untertitel',
+  kioskAddSlide: 'Slide hinzufügen',
+  kioskRemoveSlide: 'Slide entfernen',
+  kioskAdminSessionExpired: 'Admin-Sitzung abgelaufen — erneut entsperren',
   staffRoleBackOfficeHint:
     'Menü- und Bestellzugang = begrenztes Backoffice. Tagesabschluss für eigene Verkäufe erlaubt. Voller Verkauf / Rechnungen / Einstellungen nur mit explizitem Recht.',
   staffEmailPanel: 'E-Mail (offizielles Login)',

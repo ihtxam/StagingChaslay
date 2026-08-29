@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Copy,
   ExternalLink,
+  ImagePlus,
   Loader2,
   Play,
   Printer,
@@ -10,6 +11,7 @@ import {
   CreditCard,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import api from '@/lib/api';
 import axios from 'axios';
@@ -19,11 +21,14 @@ import {
   fetchKioskDiagnosticsByToken,
   kioskPublicUrl,
   saveKioskAdminSettingsByToken,
+  uploadKioskSlideImageByToken,
   type KioskAdminSettings,
   type KioskDiagnostics,
 } from '@/lib/kiosk-api';
 import { getPrintAgentHealth } from '@/lib/print-agent';
 import { getKioskAdminPin, isKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
+import { compressImageIfNeeded } from '@/lib/compress-image';
+import { useI18n } from '@/lib/i18n';
 
 export type { KioskAdminSettings };
 
@@ -39,9 +44,12 @@ export default function KioskAdminPanel({
   accessToken,
   showOwnerExtras = true,
 }: Props) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [uploadingSlideIdx, setUploadingSlideIdx] = useState<number | null>(null);
+  const slideFileRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [enabled, setEnabled] = useState(true);
   const [settings, setSettings] = useState<KioskAdminSettings>({});
   const [serverDiag, setServerDiag] = useState<KioskDiagnostics | null>(null);
@@ -155,7 +163,48 @@ export default function KioskAdminPanel({
     }
   };
 
-  const tokenModeEditable = mode === 'merchant' || (mode === 'token' && !!accessToken && isKioskAdminUnlocked(accessToken));
+  const tokenModeEditable =
+    mode === 'merchant' || (mode === 'token' && !!accessToken && isKioskAdminUnlocked(accessToken));
+
+  const uploadSlideImage = async (idx: number, file: File | null) => {
+    if (!file || !tokenModeEditable) return;
+    setUploadingSlideIdx(idx);
+    try {
+      const compressed = await compressImageIfNeeded(file, {
+        maxBytes: 1024 * 1024,
+        maxWidth: 1920,
+        targetBytes: 700 * 1024,
+      });
+      let url: string;
+      if (mode === 'merchant') {
+        const fd = new FormData();
+        fd.append('file', compressed);
+        const res = await api.post('/merchant/kiosk/media', fd);
+        url = res.data?.url as string;
+      } else if (accessToken) {
+        const pin = getKioskAdminPin(accessToken);
+        if (!pin) {
+          toast.error(t('kioskAdminSessionExpired'));
+          return;
+        }
+        url = await uploadKioskSlideImageByToken(accessToken, pin, compressed);
+      } else {
+        return;
+      }
+      if (!url) throw new Error('Upload failed');
+      const next = [...(settings.promoSlides || [])];
+      next[idx] = { ...next[idx], imageUrl: url };
+      setSettings({ ...settings, promoSlides: next });
+      toast.success(t('imageUploaded'));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('uploadFailed'));
+    } finally {
+      setUploadingSlideIdx(null);
+      const input = slideFileRefs.current[idx];
+      if (input) input.value = '';
+    }
+  };
 
   const kioskUrl = token ? kioskPublicUrl(token) : '';
   const terminalOk =
@@ -170,7 +219,7 @@ export default function KioskAdminPanel({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-6 pb-12">
       <div>
         <h1 className="text-2xl font-bold">Kiosk setup</h1>
         <p className="mt-1 text-sm text-stone-600">
@@ -256,17 +305,122 @@ export default function KioskAdminPanel({
       ) : null}
 
       <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold">Attract screen slider</h2>
+        <div>
+          <h2 className="font-semibold">{t('kioskAttractTitle')}</h2>
+          <p className="mt-1 text-xs text-stone-500">{t('kioskSlideImageHint')}</p>
+        </div>
         {(settings.promoSlides || []).map((slide, idx) => (
-          <div key={idx} className="grid gap-2 rounded-lg border border-[var(--border)] p-3 md:grid-cols-3">
-            <input className="input md:col-span-3" placeholder="Image URL" value={slide.imageUrl || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], imageUrl: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
-            <input className="input" placeholder="Title" value={slide.title || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], title: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
-            <input className="input md:col-span-2" placeholder="Subtitle" value={slide.subtitle || ''} disabled={!tokenModeEditable} onChange={(e) => { const next = [...(settings.promoSlides || [])]; next[idx] = { ...next[idx], subtitle: e.target.value }; setSettings({ ...settings, promoSlides: next }); }} />
+          <div key={idx} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 md:grid-cols-3">
+            {slide.imageUrl ? (
+              <div className="relative md:col-span-3">
+                <img
+                  src={slide.imageUrl}
+                  alt=""
+                  className="h-36 w-full rounded-lg border border-stone-200 object-cover"
+                />
+                {tokenModeEditable ? (
+                  <button
+                    type="button"
+                    className="absolute right-2 top-2 rounded-lg bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label={t('kioskRemoveSlide')}
+                    onClick={() => {
+                      const next = [...(settings.promoSlides || [])];
+                      next[idx] = { ...next[idx], imageUrl: undefined };
+                      setSettings({ ...settings, promoSlides: next });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {tokenModeEditable ? (
+              <div className="flex flex-wrap items-center gap-2 md:col-span-3">
+                <input
+                  ref={(el) => {
+                    slideFileRefs.current[idx] = el;
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => void uploadSlideImage(idx, e.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2"
+                  disabled={uploadingSlideIdx === idx}
+                  onClick={() => slideFileRefs.current[idx]?.click()}
+                >
+                  {uploadingSlideIdx === idx ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                  {uploadingSlideIdx === idx ? t('uploading') : t('kioskSlideUploadImage')}
+                </button>
+              </div>
+            ) : null}
+            <input
+              className="input md:col-span-3"
+              placeholder={t('kioskSlideImageUrl')}
+              value={slide.imageUrl || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => {
+                const next = [...(settings.promoSlides || [])];
+                next[idx] = { ...next[idx], imageUrl: e.target.value };
+                setSettings({ ...settings, promoSlides: next });
+              }}
+            />
+            <input
+              className="input"
+              placeholder={t('kioskSlideTitle')}
+              value={slide.title || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => {
+                const next = [...(settings.promoSlides || [])];
+                next[idx] = { ...next[idx], title: e.target.value };
+                setSettings({ ...settings, promoSlides: next });
+              }}
+            />
+            <input
+              className="input md:col-span-2"
+              placeholder={t('kioskSlideSubtitle')}
+              value={slide.subtitle || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => {
+                const next = [...(settings.promoSlides || [])];
+                next[idx] = { ...next[idx], subtitle: e.target.value };
+                setSettings({ ...settings, promoSlides: next });
+              }}
+            />
+            {tokenModeEditable && (settings.promoSlides || []).length > 1 ? (
+              <div className="md:col-span-3">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                  onClick={() => {
+                    const next = (settings.promoSlides || []).filter((_, i) => i !== idx);
+                    setSettings({ ...settings, promoSlides: next });
+                  }}
+                >
+                  {t('kioskRemoveSlide')}
+                </button>
+              </div>
+            ) : null}
           </div>
         ))}
         {tokenModeEditable ? (
-          <button type="button" className="btn-secondary" onClick={() => setSettings({ ...settings, promoSlides: [...(settings.promoSlides || []), { title: '', subtitle: '' }] })}>
-            Add slide
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() =>
+              setSettings({
+                ...settings,
+                promoSlides: [...(settings.promoSlides || []), { title: '', subtitle: '' }],
+              })
+            }
+          >
+            {t('kioskAddSlide')}
           </button>
         ) : null}
       </section>
