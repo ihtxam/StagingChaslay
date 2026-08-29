@@ -70,6 +70,10 @@ import {
   isStorekeeperOnlyStaff,
   isStorekeeperRestrictedStaff,
   isStorekeeperPanelPath,
+  isKioskOnlyStaff,
+  isKioskRestrictedStaff,
+  isKioskPanelPath,
+  kioskHomePath,
   isWaiterRestrictedStaff,
   isWaiterPanelPath,
   waiterRestrictedHomePath,
@@ -161,7 +165,8 @@ function MerchantShell() {
   const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
-  const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute;
+  const isKioskRoute = /^\/merchant\/kiosk\/?$/.test(location.pathname);
+  const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute || isKioskRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -248,25 +253,32 @@ function MerchantShell() {
     () => !jwtIsOwner && isStorekeeperRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
+  const kioskRestricted = useMemo(
+    () => !jwtIsOwner && isKioskRestrictedStaff(effective.permissions, false),
+    [jwtIsOwner, effective.permissions]
+  );
   const waiterRestricted = useMemo(
     () => !jwtIsOwner && isWaiterRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
     (((isPosRoute || isWaiterRoute || isOrderHubRoute) && posAppMode) ||
-      (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted))) ||
+      (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted)) ||
+      (isKioskRoute && (!managerPanelAccess || kioskRestricted))) ||
     isPosEmbed;
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
   const isAllowedPinAppRoute = useMemo(() => {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return isDriverRoute;
     if (isStorekeeperOnlyStaff(effective.permissions, false)) return isStorekeeperRoute;
+    if (isKioskOnlyStaff(effective.permissions, false)) return isKioskRoute;
     return isPosLikeRoute;
-  }, [effective.permissions, isDriverRoute, isStorekeeperRoute, isPosLikeRoute]);
+  }, [effective.permissions, isDriverRoute, isStorekeeperRoute, isKioskRoute, isPosLikeRoute]);
 
   const pinRestrictedHomePath = useMemo(() => {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(effective.permissions, false)) return storekeeperHomePath();
+    if (isKioskOnlyStaff(effective.permissions, false)) return kioskHomePath();
     if (hasPermission(effective.permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
     return '/merchant/pos';
   }, [effective.permissions]);
@@ -489,12 +501,33 @@ function MerchantShell() {
     navigate(storekeeperHomePath(), { replace: true });
   }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
 
+  // Kiosk operator staff — setup panel only, not full merchant back office.
+  useEffect(() => {
+    if (jwtIsOwner || user?.role !== 'staff') return;
+    const perms = effective.permissions;
+    if (!isKioskRestrictedStaff(perms, false)) return;
+    if (isKioskPanelPath(location.pathname)) return;
+    navigate(kioskHomePath(), { replace: true });
+  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (jwtIsOwner) return;
+    if (!isKioskOnlyStaff(effective.permissions, false)) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path === kioskHomePath()) return;
+    navigate(kioskHomePath(), { replace: true });
+  }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
+
   // PIN-scoped staff without back-office access cannot browse the manager panel.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenBackOffice) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (isStorekeeperOnlyStaff(effective.permissions, false)) {
       if (path !== storekeeperHomePath()) navigate(storekeeperHomePath(), { replace: true });
+      return;
+    }
+    if (isKioskOnlyStaff(effective.permissions, false)) {
+      if (path !== kioskHomePath()) navigate(kioskHomePath(), { replace: true });
       return;
     }
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) {
@@ -652,6 +685,7 @@ function MerchantShell() {
     ...(allowSignage('/merchant/signage')
       ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
       : []),
+    ...(allow('/merchant/kiosk') ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }] : []),
   ]
     .filter((entry) => {
       if ('children' in entry && Array.isArray(entry.children)) {
@@ -691,7 +725,19 @@ function MerchantShell() {
     return false;
   });
 
-  const menuItems = storekeeperRestricted
+  const menuItems = kioskRestricted
+    ? [
+        ...(allow('/merchant/kiosk')
+          ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }]
+          : []),
+      ].filter((entry) => {
+        if ('children' in entry && Array.isArray(entry.children)) {
+          return entry.children.length > 0;
+        }
+        if (entry.path) return allow(entry.path);
+        return false;
+      })
+    : storekeeperRestricted
     ? [
         ...(allowStorekeeper('/merchant/storekeeper')
           ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
@@ -723,7 +769,7 @@ function MerchantShell() {
       ? waiterMenuItems
       : fullMenuItems;
 
-  const panelChromeRestricted = storekeeperRestricted || waiterRestricted;
+  const panelChromeRestricted = kioskRestricted || storekeeperRestricted || waiterRestricted;
 
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
@@ -736,7 +782,7 @@ function MerchantShell() {
           registerDisplay={registerDisplay}
           showStaffSwitch={hasStaffPins}
           quickAction={
-            !storekeeperRestricted && showWebPosQuickAction
+            !storekeeperRestricted && !kioskRestricted && showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
               : null
           }
@@ -1018,7 +1064,14 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route path="kiosk" element={<KioskSettingsPage />} />
+            <Route
+              path="kiosk"
+              element={
+                <PanelRouteGuard path="/merchant/kiosk" allow={allow}>
+                  <KioskSettingsPage />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="terminals"
               element={

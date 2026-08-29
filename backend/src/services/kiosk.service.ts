@@ -81,6 +81,8 @@ export class KioskService {
         membershipScanEnabled: settings.membershipScanEnabled !== false,
         idleTimeoutSeconds: settings.idleTimeoutSeconds ?? 120,
         locationSlug: settings.locationSlug,
+        cashPaymentEnabled: settings.cashPaymentEnabled !== false,
+        cardPaymentEnabled: settings.cardPaymentEnabled !== false,
       },
       tables,
     };
@@ -292,5 +294,41 @@ export class KioskService {
     const enabled = await readKioskAddonEnabled(merchantId);
     if (!enabled) throw new KioskLicenseError();
     return settings;
+  }
+
+  static verifyAdminPin(settings: { adminPin?: string }, pin: string): boolean {
+    const expected = String(settings.adminPin || "1234").replace(/\D/g, "");
+    const given = String(pin || "").replace(/\D/g, "");
+    return expected.length >= 4 && given === expected;
+  }
+
+  static async getDiagnostics(merchantId: string) {
+    const settings = await this.readSettingsForMerchant(merchantId);
+    const db = getDb();
+    const terminals = await db.query.paymentTerminals.findMany({
+      where: eq(schema.paymentTerminals.merchantId, merchantId),
+    });
+    const terminalId = settings.terminalId?.trim() || "";
+    const terminal = terminals.find(
+      (t) =>
+        t.id === terminalId ||
+        String(t.terminalId || "") === terminalId ||
+        String((t as { poiId?: string }).poiId || "") === terminalId
+    );
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { adyenApiKey: true, adyenMerchantAccount: true },
+    });
+    const adyenConfigured = !!(merchant?.adyenApiKey && merchant?.adyenMerchantAccount);
+    return {
+      terminalConfigured: !!terminalId,
+      terminalRegistered: !!terminal,
+      terminalLabel: terminal?.terminalName || terminal?.terminalId || null,
+      adyenConfigured,
+      cashPaymentEnabled: settings.cashPaymentEnabled !== false,
+      cardPaymentEnabled: settings.cardPaymentEnabled !== false,
+      printAgentNote:
+        "Print Bridge is checked on this device at http://127.0.0.1:9101/health when you run Test connections.",
+    };
   }
 }

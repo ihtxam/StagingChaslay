@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   QrCode,
+  Settings,
   ShoppingBag,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -24,11 +25,13 @@ import {
   fetchKioskMenu,
   lookupKioskMembership,
   payKioskOrderAtTerminal,
+  verifyKioskAdminPin,
   type KioskCartLine,
   type KioskConfig,
   type KioskMenuCategory,
 } from '@/lib/kiosk-api';
 import { useI18n, type Locale } from '@/lib/i18n';
+import { setKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
 
 type Step =
   | 'attract'
@@ -57,6 +60,7 @@ function lineTotal(line: KioskCartLine): number {
 
 export default function KioskApp() {
   const { token = '' } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const { locale, setLocale } = useI18n();
   const [step, setStep] = useState<Step>('attract');
   const [loading, setLoading] = useState(true);
@@ -75,6 +79,9 @@ export default function KioskApp() {
   const [submitting, setSubmitting] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  const [adminPinOpen, setAdminPinOpen] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
+  const [adminPinSubmitting, setAdminPinSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const idleTimer = useRef<number | null>(null);
 
@@ -83,6 +90,8 @@ export default function KioskApp() {
     : [{ title: config?.merchant.name || 'Welcome', subtitle: 'Tap Start order to begin' }];
 
   const enabledLangs = config?.settings.enabledLanguages || ['en'];
+  const cashEnabled = config?.settings.cashPaymentEnabled !== false;
+  const cardEnabled = config?.settings.cardPaymentEnabled !== false;
   const cartTotal = useMemo(() => cart.reduce((s, l) => s + lineTotal(l), 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, l) => s + l.quantity, 0), [cart]);
 
@@ -255,6 +264,22 @@ export default function KioskApp() {
     }
   };
 
+  const submitAdminPin = async () => {
+    setAdminPinSubmitting(true);
+    try {
+      await verifyKioskAdminPin(token, adminPin);
+      setKioskAdminUnlocked(token, adminPin);
+      setAdminPinOpen(false);
+      setAdminPin('');
+      navigate(`/kiosk/${token}/admin`);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Invalid code');
+    } finally {
+      setAdminPinSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-stone-950 text-white">
@@ -293,6 +318,14 @@ export default function KioskApp() {
             ) : null}
           </div>
           <div className="relative z-10 flex items-start gap-2 p-3">
+            <button
+              type="button"
+              aria-label="Kiosk settings"
+              onClick={() => setAdminPinOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white hover:bg-black/60"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
             <div className="relative">
               <button
                 type="button"
@@ -564,6 +597,7 @@ export default function KioskApp() {
             <h2 className="text-3xl font-bold">How would you like to pay?</h2>
             <p className="text-4xl font-bold text-emerald-700">{money(cartTotal)}</p>
             <div className="grid w-full max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
+              {cashEnabled ? (
               <button
                 type="button"
                 disabled={submitting}
@@ -574,6 +608,8 @@ export default function KioskApp() {
                 <span className="text-xl font-bold">Pay with cash</span>
                 <span className="text-sm text-stone-500">Pay at the counter</span>
               </button>
+              ) : null}
+              {cardEnabled ? (
               <button
                 type="button"
                 disabled={submitting}
@@ -584,7 +620,11 @@ export default function KioskApp() {
                 <span className="text-xl font-bold">Pay by card</span>
                 <span className="text-sm text-stone-500">Use payment terminal</span>
               </button>
+              ) : null}
             </div>
+            {!cashEnabled && !cardEnabled ? (
+              <p className="text-center text-stone-600">No payment methods are enabled for this kiosk.</p>
+            ) : null}
             {submitting ? (
               <p className="flex items-center gap-2 text-stone-600">
                 <Loader2 className="h-5 w-5 animate-spin" /> Processing…
@@ -638,6 +678,45 @@ export default function KioskApp() {
             setModifierProduct(null);
           }}
         />
+      ) : null}
+
+      {adminPinOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-stone-900 p-6 text-white shadow-2xl">
+            <h2 className="text-xl font-bold">Kiosk back panel</h2>
+            <p className="mt-2 text-sm text-stone-400">Enter admin code</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={8}
+              value={adminPin}
+              onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, ''))}
+              className="mt-4 w-full rounded-xl border-2 border-stone-600 bg-stone-800 px-4 py-3 text-center text-2xl tracking-widest"
+              placeholder="••••"
+              autoFocus
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-stone-600 px-4 py-3 font-semibold"
+                onClick={() => {
+                  setAdminPinOpen(false);
+                  setAdminPin('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={adminPin.length < 4 || adminPinSubmitting}
+                onClick={() => void submitAdminPin()}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-semibold disabled:opacity-40"
+              >
+                {adminPinSubmitting ? 'Checking…' : 'Unlock'}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

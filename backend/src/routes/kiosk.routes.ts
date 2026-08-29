@@ -55,6 +55,66 @@ router.post("/:token/orders/:orderId/terminal-pay", async (req: Request, res: Re
   }
 });
 
+router.post("/:token/verify-admin-pin", async (req: Request, res: Response) => {
+  try {
+    const pin = String(req.body?.pin || "").trim();
+    const { merchant, settings } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    if (!KioskService.verifyAdminPin(settings, pin)) {
+      return res.status(403).json({ error: "Invalid admin code" });
+    }
+    res.json({
+      success: true,
+      adminUrl: `/kiosk/${req.params.token}/admin`,
+      merchantSlug: merchant.slug,
+    });
+  } catch (error) {
+    handleError(res, error, "Verification failed");
+  }
+});
+
+router.get("/:token/diagnostics", async (req: Request, res: Response) => {
+  try {
+    const { merchant } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    const diagnostics = await KioskService.getDiagnostics(merchant.id);
+    res.json({ success: true, diagnostics });
+  } catch (error) {
+    handleError(res, error, "Failed to load diagnostics", 500);
+  }
+});
+
+router.post("/:token/admin-settings", async (req: Request, res: Response) => {
+  try {
+    const pin = String(req.body?.pin || "").trim();
+    const { merchant, settings } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    if (!KioskService.verifyAdminPin(settings, pin)) {
+      return res.status(403).json({ error: "Invalid admin code" });
+    }
+    res.json({ success: true, settings });
+  } catch (error) {
+    handleError(res, error, "Failed to load admin settings", 500);
+  }
+});
+
+router.put("/:token/admin-settings", async (req: Request, res: Response) => {
+  try {
+    const pin = String(req.body?.pin || "").trim();
+    const { merchant, settings } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    if (!KioskService.verifyAdminPin(settings, pin)) {
+      return res.status(403).json({ error: "Invalid admin code" });
+    }
+    const saved = await KioskService.writeSettingsForMerchant(merchant.id, req.body?.settings);
+    res.json({ success: true, settings: saved });
+  } catch (error) {
+    handleError(res, error, "Failed to save kiosk settings");
+  }
+});
+
+async function loadMerchantByTokenForDiagnostics(token: string) {
+  const config = await KioskService.getPublicConfig(token);
+  const settings = await KioskService.readSettingsForMerchant(config.merchant.id);
+  return { merchant: config.merchant, settings };
+}
+
 export default router;
 
 /** Merchant-authenticated kiosk settings */
@@ -62,6 +122,15 @@ export const kioskMerchantRouter = Router();
 kioskMerchantRouter.use(verifyToken);
 kioskMerchantRouter.use(requireMerchantAccess);
 kioskMerchantRouter.use(setMerchantContext);
+
+kioskMerchantRouter.get("/diagnostics", async (req: Request, res: Response) => {
+  try {
+    const diagnostics = await KioskService.getDiagnostics(req.merchantId!);
+    res.json({ success: true, diagnostics });
+  } catch (error) {
+    handleError(res, error, "Failed to load diagnostics", 500);
+  }
+});
 
 kioskMerchantRouter.get("/settings", async (req: Request, res: Response) => {
   try {

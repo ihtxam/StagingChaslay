@@ -33,7 +33,8 @@ export type Permission =
   | 'MANAGE_BILLING'
   | 'END_OF_DAY'
   | 'MANAGE_INVENTORY'
-  | 'STOREKEEPER_INTAKE';
+  | 'STOREKEEPER_INTAKE'
+  | 'MANAGE_KIOSK';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
@@ -63,6 +64,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'END_OF_DAY',
   'MANAGE_INVENTORY',
   'STOREKEEPER_INTAKE',
+  'MANAGE_KIOSK',
 ];
 
 export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -118,6 +120,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/inventory/consumption': ['MANAGE_INVENTORY'],
   '/merchant/storekeeper': ['STOREKEEPER_INTAKE', 'MANAGE_INVENTORY'],
   '/merchant/signage': ['MANAGE_SETTINGS', 'MANAGE_PRODUCTS', 'ACCESS_PANEL'],
+  '/merchant/kiosk': ['MANAGE_KIOSK', 'MANAGE_SETTINGS'],
 };
 
 export const CATALOG_PANEL_PATHS = [
@@ -189,6 +192,7 @@ export function backOfficeHomePath(
   }
   if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
   if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
+  if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
   if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
@@ -223,6 +227,7 @@ export function staffRoleDisplayName(name: string, t: (key: string) => string): 
   if (n === 'waiter' || n === 'waiter (pos only)') return t('staffRoleWaiter');
   if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
   if (n === 'storekeeper') return t('staffRoleStorekeeper');
+  if (n === 'kiosk operator') return t('staffRoleKiosk');
   return name;
 }
 
@@ -349,6 +354,38 @@ export function isStorekeeperPanelPath(
 
 export function storekeeperHomePath(): string {
   return '/merchant/storekeeper';
+}
+
+/** Kiosk-only staff — setup sliders, payments, launch customer mode. No full panel. */
+export function isKioskOnlyStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'MANAGE_KIOSK', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_SETTINGS', false)) return false;
+  return true;
+}
+
+export function isKioskRestrictedStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'MANAGE_KIOSK', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  return true;
+}
+
+export function isKioskPanelPath(pathname: string): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  return path === '/merchant/kiosk' || path.startsWith('/merchant/kiosk/');
+}
+
+export function kioskHomePath(): string {
+  return '/merchant/kiosk';
 }
 
 /** Register POS / waiter — PIN session restricts panel access on these routes only. */

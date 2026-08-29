@@ -28,6 +28,7 @@ export const PERMISSIONS = [
   "END_OF_DAY",
   "MANAGE_INVENTORY",
   "STOREKEEPER_INTAKE",
+  "MANAGE_KIOSK",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -164,11 +165,11 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     ],
   },
   {
-    /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
-    name: "Storekeeper",
+    /** Self-order kiosk setup — sliders, payments, launch customer mode. No full panel. */
+    name: "Kiosk operator",
     isSystem: true,
-    sortOrder: 55,
-    permissions: ["STOREKEEPER_INTAKE"],
+    sortOrder: 56,
+    permissions: ["MANAGE_KIOSK"],
   },
 ];
 
@@ -238,6 +239,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/inventory/report": ["MANAGE_INVENTORY"],
   "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
   "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
+  "/merchant/kiosk": ["MANAGE_KIOSK", "MANAGE_SETTINGS"],
 };
 
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
@@ -252,6 +254,7 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
   "STOREKEEPER_INTAKE",
   "DELIVERY_ORDERS",
   "VIEW_DELIVERY_TRACKING",
+  "MANAGE_KIOSK",
 ];
 
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [

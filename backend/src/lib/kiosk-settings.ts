@@ -24,6 +24,10 @@ export type KioskSettings = {
   /** Cash orders need manual approval in Order Hub (default true). */
   kioskCashNeedsApproval?: boolean;
   idleTimeoutSeconds?: number;
+  /** 4–8 digit PIN to open back panel from fullscreen kiosk. */
+  adminPin?: string;
+  cashPaymentEnabled?: boolean;
+  cardPaymentEnabled?: boolean;
 };
 
 export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
@@ -35,6 +39,9 @@ export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
   kioskAutoAcceptCard: true,
   kioskCashNeedsApproval: true,
   idleTimeoutSeconds: 120,
+  adminPin: "1234",
+  cashPaymentEnabled: true,
+  cardPaymentEnabled: true,
 };
 
 export function generateKioskToken(): string {
@@ -92,7 +99,16 @@ export function normalizeKioskSettings(raw: unknown): KioskSettings {
     kioskAutoAcceptCard: src.kioskAutoAcceptCard !== false,
     kioskCashNeedsApproval: src.kioskCashNeedsApproval !== false,
     idleTimeoutSeconds: clampIdleSeconds(src.idleTimeoutSeconds),
+    adminPin: normalizeAdminPin(src.adminPin),
+    cashPaymentEnabled: src.cashPaymentEnabled !== false,
+    cardPaymentEnabled: src.cardPaymentEnabled !== false,
   };
+}
+
+function normalizeAdminPin(value: unknown): string {
+  const pin = String(value ?? DEFAULT_KIOSK_SETTINGS.adminPin ?? "1234").replace(/\D/g, "");
+  if (pin.length >= 4 && pin.length <= 8) return pin;
+  return DEFAULT_KIOSK_SETTINGS.adminPin!;
 }
 
 function clampIdleSeconds(value: unknown): number {
