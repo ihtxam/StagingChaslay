@@ -353,6 +353,8 @@ export class ResellerService {
         signageScreenLimit: schema.merchants.signageScreenLimit,
         kdsAddonEnabled: schema.merchants.kdsAddonEnabled,
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
+        justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
+        uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -368,6 +370,8 @@ export class ResellerService {
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
       kdsAddonEnabled: r.kdsAddonEnabled === true,
       odsAddonEnabled: r.odsAddonEnabled === true,
+      deliveryPlatformsAddonEnabled:
+        r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
     }));
   }
 
@@ -396,6 +400,7 @@ export class ResellerService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
     }
   ) {
@@ -441,6 +446,7 @@ export class ResellerService {
         signageScreenLimit: input.signageScreenLimit,
         kdsAddonEnabled: input.kdsAddonEnabled,
         odsAddonEnabled: input.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
       }
     );
@@ -459,6 +465,7 @@ export class ResellerService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
     }
   ) {
@@ -473,6 +480,7 @@ export class ResellerService {
       signageScreenLimit: limits.signageScreenLimit,
       kdsAddonEnabled: limits.kdsAddonEnabled,
       odsAddonEnabled: limits.odsAddonEnabled,
+      deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);

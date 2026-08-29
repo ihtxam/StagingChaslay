@@ -186,6 +186,7 @@ export class MerchantSettingsService {
       odsEnabled: odsOn,
       justEatAddonEnabled: justEatOn,
       uberEatsAddonEnabled: uberEatsOn,
+      deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
       storekeeperAddonEnabled: storekeeperOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,

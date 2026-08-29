@@ -370,6 +370,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
     } = req.body;
 
@@ -406,6 +407,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
           signageScreenLimit != null ? normalizeSignageScreenLimit(signageScreenLimit) : undefined,
         kdsAddonEnabled: isKdsAddonEnabled(kdsAddonEnabled),
         odsAddonEnabled: isOdsAddonEnabled(odsAddonEnabled),
+        deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
       }
     );
@@ -472,6 +474,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.kdsEnabled != null ||
       updates.odsAddonEnabled != null ||
       updates.odsEnabled != null ||
+      updates.deliveryPlatformsAddonEnabled != null ||
       updates.storekeeperAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
@@ -506,6 +509,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.odsEnabled != null
               ? isOdsAddonEnabled(updates.odsEnabled)
               : undefined,
+        deliveryPlatformsAddonEnabled:
+          updates.deliveryPlatformsAddonEnabled != null
+            ? updates.deliveryPlatformsAddonEnabled === true
+            : undefined,
         storekeeperAddonEnabled:
           updates.storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(updates.storekeeperAddonEnabled)
@@ -523,6 +530,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.kdsEnabled;
       delete updates.odsAddonEnabled;
       delete updates.odsEnabled;
+      delete updates.deliveryPlatformsAddonEnabled;
       delete updates.storekeeperAddonEnabled;
     }
 

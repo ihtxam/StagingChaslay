@@ -192,6 +192,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
@@ -222,6 +223,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
       kdsAddonEnabled: kdsAddonEnabled === true,
       odsAddonEnabled: odsAddonEnabled === true,
+      deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
       storekeeperAddonEnabled: storekeeperAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
@@ -249,6 +251,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       kdsEnabled,
       odsAddonEnabled,
       odsEnabled,
+      deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
@@ -284,6 +287,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
             : odsEnabled != null
               ? isOdsAddonEnabled(odsEnabled)
               : undefined,
+        deliveryPlatformsAddonEnabled:
+          deliveryPlatformsAddonEnabled != null ? deliveryPlatformsAddonEnabled === true : undefined,
         storekeeperAddonEnabled:
           storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(storekeeperAddonEnabled)

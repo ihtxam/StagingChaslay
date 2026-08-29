@@ -114,6 +114,7 @@ function MerchantsPage() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    deliveryPlatformsAddonEnabled: false,
     storekeeperAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
@@ -127,6 +128,7 @@ function MerchantsPage() {
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
+    deliveryPlatformsAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
@@ -276,6 +278,7 @@ function MerchantsPage() {
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: !!limitsFor.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
@@ -614,6 +617,20 @@ function MerchantsPage() {
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
               </span>
             </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.deliveryPlatformsAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, deliveryPlatformsAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
+              </span>
+            </label>
             <label className="text-sm">
               {t('signageScreenLimit')}
               <input
@@ -737,6 +754,10 @@ function MerchantsPage() {
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                         kdsAddonEnabled: m.kdsAddonEnabled === true,
                         odsAddonEnabled: m.odsAddonEnabled === true,
+                        deliveryPlatformsAddonEnabled:
+                          m.deliveryPlatformsAddonEnabled === true ||
+                          m.justEatAddonEnabled === true ||
+                          m.uberEatsAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                       })
                     }
@@ -909,6 +930,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.deliveryPlatformsAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, deliveryPlatformsAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
               </span>
             </label>
             <label className="text-sm">

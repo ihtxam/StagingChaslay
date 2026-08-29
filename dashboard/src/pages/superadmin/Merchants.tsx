@@ -106,6 +106,7 @@ const emptyForm = {
   signageScreenLimit: 2,
   kdsAddonEnabled: false,
   odsAddonEnabled: false,
+  deliveryPlatformsAddonEnabled: false,
   storekeeperAddonEnabled: false,
 };
 
@@ -138,6 +139,7 @@ export default function Merchants() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    deliveryPlatformsAddonEnabled: false,
     storekeeperAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
@@ -216,6 +218,10 @@ export default function Merchants() {
         signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
         kdsAddonEnabled: res.data.merchant?.kdsAddonEnabled === true,
         odsAddonEnabled: res.data.merchant?.odsAddonEnabled === true,
+        deliveryPlatformsAddonEnabled:
+          res.data.merchant?.deliveryPlatformsAddonEnabled === true ||
+          res.data.merchant?.justEatAddonEnabled === true ||
+          res.data.merchant?.uberEatsAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
       });
     } catch {
@@ -236,6 +242,7 @@ export default function Merchants() {
         signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
         kdsAddonEnabled: !!posLimits.kdsAddonEnabled,
         odsAddonEnabled: !!posLimits.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: !!posLimits.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
       });
       const saved = res.data?.merchant;
@@ -253,6 +260,10 @@ export default function Merchants() {
         signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
         kdsAddonEnabled: kdsOn,
         odsAddonEnabled: odsOn,
+        deliveryPlatformsAddonEnabled:
+          saved?.deliveryPlatformsAddonEnabled === true ||
+          saved?.justEatAddonEnabled === true ||
+          saved?.uberEatsAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
       });
       setShowDetail((prev) =>
@@ -416,6 +427,7 @@ export default function Merchants() {
         signageScreenLimit: Number(form.signageScreenLimit) || 2,
         kdsAddonEnabled: !!form.kdsAddonEnabled,
         odsAddonEnabled: !!form.odsAddonEnabled,
+        deliveryPlatformsAddonEnabled: !!form.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
       });
       const issued = res.data.merchant?.issuedLicenses || [];
@@ -488,6 +500,7 @@ export default function Merchants() {
         signageAddonEnabled: !!(account.signageAddonEnabled || account.signageEnabled),
         kdsAddonEnabled: !!(account.kdsAddonEnabled || account.kdsEnabled),
         odsAddonEnabled: !!(account.odsAddonEnabled || account.odsEnabled),
+        maxLocations: Math.max(0, Number(account.maxLocations ?? 1)),
       });
       toast.success(`Opened ${account.name}`);
       navigate('/merchant');
@@ -1043,6 +1056,20 @@ export default function Merchants() {
                     <span className="text-xs text-gray-500">Paid extra: customer pickup number board.</span>
                   </span>
                 </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.deliveryPlatformsAddonEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryPlatformsAddonEnabled: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                    <span className="text-xs text-gray-500">{t('deliveryPlatformAddonReadOnly')}</span>
+                  </span>
+                </label>
                 <label className="block text-sm pt-1">
                   <span className="font-medium">Screen limit</span>
                   <input
@@ -1407,6 +1434,32 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.odsAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.deliveryPlatformsAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({
+                          ...posLimits,
+                          deliveryPlatformsAddonEnabled: e.target.checked,
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
+                      <span className="text-xs text-gray-500">{t('deliveryPlatformAddonReadOnly')}</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.deliveryPlatformsAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.deliveryPlatformsAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

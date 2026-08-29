@@ -1,10 +1,13 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
 import { Bike, Copy, Save, Truck, type LucideIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { isJustEatLicensed, isUberEatsLicensed } from '@/lib/delivery-platform-addon';
+import {
+  isDeliveryPlatformsLicensed,
+  isJustEatLicensed,
+  isUberEatsLicensed,
+} from '@/lib/delivery-platform-addon';
 import {
   settingsDash,
   SettingsField,
@@ -70,6 +73,7 @@ export default function SettingsDeliveryPlatformsTab() {
   const [onlineShopAutoAccept, setOnlineShopAutoAccept] = useState(false);
   const [justEatLicensed, setJustEatLicensed] = useState(false);
   const [uberEatsLicensed, setUberEatsLicensed] = useState(false);
+  const [platformsLicensed, setPlatformsLicensed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +83,7 @@ export default function SettingsDeliveryPlatformsTab() {
       setMerchantId(String(s.id || ''));
       setJustEatLicensed(isJustEatLicensed(s));
       setUberEatsLicensed(isUberEatsLicensed(s));
+      setPlatformsLicensed(isDeliveryPlatformsLicensed(s));
       const dp = (s.deliveryPlatformSettings || {}) as DeliveryPlatformSettings & {
         onlineShopAutoAccept?: boolean;
       };
@@ -206,9 +211,6 @@ export default function SettingsDeliveryPlatformsTab() {
           <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <p>{t('deliveryPlatformAddonRequired')}</p>
             <p className="mt-1 text-xs">{addonLabel}</p>
-            <Link to="/merchant/billing" className="mt-2 inline-block text-xs font-semibold underline">
-              {t('deliveryPlatformAddonBuy')}
-            </Link>
           </div>
         ) : null}
         <SettingsToggleRow
@@ -384,6 +386,40 @@ export default function SettingsDeliveryPlatformsTab() {
 
   if (loading) {
     return <p className="muted text-sm py-8">{t('loading')}</p>;
+  }
+
+  if (!platformsLicensed) {
+    return (
+      <div className="space-y-6">
+        <SettingsPageHeader
+          title={t('settingsDeliveryPlatforms')}
+          subtitle={t('settingsDeliveryPlatformsHint')}
+        />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {t('deliveryPlatformAddonRequired')}
+        </div>
+        <form onSubmit={save} className="space-y-6">
+          <SettingsReportCard
+            title={t('deliveryPlatformChannelOnlineShop')}
+            icon={Truck}
+            accent={settingsDash.success}
+          >
+            <SettingsToggleRow
+              checked={onlineShopAutoAccept}
+              onChange={setOnlineShopAutoAccept}
+              title={t('onlineShopAutoAccept')}
+              hint={t('onlineShopAutoAcceptHint')}
+            />
+          </SettingsReportCard>
+          <div className="flex justify-end">
+            <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
+              <Save className="w-4 h-4" />
+              {saving ? t('saving') : t('save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   return (

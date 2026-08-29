@@ -1438,7 +1438,9 @@ const en: Dict = {
   settingsDeliveryPlatformsHint:
     'Connect Just Eat and Uber Eats. Orders appear in POS and the Orders board; kitchen tickets auto-print when enabled.',
   deliveryPlatformsSaved: 'Delivery platform settings saved',
-  deliveryPlatformAddonRequired: 'This integration requires a paid add-on.',
+  deliveryPlatformAddonRequired:
+    'Delivery platforms (Just Eat, Uber Eats) are a paid add-on. Ask your agency or reseller to enable it on your account.',
+  deliveryPlatformAddonReadOnly: 'Paid add-on — billed monthly when enabled.',
   deliveryPlatformAddonJustEat: 'Just Eat add-on',
   deliveryPlatformAddonUberEats: 'Uber Eats add-on',
   deliveryPlatformAddonBuy: 'View add-ons in Billing',
@@ -4821,7 +4823,9 @@ const fr: Dict = {
   settingsDeliveryPlatformsHint:
     'Connectez Just Eat et Uber Eats. Les commandes arrivent au POS et s’impriment en cuisine si activé.',
   deliveryPlatformsSaved: 'Plateformes de livraison enregistrées',
-  deliveryPlatformAddonRequired: 'Cette intégration nécessite un addon payant.',
+  deliveryPlatformAddonRequired:
+    'Les plateformes de livraison (Just Eat, Uber Eats) sont un addon payant. Demandez à votre agence ou revendeur de l’activer sur votre compte.',
+  deliveryPlatformAddonReadOnly: 'Addon payant — facturé mensuellement une fois activé.',
   deliveryPlatformAddonJustEat: 'Addon Just Eat',
   deliveryPlatformAddonUberEats: 'Addon Uber Eats',
   deliveryPlatformAddonBuy: 'Voir les addons dans Facturation',
@@ -8170,7 +8174,9 @@ const de: Dict = {
   settingsDeliveryPlatformsHint:
     'Just Eat und Uber Eats verbinden. Bestellungen erscheinen im POS und drucken automatisch in der Küche.',
   deliveryPlatformsSaved: 'Lieferplattform-Einstellungen gespeichert',
-  deliveryPlatformAddonRequired: 'Diese Integration erfordert ein bezahltes Addon.',
+  deliveryPlatformAddonRequired:
+    'Lieferplattformen (Just Eat, Uber Eats) sind ein bezahltes Addon. Bitten Sie Ihre Agentur oder Ihren Reseller, es auf Ihrem Konto zu aktivieren.',
+  deliveryPlatformAddonReadOnly: 'Bezahltes Addon — monatlich abgerechnet, sobald aktiv.',
   deliveryPlatformAddonJustEat: 'Just-Eat-Addon',
   deliveryPlatformAddonUberEats: 'Uber-Eats-Addon',
   deliveryPlatformAddonBuy: 'Addons unter Abrechnung ansehen',
