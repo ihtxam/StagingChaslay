@@ -30,4 +30,36 @@
     <string name="auto_start_summary">Runs Print Bridge in the background after every restart and reconnects USB, Bluetooth, and Wi‑Fi printers.</string>
     <string name="auto_start_enabled_toast">Print Bridge will start automatically after reboot</string>
     <string name="auto_start_disabled_toast">Print Bridge will not start after reboot until you open this app</string>
+
+    <string name="oem_setup_title">Keep Print Bridge running</string>
+    <string name="oem_setup_banner_title">Background setup recommended</string>
+    <string name="oem_setup_banner_summary">Your %1$s device may stop Print Bridge unless battery and autostart are configured.</string>
+    <string name="oem_setup_open_wizard">Open setup wizard</string>
+    <string name="oem_setup_device_label">Detected device: %1$s</string>
+    <string name="oem_setup_step_indicator">Step %1$d of %2$d</string>
+    <string name="oem_setup_open_settings_failed">Could not open that settings screen. Open App info manually in Android Settings.</string>
+    <string name="oem_step_continue">Continue</string>
+    <string name="oem_step_next">Next</string>
+    <string name="oem_step_skip">Skip for now</string>
+    <string name="oem_step_mark_done">I\'ve done this</string>
+    <string name="oem_step_finish">Finish</string>
+    <string name="oem_step_open_battery">Allow unrestricted battery</string>
+    <string name="oem_step_open_autostart">Open autostart settings</string>
+    <string name="oem_step_open_app_settings">Open app settings</string>
+    <string name="oem_step_welcome_title">Keep printing after every restart</string>
+    <string name="oem_step_welcome_desc">Android may stop background apps to save battery. These quick steps make sure Print Bridge keeps running and reconnects to your USB, Bluetooth, and Wi‑Fi printers after every reboot.</string>
+    <string name="oem_step_battery_title">Disable battery restrictions</string>
+    <string name="oem_step_battery_desc">Allow Reborn Print Bridge to run without battery limits. Tap the button below and choose Allow or Unrestricted when prompted.</string>
+    <string name="oem_step_battery_done">Battery restriction is already disabled for Print Bridge.</string>
+    <string name="oem_step_battery_pending">Battery restriction is still active. Tap Allow unrestricted battery, then return here.</string>
+    <string name="oem_step_sunmi_autostart_title">Allow Sunmi autostart</string>
+    <string name="oem_step_sunmi_autostart_desc">On Sunmi devices, open Autostart management and enable Reborn Print Bridge so it starts automatically after reboot.</string>
+    <string name="oem_step_feitian_background_title">Allow background activity</string>
+    <string name="oem_step_feitian_background_desc">On Feitian devices, open App info for Reborn Print Bridge, then set Battery to Unrestricted and allow background activity if shown.</string>
+    <string name="oem_step_autostart_title">Allow autostart</string>
+    <string name="oem_step_autostart_desc">Open your device\'s autostart or startup manager and enable Reborn Print Bridge. This prevents the system from blocking Print Bridge after reboot.</string>
+    <string name="oem_step_lock_recents_title">Lock app in recent apps</string>
+    <string name="oem_step_lock_recents_desc">Open recent apps, find Reborn Print Bridge, then tap the lock icon (or pull down) so Android does not close it when clearing other apps.</string>
+    <string name="oem_step_done_title">Setup complete</string>
+    <string name="oem_step_done_desc">Print Bridge is configured to run in the background. After reboot it will start automatically and reconnect to your printers. You can reopen this wizard anytime from the main screen.</string>
 </resources>

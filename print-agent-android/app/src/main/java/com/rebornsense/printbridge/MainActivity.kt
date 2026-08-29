@@ -24,6 +24,10 @@ import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.PrintBridgeLauncher
+import com.rebornsense.printbridge.device.DeviceProfiler
+import com.rebornsense.printbridge.setup.OemSettingsNavigator
+import com.rebornsense.printbridge.setup.OemSetupPreferences
+import com.rebornsense.printbridge.setup.SetupWizardActivity
 
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
@@ -31,6 +35,12 @@ class MainActivity : AppCompatActivity() {
     private var pendingBluetoothTestPrint: PrinterEndpoint? = null
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
+    private var pendingWizardLaunch = false
+
+    private val wizardLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            updateOemSetupBanner()
+        }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
@@ -65,11 +75,40 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
         findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrintDefault() }
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
+        findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
+        updateOemSetupBanner()
     }
 
     override fun onResume() {
         super.onResume()
         refreshPrinters()
+        updateOemSetupBanner()
+        maybeLaunchOemWizard()
+    }
+
+    private fun maybeLaunchOemWizard() {
+        if (pendingWizardLaunch) return
+        if (OemSetupPreferences.isWizardCompleted(this)) return
+        pendingWizardLaunch = true
+        openOemSetupWizard()
+    }
+
+    private fun openOemSetupWizard() {
+        wizardLauncher.launch(SetupWizardActivity.createIntent(this))
+    }
+
+    private fun updateOemSetupBanner() {
+        val banner = findViewById<View>(R.id.oemSetupBanner)
+        val summary = findViewById<TextView>(R.id.oemSetupBannerSummary)
+        val needsSetup = !OemSetupPreferences.isWizardCompleted(this) ||
+            !OemSettingsNavigator.isBatteryOptimizationDisabled(this)
+        banner.visibility = if (needsSetup) View.VISIBLE else View.GONE
+        if (needsSetup) {
+            summary.text = getString(
+                R.string.oem_setup_banner_summary,
+                DeviceProfiler.detect().displayName,
+            )
+        }
     }
 
     private fun requestNeededPermissions() {

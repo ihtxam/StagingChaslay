@@ -1,8 +1,8 @@
 package com.rebornsense.printbridge.http
 
 import android.content.Context
-import android.os.Build
 import com.rebornsense.printbridge.BuildConfig
+import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
 import com.rebornsense.printbridge.print.PrinterDriver
@@ -43,8 +43,8 @@ class BridgeHttpServer(
                         .put("ok", true)
                         .put("version", BuildConfig.VERSION_NAME)
                         .put("platform", "android")
-                        .put("deviceProfile", detectProfile())
-                        .put("manufacturer", Build.MANUFACTURER)
+                        .put("deviceProfile", DeviceProfiler.deviceProfileId())
+                        .put("manufacturer", android.os.Build.MANUFACTURER)
                         .put("model", Build.MODEL)
                         .put("features", features)
                         .put("printerReady", registry.hasReadyPrinter())
@@ -148,16 +148,5 @@ class BridgeHttpServer(
         response.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         response.addHeader("Access-Control-Allow-Headers", "Content-Type")
         return response
-    }
-
-    private fun detectProfile(): String {
-        val manufacturer = Build.MANUFACTURER.orEmpty().uppercase()
-        val model = Build.MODEL.orEmpty().uppercase()
-        return when {
-            manufacturer.contains("SUNMI") && model.contains("D3") -> "sunmi-d3-mini"
-            manufacturer.contains("SUNMI") && model.contains("D2") -> "sunmi-d2s-plus"
-            manufacturer.contains("FEITIAN") && model.contains("F310") -> "feitian-f310a"
-            else -> "generic-android"
-        }
     }
 }

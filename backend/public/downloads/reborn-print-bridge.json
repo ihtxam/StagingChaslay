@@ -1,6 +1,6 @@
 {
   "name": "reborn-print-bridge",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "apkFile": "reborn-print-bridge.apk",
   "platform": "android",
   "builtAt": "2026-08-28T16:12:59.308237988Z",
