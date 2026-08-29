@@ -9944,7 +9944,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       />
 
       <WebPosPinModal
-        open={pinModalOpen && !pinGateRequired}
+        open={pinModalOpen && (pinModalMode === 'switch' || !pinGateRequired)}
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}

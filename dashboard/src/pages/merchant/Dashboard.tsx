@@ -249,6 +249,9 @@ function MerchantShell() {
     [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession, location.pathname]
   );
 
+  /** Owner JWT bypass for staff-only route guards — disabled while a PIN session is active. */
+  const jwtOwnerBypass = jwtIsOwner && !effective.pinActive;
+
   const storekeeperRestricted = useMemo(
     () => !jwtIsOwner && isStorekeeperRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
@@ -465,53 +468,53 @@ function MerchantShell() {
 
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
-    if (effective.isOwner || isPosLikeRoute) return;
+    if (jwtOwnerBypass || isPosLikeRoute) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (allow(path)) return;
     const dest = backOfficeHomePath(effective.permissions, false);
     if (dest !== path) navigate(dest, { replace: true });
-  }, [effective.isOwner, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
+  }, [jwtOwnerBypass, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
 
   // Delivery-only staff must use the driver app, not register POS.
   useEffect(() => {
-    if (effective.isOwner) return;
+    if (jwtOwnerBypass) return;
     if (!isDeliveryDriverOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === deliveryDriverHomePath()) return;
     if (path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/')) {
       navigate(deliveryDriverHomePath(), { replace: true });
     }
-  }, [effective.isOwner, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, effective.permissions, location.pathname, navigate]);
 
   // Storekeeper staff without full panel access — mobile intake (+ optional inventory) only.
   useEffect(() => {
-    if (jwtIsOwner || user?.role !== 'staff') return;
+    if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = effective.permissions;
     if (!isStorekeeperRestrictedStaff(perms, false)) return;
     if (isStorekeeperPanelPath(location.pathname, perms)) return;
     navigate(storekeeperHomePath(), { replace: true });
-  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
 
   // Storekeeper-only staff use the mobile intake app, not the full panel.
   useEffect(() => {
-    if (jwtIsOwner) return;
+    if (jwtOwnerBypass) return;
     if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
-  }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, effective.permissions, location.pathname, navigate]);
 
   // Kiosk operator staff — setup panel only, not full merchant back office.
   useEffect(() => {
-    if (jwtIsOwner || user?.role !== 'staff') return;
+    if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = effective.permissions;
     if (!isKioskRestrictedStaff(perms, false)) return;
     if (isKioskPanelPath(location.pathname)) return;
     navigate(kioskHomePath(), { replace: true });
-  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
 
   useEffect(() => {
-    if (jwtIsOwner) return;
+    if (jwtOwnerBypass) return;
     if (!isKioskOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === kioskHomePath()) return;
@@ -548,16 +551,16 @@ function MerchantShell() {
 
   // Waiter staff without full panel access — waiter app and optional menu/orders only.
   useEffect(() => {
-    if (jwtIsOwner || user?.role !== 'staff') return;
+    if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = effective.permissions;
     if (!isWaiterRestrictedStaff(perms, false)) return;
     if (isWaiterPanelPath(location.pathname, perms)) return;
     navigate(waiterRestrictedHomePath(perms), { replace: true });
-  }, [jwtIsOwner, user?.role, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
 
   // Floor waiters (and POS-destination staff) cannot browse the manager panel.
   useEffect(() => {
-    if (jwtIsOwner || user?.role !== 'staff') return;
+    if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = user?.permissions as Permission[] | undefined;
     const floorOnly = isFloorWaiterStaff(perms, false);
     const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos';
@@ -566,7 +569,7 @@ function MerchantShell() {
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     const dest = hasPermission(perms, 'MANAGE_TABLES', false) ? '/merchant/waiter' : '/merchant/pos';
     if (path !== dest) navigate(dest, { replace: true });
-  }, [jwtIsOwner, user?.role, user?.loginHome, user?.permissions, isPosLikeRoute, location.pathname, navigate]);
+  }, [jwtOwnerBypass, user?.role, user?.loginHome, user?.permissions, isPosLikeRoute, location.pathname, navigate]);
 
   const showWebPosQuickAction = useMemo(
     () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),

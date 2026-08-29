@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, Store, User, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
-import StaffSwitchButton from '@/components/StaffSwitchButton';
+import StaffSwitchButton, { type StaffSwitchButtonHandle } from '@/components/StaffSwitchButton';
 
 export interface SidebarLeaf {
   label: string;
@@ -146,6 +146,7 @@ export default function Sidebar({
   const [profileOpen, setProfileOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const staffSwitchRef = useRef<StaffSwitchButtonHandle>(null);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -451,10 +452,15 @@ export default function Sidebar({
               {profileOpen ? (
                 <div className="mt-1 rounded-lg border border-white/15 bg-black/35 overflow-hidden">
                   {showStaffSwitch ? (
-                    <StaffSwitchButton
-                      variant="menu"
-                      onOpen={() => setProfileOpen(false)}
-                    />
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
+                      onClick={() => staffSwitchRef.current?.open()}
+                      title={t('webPosSwitchUser')}
+                    >
+                      <UserCircle2 className="w-4 h-4" />
+                      {t('webPosSwitchUser')}
+                    </button>
                   ) : null}
                   {profileMenu.supportPath ? (
                     <Link
@@ -563,6 +569,10 @@ export default function Sidebar({
       {isOpen && (
         <div className="fixed inset-0 bg-black/40 lg:hidden z-30" onClick={onToggle} />
       )}
+
+      {showStaffSwitch ? (
+        <StaffSwitchButton ref={staffSwitchRef} variant="menu" showTrigger={false} />
+      ) : null}
     </>
   );
 }
