@@ -547,6 +547,9 @@ echo "CADDYFILE=$CADDYFILE"
 # migrate is a one-shot job — starting it via `up` leaves rebornsense-migrate-1 behind and blocks later deploys.
 docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
 docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
+# Leftover API containers from a failed recreate block the next deploy.
+docker ps -aq --filter "name=${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
+docker ps -aq --filter "name=_${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
 dc up -d --build db api dashboard caddy
 
 # Caddyfile is bind-mounted; reload in place (avoid --force-recreate name conflicts)
