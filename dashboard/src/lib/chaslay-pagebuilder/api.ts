@@ -1,4 +1,5 @@
 import api from '@/lib/api';
+import { DEFAULT_EMPTY_CANVAS_STATE } from '@/chaslay-pagebuilder/constants';
 
 export type ApiResponse<T> = {
   success: boolean;
@@ -70,14 +71,21 @@ export async function createHomepageBuilder(
   name: string,
   editorState?: string
 ): Promise<ApiResponse<HomepageBuilderData>> {
-  return unwrap(api.post('/merchant/chaslay-pagebuilder', { name, editor_state: editorState }));
+  const trimmed = editorState?.trim();
+  const state = trimmed && trimmed !== '{}' ? trimmed : DEFAULT_EMPTY_CANVAS_STATE;
+  return unwrap(api.post('/merchant/chaslay-pagebuilder', { name, editor_state: state }));
 }
 
 export async function updateHomepageBuilder(
   id: number,
   data: { name?: string; editor_state?: string }
 ): Promise<ApiResponse<HomepageBuilderData>> {
-  return unwrap(api.put(`/merchant/chaslay-pagebuilder/${id}`, data));
+  const payload = { ...data };
+  if (payload.editor_state !== undefined) {
+    const trimmed = payload.editor_state.trim();
+    payload.editor_state = trimmed && trimmed !== '{}' ? trimmed : DEFAULT_EMPTY_CANVAS_STATE;
+  }
+  return unwrap(api.put(`/merchant/chaslay-pagebuilder/${id}`, payload));
 }
 
 export async function deleteHomepageBuilder(id: number): Promise<ApiResponse<void>> {
@@ -126,7 +134,12 @@ export async function updateHomepageBuilderPage(
     is_homepage: boolean;
   }>
 ): Promise<ApiResponse<HomepageBuilderPageData>> {
-  return unwrap(api.put(`/merchant/chaslay-pagebuilder/${builderId}/pages/${pageId}`, data));
+  const payload = { ...data };
+  if (payload.editor_state !== undefined) {
+    const trimmed = payload.editor_state.trim();
+    payload.editor_state = trimmed && trimmed !== '{}' ? trimmed : DEFAULT_EMPTY_CANVAS_STATE;
+  }
+  return unwrap(api.put(`/merchant/chaslay-pagebuilder/${builderId}/pages/${pageId}`, payload));
 }
 
 export async function deleteHomepageBuilderPage(

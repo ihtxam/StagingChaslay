@@ -8,20 +8,7 @@ import { Monitor, Tablet, Smartphone } from 'lucide-react';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
 import { usePageContext } from './PageContext';
-
-// Minimal valid CraftJS state with an empty RootContainer canvas
-const EMPTY_CANVAS_STATE = JSON.stringify({
-  ROOT: {
-    type: { resolvedName: 'RootContainer' },
-    isCanvas: true,
-    props: { background: '#ffffff', minHeight: 600 },
-    displayName: 'RootContainer',
-    custom: {},
-    hidden: false,
-    nodes: [],
-    linkedNodes: {},
-  },
-});
+import { DEFAULT_EMPTY_CANVAS_STATE } from './constants';
 
 interface ViewportProps {
   initialState?: string | null;
@@ -90,7 +77,7 @@ export const Viewport: React.FC<ViewportProps> = ({ initialState, defaultContent
     }
 
     // No editor_state or invalid — reset to empty canvas with a droppable RootContainer
-    actions.deserialize(EMPTY_CANVAS_STATE);
+    actions.deserialize(DEFAULT_EMPTY_CANVAS_STATE);
   }, [currentPage, isMultiPageEnabled, actions]);
 
   const viewportIcons: Record<ViewportSize, React.ReactNode> = {

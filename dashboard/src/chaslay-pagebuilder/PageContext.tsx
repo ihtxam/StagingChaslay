@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { HomepageBuilderPage } from '@/chaslay-pagebuilder/types/homepage-builder';
+import { DEFAULT_EMPTY_CANVAS_STATE } from '@/chaslay-pagebuilder/constants';
 import {
   getHomepageBuilderPages,
   createHomepageBuilderPage,
@@ -64,7 +65,7 @@ export const PageContextProvider: React.FC<PageContextProviderProps> = ({ childr
           const createResponse = await createHomepageBuilderPage(id, {
             title: 'Home',
             slug: 'home',
-            editor_state: initialEditorState || null,
+            editor_state: initialEditorState?.trim() ? initialEditorState : DEFAULT_EMPTY_CANVAS_STATE,
             sort_order: 0,
             is_homepage: true,
           });
@@ -125,7 +126,7 @@ export const PageContextProvider: React.FC<PageContextProviderProps> = ({ childr
       const response = await createHomepageBuilderPage(builderId, {
         title,
         slug,
-        editor_state: null,
+        editor_state: DEFAULT_EMPTY_CANVAS_STATE,
         sort_order: pages.length,
         is_homepage: false,
       });

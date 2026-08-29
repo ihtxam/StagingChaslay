@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { HomepageEditor } from '@/chaslay-pagebuilder';
@@ -75,15 +76,16 @@ export default function ChaslayPageBuilderEditor() {
   );
 
   if (!id || isLoading) {
-    return (
-      <div className="chaslay-pagebuilder-root flex items-center justify-center h-[70vh]">
+    return createPortal(
+      <div className="chaslay-pagebuilder-root fixed inset-0 z-[200] flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
-    <div className="chaslay-pagebuilder-root fixed inset-0 z-40 bg-background">
+  return createPortal(
+    <div className="chaslay-pagebuilder-root fixed inset-0 z-[200] bg-background">
       <HomepageEditor
         initialState={initialState}
         onSave={handleSave}
@@ -91,6 +93,7 @@ export default function ChaslayPageBuilderEditor() {
         builderId={parseInt(id, 10)}
         onPageChange={handlePageChange}
       />
-    </div>
+    </div>,
+    document.body
   );
 }
