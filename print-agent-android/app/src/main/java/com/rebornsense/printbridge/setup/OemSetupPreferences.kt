@@ -5,6 +5,7 @@ import android.content.Context
 object OemSetupPreferences {
     private const val PREFS = "reborn_print_bridge_oem_setup"
     private const val KEY_WIZARD_COMPLETED = "wizard_completed"
+    private const val KEY_TAP_TO_PAY_REGISTERED = "tap_to_pay_device_registered"
     private const val KEY_STEP_PREFIX = "step_"
     /** When this differs from the installed versionCode, the setup wizard runs again. */
     private const val KEY_SETUP_VERSION_CODE = "setup_version_code"
@@ -52,6 +53,18 @@ object OemSetupPreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_STEP_PREFIX + stepId, completed)
+            .apply()
+    }
+
+    fun isTapToPayDeviceRegistered(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_TAP_TO_PAY_REGISTERED, false)
+    }
+
+    fun setTapToPayDeviceRegistered(context: Context, registered: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_TAP_TO_PAY_REGISTERED, registered)
             .apply()
     }
 

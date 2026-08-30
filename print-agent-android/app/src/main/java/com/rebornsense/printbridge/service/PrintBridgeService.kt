@@ -11,8 +11,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import com.rebornsense.printbridge.MainActivity
-import com.rebornsense.printbridge.PrintBridgeLauncher
+import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
 import com.rebornsense.printbridge.print.DriverRegistry
@@ -80,9 +79,15 @@ class PrintBridgeService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val needsSetup = !OemSetupPreferences.isWizardCompleted(this)
+        val body = if (needsSetup) {
+            getString(R.string.notification_setup_needed)
+        } else {
+            getString(R.string.notification_body)
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_body))
+            .setContentText(body)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(launch)
             .setOngoing(true)

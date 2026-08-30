@@ -8,14 +8,18 @@ import android.content.Context
 class TapToPayEngineStub : TapToPayEngine {
     override fun isReady(): Boolean = false
 
-    override fun readinessMessage(): String =
+    override fun readinessMessage(context: Context): String =
         "Tap to Pay requires Bridge Reborn build with Adyen SDK (see print-agent-android README)."
+
+    override suspend fun registerDevice(context: Context, params: TapToPayAuthParams): TapToPayRegisterOutcome {
+        return TapToPayRegisterOutcome(ok = false, message = readinessMessage(context))
+    }
 
     override suspend fun processSale(activity: Activity, params: TapToPaySaleParams): TapToPaySaleOutcome {
         return TapToPaySaleOutcome(
             ok = false,
             status = "error",
-            message = readinessMessage(),
+            message = readinessMessage(activity),
         )
     }
 }

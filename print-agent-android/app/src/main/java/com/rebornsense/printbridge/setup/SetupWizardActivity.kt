@@ -89,12 +89,21 @@ class SetupWizardActivity : AppCompatActivity() {
                 secondaryBtn.visibility = View.GONE
                 skipBtn.visibility = if (step.id == "done") View.GONE else View.VISIBLE
                 nextBtn.visibility = View.VISIBLE
-                nextBtn.text = if (step.id == "done") {
-                    getString(R.string.oem_step_open_webpos)
-                } else {
-                    getString(R.string.oem_step_next)
+                nextBtn.text = when (step.id) {
+                    "done" -> getString(R.string.oem_step_open_webpos)
+                    "tap_to_pay" -> getString(R.string.oem_step_open_webpos)
+                    else -> getString(R.string.oem_step_next)
                 }
-                statusText.visibility = View.GONE
+                if (step.id == "tap_to_pay") {
+                    statusText.visibility = View.VISIBLE
+                    statusText.text = if (OemSetupPreferences.isTapToPayDeviceRegistered(this)) {
+                        getString(R.string.oem_step_tap_to_pay_done)
+                    } else {
+                        getString(R.string.oem_step_tap_to_pay_pending)
+                    }
+                } else {
+                    statusText.visibility = View.GONE
+                }
             }
             OemSetupAction.OPEN_BATTERY -> {
                 secondaryBtn.visibility = View.VISIBLE
@@ -150,6 +159,9 @@ class SetupWizardActivity : AppCompatActivity() {
         if (step.id == "start_bridge" && BridgeHealthChecker.isHealthy()) {
             OemSetupPreferences.setStepCompleted(this, step.id, true)
         }
+        if (step.id == "tap_to_pay" && OemSetupPreferences.isTapToPayDeviceRegistered(this)) {
+            OemSetupPreferences.setStepCompleted(this, step.id, true)
+        }
     }
 
     private fun onPrimaryAction() {
@@ -159,15 +171,27 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.OPEN_AUTOSTART -> OemSettingsNavigator.openAutostartSettings(this)
             OemSetupAction.OPEN_BACKGROUND -> OemSettingsNavigator.openBackgroundActivitySettings(this)
             OemSetupAction.START_BRIDGE -> startBridgeAndPoll()
-            OemSetupAction.INSTRUCTION_ONLY -> onNextAction()
+            OemSetupAction.INSTRUCTION_ONLY -> {
+                if (step.id == "tap_to_pay" || step.id == "done") {
+                    openWebPosSettings()
+                } else {
+                    onNextAction()
+                }
+            }
         }
     }
 
     private fun onNextAction() {
         val step = currentStep()
-        if (step.id == "done") {
-            openWebPos()
-            finishWizard()
+        if (step.id == "done" || step.id == "tap_to_pay") {
+            if (step.id == "done") {
+                openWebPos()
+            } else {
+                openWebPosSettings()
+            }
+            if (step.id == "done") {
+                finishWizard()
+            }
             return
         }
         goToNextStep()
@@ -229,6 +253,21 @@ class SetupWizardActivity : AppCompatActivity() {
             return
         }
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.rebornsense.com")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+    }
+
+    private fun openWebPosSettings() {
+        val settingsUrl = "https://app.rebornsense.com/merchant/settings?tab=payments"
+        val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
+            ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
+        if (launch != null) {
+            launch.data = Uri.parse(settingsUrl)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
+            return
+        }
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(settingsUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }

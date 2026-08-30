@@ -17,10 +17,22 @@ data class TapToPaySaleOutcome(
     val message: String? = null,
 )
 
+data class TapToPayAuthParams(
+    val apiBaseUrl: String,
+    val authToken: String,
+)
+
+data class TapToPayRegisterOutcome(
+    val ok: Boolean,
+    val message: String? = null,
+    val installationId: String? = null,
+)
+
 /** Pluggable NFC payment backend (Adyen when SDK is on the classpath). */
 interface TapToPayEngine {
     fun isReady(): Boolean
-    fun readinessMessage(): String
+    fun readinessMessage(context: android.content.Context): String
+    suspend fun registerDevice(context: android.content.Context, params: TapToPayAuthParams): TapToPayRegisterOutcome
     suspend fun processSale(activity: Activity, params: TapToPaySaleParams): TapToPaySaleOutcome
 }
 

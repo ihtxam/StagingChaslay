@@ -28,6 +28,7 @@ import {
   Copy,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
+import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
@@ -2927,6 +2928,13 @@ export default function Settings() {
                       ))}
                     </ul>
                   </div>
+                  <TapToPayDeviceSetup
+                    adyenReady={
+                      adyen.apiKeySet === true &&
+                      !!(adyen.merchantAccount || merchantAccount.trim())
+                    }
+                    tapToPayEnabled={settings?.tapToPayEnabled === true}
+                  />
                   {adyenWebhookUrl ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs muted">{t('adyenWebhookUrl')}</p>

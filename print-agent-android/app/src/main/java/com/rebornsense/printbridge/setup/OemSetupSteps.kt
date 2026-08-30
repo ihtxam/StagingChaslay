@@ -1,5 +1,6 @@
 package com.rebornsense.printbridge.setup
 
+import com.rebornsense.printbridge.BuildConfig
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.device.DeviceProfiler
 
@@ -30,7 +31,7 @@ object OemSetupSteps {
         }
     }
 
-    private fun sunmiSteps(): List<OemSetupStep> = listOf(
+    private fun sunmiSteps(): List<OemSetupStep> = listOfNotNull(
         welcomeStep(),
         batteryStep(),
         OemSetupStep(
@@ -41,10 +42,11 @@ object OemSetupSteps {
             action = OemSetupAction.OPEN_AUTOSTART,
         ),
         startBridgeStep(),
+        tapToPayStep(),
         doneStep(),
     )
 
-    private fun feitianSteps(): List<OemSetupStep> = listOf(
+    private fun feitianSteps(): List<OemSetupStep> = listOfNotNull(
         welcomeStep(),
         batteryStep(),
         OemSetupStep(
@@ -55,10 +57,11 @@ object OemSetupSteps {
             action = OemSetupAction.OPEN_BACKGROUND,
         ),
         startBridgeStep(),
+        tapToPayStep(),
         doneStep(),
     )
 
-    private fun genericChineseSteps(): List<OemSetupStep> = listOf(
+    private fun genericChineseSteps(): List<OemSetupStep> = listOfNotNull(
         welcomeStep(),
         batteryStep(),
         OemSetupStep(
@@ -76,13 +79,15 @@ object OemSetupSteps {
             action = OemSetupAction.INSTRUCTION_ONLY,
         ),
         startBridgeStep(),
+        tapToPayStep(),
         doneStep(),
     )
 
-    private fun genericAndroidSteps(): List<OemSetupStep> = listOf(
+    private fun genericAndroidSteps(): List<OemSetupStep> = listOfNotNull(
         welcomeStep(),
         batteryStep(),
         startBridgeStep(),
+        tapToPayStep(),
         doneStep(),
     )
 
@@ -110,6 +115,18 @@ object OemSetupSteps {
         action = OemSetupAction.OPEN_BATTERY,
         autoComplete = { false },
     )
+
+    /** Shown when Adyen SDK is bundled — device registration happens in WebPOS Settings. */
+    private fun tapToPayStep(): OemSetupStep? {
+        if (!BuildConfig.HAS_ADYEN_SDK) return null
+        return OemSetupStep(
+            id = "tap_to_pay",
+            titleRes = R.string.oem_step_tap_to_pay_title,
+            descriptionRes = R.string.oem_step_tap_to_pay_desc,
+            actionLabelRes = R.string.oem_step_open_webpos,
+            action = OemSetupAction.INSTRUCTION_ONLY,
+        )
+    }
 
     private fun doneStep(): OemSetupStep = OemSetupStep(
         id = "done",

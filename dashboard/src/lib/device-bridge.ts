@@ -17,6 +17,8 @@ export type DeviceBridgeHealth = {
   hasAdyenSdk?: boolean;
   /** Adyen SoftPOS SDK initialized and ready for sales */
   tapToPayReady?: boolean;
+  /** Device completed one-time Tap to Pay registration (warmUp + installationId) */
+  tapToPayRegistered?: boolean;
   /** Human-readable reason when tapToPayReady is false */
   tapToPayMessage?: string;
 };
@@ -55,6 +57,7 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
       nfcAvailable: data.nfcAvailable === true,
       hasAdyenSdk: data.hasAdyenSdk === true,
       tapToPayReady: data.tapToPayReady === true,
+      tapToPayRegistered: data.tapToPayRegistered === true,
       tapToPayMessage:
         data.tapToPayMessage != null ? String(data.tapToPayMessage) : undefined,
     };
@@ -133,6 +136,61 @@ export async function runDeviceBridgeTapToPay(
       ok: false,
       status: aborted ? 'cancelled' : 'error',
       message: aborted ? 'Payment cancelled.' : 'Could not reach Bridge Reborn.',
+    };
+  } finally {
+    clearTimeout(timer);
+    options?.signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+export type TapToPayRegisterResult = {
+  ok: boolean;
+  installationId?: string;
+  message?: string;
+};
+
+/** One-time Tap to Pay activation (Adyen warmUp + device registration). */
+export async function registerDeviceBridgeTapToPay(
+  request: { apiBaseUrl: string; authToken: string },
+  options?: { signal?: AbortSignal; timeoutMs?: number }
+): Promise<TapToPayRegisterResult> {
+  const timeoutMs = options?.timeoutMs ?? 120_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  options?.signal?.addEventListener('abort', onAbort);
+
+  try {
+    const res = await fetch(bridgeUrl('/tap-to-pay/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_base_url: request.apiBaseUrl.replace(/\/$/, ''),
+        auth_token: request.authToken,
+      }),
+      signal: controller.signal,
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: String(data.error || data.message || `Bridge Reborn HTTP ${res.status}`),
+      };
+    }
+    return {
+      ok: data.ok === true,
+      installationId:
+        data.installation_id != null ? String(data.installation_id) : undefined,
+      message: data.message != null ? String(data.message) : undefined,
+    };
+  } catch (e: unknown) {
+    const aborted =
+      (e as { name?: string })?.name === 'AbortError' ||
+      options?.signal?.aborted ||
+      controller.signal.aborted;
+    return {
+      ok: false,
+      message: aborted ? 'Setup cancelled.' : 'Could not reach Bridge Reborn.',
     };
   } finally {
     clearTimeout(timer);

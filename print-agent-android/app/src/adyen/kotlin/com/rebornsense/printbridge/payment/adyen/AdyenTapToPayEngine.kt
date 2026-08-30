@@ -7,9 +7,12 @@ import androidx.appcompat.app.AppCompatActivity
 import com.adyen.ipp.api.InPersonPayments
 import com.adyen.ipp.api.payment.PaymentInterfaceType
 import com.adyen.ipp.api.payment.TransactionRequest
+import com.rebornsense.printbridge.payment.TapToPayAuthParams
 import com.rebornsense.printbridge.payment.TapToPayEngine
+import com.rebornsense.printbridge.payment.TapToPayRegisterOutcome
 import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
 import com.rebornsense.printbridge.payment.TapToPaySaleParams
+import com.rebornsense.printbridge.setup.OemSetupPreferences
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,16 +28,52 @@ class AdyenTapToPayEngine : TapToPayEngine {
 
     override fun isReady(): Boolean = adyenSdkAvailable()
 
-    override fun readinessMessage(): String = when {
+    override fun readinessMessage(context: Context): String = when {
         !adyenSdkAvailable() ->
             "This APK was built without the Adyen SDK. Install the Tap to Pay build from the merchant panel."
-        else -> "Ready — Tap to Pay starts when you take a card payment in WebPOS."
+        !nfcAvailable(context) ->
+            "This device has no NFC reader."
+        !OemSetupPreferences.isTapToPayDeviceRegistered(context) ->
+            "Tap to Pay not activated on this device. In WebPOS go to Settings → Payments → Activate Tap to Pay."
+        else -> "Ready — take a card payment in WebPOS to start Tap to Pay."
     }
 
     private fun adyenSdkAvailable(): Boolean = runCatching {
         Class.forName("com.adyen.ipp.api.InPersonPayments")
         true
     }.getOrDefault(false)
+
+    override suspend fun registerDevice(context: Context, params: TapToPayAuthParams): TapToPayRegisterOutcome {
+        if (!adyenSdkAvailable()) {
+            return TapToPayRegisterOutcome(ok = false, message = readinessMessage(context))
+        }
+        if (!nfcAvailable(context)) {
+            return TapToPayRegisterOutcome(ok = false, message = readinessMessage(context))
+        }
+        if (params.authToken.isBlank() || params.apiBaseUrl.isBlank()) {
+            return TapToPayRegisterOutcome(ok = false, message = "Missing auth token or API URL.")
+        }
+
+        TapToPayConfig.apiBaseUrl = params.apiBaseUrl.trimEnd('/')
+        TapToPayConfig.authToken = params.authToken
+
+        return try {
+            withContext(Dispatchers.IO) { InPersonPayments.warmUp() }.getOrElse {
+                return TapToPayRegisterOutcome(ok = false, message = "Warm-up failed: ${it.message}")
+            }
+            val installationId = withContext(Dispatchers.IO) { InPersonPayments.getInstallationId() }
+                .getOrElse {
+                    return TapToPayRegisterOutcome(ok = false, message = "Registration failed: ${it.message}")
+                }
+            OemSetupPreferences.setTapToPayDeviceRegistered(context, true)
+            OemSetupPreferences.setStepCompleted(context, "tap_to_pay", true)
+            TapToPayRegisterOutcome(ok = true, installationId = installationId, message = "Tap to Pay activated.")
+        } catch (t: Throwable) {
+            TapToPayRegisterOutcome(ok = false, message = t.message ?: "Tap to Pay setup failed.")
+        } finally {
+            TapToPayConfig.clear()
+        }
+    }
 
     override suspend fun processSale(activity: Activity, params: TapToPaySaleParams): TapToPaySaleOutcome {
         if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC)) {
@@ -55,7 +94,7 @@ class AdyenTapToPayEngine : TapToPayEngine {
             ?: return TapToPaySaleOutcome(
                 ok = false,
                 status = "error",
-                message = readinessMessage(),
+                message = readinessMessage(activity),
             )
         if (params.amountMinor <= 0L) {
             return TapToPaySaleOutcome(ok = false, status = "error", message = "Invalid amount.")

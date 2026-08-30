@@ -6,9 +6,11 @@ import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
 import com.rebornsense.printbridge.payment.PaymentCoordinator
+import com.rebornsense.printbridge.payment.TapToPayAuthParams
 import com.rebornsense.printbridge.payment.TapToPayEngines
 import com.rebornsense.printbridge.payment.TapToPaySaleParams
 import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
+import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.payment.hasNfcFeature
 import com.rebornsense.printbridge.scale.AclasScaleReader
 import com.rebornsense.printbridge.scale.AclasScaleReading
@@ -51,13 +53,16 @@ class BridgeHttpServer(
 
                 val engine = TapToPayEngines.current()
                 val nfcAvailable = appContext.hasNfcFeature()
-                val tapToPayReady = nfcAvailable && engine.isReady()
+                val deviceRegistered = OemSetupPreferences.isTapToPayDeviceRegistered(appContext)
+                val sdkReady = engine.isReady()
+                val tapToPayReady = nfcAvailable && sdkReady && deviceRegistered
                 val tapToPayMessage = when {
                     !nfcAvailable -> "This device has no NFC reader."
                     tapToPayReady -> "Ready"
-                    else -> engine.readinessMessage()
+                    else -> engine.readinessMessage(appContext)
                 }
                 if (nfcAvailable) features.put("nfc")
+                if (sdkReady) features.put("tap-to-pay-sdk")
                 if (tapToPayReady) features.put("tap-to-pay")
                 features.put("scale")
                 features.put("usb-scale")
@@ -75,6 +80,7 @@ class BridgeHttpServer(
                         .put("queueDepth", queue.queueDepth())
                         .put("nfcAvailable", nfcAvailable)
                         .put("hasAdyenSdk", BuildConfig.HAS_ADYEN_SDK)
+                        .put("tapToPayRegistered", deviceRegistered)
                         .put("tapToPayReady", tapToPayReady)
                         .put("tapToPayMessage", tapToPayMessage)
                 )
@@ -122,6 +128,47 @@ class BridgeHttpServer(
                         .put("ok", true)
                         .put("printer", endpoint.name)
                         .put("queued", true)
+                )
+            }
+
+            uri == "/tap-to-pay/register" && method == Method.POST -> {
+                val body = readBody(session)
+                val apiBaseUrl = body.optString("api_base_url", "")
+                val authToken = body.optString("auth_token", "")
+                if (apiBaseUrl.isBlank() || authToken.isBlank()) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "api_base_url and auth_token are required"),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                if (!appContext.hasNfcFeature()) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "This device has no NFC reader."),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val engine = TapToPayEngines.current()
+                val outcome = runBlocking {
+                    withTimeoutOrNull(120_000L) {
+                        engine.registerDevice(
+                            appContext,
+                            TapToPayAuthParams(apiBaseUrl = apiBaseUrl, authToken = authToken),
+                        )
+                    }
+                } ?: return jsonResponse(
+                    JSONObject().put("ok", false).put("error", "Tap to Pay setup timed out."),
+                    Response.Status.GATEWAY_TIMEOUT,
+                )
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", outcome.ok)
+                        .put("installation_id", outcome.installationId)
+                        .put("message", outcome.message),
+                    if (outcome.ok) Response.Status.OK else Response.Status.BAD_REQUEST,
                 )
             }
 

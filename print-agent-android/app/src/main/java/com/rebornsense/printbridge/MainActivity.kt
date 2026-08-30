@@ -104,6 +104,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
         updateOemSetupBanner()
         updateTapToPayDiagnostics()
+        if (!OemSetupPreferences.isWizardCompleted(this)) {
+            window.decorView.post { maybeLaunchOemWizard() }
+        }
     }
 
     override fun onResume() {
@@ -135,7 +138,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openOemSetupWizard() {
-        pendingWizardLaunch = true
         wizardLauncher.launch(SetupWizardActivity.createIntent(this))
     }
 

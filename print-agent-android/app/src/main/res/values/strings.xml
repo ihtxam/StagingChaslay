@@ -74,6 +74,11 @@
     <string name="oem_step_bridge_failed">Bridge did not respond. Check notification permission, then tap Start Bridge service again.</string>
     <string name="oem_step_bridge_version_unknown">unknown</string>
     <string name="oem_step_open_webpos">Open WebPOS</string>
+    <string name="oem_step_tap_to_pay_title">Activate Tap to Pay</string>
+    <string name="oem_step_tap_to_pay_desc">Sign in to WebPOS in Chrome on this tablet, then go to Settings → Payments and tap “Activate Tap to Pay on this device”. This registers the tablet with Adyen (one time).</string>
+    <string name="oem_step_tap_to_pay_done">Tap to Pay activated on this device.</string>
+    <string name="oem_step_tap_to_pay_pending">Not activated yet — complete setup in WebPOS Settings → Payments.</string>
+    <string name="notification_setup_needed">Tap to open Bridge Reborn and finish setup</string>
     <string name="oem_step_done_title">Setup complete</string>
     <string name="oem_step_done_desc">Bridge Reborn is configured to run in the background. Open WebPOS in Chrome — it will connect automatically. You can reopen this wizard anytime from the main screen.</string>
 
