@@ -2402,6 +2402,24 @@ const en: Dict = {
     'Keep Reborn open on the PC with the Print Agent — that till prints kitchen/receipt jobs from waiter phones automatically.',
   webPosPrintQueuedMainTill:
     'Sent to main till printer. Keep Reborn open on the PC with the Print Agent.',
+  webPosBridgeSetupOfflineTitle: 'Bridge Reborn is not running',
+  webPosBridgeSetupOfflineBody:
+    'This tablet is the main till. Open Bridge Reborn so kitchen and receipt prints stay on this device instead of queuing to a PC.',
+  webPosBridgeSetupStepOpenApp: 'Open the Bridge Reborn app on this tablet',
+  webPosBridgeSetupStepAllowPermissions: 'Allow Bluetooth and local network permissions if asked',
+  webPosBridgeSetupStepRetry: 'Tap Refresh below — Web POS will connect automatically',
+  webPosBridgeSetupNoPrintersTitle: 'No printers found',
+  webPosBridgeSetupNoPrintersBody:
+    'Bridge Reborn is running but no suitable printer was detected. Pair your Bluetooth kitchen printer in Android settings, then refresh the printer list in Bridge Reborn.',
+  webPosBridgeSetupSingleTitle: 'Use this printer?',
+  webPosBridgeSetupSingleBody: 'One printer is available on this tablet. Confirm to use it for receipts and kitchen tickets.',
+  webPosBridgeSetupPickTitle: 'Choose printers',
+  webPosBridgeSetupPickBody:
+    'Multiple printers were found. Select which one this till should use for receipts and kitchen tickets.',
+  webPosBridgeSetupSelectPrinter: 'Select a printer…',
+  webPosBridgeSetupUsePrinter: 'Use printer',
+  webPosBridgeSetupLater: 'Later',
+  webPosBridgeSetupConnected: 'Printer connected: {name}',
   webPosWaiterOrderAtTill: 'Waiter order received — printing on this till',
   webPosWaiterOrderAtTillNamed: 'Waiter order received — {label}',
   webPosAgentOffline: 'Print agent offline.',
@@ -5833,6 +5851,25 @@ const fr: Dict = {
     'Laissez Reborn ouvert sur le PC avec l\'agent d\'impression — cette caisse imprime automatiquement les tickets des téléphones serveurs.',
   webPosPrintQueuedMainTill:
     'Envoyé à la caisse principale — gardez Reborn ouvert sur le PC.',
+  webPosBridgeSetupOfflineTitle: 'Bridge Reborn n’est pas démarré',
+  webPosBridgeSetupOfflineBody:
+    'Cette tablette est la caisse principale. Ouvrez Bridge Reborn pour que les impressions cuisine et ticket restent sur cet appareil au lieu d’être envoyées à un PC.',
+  webPosBridgeSetupStepOpenApp: 'Ouvrez l’application Bridge Reborn sur cette tablette',
+  webPosBridgeSetupStepAllowPermissions: 'Autorisez Bluetooth et le réseau local si demandé',
+  webPosBridgeSetupStepRetry: 'Appuyez sur Actualiser ci-dessous — Web POS se connectera automatiquement',
+  webPosBridgeSetupNoPrintersTitle: 'Aucune imprimante trouvée',
+  webPosBridgeSetupNoPrintersBody:
+    'Bridge Reborn est actif mais aucune imprimante adaptée n’a été détectée. Associez votre imprimante cuisine Bluetooth dans les réglages Android, puis actualisez la liste dans Bridge Reborn.',
+  webPosBridgeSetupSingleTitle: 'Utiliser cette imprimante ?',
+  webPosBridgeSetupSingleBody:
+    'Une imprimante est disponible sur cette tablette. Confirmez pour l’utiliser pour les tickets et la cuisine.',
+  webPosBridgeSetupPickTitle: 'Choisir les imprimantes',
+  webPosBridgeSetupPickBody:
+    'Plusieurs imprimantes ont été trouvées. Sélectionnez celle que cette caisse doit utiliser pour les tickets et la cuisine.',
+  webPosBridgeSetupSelectPrinter: 'Sélectionner une imprimante…',
+  webPosBridgeSetupUsePrinter: 'Utiliser l’imprimante',
+  webPosBridgeSetupLater: 'Plus tard',
+  webPosBridgeSetupConnected: 'Imprimante connectée : {name}',
   webPosWaiterOrderAtTill: 'Commande serveur reçue — impression sur cette caisse',
   webPosWaiterOrderAtTillNamed: 'Commande serveur reçue — {label}',
   webPosAgentOffline: 'Agent d\'impression hors ligne.',
@@ -9229,6 +9266,25 @@ const de: Dict = {
     'Lassen Sie Reborn auf dem PC mit Druckagent geöffnet — diese Kasse druckt Küchen-/Belegjobs von Kellner-Handys automatisch.',
   webPosPrintQueuedMainTill:
     'An die Hauptkasse gesendet. Reborn auf dem PC mit Druckagent geöffnet lassen.',
+  webPosBridgeSetupOfflineTitle: 'Bridge Reborn läuft nicht',
+  webPosBridgeSetupOfflineBody:
+    'Dieses Tablet ist die Hauptkasse. Öffnen Sie Bridge Reborn, damit Küchen- und Belegdrucke auf diesem Gerät bleiben und nicht an einen PC geschickt werden.',
+  webPosBridgeSetupStepOpenApp: 'Öffnen Sie die Bridge-Reborn-App auf diesem Tablet',
+  webPosBridgeSetupStepAllowPermissions: 'Erlauben Sie Bluetooth und lokales Netzwerk, falls gefragt',
+  webPosBridgeSetupStepRetry: 'Tippen Sie unten auf Aktualisieren — Web POS verbindet sich automatisch',
+  webPosBridgeSetupNoPrintersTitle: 'Keine Drucker gefunden',
+  webPosBridgeSetupNoPrintersBody:
+    'Bridge Reborn läuft, aber es wurde kein passender Drucker erkannt. Koppeln Sie Ihren Bluetooth-Küchendrucker in den Android-Einstellungen und aktualisieren Sie die Liste in Bridge Reborn.',
+  webPosBridgeSetupSingleTitle: 'Diesen Drucker verwenden?',
+  webPosBridgeSetupSingleBody:
+    'Ein Drucker ist auf diesem Tablet verfügbar. Bestätigen Sie, um ihn für Belege und Küchentickets zu nutzen.',
+  webPosBridgeSetupPickTitle: 'Drucker auswählen',
+  webPosBridgeSetupPickBody:
+    'Mehrere Drucker wurden gefunden. Wählen Sie, welchen diese Kasse für Belege und Küchentickets nutzen soll.',
+  webPosBridgeSetupSelectPrinter: 'Drucker auswählen…',
+  webPosBridgeSetupUsePrinter: 'Drucker verwenden',
+  webPosBridgeSetupLater: 'Später',
+  webPosBridgeSetupConnected: 'Drucker verbunden: {name}',
   webPosWaiterOrderAtTill: 'Kellnerbestellung eingegangen — Druck an dieser Kasse',
   webPosWaiterOrderAtTillNamed: 'Kellnerbestellung eingegangen — {label}',
   webPosAgentOffline: 'Druckagent offline.',
