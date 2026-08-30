@@ -6022,7 +6022,7 @@ const fr: Dict = {
   paxOrderingHint: 'Commander par convive, facturer par personne ou partager /N.',
   webPosHint: 'POS navigateur. Utilisez Reborn Print Agent sur Windows pour l’impression thermique.',
   webposPaymentMethods: 'Modes de paiement POS',
-  webposPaymentMethodsHint: 'Options affichées sur Reborn et l\'app Android POS. Les changements se synchronisent sur les appareils connectés.',
+  webposPaymentMethodsHint: 'Moyens de paiement à l\'encaissement sur Reborn et l\'app Android POS. Les boutons express sous les produits se règlent séparément dans les paramètres d\'encaissement POS.',
   webposExpress: 'Vente express (raccourci caisse)',
   expressCheckoutEnabled: 'Boutons express sous les produits',
   expressCheckoutEnabledHint:
@@ -9636,7 +9636,7 @@ const de: Dict = {
   paxOrderingHint: 'Pro Gast bestellen, einzeln abrechnen oder /N teilen.',
   webPosHint: 'Browser-POS. Reborn Print Agent unter Windows für Thermodruck.',
   webposPaymentMethods: 'POS-Zahlungsarten',
-  webposPaymentMethodsHint: 'Zahlungsoptionen in Reborn und der Android-POS-App. Änderungen werden auf verbundene Geräte synchronisiert.',
+  webposPaymentMethodsHint: 'Zahlungsarten an der Kasse in Reborn und der Android-POS-App. Express-Buttons unter den Produkten werden separat in den POS-Checkout-Einstellungen gesteuert.',
   webposExpress: 'Express-Verkauf (Kassen-Shortcut)',
   expressCheckoutEnabled: 'Express-Checkout-Buttons',
   expressCheckoutEnabledHint:
