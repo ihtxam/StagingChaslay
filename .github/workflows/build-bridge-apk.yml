@@ -15,6 +15,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Adyen SDK keys when secrets exist
+        env:
+          ADYEN_SDK_API_KEY: ${{ secrets.ADYEN_SDK_API_KEY }}
+          ADYEN_SDK_API_KEY_LIVE: ${{ secrets.ADYEN_SDK_API_KEY_LIVE }}
+          ADYEN_SDK_ENV: ${{ secrets.ADYEN_SDK_ENV }}
+        run: |
+          {
+            echo "adyenEnv=${ADYEN_SDK_ENV:-test}"
+            if [[ -n "${ADYEN_SDK_API_KEY:-}" ]]; then
+              echo "adyenSdkApiKey=${ADYEN_SDK_API_KEY}"
+            fi
+            if [[ -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
+              echo "adyenSdkApiKeyLive=${ADYEN_SDK_API_KEY_LIVE}"
+            fi
+          } >> print-agent-android/local.properties
+          if [[ -n "${ADYEN_SDK_API_KEY:-}" || -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
+            echo "Adyen SDK keys present — Tap to Pay APK will be built"
+          else
+            echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
+          fi
+
       - name: Build APK in Android container
         run: |
           set -euo pipefail

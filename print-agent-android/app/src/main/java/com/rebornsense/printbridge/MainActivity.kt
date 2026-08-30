@@ -63,6 +63,8 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
             startBridge()
             refreshPrinters()
+            window.decorView.postDelayed({ refreshPrinters() }, 2_500)
+            maybeLaunchOemWizard()
             val endpoint = pendingBluetoothTestPrint
             pendingBluetoothTestPrint = null
             if (endpoint != null) {
@@ -103,9 +105,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
         updateOemSetupBanner()
         updateTapToPayDiagnostics()
-        if (!OemSetupPreferences.isWizardCompleted(this)) {
-            window.decorView.post { maybeLaunchOemWizard() }
-        }
+        // Wizard waits until permission dialogs finish so USB/Bluetooth prompts are not hidden.
     }
 
     override fun onResume() {
@@ -214,6 +214,8 @@ class MainActivity : AppCompatActivity() {
         needed += bluetoothPermissionsNeeded()
         if (needed.isEmpty()) {
             startBridge()
+            refreshPrinters()
+            maybeLaunchOemWizard()
         } else {
             permissionLauncher.launch(needed.toTypedArray())
         }
