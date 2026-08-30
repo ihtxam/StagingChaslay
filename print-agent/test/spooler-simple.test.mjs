@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.9.4";
+const VERSION = "1.9.5";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.9.4 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.9.5 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -29,6 +29,8 @@ test("print-agent version is 1.9.4 in package.json, server.js, and download mani
   assert.match(server, /cloud-relay/);
   assert.match(server, /bt-com-paced-spooler/);
   assert.match(server, /com-serial-write-fallback/);
+  assert.match(server, /warm-print-worker/);
+  assert.match(server, /printViaWorker/);
   assert.match(server, /enqueuePrint/);
   assert.match(server, /timeout: 180000/);
 });
@@ -47,6 +49,8 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
   assert.match(src, /writeChunk = if \(\$isComPort\) \{ 32 \} else \{ 96 \}/);
+  assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
+  assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
   assert.match(src, /Get-BtCutTrailer/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
@@ -70,6 +74,8 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
   assert.match(src, /writeChunk = if \(\$isComPort\) \{ 32 \} else \{ 96 \}/);
+  assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
+  assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
   assert.match(src, /Get-BtCutTrailer/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);

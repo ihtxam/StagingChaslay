@@ -340,8 +340,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.9.4+ fixes COM4 Bluetooth serial short-write (FlushPrinter 0-byte success). */
-export const MIN_PRINT_AGENT_VERSION = '1.9.4';
+/** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
+export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
