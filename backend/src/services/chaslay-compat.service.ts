@@ -468,8 +468,10 @@ export class ChaslayCompatService {
       !!merchant.adyenMerchantAccount;
 
     const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
+    const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
 
     return {
       adyen: {
@@ -489,7 +491,8 @@ export class ChaslayCompatService {
       tap_to_pay_ready: tapToPayReady,
       tap_to_pay_enabled: merchant.tapToPayEnabled === true,
       methods: {
-        express: merchant.webposExpressEnabled !== false,
+        // Express checkout bar under products — driven by posCheckoutSettings.
+        express: posCheckoutSettings.expressCheckoutEnabled,
         cash: merchant.webposCashEnabled !== false,
         card: merchant.webposCardEnabled !== false,
         terminal: merchant.webposTerminalEnabled !== false && terminalReady,
@@ -509,9 +512,7 @@ export class ChaslayCompatService {
         shifts_enabled: !!merchant.shiftsEnabled,
       },
       checkout: {
-        ...(await import("@/lib/pos-checkout-settings")).normalizePosCheckoutSettings(
-          merchant.posCheckoutSettings
-        ),
+        ...posCheckoutSettings,
         vatIncludedInPrice: merchant.taxIncludedInPrice === true,
         vatAfterDiscount: merchant.vatAfterDiscount !== false,
       },

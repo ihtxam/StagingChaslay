@@ -8709,7 +8709,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (paymentConfig?.tapToPayReady !== false) &&
     !offlineNow;
   const enabledMethods = {
-    express: (paymentConfig?.methods.express ?? true) && canPay,
+    express: (checkoutSettings.expressCheckoutEnabled !== false) && canPay,
     cash: (paymentConfig?.methods.cash ?? true) && canPay,
     card: (paymentConfig?.methods.card ?? true) && canPay,
     // Terminal / gift card require live cloud APIs — hide while offline.

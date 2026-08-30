@@ -213,7 +213,7 @@ export const merchants = pgTable(
     adyenLiveRegion: varchar("adyen_live_region", { length: 10 }).default("EU").notNull(),
     /** Use legacy Terminal API sync URL instead of Cloud Device API */
     adyenUseLegacyEndpoint: boolean("adyen_use_legacy_endpoint").default(false).notNull(),
-    /** WebPOS payment method toggles (merchant panel counter sales) */
+    /** @deprecated Use posCheckoutSettings.expressCheckoutEnabled. Kept in sync for older clients. */
     webposExpressEnabled: boolean("webpos_express_enabled").default(true).notNull(),
     webposCashEnabled: boolean("webpos_cash_enabled").default(true).notNull(),
     webposCardEnabled: boolean("webpos_card_enabled").default(true).notNull(),

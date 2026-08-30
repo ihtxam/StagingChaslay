@@ -1655,7 +1655,8 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       success: true,
       config: {
         methods: {
-          express: merchant.webposExpressEnabled !== false,
+          // Express checkout bar under products — driven by posCheckoutSettings, not a tender.
+          express: posCheckoutSettings.expressCheckoutEnabled,
           cash: merchant.webposCashEnabled !== false,
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,

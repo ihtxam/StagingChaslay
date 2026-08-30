@@ -631,6 +631,10 @@ export class MerchantSettingsService {
         checkout = { ...checkout, posMode: posModeForModule(locked) };
       }
       patch.posCheckoutSettings = checkout;
+      // Keep legacy webpos_express_enabled in sync with the single express-checkout toggle.
+      if (updates.webposExpressEnabled === undefined) {
+        patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
+      }
     }
     if (updates.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
