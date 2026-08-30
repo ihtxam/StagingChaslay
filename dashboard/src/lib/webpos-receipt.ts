@@ -1122,7 +1122,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.printAdyenReceiptOnTicket !== false) {
     r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
-  r += '\n\n';
+  r += '\n';
   return r;
 }
 
@@ -1633,7 +1633,15 @@ function escUnderline(on: boolean): Uint8Array {
  * Feed past the cutter — tuned for cheap Chinese ESC/POS clones (Xprinter, RPP, Gprinter).
  * Avoids Epson-only GS V 41; uses partial + full cut and ESC m fallback.
  */
-export function escposFeedAndCut(): Uint8Array {
+export function escposKitchenTicketEnd(): Uint8Array {
+  return new Uint8Array([0x1b, 0x64, 0x02]); // ESC d 2 — small gap before cut job
+}
+
+/**
+ * Single feed+cut for kitchen follow-up jobs and BT/COM safety cuts.
+ * Avoid stacking heavy feeds on the ticket body (was wasting ~30+ lines of paper).
+ */
+export function escposKitchenCut(): Uint8Array {
   return new Uint8Array([
     0x1b, 0x64, 0x05, // ESC d 5 — short feed before cut
     0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
@@ -1641,7 +1649,15 @@ export function escposFeedAndCut(): Uint8Array {
   ]);
 }
 
-const KITCHEN_TICKET_CUT = escposFeedAndCut();
+/**
+ * Feed past the cutter, then full + partial cut variants.
+ * Used for test prints and other non-kitchen paths that need a reliable cut in one job.
+ */
+export function escposFeedAndCut(): Uint8Array {
+  return escposKitchenCut();
+}
+
+const KITCHEN_TICKET_CUT = escposKitchenTicketEnd();
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
@@ -2373,7 +2389,7 @@ export async function buildReceiptEscPos(
         paperWidthMm: paper,
       })) ||
       (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-      escposQrCode(qrData, paper === 58 ? 4 : 5);
+      escposQrCode(qrData, paper === 58 ? 5 : 5);
   }
 
   return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);

@@ -10,7 +10,7 @@ import {
   settleAfterBluetoothKitchenPrint,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import { escposFeedAndCut, uint8ToBase64 } from '@/lib/webpos-receipt';
+import { escposKitchenCut, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { enqueueFailedPrintJob } from '@/lib/webpos-print-queue';
 import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
@@ -255,7 +255,7 @@ export async function printViaAgentOrQueue(opts: {
 }
 
 /**
- * Kitchen print, then a tiny feed+cut job on Bluetooth/COM so the blade runs
+ * Kitchen print, then a light feed+cut job on Bluetooth/COM so the blade runs
  * even when the last packet of the ticket was dropped.
  */
 export async function printKitchenViaAgentOrQueue(
