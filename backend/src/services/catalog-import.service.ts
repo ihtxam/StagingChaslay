@@ -15,6 +15,26 @@ export interface ImportRowError {
   message: string;
 }
 
+export type ImportProgressPhase =
+  | "parsing"
+  | "categories"
+  | "modifierGroups"
+  | "products"
+  | "done"
+  | "error";
+
+export type ImportProgressEvent = {
+  phase: ImportProgressPhase;
+  message?: string;
+  current?: number;
+  total?: number;
+  percent?: number;
+};
+
+export type ImportWorkbookOptions = {
+  onProgress?: (event: ImportProgressEvent) => void;
+};
+
 type SpecRow = {
   id: string;
   name: string;
@@ -35,8 +55,18 @@ export class CatalogImportService {
    *   bulkPricing? (10:2.5;20:2.0), specifications? (Small:8.9|Large:10.5*),
    *   modifierGroups? (Milk|Toppings), extras? (Extra Cheese:1.5|Bacon:2), allowExtras?
    */
-  static async importWorkbook(merchantId: string, buffer: Buffer) {
+  static async importWorkbook(
+    merchantId: string,
+    buffer: Buffer,
+    options?: ImportWorkbookOptions
+  ) {
+    const onProgress = options?.onProgress;
+    const emit = (event: ImportProgressEvent) => onProgress?.(event);
+
+    emit({ phase: "parsing", message: "Reading workbook…", percent: 0 });
     const workbook = XLSX.read(buffer, { type: "buffer" });
+    emit({ phase: "parsing", message: "Workbook loaded", percent: 5 });
+
     const errors: ImportRowError[] = [];
     let categoriesCreated = 0;
     let productsCreated = 0;
@@ -62,6 +92,13 @@ export class CatalogImportService {
         defval: "",
       });
       for (let i = 0; i < rows.length; i++) {
+        emit({
+          phase: "categories",
+          current: i + 1,
+          total: rows.length,
+          percent: rows.length ? 5 + Math.round(((i + 1) / rows.length) * 15) : 10,
+          message: `Importing categories (${i + 1}/${rows.length})`,
+        });
         const row = rows[i];
         const name = repairCatalogText(String(row.name || row.Name || "").trim());
         if (!name) {
@@ -102,7 +139,16 @@ export class CatalogImportService {
       merchantId,
       workbook,
       errors,
-      { created: () => modifierGroupsCreated++, updated: () => modifierGroupsUpdated++ }
+      { created: () => modifierGroupsCreated++, updated: () => modifierGroupsUpdated++ },
+      (current, total) => {
+        emit({
+          phase: "modifierGroups",
+          current,
+          total,
+          percent: total ? 20 + Math.round((current / total) * 10) : 25,
+          message: `Importing modifier groups (${current}/${total})`,
+        });
+      }
     );
 
     const productsSheet = findSheet(workbook, "Products");
@@ -125,6 +171,15 @@ export class CatalogImportService {
     });
 
     for (let i = 0; i < productRows.length; i++) {
+      emit({
+        phase: "products",
+        current: i + 1,
+        total: productRows.length,
+        percent: productRows.length
+          ? 30 + Math.round(((i + 1) / productRows.length) * 65)
+          : 95,
+        message: `Importing products (${i + 1}/${productRows.length})`,
+      });
       const row = productRows[i];
       const name = repairCatalogText(String(row.name || row.Name || "").trim());
       const priceRaw = row.price ?? row.Price;
@@ -276,6 +331,8 @@ export class CatalogImportService {
       }
     }
 
+    emit({ phase: "done", message: "Import complete", percent: 100 });
+
     return {
       success: errors.length === 0,
       categoriesCreated,
@@ -291,7 +348,8 @@ export class CatalogImportService {
     merchantId: string,
     workbook: XLSX.WorkBook,
     errors: ImportRowError[],
-    counters: { created: () => void; updated: () => void }
+    counters: { created: () => void; updated: () => void },
+    onRowProgress?: (current: number, total: number) => void
   ): Promise<Map<string, string>> {
     const groupTitleToId = new Map<string, string>();
     const existingGroups = await ModifierService.list(merchantId);
@@ -304,6 +362,7 @@ export class CatalogImportService {
 
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
     for (let i = 0; i < rows.length; i++) {
+      onRowProgress?.(i + 1, rows.length);
       const row = rows[i];
       const title = repairCatalogText(String(row.title || row.Title || row.name || row.Name || "").trim());
       if (!title) {
