@@ -178,6 +178,7 @@ import WebPosBridgeSetupModal from '@/components/webpos/WebPosBridgeSetupModal';
 import {
   initWebPosLogging,
   logWebPosError,
+  logWebPosEvent,
   sendWebPosLogsToSupport,
 } from '@/lib/webpos-log';
 
@@ -871,6 +872,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
   const [deviceTapToPayReady, setDeviceTapToPayReady] = useState(false);
+  const [deviceTapToPayMessage, setDeviceTapToPayMessage] = useState<string | null>(null);
   const [agentOutdated, setAgentOutdated] = useState(false);
   const isLocalPrint = isLocalPrintStation(agentOk);
   const [mainTillOnline, setMainTillOnline] = useState(false);
@@ -1878,8 +1880,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       const bridge = await (isAndroidWebPosTill() ? probeDeviceBridgeHealth(5) : probeDeviceBridgeHealth(1));
       setDeviceTapToPayReady(bridge.ok && bridge.tapToPayReady === true);
+      setDeviceTapToPayMessage(bridge.tapToPayMessage || null);
     } catch {
       setDeviceTapToPayReady(false);
+      setDeviceTapToPayMessage(null);
     }
     if (!health.ok) {
       setPrinters([]);
@@ -6733,6 +6737,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTapToPayPayment(undefined, extras);
       return;
     }
+    if (method === 'card' && isAndroidWebPosTill()) {
+      toast.error(deviceTapToPayMessage || t('webPosTapToPayNotReady'));
+      return;
+    }
     const paidAmount = totals.total;
     setBusy(true);
     try {
@@ -8079,6 +8087,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (adjusted.method === 'card' && deviceTapToPayActive) {
       setPaymentMethod('card');
       await runTapToPayPayment(undefined, adjusted);
+      return;
+    }
+    if (adjusted.method === 'card' && isAndroidWebPosTill()) {
+      toast.error(deviceTapToPayMessage || t('webPosTapToPayNotReady'));
+      setPosView('checkout');
       return;
     }
     setBusy(true);

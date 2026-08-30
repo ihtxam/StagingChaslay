@@ -2741,6 +2741,8 @@ const en: Dict = {
   webPosPayCompleteOnTerminal: 'Complete the payment on your terminal…',
   webPosPayTapOnDevice: 'Tap card or phone on this device…',
   webPosTapToPaySignIn: 'Sign in to the dashboard to use Tap to Pay on this device.',
+  webPosTapToPayNotReady:
+    'Tap to Pay is not ready. Open Bridge Reborn on this tablet and check Settings → Payments.',
   webPosPayCancelledMsg: 'The payment was cancelled on the terminal.',
   webPosPayFailedMsg: 'The terminal could not complete this payment.',
   webPosRetry: 'Retry',
@@ -6358,6 +6360,8 @@ const fr: Dict = {
   webPosPayCompleteOnTerminal: 'Finalisez le paiement sur le terminal…',
   webPosPayTapOnDevice: 'Approchez la carte ou le téléphone sur cet appareil…',
   webPosTapToPaySignIn: 'Connectez-vous au tableau de bord pour utiliser Tap to Pay sur cet appareil.',
+  webPosTapToPayNotReady:
+    'Tap to Pay n’est pas prêt. Ouvrez Bridge Reborn sur cette tablette et vérifiez Paramètres → Paiements.',
   webPosPayCancelledMsg: 'Le paiement a été annulé sur le terminal.',
   webPosPayFailedMsg: 'Le terminal n’a pas pu finaliser ce paiement.',
   webPosRetry: 'Réessayer',
@@ -9972,6 +9976,8 @@ const de: Dict = {
   webPosPayCompleteOnTerminal: 'Zahlung am Terminal abschliessen…',
   webPosPayTapOnDevice: 'Karte oder Telefon an dieses Gerät halten…',
   webPosTapToPaySignIn: 'Melden Sie sich im Dashboard an, um Tap to Pay auf diesem Gerät zu nutzen.',
+  webPosTapToPayNotReady:
+    'Tap to Pay ist nicht bereit. Öffnen Sie Bridge Reborn auf diesem Tablet und prüfen Sie Einstellungen → Zahlungen.',
   webPosPayCancelledMsg: 'Die Zahlung wurde am Terminal abgebrochen.',
   webPosPayFailedMsg: 'Das Terminal konnte diese Zahlung nicht abschliessen.',
   webPosRetry: 'Erneut versuchen',
