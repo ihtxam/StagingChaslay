@@ -41,7 +41,10 @@ class BridgeHttpServer(
                 features.put("drawer")
                 if (registry.list().any { it.connectionType == "sunmi-internal" }) features.put("sunmi-internal")
                 if (registry.list().any { it.connectionType == "usb" }) features.put("usb-host")
-                if (registry.list().any { it.connectionType == "bluetooth" }) features.put("bluetooth")
+                if (registry.list().any { it.connectionType == "bluetooth" }) {
+                    features.put("bluetooth")
+                    features.put("bt-cut-trailer")
+                }
                 if (registry.list().any { it.connectionType == "lan" }) features.put("lan")
 
                 val engine = TapToPayEngines.current()

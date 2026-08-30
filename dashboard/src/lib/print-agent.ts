@@ -534,7 +534,19 @@ async function agentFetch(path: string, init?: RequestInit, printerName?: string
 export type PrintAgentHealth = {
   ok: boolean;
   version?: string;
+  platform?: string;
+  features?: string[];
 };
+
+/** Android Bridge 0.3.2+ strips embedded cut and sends one BT trailer per job. */
+export function agentSupportsBtCutTrailer(health: PrintAgentHealth | null | undefined): boolean {
+  if (!health?.ok) return false;
+  if (Array.isArray(health.features) && health.features.includes('bt-cut-trailer')) return true;
+  if (health.platform === 'android' && isBridgeVersion(health.version || '')) {
+    return compareAgentVersion(health.version || '0', '0.3.2') >= 0;
+  }
+  return false;
+}
 
 export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
   if (window.manuposDesktop) {
@@ -547,9 +559,14 @@ export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
   }
   try {
     const data = await agentFetch('/health');
+    const features = Array.isArray(data.features)
+      ? data.features.map((f: unknown) => String(f))
+      : undefined;
     return {
       ok: !!data.ok,
       version: data.version != null ? String(data.version) : undefined,
+      platform: data.platform != null ? String(data.platform) : undefined,
+      features,
     };
   } catch {
     return { ok: false };

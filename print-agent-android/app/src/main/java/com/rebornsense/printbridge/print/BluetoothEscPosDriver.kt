@@ -75,15 +75,40 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     /**
      * Pace SPP writes like Windows print-agent (96-byte slices, 80ms gaps) so kitchen
-     * tickets are not truncated. After the body drains, send a dedicated cut trailer —
-     * cheap BLE stacks often drop the cut when it is the last bytes of a large job.
+     * tickets are not truncated. Strips any embedded feed/cut suffix from the payload
+     * (kitchen tickets already include KITCHEN_TICKET_CUT) and sends one btCutTrailer
+     * after the body drains — avoids 3–4 visible cuts on Chinese clones.
      */
     private fun transmitBluetoothJob(socket: BluetoothSocket, data: ByteArray) {
-        writePaced(socket, data, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
-        val drainMs = (800L + data.size / 8L).coerceAtMost(8_000L)
-        Thread.sleep(drainMs)
+        val (body, _) = splitCutSuffix(data)
+        if (body.isNotEmpty()) {
+            writePaced(socket, body, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
+            val drainMs = (800L + body.size / 8L).coerceAtMost(8_000L)
+            Thread.sleep(drainMs)
+        }
         writePaced(socket, btCutTrailer, chunkSize = 32, delayMs = BT_CHUNK_DELAY_MS)
         Thread.sleep(500L)
+    }
+
+    /** Mirror Windows print-agent Split-CutSuffix — scan tail for GS V / ESC d. */
+    private fun splitCutSuffix(data: ByteArray): Pair<ByteArray, ByteArray> {
+        if (data.size < 4) return data to byteArrayOf()
+        val start = maxOf(0, data.size - 96)
+        var i = data.size - 1
+        while (i >= start) {
+            if (data[i] == 0x1D.toByte() && i + 1 < data.size && data[i + 1] == 0x56.toByte()) {
+                val body = data.copyOfRange(0, i)
+                val trail = data.copyOfRange(i, data.size)
+                return body to trail
+            }
+            if (data[i] == 0x1B.toByte() && i + 1 < data.size && data[i + 1] == 0x64.toByte()) {
+                val body = data.copyOfRange(0, i)
+                val trail = data.copyOfRange(i, data.size)
+                return body to trail
+            }
+            i--
+        }
+        return data to byteArrayOf()
     }
 
     private fun writePaced(
