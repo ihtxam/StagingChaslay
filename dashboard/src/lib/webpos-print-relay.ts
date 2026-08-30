@@ -21,6 +21,29 @@ import {
 } from '@/lib/external-order-auto-print';
 
 const DEVICE_KEY = 'manupos_webpos_device_id';
+const KIOSK_DEVICE_KEY = 'manupos_kiosk_device_id';
+
+/** Stable device id for kiosk print jobs queued to the main till hub. */
+export function kioskDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(KIOSK_DEVICE_KEY);
+    if (existing) return existing;
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `kiosk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(KIOSK_DEVICE_KEY, id);
+    return id;
+  } catch {
+    return `kiosk-${Date.now()}`;
+  }
+}
+
+/** Self-order kiosk routes — kitchen prints behave like waiter phones (remote station). */
+export function isKioskPrintContext(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /^\/kiosk\/[^/]+/.test(window.location.pathname);
+}
 
 export function webPosDeviceId(): string {
   try {
@@ -117,6 +140,8 @@ export async function enqueueEscPosPrintJob(opts: {
   text?: string;
   orderId?: string | null;
   jobKind?: PrintJobKind;
+  /** Defaults to WebPOS device id; kiosk passes kioskDeviceId(). */
+  sourceDeviceId?: string;
 }): Promise<{ jobId: string }> {
   const payload: EscPosPrintJobPayload = {
     kind: 'escpos',
@@ -128,7 +153,7 @@ export async function enqueueEscPosPrintJob(opts: {
   const res = await api.post('/merchant/pos/print-jobs', {
     jobType: 'ESCPOS',
     payload,
-    sourceDeviceId: webPosDeviceId(),
+    sourceDeviceId: opts.sourceDeviceId || webPosDeviceId(),
     orderId: opts.orderId || null,
   });
   return { jobId: String(res.data?.jobId || '') };
@@ -139,6 +164,8 @@ export async function enqueueEscPosPrintJob(opts: {
  * Phones and narrow WebPOS layouts without a local agent queue jobs to the main till.
  */
 export function isLocalPrintStation(agentOnline: boolean): boolean {
+  // Kiosk tablets may have Print Bridge for guest receipts but are not the kitchen hub.
+  if (isKioskPrintContext()) return false;
   if (agentOnline) return true;
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
   if (isAndroidWebPosTill()) return true;
@@ -174,8 +201,9 @@ export async function printViaAgentOrQueue(opts: {
   jobKind?: PrintJobKind;
   jobLabel?: string;
   lineIds?: string[];
+  sourceDeviceId?: string;
 }): Promise<'local' | 'queued'> {
-  const retryLocally = opts.retryLocally !== false;
+  const retryLocally = opts.retryLocally !== false && !isKioskPrintContext();
   const persistLocal = (error: unknown) => {
     if (!opts.dataBase64) return;
     enqueueFailedPrintJob({
@@ -190,10 +218,11 @@ export async function printViaAgentOrQueue(opts: {
     });
   };
 
-  const agentOnline = !opts.forceQueue && (await isPrintAgentAvailable());
+  const forceQueue = opts.forceQueue === true || (isKioskPrintContext() && opts.jobKind === 'kitchen');
+  const agentOnline = !forceQueue && (await isPrintAgentAvailable());
   const localStation = isLocalPrintStation(agentOnline);
   const canPrintLocally =
-    agentOnline && (opts.retryLocally !== false || localStation);
+    agentOnline && !forceQueue && (opts.retryLocally !== false || localStation);
   if (canPrintLocally) {
     try {
       await printViaAgent({
@@ -218,7 +247,10 @@ export async function printViaAgentOrQueue(opts: {
     throw offlineErr;
   }
 
-  await enqueueEscPosPrintJob(opts);
+  await enqueueEscPosPrintJob({
+    ...opts,
+    sourceDeviceId: opts.sourceDeviceId || (isKioskPrintContext() ? kioskDeviceId() : undefined),
+  });
   return 'queued';
 }
 

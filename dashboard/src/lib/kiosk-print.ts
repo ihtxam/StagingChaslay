@@ -6,6 +6,10 @@ import {
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
 import { isPrintAgentAvailable, printViaAgent } from '@/lib/print-agent';
+import {
+  isKioskPrintContext,
+  printKitchenViaAgentOrQueue,
+} from '@/lib/webpos-print-relay';
 import type { KioskCartLine } from '@/lib/kiosk-api';
 
 export type KioskPrintContext = {
@@ -30,11 +34,15 @@ function channelLabel(channel: KioskPrintContext['fulfillmentChannel']): string 
   return 'DINE IN';
 }
 
+/**
+ * Queue kitchen tickets to the main till print hub (same relay as waiter WebPOS phones).
+ * Does not print locally on the kiosk — main till applies kitchen routing.
+ */
 export async function printKioskKitchenTicket(
   ctx: KioskPrintContext,
   printSettings: PosPrintSettingsClient | null = null
 ): Promise<boolean> {
-  if (!(await isPrintAgentAvailable())) return false;
+  if (!isKioskPrintContext()) return false;
   const items = ctx.cart.map((line) =>
     buildKitchenTicketItemFromLine({
       name: line.name,
@@ -46,7 +54,7 @@ export async function printKioskKitchenTicket(
     })
   );
   const jobs = buildKitchenPrintJobs(items, printSettings);
-  let ok = true;
+  let queuedAny = false;
   for (const job of jobs) {
     if (!job.items.length) continue;
     const bytes = generateKitchenTicketEscPos({
@@ -59,16 +67,26 @@ export async function printKioskKitchenTicket(
         ctx.badgeNumber ? `Badge ${ctx.badgeNumber}` : ctx.tableLabel ? `Table ${ctx.tableLabel}` : undefined,
       paperWidthMm: job.paperWidthMm,
     });
-    const res = await printViaAgent({
-      dataBase64: uint8ToBase64(bytes),
-      printerName: job.printerName || undefined,
-      jobKind: 'kitchen',
-    });
-    if (!res.ok) ok = false;
+    try {
+      const mode = await printKitchenViaAgentOrQueue({
+        printerName: job.printerName || undefined,
+        dataBase64: uint8ToBase64(bytes),
+        orderId: ctx.orderId,
+        configuredName: job.printerName,
+        retryLocally: false,
+        forceQueue: true,
+        jobKind: 'kitchen',
+        jobLabel: `Kiosk kitchen #${ctx.orderNumber || ctx.orderId.slice(0, 8)}`,
+      });
+      if (mode === 'queued') queuedAny = true;
+    } catch {
+      /* queue requires network; backend auto-print may still run on main till */
+    }
   }
-  return ok;
+  return queuedAny || jobs.some((j) => j.items.length > 0);
 }
 
+/** Print guest receipt locally on kiosk when Print Bridge is configured. */
 export async function printKioskGuestReceipt(ctx: KioskPrintContext): Promise<boolean> {
   if (!(await isPrintAgentAvailable())) return false;
   const lines = [
@@ -93,9 +111,12 @@ export async function printKioskOrder(
   ctx: KioskPrintContext,
   opts: { kitchen?: boolean; receipt?: boolean },
   printSettings: PosPrintSettingsClient | null = null
-): Promise<{ kitchen: boolean; receipt: boolean }> {
-  const out = { kitchen: false, receipt: false };
-  if (opts.kitchen) out.kitchen = await printKioskKitchenTicket(ctx, printSettings);
+): Promise<{ kitchen: boolean; receipt: boolean; kitchenQueued?: boolean }> {
+  const out = { kitchen: false, receipt: false, kitchenQueued: false };
+  if (opts.kitchen) {
+    out.kitchen = await printKioskKitchenTicket(ctx, printSettings);
+    out.kitchenQueued = out.kitchen;
+  }
   if (opts.receipt) out.receipt = await printKioskGuestReceipt(ctx);
   return out;
 }
