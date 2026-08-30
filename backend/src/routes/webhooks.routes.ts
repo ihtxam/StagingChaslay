@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
+import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
 
 const router = Router();
 
@@ -74,6 +75,31 @@ router.post("/adyen/subscription", async (req: Request, res: Response) => {
     console.error("Adyen subscription webhook error:", error);
     // Still acknowledge to avoid retries storms; log for investigation
     res.json({ notificationResponse: "[accepted]" });
+  }
+});
+
+/**
+ * POST /api/webhooks/adyen/:merchantId
+ * Per-merchant Adyen Standard notification webhook (Tap to Pay, terminal POI, shop card).
+ * Configure in the merchant's Adyen Customer Area with their webhook HMAC key.
+ */
+router.post("/adyen/:merchantId", async (req: Request, res: Response) => {
+  const merchantId = String(req.params.merchantId || "").trim();
+  if (!merchantId) {
+    return res.status(400).json({ notificationResponse: "[invalid]" });
+  }
+
+  try {
+    await AdyenMerchantWebhookService.processWebhook(merchantId, req.body || {});
+    return res.json({ notificationResponse: "[accepted]" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Merchant not found") {
+      return res.status(404).json({ notificationResponse: "[invalid]" });
+    }
+    console.error(`Adyen merchant webhook error (${merchantId}):`, error);
+    // Acknowledge to avoid retry storms; investigate via logs
+    return res.json({ notificationResponse: "[accepted]" });
   }
 });
 

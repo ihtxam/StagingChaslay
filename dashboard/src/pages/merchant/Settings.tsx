@@ -23,6 +23,7 @@ import {
   Users,
   UtensilsCrossed,
   ChefHat,
+  Copy,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
@@ -477,6 +478,13 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const adyenWebhookUrl = useMemo(() => {
+    const merchantId = user?.merchantId;
+    if (!merchantId) return '';
+    const env = import.meta.env.VITE_API_URL as string | undefined;
+    const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
+    return `${base}/webhooks/adyen/${merchantId}`;
+  }, [user?.merchantId]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [adyen, setAdyen] = useState<AdyenCreds>({});
@@ -765,6 +773,11 @@ export default function Settings() {
         id: 'payments-adyen',
         tab: 'payments',
         keywords: ['adyen', 'swisspayout', 'terminal', 'tap to pay', 'softpos', t('adyenCredentials'), t('tapToPaySettings')],
+      },
+      {
+        id: 'payments-tap-to-pay',
+        tab: 'payments',
+        keywords: ['tap to pay', 'nfc', 'softpos', 'android', t('tapToPaySettings'), t('tapToPayEnabled')],
       },
       {
         id: 'business-profile',
@@ -2719,11 +2732,30 @@ export default function Settings() {
                     {t('tapToPayEnabled')}
                   </label>
                   <p className="text-xs muted">{t('tapToPayEnabledHint')}</p>
-                  <p className="text-xs muted">
-                    {t('adyenWebhookUrl')}:{' '}
-                    <code className="text-[11px]">/api/webhooks/adyen/merchant</code>
-                  </p>
-                  <p className="text-xs muted">{t('adyenWebhookSetupHint')}</p>
+                  {adyenWebhookUrl ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs muted">{t('adyenWebhookUrl')}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="block max-w-full break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-[11px]">
+                          {adyenWebhookUrl}
+                        </code>
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
+                          aria-label={t('copied')}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(adyenWebhookUrl).then(
+                              () => toast.success(t('copied')),
+                              () => toast.error(t('copyFailed'))
+                            );
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs muted">{t('adyenWebhookSetupHint')}</p>
+                    </div>
+                  ) : null}
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
