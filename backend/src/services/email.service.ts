@@ -502,6 +502,31 @@ export class EmailService {
     });
   }
 
+  private static async sendViaSmtp(cfg: ResolvedEmailConfig, input: SendEmailInput) {
+    const smtp = cfg.smtp || {};
+    const port = Number(smtp.port) || (smtp.secure ? 465 : 587);
+    const transporter = nodemailer.createTransport({
+      host: String(smtp.host || "").trim(),
+      port,
+      secure: !!smtp.secure || port === 465,
+      auth:
+        smtp.user || smtp.password
+          ? {
+              user: String(smtp.user || "").trim(),
+              pass: String(smtp.password || ""),
+            }
+          : undefined,
+    });
+
+    await transporter.sendMail({
+      from: `"${cfg.fromName || "Shop"}" <${cfg.fromEmail}>`,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text || input.html.replace(/<[^>]+>/g, " "),
+    });
+  }
+
   private static async sendViaBrevo(cfg: ResolvedEmailConfig, input: SendEmailInput) {
     try {
       const attachment = (input.attachments || []).map((a) => ({
