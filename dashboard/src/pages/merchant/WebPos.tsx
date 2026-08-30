@@ -979,6 +979,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   } | null>(null);
   const [logsOpen, setLogsOpen] = useState(false);
   const [logsAutoSend, setLogsAutoSend] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSeedMethod, setCheckoutSeedMethod] = useState<
     PosPaymentMethod | 'express'
