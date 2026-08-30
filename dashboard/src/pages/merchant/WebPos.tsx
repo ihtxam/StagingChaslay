@@ -880,6 +880,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bridgeSetupOpen, setBridgeSetupOpen] = useState(false);
   const [bridgeSetupMode, setBridgeSetupMode] = useState<BridgeSetupMode>('bridge_offline');
   const [bridgeSetupChecking, setBridgeSetupChecking] = useState(false);
+  const [bridgeProbeComplete, setBridgeProbeComplete] = useState(false);
   const bridgeSetupDismissedRef = useRef(false);
   const bridgeAutoConfigRef = useRef(false);
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
@@ -1851,7 +1852,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const refreshAgent = useCallback(async () => {
-    const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(5) : getPrintAgentHealth());
+    const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     try {
@@ -1863,6 +1864,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!health.ok) {
       setPrinters([]);
       setPrintersReady(false);
+      setBridgeProbeComplete(true);
       return;
     }
     try {
@@ -1892,6 +1894,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     } catch {
       setPrinters([]);
       setPrintersReady(false);
+    } finally {
+      setBridgeProbeComplete(true);
     }
   }, []);
 
@@ -1935,6 +1939,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Android tablet till: auto-connect single printer or prompt when Bridge/printers need setup. */
   useEffect(() => {
     if (!isAndroidWebPosTill()) return;
+    if (!bridgeProbeComplete) return;
 
     const mode = evaluateBridgeSetupMode({
       agentOk,
@@ -1961,11 +1966,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
 
-    if (mode === 'bridge_offline' || !bridgeSetupDismissedRef.current) {
-      setBridgeSetupMode(mode);
-      setBridgeSetupOpen(true);
-    }
-  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup]);
+    if (bridgeSetupDismissedRef.current) return;
+
+    setBridgeSetupMode(mode);
+    setBridgeSetupOpen(true);
+  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup, bridgeProbeComplete]);
 
   const shiftsEnabledRef = useRef(shiftsEnabled);
   shiftsEnabledRef.current = shiftsEnabled;
@@ -10414,6 +10419,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         printerName={printerName}
         printSettings={printSettings}
         checking={bridgeSetupChecking}
+        starting={!bridgeProbeComplete || (bridgeSetupChecking && !agentOk)}
         onRefresh={refreshBridgeSetup}
         onConfirm={applyBridgePrinterSetup}
         onDismiss={() => {

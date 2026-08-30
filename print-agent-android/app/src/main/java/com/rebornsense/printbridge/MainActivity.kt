@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -23,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
+import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSettingsNavigator
@@ -36,6 +39,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
     private var pendingWizardLaunch = false
+    private val serviceStatusHandler = Handler(Looper.getMainLooper())
+    private val serviceStatusRunnable = object : Runnable {
+        override fun run() {
+            updateServiceStatus()
+            serviceStatusHandler.postDelayed(this, SERVICE_STATUS_INTERVAL_MS)
+        }
+    }
 
     private val wizardLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -88,7 +98,14 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshPrinters()
         updateOemSetupBanner()
+        updateServiceStatus()
+        serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
         maybeLaunchOemWizard()
+    }
+
+    override fun onPause() {
+        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
+        super.onPause()
     }
 
     private fun maybeLaunchOemWizard() {
@@ -155,8 +172,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun startBridge() {
         PrintBridgeLauncher.start(this)
-        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_ready)
-        findViewById<TextView>(R.id.hintText).text = getString(R.string.open_webpos)
+        updateServiceStatus()
+    }
+
+    private fun updateServiceStatus() {
+        val statusText = findViewById<TextView>(R.id.statusText)
+        val hintText = findViewById<TextView>(R.id.hintText)
+        val serviceCard = findViewById<View>(R.id.serviceStatusCard)
+        val serviceIndicator = findViewById<View>(R.id.serviceStatusIndicator)
+        val serviceStatusText = findViewById<TextView>(R.id.serviceStatusText)
+
+        val health = BridgeHealthChecker.probeHealth()
+        if (health != null) {
+            statusText.text = getString(R.string.status_ready)
+            hintText.text = getString(R.string.open_webpos)
+            serviceStatusText.text = getString(R.string.status_service_running)
+            serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
+            serviceCard.visibility = View.VISIBLE
+        } else {
+            statusText.text = getString(R.string.status_starting)
+            hintText.text = getString(R.string.oem_step_bridge_pending)
+            serviceStatusText.text = getString(R.string.status_service_stopped)
+            serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
+            serviceCard.visibility = View.VISIBLE
+            PrintBridgeLauncher.start(this)
+        }
     }
 
     private fun setupAutoStartSwitch() {
@@ -294,8 +334,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
         usbPermissionReceiver?.let { unregisterReceiver(it) }
         usbPermissionReceiver = null
         super.onDestroy()
+    }
+
+    companion object {
+        private const val SERVICE_STATUS_INTERVAL_MS = 3_000L
     }
 }

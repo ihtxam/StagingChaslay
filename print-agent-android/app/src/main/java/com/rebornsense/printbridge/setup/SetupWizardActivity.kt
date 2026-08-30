@@ -1,18 +1,25 @@
 package com.rebornsense.printbridge.setup
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.rebornsense.printbridge.BridgeHealthChecker
+import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.device.DeviceProfiler
 
 class SetupWizardActivity : AppCompatActivity() {
     private lateinit var steps: List<OemSetupStep>
     private var stepIndex = 0
+    private val healthHandler = Handler(Looper.getMainLooper())
+    private var healthPollRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,7 +33,7 @@ class SetupWizardActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.wizardPrimaryBtn).setOnClickListener { onPrimaryAction() }
         findViewById<MaterialButton>(R.id.wizardSecondaryBtn).setOnClickListener { markCurrentStepDone() }
         findViewById<MaterialButton>(R.id.wizardSkipBtn).setOnClickListener { goToNextStep() }
-        findViewById<MaterialButton>(R.id.wizardNextBtn).setOnClickListener { goToNextStep() }
+        findViewById<MaterialButton>(R.id.wizardNextBtn).setOnClickListener { onNextAction() }
 
         renderStep()
     }
@@ -34,6 +41,14 @@ class SetupWizardActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderStep()
+        if (currentStep().action == OemSetupAction.START_BRIDGE) {
+            pollBridgeHealth(showChecking = false)
+        }
+    }
+
+    override fun onPause() {
+        stopHealthPolling()
+        super.onPause()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -75,7 +90,7 @@ class SetupWizardActivity : AppCompatActivity() {
                 skipBtn.visibility = if (step.id == "done") View.GONE else View.VISIBLE
                 nextBtn.visibility = View.VISIBLE
                 nextBtn.text = if (step.id == "done") {
-                    getString(R.string.oem_step_finish)
+                    getString(R.string.oem_step_open_webpos)
                 } else {
                     getString(R.string.oem_step_next)
                 }
@@ -86,6 +101,12 @@ class SetupWizardActivity : AppCompatActivity() {
                 skipBtn.visibility = View.VISIBLE
                 nextBtn.visibility = View.VISIBLE
                 renderBatteryStatus(statusText)
+            }
+            OemSetupAction.START_BRIDGE -> {
+                secondaryBtn.visibility = View.VISIBLE
+                skipBtn.visibility = View.VISIBLE
+                nextBtn.visibility = View.VISIBLE
+                renderBridgeStatus(statusText)
             }
             else -> {
                 secondaryBtn.visibility = View.VISIBLE
@@ -107,8 +128,26 @@ class SetupWizardActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderBridgeStatus(statusText: TextView) {
+        val health = BridgeHealthChecker.probeHealth()
+        if (health != null) {
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(
+                R.string.oem_step_bridge_verified,
+                health.version ?: getString(R.string.oem_step_bridge_version_unknown),
+            )
+            OemSetupPreferences.setStepCompleted(this, "start_bridge", true)
+        } else {
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(R.string.oem_step_bridge_pending)
+        }
+    }
+
     private fun updateAutoComplete(step: OemSetupStep) {
         if (step.id == "battery" && OemSettingsNavigator.isBatteryOptimizationDisabled(this)) {
+            OemSetupPreferences.setStepCompleted(this, step.id, true)
+        }
+        if (step.id == "start_bridge" && BridgeHealthChecker.isHealthy()) {
             OemSetupPreferences.setStepCompleted(this, step.id, true)
         }
     }
@@ -119,8 +158,79 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.OPEN_BATTERY -> OemSettingsNavigator.openBatteryOptimizationRequest(this)
             OemSetupAction.OPEN_AUTOSTART -> OemSettingsNavigator.openAutostartSettings(this)
             OemSetupAction.OPEN_BACKGROUND -> OemSettingsNavigator.openBackgroundActivitySettings(this)
-            OemSetupAction.INSTRUCTION_ONLY -> goToNextStep()
+            OemSetupAction.START_BRIDGE -> startBridgeAndPoll()
+            OemSetupAction.INSTRUCTION_ONLY -> onNextAction()
         }
+    }
+
+    private fun onNextAction() {
+        val step = currentStep()
+        if (step.id == "done") {
+            openWebPos()
+            finishWizard()
+            return
+        }
+        goToNextStep()
+    }
+
+    private fun startBridgeAndPoll() {
+        PrintBridgeLauncher.start(this)
+        pollBridgeHealth(showChecking = true)
+    }
+
+    private fun pollBridgeHealth(showChecking: Boolean) {
+        stopHealthPolling()
+        val statusText = findViewById<TextView>(R.id.wizardStatusText)
+        if (showChecking) {
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(R.string.oem_step_bridge_checking)
+        }
+
+        var attempts = 0
+        healthPollRunnable = object : Runnable {
+            override fun run() {
+                attempts += 1
+                val health = BridgeHealthChecker.probeHealth()
+                if (health != null) {
+                    statusText.visibility = View.VISIBLE
+                    statusText.text = getString(
+                        R.string.oem_step_bridge_verified,
+                        health.version ?: getString(R.string.oem_step_bridge_version_unknown),
+                    )
+                    OemSetupPreferences.setStepCompleted(this@SetupWizardActivity, "start_bridge", true)
+                    stopHealthPolling()
+                    return
+                }
+                if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) {
+                    statusText.visibility = View.VISIBLE
+                    statusText.text = getString(R.string.oem_step_bridge_failed)
+                    stopHealthPolling()
+                    return
+                }
+                statusText.visibility = View.VISIBLE
+                statusText.text = getString(R.string.oem_step_bridge_checking)
+                healthHandler.postDelayed(this, HEALTH_POLL_INTERVAL_MS)
+            }
+        }
+        healthHandler.post(healthPollRunnable!!)
+    }
+
+    private fun stopHealthPolling() {
+        healthPollRunnable?.let { healthHandler.removeCallbacks(it) }
+        healthPollRunnable = null
+    }
+
+    private fun openWebPos() {
+        val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
+            ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
+            return
+        }
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.rebornsense.com")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
     }
 
     private fun markCurrentStepDone() {
@@ -146,6 +256,8 @@ class SetupWizardActivity : AppCompatActivity() {
 
     companion object {
         private const val STATE_STEP_INDEX = "step_index"
+        private const val HEALTH_POLL_INTERVAL_MS = 500L
+        private const val HEALTH_POLL_MAX_ATTEMPTS = 20
 
         fun createIntent(context: android.content.Context): Intent {
             return Intent(context, SetupWizardActivity::class.java)
