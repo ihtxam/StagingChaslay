@@ -7,9 +7,10 @@
       (function () {
         var p = location.pathname || '';
         if (
-          /\/merchant\/(pos|waiter)(\/|$)/.test(p) ||
+          /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(p) ||
           /^\/kds(\/|$)/.test(p) ||
-          /^\/tv(\/|$)/.test(p)
+          /^\/tv(\/|$)/.test(p) ||
+          /^\/kiosk(\/|$)/.test(p)
         ) {
           var m = document.querySelector('meta[name="viewport"]');
           if (m) {
@@ -19,6 +20,9 @@
             );
           }
           document.documentElement.classList.add('webpos-lock');
+          if (/^\/kiosk(\/|$)/.test(p)) {
+            document.documentElement.classList.add('kiosk-lock');
+          }
           try {
             var ts = localStorage.getItem('webpos_text_size');
             if (ts === 'sm' || ts === 'md' || ts === 'lg' || ts === 'xl') {
@@ -39,8 +43,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-DucvtlcL.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Bmw0iS68.css">
+    <script type="module" crossorigin src="/assets/index-B-3l9vhm.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B_uH3pMQ.css">
   </head>
   <body>
     <div id="root">
