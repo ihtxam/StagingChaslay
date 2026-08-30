@@ -87,8 +87,7 @@ class MainActivity : AppCompatActivity() {
                 .invoke(null, this)
         }
         setContentView(R.layout.activity_main)
-        findViewById<TextView>(R.id.versionText).text =
-            getString(R.string.bridge_version_label, BuildConfig.VERSION_NAME)
+        updateVersionHeader()
         emptyPrintersText = findViewById(R.id.emptyPrintersText)
         printerAdapter = PrinterListAdapter(
             onSetDefault = { endpoint -> setDefaultPrinter(endpoint) },
@@ -124,6 +123,16 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
+    private fun updateVersionHeader() {
+        val label = getString(
+            R.string.bridge_version_header,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE,
+        )
+        findViewById<TextView>(R.id.versionText).text = label
+        title = label
+    }
+
     private fun maybeLaunchOemWizard() {
         if (pendingWizardLaunch) return
         if (OemSetupPreferences.isWizardCompleted(this)) return
@@ -147,7 +156,7 @@ class MainActivity : AppCompatActivity() {
         val runSetupBtn = findViewById<Button>(R.id.runSetupBtn)
         val needsSetup = needsSetupAttention()
         banner.visibility = if (needsSetup) View.VISIBLE else View.GONE
-        runSetupBtn.visibility = if (OemSetupPreferences.isWizardCompleted(this)) View.VISIBLE else View.GONE
+        runSetupBtn.visibility = View.VISIBLE
         if (needsSetup) {
             summary.text = getString(
                 R.string.oem_setup_banner_summary,

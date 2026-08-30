@@ -40,6 +40,7 @@
     <string name="oem_setup_open_wizard">Open setup wizard</string>
     <string name="oem_setup_run_setup">Run setup wizard</string>
     <string name="bridge_version_label">Bridge Reborn v%1$s</string>
+    <string name="bridge_version_header">Bridge v%1$s (build %2$d)</string>
     <string name="oem_setup_device_label">Detected device: %1$s</string>
     <string name="oem_setup_step_indicator">Step %1$d of %2$d</string>
     <string name="oem_setup_open_settings_failed">Could not open that settings screen. Open App info manually in Android Settings.</string>

@@ -219,8 +219,8 @@ One **universal APK** for all devices (Sunmi, Feitian, generic). Drivers load at
 ### Setup wizard not showing
 
 1. **Open Bridge Reborn** from the app drawer after installing from the panel. The service starts in the background, but the **setup wizard only runs when you open the app**.
-2. After each **APK update**, the wizard resets automatically (v0.3.6+). You should see it on first launch of the new version.
-3. If you skipped steps, use **Run setup wizard** on the main screen (orange banner or button below it).
+2. After each **APK update or reinstall**, the wizard resets automatically (v0.3.8+ tracks install time and version code). You should see it on first launch of the new version.
+3. If you skipped steps, tap **Run setup wizard** — it is always visible on the main screen (green header + orange banner when setup is incomplete).
 4. Complete **battery unrestricted** and **autostart** steps for your OEM (Sunmi, Feitian, etc.).
 
 ### NFC / Tap to Pay not working
@@ -247,7 +247,7 @@ Check the **Tap to Pay (NFC)** card on Bridge Reborn’s main screen:
 
 ### Version check
 
-Bridge Reborn **0.3.6+** shows **Bridge Reborn vX.Y.Z** under the status line on the main screen. Match this to the version in Settings → Receipts & printers → Download Bridge Reborn.
+Bridge Reborn **0.3.8+** shows a green header at the top: **Bridge vX.Y.Z (build N)**. Match this to the version in Settings → Receipts & printers → Download Bridge Reborn. If you still see the old printer-only UI with no version header, the panel APK is stale — rebuild and upload `reborn-print-bridge.apk`.
 
 ---
 
