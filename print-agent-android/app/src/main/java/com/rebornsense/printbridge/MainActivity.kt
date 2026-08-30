@@ -63,6 +63,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        runCatching {
+            Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenBootstrap")
+                .getMethod("register", AppCompatActivity::class.java)
+                .invoke(null, this)
+        }
         setContentView(R.layout.activity_main)
         emptyPrintersText = findViewById(R.id.emptyPrintersText)
         printerAdapter = PrinterListAdapter(

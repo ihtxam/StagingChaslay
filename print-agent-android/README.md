@@ -1,11 +1,14 @@
-# Reborn Print Bridge (Android)
+# Reborn Device Bridge (Android)
 
 Companion app for **WebPOS on Android POS hardware** — not a POS app.  
-WebPOS stays 100% in Chrome/PWA; this bridge is the local print layer (same role as Windows Print Agent).
+WebPOS stays 100% in Chrome/PWA; this bridge is the local **print + NFC payment** layer (same role as Windows Print Agent for printing).
 
 ## Problem
 
-Browsers on Android cannot send ESC/POS bytes to Bluetooth, USB, or LAN printers.  
+Browsers on Android cannot:
+- Send ESC/POS bytes to Bluetooth, USB, or LAN printers
+- Access NFC for EMV Tap to Pay (Adyen SoftPOS requires a native SDK)
+
 Merchants use **one device only** (tablet or handheld) — no Windows hub PC.
 
 ## Solution
@@ -13,12 +16,33 @@ Merchants use **one device only** (tablet or handheld) — no Windows hub PC.
 A small **always-on foreground service** on the device:
 
 ```
-WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Print Bridge  →  printer
+WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Device Bridge  →  printer / NFC
 ```
 
-**Same HTTP contract as Windows Print Agent** — WebPOS code changes are minimal.
+**Same HTTP contract as Windows Print Agent** for printing — plus `/tap-to-pay` when the APK is built with Adyen SDK keys.
 
 ---
+
+## Tap to Pay (NFC) — v0.3.0+
+
+When the merchant has Adyen configured and the tablet has NFC:
+
+| Endpoint | Method | Body / response |
+|----------|--------|-----------------|
+| `/health` | GET | Adds `nfcAvailable`, `tapToPayReady`, `tapToPayMessage` |
+| `/tap-to-pay` | POST | `{ amount_minor, currency, api_base_url, auth_token, reference? }` → `{ ok, status, reference, message }` |
+
+WebPOS passes the dashboard JWT from `localStorage`; the bridge calls `/api/tap-to-pay/*` on your backend (same as native POS app).
+
+**Build with Adyen:** set `adyenSdkApiKey` in repo-root `local.properties` (see `local.properties.example`). Without keys, printing still works; tap-to-pay returns a clear error.
+
+**Plug-and-play flow:**
+1. Install Device Bridge APK (same download as Print Bridge)
+2. Open once so Tap to Pay launcher registers
+3. Open WebPOS in Chrome — Card payments automatically use NFC when bridge reports `tapToPayReady`
+
+---
+
 
 ## Supported hardware (Reborn stock & roadmap)
 

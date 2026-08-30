@@ -86,6 +86,7 @@ import {
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import { getDeviceBridgeHealth, runDeviceBridgeTapToPay } from '@/lib/device-bridge';
 import {
   isLocalPrintStation,
   printKitchenViaAgentOrQueue,
@@ -831,6 +832,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [agentOk, setAgentOk] = useState(false);
+  const [deviceTapToPayReady, setDeviceTapToPayReady] = useState(false);
   const [agentOutdated, setAgentOutdated] = useState(false);
   const isLocalPrint = isLocalPrintStation(agentOk);
   const [mainTillOnline, setMainTillOnline] = useState(false);
@@ -1813,6 +1815,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const health = await getPrintAgentHealth();
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
+    try {
+      const bridge = await getDeviceBridgeHealth();
+      setDeviceTapToPayReady(bridge.ok && bridge.tapToPayReady === true);
+    } catch {
+      setDeviceTapToPayReady(false);
+    }
     if (!health.ok) {
       setPrinters([]);
       setPrintersReady(false);
@@ -6546,6 +6554,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, extras);
       return;
     }
+    if (method === 'card' && deviceTapToPayActive) {
+      setCheckoutExtras(extras);
+      await runTapToPayPayment(undefined, extras);
+      return;
+    }
     const paidAmount = totals.total;
     setBusy(true);
     try {
@@ -7873,6 +7886,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, adjusted);
       return;
     }
+    if (adjusted.method === 'card' && deviceTapToPayActive) {
+      setPaymentMethod('card');
+      await runTapToPayPayment(undefined, adjusted);
+      return;
+    }
     setBusy(true);
     try {
       await finalizeSale(adjusted.method, undefined, undefined, adjusted, true);
@@ -7979,6 +7997,83 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           return;
         }
         await finalizeSale('terminal', clientId, whenOverride, extras, true);
+        return;
+      }
+
+      if (result.status === 'cancelled') {
+        setPaymentPhase('cancelled');
+        setPaymentMessage(result.message || t('webPosPayCancelledMsg'));
+        return;
+      }
+
+      setPaymentPhase('failed');
+      setPaymentMessage(result.message || t('webPosPayFailedMsg'));
+    } catch (e: any) {
+      if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError') {
+        setPaymentPhase('cancelled');
+        setPaymentMessage(t('webPosPayCancelled'));
+        return;
+      }
+      setPaymentPhase('failed');
+      setPaymentMessage(e.message || t('webPosPayFailedMsg'));
+    } finally {
+      setBusy(false);
+      paymentAbortRef.current = null;
+    }
+  };
+
+  const runTapToPayPayment = async (
+    whenOverride?: FulfillmentWhen | null,
+    extras?: CheckoutExtras | null
+  ) => {
+    const token = localStorage.getItem('token') || '';
+    if (!token.trim()) {
+      toast.error(t('webPosTapToPaySignIn'));
+      return;
+    }
+    const apiBase =
+      (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+    const clientId = `webpos-ttp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const abort = new AbortController();
+    paymentAbortRef.current = abort;
+    setPaymentModalOpen(true);
+    setPaymentPhase('processing');
+    setPaymentMessage(t('webPosPayTapOnDevice'));
+    setBusy(true);
+
+    try {
+      const payAmount = roundMoney2(
+        extras?.total ??
+          (collectOrderRef ? collectOrderRef.total : activeSale.totals.total)
+      );
+      const result = await runDeviceBridgeTapToPay(
+        {
+          amountMinor: Math.round(payAmount * 100),
+          currency: 'CHF',
+          apiBaseUrl: apiBase,
+          authToken: token,
+          reference: clientId,
+        },
+        { signal: abort.signal }
+      );
+
+      if (result.ok && result.status === 'approved') {
+        terminalPaymentRef.current = {
+          reference: String(result.reference || clientId),
+          poiTransactionTimestamp: new Date().toISOString(),
+          customerReceipt: null,
+          cashierReceipt: null,
+        };
+        closePaymentModal();
+        if (collectOrderRef) {
+          await finalizeCollectPayment(
+            [{ id: clientId, method: 'card', amount: payAmount }],
+            0,
+            extras?.tipAmount || 0
+          );
+          return;
+        }
+        await finalizeSale('card', clientId, whenOverride, extras, true);
         return;
       }
 
@@ -8437,6 +8532,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [handlePosScan, pinGateRequired, pinModalOpen, posView]);
 
   const offlineNow = isWebPosCurrentlyOffline();
+  const deviceTapToPayActive =
+    deviceTapToPayReady && paymentConfig?.adyenConfigured === true && !offlineNow;
   const enabledMethods = {
     express: (paymentConfig?.methods.express ?? true) && canPay,
     cash: (paymentConfig?.methods.cash ?? true) && canPay,

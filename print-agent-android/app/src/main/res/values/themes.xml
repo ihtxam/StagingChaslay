@@ -4,4 +4,9 @@
         <item name="colorPrimaryVariant">#115e59</item>
         <item name="colorOnPrimary">#ffffff</item>
     </style>
+    <style name="Theme.RebornPrintBridge.Transparent" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

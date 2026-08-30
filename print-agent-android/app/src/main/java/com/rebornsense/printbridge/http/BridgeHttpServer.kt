@@ -5,8 +5,14 @@ import com.rebornsense.printbridge.BuildConfig
 import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
-import com.rebornsense.printbridge.print.PrinterDriver
+import com.rebornsense.printbridge.payment.PaymentCoordinator
+import com.rebornsense.printbridge.payment.TapToPayEngines
+import com.rebornsense.printbridge.payment.TapToPaySaleParams
+import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
+import com.rebornsense.printbridge.payment.hasNfcFeature
 import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -38,6 +44,17 @@ class BridgeHttpServer(
                 if (registry.list().any { it.connectionType == "bluetooth" }) features.put("bluetooth")
                 if (registry.list().any { it.connectionType == "lan" }) features.put("lan")
 
+                val engine = TapToPayEngines.current()
+                val nfcAvailable = appContext.hasNfcFeature()
+                val tapToPayReady = nfcAvailable && engine.isReady()
+                val tapToPayMessage = when {
+                    !nfcAvailable -> "This device has no NFC reader."
+                    tapToPayReady -> "Ready"
+                    else -> engine.readinessMessage()
+                }
+                if (nfcAvailable) features.put("nfc")
+                if (tapToPayReady) features.put("tap-to-pay")
+
                 jsonResponse(
                     JSONObject()
                         .put("ok", true)
@@ -49,6 +66,9 @@ class BridgeHttpServer(
                         .put("features", features)
                         .put("printerReady", registry.hasReadyPrinter())
                         .put("queueDepth", queue.queueDepth())
+                        .put("nfcAvailable", nfcAvailable)
+                        .put("tapToPayReady", tapToPayReady)
+                        .put("tapToPayMessage", tapToPayMessage)
                 )
             }
 
@@ -94,6 +114,56 @@ class BridgeHttpServer(
                         .put("ok", true)
                         .put("printer", endpoint.name)
                         .put("queued", true)
+                )
+            }
+
+            uri == "/tap-to-pay" && method == Method.POST -> {
+                val body = readBody(session)
+                val amountMinor = body.optLong("amount_minor", 0L)
+                val currency = body.optString("currency", "CHF")
+                val apiBaseUrl = body.optString("api_base_url", "")
+                val authToken = body.optString("auth_token", "")
+                val reference = body.optString("reference", "").takeIf { it.isNotBlank() }
+                if (amountMinor <= 0L || apiBaseUrl.isBlank() || authToken.isBlank()) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("status", "error")
+                            .put("error", "amount_minor, api_base_url, and auth_token are required"),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                if (!appContext.hasNfcFeature()) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("status", "error")
+                            .put("error", "This device has no NFC reader."),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val params = TapToPaySaleParams(
+                    amountMinor = amountMinor,
+                    currency = currency,
+                    apiBaseUrl = apiBaseUrl,
+                    authToken = authToken,
+                    reference = reference,
+                )
+                val deferred = PaymentCoordinator.beginSale(appContext, params)
+                val outcome = runBlocking {
+                    withTimeoutOrNull(170_000L) { deferred.await() }
+                } ?: TapToPaySaleOutcome(
+                    ok = false,
+                    status = "cancelled",
+                    message = "Payment timed out.",
+                )
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", outcome.ok)
+                        .put("status", outcome.status)
+                        .put("reference", outcome.reference)
+                        .put("message", outcome.message),
+                    if (outcome.ok) Response.Status.OK else Response.Status.BAD_REQUEST,
                 )
             }
 

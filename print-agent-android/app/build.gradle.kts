@@ -1,8 +1,23 @@
 import java.time.Instant
+import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
+
+val localProps = Properties().apply {
+    val rootFile = rootProject.projectDir.parentFile?.resolve("local.properties")
+    val here = rootProject.file("local.properties")
+    when {
+        here.exists() -> here.inputStream().use { load(it) }
+        rootFile != null && rootFile.exists() -> rootFile.inputStream().use { load(it) }
+    }
+}
+val adyenEnv = (localProps.getProperty("adyenEnv") ?: "test").lowercase()
+val hasTestKey = localProps.getProperty("adyenSdkApiKey").orEmpty().isNotBlank()
+val hasLiveKey = localProps.getProperty("adyenSdkApiKeyLive").orEmpty().isNotBlank()
+val hasAdyenSdk = (adyenEnv == "live" && hasLiveKey) || hasTestKey
 
 android {
     namespace = "com.rebornsense.printbridge"
@@ -10,10 +25,18 @@ android {
 
     defaultConfig {
         applicationId = "com.rebornsense.printbridge"
-        minSdk = 24
+        // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
+        minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.2.5"
+        versionCode = 8
+        versionName = "0.3.0"
+        buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
+    }
+
+    if (hasAdyenSdk) {
+        sourceSets {
+            getByName("main").java.srcDirs("src/adyen/kotlin")
+        }
     }
 
     signingConfigs {
@@ -37,6 +60,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     buildFeatures {
         buildConfig = true
     }
@@ -49,6 +76,20 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("com.sunmi:printerlibrary:1.0.23")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    if (hasAdyenSdk) {
+        val adyenPosVersion = "2.16.0"
+        if (adyenEnv == "live" && hasLiveKey) {
+            implementation("com.adyen.ipp:pos-mobile-release:$adyenPosVersion")
+            implementation("com.adyen.ipp:payment-tap-to-pay-release:$adyenPosVersion")
+        } else {
+            implementation("com.adyen.ipp:pos-mobile-debug:$adyenPosVersion")
+            implementation("com.adyen.ipp:payment-tap-to-pay-debug:$adyenPosVersion")
+        }
+        implementation("androidx.startup:startup-runtime:1.1.1")
+        implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    }
 }
 
 val copyReleaseApk = tasks.register<Copy>("copyReleaseApkToDownloads") {

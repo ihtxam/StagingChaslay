@@ -2615,6 +2615,8 @@ const en: Dict = {
   webPosPayCancelled: 'Payment cancelled',
   webPosPayFailed: 'Payment failed',
   webPosPayCompleteOnTerminal: 'Complete the payment on your terminal…',
+  webPosPayTapOnDevice: 'Tap card or phone on this device…',
+  webPosTapToPaySignIn: 'Sign in to the dashboard to use Tap to Pay on this device.',
   webPosPayCancelledMsg: 'The payment was cancelled on the terminal.',
   webPosPayFailedMsg: 'The terminal could not complete this payment.',
   webPosRetry: 'Retry',
