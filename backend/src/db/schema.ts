@@ -3387,9 +3387,6 @@ export const posCashMovements = pgTable(
   })
 );
 
-// =====================================================================  payments: many(subscriptionPayments),
-}));
-
 export const subscriptionAddonsRelations = relations(subscriptionAddons, ({ many }) => ({
   merchantSubscriptions: many(merchantAddonSubscriptions),
   payments: many(subscriptionAddonPayments),
