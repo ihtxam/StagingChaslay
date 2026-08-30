@@ -28,8 +28,8 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.3.3"
+        versionCode = 12
+        versionName = "0.3.4"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 
@@ -77,6 +77,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("com.sunmi:printerlibrary:1.0.23")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
 
     if (hasAdyenSdk) {
         val adyenPosVersion = "2.16.0"

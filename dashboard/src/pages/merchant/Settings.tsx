@@ -49,6 +49,7 @@ import {
   isPrintAgentAvailable,
   isPrintAgentVersionOutdated,
   isUnsuitableRawPrinter,
+  isUsbScaleAddress,
   listAgentPrinters,
   listScaleDevices,
   printViaAgent,
@@ -1394,6 +1395,29 @@ export default function Settings() {
   const selectScalePortAndSave = async (device: ScaleDevice | string) => {
     if (!settings) return;
     const row: ScaleDevice = typeof device === 'string' ? { port: device, name: device } : device;
+    const usbAddress = String(row.usbAddress || (isUsbScaleAddress(row.port) ? row.port : '')).trim();
+    if (usbAddress) {
+      const deviceName = String(row.name || row.caption || '').trim();
+      const nextSettings: SettingsData = {
+        ...settings,
+        posPrintSettings: {
+          ...(settings.posPrintSettings || {}),
+          scaleUsbAddress: usbAddress,
+          scaleDeviceName: deviceName || null,
+          scaleEnabled: true,
+        },
+      };
+      setSettings(nextSettings);
+      setSavingReceipt(true);
+      try {
+        await persistPosPrintSettings(nextSettings, t('settingsScaleSaved'));
+      } catch (error: any) {
+        toast.error(error.response?.data?.error || t('failedSaveReceipt'));
+      } finally {
+        setSavingReceipt(false);
+      }
+      return;
+    }
     const label = formatScalePortLabel(row.port);
     if (!label) return;
     const deviceName = String(row.name || row.caption || '')
@@ -3493,17 +3517,25 @@ export default function Settings() {
                   <>
                 <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
                   <div className="space-y-3">
-                    {settings.posPrintSettings?.scaleComPort || settings.posPrintSettings?.scaleDeviceName ? (
+                    {settings.posPrintSettings?.scaleComPort ||
+                    settings.posPrintSettings?.scaleDeviceName ||
+                    settings.posPrintSettings?.scaleUsbAddress ? (
                       <p className="text-sm m-0 text-emerald-700">
                         {t('settingsScaleSelected')}:{' '}
                         <span className="font-medium">
-                          {settings.posPrintSettings.scaleDeviceName
-                            ? `${settings.posPrintSettings.scaleDeviceName}${
-                                settings.posPrintSettings.scaleComPort
-                                  ? ` · ${formatScalePortLabel(settings.posPrintSettings.scaleComPort)}`
-                                  : ''
-                              }`
-                            : formatScalePortLabel(settings.posPrintSettings.scaleComPort || '')}
+                          {settings.posPrintSettings.scaleUsbAddress
+                            ? formatScaleDeviceLabel({
+                                port: settings.posPrintSettings.scaleUsbAddress,
+                                name: settings.posPrintSettings.scaleDeviceName || undefined,
+                                usbAddress: settings.posPrintSettings.scaleUsbAddress,
+                              })
+                            : settings.posPrintSettings.scaleDeviceName
+                              ? `${settings.posPrintSettings.scaleDeviceName}${
+                                  settings.posPrintSettings.scaleComPort
+                                    ? ` · ${formatScalePortLabel(settings.posPrintSettings.scaleComPort)}`
+                                    : ''
+                                }`
+                              : formatScalePortLabel(settings.posPrintSettings.scaleComPort || '')}
                         </span>
                       </p>
                     ) : null}
@@ -3531,7 +3563,10 @@ export default function Settings() {
                             formatScalePortLabel(settings.posPrintSettings?.scaleComPort || '') ===
                               formatScalePortLabel(device.port) ||
                             (!!settings.posPrintSettings?.scaleDeviceId &&
-                              settings.posPrintSettings.scaleDeviceId === device.pnpDeviceId);
+                              settings.posPrintSettings.scaleDeviceId === device.pnpDeviceId) ||
+                            (!!settings.posPrintSettings?.scaleUsbAddress &&
+                              settings.posPrintSettings.scaleUsbAddress ===
+                                (device.usbAddress || device.port));
                           return (
                             <li key={`${device.port}-${device.pnpDeviceId || device.name || ''}`}>
                               <button

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scale, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { isAndroidDevice } from '@/lib/print-agent-platform';
 import { roundMoney2 } from '@/lib/money';
 import {
   formatScalePortLabel,
+  formatScaleUsbLabel,
   isPrintAgentAvailable,
+  isUsbScaleAddress,
   readScaleWeight,
   type ScaleReading,
 } from '@/lib/print-agent';
@@ -16,13 +19,17 @@ type Props = {
   /** Catalog price = CHF per kg */
   pricePerKg: number;
   weightUnit?: 'kg' | 'g' | 'lb' | string | null;
-  /** Merchant Settings → Print → Scale COM port (Print Agent). */
+  /** Merchant Settings → Print → Scale COM port (Windows Print Agent). */
   configuredPort?: string | null;
+  /** Android Bridge: stable USB scale address (usb:VID:PID). */
+  configuredUsbAddress?: string | null;
   /** Friendly USB/Bluetooth name so we can find a new COM port after replug. */
   configuredDeviceName?: string | null;
   configuredDeviceId?: string | null;
   /** Called when Print Agent resolves a different COM port (USB replug). */
   onPortResolved?: (port: string) => void;
+  /** Called when Bridge resolves a different USB address after replug. */
+  onUsbAddressResolved?: (address: string) => void;
   onClose: () => void;
   onConfirm: (weightKg: number) => void;
 };
@@ -46,9 +53,11 @@ export default function WebPosWeightModal({
   pricePerKg,
   weightUnit = 'kg',
   configuredPort,
+  configuredUsbAddress,
   configuredDeviceName,
   configuredDeviceId,
   onPortResolved,
+  onUsbAddressResolved,
   onClose,
   onConfirm,
 }: Props) {
@@ -57,21 +66,25 @@ export default function WebPosWeightModal({
   const [entryUnit, setEntryUnit] = useState<'kg' | 'g'>('kg');
   const [scaleReading, setScaleReading] = useState<ScaleReading | null>(null);
   const [scaleMsg, setScaleMsg] = useState('');
-  const [activePort, setActivePort] = useState('');
+  const [activeAddress, setActiveAddress] = useState('');
   const [agentOk, setAgentOk] = useState(false);
   const manualOverrideRef = useRef(false);
   const entryUnitRef = useRef<'kg' | 'g'>('kg');
   const pollSessionRef = useRef(0);
-  const portRef = useRef('');
+  const addressRef = useRef('');
   const onPortResolvedRef = useRef(onPortResolved);
+  const onUsbAddressResolvedRef = useRef(onUsbAddressResolved);
 
   const fixedPort = (configuredPort || '').trim();
+  const fixedUsb = (configuredUsbAddress || '').trim();
   const deviceHint = (configuredDeviceName || '').trim();
   const deviceId = (configuredDeviceId || '').trim();
-  const scaleConfigured = !!(fixedPort || deviceHint || deviceId);
+  const useUsbScale = isUsbScaleAddress(fixedUsb) || isUsbScaleAddress(fixedPort);
+  const scaleConfigured = !!(fixedPort || fixedUsb || deviceHint || deviceId);
 
   entryUnitRef.current = entryUnit;
   onPortResolvedRef.current = onPortResolved;
+  onUsbAddressResolvedRef.current = onUsbAddressResolved;
 
   const applyLiveReading = useCallback((reading: ScaleReading, unit: 'kg' | 'g') => {
     if (manualOverrideRef.current) return;
@@ -110,9 +123,13 @@ export default function WebPosWeightModal({
     const initialUnit = weightUnit === 'g' ? 'g' : 'kg';
     setEntryUnit(initialUnit);
     entryUnitRef.current = initialUnit;
-    const initialPort = fixedPort ? formatScalePortLabel(fixedPort) : '';
-    portRef.current = initialPort;
-    setActivePort(initialPort);
+    const initialAddress = useUsbScale
+      ? fixedUsb || fixedPort
+      : fixedPort
+        ? formatScalePortLabel(fixedPort)
+        : '';
+    addressRef.current = initialAddress;
+    setActiveAddress(initialAddress);
     if (!scaleConfigured) {
       setAgentOk(false);
       return;
@@ -123,7 +140,7 @@ export default function WebPosWeightModal({
       if (pollSessionRef.current !== session) return;
       setAgentOk(ok);
     })();
-  }, [open, weightUnit, scaleConfigured, fixedPort]);
+  }, [open, weightUnit, scaleConfigured, fixedPort, fixedUsb, useUsbScale]);
 
   useEffect(() => {
     if (!open || !scaleConfigured || !agentOk) return;
@@ -139,19 +156,28 @@ export default function WebPosWeightModal({
     const pollLoop = async () => {
       await sleep(REOPEN_SETTLE_MS);
       while (!stopped && pollSessionRef.current === session) {
-        const port = portRef.current;
+        const address = addressRef.current;
         try {
-          const res = await readScaleWeight(port, READ_TIMEOUT_MS, {
+          const res = await readScaleWeight(useUsbScale ? '' : address, READ_TIMEOUT_MS, {
             hint: deviceHint || null,
             deviceId: deviceId || null,
+            usbAddress: useUsbScale ? address || fixedUsb || fixedPort : null,
           });
           if (stopped || pollSessionRef.current !== session) return;
           if (res.resolvedPort) {
             const resolved = formatScalePortLabel(res.resolvedPort);
-            if (resolved !== portRef.current) {
-              portRef.current = resolved;
-              setActivePort(resolved);
+            if (resolved !== addressRef.current) {
+              addressRef.current = resolved;
+              setActiveAddress(resolved);
               onPortResolvedRef.current?.(resolved);
+            }
+          }
+          if (res.resolvedUsbAddress) {
+            const resolved = res.resolvedUsbAddress.trim();
+            if (resolved && resolved !== addressRef.current) {
+              addressRef.current = resolved;
+              setActiveAddress(resolved);
+              onUsbAddressResolvedRef.current?.(resolved);
             }
           }
           if (res.reading) {
@@ -176,7 +202,17 @@ export default function WebPosWeightModal({
     return () => {
       stopped = true;
     };
-  }, [open, agentOk, deviceHint, deviceId, t, scaleConfigured, applyLiveReading]);
+  }, [
+    open,
+    agentOk,
+    deviceHint,
+    deviceId,
+    fixedUsb,
+    useUsbScale,
+    t,
+    scaleConfigured,
+    applyLiveReading,
+  ]);
 
   const weightKg = useMemo(() => {
     const n = Number(buffer);
@@ -189,7 +225,21 @@ export default function WebPosWeightModal({
     [weightKg, pricePerKg]
   );
 
-  const displayPort = activePort || (fixedPort ? formatScalePortLabel(fixedPort) : '');
+  const displayAddress = useMemo(() => {
+    const raw = activeAddress || fixedUsb || (fixedPort ? formatScalePortLabel(fixedPort) : '');
+    if (isUsbScaleAddress(raw)) return formatScaleUsbLabel(raw);
+    return raw;
+  }, [activeAddress, fixedPort, fixedUsb]);
+
+  const configuredAddress = useUsbScale
+    ? formatScaleUsbLabel(fixedUsb)
+    : fixedPort
+      ? formatScalePortLabel(fixedPort)
+      : '';
+
+  const agentOfflineMessage = isAndroidDevice()
+    ? t('webPosScaleBridgeOffline')
+    : t('webPosScaleAgentOffline');
 
   if (!open) return null;
 
@@ -259,7 +309,7 @@ export default function WebPosWeightModal({
               <p className="text-[11px] text-amber-800">{t('webPosScalePortMissing')}</p>
             ) : !agentOk ? (
               <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
-                {t('webPosScaleAgentOffline')}
+                {agentOfflineMessage}
               </p>
             ) : (
               <div className="space-y-0.5 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
@@ -268,12 +318,12 @@ export default function WebPosWeightModal({
                     ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
                     : scaleMsg || t('webPosScaleWaiting')}
                 </p>
-                {displayPort ? (
+                {displayAddress ? (
                   <p>
-                    {t('webPosScalePort')}: {displayPort}
-                    {activePort &&
-                    fixedPort &&
-                    formatScalePortLabel(activePort) !== formatScalePortLabel(fixedPort)
+                    {useUsbScale ? t('webPosScaleUsb') : t('webPosScalePort')}: {displayAddress}
+                    {activeAddress &&
+                    configuredAddress &&
+                    activeAddress !== (useUsbScale ? fixedUsb : formatScalePortLabel(fixedPort))
                       ? ` (${t('webPosScalePortReconnected')})`
                       : ''}
                   </p>

@@ -27,6 +27,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
         if (adyenSdkApiKey.isNotBlank()) {
             maven {
                 url = uri("https://pos-mobile-test.cdn.adyen.com/adyen-pos-android")

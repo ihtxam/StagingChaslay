@@ -10,6 +10,8 @@ import com.rebornsense.printbridge.payment.TapToPayEngines
 import com.rebornsense.printbridge.payment.TapToPaySaleParams
 import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
 import com.rebornsense.printbridge.payment.hasNfcFeature
+import com.rebornsense.printbridge.scale.AclasScaleReader
+import com.rebornsense.printbridge.scale.AclasScaleReading
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -57,6 +59,8 @@ class BridgeHttpServer(
                 }
                 if (nfcAvailable) features.put("nfc")
                 if (tapToPayReady) features.put("tap-to-pay")
+                features.put("scale")
+                features.put("usb-scale")
 
                 jsonResponse(
                     JSONObject()
@@ -170,6 +174,76 @@ class BridgeHttpServer(
                 )
             }
 
+            uri == "/scale/ports" && method == Method.GET -> {
+                val devices = AclasScaleReader.listDevices(appContext)
+                val arr = JSONArray()
+                devices.forEach { device ->
+                    arr.put(
+                        JSONObject()
+                            .put("port", device.stableAddress)
+                            .put("name", device.displayName)
+                            .put("caption", device.displayName)
+                            .put("usbAddress", device.stableAddress)
+                            .put("connectionType", "usb")
+                            .put("hasPermission", device.hasPermission)
+                    )
+                }
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", true)
+                        .put("ports", JSONArray())
+                        .put("devices", arr)
+                )
+            }
+
+            uri == "/scale/reading" && method == Method.GET -> {
+                val usbAddress = queryParam(session, "usbAddress")
+                    .ifBlank { queryParam(session, "address") }
+                    .ifBlank {
+                        val port = queryParam(session, "port")
+                        if (port.startsWith("usb:", ignoreCase = true)) port else ""
+                    }
+                val timeoutMs = queryParam(session, "timeoutMs").toLongOrNull()?.coerceIn(300L, 5000L) ?: 1200L
+                if (usbAddress.isBlank()) {
+                    return jsonResponse(
+                        JSONObject().put("ok", false).put("error", "usbAddress query param required"),
+                        Response.Status.BAD_REQUEST
+                    )
+                }
+                val outcome = runBlocking {
+                    withTimeoutOrNull(timeoutMs + 800L) {
+                        AclasScaleReader.readOnce(appContext, usbAddress, timeoutMs)
+                    }
+                }
+                when {
+                    outcome == null -> jsonResponse(
+                        JSONObject()
+                            .put("ok", true)
+                            .put("reading", JSONObject.NULL)
+                            .put("message", "Scale read timed out")
+                    )
+                    outcome.isSuccess -> {
+                        val data = outcome.getOrThrow()
+                        jsonResponse(
+                            JSONObject()
+                                .put("ok", true)
+                                .put("reading", scaleReadingJson(data.reading))
+                                .put("resolvedUsbAddress", data.resolvedUsbAddress)
+                                .put("resolvedPort", data.resolvedUsbAddress)
+                        )
+                    }
+                    else -> jsonResponse(
+                        JSONObject()
+                            .put("ok", true)
+                            .put("reading", JSONObject.NULL)
+                            .put(
+                                "message",
+                                outcome.exceptionOrNull()?.message ?: "Scale read failed"
+                            )
+                    )
+                }
+            }
+
             uri == "/drawer" && method == Method.POST -> {
                 val body = readBody(session)
                 val printerName = body.optString("printerName", "")
@@ -198,6 +272,20 @@ class BridgeHttpServer(
                 newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found"),
             )
         }
+    }
+
+    private fun queryParam(session: IHTTPSession, name: String): String {
+        return session.parameters[name]?.firstOrNull()?.trim().orEmpty()
+    }
+
+    private fun scaleReadingJson(reading: AclasScaleReading): JSONObject {
+        return JSONObject()
+            .put("weightKg", reading.weightKg)
+            .put("rawWeight", reading.rawWeight)
+            .put("units", reading.units)
+            .put("status", reading.status.name)
+            .put("isZero", reading.isZero)
+            .put("isTare", reading.isTare)
     }
 
     private fun readBody(session: IHTTPSession): JSONObject {

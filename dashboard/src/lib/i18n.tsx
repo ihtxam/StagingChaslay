@@ -1243,9 +1243,12 @@ const en: Dict = {
   webPosScaleLive: 'Scale',
   webPosScaleWaiting: 'Waiting for scale reading…',
   webPosScaleAgentOffline: 'Start Print Agent on this PC to read the USB scale (manual entry still works).',
+  webPosScaleBridgeOffline:
+    'Start Bridge Reborn on this tablet to read the USB scale (manual entry still works).',
   webPosScalePortMissing: 'Configure the scale in Settings → Print (Scan scale and tap the device name).',
   webPosScaleReadFailed: 'Could not read scale',
   webPosScalePort: 'Port',
+  webPosScaleUsb: 'USB scale',
   webPosScalePortReconnected: 'reconnected',
   settingsScaleTitle: 'Scale (Aclas USB)',
   settingsScaleHint:
@@ -4690,10 +4693,13 @@ const fr: Dict = {
   webPosScaleWaiting: 'En attente de la balance…',
   webPosScaleAgentOffline:
     'Démarrez Print Agent sur ce PC pour lire la balance USB (saisie manuelle toujours possible).',
+  webPosScaleBridgeOffline:
+    'Démarrez Bridge Reborn sur cette tablette pour lire la balance USB (saisie manuelle toujours possible).',
   webPosScalePortMissing:
-    'Configurez le port COM balance dans Paramètres → Impression (Scanner la balance).',
+    'Configurez la balance dans Paramètres → Impression (Scanner la balance).',
   webPosScaleReadFailed: 'Lecture balance impossible',
   webPosScalePort: 'Port',
+  webPosScaleUsb: 'Balance USB',
   webPosScalePortReconnected: 'reconnecté',
   settingsScaleTitle: 'Balance (Aclas USB)',
   settingsScaleHint:
@@ -8105,10 +8111,13 @@ const de: Dict = {
   webPosScaleWaiting: 'Warte auf Waagenwert…',
   webPosScaleAgentOffline:
     'Print Agent auf diesem PC starten, um die USB-Waage zu lesen (manuelle Eingabe weiterhin möglich).',
+  webPosScaleBridgeOffline:
+    'Bridge Reborn auf diesem Tablet starten, um die USB-Waage zu lesen (manuelle Eingabe weiterhin möglich).',
   webPosScalePortMissing:
-    'COM-Port der Waage unter Einstellungen → Druck konfigurieren (Waage scannen).',
+    'Waage unter Einstellungen → Druck konfigurieren (Waage scannen).',
   webPosScaleReadFailed: 'Waage konnte nicht gelesen werden',
   webPosScalePort: 'Port',
+  webPosScaleUsb: 'USB-Waage',
   webPosScalePortReconnected: 'wieder verbunden',
   settingsScaleTitle: 'Waage (Aclas USB)',
   settingsScaleHint:
