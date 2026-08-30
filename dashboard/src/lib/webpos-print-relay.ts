@@ -3,6 +3,7 @@ import {
   agentSupportsBtCutTrailer,
   getPrintAgentHealth,
   isAndroidTabletDevice,
+  isAndroidWebPosTill,
   isPrintAgentAvailable,
   looksLikeBluetoothOrComPrinter,
   printViaAgent,
@@ -140,6 +141,7 @@ export async function enqueueEscPosPrintJob(opts: {
 export function isLocalPrintStation(agentOnline: boolean): boolean {
   if (agentOnline) return true;
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  if (isAndroidWebPosTill()) return true;
   if (isAndroidTabletDevice()) return true;
   const ua = navigator.userAgent || '';
   if (/Mobile|Android|iPhone|iPod/i.test(ua) && !/iPad|Tablet/i.test(ua)) return false;
@@ -189,8 +191,9 @@ export async function printViaAgentOrQueue(opts: {
   };
 
   const agentOnline = !opts.forceQueue && (await isPrintAgentAvailable());
+  const localStation = isLocalPrintStation(agentOnline);
   const canPrintLocally =
-    agentOnline && (retryLocally || isLocalPrintStation(agentOnline));
+    agentOnline && (opts.retryLocally !== false || localStation);
   if (canPrintLocally) {
     try {
       await printViaAgent({
@@ -206,11 +209,11 @@ export async function printViaAgentOrQueue(opts: {
   }
 
   const offlineErr = new Error(
-    retryLocally
+    retryLocally || localStation
       ? 'Print agent offline — start Reborn Print Agent on this PC to print.'
       : 'Network required — connect to send prints to the main till.'
   );
-  if (retryLocally || !isBrowserOnline()) {
+  if (retryLocally || localStation || !isBrowserOnline()) {
     persistLocal(offlineErr);
     throw offlineErr;
   }

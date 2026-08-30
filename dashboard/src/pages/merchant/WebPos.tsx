@@ -72,7 +72,9 @@ import {
   browserPrintText,
   formatScalePortLabel,
   getPrintAgentHealth,
+  isAndroidWebPosTill,
   isConfiguredPrinterMissing,
+  probePrintAgentHealth,
   isPrintAgentVersionOutdated,
   isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
@@ -97,6 +99,12 @@ import {
   shouldAutoPrintReceipt,
   cacheMerchantAutoPrintSettings,
 } from '@/lib/webpos-print-relay';
+import {
+  buildPrinterProfileUpdate,
+  evaluateBridgeSetupMode,
+  listSuitablePrinters,
+  type BridgeSetupMode,
+} from '@/lib/webpos-bridge-setup';
 import {
   applyKitchenPrintRetryFromSettings,
   hasKitchenRetryPending,
@@ -163,6 +171,7 @@ import WebPosTopBar, {
 } from '@/components/webpos/WebPosTopBar';
 import WebPosLogsModal from '@/components/webpos/WebPosLogsModal';
 import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/webpos/WebPosOnboardingTour';
+import WebPosBridgeSetupModal from '@/components/webpos/WebPosBridgeSetupModal';
 import {
   initWebPosLogging,
   sendWebPosLogsToSupport,
@@ -852,6 +861,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printersReady, setPrintersReady] = useState(false);
   const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
+  const [bridgeSetupOpen, setBridgeSetupOpen] = useState(false);
+  const [bridgeSetupMode, setBridgeSetupMode] = useState<BridgeSetupMode>('bridge_offline');
+  const [bridgeSetupChecking, setBridgeSetupChecking] = useState(false);
+  const bridgeSetupDismissedRef = useRef(false);
+  const bridgeAutoConfigRef = useRef(false);
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
@@ -1812,7 +1826,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const refreshAgent = useCallback(async () => {
-    const health = await getPrintAgentHealth();
+    const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(5) : getPrintAgentHealth());
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     try {
@@ -1855,6 +1869,78 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPrintersReady(false);
     }
   }, []);
+
+  const applyBridgePrinterSetup = useCallback(
+    async (opts: { printerName: string; printSettings: PosPrintSettingsClient }) => {
+      const name = opts.printerName.trim();
+      if (!name) return;
+      setPrinterName(name);
+      setPrintSettings(opts.printSettings);
+      cacheMerchantAutoPrintSettings(opts.printSettings);
+      await api.put('/merchant/settings', { posPrintSettings: opts.printSettings }).catch(() => undefined);
+      toast.success(t('webPosBridgeSetupConnected').replace('{name}', name));
+    },
+    [t]
+  );
+
+  const refreshBridgeSetup = useCallback(async () => {
+    setBridgeSetupChecking(true);
+    try {
+      await refreshAgent();
+    } finally {
+      setBridgeSetupChecking(false);
+    }
+  }, [refreshAgent]);
+
+  /** Android tablet till: probe Bridge on launch, foreground, and keep printers in sync. */
+  useEffect(() => {
+    if (!isAndroidWebPosTill()) return;
+    const onRefresh = () => void refreshAgent().catch(() => undefined);
+    const id = window.setInterval(onRefresh, 12_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshAgent]);
+
+  /** Android tablet till: auto-connect single printer or prompt when Bridge/printers need setup. */
+  useEffect(() => {
+    if (!isAndroidWebPosTill()) return;
+
+    const mode = evaluateBridgeSetupMode({
+      agentOk,
+      printersReady,
+      printers,
+      printerName,
+      printSettings,
+    });
+
+    if (!mode) {
+      setBridgeSetupOpen(false);
+      return;
+    }
+
+    if (mode === 'confirm_single') {
+      const suitable = listSuitablePrinters(printers);
+      const only = suitable[0]?.name;
+      if (!only || bridgeAutoConfigRef.current) return;
+      bridgeAutoConfigRef.current = true;
+      const next = buildPrinterProfileUpdate(printSettings, only);
+      void applyBridgePrinterSetup({ printerName: only, printSettings: next }).then(() => {
+        setBridgeSetupOpen(false);
+      });
+      return;
+    }
+
+    if (mode === 'bridge_offline' || !bridgeSetupDismissedRef.current) {
+      setBridgeSetupMode(mode);
+      setBridgeSetupOpen(true);
+    }
+  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup]);
 
   const shiftsEnabledRef = useRef(shiftsEnabled);
   shiftsEnabledRef.current = shiftsEnabled;
@@ -10209,6 +10295,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           staffName: webposStaff?.name,
           staffRole: webposStaff?.roleName,
           merchantName: merchant?.name || merchant?.businessName,
+        }}
+      />
+
+      <WebPosBridgeSetupModal
+        open={bridgeSetupOpen}
+        mode={bridgeSetupMode}
+        printers={printers}
+        printerName={printerName}
+        printSettings={printSettings}
+        checking={bridgeSetupChecking}
+        onRefresh={refreshBridgeSetup}
+        onConfirm={applyBridgePrinterSetup}
+        onDismiss={() => {
+          bridgeSetupDismissedRef.current = true;
+          setBridgeSetupOpen(false);
         }}
       />
 

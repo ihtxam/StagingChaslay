@@ -554,8 +554,40 @@ export function isAndroidTabletDevice(): boolean {
   const ua = navigator.userAgent || '';
   if (!/android/i.test(ua)) return false;
   if (/tablet|pad|sm-t|lenovo tab|galaxy tab/i.test(ua)) return true;
-  if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches) return true;
+  if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 600px)').matches) return true;
   return false;
+}
+
+/**
+ * Android device running WebPOS as the main till (PWA / tablet), not a waiter phone.
+ * Used so kitchen prints stay local via Bridge Reborn instead of queuing to a PC.
+ */
+export function isAndroidWebPosTill(): boolean {
+  if (typeof navigator === 'undefined' || !/android/i.test(navigator.userAgent || '')) {
+    return false;
+  }
+  if (typeof window === 'undefined') return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  if (window.matchMedia?.('(display-mode: standalone)').matches) return true;
+  if (window.matchMedia?.('(display-mode: fullscreen)').matches) return true;
+  if (nav.standalone === true) return true;
+  if (isAndroidTabletDevice()) return true;
+  if (window.matchMedia?.('(min-width: 600px)').matches) return true;
+  return false;
+}
+
+/** Probe Bridge / Print Agent with backoff (Android tablet boot / PWA cold start). */
+export async function probePrintAgentHealth(attempts = 5): Promise<PrintAgentHealth> {
+  let last: PrintAgentHealth = { ok: false };
+  const tries = Math.max(1, attempts);
+  for (let i = 0; i < tries; i++) {
+    last = await getPrintAgentHealth(i === 0 && isAndroidWebPosTill() ? 2 : 0);
+    if (last.ok) return last;
+    if (i + 1 < tries) {
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  return last;
 }
 
 async function agentFetchWithTimeout(
