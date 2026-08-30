@@ -99,6 +99,9 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_gift_card_enabled boolean NOT NULL DEFAULT false",
   adyen_use_legacy_endpoint:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_use_legacy_endpoint boolean NOT NULL DEFAULT false",
+  adyen_hmac_key: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_hmac_key text",
+  tap_to_pay_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tap_to_pay_enabled boolean NOT NULL DEFAULT false",
   courses_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS courses_enabled boolean NOT NULL DEFAULT false",
   max_pos_posts:

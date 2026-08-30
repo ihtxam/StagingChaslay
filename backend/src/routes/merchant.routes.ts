@@ -1587,6 +1587,10 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount &&
       activeTerminals.length > 0;
+    const tapToPayReady =
+      merchant.tapToPayEnabled === true &&
+      !!merchant.adyenApiKey &&
+      !!merchant.adyenMerchantAccount;
 
     const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
@@ -1629,8 +1633,11 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           merchant
         ),
         terminalReady,
+        tapToPayReady,
         adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,
+        tapToPayEnabled: merchant.tapToPayEnabled === true,
         adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
+        adyenLiveRegion: merchant.adyenLiveRegion || "EU",
         adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
         defaultTerminalId: activeTerminals[0]?.terminalId || null,
         staffPreferredTerminalId,

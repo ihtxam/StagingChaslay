@@ -3027,6 +3027,19 @@ const en: Dict = {
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
   swisspayoutCreateAccount: 'Create an account now',
   adyenSaved: 'Swisspayout credentials saved',
+  adyenHmacKey: 'Webhook HMAC key',
+  adyenHmacKeyHint: 'From Adyen Customer Area → Developers → Webhooks. Used to verify payment notifications.',
+  adyenHmacKeyPlaceholder: 'Optional until webhooks are configured',
+  adyenWebhookUrl: 'Webhook URL',
+  adyenWebhookSetupHint:
+    'In Adyen Customer Area, add a Standard webhook pointing to the URL above. Enable AUTHORISATION and include the HMAC key.',
+  tapToPaySettings: 'Tap to Pay (NFC)',
+  tapToPaySettingsHint:
+    'Accept contactless card and wallet payments on Android tablets (Bridge Reborn) and the Chaslay POS app. Requires merchant account and API key above.',
+  tapToPayEnabled: 'Enable Tap to Pay',
+  tapToPayEnabledHint:
+    'When enabled and credentials are set, WebPOS on Android tablets and the native POS app can take NFC payments.',
+  adyenLiveRegion: 'Live region',
   currentKey: 'Current key',
   apiKeyHint: 'Leave blank to keep the existing key.',
   manageTerminals: 'Manage terminals →',
@@ -6420,6 +6433,19 @@ const fr: Dict = {
   swisspayoutNoAccount: "Vous n'avez pas de compte Swisspayout ?",
   swisspayoutCreateAccount: 'Créer un compte maintenant',
   adyenSaved: 'Identifiants Swisspayout enregistrés',
+  adyenHmacKey: 'Clé HMAC webhook',
+  adyenHmacKeyHint: 'Depuis Espace client Adyen → Développeurs → Webhooks.',
+  adyenHmacKeyPlaceholder: 'Optionnel tant que les webhooks ne sont pas configurés',
+  adyenWebhookUrl: 'URL webhook',
+  adyenWebhookSetupHint:
+    'Dans l’espace client Adyen, ajoutez un webhook Standard vers l’URL ci-dessus. Activez AUTHORISATION et la clé HMAC.',
+  tapToPaySettings: 'Tap to Pay (NFC)',
+  tapToPaySettingsHint:
+    'Paiements sans contact sur tablettes Android (Bridge Reborn) et l’app POS Chaslay. Nécessite le compte marchand et la clé API ci-dessus.',
+  tapToPayEnabled: 'Activer Tap to Pay',
+  tapToPayEnabledHint:
+    'Si activé avec les identifiants, WebPOS sur tablette Android et l’app POS native peuvent accepter les paiements NFC.',
+  adyenLiveRegion: 'Région live',
   currentKey: 'Clé actuelle',
   apiKeyHint: 'Laisser vide pour conserver la clé existante.',
   manageTerminals: 'Gérer les terminaux →',
@@ -9816,6 +9842,19 @@ const de: Dict = {
   swisspayoutNoAccount: 'Noch kein Swisspayout-Konto?',
   swisspayoutCreateAccount: 'Jetzt Konto erstellen',
   adyenSaved: 'Swisspayout-Zugangsdaten gespeichert',
+  adyenHmacKey: 'Webhook-HMAC-Schlüssel',
+  adyenHmacKeyHint: 'Aus Adyen Customer Area → Developers → Webhooks.',
+  adyenHmacKeyPlaceholder: 'Optional bis Webhooks konfiguriert sind',
+  adyenWebhookUrl: 'Webhook-URL',
+  adyenWebhookSetupHint:
+    'In der Adyen Customer Area einen Standard-Webhook auf die URL oben einrichten. AUTHORISATION und HMAC-Schlüssel aktivieren.',
+  tapToPaySettings: 'Tap to Pay (NFC)',
+  tapToPaySettingsHint:
+    'Kontaktlose Zahlungen auf Android-Tablets (Bridge Reborn) und in der Chaslay-POS-App. Erfordert Händlerkonto und API-Schlüssel oben.',
+  tapToPayEnabled: 'Tap to Pay aktivieren',
+  tapToPayEnabledHint:
+    'Wenn aktiviert und Zugangsdaten gesetzt sind, können WebPOS auf Android-Tablets und die native POS-App NFC-Zahlungen annehmen.',
+  adyenLiveRegion: 'Live-Region',
   currentKey: 'Aktueller Schlüssel',
   apiKeyHint: 'Leer lassen, um den bestehenden Schlüssel zu behalten.',
   manageTerminals: 'Terminals verwalten →',

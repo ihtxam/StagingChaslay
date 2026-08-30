@@ -578,7 +578,9 @@ type WebPosPaymentConfig = {
     invoice?: boolean;
   };
   terminalReady: boolean;
+  tapToPayReady?: boolean;
   adyenConfigured: boolean;
+  tapToPayEnabled?: boolean;
   defaultTerminalId: string | null;
   staffPreferredTerminalId?: string | null;
   terminals: WebPosTerminal[];
@@ -8533,7 +8535,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const offlineNow = isWebPosCurrentlyOffline();
   const deviceTapToPayActive =
-    deviceTapToPayReady && paymentConfig?.adyenConfigured === true && !offlineNow;
+    deviceTapToPayReady &&
+    paymentConfig?.adyenConfigured === true &&
+    paymentConfig?.tapToPayEnabled !== false &&
+    (paymentConfig?.tapToPayReady !== false) &&
+    !offlineNow;
   const enabledMethods = {
     express: (paymentConfig?.methods.express ?? true) && canPay,
     cash: (paymentConfig?.methods.cash ?? true) && canPay,

@@ -44,6 +44,8 @@ router.get("/", async (req: Request, res: Response) => {
         apiKeyMasked: settings.adyenApiKeyMasked,
         apiKeySet: settings.adyenApiKeySet,
         clientId: settings.adyenClientId,
+        hmacKeyMasked: settings.adyenHmacKeyMasked,
+        hmacKeySet: settings.adyenHmacKeySet,
       },
     });
   } catch (error) {
@@ -53,15 +55,16 @@ router.get("/", async (req: Request, res: Response) => {
 
 /**
  * PUT /api/terminals/adyen-credentials
- * Store merchant-level Adyen merchant account, API key, and client ID.
+ * Store merchant-level Adyen merchant account, API key, client ID, and webhook HMAC key.
  */
 router.put("/adyen-credentials", async (req: Request, res: Response) => {
   try {
-    const { adyenMerchantAccount, adyenApiKey, adyenClientId } = req.body;
+    const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey } = req.body;
     const settings = await MerchantSettingsService.updateMerchantSettings(req.merchantId!, {
       adyenMerchantAccount,
       adyenApiKey,
       adyenClientId,
+      adyenHmacKey,
     });
     res.json({
       success: true,
@@ -70,6 +73,8 @@ router.put("/adyen-credentials", async (req: Request, res: Response) => {
         apiKeyMasked: settings.adyenApiKeyMasked,
         apiKeySet: settings.adyenApiKeySet,
         clientId: settings.adyenClientId,
+        hmacKeyMasked: settings.adyenHmacKeyMasked,
+        hmacKeySet: settings.adyenHmacKeySet,
       },
     });
   } catch (error) {

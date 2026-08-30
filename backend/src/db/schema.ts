@@ -203,6 +203,10 @@ export const merchants = pgTable(
     adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
     adyenApiKey: text("adyen_api_key"),
     adyenClientId: varchar("adyen_client_id", { length: 255 }),
+    /** Adyen Standard webhook HMAC key (merchant Customer Area) */
+    adyenHmacKey: text("adyen_hmac_key"),
+    /** Enable NFC Tap to Pay (Adyen SoftPOS) for WebPOS + Android when credentials are set */
+    tapToPayEnabled: boolean("tap_to_pay_enabled").default(false).notNull(),
     /** Adyen Terminal API: test vs live environment */
     adyenLiveEnvironment: boolean("adyen_live_environment").default(false).notNull(),
     /** Adyen cloud device region: EU | US | AU | APSE */
