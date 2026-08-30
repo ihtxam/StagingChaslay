@@ -20,10 +20,7 @@ import {
   normalizeActionButtonSize,
   type WebPosActionButtonSize,
 } from '@/lib/webpos-action-button-size';
-import {
-  shouldShowCategoryLayoutPicker,
-  type WebPosCategoryLayoutMode,
-} from '@/lib/webpos-category-layout';
+import type { WebPosCategoryLayoutMode } from '@/lib/webpos-category-layout';
 import WebPosCategoryLayoutPicker from '@/components/webpos/WebPosCategoryLayoutPicker';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import {
@@ -57,6 +54,8 @@ type Props = {
   /** Phone layout step: 0 = 2×2, 1 = 3× cat / 2× prod, 2 = 3× both */
   mobileGridStep?: 0 | 1 | 2;
   isPhoneLayout?: boolean;
+  /** Phones & small tablets below ~9" — category row filter applies. */
+  isBelow9Inch?: boolean;
   onCycleTileSize?: () => void;
   productSort?: ProductGridSort;
   onToggleSortAlpha?: () => void;
@@ -100,6 +99,7 @@ export default function WebPosProductArea({
   tileSize = 'md',
   mobileGridStep = 0,
   isPhoneLayout = false,
+  isBelow9Inch = false,
   onCycleTileSize,
   productSort = 'default',
   onToggleSortAlpha,
@@ -129,12 +129,9 @@ export default function WebPosProductArea({
   const gridClass = TILE_GRID[tileSize] || TILE_GRID.md;
   const categoryColumns: 2 | 3 =
     isPhoneLayout && mobileGridStep >= 1 ? 3 : isPhoneLayout ? 2 : 3;
-  const categoryChipCount =
-    categories.length + (giftCardsEnabled ? 1 : 0) + 1 /* Tous */;
-  const showCategoryLayoutPicker = shouldShowCategoryLayoutPicker(
-    categoryChipCount,
-    categoryColumns
-  );
+  const categoryLayoutMode: WebPosCategoryLayoutMode | undefined = isBelow9Inch
+    ? categoryLayout
+    : undefined;
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
@@ -146,7 +143,7 @@ export default function WebPosProductArea({
               onClick={onToggleShowImages}
               title={t('webPosGridShowImages')}
               aria-label={t('webPosGridShowImages')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
                 showProductImages
                   ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
                   : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
@@ -161,10 +158,8 @@ export default function WebPosProductArea({
               onClick={onCycleTileSize}
               title={t('webPosGridTileSize')}
               aria-label={t('webPosGridTileSize')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
-                isPhoneLayout &&
-                (mobileGridStep > 0 ||
-                  shouldShowCategoryLayoutPicker(categoryChipCount, categoryColumns))
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
+                isPhoneLayout && mobileGridStep > 0
                   ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
                   : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
               }`}
@@ -172,13 +167,19 @@ export default function WebPosProductArea({
               <LayoutGrid size={16} aria-hidden />
             </button>
           ) : null}
+          {isBelow9Inch && onCategoryLayoutChange ? (
+            <WebPosCategoryLayoutPicker
+              value={categoryLayout}
+              onChange={onCategoryLayoutChange}
+            />
+          ) : null}
           {onToggleSortAlpha ? (
             <button
               type="button"
               onClick={onToggleSortAlpha}
               title={t('webPosGridSortAlpha')}
               aria-label={t('webPosGridSortAlpha')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
                 productSort === 'alpha'
                   ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
                   : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
@@ -193,7 +194,7 @@ export default function WebPosProductArea({
               onClick={onToggleSortBestseller}
               title={t('webPosGridSortBestseller')}
               aria-label={t('webPosGridSortBestseller')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
                 productSort === 'bestseller'
                   ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
                   : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
@@ -203,22 +204,10 @@ export default function WebPosProductArea({
             </button>
           ) : null}
         </div>
-        {showCategoryLayoutPicker && onCategoryLayoutChange ? (
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-              {t('webPosCategoryLayoutLabel')}
-            </p>
-            <WebPosCategoryLayoutPicker
-              value={categoryLayout}
-              onChange={onCategoryLayoutChange}
-              compact={false}
-            />
-          </div>
-        ) : null}
         <div
           className="webpos-cat-scroll flex flex-wrap gap-1.5"
-          data-cat-layout={categoryLayout}
-          data-cat-cols={String(categoryColumns)}
+          data-cat-layout={categoryLayoutMode}
+          data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
         >
           <button
             type="button"

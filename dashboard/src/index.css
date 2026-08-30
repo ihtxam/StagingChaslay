@@ -564,10 +564,14 @@ button {
     background-color: #303030 !important;
   }
   .webpos-shell[data-appearance='night'] .webpos-mini-btn,
-  .webpos-shell[data-appearance='night'] .webpos-action-chip {
+  .webpos-shell[data-appearance='night'] .webpos-action-chip,
+  .webpos-shell[data-appearance='night'] .webpos-toolbar-btn {
     background-color: var(--webpos-surface);
     border-color: var(--webpos-border);
     color: var(--webpos-text);
+  }
+  .webpos-shell[data-appearance='night'] .webpos-toolbar-btn:hover:not(:disabled) {
+    background-color: var(--webpos-surface-2);
   }
   .webpos-shell[data-appearance='night'] .webpos-accent-btn {
     color: #0a0a0a !important;
@@ -606,45 +610,36 @@ button {
     display: none;
   }
 
-  /* Category layout modes — horizontal scroll & capped row grids */
-  .webpos-cat-scroll[data-cat-layout='scroll'] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    padding-bottom: 0.125rem;
-  }
-  .webpos-cat-scroll[data-cat-layout='scroll'] .webpos-category-chip {
-    scroll-snap-align: start;
-  }
+  /* Category layout modes — horizontal scroll with 2 or 3 fixed rows (no vertical scroll) */
   .webpos-cat-scroll[data-cat-layout='rows-2'],
   .webpos-cat-scroll[data-cat-layout='rows-3'] {
     display: grid !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch;
     align-content: start;
-  }
-  .webpos-cat-scroll[data-cat-cols='2'][data-cat-layout='rows-2'],
-  .webpos-cat-scroll[data-cat-cols='2'][data-cat-layout='rows-3'],
-  .webpos-cat-scroll[data-cat-cols='2'][data-cat-layout='wrap'] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .webpos-cat-scroll[data-cat-cols='3'][data-cat-layout='rows-2'],
-  .webpos-cat-scroll[data-cat-cols='3'][data-cat-layout='rows-3'],
-  .webpos-cat-scroll[data-cat-cols='3'][data-cat-layout='wrap'] {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 0.375rem;
+    row-gap: 0.375rem;
+    flex-wrap: nowrap !important;
+    padding-bottom: 0.125rem;
   }
   .webpos-cat-scroll[data-cat-layout='rows-2'] {
+    grid-template-rows: repeat(2, var(--webpos-cat-chip-h, 2.25rem));
     max-height: calc(2 * var(--webpos-cat-chip-h, 2.25rem) + 0.375rem);
   }
   .webpos-cat-scroll[data-cat-layout='rows-3'] {
+    grid-template-rows: repeat(3, var(--webpos-cat-chip-h, 2.25rem));
     max-height: calc(3 * var(--webpos-cat-chip-h, 2.25rem) + 0.75rem);
   }
-  .webpos-cat-scroll[data-cat-layout='wrap'] {
-    overflow: visible;
+  .webpos-cat-scroll[data-cat-layout='rows-2'] .webpos-category-chip,
+  .webpos-cat-scroll[data-cat-layout='rows-3'] .webpos-category-chip {
+    width: max-content;
+    min-width: 4.5rem;
+    max-width: 9rem;
+    flex-shrink: 0;
+    scroll-snap-align: start;
   }
 
   /* Merchant subline — sync/offline status inline (replaces banner row) */
