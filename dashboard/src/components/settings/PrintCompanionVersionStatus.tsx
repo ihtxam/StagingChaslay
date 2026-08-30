@@ -11,14 +11,18 @@ type Props = {
   serverVersion?: string | null;
   downloadUrl?: string | null;
   className?: string;
+  onAndroid?: boolean;
+  agentChecked?: boolean;
 };
 
 function statusClassName(status: PrintCompanionInstallStatus): string {
   switch (status.state) {
     case 'update_available':
-      return 'text-amber-800';
+      return 'text-amber-800 dark:text-amber-200';
     case 'up_to_date':
-      return 'text-emerald-700';
+      return 'text-emerald-700 dark:text-emerald-300';
+    case 'not_responding':
+      return 'text-amber-800 dark:text-amber-200';
     default:
       return 'text-[var(--text-muted)]';
   }
@@ -30,14 +34,22 @@ export default function PrintCompanionVersionStatus({
   serverVersion,
   downloadUrl,
   className = '',
+  onAndroid = false,
+  agentChecked = false,
 }: Props) {
   const { t } = useI18n();
-  const status = resolvePrintCompanionInstallStatus(kind, installedVersion, serverVersion);
+  const status = resolvePrintCompanionInstallStatus(kind, installedVersion, serverVersion, {
+    onAndroid,
+    agentChecked,
+  });
   const label =
     kind === 'windows-agent' ? t('printAgentVersionStatusLabel') : t('printBridgeVersionStatusLabel');
 
   let message: string;
   switch (status.state) {
+    case 'not_responding':
+      message = t('printBridgeNotResponding');
+      break;
     case 'not_installed':
       message =
         kind === 'windows-agent'

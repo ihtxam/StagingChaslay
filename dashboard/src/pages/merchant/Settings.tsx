@@ -518,6 +518,7 @@ export default function Settings() {
   const [savingWebposPay, setSavingWebposPay] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
+  const [printAgentHealthChecked, setPrintAgentHealthChecked] = useState(false);
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
@@ -1020,8 +1021,9 @@ export default function Settings() {
   const refreshPrintAgentPrinters = useCallback(async () => {
     setRefreshingPrinters(true);
     try {
-      const health = await getPrintAgentHealth();
+      const health = await getPrintAgentHealth(isAndroidDevice() ? 2 : 0);
       setPrintAgentOk(health.ok);
+      setPrintAgentHealthChecked(true);
       const serverVersion = isAndroidDevice()
         ? printBridgeManifest?.version
         : printAgentManifest?.version;
@@ -4021,6 +4023,8 @@ export default function Settings() {
                         installedVersion={installedPrintCompanionVersion}
                         serverVersion={printBridgeManifest?.version}
                         downloadUrl={printBridgeDownloadUrl()}
+                        onAndroid={isAndroidDevice()}
+                        agentChecked={printAgentHealthChecked}
                       />
                     ) : null}
                   </div>

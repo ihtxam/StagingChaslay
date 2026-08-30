@@ -309,7 +309,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
             type="button"
             onClick={() => setTab(tabId)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === tabId ? 'border-stone-900 text-stone-900' : 'border-transparent text-[var(--text-muted)]'
+              tab === tabId
+                ? 'border-[var(--text)] text-[var(--text)]'
+                : 'border-transparent text-[var(--text-muted)]'
             }`}
           >
             {tabId === 'staff' ? t('staffTabUsers') : t('staffTabRoles')}
@@ -437,7 +439,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                         <label
                           key={value}
                           className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5 ${
-                            active ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                            active
+                              ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                              : 'border-[var(--border)]'
                           }`}
                         >
                           <input
@@ -466,9 +470,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
           </form>
 
           {ownerEmail ? (
-            <div className="card p-4 space-y-1 border border-stone-200 bg-stone-50">
+            <div className="card p-4 space-y-1 border border-[var(--border)] bg-[var(--bg-muted)]">
               <p className="text-sm font-medium">{t('staffOwnerTitle')}</p>
-              <p className="text-sm text-stone-800">
+              <p className="text-sm text-[var(--text)]">
                 {ownerName ? `${ownerName} · ` : ''}
                 <span className="font-mono text-xs sm:text-sm">{ownerEmail}</span>
               </p>
@@ -527,7 +531,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         type="button"
-                        className="text-stone-800 text-xs font-medium mr-3 underline-offset-2 hover:underline"
+                        className="text-[var(--text)] text-xs font-medium mr-3 underline-offset-2 hover:underline"
                         onClick={() => openStaffEdit(s)}
                       >
                         {t('edit')}
@@ -732,7 +736,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                         <label
                           key={value}
                           className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5 ${
-                            active ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                            active
+                              ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                              : 'border-[var(--border)]'
                           }`}
                         >
                           <input
@@ -763,7 +769,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                         <label
                           key={loc.id}
                           className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 ${
-                            checked ? 'border-stone-900 bg-stone-50' : 'border-[var(--border)]'
+                            checked ? 'border-[var(--text)] bg-[var(--bg-muted)]' : 'border-[var(--border)]'
                           }`}
                         >
                           <input

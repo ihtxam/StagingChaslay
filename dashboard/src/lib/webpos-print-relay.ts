@@ -1,5 +1,8 @@
 import api from '@/lib/api';
 import {
+  agentSupportsBtCutTrailer,
+  getPrintAgentHealth,
+  isAndroidTabletDevice,
   isPrintAgentAvailable,
   looksLikeBluetoothOrComPrinter,
   printViaAgent,
@@ -137,6 +140,7 @@ export async function enqueueEscPosPrintJob(opts: {
 export function isLocalPrintStation(agentOnline: boolean): boolean {
   if (agentOnline) return true;
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  if (isAndroidTabletDevice()) return true;
   const ua = navigator.userAgent || '';
   if (/Mobile|Android|iPhone|iPod/i.test(ua) && !/iPad|Tablet/i.test(ua)) return false;
   if (window.matchMedia && !window.matchMedia('(min-width: 1024px)').matches) return false;
@@ -234,22 +238,24 @@ export async function printKitchenViaAgentOrQueue(
         p.matchHint === opts.configuredName
     ) || opts.printers?.find((p) => p.name === opts.printerName) || opts.configuredName || opts.printerName;
   const isBt = looksLikeBluetoothOrComPrinter(printerRef);
-  if (isBt) {
+  const agentHealth = isBt ? await getPrintAgentHealth().catch(() => ({ ok: false })) : null;
+  const skipCutFollowUp = isBt && agentSupportsBtCutTrailer(agentHealth);
+  if (isBt && !skipCutFollowUp) {
     // Let the ticket body finish printing before the cut-only follow-up job.
     await new Promise((resolve) => setTimeout(resolve, 450));
-  }
-  try {
-    await printViaAgentOrQueue({
-      printerName: opts.printerName,
-      dataBase64: uint8ToBase64(escposFeedAndCut()),
-      orderId: opts.orderId,
-      retryLocally: opts.retryLocally,
-      forceQueue: opts.forceQueue,
-      jobKind: 'kitchen',
-      jobLabel: opts.jobLabel ? `${opts.jobLabel} · cut` : 'Kitchen cut',
-    });
-  } catch {
-    /* ticket may already have cut; follow-up is best-effort */
+    try {
+      await printViaAgentOrQueue({
+        printerName: opts.printerName,
+        dataBase64: uint8ToBase64(escposFeedAndCut()),
+        orderId: opts.orderId,
+        retryLocally: opts.retryLocally,
+        forceQueue: opts.forceQueue,
+        jobKind: 'kitchen',
+        jobLabel: opts.jobLabel ? `${opts.jobLabel} · cut` : 'Kitchen cut',
+      });
+    } catch {
+      /* ticket may already have cut; follow-up is best-effort */
+    }
   }
   await settleAfterBluetoothKitchenPrint(printerRef);
   return mode;
@@ -315,6 +321,8 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
     try {
       if (!(await isPrintAgentAvailable())) return { done: 0, remoteKitchenDone: 0, reservationDone: 0 };
       const localDeviceId = webPosDeviceId();
+      const agentHealth = await getPrintAgentHealth().catch(() => ({ ok: false }));
+      const skipBtCutFollowUp = agentSupportsBtCutTrailer(agentHealth);
       const res = await api.get('/merchant/pos/print-jobs/pending', {
         params: { jobType: 'ESCPOS', limit: 15 },
       });
@@ -395,13 +403,13 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           if (relayKind === 'kitchen') {
             try {
               const livePrinter = (p.printerName || '').trim();
-              if (looksLikeBluetoothOrComPrinter(livePrinter)) {
+              if (looksLikeBluetoothOrComPrinter(livePrinter) && !skipBtCutFollowUp) {
                 await new Promise((r) => setTimeout(r, 450));
+                await printViaAgent({
+                  printerName: p.printerName,
+                  dataBase64: uint8ToBase64(escposFeedAndCut()),
+                });
               }
-              await printViaAgent({
-                printerName: p.printerName,
-                dataBase64: uint8ToBase64(escposFeedAndCut()),
-              });
             } catch {
               /* cut follow-up is best-effort */
             }
