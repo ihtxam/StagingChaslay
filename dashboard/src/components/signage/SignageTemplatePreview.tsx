@@ -32,7 +32,7 @@ export default function SignageTemplatePreview({ templateId, className = '' }: P
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-stone-200 shadow-sm ${className}`}
+      className={`overflow-hidden rounded-xl border border-[var(--border)] shadow-sm ${className}`}
       style={{ background: theme.bg, color: theme.text }}
     >
       <div className="px-3 py-2 text-[10px] uppercase tracking-widest opacity-70">{t('signageTemplatePreview')}</div>
@@ -48,8 +48,8 @@ export default function SignageTemplatePreview({ templateId, className = '' }: P
         </div>
         <div className="flex gap-1 opacity-60">
           <div className="h-1 flex-1 rounded" style={{ background: theme.accent }} />
-          <div className="h-1 flex-1 rounded bg-white/20" />
-          <div className="h-1 flex-1 rounded bg-white/20" />
+          <div className="h-1 flex-1 rounded bg-[var(--bg-elevated)]/20" />
+          <div className="h-1 flex-1 rounded bg-[var(--bg-elevated)]/20" />
         </div>
       </div>
     </div>

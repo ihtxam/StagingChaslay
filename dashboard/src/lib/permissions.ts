@@ -101,7 +101,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/menus': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
-  '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING'],
+  '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],
@@ -379,13 +379,28 @@ export function isKioskRestrictedStaff(
   return true;
 }
 
-export function isKioskPanelPath(pathname: string): boolean {
+export function isKioskSettingsTab(search: string): boolean {
+  try {
+    return new URLSearchParams(search).get('tab') === 'kiosk';
+  } catch {
+    return false;
+  }
+}
+
+export function isKioskPanelPath(pathname: string, search = ''): boolean {
   const path = pathname.replace(/\/$/, '') || '/merchant';
-  return path === '/merchant/kiosk' || path.startsWith('/merchant/kiosk/');
+  if (path === '/merchant/kiosk' || path.startsWith('/merchant/kiosk/')) return true;
+  return path === '/merchant/settings' && isKioskSettingsTab(search);
 }
 
 export function kioskHomePath(): string {
-  return '/merchant/kiosk';
+  return '/merchant/settings?tab=kiosk';
+}
+
+export function isKioskHomeLocation(pathname: string, search = ''): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  if (path === '/merchant/kiosk') return true;
+  return path === '/merchant/settings' && isKioskSettingsTab(search);
 }
 
 /** Register POS / waiter — PIN session restricts panel access on these routes only. */

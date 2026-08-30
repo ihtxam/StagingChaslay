@@ -83,13 +83,13 @@ export default function SignageScreenEditModal({ open, screen, playlists, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90dvh] overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-elevated)] shadow-xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <h2 className="font-bold">{t('signageEditScreen')}</h2>
-            <p className="text-xs text-stone-500">{screen.name}</p>
+            <p className="text-xs text-[var(--text-muted)]">{screen.name}</p>
           </div>
-          <button type="button" className="p-2 rounded-lg hover:bg-stone-100" onClick={onClose}>
+          <button type="button" className="p-2 rounded-lg hover:bg-[var(--bg-muted)]" onClick={onClose}>
             <X className="h-4 w-4" />
           </button>
         </div>

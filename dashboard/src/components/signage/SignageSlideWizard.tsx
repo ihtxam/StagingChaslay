@@ -131,22 +131,22 @@ export default function SignageSlideWizard({ open, categories, initial, onClose,
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90dvh] overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-elevated)] shadow-xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <h2 className="font-bold">{initial ? t('signageEditSlide') : t('signageAddSlide')}</h2>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-[var(--text-muted)]">
               {t('signageWizardStep').replace('{n}', String(step)).replace('{total}', '2')}
             </p>
           </div>
-          <button type="button" className="p-2 rounded-lg hover:bg-stone-100" onClick={onClose}>
+          <button type="button" className="p-2 rounded-lg hover:bg-[var(--bg-muted)]" onClick={onClose}>
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {step === 1 ? (
           <div className="p-4 space-y-3">
-            <p className="text-sm text-stone-600">{t('signageSlideWizardStep1')}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('signageSlideWizardStep1')}</p>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { type: 'menu' as const, icon: LayoutGrid, label: t('signageAddMenuSlide') },
@@ -157,7 +157,7 @@ export default function SignageSlideWizard({ open, categories, initial, onClose,
                   key={type}
                   type="button"
                   className={`rounded-xl border-2 p-3 text-xs font-semibold flex flex-col items-center gap-2 ${
-                    draft.type === type ? 'border-teal-500 bg-teal-50' : 'border-stone-200'
+                    draft.type === type ? 'border-teal-500 bg-teal-50' : 'border-[var(--border)]'
                   }`}
                   onClick={() => setType(type)}
                 >
@@ -169,7 +169,7 @@ export default function SignageSlideWizard({ open, categories, initial, onClose,
           </div>
         ) : (
           <div className="p-4 space-y-3">
-            <p className="text-sm text-stone-600">{t('signageSlideWizardStep2')}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('signageSlideWizardStep2')}</p>
             <label className="block text-xs">
               {t('signageDuration')}
               <input
@@ -184,14 +184,14 @@ export default function SignageSlideWizard({ open, categories, initial, onClose,
 
             {draft.type === 'menu' ? (
               <>
-                <p className="text-xs font-medium text-stone-600">{t('signageChooseCategories')}</p>
+                <p className="text-xs font-medium text-[var(--text-muted)]">{t('signageChooseCategories')}</p>
                 <div className="flex flex-wrap gap-2">
                   {categories.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       className={`rounded-lg px-2 py-1 text-xs ${
-                        draft.categoryIds.includes(c.id) ? 'bg-teal-600 text-white' : 'bg-stone-100'
+                        draft.categoryIds.includes(c.id) ? 'bg-teal-600 text-white' : 'bg-[var(--bg-muted)]'
                       }`}
                       onClick={() => toggleCategory(c.id)}
                     >

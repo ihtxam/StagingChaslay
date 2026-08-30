@@ -37,12 +37,14 @@ type Props = {
   mode?: 'merchant' | 'token';
   accessToken?: string;
   showOwnerExtras?: boolean;
+  embedded?: boolean;
 };
 
 export default function KioskAdminPanel({
   mode = 'merchant',
   accessToken,
   showOwnerExtras = true,
+  embedded = false,
 }: Props) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -219,27 +221,36 @@ export default function KioskAdminPanel({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6 pb-12">
-      <div>
-        <h1 className="text-2xl font-bold">Kiosk setup</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          Configure sliders, payment methods, and connections before launching customer mode.
-        </p>
-      </div>
+    <div className={embedded ? 'space-y-6' : 'mx-auto max-w-3xl space-y-6 p-6 pb-12'}>
+      {!embedded ? (
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text)]">Kiosk setup</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Configure sliders, payment methods, and connections before launching customer mode.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-lg font-bold text-[var(--text)]">{t('kioskNav')}</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Configure sliders, payment methods, and connections before launching customer mode.
+          </p>
+        </div>
+      )}
 
       {mode === 'merchant' && !enabled ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
           The self-order kiosk add-on is not enabled. Contact your reseller to activate it.
         </div>
       ) : null}
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold">Connections</h2>
-        <p className="mt-1 text-sm text-stone-500">
+        <h2 className="font-semibold text-[var(--text)]">Connections</h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
           Test payment terminal registration and Bridge Reborn on this device before going live.
         </p>
         <div className="mt-4 space-y-3">
-          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
             {terminalOk ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             ) : (
@@ -249,7 +260,7 @@ export default function KioskAdminPanel({
               <p className="font-semibold flex items-center gap-2">
                 <CreditCard className="h-4 w-4" /> Payment terminal
               </p>
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-[var(--text-muted)]">
                 {serverDiag?.terminalConfigured
                   ? serverDiag.terminalRegistered
                     ? `Terminal: ${serverDiag.terminalLabel || 'registered'}${serverDiag.adyenConfigured ? '' : ' — Adyen credentials missing'}`
@@ -258,19 +269,19 @@ export default function KioskAdminPanel({
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
             {printOk === true ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             ) : printOk === false ? (
               <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
             ) : (
-              <Printer className="mt-0.5 h-5 w-5 shrink-0 text-stone-400" />
+              <Printer className="mt-0.5 h-5 w-5 shrink-0 text-[var(--text-muted)]" />
             )}
             <div>
               <p className="font-semibold flex items-center gap-2">
                 <Printer className="h-4 w-4" /> Bridge Reborn / printers
               </p>
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-[var(--text-muted)]">
                 {printMessage || 'Tap Test connections to check localhost:9101 on this tablet'}
               </p>
             </div>
@@ -290,7 +301,7 @@ export default function KioskAdminPanel({
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
           <h2 className="font-semibold">Kiosk URL</h2>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="flex-1 break-all rounded-lg bg-stone-100 px-3 py-2 text-sm">{kioskUrl}</code>
+            <code className="flex-1 break-all rounded-lg bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text)]">{kioskUrl}</code>
             <button type="button" className="btn-secondary inline-flex items-center gap-1" onClick={() => { void navigator.clipboard.writeText(kioskUrl); toast.success('Copied'); }}>
               <Copy className="h-4 w-4" /> Copy
             </button>
@@ -307,7 +318,7 @@ export default function KioskAdminPanel({
       <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
         <div>
           <h2 className="font-semibold">{t('kioskAttractTitle')}</h2>
-          <p className="mt-1 text-xs text-stone-500">{t('kioskSlideImageHint')}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskSlideImageHint')}</p>
         </div>
         {(settings.promoSlides || []).map((slide, idx) => (
           <div key={idx} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 md:grid-cols-3">

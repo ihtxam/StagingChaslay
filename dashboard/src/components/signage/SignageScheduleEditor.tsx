@@ -100,7 +100,7 @@ export default function SignageScheduleEditor({
               key={d.n}
               type="button"
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                weekdays.includes(d.n) ? 'bg-teal-600 text-white' : 'bg-stone-100'
+                weekdays.includes(d.n) ? 'bg-teal-600 text-white' : 'bg-[var(--bg-muted)]'
               }`}
               onClick={() => onWeekdaysChange(toggleWeekday(weekdays, d.n))}
             >
@@ -137,9 +137,9 @@ export default function SignageScheduleEditor({
 
       {scheduleType === 'windows' ? (
         <div className="space-y-3">
-          <p className="text-xs text-stone-500">{t('signageScheduleWindowsHint')}</p>
+          <p className="text-xs text-[var(--text-muted)]">{t('signageScheduleWindowsHint')}</p>
           {windows.map((w, idx) => (
-            <div key={idx} className="rounded-lg border border-stone-200 p-3 space-y-2">
+            <div key={idx} className="rounded-lg border border-[var(--border)] p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <input
                   className="input flex-1 text-sm"
@@ -163,7 +163,7 @@ export default function SignageScheduleEditor({
                     key={d.n}
                     type="button"
                     className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${
-                      w.weekdays.includes(d.n) ? 'bg-teal-600 text-white' : 'bg-stone-100'
+                      w.weekdays.includes(d.n) ? 'bg-teal-600 text-white' : 'bg-[var(--bg-muted)]'
                     }`}
                     onClick={() => patchWindow(idx, { weekdays: toggleWeekday(w.weekdays, d.n) })}
                   >

@@ -23,12 +23,16 @@ import {
   Users,
   UtensilsCrossed,
   ChefHat,
+  Tv,
+  TabletSmartphone,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
+import SignagePage from './SignagePage';
+import KioskSettingsPage from './KioskSettingsPage';
 import api from '@/lib/api';
 import {
   RECEIPT_LOGO_WIDTH_PX_MAX,
@@ -82,7 +86,7 @@ import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTa
 import Staff from './Staff';
 import DeliveryTrackingPage from './DeliveryTracking';
 import { useAuthStore } from '@/store/auth';
-import { canAccessRoute } from '@/lib/permissions';
+import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/permissions';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
 
@@ -300,6 +304,8 @@ type TabId =
   | 'receipt'
   | 'kds'
   | 'ods'
+  | 'signage'
+  | 'kiosk'
   | 'email'
   | 'language'
   | 'users';
@@ -318,6 +324,8 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'receipt',
   'kds',
   'ods',
+  'signage',
+  'kiosk',
   'email',
   'language',
   'users',
@@ -339,7 +347,8 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'delivery') return 'delivery';
     if (q === 'hours') return 'hours';
     if (q === 'reservations') return 'reservations';
-    if (q === 'business') return 'business';
+    if (q === 'signage') return 'signage';
+    if (q === 'kiosk') return 'kiosk';
   } catch {
     /* ignore */
   }
@@ -556,6 +565,8 @@ export default function Settings() {
         { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
+        { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
+        { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
         { id: 'users' as const, label: t('staffPageTitle'), navLabel: t('settingsNavStaff'), icon: Users },
         { id: 'language' as const, label: t('language'), navLabel: t('settingsNavLanguage'), icon: Languages },
@@ -563,8 +574,31 @@ export default function Settings() {
     [t]
   );
 
+  const businessModule = useMemo(
+    () =>
+      normalizeBusinessModule(
+        settings?.posCheckoutSettings?.posMode === 'retail' ? 'retail' : 'restaurant'
+      ),
+    [settings?.posCheckoutSettings?.posMode]
+  );
+
   const canOpenSettingsTab = useCallback(
     (tabId: TabId) => {
+      if (
+        isKioskRestrictedStaff(user?.permissions, jwtIsOwner) &&
+        !hasPermission(user?.permissions, 'MANAGE_SETTINGS', jwtIsOwner)
+      ) {
+        return tabId === 'kiosk';
+      }
+      if (tabId === 'signage') {
+        return (
+          isSignageLicensed(settings) &&
+          canAccessRoute('/merchant/signage', user?.permissions, jwtIsOwner, null, businessModule)
+        );
+      }
+      if (tabId === 'kiosk') {
+        return canAccessRoute('/merchant/kiosk', user?.permissions, jwtIsOwner);
+      }
       if (tabId === 'users') {
         return canAccessRoute('/merchant/users', user?.permissions, jwtIsOwner);
       }
@@ -573,7 +607,7 @@ export default function Settings() {
       }
       return canAccessRoute('/merchant/settings', user?.permissions, jwtIsOwner);
     },
-    [jwtIsOwner, user?.permissions]
+    [businessModule, jwtIsOwner, settings, user?.permissions]
   );
 
   const visibleTabs = useMemo(
@@ -836,8 +870,13 @@ export default function Settings() {
       },
       {
         id: 'signage-addon',
-        tab: 'pos',
-        keywords: ['signage', 'tv', 'menu board', 'screens', t('signageTitle')],
+        tab: 'signage',
+        keywords: ['signage', 'tv', 'menu board', 'screens', 'playlist', t('signageTitle'), t('signageNav')],
+      },
+      {
+        id: 'kiosk-setup',
+        tab: 'kiosk',
+        keywords: ['kiosk', 'self order', 'attract', 'slider', t('kioskNav')],
       },
       {
         id: 'email-smtp',
@@ -2426,7 +2465,7 @@ export default function Settings() {
 
               <Section
                 id="signage-addon"
-                icon={Monitor}
+                icon={Tv}
                 accent={settingsDash.accent}
                 title={t('signageTitle')}
                 description={t('signageAddonReadOnly')}
@@ -2438,9 +2477,13 @@ export default function Settings() {
                 </p>
                 <p className="text-xs muted mt-1">{t('signageAddonReadOnly')}</p>
                 {isSignageLicensed(settings) ? (
-                  <Link to="/merchant/signage" className="btn-secondary mt-3 inline-flex">
+                  <button
+                    type="button"
+                    className="btn-secondary mt-3 inline-flex"
+                    onClick={() => selectTab('signage')}
+                  >
                     {t('signageNav')}
-                  </Link>
+                  </button>
                 ) : null}
               </Section>
 
@@ -4376,6 +4419,18 @@ export default function Settings() {
             <div className="space-y-5">
               <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
               <OdsSettingsPanel />
+            </div>
+          )}
+
+          {tab === 'signage' && (
+            <div className="space-y-5">
+              <SignagePage embedded />
+            </div>
+          )}
+
+          {tab === 'kiosk' && (
+            <div className="space-y-5">
+              <KioskSettingsPage embedded />
             </div>
           )}
 
