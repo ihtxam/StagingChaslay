@@ -1633,11 +1633,12 @@ function escUnderline(on: boolean): Uint8Array {
  * Feed past the cutter, then full + partial cut variants.
  * Cheap BLE printers often ignore GS V 0 unless paper has already reached the blade,
  * and the last radio packet (the cut) is the one that gets dropped.
+ * Extra feed lines help label/sticker kitchen printers advance to the next gap.
  */
 export function escposFeedAndCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x08, // ESC d 8 — feed 8 lines past the print head
-    0x1d, 0x56, 0x41, 0x18, // GS V 65 24 — feed-and-full-cut (Epson / most clones)
+    0x1b, 0x64, 0x0c, // ESC d 12 — feed 12 lines past the print head
+    0x1d, 0x56, 0x41, 0x30, // GS V 65 48 — feed 48 dots + full cut (Epson / clones)
     0x1d, 0x56, 0x00, // GS V 0 full cut
     0x1b, 0x69, // ESC i legacy cut
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

@@ -42,6 +42,7 @@ class PrintJobQueue(
 
     private fun runLoop() {
         val delays = longArrayOf(1000, 2000, 5000, 10000, 30000)
+        var lastBluetoothPrintMs = 0L
         while (!Thread.currentThread().isInterrupted) {
             val job = try {
                 queue.take()
@@ -54,8 +55,17 @@ class PrintJobQueue(
                 depth.decrementAndGet()
                 continue
             }
+            if (job.endpoint.connectionType == "bluetooth") {
+                val gap = System.currentTimeMillis() - lastBluetoothPrintMs
+                if (lastBluetoothPrintMs > 0L && gap < BT_INTER_JOB_MS) {
+                    Thread.sleep(BT_INTER_JOB_MS - gap)
+                }
+            }
             val result = driver.print(ctx, job.endpoint, job.data)
             if (result.isSuccess) {
+                if (job.endpoint.connectionType == "bluetooth") {
+                    lastBluetoothPrintMs = System.currentTimeMillis()
+                }
                 depth.decrementAndGet()
             } else if (job.attempts < delays.size) {
                 try {
@@ -71,6 +81,8 @@ class PrintJobQueue(
     }
 
     companion object {
+        private const val BT_INTER_JOB_MS = 1_500L
+
         fun decodeBase64(dataBase64: String): ByteArray {
             return Base64.decode(dataBase64, Base64.DEFAULT)
         }

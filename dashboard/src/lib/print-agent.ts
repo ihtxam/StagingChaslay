@@ -15,6 +15,9 @@ export type AgentPrinter = {
   isDefault?: boolean;
   status?: string;
   unsuitableForRaw?: boolean;
+  /** Android Bridge Reborn: sunmi-internal | usb | bluetooth | lan */
+  connectionType?: string;
+  driver?: string;
 };
 
 export type ScaleDevice = {
@@ -336,23 +339,27 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.9.2+ paces Bluetooth / virtual-COM writes and sends a feed+cut trailer. */
 export const MIN_PRINT_AGENT_VERSION = '1.9.2';
 
-const BT_COM_PRINTER_RE = /com\d+|bth|bluetooth|ble\b|rfcomm|serial over/i;
+const BT_COM_PRINTER_RE =
+  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-58|pos-80|mtp-|spp/i;
 
 /** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
-export const BLUETOOTH_KITCHEN_SETTLE_MS = 1200;
+export const BLUETOOTH_KITCHEN_SETTLE_MS = 1800;
 
 export function looksLikeBluetoothOrComPrinter(
-  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint'> | string | null
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint' | 'connectionType'> | string | null
 ): boolean {
   if (!printer) return false;
+  if (typeof printer === 'object' && printer.connectionType === 'bluetooth') return true;
   if (typeof printer === 'string') return BT_COM_PRINTER_RE.test(printer);
   return BT_COM_PRINTER_RE.test(
-    [printer.name, printer.portName, printer.driverName, printer.matchHint].filter(Boolean).join(' ')
+    [printer.name, printer.portName, printer.driverName, printer.matchHint, printer.connectionType]
+      .filter(Boolean)
+      .join(' ')
   );
 }
 
 export async function settleAfterBluetoothKitchenPrint(
-  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint'> | string | null
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint' | 'connectionType'> | string | null
 ): Promise<void> {
   if (!looksLikeBluetoothOrComPrinter(printer)) return;
   await new Promise((resolve) => setTimeout(resolve, BLUETOOTH_KITCHEN_SETTLE_MS));

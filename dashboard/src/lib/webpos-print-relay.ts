@@ -1,6 +1,7 @@
 import api from '@/lib/api';
 import {
   isPrintAgentAvailable,
+  looksLikeBluetoothOrComPrinter,
   printViaAgent,
   settleAfterBluetoothKitchenPrint,
   type AgentPrinter,
@@ -225,6 +226,18 @@ export async function printKitchenViaAgentOrQueue(
   }
 ): Promise<'local' | 'queued'> {
   const mode = await printViaAgentOrQueue(opts);
+  const printerRef =
+    opts.printers?.find(
+      (p) =>
+        p.name === opts.printerName ||
+        p.name === opts.configuredName ||
+        p.matchHint === opts.configuredName
+    ) || opts.printers?.find((p) => p.name === opts.printerName) || opts.configuredName || opts.printerName;
+  const isBt = looksLikeBluetoothOrComPrinter(printerRef);
+  if (isBt) {
+    // Let the ticket body finish printing before the cut-only follow-up job.
+    await new Promise((resolve) => setTimeout(resolve, 450));
+  }
   try {
     await printViaAgentOrQueue({
       printerName: opts.printerName,
@@ -238,8 +251,7 @@ export async function printKitchenViaAgentOrQueue(
   } catch {
     /* ticket may already have cut; follow-up is best-effort */
   }
-  const live = opts.printers?.find((p) => p.name === opts.printerName);
-  await settleAfterBluetoothKitchenPrint(live || opts.printerName || opts.configuredName || '');
+  await settleAfterBluetoothKitchenPrint(printerRef);
   return mode;
 }
 
@@ -382,6 +394,10 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           });
           if (relayKind === 'kitchen') {
             try {
+              const livePrinter = (p.printerName || '').trim();
+              if (looksLikeBluetoothOrComPrinter(livePrinter)) {
+                await new Promise((r) => setTimeout(r, 450));
+              }
               await printViaAgent({
                 printerName: p.printerName,
                 dataBase64: uint8ToBase64(escposFeedAndCut()),
