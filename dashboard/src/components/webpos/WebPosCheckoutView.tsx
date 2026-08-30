@@ -866,7 +866,7 @@ export default function WebPosCheckoutView({
             onClick={() => dismissPaymentFocus()}
             role="presentation"
           >
-            <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-1 lg:gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="grid grid-cols-3 gap-1.5 md:grid-cols-2 xl:grid-cols-1 xl:gap-2" onClick={(e) => e.stopPropagation()}>
               {payButtons
                 .filter((b) => b.show)
                 .map((b) => {
@@ -877,13 +877,13 @@ export default function WebPosCheckoutView({
                       type="button"
                       disabled={busy}
                       onClick={() => applyMethod(b.id)}
-                      className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center text-[10px] font-semibold leading-tight disabled:opacity-40 sm:min-h-[3.5rem] sm:text-[11px] lg:min-h-0 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3.5 lg:text-left lg:text-sm ${
+                      className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center text-[10px] font-semibold leading-tight disabled:opacity-40 sm:min-h-[3.5rem] sm:text-[11px] xl:min-h-0 xl:flex-row xl:justify-start xl:gap-3 xl:px-4 xl:py-3.5 xl:text-left xl:text-sm ${
                         selected
                           ? 'border-[var(--webpos-accent-ring)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
                           : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
                       }`}
                     >
-                      <span className="shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px] lg:[&_svg]:h-[22px] lg:[&_svg]:w-[22px]">
+                      <span className="shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px] xl:[&_svg]:h-[22px] xl:[&_svg]:w-[22px]">
                         {b.icon}
                       </span>
                       <span className="max-w-full truncate px-0.5">{b.label}</span>
