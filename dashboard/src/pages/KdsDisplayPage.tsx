@@ -495,6 +495,7 @@ export default function KdsDisplayPage() {
         gridColumnsOverrideRef.current = localCols;
         setGridColumns(localCols ?? serverCols);
       }
+
       initialLoad.current = false;
       setOverdueMinutes(Math.min(120, Math.max(5, Number(st.overdueMinutes) || 20)));
       setFullTickets(activeFull);
@@ -570,6 +571,12 @@ export default function KdsDisplayPage() {
     try {
       await publicApi.patch(`/kds/${encodeURIComponent(token)}/items/${itemId}/ready`);
       await load();
+      const ticket = tickets.find((tk) => tk.id === ticketId);
+      const remaining =
+        ticket?.items.filter((i) => i.id !== itemId && i.status !== 'ready').length ?? 0;
+      if (remaining === 0) {
+        setTab('completed');
+      }
     } catch (e: any) {
       setError(e.response?.data?.error || t('kdsActionFailed'));
       await load();
@@ -609,6 +616,7 @@ export default function KdsDisplayPage() {
     }
     try {
       await publicApi.patch(`/kds/${encodeURIComponent(token)}/tickets/${ticketId}/complete`);
+      setTab('completed');
       await load();
     } catch (e: any) {
       setError(e.response?.data?.error || t('kdsActionFailed'));
@@ -652,6 +660,97 @@ export default function KdsDisplayPage() {
       : shellTheme === 'light'
         ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
         : 'bg-black/15 text-inherit hover:bg-black/25';
+
+  const renderTicket = (ticket: KdsTicket, mode: 'pending' | 'completed') => {
+    const ready = ticket.items.filter((i) => i.status === 'ready').length;
+    const total = ticket.items.length;
+    const label = [
+      ticket.orderNumber || ticket.ticketKey.split('@')[0],
+      ticket.tableLabel || ticket.tabNumber,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return (
+      <article
+        key={ticket.id}
+        className="kds-ticket-column flex h-full w-[min(88vw,340px)] shrink-0 snap-start flex-col rounded-2xl border border-stone-800 bg-stone-900 shadow-lg"
+      >
+        <div className="border-b border-stone-800 px-4 py-3">
+          <p className="text-lg font-bold leading-tight">{label || t('kdsTicket')}</p>
+          <p className="text-xs text-stone-400">
+            {ticket.channel || '—'} · {ready}/{total} {t('kdsReadyShort')}
+          </p>
+        </div>
+        <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+          {ticket.items.map((item) => {
+            const isReady = item.status === 'ready';
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  disabled={busyId === item.id || isReady || mode === 'completed'}
+                  onClick={() => void markReady(item.id, ticket.id)}
+                  className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                    isReady
+                      ? 'border-amber-600/40 bg-amber-950/30'
+                      : 'border-stone-700 bg-stone-800 hover:border-teal-500 hover:bg-stone-750 active:scale-[0.99]'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      isReady ? 'bg-amber-700/50 text-amber-100' : 'bg-stone-700'
+                    }`}
+                  >
+                    {item.quantity}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block font-semibold leading-snug ${
+                        isReady ? 'text-stone-400 line-through decoration-stone-600' : ''
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+                    {item.lineNote ? (
+                      <span className="mt-0.5 block text-xs text-amber-200/90">{item.lineNote}</span>
+                    ) : null}
+                  </span>
+                  {isReady ? (
+                    <ChefHat
+                      className="mt-0.5 h-6 w-6 shrink-0 text-amber-400"
+                      aria-label={t('kdsItemReady')}
+                    />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="border-t border-stone-800 p-3">
+          {mode === 'pending' ? (
+            <button
+              type="button"
+              disabled={busyId === ticket.id}
+              onClick={() => void completeTicket(ticket.id)}
+              className="w-full rounded-xl bg-teal-600 py-3 text-sm font-bold hover:bg-teal-500 disabled:opacity-50"
+            >
+              {t('kdsCompleteTicket')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busyId === ticket.id}
+              onClick={() => void recallTicket(ticket.id)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-600 py-3 text-sm font-semibold hover:bg-stone-800 disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              {t('kdsRecallTicket')}
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  };
 
   return (
     <div className={`kds-shell min-h-dvh ${theme.shell}`}>

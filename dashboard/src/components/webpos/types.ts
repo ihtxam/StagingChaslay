@@ -51,6 +51,8 @@ export type CartLine = {
   kitchenPrintFailed?: boolean;
   /** Set when KDS marks line ready. */
   kitchenReadyAt?: number;
+  /** KDS batch ticket key (orderNo@timestamp) for this kitchen send. */
+  kdsBatchKey?: string;
   /** Per-line kitchen note from modifier modal */
   lineNote?: string;
   /** Gift card sell/reload  - credited after successful payment */

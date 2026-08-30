@@ -483,13 +483,14 @@ export class KdsService {
     if (!item?.ticket || item.ticket.merchantId !== station.merchantId) {
       throw new Error("Item not found");
     }
+    const now = new Date();
     await db
       .update(schema.kdsTicketItems)
-      .set({ status: "ready", readyAt: new Date() })
+      .set({ status: "ready", readyAt: now })
       .where(eq(schema.kdsTicketItems.id, itemId));
     await db
       .update(schema.kdsTickets)
-      .set({ updatedAt: new Date() })
+      .set({ updatedAt: now })
       .where(eq(schema.kdsTickets.id, item.ticketId));
 
     const allItems = await db.query.kdsTicketItems.findMany({
