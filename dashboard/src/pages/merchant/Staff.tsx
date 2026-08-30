@@ -594,7 +594,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
           <form
             onSubmit={(e) => void saveStaffEdit(e)}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl space-y-3"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-[var(--bg-elevated)] p-4 shadow-xl space-y-3"
           >
             <h3 className="font-semibold">
               {t('staffEditUser').replace('{name}', editingStaff.name)}
@@ -839,7 +839,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
           onClick={() => setEditingRole(null)}
         >
           <div
-            className="mx-auto w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-stone-900 p-4 shadow-xl my-4 sm:my-8"
+            className="mx-auto w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain rounded-xl bg-[var(--bg-elevated)] p-4 shadow-xl my-4 sm:my-8"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-semibold mb-3">

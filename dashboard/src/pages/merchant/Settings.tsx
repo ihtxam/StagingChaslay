@@ -4368,18 +4368,14 @@ export default function Settings() {
           {tab === 'kds' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('kdsSettingsTitle')} subtitle={t('kdsSettingsHint')} />
-              <Section icon={ChefHat} accent={settingsDash.accent} title={t('kdsSettingsTitle')} description={t('kdsSettingsHint')}>
-                <KdsSettingsPanel />
-              </Section>
+              <KdsSettingsPanel />
             </div>
           )}
 
           {tab === 'ods' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
-              <Section icon={Monitor} accent={settingsDash.accent} title={t('odsSettingsTitle')} description={t('odsSettingsHint')}>
-                <OdsSettingsPanel />
-              </Section>
+              <OdsSettingsPanel />
             </div>
           )}
 
@@ -4432,13 +4428,10 @@ export default function Settings() {
             </div>
           )}
 
-          {tab === 'users' && <Staff />}
-
-          {tab === 'delivery-map' && <DeliveryTrackingPage />}
           </div>
         </div>
       </div>
-      <p className="text-center text-xs text-stone-400">{dashboardVersionLabel}</p>
+      <p className="text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
   );
 }

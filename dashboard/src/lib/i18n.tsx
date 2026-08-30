@@ -1968,6 +1968,8 @@ const en: Dict = {
   deliveryMapGuest: 'Guest',
   deliveryMapActiveOrders: '{n} active',
   deliveryMapLoadFailed: 'Could not load delivery map',
+  deliveryMapPermissionDenied:
+    'You do not have permission to view the delivery map. Ask an owner to grant Delivery tracking access.',
   deliveryAssignDriver: 'Assign driver',
   deliveryUnassigned: 'Unassigned',
   deliveryAssignSaved: 'Driver assignment saved',
@@ -5395,6 +5397,8 @@ const fr: Dict = {
   deliveryMapGuest: 'Client',
   deliveryMapActiveOrders: '{n} active(s)',
   deliveryMapLoadFailed: 'Impossible de charger la carte',
+  deliveryMapPermissionDenied:
+    'Vous n’avez pas l’autorisation d’afficher la carte livraison. Demandez l’accès Suivi livraison à un responsable.',
   deliveryAssignDriver: 'Assigner livreur',
   deliveryUnassigned: 'Non assigné',
   deliveryAssignSaved: 'Livreur assigné',
@@ -8789,6 +8793,8 @@ const de: Dict = {
   deliveryMapGuest: 'Gast',
   deliveryMapActiveOrders: '{n} aktiv',
   deliveryMapLoadFailed: 'Lieferkarte konnte nicht geladen werden',
+  deliveryMapPermissionDenied:
+    'Keine Berechtigung für die Lieferkarte. Bitte den Inhaber um Zugriff „Lieferverfolgung“.',
   deliveryAssignDriver: 'Fahrer zuweisen',
   deliveryUnassigned: 'Nicht zugewiesen',
   deliveryAssignSaved: 'Fahrer zugewiesen',

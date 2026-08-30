@@ -150,7 +150,7 @@ export default function PrinterKitchenRoutingPicker({
       ) : null}
       <div className="grid min-h-0 gap-0 overflow-hidden rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(9rem,34%)_1fr] h-[min(28rem,55vh)] min-h-[14rem]">
         <div
-          className="min-h-0 max-h-[min(28rem,55vh)] border-b sm:border-b-0 sm:border-r border-[var(--border)] overflow-y-auto overscroll-contain bg-stone-50/80"
+          className="min-h-0 max-h-[min(28rem,55vh)] border-b sm:border-b-0 sm:border-r border-[var(--border)] overflow-y-auto overscroll-contain bg-[var(--bg-muted)]/80"
           onWheel={(e) => e.stopPropagation()}
         >
           {categories.map((cat) => {
@@ -161,7 +161,7 @@ export default function PrinterKitchenRoutingPicker({
               <div
                 key={cat.id}
                 className={`flex items-start gap-1 border-b border-[var(--border)] last:border-b-0 ${
-                  active ? 'bg-teal-50' : 'hover:bg-white'
+                  active ? 'bg-teal-50 dark:bg-teal-950/30' : 'hover:bg-[var(--bg-elevated)]'
                 }`}
               >
                 <label className="flex shrink-0 items-center px-2 py-2.5">
@@ -176,12 +176,12 @@ export default function PrinterKitchenRoutingPicker({
                 <button
                   type="button"
                   className={`min-w-0 flex-1 py-2.5 pr-2 text-left text-sm ${
-                    active ? 'font-semibold text-teal-900' : 'text-stone-800'
+                    active ? 'font-semibold text-teal-900 dark:text-teal-200' : 'text-[var(--text)]'
                   }`}
                   onClick={() => setActiveCategoryId(cat.id)}
                 >
                   <span className="block truncate">{cat.name}</span>
-                  <span className="text-[10px] font-normal text-stone-500">{count}</span>
+                  <span className="text-[10px] font-normal text-[var(--text-muted)]">{count}</span>
                 </button>
               </div>
             );
@@ -197,7 +197,7 @@ export default function PrinterKitchenRoutingPicker({
             <p className="text-xs text-[var(--muted)] m-0 p-2">{t('printerNoProductsInCategory')}</p>
           ) : (
             <>
-              <label className="mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold hover:bg-stone-50">
+              <label className="mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold hover:bg-[var(--bg-muted)]">
                 <input
                   type="checkbox"
                   checked={allInActiveSelected}
@@ -227,8 +227,8 @@ export default function PrinterKitchenRoutingPicker({
                   return (
                     <li key={product.id}>
                       <label
-                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-stone-50 ${
-                          viaCategory ? 'text-stone-600' : ''
+                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-[var(--bg-muted)] ${
+                          viaCategory ? 'text-[var(--text-muted)]' : ''
                         }`}
                       >
                         <input
@@ -243,7 +243,7 @@ export default function PrinterKitchenRoutingPicker({
                         />
                         <span className="truncate">{product.name}</span>
                         {viaCategory ? (
-                          <span className="ml-auto shrink-0 text-[10px] text-stone-400">
+                          <span className="ml-auto shrink-0 text-[10px] text-[var(--text-muted)]">
                             {t('printerViaCategory')}
                           </span>
                         ) : null}

@@ -31,6 +31,10 @@ type Category = {
 
 const CHANNELS = ['takeaway', 'dine_in', 'delivery'] as const;
 
+const PANEL_CARD = 'rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]';
+const CHIP_IDLE = 'bg-[var(--bg-muted)] text-[var(--text)] hover:opacity-90';
+const ICON_BTN = 'rounded-lg border border-[var(--border)] p-2 hover:bg-[var(--bg-muted)]';
+
 function kdsPublicUrl(station: Pick<KdsStation, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
@@ -218,7 +222,7 @@ export default function KdsSettingsPanel() {
     onChange: (theme: KdsShellTheme) => void;
   }) => (
     <div>
-      <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsThemeLabel')}</p>
+      <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsThemeLabel')}</p>
       <div className="flex flex-wrap gap-2">
         {KDS_THEME_OPTIONS.map((th) => {
           const shell = KDS_SHELL_THEMES[th];
@@ -231,26 +235,23 @@ export default function KdsSettingsPanel() {
               onClick={() => onChange(th)}
               className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                 selected
-                  ? 'border-teal-600 ring-2 ring-teal-200'
-                  : 'border-stone-200 hover:border-stone-300'
+                  ? 'border-teal-600 ring-2 ring-teal-200 dark:ring-teal-800'
+                  : 'border-[var(--border)] hover:border-[var(--text-muted)]'
               }`}
             >
-              <span
-                className={`mb-1 block h-6 w-16 rounded ${shell.shell}`}
-                aria-hidden
-              />
+              <span className={`mb-1 block h-6 w-16 rounded ${shell.shell}`} aria-hidden />
               {themeLabel(th)}
             </button>
           );
         })}
       </div>
-      <p className="mt-1 text-xs text-stone-500">{t('kdsThemeHint')}</p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsThemeHint')}</p>
     </div>
   );
 
   if (licenseError) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
         {t('kdsAddonRequired')}
       </div>
     );
@@ -258,12 +259,7 @@ export default function KdsSettingsPanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">{t('kdsSettingsTitle')}</h3>
-        <p className="mt-1 text-sm text-stone-500">{t('kdsSettingsHint')}</p>
-      </div>
-
-      <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+      <div className={`${PANEL_CARD} p-4 space-y-3`}>
         <p className="text-sm font-medium">{t('kdsAddStation')}</p>
         <input
           className="input w-full"
@@ -272,7 +268,7 @@ export default function KdsSettingsPanel() {
           placeholder={t('kdsStationNamePlaceholder')}
         />
         <div>
-          <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsOrderTypesLabel')}</p>
+          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOrderTypesLabel')}</p>
           <div className="flex flex-wrap gap-2">
             {CHANNELS.map((ch) => (
               <button
@@ -280,20 +276,18 @@ export default function KdsSettingsPanel() {
                 type="button"
                 onClick={() => toggleChannel(ch)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  orderTypes.includes(ch)
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                  orderTypes.includes(ch) ? 'bg-teal-600 text-white' : CHIP_IDLE
                 }`}
               >
                 {ch}
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-stone-500">{t('kdsChannelFilterHint')}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsChannelFilterHint')}</p>
         </div>
         {categories.length > 0 ? (
           <div>
-            <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsCategoriesLabel')}</p>
+            <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsCategoriesLabel')}</p>
             <div className="flex flex-wrap gap-2">
               {categories.map((cat) => (
                 <button
@@ -301,16 +295,14 @@ export default function KdsSettingsPanel() {
                   type="button"
                   onClick={() => toggleCategory(cat.id)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    categoryIds.includes(cat.id)
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                    categoryIds.includes(cat.id) ? 'bg-violet-600 text-white' : CHIP_IDLE
                   }`}
                 >
                   {cat.name}
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-xs text-stone-500">{t('kdsCategoryFilterHint')}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsCategoryFilterHint')}</p>
           </div>
         ) : null}
         <ThemePicker value={theme} onChange={setTheme} />
@@ -319,7 +311,7 @@ export default function KdsSettingsPanel() {
           <KdsGridColumnsPicker value={gridColumns} onChange={setGridColumns} />
         ) : null}
         <div>
-          <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
+          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOverdueMinutesLabel')}</p>
           <input
             type="number"
             min={5}
@@ -328,7 +320,7 @@ export default function KdsSettingsPanel() {
             value={overdueMinutes}
             onChange={(e) => setOverdueMinutes(Math.min(120, Math.max(5, Number(e.target.value) || 20)))}
           />
-          <p className="mt-1 text-xs text-stone-500">{t('kdsOverdueMinutesHint')}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsOverdueMinutesHint')}</p>
         </div>
         <button
           type="button"
@@ -342,9 +334,9 @@ export default function KdsSettingsPanel() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-stone-500">{t('loading')}</p>
+        <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
       ) : !stations.length ? (
-        <p className="text-sm text-stone-500">{t('kdsNoStations')}</p>
+        <p className="text-sm text-[var(--text-muted)]">{t('kdsNoStations')}</p>
       ) : (
         <ul className="space-y-3">
           {stations.map((s) => {
@@ -352,15 +344,17 @@ export default function KdsSettingsPanel() {
             const code = s.shortCode || s.token.slice(0, 8);
             const saving = savingStationId === s.id;
             return (
-              <li key={s.id} className="rounded-xl border border-stone-200 bg-white p-4">
+              <li key={s.id} className={`${PANEL_CARD} p-4`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{s.name}</p>
-                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700">{code}</p>
-                    <p className="mt-1 break-all font-mono text-xs text-stone-500">{url}</p>
+                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700 dark:text-teal-400">
+                      {code}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs text-[var(--text-muted)]">{url}</p>
                     <div className="mt-3 space-y-2">
                       <div>
-                        <p className="text-xs font-medium text-stone-600">{t('kdsOrderTypesLabel')}</p>
+                        <p className="text-xs font-medium text-[var(--text-muted)]">{t('kdsOrderTypesLabel')}</p>
                         <div className="mt-1 flex flex-wrap gap-1.5">
                           {CHANNELS.map((ch) => (
                             <button
@@ -369,9 +363,7 @@ export default function KdsSettingsPanel() {
                               disabled={saving}
                               onClick={() => toggleStationChannel(s, ch)}
                               className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                                s.orderTypes.includes(ch)
-                                  ? 'bg-teal-600 text-white'
-                                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                                s.orderTypes.includes(ch) ? 'bg-teal-600 text-white' : CHIP_IDLE
                               }`}
                             >
                               {ch}
@@ -381,7 +373,7 @@ export default function KdsSettingsPanel() {
                       </div>
                       {categories.length > 0 ? (
                         <div>
-                          <p className="text-xs font-medium text-stone-600">{t('kdsCategoriesLabel')}</p>
+                          <p className="text-xs font-medium text-[var(--text-muted)]">{t('kdsCategoriesLabel')}</p>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {categories.map((cat) => (
                               <button
@@ -390,9 +382,7 @@ export default function KdsSettingsPanel() {
                                 disabled={saving}
                                 onClick={() => toggleStationCategory(s, cat.id)}
                                 className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                                  s.categoryIds.includes(cat.id)
-                                    ? 'bg-violet-600 text-white'
-                                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                                  s.categoryIds.includes(cat.id) ? 'bg-violet-600 text-white' : CHIP_IDLE
                                 }`}
                               >
                                 {cat.name}
@@ -400,9 +390,9 @@ export default function KdsSettingsPanel() {
                             ))}
                           </div>
                           {!s.categoryIds.length ? (
-                            <p className="mt-1 text-xs text-stone-500">{t('kdsCategoryFilterHint')}</p>
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsCategoryFilterHint')}</p>
                           ) : (
-                            <p className="mt-1 text-xs text-stone-500">
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">
                               {s.categoryIds.map(categoryName).join(', ')}
                             </p>
                           )}
@@ -434,7 +424,7 @@ export default function KdsSettingsPanel() {
                         />
                       ) : null}
                       <div>
-                        <p className="text-xs font-medium text-stone-600">{t('kdsOverdueMinutesLabel')}</p>
+                        <p className="text-xs font-medium text-[var(--text-muted)]">{t('kdsOverdueMinutesLabel')}</p>
                         <input
                           type="number"
                           min={5}
@@ -448,14 +438,14 @@ export default function KdsSettingsPanel() {
                             })
                           }
                         />
-                        <p className="mt-1 text-xs text-stone-500">{t('kdsOverdueMinutesHint')}</p>
+                        <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsOverdueMinutesHint')}</p>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
+                      className={ICON_BTN}
                       title={t('kdsCopyUrl')}
                       onClick={() => void copyUrl(s)}
                     >
@@ -463,7 +453,7 @@ export default function KdsSettingsPanel() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
+                      className={ICON_BTN}
                       title={t('kdsRotateToken')}
                       onClick={() => void rotateToken(s.id)}
                     >
@@ -471,7 +461,7 @@ export default function KdsSettingsPanel() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-red-200 p-2 text-red-700 hover:bg-red-50"
+                      className="rounded-lg border border-red-200 p-2 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
                       title={t('delete')}
                       onClick={() => void removeStation(s.id)}
                     >

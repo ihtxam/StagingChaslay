@@ -155,6 +155,12 @@ button {
     }
   }
 
+  .delivery-map.leaflet-container,
+  .delivery-map .leaflet-container {
+    background: var(--bg-muted);
+    font-family: inherit;
+  }
+
   .panel-main {
     flex: 1 1 0%;
     -webkit-overflow-scrolling: touch;

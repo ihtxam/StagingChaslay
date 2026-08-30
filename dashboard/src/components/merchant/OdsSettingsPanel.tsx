@@ -16,6 +16,10 @@ type OdsDisplay = {
 
 const THEMES = ['light', 'teal', 'dark'] as const;
 
+const PANEL_CARD = 'rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]';
+const CHIP_IDLE = 'bg-[var(--bg-muted)] text-[var(--text)] hover:opacity-90';
+const ICON_BTN = 'rounded-lg border border-[var(--border)] p-2 hover:bg-[var(--bg-muted)]';
+
 function odsPublicUrl(display: Pick<OdsDisplay, 'shortCode' | 'token'>): string {
   const origin =
     (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
@@ -133,7 +137,7 @@ export default function OdsSettingsPanel() {
 
   if (licenseError) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
         {t('odsAddonRequired')}
       </div>
     );
@@ -141,26 +145,21 @@ export default function OdsSettingsPanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">{t('odsSettingsTitle')}</h3>
-        <p className="mt-1 text-sm text-stone-500">{t('odsSettingsHint')}</p>
-      </div>
-
-      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
-        <p className="text-sm font-medium text-amber-950">{t('odsClearBoard')}</p>
-        <p className="mt-1 text-xs text-amber-900/80">{t('odsClearBoardHint')}</p>
+      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+        <p className="text-sm font-medium text-amber-950 dark:text-amber-100">{t('odsClearBoard')}</p>
+        <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-200/80">{t('odsClearBoardHint')}</p>
         <button
           type="button"
           disabled={busy}
           onClick={() => void clearBoard()}
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-[var(--bg-elevated)] px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-950/50"
         >
           <Eraser className="h-4 w-4" aria-hidden />
           {t('odsClearBoard')}
         </button>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+      <div className={`${PANEL_CARD} p-4 space-y-3`}>
         <p className="text-sm font-medium">{t('odsAddDisplay')}</p>
         <input
           className="input w-full"
@@ -175,14 +174,14 @@ export default function OdsSettingsPanel() {
               type="button"
               onClick={() => setTheme(th)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${
-                theme === th ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                theme === th ? 'bg-teal-600 text-white' : CHIP_IDLE
               }`}
             >
               {t(`odsTheme_${th}`)}
             </button>
           ))}
         </div>
-        <p className="text-xs text-stone-500">{t('odsThemeHint')}</p>
+        <p className="text-xs text-[var(--text-muted)]">{t('odsThemeHint')}</p>
         <button
           type="button"
           disabled={busy || !name.trim()}
@@ -195,21 +194,23 @@ export default function OdsSettingsPanel() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-stone-500">{t('loading')}</p>
+        <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
       ) : !displays.length ? (
-        <p className="text-sm text-stone-500">{t('odsNoDisplays')}</p>
+        <p className="text-sm text-[var(--text-muted)]">{t('odsNoDisplays')}</p>
       ) : (
         <ul className="space-y-3">
           {displays.map((d) => {
             const url = odsPublicUrl(d);
             const code = d.shortCode || d.token.slice(0, 8);
             return (
-              <li key={d.id} className="rounded-xl border border-stone-200 bg-white p-4">
+              <li key={d.id} className={`${PANEL_CARD} p-4`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{d.name}</p>
-                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700">{code}</p>
-                    <p className="mt-1 break-all font-mono text-xs text-stone-500">{url}</p>
+                    <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700 dark:text-teal-400">
+                      {code}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs text-[var(--text-muted)]">{url}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {THEMES.map((th) => (
                         <button
@@ -217,9 +218,7 @@ export default function OdsSettingsPanel() {
                           type="button"
                           onClick={() => void updateTheme(d.id, th)}
                           className={`rounded-lg px-2.5 py-1 text-xs font-semibold capitalize ${
-                            d.theme === th
-                              ? 'bg-teal-600 text-white'
-                              : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                            d.theme === th ? 'bg-teal-600 text-white' : CHIP_IDLE
                           }`}
                         >
                           {t(`odsTheme_${th}`)}
@@ -230,7 +229,7 @@ export default function OdsSettingsPanel() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
+                      className={ICON_BTN}
                       title={t('odsCopyUrl')}
                       onClick={() => void copyUrl(d)}
                     >
@@ -238,7 +237,7 @@ export default function OdsSettingsPanel() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-stone-300 p-2 hover:bg-stone-50"
+                      className={ICON_BTN}
                       title={t('odsRotateToken')}
                       onClick={() => void rotateToken(d.id)}
                     >
@@ -246,7 +245,7 @@ export default function OdsSettingsPanel() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-red-200 p-2 text-red-700 hover:bg-red-50"
+                      className="rounded-lg border border-red-200 p-2 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
                       title={t('delete')}
                       onClick={() => void removeDisplay(d.id)}
                     >

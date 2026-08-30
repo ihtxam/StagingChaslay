@@ -44,13 +44,13 @@ export default function KdsLayoutModePicker({ value, disabled, compact, onChange
     : 'bg-teal-600 text-white';
   const idleClass = compact
     ? 'bg-black/20 text-inherit hover:bg-black/30'
-    : 'border border-stone-200 text-stone-700 hover:border-stone-300';
+    : 'border border-[var(--border)] text-[var(--text)] hover:border-[var(--text-muted)]';
 
   return (
     <div className={compact ? 'flex items-center gap-2' : undefined}>
       {!compact ? (
         <>
-          <p className="mb-2 text-xs font-medium text-stone-600">{t('kdsLayoutLabel')}</p>
+          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsLayoutLabel')}</p>
         </>
       ) : null}
       <div className="flex flex-wrap gap-1.5">
@@ -69,7 +69,7 @@ export default function KdsLayoutModePicker({ value, disabled, compact, onChange
           </button>
         ))}
       </div>
-      {!compact ? <p className="mt-1 text-xs text-stone-500">{t('kdsLayoutHint')}</p> : null}
+      {!compact ? <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsLayoutHint')}</p> : null}
     </div>
   );
 }

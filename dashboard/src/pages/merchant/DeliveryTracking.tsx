@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import toast from 'react-hot-toast';
@@ -39,6 +39,7 @@ type DeliveryOrder = {
 type StaffOption = { id: string; name: string };
 
 const DEFAULT_CENTER: [number, number] = [47.3769, 8.5417];
+const PANEL_CARD = 'rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-sm';
 
 const driverIcon = L.divIcon({
   className: '',
@@ -46,6 +47,23 @@ const driverIcon = L.divIcon({
   iconSize: [28, 28],
   iconAnchor: [14, 14],
 });
+
+function MapResizeFix() {
+  const map = useMap();
+  useEffect(() => {
+    const timers = [100, 400, 900].map((ms) =>
+      window.setTimeout(() => {
+        try {
+          map.invalidateSize();
+        } catch {
+          /* ignore */
+        }
+      }, ms)
+    );
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, [map]);
+  return null;
+}
 
 export default function DeliveryTrackingPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
@@ -59,6 +77,7 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
   const [hourlyRate, setHourlyRate] = useState('0');
   const [perOrderFee, setPerOrderFee] = useState('0');
   const [paySaving, setPaySaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +88,7 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
       setDrivers(liveRes.data.drivers || []);
       setOrders(liveRes.data.orders || []);
       setStaff(liveRes.data.deliveryStaff || []);
+      setLoadError(null);
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       const lat = merch?.latitude != null ? Number(merch.latitude) : null;
       const lng = merch?.longitude != null ? Number(merch.longitude) : null;
@@ -83,8 +103,13 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
       setHourlyRate(String(merch?.deliveryDriverHourlyRate ?? '0'));
       setPerOrderFee(String(merch?.deliveryPerOrderFee ?? '0'));
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('deliveryMapLoadFailed'));
+      const err = e as { response?: { status?: number; data?: { error?: string } } };
+      const message =
+        err.response?.status === 403
+          ? t('deliveryMapPermissionDenied')
+          : err.response?.data?.error || t('deliveryMapLoadFailed');
+      setLoadError(message);
+      toast.error(message);
     }
   }, [t]);
 
@@ -137,14 +162,21 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
     <div className={embedded ? 'space-y-4' : 'mx-auto max-w-6xl space-y-4 p-4'}>
       {!embedded ? (
         <div>
-          <h1 className="text-xl font-bold text-stone-900">{t('deliveryMapTitle')}</h1>
-          <p className="mt-1 text-sm text-stone-600">{t('deliveryMapHint')}</p>
+          <h1 className="text-xl font-bold text-[var(--text)]">{t('deliveryMapTitle')}</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{t('deliveryMapHint')}</p>
+        </div>
+      ) : null}
+
+      {loadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {loadError}
         </div>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
-          <MapContainer center={mapCenter} zoom={13} className="h-[min(60vh,480px)] w-full" scrollWheelZoom>
+        <div className={`overflow-hidden ${PANEL_CARD}`}>
+          <MapContainer center={mapCenter} zoom={13} className="delivery-map h-[min(60vh,480px)] w-full" scrollWheelZoom>
+            <MapResizeFix />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -181,18 +213,18 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
         </div>
 
         <div className="space-y-3">
-          <section className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-stone-500">
+          <section className={`${PANEL_CARD} p-3`}>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
               {t('deliveryMapDrivers')} ({drivers.length})
             </h2>
             <ul className="mt-2 max-h-40 space-y-2 overflow-auto text-sm">
               {drivers.length === 0 ? (
-                <li className="text-stone-500">{t('deliveryMapNoDrivers')}</li>
+                <li className="text-[var(--text-muted)]">{t('deliveryMapNoDrivers')}</li>
               ) : (
                 drivers.map((d) => (
-                  <li key={d.staffId} className="rounded-lg bg-stone-50 px-2 py-1.5">
-                    <span className="font-semibold text-stone-900">{d.staffName}</span>
-                    <span className="ml-2 text-xs text-stone-500">
+                  <li key={d.staffId} className="rounded-lg bg-[var(--bg-muted)] px-2 py-1.5">
+                    <span className="font-semibold text-[var(--text)]">{d.staffName}</span>
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">
                       {new Date(d.recordedAt).toLocaleTimeString()}
                     </span>
                   </li>
@@ -201,20 +233,20 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
             </ul>
           </section>
 
-          <section className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-stone-500">
+          <section className={`${PANEL_CARD} p-3`}>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
               {t('deliveryMapOrders')} ({orders.length})
             </h2>
             <ul className="mt-2 max-h-[min(40vh,360px)] space-y-3 overflow-auto text-sm">
               {orders.length === 0 ? (
-                <li className="text-stone-500">{t('deliveryMapNoOrders')}</li>
+                <li className="text-[var(--text-muted)]">{t('deliveryMapNoOrders')}</li>
               ) : (
                 orders.map((o) => (
-                  <li key={o.id} className="rounded-lg border border-stone-100 p-2">
-                    <div className="font-semibold text-stone-900">#{o.orderNumber}</div>
-                    <div className="text-xs text-stone-600">{o.shippingAddress || '—'}</div>
-                    <div className="mt-1 text-[11px] uppercase text-stone-400">{o.status}</div>
-                    <label className="mt-2 block text-[11px] text-stone-500">
+                  <li key={o.id} className="rounded-lg border border-[var(--border)] p-2">
+                    <div className="font-semibold text-[var(--text)]">#{o.orderNumber}</div>
+                    <div className="text-xs text-[var(--text-muted)]">{o.shippingAddress || '—'}</div>
+                    <div className="mt-1 text-[11px] uppercase text-[var(--text-muted)]">{o.status}</div>
+                    <label className="mt-2 block text-[11px] text-[var(--text-muted)]">
                       {t('deliveryAssignDriver')}
                       <select
                         className="input mt-0.5 w-full text-xs"
@@ -238,11 +270,11 @@ export default function DeliveryTrackingPage({ embedded = false }: { embedded?: 
         </div>
       </div>
 
-      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-bold text-stone-900">{t('deliveryPaySettings')}</h2>
-        <p className="mt-1 text-xs text-stone-500">{t('deliveryMapHint')}</p>
+      <section className={`${PANEL_CARD} p-4`}>
+        <h2 className="text-sm font-bold text-[var(--text)]">{t('deliveryPaySettings')}</h2>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{t('deliveryMapHint')}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm sm:col-span-3">
+          <label className="block text-sm">
             {t('deliveryPayMode')}
             <select
               className="input mt-1 w-full max-w-xs"

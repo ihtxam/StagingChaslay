@@ -44,11 +44,11 @@ export default function KdsGridColumnsPicker({ value, disabled, compact, onChang
     : 'bg-teal-600 text-white';
   const idleClass = compact
     ? 'bg-black/20 text-inherit hover:bg-black/30'
-    : 'bg-stone-100 text-stone-700 hover:bg-stone-200';
+    : 'bg-[var(--bg-muted)] text-[var(--text)] hover:opacity-90';
 
   return (
     <div className={compact ? 'flex items-center gap-2' : undefined}>
-      <p className={compact ? 'text-xs font-semibold whitespace-nowrap' : 'mb-2 text-xs font-medium text-stone-600'}>
+      <p className={compact ? 'text-xs font-semibold whitespace-nowrap' : 'mb-2 text-xs font-medium text-[var(--text-muted)]'}>
         {t('kdsGridColumnsLabel')}
       </p>
       <div className="flex flex-wrap gap-1.5">
