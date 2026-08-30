@@ -6872,9 +6872,9 @@ const fr: Dict = {
   failedSaveCardFees: 'Impossible d’enregistrer les frais carte',
   paymentTerminals: 'Terminaux de paiement',
   paymentTerminalsHint:
-    'Enregistrez les terminaux Adyen avec l’ID seulement. Compte marchand et clé API viennent des identifiants ci-dessus.',
+    'Enregistrez les terminaux Swisspayout avec l’ID seulement. Compte marchand et clé API viennent des identifiants ci-dessus.',
   terminalId: 'ID terminal',
-  terminalIdHint: 'ID / numéro de série Adyen (ex. S1F2-…)',
+  terminalIdHint: 'ID / numéro de série Swisspayout (ex. S1F2-…)',
   terminalIdRequired: 'L’ID terminal est requis',
   terminalName: 'Nom affiché',
   terminalNameHint: 'Libellé optionnel (par défaut = ID terminal)',
@@ -10486,9 +10486,9 @@ const de: Dict = {
   failedSaveCardFees: 'Kartengebühren konnten nicht gespeichert werden',
   paymentTerminals: 'Zahlungsterminals',
   paymentTerminalsHint:
-    'Adyen-Terminals nur mit Terminal-ID registrieren. Händlerkonto und API-Schlüssel kommen von oben.',
+    'Swisspayout-Terminals nur mit Terminal-ID registrieren. Händlerkonto und API-Schlüssel kommen von oben.',
   terminalId: 'Terminal-ID',
-  terminalIdHint: 'Adyen Terminal-ID / Seriennummer (z. B. S1F2-…)',
+  terminalIdHint: 'Swisspayout Terminal-ID / Seriennummer (z. B. S1F2-…)',
   terminalIdRequired: 'Terminal-ID ist erforderlich',
   terminalName: 'Anzeigename',
   terminalNameHint: 'Optionale Bezeichnung (Standard = Terminal-ID)',

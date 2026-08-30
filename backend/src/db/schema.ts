@@ -834,7 +834,7 @@ export const subscriptionAddonPayments = pgTable(
   })
 );
 
-/** Platform-wide key/value settings (e.g. platform Adyen credentials) */
+/** Platform-wide key/value settings (e.g. platform Swisspayout credentials) */
 export const platformSettings = pgTable("platform_settings", {
   key: varchar("key", { length: 100 }).primaryKey(),
   value: text("value"),
@@ -2312,10 +2312,10 @@ export const paymentTerminals = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
-    terminalId: varchar("terminal_id", { length: 255 }).notNull().unique(), // Adyen terminal ID
+    terminalId: varchar("terminal_id", { length: 255 }).notNull().unique(), // Swisspayout / Adyen terminal ID
     terminalName: varchar("terminal_name", { length: 255 }).notNull(),
     serialNumber: varchar("serial_number", { length: 255 }),
-    // Optional per-terminal Adyen overrides (falls back to merchant credentials)
+    // Optional per-terminal Swisspayout overrides (falls back to merchant credentials)
     adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
     adyenApiKey: text("adyen_api_key"),
     adyenClientId: varchar("adyen_client_id", { length: 255 }),

@@ -148,9 +148,9 @@ export default function Settings() {
       });
       setAdyen(res.data.adyen);
       setAdyenForm((f) => ({ ...f, apiKey: '', hmacKey: '' }));
-      toast.success('Platform Adyen settings saved');
+      toast.success('Platform Swisspayout settings saved');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save Adyen settings');
+      toast.error(err.response?.data?.error || 'Failed to save Swisspayout settings');
     } finally {
       setSavingAdyen(false);
     }
@@ -268,7 +268,7 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h2 className="text-xl font-bold">Platform Adyen (subscription payments)</h2>
+        <h2 className="text-xl font-bold">Platform Swisspayout (subscription payments)</h2>
         <p className="text-gray-600 mt-1 mb-4">
           When merchants buy a subscription, payments settle to <strong>your</strong> Adyen account - not
           the merchant&apos;s shop Adyen credentials.
@@ -355,7 +355,7 @@ export default function Settings() {
               Webhook URL: <code>/api/webhooks/adyen/subscription</code>
             </p>
             <button type="submit" className="btn btn-primary" disabled={savingAdyen}>
-              {savingAdyen ? 'Saving…' : 'Save Adyen settings'}
+              {savingAdyen ? 'Saving…' : 'Save Swisspayout settings'}
             </button>
           </div>
         </form>
