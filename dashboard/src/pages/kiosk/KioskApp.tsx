@@ -21,6 +21,7 @@ import ShopProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
 } from '@/components/shop/ShopProductModifiersModal';
+import { acquireCameraStream, describeCameraAccessError, isCameraAvailable } from '@/lib/camera-stream';
 import { startQrCameraScan } from '@/lib/qr-camera-scan';
 import {
   buildKioskProductScanIndex,
@@ -84,7 +85,9 @@ export default function KioskApp() {
   const [badgeNumber, setBadgeNumber] = useState('');
   const [membership, setMembership] = useState<{ id: string; holderName?: string } | null>(null);
   const [scanningMembership, setScanningMembership] = useState(false);
+  const [membershipCameraError, setMembershipCameraError] = useState<string | null>(null);
   const [scanningBarcode, setScanningBarcode] = useState(false);
+  const [barcodeCameraError, setBarcodeCameraError] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [cart, setCart] = useState<KioskCartLine[]>([]);
   const [modifierProduct, setModifierProduct] = useState<ShopProductForModifiers | null>(null);
@@ -97,8 +100,14 @@ export default function KioskApp() {
   const [fulfillmentChannel, setFulfillmentChannel] = useState<KioskFulfillmentChannel>('dine_in');
   const [lastPrintCtx, setLastPrintCtx] = useState<KioskPrintContext | null>(null);
   const [reprinting, setReprinting] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const barcodeVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const membershipStreamRef = useRef<MediaStream | null>(null);
+  const membershipPendingStreamRef = useRef<MediaStream | null>(null);
+  const membershipScanRef = useRef<{ stop: () => void } | null>(null);
+  const barcodeVideoRef = useRef<HTMLVideoElement | null>(null);
+  const barcodeStreamRef = useRef<MediaStream | null>(null);
+  const barcodePendingStreamRef = useRef<MediaStream | null>(null);
+  const barcodeScanRef = useRef<{ stop: () => void } | null>(null);
   const idleTimer = useRef<number | null>(null);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
@@ -312,69 +321,175 @@ export default function KioskApp() {
     [productScanIndex, addProduct]
   );
 
-  useEffect(() => {
-    if (!scanningMembership || !videoRef.current) return;
-    let stream: MediaStream | null = null;
-    let scanHandle: { stop: () => void } | null = null;
-    void (async () => {
+  const stopMembershipCamera = useCallback(() => {
+    membershipScanRef.current?.stop();
+    membershipScanRef.current = null;
+    if (membershipStreamRef.current) {
+      for (const track of membershipStreamRef.current.getTracks()) track.stop();
+      membershipStreamRef.current = null;
+    }
+    membershipPendingStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
+
+  const stopBarcodeCamera = useCallback(() => {
+    barcodeScanRef.current?.stop();
+    barcodeScanRef.current = null;
+    if (barcodeStreamRef.current) {
+      for (const track of barcodeStreamRef.current.getTracks()) track.stop();
+      barcodeStreamRef.current = null;
+    }
+    barcodePendingStreamRef.current = null;
+    if (barcodeVideoRef.current) barcodeVideoRef.current.srcObject = null;
+  }, []);
+
+  const attachMembershipStream = useCallback(
+    async (video: HTMLVideoElement, stream: MediaStream) => {
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false,
-        });
-        const video = videoRef.current!;
-        video.srcObject = stream;
         await video.play();
-        scanHandle = startQrCameraScan(
-          video,
-          (raw) => {
-            void applyMembershipCode(raw);
-            return true;
-          },
-          KIOSK_MEMBERSHIP_SCAN_FORMATS
-        );
       } catch {
-        toast.error('Camera access required for membership scan');
-        setScanningMembership(false);
+        /* iOS may reject play() until the element is visible */
       }
-    })();
-    return () => {
-      scanHandle?.stop();
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [scanningMembership, applyMembershipCode]);
+      membershipScanRef.current?.stop();
+      membershipScanRef.current = startQrCameraScan(
+        video,
+        (raw) => {
+          void applyMembershipCode(raw);
+          return true;
+        },
+        KIOSK_MEMBERSHIP_SCAN_FORMATS
+      );
+    },
+    [applyMembershipCode]
+  );
+
+  const attachBarcodeStream = useCallback(
+    async (video: HTMLVideoElement, stream: MediaStream) => {
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      try {
+        await video.play();
+      } catch {
+        /* iOS may reject play() until the element is visible */
+      }
+      barcodeScanRef.current?.stop();
+      barcodeScanRef.current = startQrCameraScan(
+        video,
+        (raw) => {
+          handleProductScan(raw);
+          return true;
+        },
+        KIOSK_PRODUCT_SCAN_FORMATS
+      );
+    },
+    [handleProductScan]
+  );
+
+  const membershipVideoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (!node) return;
+      const stream = membershipPendingStreamRef.current || membershipStreamRef.current;
+      if (stream && node.srcObject !== stream) {
+        void attachMembershipStream(node, stream);
+      }
+    },
+    [attachMembershipStream]
+  );
+
+  const barcodeVideoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      barcodeVideoRef.current = node;
+      if (!node) return;
+      const stream = barcodePendingStreamRef.current || barcodeStreamRef.current;
+      if (stream && node.srcObject !== stream) {
+        void attachBarcodeStream(node, stream);
+      }
+    },
+    [attachBarcodeStream]
+  );
 
   useEffect(() => {
-    if (!scanningBarcode || !barcodeVideoRef.current) return;
-    let stream: MediaStream | null = null;
-    let scanHandle: { stop: () => void } | null = null;
+    if (!scanningMembership) {
+      stopMembershipCamera();
+      setMembershipCameraError(null);
+      return;
+    }
+
+    if (!isCameraAvailable()) {
+      setMembershipCameraError('Camera not available on this device. Use a USB scanner or skip.');
+      return;
+    }
+
+    let cancelled = false;
     void (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false,
-        });
-        const video = barcodeVideoRef.current!;
-        video.srcObject = stream;
-        await video.play();
-        scanHandle = startQrCameraScan(
-          video,
-          (raw) => {
-            handleProductScan(raw);
-            return true;
-          },
-          KIOSK_PRODUCT_SCAN_FORMATS
-        );
-      } catch {
-        toast.error('Camera access required for barcode scan');
-        setScanningBarcode(false);
+        const stream = await acquireCameraStream();
+        if (cancelled) {
+          for (const track of stream.getTracks()) track.stop();
+          return;
+        }
+        membershipStreamRef.current = stream;
+        membershipPendingStreamRef.current = stream;
+        const video = videoRef.current;
+        if (video) {
+          await attachMembershipStream(video, stream);
+        }
+      } catch (err) {
+        if (!cancelled) setMembershipCameraError(describeCameraAccessError(err));
       }
     })();
+
     return () => {
-      scanHandle?.stop();
-      stream?.getTracks().forEach((t) => t.stop());
+      cancelled = true;
+      stopMembershipCamera();
     };
-  }, [scanningBarcode, handleProductScan]);
+  }, [scanningMembership, stopMembershipCamera, attachMembershipStream]);
+
+  useEffect(() => {
+    if (!scanningBarcode) {
+      stopBarcodeCamera();
+      setBarcodeCameraError(null);
+      return;
+    }
+
+    if (!isCameraAvailable()) {
+      setBarcodeCameraError('Camera not available on this device. Use a USB scanner instead.');
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stream = await acquireCameraStream();
+        if (cancelled) {
+          for (const track of stream.getTracks()) track.stop();
+          return;
+        }
+        barcodeStreamRef.current = stream;
+        barcodePendingStreamRef.current = stream;
+        const video = barcodeVideoRef.current;
+        if (video) {
+          await attachBarcodeStream(video, stream);
+        }
+      } catch (err) {
+        if (!cancelled) setBarcodeCameraError(describeCameraAccessError(err));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopBarcodeCamera();
+    };
+  }, [scanningBarcode, stopBarcodeCamera, attachBarcodeStream]);
 
   useEffect(() => {
     if (step !== 'menu' && step !== 'membership') return;
