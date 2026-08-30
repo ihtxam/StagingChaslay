@@ -10,9 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.9.4: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Bluetooth / virtual-COM ports are paced; COM4+ serial skips FlushPrinter (it
-# often reports success with 0 bytes) and uses smaller WritePrinter chunks.
+# v1.9.5: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Bluetooth / virtual-COM ports are paced; FlushPrinter is skipped for all paced
+# writes (often reports success with 0 bytes) and WritePrinter uses smaller chunks.
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -213,10 +213,11 @@ function Write-RawChunks {
         [Array]::Copy($Data, $offset, $slice, 0, $len)
         $written = 0
         $usedFlush = $false
-        # FlushPrinter often returns true with written=0 on COM Bluetooth serial ports.
-        if ($DelayMs -gt 0 -and -not $ComSerialPort) {
+        # FlushPrinter often returns true with 0 bytes on Bluetooth serial ports.
+        # Skip for all paced writes; only fast USB paths may use FlushPrinter.
+        if ($DelayMs -eq 0 -and -not $ComSerialPort) {
             try {
-                $usedFlush = [RawPrinterHelper]::FlushPrinter($Handle, $slice, $len, [ref]$written, $DelayMs)
+                $usedFlush = [RawPrinterHelper]::FlushPrinter($Handle, $slice, $len, [ref]$written, 0)
                 if ($usedFlush -and $written -lt $len) {
                     $usedFlush = $false
                 }
@@ -226,7 +227,7 @@ function Write-RawChunks {
         }
         if (-not $usedFlush) {
             $attempts = 0
-            $maxAttempts = if ($ComSerialPort) { 8 } else { 1 }
+            $maxAttempts = if ($ComSerialPort) { 8 } elseif ($DelayMs -gt 0) { 6 } else { 1 }
             while ($attempts -lt $maxAttempts) {
                 $written = 0
                 if (-not [RawPrinterHelper]::WritePrinter($Handle, $slice, $len, [ref]$written)) {

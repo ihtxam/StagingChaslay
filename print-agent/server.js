@@ -21,7 +21,15 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.4";
+const VERSION = "1.9.5";
+
+/** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
+let printWorker = null;
+let printWorkerReady = null;
+let printWorkerReadyTimer = null;
+let printWorkerBuf = "";
+const printWorkerJobQueue = [];
+let printWorkerJobActive = false;
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -248,6 +256,184 @@ function ensurePs1OnDisk() {
     }
   }
   return path.join(dir, "win-raw-print.ps1");
+}
+
+function ensureWorkerPs1OnDisk() {
+  ensurePs1OnDisk();
+  return path.join(runtimeDir(), "win-raw-print-worker.ps1");
+}
+
+function killPrintWorker() {
+  if (printWorkerReadyTimer) {
+    clearTimeout(printWorkerReadyTimer);
+    printWorkerReadyTimer = null;
+  }
+  if (!printWorker) return;
+  try {
+    printWorker.kill();
+  } catch {
+    /* ignore */
+  }
+  printWorker = null;
+  printWorkerReady = null;
+  printWorkerBuf = "";
+  while (printWorkerJobQueue.length) {
+    const job = printWorkerJobQueue.shift();
+    try {
+      job.reject(new Error("Print worker stopped"));
+    } catch {
+      /* ignore */
+    }
+  }
+  printWorkerJobActive = false;
+}
+
+function pumpPrintWorkerJobs() {
+  if (printWorkerJobActive || !printWorkerJobQueue.length || !printWorker || !printWorker.stdin.writable) {
+    return;
+  }
+  printWorkerJobActive = true;
+  const job = printWorkerJobQueue[0];
+  const payload = JSON.stringify({
+    cmd: "print",
+    printerName: job.printerName || "",
+    dataBase64: job.dataBase64,
+  });
+  try {
+    printWorker.stdin.write(`${payload}\n`);
+  } catch (e) {
+    printWorkerJobQueue.shift();
+    printWorkerJobActive = false;
+    job.reject(e);
+    killPrintWorker();
+  }
+}
+
+function onPrintWorkerLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return;
+  let msg;
+  try {
+    msg = JSON.parse(trimmed);
+  } catch {
+    return;
+  }
+  if (msg.ready && printWorkerReady) {
+    if (printWorkerReadyTimer) {
+      clearTimeout(printWorkerReadyTimer);
+      printWorkerReadyTimer = null;
+    }
+    printWorkerReady.resolve(true);
+    printWorkerReady = null;
+    return;
+  }
+  if (!printWorkerJobQueue.length) return;
+  const job = printWorkerJobQueue.shift();
+  printWorkerJobActive = false;
+  if (msg.ok) {
+    job.resolve(msg.printer || job.printerName || "default");
+  } else {
+    job.reject(new Error(msg.error || "Print worker failed"));
+  }
+  pumpPrintWorkerJobs();
+}
+
+function ensurePrintWorker() {
+  if (!isWindows()) {
+    return Promise.reject(new Error("Print worker is Windows-only"));
+  }
+  if (printWorker && printWorker.stdin && printWorker.stdin.writable) {
+    return Promise.resolve();
+  }
+  if (printWorkerReady) return printWorkerReady.promise;
+
+  let resolveReady;
+  let rejectReady;
+  const promise = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  printWorkerReady = { promise, resolve: resolveReady, reject: rejectReady };
+
+  const scriptPath = ensureWorkerPs1OnDisk();
+  if (!fs.existsSync(scriptPath)) {
+    const err = new Error(`win-raw-print-worker.ps1 not found at ${scriptPath}`);
+    printWorkerReady = null;
+    rejectReady(err);
+    return promise;
+  }
+
+  printWorkerBuf = "";
+  const child = spawn(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+    {
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    }
+  );
+  printWorker = child;
+
+  printWorkerReadyTimer = setTimeout(() => {
+    if (printWorkerReady) {
+      printWorkerReady.reject(new Error("Print worker startup timeout"));
+      printWorkerReady = null;
+      killPrintWorker();
+    }
+  }, 15000);
+
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    printWorkerBuf += chunk;
+    let idx;
+    while ((idx = printWorkerBuf.indexOf("\n")) >= 0) {
+      const line = printWorkerBuf.slice(0, idx);
+      printWorkerBuf = printWorkerBuf.slice(idx + 1);
+      onPrintWorkerLine(line);
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    const msg = String(chunk || "").trim();
+    if (msg) console.warn("[print-agent] worker:", msg);
+  });
+  child.on("exit", () => {
+    if (printWorkerReadyTimer) {
+      clearTimeout(printWorkerReadyTimer);
+      printWorkerReadyTimer = null;
+    }
+    if (printWorkerReady) {
+      printWorkerReady.reject(new Error("Print worker exited during startup"));
+      printWorkerReady = null;
+    }
+    printWorker = null;
+    printWorkerBuf = "";
+    while (printWorkerJobQueue.length) {
+      const job = printWorkerJobQueue.shift();
+      try {
+        job.reject(new Error("Print worker exited"));
+      } catch {
+        /* ignore */
+      }
+    }
+    printWorkerJobActive = false;
+  });
+
+  return promise;
+}
+
+function printViaWorker({ printerName, dataBase64 }) {
+  return ensurePrintWorker().then(
+    () =>
+      new Promise((resolve, reject) => {
+        printWorkerJobQueue.push({
+          printerName: printerName || "",
+          dataBase64,
+          resolve,
+          reject,
+        });
+        pumpPrintWorkerJobs();
+      })
+  );
 }
 
 /** Resolve win-scale-read.ps1 (install dir, pkg asset dir, or dev source). */
@@ -753,6 +939,42 @@ function enqueuePrint(task) {
   return run;
 }
 
+async function printRawFallback({ printerName, dataBase64 }) {
+  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  const bytes = Buffer.from(dataBase64, "base64");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
+  const tmpFile = path.join(tmpDir, "receipt.bin");
+  const nameFile = path.join(tmpDir, "printer-name.txt");
+  fs.writeFileSync(tmpFile, bytes);
+
+  try {
+    const scriptPath = ensurePs1OnDisk();
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
+    }
+    const args = ["-FilePath", tmpFile];
+    if (name) {
+      const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+      fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
+      args.push("-PrinterNameFile", nameFile);
+    }
+    const usedPrinter = await runPowerShell(scriptPath, args, name || undefined);
+    const resolved = usedPrinter || name || "default";
+    if (isUnsuitableRawPrinter(resolved)) {
+      throw new Error(unsuitablePrinterError(resolved));
+    }
+    return resolved;
+  } finally {
+    try {
+      fs.unlinkSync(tmpFile);
+      if (fs.existsSync(nameFile)) fs.unlinkSync(nameFile);
+      fs.rmdirSync(tmpDir);
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
+}
+
 async function printRaw({ printerName, dataBase64, dryRun }) {
   if (!isWindows()) {
     throw new Error("Reborn Print Agent supports Windows only.");
@@ -781,39 +1003,21 @@ async function printRaw({ printerName, dataBase64, dryRun }) {
       dryRun: true,
     };
   }
-  // 1.6.0+: reborn-print-* (older installed EXEs still used manupos-print-*).
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
-  const tmpFile = path.join(tmpDir, "receipt.bin");
-  const nameFile = path.join(tmpDir, "printer-name.txt");
-  fs.writeFileSync(tmpFile, bytes);
 
   try {
-    const scriptPath = ensurePs1OnDisk();
-    if (!fs.existsSync(scriptPath)) {
-      throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
-    }
-    // Pass printer name via UTF-8 file (not argv) so OpenPrinterW gets real Unicode.
-    const args = ["-FilePath", tmpFile];
-    if (name) {
-      // UTF-8 BOM so PowerShell/.NET always detect UTF-8 (accents/dashes intact).
-      const bom = Buffer.from([0xef, 0xbb, 0xbf]);
-      fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
-      args.push("-PrinterNameFile", nameFile);
-    }
-    const usedPrinter = await runPowerShell(scriptPath, args, name || undefined);
+    const usedPrinter = await printViaWorker({ printerName: name, dataBase64 });
     const resolved = usedPrinter || name || "default";
     if (isUnsuitableRawPrinter(resolved)) {
       throw new Error(unsuitablePrinterError(resolved));
     }
     return resolved;
-  } finally {
-    try {
-      fs.unlinkSync(tmpFile);
-      if (fs.existsSync(nameFile)) fs.unlinkSync(nameFile);
-      fs.rmdirSync(tmpDir);
-    } catch {
-      /* ignore cleanup errors */
-    }
+  } catch (workerErr) {
+    console.warn(
+      "[print-agent] warm worker failed, falling back to one-shot script:",
+      workerErr && workerErr.message ? workerErr.message : workerErr
+    );
+    killPrintWorker();
+    return printRawFallback({ printerName: name, dataBase64 });
   }
 }
 
@@ -995,6 +1199,7 @@ function startServer() {
       platform: process.platform,
       windows: isWindows(),
       installDir: installDir(),
+      warmWorker: !!(printWorker && printWorker.stdin && printWorker.stdin.writable),
       features: [
         "print",
         "printers",
@@ -1009,6 +1214,7 @@ function startServer() {
         "cloud-relay",
         "bt-com-paced-spooler",
         "com-serial-write-fallback",
+        "warm-print-worker",
       ],
     });
   });
@@ -1187,6 +1393,10 @@ function startServer() {
     console.log(`Reborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
     if (!isWindows()) {
       console.warn("Warning: RAW thermal printing is only supported on Windows.");
+    } else {
+      ensurePrintWorker().catch((e) => {
+        console.warn("[print-agent] warm worker preload failed:", e.message || e);
+      });
     }
     if (readCloudRelay()) startCloudRelayPoller();
   });
