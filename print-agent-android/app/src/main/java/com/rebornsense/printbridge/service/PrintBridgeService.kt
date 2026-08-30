@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import com.rebornsense.printbridge.MainActivity
+import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer

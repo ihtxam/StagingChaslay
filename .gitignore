@@ -18,6 +18,7 @@
 .externalNativeBuild
 .cxx
 *.apk
+!backend/public/downloads/reborn-print-bridge.apk
 *.ap_
 *.aab
 .android-sdk/

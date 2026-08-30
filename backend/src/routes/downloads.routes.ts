@@ -68,17 +68,19 @@ router.get(`/${PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
 
 router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
   const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
-  if (!fileMagicOk(filePath, "apk")) {
+  const desc = describePrintBridgeApk();
+  if (!fileMagicOk(filePath, "apk") || !desc.available) {
     return res
       .status(404)
       .type("text/plain")
       .send(
-        [
-          "Reborn Print Bridge APK is not available on this server.",
-          "",
-          "Ask your administrator to build print-agent-android/ and deploy:",
-          "  backend/public/downloads/reborn-print-bridge.apk",
-        ].join("\n")
+        desc.message ||
+          [
+            "Reborn Print Bridge APK is not available on this server.",
+            "",
+            "Ask your administrator to build print-agent-android/ and deploy:",
+            "  backend/public/downloads/reborn-print-bridge.apk",
+          ].join("\n")
       );
   }
   sendBinary(res, filePath, PRINT_BRIDGE_APK_FILE, "application/vnd.android.package-archive", "inline");

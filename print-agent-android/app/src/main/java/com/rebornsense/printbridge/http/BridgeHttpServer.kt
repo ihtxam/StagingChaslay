@@ -74,7 +74,7 @@ class BridgeHttpServer(
                         .put("platform", "android")
                         .put("deviceProfile", DeviceProfiler.deviceProfileId())
                         .put("manufacturer", android.os.Build.MANUFACTURER)
-                        .put("model", Build.MODEL)
+                        .put("model", android.os.Build.MODEL)
                         .put("features", features)
                         .put("printerReady", registry.hasReadyPrinter())
                         .put("queueDepth", queue.queueDepth())
@@ -161,7 +161,7 @@ class BridgeHttpServer(
                     }
                 } ?: return jsonResponse(
                     JSONObject().put("ok", false).put("error", "Tap to Pay setup timed out."),
-                    Response.Status.GATEWAY_TIMEOUT,
+                    Response.Status.REQUEST_TIMEOUT,
                 )
                 jsonResponse(
                     JSONObject()

@@ -3,7 +3,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9 already registers the Kotlin Android extension. Applying
+    // org.jetbrains.kotlin.android again fails: "Cannot add extension 'kotlin'".
 }
 
 val localProps = Properties().apply {
@@ -28,14 +29,14 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 16
-        versionName = "0.3.8"
+        versionCode = 17
+        versionName = "0.3.9"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 
     if (hasAdyenSdk) {
         sourceSets {
-            getByName("main").java.srcDirs("src/adyen/kotlin")
+            getByName("main").java.directories.add("src/adyen/kotlin")
         }
     }
 
@@ -60,12 +61,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         buildConfig = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
