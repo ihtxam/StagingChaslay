@@ -2,13 +2,15 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'reborn-shell-v7';
+const CACHE = 'reborn-shell-v8';
 
 /** Static files that must not depend on auth or SPA routing. */
 const PRECACHE = [
   '/index.html',
   '/offline.html',
   '/manifest.webmanifest',
+  '/kiosk.webmanifest',
+  '/order-center.webmanifest',
   '/favicon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

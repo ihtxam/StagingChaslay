@@ -44,6 +44,12 @@ import {
 import { printKioskOrder, type KioskPrintContext } from '@/lib/kiosk-print';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { setKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
+import KioskInstallHint from '@/components/kiosk/KioskInstallHint';
+import {
+  bindKioskInstallPrompt,
+  ensureKioskManifest,
+  saveKioskLaunchToken,
+} from '@/lib/kiosk-pwa';
 
 type Step =
   | 'attract'
@@ -217,10 +223,18 @@ export default function KioskApp() {
 
   useEffect(() => {
     document.documentElement.classList.add('kiosk-lock');
+    const restoreManifest = ensureKioskManifest();
+    const unbindInstall = bindKioskInstallPrompt();
     return () => {
       document.documentElement.classList.remove('kiosk-lock');
+      restoreManifest();
+      unbindInstall();
     };
   }, []);
+
+  useEffect(() => {
+    if (token) saveKioskLaunchToken(token);
+  }, [token]);
 
   useEffect(() => {
     void (async () => {
@@ -1235,6 +1249,8 @@ export default function KioskApp() {
           </div>
         </div>
       ) : null}
+
+      <KioskInstallHint />
     </div>
   );
 }

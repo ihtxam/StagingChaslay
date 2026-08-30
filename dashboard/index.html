@@ -22,6 +22,14 @@
           document.documentElement.classList.add('webpos-lock');
           if (/^\/kiosk(\/|$)/.test(p)) {
             document.documentElement.classList.add('kiosk-lock');
+            var km = document.querySelector('link[rel="manifest"]');
+            if (km) km.setAttribute('href', '/kiosk.webmanifest');
+            var ktc = document.querySelector('meta[name="theme-color"]');
+            if (ktc) ktc.setAttribute('content', '#059669');
+            var kan = document.querySelector('meta[name="application-name"]');
+            if (kan) kan.setAttribute('content', 'Reborn Kiosk');
+            var kat = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (kat) kat.setAttribute('content', 'Kiosk');
           }
           try {
             var ts = localStorage.getItem('webpos_text_size');

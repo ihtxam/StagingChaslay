@@ -422,6 +422,7 @@ export default function KioskAdminPanel({
                   <RefreshCw className="h-4 w-4" /> {t('kioskRegenerateUrl')}
                 </button>
               </div>
+              <p className="mt-3 text-sm text-[var(--text-muted)]">{t('kioskPwaSetupNote')}</p>
             </section>
           ) : null}
 

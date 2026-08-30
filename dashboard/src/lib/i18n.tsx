@@ -3101,6 +3101,15 @@ const en: Dict = {
   kioskMembershipScan: 'Offer membership QR scan step',
   kioskCashNeedsApproval: 'Cash orders need staff approval',
   kioskLaunchCustomer: 'Launch customer kiosk',
+  kioskPwaInstallTitle: 'Install kiosk on this device',
+  kioskPwaInstallBody:
+    'Install once from Chrome (Add to Home screen / Install app). The same Kiosk icon will reopen this screen — installing again creates duplicate shortcuts.',
+  kioskPwaInstallAction: 'Install kiosk app',
+  kioskPwaInstalling: 'Installing…',
+  kioskPwaUseIconTitle: 'Kiosk already installed',
+  kioskPwaUseIconBody: 'Open the Kiosk icon on your home screen. Do not install again from Chrome — that adds duplicate shortcuts.',
+  kioskPwaSetupNote:
+    'On the kiosk tablet: open this URL once, tap Install, then always launch from the Kiosk home-screen icon — not from Chrome bookmarks.',
   copy: 'Copy',
   open: 'Open',
 
@@ -6662,6 +6671,16 @@ const fr: Dict = {
   kioskMembershipScan: 'Proposer le scan carte fidélité',
   kioskCashNeedsApproval: 'Commandes espèces à valider',
   kioskLaunchCustomer: 'Lancer la borne client',
+  kioskPwaInstallTitle: 'Installer la borne sur cet appareil',
+  kioskPwaInstallBody:
+    'Installez une seule fois depuis Chrome (Ajouter à l’écran d’accueil). La même icône Kiosk rouvrira cet écran — réinstaller crée des doublons.',
+  kioskPwaInstallAction: 'Installer l’application Kiosk',
+  kioskPwaInstalling: 'Installation…',
+  kioskPwaUseIconTitle: 'Borne déjà installée',
+  kioskPwaUseIconBody:
+    'Ouvrez l’icône Kiosk sur l’écran d’accueil. N’installez pas à nouveau depuis Chrome — cela ajoute des raccourcis en double.',
+  kioskPwaSetupNote:
+    'Sur la tablette : ouvrez cette URL une fois, installez, puis lancez toujours depuis l’icône Kiosk — pas depuis les favoris Chrome.',
   copy: 'Copier',
   open: 'Ouvrir',
 
@@ -10221,6 +10240,16 @@ const de: Dict = {
   kioskMembershipScan: 'Mitgliedskarten-QR anbieten',
   kioskCashNeedsApproval: 'Barbestellungen brauchen Freigabe',
   kioskLaunchCustomer: 'Kunden-Kiosk starten',
+  kioskPwaInstallTitle: 'Kiosk auf diesem Gerät installieren',
+  kioskPwaInstallBody:
+    'Einmal in Chrome installieren (Zum Startbildschirm / App installieren). Dasselbe Kiosk-Symbol öffnet diesen Bildschirm — erneutes Installieren erzeugt doppelte Verknüpfungen.',
+  kioskPwaInstallAction: 'Kiosk-App installieren',
+  kioskPwaInstalling: 'Installiere…',
+  kioskPwaUseIconTitle: 'Kiosk bereits installiert',
+  kioskPwaUseIconBody:
+    'Öffnen Sie das Kiosk-Symbol auf dem Startbildschirm. Nicht erneut aus Chrome installieren — das erzeugt doppelte Verknüpfungen.',
+  kioskPwaSetupNote:
+    'Auf dem Kiosk-Tablet: URL einmal öffnen, installieren, dann immer über das Kiosk-Symbol starten — nicht über Chrome-Lesezeichen.',
   copy: 'Kopieren',
   open: 'Öffnen',
 

@@ -22,6 +22,14 @@
           document.documentElement.classList.add('webpos-lock');
           if (/^\/kiosk(\/|$)/.test(p)) {
             document.documentElement.classList.add('kiosk-lock');
+            var km = document.querySelector('link[rel="manifest"]');
+            if (km) km.setAttribute('href', '/kiosk.webmanifest');
+            var ktc = document.querySelector('meta[name="theme-color"]');
+            if (ktc) ktc.setAttribute('content', '#059669');
+            var kan = document.querySelector('meta[name="application-name"]');
+            if (kan) kan.setAttribute('content', 'Reborn Kiosk');
+            var kat = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (kat) kat.setAttribute('content', 'Kiosk');
           }
           try {
             var ts = localStorage.getItem('webpos_text_size');
@@ -43,8 +51,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-CZHdBUA0.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-B_uH3pMQ.css">
+    <script type="module" crossorigin src="/assets/index-Yb6W4-5F.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DLnaEpJA.css">
   </head>
   <body>
     <div id="root">
