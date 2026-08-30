@@ -24,14 +24,17 @@ export async function isRebornPwaInstalled(): Promise<boolean> {
   if (!nav.getInstalledRelatedApps) return false;
   try {
     const related = await nav.getInstalledRelatedApps();
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const installed = related.some((app) => {
       if (app.platform !== 'webapp') return false;
       const url = String(app.url || '');
       const id = String(app.id || '');
+      if (origin && url.startsWith(origin)) return true;
       return (
         url.includes('manifest.webmanifest') ||
         id === '/' ||
         id.endsWith('/') ||
+        id.includes('rebornsense.com') ||
         url.includes('/merchant/pos')
       );
     });
@@ -94,8 +97,12 @@ export function bindRebornPwaInstallGuard(): () => void {
     rebornPwaInstalledCache = true;
     try {
       localStorage.setItem(PWA_INSTALLED_KEY, '1');
+      sessionStorage.setItem('reborn_pwa_just_installed', '1');
     } catch {
       /* ignore */
+    }
+    if (!isStandalonePwa() && typeof document !== 'undefined') {
+      document.querySelector('link[rel="manifest"]')?.remove();
     }
   };
 

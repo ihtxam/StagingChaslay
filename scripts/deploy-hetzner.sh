@@ -461,9 +461,65 @@ PY
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
     echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
     echo "  Then copy app/build/outputs/apk/release/*.apk to $BRIDGE_APK"
+    if [[ -f "$BRIDGE_APK" ]]; then
+      STALE_APK_VERSION="$(
+        python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
+import re, sys, zipfile
+apk = sys.argv[1]
+with zipfile.ZipFile(apk) as z:
+    data = z.read("AndroidManifest.xml")
+vers = set()
+for i in range(len(data) - 6):
+    if data[i] == 0x30 and data[i+1] == 0 and data[i+2] == 0x2e and data[i+3] == 0:
+        j, s = i, ""
+        while j + 1 < len(data):
+            lo, hi = data[j], data[j+1]
+            if hi or lo == 0 or not ((0x30 <= lo <= 0x39) or lo == 0x2e):
+                break
+            s += chr(lo)
+            j += 2
+        if re.fullmatch(r"0\.\d+\.\d+", s):
+            vers.add(s)
+print(sorted(vers)[-1] if vers else "")
+PY
+      )"
+      if [[ -n "$STALE_APK_VERSION" && "$STALE_APK_VERSION" != "$BRIDGE_VERSION" ]]; then
+        echo "ERROR: Refusing deploy — APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
+        echo "  Tablets cannot upgrade until a fresh APK is built and copied to downloads/."
+        exit 1
+      fi
+    fi
   fi
 else
   echo "SKIP_ANDROID_BRIDGE_BUILD=1 - using existing $BRIDGE_APK (if any)"
+  if [[ -f "$BRIDGE_APK" ]]; then
+    STALE_APK_VERSION="$(
+      python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
+import re, sys, zipfile
+apk = sys.argv[1]
+with zipfile.ZipFile(apk) as z:
+    data = z.read("AndroidManifest.xml")
+vers = set()
+for i in range(len(data) - 6):
+    if data[i] == 0x30 and data[i+1] == 0 and data[i+2] == 0x2e and data[i+3] == 0:
+        j, s = i, ""
+        while j + 1 < len(data):
+            lo, hi = data[j], data[j+1]
+            if hi or lo == 0 or not ((0x30 <= lo <= 0x39) or lo == 0x2e):
+                break
+            s += chr(lo)
+            j += 2
+        if re.fullmatch(r"0\.\d+\.\d+", s):
+            vers.add(s)
+print(sorted(vers)[-1] if vers else "")
+PY
+    )"
+    if [[ -n "$STALE_APK_VERSION" && "$STALE_APK_VERSION" != "$BRIDGE_VERSION" ]]; then
+      echo "ERROR: $BRIDGE_APK is v${STALE_APK_VERSION} but print-agent-android requires v${BRIDGE_VERSION}."
+      echo "  Rebuild the APK (unset SKIP_ANDROID_BRIDGE_BUILD) before deploying."
+      exit 1
+    fi
+  fi
 fi
 if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
   echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"

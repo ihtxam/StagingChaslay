@@ -4323,7 +4323,16 @@ export default function Settings() {
                       </a>
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' ? (
-                      printBridgeManifest?.available === false ? (
+                      printBridgeManifest?.versionMismatch ? (
+                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                          {t('printBridgeApkNotPublished')
+                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
+                            .replace(
+                              '{declaredVersion}',
+                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
+                            )}
+                        </p>
+                      ) : printBridgeManifest?.available === false ? (
                         <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                           {printBridgeManifest.message ||
                             'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}

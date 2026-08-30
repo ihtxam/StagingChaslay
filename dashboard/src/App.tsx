@@ -33,6 +33,7 @@ import KioskLaunchRedirect from '@/pages/kiosk/KioskLaunchRedirect';
 import KioskTokenAdminPage from '@/pages/kiosk/KioskTokenAdminPage';
 import SignageDisplayPage from '@/pages/SignageDisplayPage';
 import StatusPage from '@/pages/StatusPage';
+import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -722,6 +723,7 @@ function App() {
             </>
           )}
         </Routes>
+        <PwaLaunchGuide />
         <AppToaster />
       </BrowserRouter>
     </>

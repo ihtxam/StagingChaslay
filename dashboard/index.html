@@ -40,6 +40,44 @@
         }
       })();
     </script>
+    <script>
+      (function () {
+        var standalone =
+          (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+          (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
+          window.navigator.standalone === true;
+        if (standalone) {
+          try {
+            localStorage.setItem('reborn_pwa_installed', '1');
+          } catch (e) {}
+        }
+        function suppressInstallPrompt(e) {
+          if (/^\/kiosk(\/|$)/.test(location.pathname || '')) return;
+          e.preventDefault();
+        }
+        function armInstallGuard() {
+          window.addEventListener('beforeinstallprompt', suppressInstallPrompt, { capture: true });
+        }
+        try {
+          if (localStorage.getItem('reborn_pwa_installed') === '1') armInstallGuard();
+        } catch (e) {}
+        window.addEventListener('appinstalled', function () {
+          try {
+            localStorage.setItem('reborn_pwa_installed', '1');
+            sessionStorage.setItem('reborn_pwa_just_installed', '1');
+          } catch (e) {}
+          armInstallGuard();
+        });
+        if (!standalone) {
+          try {
+            if (localStorage.getItem('reborn_pwa_installed') === '1' && !/^\/kiosk(\/|$)/.test(location.pathname || '')) {
+              var manifestLink = document.querySelector('link[rel="manifest"]');
+              if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
+            }
+          } catch (e) {}
+        }
+      })();
+    </script>
     <meta name="theme-color" content="#800020" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
