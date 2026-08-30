@@ -31,6 +31,8 @@ import { useI18n } from '@/lib/i18n';
 
 export type { KioskAdminSettings };
 
+type KioskPanelTab = 'branding' | 'slides' | 'kiosks';
+
 type PaymentTerminal = {
   id: string;
   terminalId: string;
@@ -75,6 +77,7 @@ export default function KioskAdminPanel({
   const [printOk, setPrintOk] = useState<boolean | null>(null);
   const [printMessage, setPrintMessage] = useState('');
   const [launchCheckOpen, setLaunchCheckOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<KioskPanelTab>('branding');
 
   const token = accessToken || settings.accessToken || '';
   const kioskLicensed = isKioskLicensed({ enabled });
@@ -208,6 +211,14 @@ export default function KioskAdminPanel({
   const terminalOk =
     serverDiag?.terminalConfigured && serverDiag?.terminalRegistered && serverDiag?.adyenConfigured;
 
+  const panelTabs: { id: KioskPanelTab; label: string; hint: string }[] = [
+    { id: 'branding', label: t('kioskTabBranding'), hint: t('kioskTabBrandingHint') },
+    { id: 'slides', label: t('kioskTabSlides'), hint: t('kioskTabSlidesHint') },
+    { id: 'kiosks', label: t('kioskTabKiosks'), hint: t('kioskTabKiosksHint') },
+  ];
+
+  const activeTabHint = panelTabs.find((item) => item.id === panelTab)?.hint ?? '';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -244,380 +255,407 @@ export default function KioskAdminPanel({
         </div>
       )}
 
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold">{t('kioskConnectionsTitle')}</h2>
-        <p className="mt-1 text-sm text-stone-500">{t('kioskConnectionsHint')}</p>
-        <div className="mt-4 space-y-3">
-          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
-            {terminalOk ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            ) : (
-              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 font-semibold">
-                <CreditCard className="h-4 w-4" /> {t('paymentTerminals')}
-              </p>
-              <p className="text-sm text-stone-600">
-                {serverDiag?.terminalConfigured
-                  ? serverDiag.terminalRegistered
-                    ? `${t('kioskTerminalSelected')}: ${serverDiag.terminalLabel || selectedTerminalId}${
-                        serverDiag.adyenConfigured ? '' : ` — ${t('kioskAdyenMissing')}`
-                      }`
-                    : t('kioskTerminalNotRegistered')
-                  : t('kioskTerminalNotSelected')}
-              </p>
+      <div className="flex flex-wrap gap-2">
+        {panelTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+              panelTab === item.id
+                ? 'bg-teal-600 text-white'
+                : 'bg-[var(--bg-muted)] text-[var(--text-muted)]'
+            }`}
+            onClick={() => setPanelTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTabHint ? (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-4 py-3 text-sm text-[var(--text-muted)]">
+          {activeTabHint}
+        </p>
+      ) : null}
+
+      {panelTab === 'kiosks' ? (
+        <>
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+            <h2 className="font-semibold text-[var(--text)]">{t('kioskConnectionsTitle')}</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">{t('kioskConnectionsHint')}</p>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+                {terminalOk ? (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                ) : (
+                  <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 font-semibold text-[var(--text)]">
+                    <CreditCard className="h-4 w-4" /> {t('paymentTerminals')}
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {serverDiag?.terminalConfigured
+                      ? serverDiag.terminalRegistered
+                        ? `${t('kioskTerminalSelected')}: ${serverDiag.terminalLabel || selectedTerminalId}${
+                            serverDiag.adyenConfigured ? '' : ` — ${t('kioskAdyenMissing')}`
+                          }`
+                        : t('kioskTerminalNotRegistered')
+                      : t('kioskTerminalNotSelected')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+                {printOk === true ? (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                ) : printOk === false ? (
+                  <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                ) : (
+                  <Printer className="mt-0.5 h-5 w-5 shrink-0 text-[var(--text-muted)]" />
+                )}
+                <div>
+                  <p className="font-semibold flex items-center gap-2 text-[var(--text)]">
+                    <Printer className="h-4 w-4" /> {t('kioskPrintBridgeTitle')}
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {printMessage || t('kioskPrintBridgeHint')}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
-            {printOk === true ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            ) : printOk === false ? (
-              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            ) : (
-              <Printer className="mt-0.5 h-5 w-5 shrink-0 text-stone-400" />
-            )}
-            <div>
-              <p className="font-semibold flex items-center gap-2">
-                <Printer className="h-4 w-4" /> {t('kioskPrintBridgeTitle')}
-              </p>
-              <p className="text-sm text-stone-600">
-                {printMessage || t('kioskPrintBridgeHint')}
-              </p>
-            </div>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="btn-secondary mt-4"
-          disabled={testing}
-          onClick={() => void testConnections()}
-        >
-          {testing ? t('kioskTesting') : t('kioskTestConnections')}
-        </button>
-      </section>
-
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">{t('kioskTerminalPickerTitle')}</h2>
-            <p className="mt-1 text-sm text-stone-500">{t('kioskTerminalPickerHint')}</p>
-          </div>
-          {mode === 'merchant' ? (
-            <Link to="/merchant/settings?tab=payments" className="text-sm font-semibold text-teal-700 hover:underline">
-              {t('settingsNavPayments')} →
-            </Link>
-          ) : null}
-        </div>
-
-        {terminals.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-sm text-stone-600">
-            {t('kioskNoTerminalsHint')}
-          </p>
-        ) : (
-          <>
-            <label className="mt-4 block">
-              <span className="text-sm font-semibold">{t('kioskSelectTerminal')}</span>
-              <select
-                className="input mt-1 w-full"
-                disabled={!tokenModeEditable}
-                value={selectedTerminalId}
-                onChange={(e) =>
-                  setSettings({ ...settings, terminalId: e.target.value || null })
-                }
-              >
-                <option value="">{t('kioskSelectTerminalPlaceholder')}</option>
-                {activeTerminals.map((term) => (
-                  <option key={term.id} value={term.terminalId}>
-                    {term.terminalName || term.terminalId} ({term.terminalId})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="mt-4 table-scroll rounded-lg border border-[var(--border)]">
-              <table className="w-full min-w-[480px] text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)] text-left muted">
-                    <th className="px-3 py-2 font-medium">{t('terminalName')}</th>
-                    <th className="px-3 py-2 font-medium">{t('terminalId')}</th>
-                    <th className="px-3 py-2 font-medium">{t('status')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {terminals.map((term) => (
-                    <tr
-                      key={term.id}
-                      className={`border-b border-[var(--border)] last:border-0 ${
-                        term.terminalId === selectedTerminalId ? 'bg-emerald-50/80' : ''
-                      }`}
-                    >
-                      <td className="px-3 py-2.5 font-medium">{term.terminalName || '—'}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs">{term.terminalId}</td>
-                      <td className="px-3 py-2.5 capitalize">{term.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </section>
-
-      {mode === 'merchant' && showOwnerExtras && kioskLicensed && kioskUrl ? (
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-          <h2 className="font-semibold">{t('kioskUrlTitle')}</h2>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="flex-1 break-all rounded-lg bg-stone-100 px-3 py-2 text-sm">{kioskUrl}</code>
             <button
               type="button"
-              className="btn-secondary inline-flex items-center gap-1"
-              onClick={() => {
-                void navigator.clipboard.writeText(kioskUrl);
-                toast.success(t('copied'));
-              }}
+              className="btn-secondary mt-4"
+              disabled={testing}
+              onClick={() => void testConnections()}
             >
-              <Copy className="h-4 w-4" /> {t('copy')}
+              {testing ? t('kioskTesting') : t('kioskTestConnections')}
             </button>
-            <a href={kioskUrl} target="_blank" rel="noreferrer" className="btn-secondary inline-flex items-center gap-1">
-              <ExternalLink className="h-4 w-4" /> {t('open')}
-            </a>
-            <button type="button" className="btn-secondary inline-flex items-center gap-1" onClick={() => void regenerateToken()}>
-              <RefreshCw className="h-4 w-4" /> {t('kioskRegenerateUrl')}
-            </button>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-[var(--text)]">{t('kioskTerminalPickerTitle')}</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">{t('kioskTerminalPickerHint')}</p>
+              </div>
+              {mode === 'merchant' ? (
+                <Link to="/merchant/settings?tab=payments" className="text-sm font-semibold text-teal-700 hover:underline dark:text-teal-400">
+                  {t('settingsNavPayments')} →
+                </Link>
+              ) : null}
+            </div>
+
+            {terminals.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)] px-4 py-6 text-sm text-[var(--text-muted)]">
+                {t('kioskNoTerminalsHint')}
+              </p>
+            ) : (
+              <>
+                <label className="mt-4 block">
+                  <span className="text-sm font-semibold text-[var(--text)]">{t('kioskSelectTerminal')}</span>
+                  <select
+                    className="input mt-1 w-full"
+                    disabled={!tokenModeEditable}
+                    value={selectedTerminalId}
+                    onChange={(e) =>
+                      setSettings({ ...settings, terminalId: e.target.value || null })
+                    }
+                  >
+                    <option value="">{t('kioskSelectTerminalPlaceholder')}</option>
+                    {activeTerminals.map((term) => (
+                      <option key={term.id} value={term.terminalId}>
+                        {term.terminalName || term.terminalId} ({term.terminalId})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="mt-4 table-scroll rounded-lg border border-[var(--border)]">
+                  <table className="w-full min-w-[480px] text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] text-left muted">
+                        <th className="px-3 py-2 font-medium">{t('terminalName')}</th>
+                        <th className="px-3 py-2 font-medium">{t('terminalId')}</th>
+                        <th className="px-3 py-2 font-medium">{t('status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terminals.map((term) => (
+                        <tr
+                          key={term.id}
+                          className={`border-b border-[var(--border)] last:border-0 ${
+                            term.terminalId === selectedTerminalId ? 'bg-emerald-50/80 dark:bg-emerald-950/30' : ''
+                          }`}
+                        >
+                          <td className="px-3 py-2.5 font-medium">{term.terminalName || '—'}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs">{term.terminalId}</td>
+                          <td className="px-3 py-2.5 capitalize">{term.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+
+          {mode === 'merchant' && showOwnerExtras && kioskLicensed && kioskUrl ? (
+            <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+              <h2 className="font-semibold text-[var(--text)]">{t('kioskUrlTitle')}</h2>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <code className="flex-1 break-all rounded-lg bg-[var(--bg-muted)] px-3 py-2 text-sm">{kioskUrl}</code>
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(kioskUrl);
+                    toast.success(t('copied'));
+                  }}
+                >
+                  <Copy className="h-4 w-4" /> {t('copy')}
+                </button>
+                <a href={kioskUrl} target="_blank" rel="noreferrer" className="btn-secondary inline-flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {t('open')}
+                </a>
+                <button type="button" className="btn-secondary inline-flex items-center gap-1" onClick={() => void regenerateToken()}>
+                  <RefreshCw className="h-4 w-4" /> {t('kioskRegenerateUrl')}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="grid gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 md:grid-cols-2">
+            <label className="block md:col-span-2">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskNameLabel')}</span>
+              <input
+                className="input mt-1 w-full"
+                value={settings.name || ''}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskAdminPinLabel')}</span>
+              <input
+                className="input mt-1 w-full"
+                inputMode="numeric"
+                maxLength={8}
+                value={settings.adminPin || ''}
+                disabled={!tokenModeEditable}
+                onChange={(e) =>
+                  setSettings({ ...settings, adminPin: e.target.value.replace(/\D/g, '') })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskLanguagesLabel')}</span>
+              <input
+                className="input mt-1 w-full"
+                value={(settings.enabledLanguages || []).join(', ')}
+                disabled={!tokenModeEditable}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    enabledLanguages: e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskDefaultLanguageLabel')}</span>
+              <input
+                className="input mt-1 w-full"
+                value={settings.defaultLanguage || 'en'}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, defaultLanguage: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskTableModeLabel')}</span>
+              <select
+                className="input mt-1 w-full"
+                value={settings.tableMode || 'both'}
+                disabled={!tokenModeEditable}
+                onChange={(e) =>
+                  setSettings({ ...settings, tableMode: e.target.value as KioskAdminSettings['tableMode'] })
+                }
+              >
+                <option value="both">{t('kioskTableModeBoth')}</option>
+                <option value="table">{t('kioskTableModeTable')}</option>
+                <option value="badge">{t('kioskTableModeBadge')}</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={settings.cashPaymentEnabled !== false}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, cashPaymentEnabled: e.target.checked })}
+              />
+              <span className="text-sm">{t('kioskCashEnabled')}</span>
+            </label>
+            <label className="flex items-center gap-2 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={settings.cardPaymentEnabled !== false}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, cardPaymentEnabled: e.target.checked })}
+              />
+              <span className="text-sm">{t('kioskCardEnabled')}</span>
+            </label>
+            <label className="flex items-center gap-2 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={settings.membershipScanEnabled !== false}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, membershipScanEnabled: e.target.checked })}
+              />
+              <span className="text-sm">{t('kioskMembershipScan')}</span>
+            </label>
+            <label className="flex items-center gap-2 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={settings.kioskCashNeedsApproval !== false}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, kioskCashNeedsApproval: e.target.checked })}
+              />
+              <span className="text-sm">{t('kioskCashNeedsApproval')}</span>
+            </label>
+          </section>
+        </>
+      ) : null}
+
+      {panelTab === 'slides' ? (
+        <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+          <h2 className="font-semibold text-[var(--text)]">{t('kioskAttractTitle')}</h2>
+          <p className="text-sm text-[var(--text-muted)]">{t('kioskSlidesHint')}</p>
+          <label className="block">
+            <span className="text-sm font-semibold text-[var(--text)]">{t('kioskSlidesBannerLabel')}</span>
+            <input
+              className="input mt-1 w-full"
+              placeholder={t('kioskSlidesBannerPlaceholder')}
+              value={settings.slideBannerText || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, slideBannerText: e.target.value })}
+            />
+          </label>
+          <KioskSlideEditor
+            slides={settings.promoSlides?.length ? settings.promoSlides : [{ title: '', subtitle: '' }]}
+            editable={tokenModeEditable}
+            mode={mode}
+            accessToken={accessToken}
+            onChange={(promoSlides) => setSettings({ ...settings, promoSlides })}
+          />
+        </section>
+      ) : null}
+
+      {panelTab === 'branding' ? (
+        <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+          <h2 className="font-semibold text-[var(--text)]">{t('kioskBrandingTitle')}</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block md:col-span-2">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskBrandingAttractHeadline')}</span>
+              <input
+                className="input mt-1 w-full"
+                placeholder={settings.name || 'Your restaurant name'}
+                value={settings.attractHeadline || ''}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, attractHeadline: e.target.value })}
+              />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskBrandingAttractSubheadline')}</span>
+              <input
+                className="input mt-1 w-full"
+                placeholder="Order here — pay at the counter or by card."
+                value={settings.attractSubheadline || ''}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, attractSubheadline: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskBrandPrimaryColor')}</span>
+              <input
+                type="color"
+                className="mt-1 h-10 w-full cursor-pointer rounded border border-[var(--border)]"
+                value={settings.brandPrimaryColor || '#059669'}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, brandPrimaryColor: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskBrandSecondaryColor')}</span>
+              <input
+                type="color"
+                className="mt-1 h-10 w-full cursor-pointer rounded border border-[var(--border)]"
+                value={settings.brandSecondaryColor || '#047857'}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, brandSecondaryColor: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskBrandButtonTextColor')}</span>
+              <input
+                type="color"
+                className="mt-1 h-10 w-full cursor-pointer rounded border border-[var(--border)]"
+                value={settings.brandButtonTextColor || '#ffffff'}
+                disabled={!tokenModeEditable}
+                onChange={(e) => setSettings({ ...settings, brandButtonTextColor: e.target.value })}
+              />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="text-sm font-semibold text-[var(--text)]">{t('kioskScreenSizeLabel')}</span>
+              <select
+                className="input mt-1 w-full max-w-xs"
+                value={settings.screenSizeIn === 27 ? 27 : 23}
+                disabled={!tokenModeEditable}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    screenSizeIn: Number(e.target.value) === 27 ? 27 : 23,
+                  })
+                }
+              >
+                <option value={23}>{t('kioskScreenSize23')}</option>
+                <option value={27}>{t('kioskScreenSize27')}</option>
+              </select>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskScreenSizeHint')}</p>
+            </label>
+          </div>
+          <div className="space-y-2 border-t border-[var(--border)] pt-3">
+            <p className="text-sm font-semibold text-[var(--text)]">{t('kioskOrderTypeButtonsTitle')}</p>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.takeawayEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, takeawayEnabled: e.target.checked })} />
+              <span className="text-sm">{t('kioskTakeawayEnabled')}</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.deliveryEnabled === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, deliveryEnabled: e.target.checked })} />
+              <span className="text-sm">{t('kioskDeliveryEnabled')}</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.dineInEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, dineInEnabled: e.target.checked })} />
+              <span className="text-sm">{t('kioskDineInEnabled')}</span>
+            </label>
+          </div>
+          <div className="space-y-2 border-t border-[var(--border)] pt-3">
+            <p className="text-sm font-semibold text-[var(--text)]">{t('kioskPrintTitle')}</p>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.autoPrintKitchen !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintKitchen: e.target.checked })} />
+              <span className="text-sm">{t('kioskAutoPrintKitchen')}</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.autoPrintReceipt === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintReceipt: e.target.checked })} />
+              <span className="text-sm">{t('kioskAutoPrintReceipt')}</span>
+            </label>
           </div>
         </section>
       ) : null}
 
-      <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold">{t('kioskAttractTitle')}</h2>
-        <p className="text-sm text-stone-500">
-          Upload promo images, add large overlay text on each slide, and optional banner above the slider.
-        </p>
-        <label className="block">
-          <span className="text-sm font-semibold">Banner text (above slider)</span>
-          <input
-            className="input mt-1 w-full"
-            placeholder="e.g. Welcome — order here!"
-            value={settings.slideBannerText || ''}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, slideBannerText: e.target.value })}
-          />
-        </label>
-        <KioskSlideEditor
-          slides={settings.promoSlides?.length ? settings.promoSlides : [{ title: '', subtitle: '' }]}
-          editable={tokenModeEditable}
-          mode={mode}
-          accessToken={accessToken}
-          onChange={(promoSlides) => setSettings({ ...settings, promoSlides })}
-        />
-      </section>
-
-      <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold">Branding &amp; main screen</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block md:col-span-2">
-            <span className="text-sm font-semibold">Attract headline</span>
-            <input
-              className="input mt-1 w-full"
-              placeholder={settings.name || 'Your restaurant name'}
-              value={settings.attractHeadline || ''}
-              disabled={!tokenModeEditable}
-              onChange={(e) => setSettings({ ...settings, attractHeadline: e.target.value })}
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-semibold">Attract subheadline</span>
-            <input
-              className="input mt-1 w-full"
-              placeholder="Order here — pay at the counter or by card."
-              value={settings.attractSubheadline || ''}
-              disabled={!tokenModeEditable}
-              onChange={(e) => setSettings({ ...settings, attractSubheadline: e.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold">Primary button color</span>
-            <input
-              type="color"
-              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
-              value={settings.brandPrimaryColor || '#059669'}
-              disabled={!tokenModeEditable}
-              onChange={(e) => setSettings({ ...settings, brandPrimaryColor: e.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold">Secondary / accent color</span>
-            <input
-              type="color"
-              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
-              value={settings.brandSecondaryColor || '#047857'}
-              disabled={!tokenModeEditable}
-              onChange={(e) => setSettings({ ...settings, brandSecondaryColor: e.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold">Button text color</span>
-            <input
-              type="color"
-              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
-              value={settings.brandButtonTextColor || '#ffffff'}
-              disabled={!tokenModeEditable}
-              onChange={(e) => setSettings({ ...settings, brandButtonTextColor: e.target.value })}
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-semibold">Touch screen size (portrait)</span>
-            <select
-              className="input mt-1 w-full max-w-xs"
-              value={settings.screenSizeIn === 27 ? 27 : 23}
-              disabled={!tokenModeEditable}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  screenSizeIn: Number(e.target.value) === 27 ? 27 : 23,
-                })
-              }
-            >
-              <option value={23}>23&quot; vertical (1080×1920)</option>
-              <option value={27}>27&quot; vertical (1080×1920)</option>
-            </select>
-            <p className="mt-1 text-xs text-stone-500">
-              Scales buttons, text, and product tiles for your kiosk display. Use 27&quot; for larger touch targets.
-            </p>
-          </label>
-        </div>
-        <div className="space-y-2 border-t border-stone-200 pt-3">
-          <p className="text-sm font-semibold">Order type buttons on main screen</p>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={settings.takeawayEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, takeawayEnabled: e.target.checked })} />
-            <span className="text-sm">Takeaway</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={settings.deliveryEnabled === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, deliveryEnabled: e.target.checked })} />
-            <span className="text-sm">Delivery</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={settings.dineInEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, dineInEnabled: e.target.checked })} />
-            <span className="text-sm">Dine in (table / badge)</span>
-          </label>
-        </div>
-        <div className="space-y-2 border-t border-stone-200 pt-3">
-          <p className="text-sm font-semibold">Print from this kiosk tablet</p>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={settings.autoPrintKitchen !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintKitchen: e.target.checked })} />
-            <span className="text-sm">Auto-print kitchen ticket after order</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={settings.autoPrintReceipt === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintReceipt: e.target.checked })} />
-            <span className="text-sm">Auto-print guest receipt after order</span>
-          </label>
-        </div>
-      </section>
-
-      <section className="grid gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 md:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-semibold">{t('kioskNameLabel')}</span>
-          <input
-            className="input mt-1 w-full"
-            value={settings.name || ''}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, name: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold">{t('kioskAdminPinLabel')}</span>
-          <input
-            className="input mt-1 w-full"
-            inputMode="numeric"
-            maxLength={8}
-            value={settings.adminPin || ''}
-            disabled={!tokenModeEditable}
-            onChange={(e) =>
-              setSettings({ ...settings, adminPin: e.target.value.replace(/\D/g, '') })
-            }
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold">{t('kioskLanguagesLabel')}</span>
-          <input
-            className="input mt-1 w-full"
-            value={(settings.enabledLanguages || []).join(', ')}
-            disabled={!tokenModeEditable}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                enabledLanguages: e.target.value
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold">{t('kioskDefaultLanguageLabel')}</span>
-          <input
-            className="input mt-1 w-full"
-            value={settings.defaultLanguage || 'en'}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, defaultLanguage: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold">{t('kioskTableModeLabel')}</span>
-          <select
-            className="input mt-1 w-full"
-            value={settings.tableMode || 'both'}
-            disabled={!tokenModeEditable}
-            onChange={(e) =>
-              setSettings({ ...settings, tableMode: e.target.value as KioskAdminSettings['tableMode'] })
-            }
-          >
-            <option value="both">{t('kioskTableModeBoth')}</option>
-            <option value="table">{t('kioskTableModeTable')}</option>
-            <option value="badge">{t('kioskTableModeBadge')}</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2 md:col-span-2">
-          <input
-            type="checkbox"
-            checked={settings.cashPaymentEnabled !== false}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, cashPaymentEnabled: e.target.checked })}
-          />
-          <span className="text-sm">{t('kioskCashEnabled')}</span>
-        </label>
-        <label className="flex items-center gap-2 md:col-span-2">
-          <input
-            type="checkbox"
-            checked={settings.cardPaymentEnabled !== false}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, cardPaymentEnabled: e.target.checked })}
-          />
-          <span className="text-sm">{t('kioskCardEnabled')}</span>
-        </label>
-        <label className="flex items-center gap-2 md:col-span-2">
-          <input
-            type="checkbox"
-            checked={settings.membershipScanEnabled !== false}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, membershipScanEnabled: e.target.checked })}
-          />
-          <span className="text-sm">{t('kioskMembershipScan')}</span>
-        </label>
-        <label className="flex items-center gap-2 md:col-span-2">
-          <input
-            type="checkbox"
-            checked={settings.kioskCashNeedsApproval !== false}
-            disabled={!tokenModeEditable}
-            onChange={(e) => setSettings({ ...settings, kioskCashNeedsApproval: e.target.checked })}
-          />
-          <span className="text-sm">{t('kioskCashNeedsApproval')}</span>
-        </label>
-      </section>
-
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
         {tokenModeEditable ? (
           <button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>
             {saving ? t('saving') : t('save')}
