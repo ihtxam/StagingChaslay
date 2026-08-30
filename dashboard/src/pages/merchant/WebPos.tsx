@@ -177,6 +177,7 @@ import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/web
 import WebPosBridgeSetupModal from '@/components/webpos/WebPosBridgeSetupModal';
 import {
   initWebPosLogging,
+  logWebPosError,
   sendWebPosLogsToSupport,
 } from '@/lib/webpos-log';
 
@@ -976,6 +977,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     scope: CancelScope;
     lineId?: string;
   } | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsAutoSend, setLogsAutoSend] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSeedMethod, setCheckoutSeedMethod] = useState<
     PosPaymentMethod | 'express'
