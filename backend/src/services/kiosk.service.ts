@@ -160,6 +160,7 @@ export class KioskService {
         price?: number | string | null;
         isDefault?: boolean | null;
         saleStatus?: string | null;
+        imageUrl?: string | null;
       }>;
     }) => ({
       id: g.id,
@@ -175,6 +176,7 @@ export class KioskService {
           name: o.name,
           price: Number(o.price) || 0,
           isDefault: !!o.isDefault,
+          image: o.imageUrl || null,
         })),
     });
 

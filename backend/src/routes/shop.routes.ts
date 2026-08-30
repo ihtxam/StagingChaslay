@@ -66,6 +66,7 @@ function serializeShopModifierGroup(g: any) {
         name: o.name,
         price: pricingType === "free" ? 0 : parseFloat(o.price?.toString() || "0"),
         isDefault: !!o.isDefault,
+        image: o.imageUrl || o.image || null,
       })),
   };
 }
@@ -148,16 +149,31 @@ function withPublicShopImageUrls(
   req: Request,
   item: ReturnType<typeof mapShopProduct>
 ): ReturnType<typeof mapShopProduct> {
+  const modifierGroups = item.modifierGroups?.map((g) => ({
+    ...g,
+    options: g.options.map((opt) => ({
+      ...opt,
+      image: resolvePublicAssetUrl(req, opt.image) || opt.image,
+    })),
+  }));
   const comboSlots = item.comboSlots?.map((slot) => ({
     ...slot,
     options: slot.options.map((opt) => ({
       ...opt,
       image: resolvePublicAssetUrl(req, opt.image) || opt.image,
+      modifierGroups: opt.modifierGroups?.map((g) => ({
+        ...g,
+        options: g.options.map((o) => ({
+          ...o,
+          image: resolvePublicAssetUrl(req, o.image) || o.image,
+        })),
+      })),
     })),
   }));
   return {
     ...item,
     image: resolvePublicAssetUrl(req, item.image) || item.image,
+    modifierGroups: modifierGroups ?? item.modifierGroups,
     comboSlots: comboSlots ?? item.comboSlots,
   };
 }

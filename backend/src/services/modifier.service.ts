@@ -14,6 +14,7 @@ export type ModifierOptionInput = {
   sortOrder?: number;
   inventoryItemId?: string | null;
   inventoryQty?: number;
+  imageUrl?: string | null;
 };
 
 export type ModifierGroupInput = {
@@ -52,6 +53,7 @@ function publicOption(o: typeof schema.modifierOptions.$inferSelect) {
     sortOrder: o.sortOrder ?? 0,
     inventoryItemId: o.inventoryItemId || null,
     inventoryQty: Number.isFinite(qty) ? qty : 0,
+    imageUrl: String(o.imageUrl || "").trim() || null,
   };
 }
 
@@ -332,6 +334,7 @@ export class ModifierService {
           ? o.inventoryItemId
           : null,
         inventoryQty: String(Math.max(0, Number(o.inventoryQty) || 0)),
+        imageUrl: o.imageUrl?.trim() || null,
       }))
       .filter((o) => o.name);
 

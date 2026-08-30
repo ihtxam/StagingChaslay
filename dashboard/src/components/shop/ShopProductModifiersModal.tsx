@@ -36,6 +36,13 @@ type Props = {
   /** POS-style header with qty, note, and blue add button */
   variant?: 'shop' | 'pos';
   initialQty?: number;
+  showProductImages?: boolean;
+  /** false = wider grid (kiosk / POS-style modifier picker) */
+  compact?: boolean;
+  /** Larger option photo tiles */
+  touchLarge?: boolean;
+  /** Wider modal (kiosk) */
+  wide?: boolean;
 };
 
 export default function ShopProductModifiersModal({
@@ -44,6 +51,10 @@ export default function ShopProductModifiersModal({
   onConfirm,
   variant = 'shop',
   initialQty = 1,
+  showProductImages = true,
+  compact,
+  touchLarge = false,
+  wide = false,
 }: Props) {
   const { t } = useI18n();
   const groups = useMemo(() => effectiveGroups(product), [product]);
@@ -80,6 +91,7 @@ export default function ShopProductModifiersModal({
   };
 
   const isPos = variant === 'pos';
+  const gridCompact = compact ?? !isPos;
 
   return (
     <>
@@ -89,7 +101,9 @@ export default function ShopProductModifiersModal({
       >
         <div
           className={`flex w-full flex-col bg-white shadow-2xl ${
-            isPos ? 'max-h-[92vh] sm:max-w-2xl' : 'max-h-[90vh] sm:max-w-md'
+            isPos || wide
+              ? 'max-h-[92vh] sm:max-w-2xl'
+              : 'max-h-[90vh] sm:max-w-md'
           }`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -178,7 +192,9 @@ export default function ShopProductModifiersModal({
               setError(null);
               setSelection(updater);
             }}
-            compact={!isPos}
+            compact={gridCompact}
+            showProductImages={showProductImages}
+            touchLarge={touchLarge}
           />
 
           {!isPos ? (

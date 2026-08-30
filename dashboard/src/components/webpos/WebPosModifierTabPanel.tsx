@@ -142,7 +142,7 @@ export default function WebPosModifierTabPanel({
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
                 {activeGroup.options.map((opt) => {
                   const checked = (selection[activeGroup.id] || []).includes(opt.id);
-                  const imageSrc = opt.image || null;
+                  const imageSrc = opt.image || opt.imageUrl || null;
                   return (
                     <button
                       key={opt.id}
@@ -155,7 +155,7 @@ export default function WebPosModifierTabPanel({
                       }`}
                     >
                       {showProductImages && imageSrc ? (
-                        <div className="mb-1.5 h-10 w-10 shrink-0 overflow-hidden rounded-md bg-stone-100">
+                        <div className="mb-1.5 h-14 w-14 shrink-0 overflow-hidden rounded-md bg-stone-100">
                           <img
                             src={imageSrc}
                             alt=""
