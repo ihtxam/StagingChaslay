@@ -1,6 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
+import {
+  reservationChipActiveClass,
+  reservationChipIdleClass,
+} from '@/lib/reservation-badges';
 import { useI18n } from '@/lib/i18n';
 import { addDaysYmdZurich, ymdZurich } from '@/lib/date-format';
 import { dayKeyOf, zonedLocalDate, type DayKey } from '@/lib/shop-hours';
@@ -49,9 +53,7 @@ type Props = {
 
 const chipClass = (active: boolean) =>
   `rounded-full px-2.5 py-1 text-xs sm:text-sm border transition ${
-    active
-      ? 'bg-sky-100 border-sky-300 text-sky-900 font-medium'
-      : 'border-[var(--border)] hover:bg-[var(--bg-muted)]'
+    active ? reservationChipActiveClass : reservationChipIdleClass
   }`;
 
 type FieldErrors = {
@@ -398,7 +400,9 @@ export default function ReservationCreateSheet({
                 )}
               </div>
               {isPast ? (
-                <p className="mt-2 text-xs text-amber-700">{t('reservationsDatePast')}</p>
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  {t('reservationsDatePast')}
+                </p>
               ) : null}
             </section>
 
@@ -414,8 +418,8 @@ export default function ReservationCreateSheet({
                     onClick={() => setForm({ ...form, partySize: n })}
                     className={`h-9 w-9 rounded-lg border text-sm font-medium ${
                       form.partySize === n
-                        ? 'bg-sky-100 border-sky-300 text-sky-900'
-                        : 'border-[var(--border)] hover:bg-[var(--bg-muted)]'
+                        ? reservationChipActiveClass
+                        : reservationChipIdleClass
                     }`}
                   >
                     {n}

@@ -77,14 +77,14 @@ export default function OrderAcceptWithEtaModal({
       aria-modal="true"
       aria-labelledby="order-accept-eta-title"
     >
-      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-violet-300 bg-white p-5 shadow-2xl ring-4 ring-violet-400/50">
+      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-violet-300 bg-[var(--webpos-surface,var(--bg-elevated))] p-5 shadow-2xl ring-4 ring-violet-400/50 dark:border-violet-800">
         <div className="flex items-start gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
             <Bell size={26} className="animate-pulse" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 id="order-accept-eta-title" className="text-xl font-bold text-stone-900">
+              <h2 id="order-accept-eta-title" className="text-xl font-bold text-[var(--webpos-text,var(--text))]">
                 {t('webPosNewOrderAlert')}
               </h2>
               <span
@@ -102,7 +102,7 @@ export default function OrderAcceptWithEtaModal({
           {onDismiss ? (
             <button
               type="button"
-              className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
+              className="rounded-lg p-2 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
               aria-label={t('close')}
               onClick={() => onDismiss(order)}
             >
@@ -114,10 +114,10 @@ export default function OrderAcceptWithEtaModal({
         <div className="mt-4 space-y-3 rounded-xl border border-violet-100 bg-violet-50/70 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-lg font-bold text-stone-900">
+              <p className="text-lg font-bold text-[var(--webpos-text,var(--text))]">
                 {formatOrderNumberDisplay(order.orderNumber) || order.id.slice(0, 8)}
               </p>
-              <p className="mt-0.5 text-sm text-stone-600">
+              <p className="mt-0.5 text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
                 {channelLabel(order.fulfillmentChannel)} · {money(order.total)}
               </p>
             </div>
@@ -136,15 +136,15 @@ export default function OrderAcceptWithEtaModal({
               {t('orderAcceptCustomerTime')}: {formatDateTime(order.scheduledFor!)}
             </p>
           ) : (
-            <p className="text-sm text-stone-600">{t('orderAcceptAsapHint')}</p>
+            <p className="text-sm text-[var(--webpos-text-muted,var(--text-muted))]">{t('orderAcceptAsapHint')}</p>
           )}
 
           {(order.customerName || order.customerPhone || order.shippingAddress) && (
-            <div className="space-y-0.5 text-sm text-stone-700">
+            <div className="space-y-0.5 text-sm text-[var(--webpos-text,var(--text))]">
               {order.customerName ? <p className="font-semibold">{order.customerName}</p> : null}
               {order.customerPhone ? <p>{order.customerPhone}</p> : null}
               {order.shippingAddress ? (
-                <p className="text-xs text-stone-600">{order.shippingAddress}</p>
+                <p className="text-xs text-[var(--webpos-text-muted,var(--text-muted))]">{order.shippingAddress}</p>
               ) : null}
               {zip ? (
                 <p className="text-xs font-bold text-sky-800">
@@ -155,14 +155,14 @@ export default function OrderAcceptWithEtaModal({
           )}
 
           {itemPreview.length > 0 ? (
-            <ul className="space-y-0.5 border-t border-violet-100 pt-2 text-sm text-stone-700">
+            <ul className="space-y-0.5 border-t border-violet-100 pt-2 text-sm text-[var(--webpos-text,var(--text))] dark:border-violet-900">
               {itemPreview.map((item, idx) => (
                 <li key={idx}>
                   {item.quantity}× {resolveOrderItemName(item.productName)}
                 </li>
               ))}
               {items.length > itemPreview.length ? (
-                <li className="text-stone-500">
+                <li className="text-[var(--webpos-text-muted,var(--text-muted))]">
                   {t('webPosNewOrderAlertMoreItems').replace(
                     '{n}',
                     String(items.length - itemPreview.length)
@@ -174,8 +174,8 @@ export default function OrderAcceptWithEtaModal({
         </div>
 
         <div className="mt-4">
-          <p className="text-sm font-semibold text-stone-800">{t('orderAcceptPrepTime')}</p>
-          <p className="mt-0.5 text-xs text-stone-500">{t('orderAcceptPrepTimeHint')}</p>
+          <p className="text-sm font-semibold text-[var(--webpos-text,var(--text))]">{t('orderAcceptPrepTime')}</p>
+          <p className="mt-0.5 text-xs text-[var(--webpos-text-muted,var(--text-muted))]">{t('orderAcceptPrepTimeHint')}</p>
           <div className="mt-3 grid grid-cols-4 gap-2">
             {ORDER_ACCEPT_ETA_PRESETS.map((m) => (
               <button
@@ -186,7 +186,7 @@ export default function OrderAcceptWithEtaModal({
                 className={`rounded-xl border-2 py-3 text-sm font-bold ${
                   prepMinutes === m
                     ? 'border-violet-600 bg-violet-600 text-white'
-                    : 'border-stone-200 bg-white text-stone-800 hover:border-violet-300'
+                    : 'border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] hover:border-violet-300'
                 }`}
               >
                 +{m} {t('minutes')}

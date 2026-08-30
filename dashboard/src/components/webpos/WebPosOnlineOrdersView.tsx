@@ -257,12 +257,12 @@ export default function WebPosOnlineOrdersView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-stone-100 bg-stone-50 px-2 py-2 sm:px-3">
+      <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-surface-2)] px-2 py-2 sm:px-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-stone-500">{t('orderCenterSubtitle')}</p>
+          <p className="text-xs text-[var(--webpos-text-muted)]">{t('orderCenterSubtitle')}</p>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--webpos-border)] bg-[var(--webpos-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--webpos-text)] hover:bg-[var(--webpos-surface-2)]"
             onClick={() => setPrepOpen(true)}
           >
             <Settings2 size={14} />
@@ -284,14 +284,14 @@ export default function WebPosOnlineOrdersView({
               onClick={() => setTab(id)}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold sm:px-4 sm:text-sm ${
                 tab === id
-                  ? 'bg-stone-900 text-white'
-                  : 'bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100'
+                  ? 'bg-[var(--webpos-accent)] text-white'
+                  : 'bg-[var(--webpos-surface)] text-[var(--webpos-text-muted)] ring-1 ring-[var(--webpos-border)] hover:bg-[var(--webpos-surface-2)]'
               }`}
             >
               {label}
             </button>
           ))}
-          <span className="mx-0.5 hidden h-5 w-px bg-stone-300 sm:inline-block" aria-hidden />
+          <span className="mx-0.5 hidden h-5 w-px bg-[var(--webpos-border)] sm:inline-block" aria-hidden />
           {(
             [
               ['all', t('orderCenterFilterAll')],
@@ -306,8 +306,8 @@ export default function WebPosOnlineOrdersView({
               onClick={() => setPlatform(id)}
               className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide sm:px-2.5 sm:text-[11px] ${
                 platform === id
-                  ? 'bg-violet-100 text-violet-900'
-                  : 'bg-white text-stone-500 ring-1 ring-stone-200 hover:bg-stone-50'
+                  ? 'bg-violet-100 text-violet-900 dark:bg-violet-950/50 dark:text-violet-200'
+                  : 'bg-[var(--webpos-surface)] text-[var(--webpos-text-muted)] ring-1 ring-[var(--webpos-border)] hover:bg-[var(--webpos-surface-2)]'
               }`}
             >
               {label}
@@ -318,7 +318,7 @@ export default function WebPosOnlineOrdersView({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
         {filtered.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-[var(--webpos-border)] bg-[var(--webpos-surface)] p-8 text-center text-sm text-[var(--webpos-text-muted)]">
             {t('webPosNoOnlineOrders')}
           </p>
         ) : (
@@ -333,7 +333,7 @@ export default function WebPosOnlineOrdersView({
               return (
                 <article
                   key={o.id}
-                  className={`relative overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm border-l-4 ${borderClass} ${
+                  className={`relative overflow-hidden rounded-xl border border-[var(--webpos-border)] bg-[var(--webpos-surface)] shadow-sm border-l-4 ${borderClass} ${
                     highlighted ? 'ring-2 ring-violet-400' : ''
                   }`}
                 >
@@ -352,7 +352,7 @@ export default function WebPosOnlineOrdersView({
                         >
                           {orderPlatformLabel(o as MerchantOrder, t)}
                         </span>
-                        <span className="text-base font-bold text-stone-900">
+                        <span className="text-base font-bold text-[var(--webpos-text)]">
                           {formatOrderNumberDisplay(o.orderNumber) || o.id.slice(0, 8)}
                         </span>
                         {isPaidOrder(o as MerchantOrder) ||
@@ -363,9 +363,9 @@ export default function WebPosOnlineOrdersView({
                           </span>
                         ) : null}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-stone-500">
+                      <div className="flex items-center gap-2 text-xs text-[var(--webpos-text-muted)]">
                         {(o.printCount ?? 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5 font-semibold text-stone-700">
+                          <span className="inline-flex items-center gap-1 rounded bg-[var(--webpos-surface-2)] px-2 py-0.5 font-semibold text-[var(--webpos-text)]">
                             <Printer size={12} />
                             {o.printCount}
                           </span>
@@ -374,11 +374,11 @@ export default function WebPosOnlineOrdersView({
                       </div>
                     </div>
 
-                    <div className="mt-2 grid gap-1 text-sm text-stone-700 sm:grid-cols-2">
+                    <div className="mt-2 grid gap-1 text-sm text-[var(--webpos-text)] sm:grid-cols-2">
                       {o.customerName ? <p className="font-semibold">{o.customerName}</p> : null}
                       {o.customerPhone ? <p>{o.customerPhone}</p> : null}
                       {o.shippingAddress ? (
-                        <p className="sm:col-span-2 text-xs text-stone-600">{o.shippingAddress}</p>
+                        <p className="sm:col-span-2 text-xs text-[var(--webpos-text-muted)]">{o.shippingAddress}</p>
                       ) : null}
                     </div>
 
@@ -393,7 +393,7 @@ export default function WebPosOnlineOrdersView({
                           {t('webPosAwaitingPayment')}
                         </span>
                       ) : null}
-                      <span className="text-sm font-bold text-stone-900">{money(o.total)}</span>
+                      <span className="text-sm font-bold text-[var(--webpos-text)]">{money(o.total)}</span>
                       {o.scheduledFor ? (
                         <span className="text-xs font-semibold text-amber-800">
                           {t('orderCenterScheduled')}: {formatDateTime(o.scheduledFor)}
@@ -408,7 +408,7 @@ export default function WebPosOnlineOrdersView({
                         {tags.map((tag) => (
                           <span
                             key={tag}
-                            className="rounded bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-stone-600"
+                            className="rounded bg-[var(--webpos-surface-2)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--webpos-text-muted)]"
                           >
                             {tag}
                           </span>
@@ -417,14 +417,14 @@ export default function WebPosOnlineOrdersView({
                     ) : null}
 
                     {o.items && o.items.length > 0 ? (
-                      <ul className="mt-2 space-y-0.5 text-xs text-stone-600">
+                      <ul className="mt-2 space-y-0.5 text-xs text-[var(--webpos-text-muted)]">
                         {o.items.slice(0, 3).map((item, idx) => (
                           <li key={idx}>
                             {item.quantity}× {resolveOrderItemName(item.productName)}
                           </li>
                         ))}
                         {o.items.length > 3 ? (
-                          <li className="text-stone-400">
+                          <li className="text-[var(--webpos-text-muted)] opacity-70">
                             +{o.items.length - 3} {t('more')}
                           </li>
                         ) : null}
@@ -432,15 +432,15 @@ export default function WebPosOnlineOrdersView({
                     ) : null}
 
                     {o.estimatedReadyAt && isActiveOnlineOrder(o) ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-3 py-2">
-                        <Clock size={14} className="text-stone-500" />
-                        <span className="text-xs font-semibold text-stone-700">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[var(--webpos-surface-2)] px-3 py-2">
+                        <Clock size={14} className="text-[var(--webpos-text-muted)]" />
+                        <span className="text-xs font-semibold text-[var(--webpos-text)]">
                           {t('orderCenterEta')}: {formatTime(o.estimatedReadyAt)}
                         </span>
                         <div className="ml-auto flex items-center gap-2">
                           <button
                             type="button"
-                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-stone-300 bg-white p-2.5 hover:bg-stone-50 disabled:opacity-50"
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--webpos-border)] bg-[var(--webpos-surface)] p-2.5 hover:bg-[var(--webpos-surface-2)] disabled:opacity-50"
                             disabled={busyId === o.id}
                             onClick={() => void adjustEta(o, -5)}
                             aria-label="-5 min"
@@ -449,7 +449,7 @@ export default function WebPosOnlineOrdersView({
                           </button>
                           <button
                             type="button"
-                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-stone-300 bg-white p-2.5 hover:bg-stone-50 disabled:opacity-50"
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--webpos-border)] bg-[var(--webpos-surface)] p-2.5 hover:bg-[var(--webpos-surface-2)] disabled:opacity-50"
                             disabled={busyId === o.id}
                             onClick={() => void adjustEta(o, 5)}
                             aria-label="+5 min"
@@ -460,7 +460,7 @@ export default function WebPosOnlineOrdersView({
                       </div>
                     ) : null}
 
-                    <div className="mt-3 border-t border-stone-100 pt-3">{renderActions(o)}</div>
+                    <div className="mt-3 border-t border-[var(--webpos-border)] pt-3">{renderActions(o)}</div>
                   </div>
                 </article>
               );

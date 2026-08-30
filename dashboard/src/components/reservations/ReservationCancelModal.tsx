@@ -54,17 +54,18 @@ export default function ReservationCancelModal({
 
   const panelClass =
     variant === 'webpos'
-      ? 'w-full max-w-md rounded-xl bg-white p-4 shadow-xl space-y-3'
-      : 'w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-xl space-y-3';
-  const hintClass = variant === 'webpos' ? 'text-sm text-stone-600' : 'text-sm muted';
-  const chipSelected =
+      ? 'w-full max-w-md rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] p-4 shadow-xl space-y-3'
+      : 'w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-xl space-y-3';
+  const hintClass =
     variant === 'webpos'
-      ? 'border-red-600 bg-red-50 text-red-900 font-semibold'
-      : 'border-red-600 bg-red-50 text-red-900 font-semibold';
+      ? 'text-sm text-[var(--webpos-text-muted,var(--text-muted))]'
+      : 'text-sm muted';
+  const chipSelected =
+    'border-red-600 bg-red-50 text-red-900 font-semibold dark:bg-red-950/40 dark:text-red-200 dark:border-red-700';
   const chipDefault =
     variant === 'webpos'
-      ? 'border-stone-200 bg-stone-50 text-stone-700 hover:border-stone-300'
-      : 'border-[var(--border)] bg-[var(--bg-muted)]/40 hover:border-stone-300';
+      ? 'border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface-2,var(--bg-muted))] text-[var(--webpos-text,var(--text))] hover:border-[var(--webpos-border,var(--border))]'
+      : 'border-[var(--border)] bg-[var(--bg-muted)]/40 hover:border-[var(--border)]';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
