@@ -1383,6 +1383,10 @@ const REQUIRED_POS_SESSIONS_COLUMNS = ["location_id", "print_agent_online"];
 
 /** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
 export async function ensurePosSessionsSchema(): Promise<void> {
+  if (!(await tableExists("pos_sessions"))) {
+    patchedTables = false;
+    await ensureMerchantTables();
+  }
   const statements = [
     EXTRA_COLUMN_PATCHES.pos_sessions_location_id,
     EXTRA_COLUMN_PATCHES.pos_sessions_print_agent_online,
@@ -1762,6 +1766,13 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       if (locationsMissing) {
         await ensureLocationsSchema();
       } else if (posSessionsMissing) {
+        if (
+          !missingColumnFromDbError(raw) &&
+          /relation ["']?pos_sessions["']? does not exist/i.test(raw)
+        ) {
+          patchedTables = false;
+          await ensureMerchantTables();
+        }
         await ensurePosSessionsSchema();
       } else if (subscriptionMissing) {
         await ensureSubscriptionPlansSchema();
@@ -1804,6 +1815,11 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
     return true;
   }
   if (isPosSessionsSchemaError(raw) || /pos_sessions|posSessions/i.test(raw)) {
+    const { table, column } = missingTableColumnFromDbError(error);
+    if (table === "pos_sessions" && !column) {
+      patchedTables = false;
+      await ensureMerchantTables();
+    }
     await ensurePosSessionsSchema();
     return true;
   }

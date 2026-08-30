@@ -15,7 +15,10 @@ router.use(setMerchantContext);
 /** GET /api/merchant/pos/sessions — active main + waiter stations */
 router.get("/pos/sessions", async (req: Request, res: Response) => {
   try {
-    const merchantId = req.merchantId!;
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
     const [main, waiter, limits] = await Promise.all([
       PosSessionsService.listActive(merchantId, "main"),
       PosSessionsService.listActive(merchantId, "waiter"),

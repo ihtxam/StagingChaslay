@@ -92,7 +92,13 @@ export default function PosPostsSection({
       setMain(data.sessions.main || []);
       setWaiter(data.sessions.waiter || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load sessions');
+      const msg = String(e.response?.data?.error || e.message || '');
+      const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(msg);
+      if (schemaLag) {
+        console.warn('[pos-posts] sessions list skipped (schema):', msg);
+      } else {
+        toast.error(msg || 'Failed to load sessions');
+      }
     } finally {
       setLoading(false);
     }

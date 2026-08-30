@@ -11,6 +11,9 @@ router.use(auth_middleware_1.setMerchantContext);
 router.get("/pos/sessions", async (req, res) => {
     try {
         const merchantId = req.merchantId;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
         const [main, waiter, limits] = await Promise.all([
             pos_sessions_service_1.PosSessionsService.listActive(merchantId, "main"),
             pos_sessions_service_1.PosSessionsService.listActive(merchantId, "waiter"),
@@ -42,6 +45,7 @@ router.post("/pos/sessions/register", async (req, res) => {
             deviceLabel: body.deviceLabel ? String(body.deviceLabel) : null,
             staffId: body.staffId ? String(body.staffId) : null,
             staffName: body.staffName ? String(body.staffName) : null,
+            locationId: body.locationId ? String(body.locationId) : null,
         });
         res.json({ success: true, ...result });
     }
