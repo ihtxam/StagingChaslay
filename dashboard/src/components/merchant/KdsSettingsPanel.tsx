@@ -56,8 +56,24 @@ export default function KdsSettingsPanel() {
   const [gridColumns, setGridColumns] = useState(3);
   const [overdueMinutes, setOverdueMinutes] = useState(20);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [licenseError, setLicenseError] = useState(false);
   const [savingStationId, setSavingStationId] = useState<string | null>(null);
+
+  const resetCreateForm = () => {
+    setName('');
+    setOrderTypes([]);
+    setCategoryIds([]);
+    setTheme('dark');
+    setLayoutMode('grid');
+    setGridColumns(3);
+    setOverdueMinutes(20);
+  };
+
+  const closeCreateForm = () => {
+    setCreateOpen(false);
+    resetCreateForm();
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,13 +120,7 @@ export default function KdsSettingsPanel() {
         gridColumns,
         overdueMinutes,
       });
-      setName('');
-      setOrderTypes([]);
-      setCategoryIds([]);
-      setTheme('dark');
-      setLayoutMode('grid');
-      setGridColumns(3);
-      setOverdueMinutes(20);
+      closeCreateForm();
       toast.success(t('kdsStationCreated'));
       await load();
     } catch (e: any) {
@@ -259,79 +269,100 @@ export default function KdsSettingsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className={`${PANEL_CARD} p-4 space-y-3`}>
-        <p className="text-sm font-medium">{t('kdsAddStation')}</p>
-        <input
-          className="input w-full"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t('kdsStationNamePlaceholder')}
-        />
-        <div>
-          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOrderTypesLabel')}</p>
-          <div className="flex flex-wrap gap-2">
-            {CHANNELS.map((ch) => (
-              <button
-                key={ch}
-                type="button"
-                onClick={() => toggleChannel(ch)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  orderTypes.includes(ch) ? 'bg-teal-600 text-white' : CHIP_IDLE
-                }`}
-              >
-                {ch}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsChannelFilterHint')}</p>
-        </div>
-        {categories.length > 0 ? (
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text)]">{t('kdsStations')}</h2>
+        {!createOpen ? (
+          <button
+            type="button"
+            className="btn-primary text-sm inline-flex items-center gap-1"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            {t('kdsAddStation')}
+          </button>
+        ) : null}
+      </div>
+
+      {createOpen ? (
+        <div className={`${PANEL_CARD} p-4 space-y-3`}>
+          <input
+            className="input w-full"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('kdsStationNamePlaceholder')}
+            autoFocus
+          />
           <div>
-            <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsCategoriesLabel')}</p>
+            <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOrderTypesLabel')}</p>
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
+              {CHANNELS.map((ch) => (
                 <button
-                  key={cat.id}
+                  key={ch}
                   type="button"
-                  onClick={() => toggleCategory(cat.id)}
+                  onClick={() => toggleChannel(ch)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    categoryIds.includes(cat.id) ? 'bg-violet-600 text-white' : CHIP_IDLE
+                    orderTypes.includes(ch) ? 'bg-teal-600 text-white' : CHIP_IDLE
                   }`}
                 >
-                  {cat.name}
+                  {ch}
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsCategoryFilterHint')}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsChannelFilterHint')}</p>
           </div>
-        ) : null}
-        <ThemePicker value={theme} onChange={setTheme} />
-        <KdsLayoutModePicker value={layoutMode} onChange={setLayoutMode} />
-        {layoutMode === 'grid' ? (
-          <KdsGridColumnsPicker value={gridColumns} onChange={setGridColumns} />
-        ) : null}
-        <div>
-          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOverdueMinutesLabel')}</p>
-          <input
-            type="number"
-            min={5}
-            max={120}
-            className="input w-24"
-            value={overdueMinutes}
-            onChange={(e) => setOverdueMinutes(Math.min(120, Math.max(5, Number(e.target.value) || 20)))}
-          />
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsOverdueMinutesHint')}</p>
+          {categories.length > 0 ? (
+            <div>
+              <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsCategoriesLabel')}</p>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => toggleCategory(cat.id)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                      categoryIds.includes(cat.id) ? 'bg-violet-600 text-white' : CHIP_IDLE
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsCategoryFilterHint')}</p>
+            </div>
+          ) : null}
+          <ThemePicker value={theme} onChange={setTheme} />
+          <KdsLayoutModePicker value={layoutMode} onChange={setLayoutMode} />
+          {layoutMode === 'grid' ? (
+            <KdsGridColumnsPicker value={gridColumns} onChange={setGridColumns} />
+          ) : null}
+          <div>
+            <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{t('kdsOverdueMinutesLabel')}</p>
+            <input
+              type="number"
+              min={5}
+              max={120}
+              className="input w-24"
+              value={overdueMinutes}
+              onChange={(e) => setOverdueMinutes(Math.min(120, Math.max(5, Number(e.target.value) || 20)))}
+            />
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kdsOverdueMinutesHint')}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || !name.trim()}
+              onClick={() => void createStation()}
+              className="btn-primary inline-flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              {t('create')}
+            </button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={closeCreateForm}>
+              {t('cancel')}
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          disabled={busy || !name.trim()}
-          onClick={() => void createStation()}
-          className="btn-primary inline-flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          {t('kdsAddStation')}
-        </button>
-      </div>
+      ) : null}
 
       {loading ? (
         <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>

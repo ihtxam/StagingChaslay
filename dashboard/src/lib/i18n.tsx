@@ -2595,6 +2595,7 @@ const en: Dict = {
   kdsSettingsTitle: 'Kitchen display (KDS)',
   kdsSettingsHint:
     'Create a station, copy the browser link to a kitchen tablet, and bookmark it. Rotate the link if the URL is shared outside the kitchen.',
+  kdsStations: 'KDS stations',
   kdsAddStation: 'Add KDS station',
   kdsStationNamePlaceholder: 'e.g. Pizza station',
   kdsChannelFilterHint: 'Leave all channels off to show every order type on this screen.',
@@ -6153,6 +6154,7 @@ const fr: Dict = {
   kdsSettingsTitle: 'Écran cuisine (KDS)',
   kdsSettingsHint:
     'Créez un poste, copiez le lien navigateur sur une tablette cuisine et mettez-le en favori. Régénérez le lien si l’URL circule hors cuisine.',
+  kdsStations: 'Postes KDS',
   kdsAddStation: 'Ajouter un poste KDS',
   kdsStationNamePlaceholder: 'ex. Poste pizza',
   kdsChannelFilterHint: 'Laissez tous les canaux désactivés pour afficher tous les types de commande.',
@@ -9674,6 +9676,7 @@ const de: Dict = {
   kdsSettingsTitle: 'Küchendisplay (KDS)',
   kdsSettingsHint:
     'Station anlegen, Browser-Link auf Küchen-Tablet kopieren und als Lesezeichen speichern. Link rotieren, wenn die URL weitergegeben wurde.',
+  kdsStations: 'KDS-Stationen',
   kdsAddStation: 'KDS-Station hinzufügen',
   kdsStationNamePlaceholder: 'z. B. Pizza-Station',
   kdsChannelFilterHint: 'Alle Kanäle aus = alle Bestelltypen auf diesem Bildschirm.',
