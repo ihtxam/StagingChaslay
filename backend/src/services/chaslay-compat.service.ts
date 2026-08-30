@@ -462,6 +462,10 @@ export class ChaslayCompatService {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount &&
       active.length > 0;
+    const tapToPayReady =
+      merchant.tapToPayEnabled === true &&
+      !!merchant.adyenApiKey &&
+      !!merchant.adyenMerchantAccount;
 
     const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
@@ -482,11 +486,14 @@ export class ChaslayCompatService {
         status: t.status,
       })),
       terminal_ready: terminalReady,
+      tap_to_pay_ready: tapToPayReady,
+      tap_to_pay_enabled: merchant.tapToPayEnabled === true,
       methods: {
         express: merchant.webposExpressEnabled !== false,
         cash: merchant.webposCashEnabled !== false,
         card: merchant.webposCardEnabled !== false,
         terminal: merchant.webposTerminalEnabled !== false && terminalReady,
+        tap_to_pay: tapToPayReady,
         giftCard:
           merchant.webposGiftCardEnabled === true &&
           !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,

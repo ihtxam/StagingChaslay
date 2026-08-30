@@ -221,6 +221,9 @@ export class MerchantSettingsService {
       adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
       adyenApiKeySet: !!merchant.adyenApiKey,
       adyenClientId: merchant.adyenClientId,
+      adyenHmacKeyMasked: maskSecret(merchant.adyenHmacKey),
+      adyenHmacKeySet: !!merchant.adyenHmacKey,
+      tapToPayEnabled: merchant.tapToPayEnabled === true,
       adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
       adyenLiveRegion: merchant.adyenLiveRegion || "EU",
       adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
@@ -329,6 +332,8 @@ export class MerchantSettingsService {
       adyenMerchantAccount?: string;
       adyenApiKey?: string;
       adyenClientId?: string;
+      adyenHmacKey?: string;
+      tapToPayEnabled?: boolean;
       adyenLiveEnvironment?: boolean;
       adyenLiveRegion?: string;
       adyenUseLegacyEndpoint?: boolean;
@@ -462,6 +467,7 @@ export class MerchantSettingsService {
     }
     if (updates.adyenMerchantAccount !== undefined) patch.adyenMerchantAccount = updates.adyenMerchantAccount;
     if (updates.adyenClientId !== undefined) patch.adyenClientId = updates.adyenClientId;
+    if (updates.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!updates.tapToPayEnabled;
     if (updates.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
     if (updates.adyenLiveRegion !== undefined) {
       const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
@@ -521,6 +527,9 @@ export class MerchantSettingsService {
     // Only overwrite API key when a non-empty new value is provided (not the masked placeholder)
     if (updates.adyenApiKey && !updates.adyenApiKey.includes("••••")) {
       patch.adyenApiKey = updates.adyenApiKey;
+    }
+    if (updates.adyenHmacKey && !updates.adyenHmacKey.includes("••••")) {
+      patch.adyenHmacKey = updates.adyenHmacKey.trim();
     }
 
     if (updates.slug !== undefined) {

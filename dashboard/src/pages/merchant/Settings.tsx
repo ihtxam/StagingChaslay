@@ -25,6 +25,7 @@ import {
   ChefHat,
   Tv,
   TabletSmartphone,
+  Copy,
 } from 'lucide-react';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
@@ -173,7 +174,9 @@ interface SettingsData {
   bankAccountHolder?: string | null;
   webposTerminalEnabled?: boolean;
   adyenLiveEnvironment?: boolean;
+  adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
+  tapToPayEnabled?: boolean;
   emailSmtpSettings?: {
     enabled?: boolean;
     host?: string | null;
@@ -281,6 +284,8 @@ interface AdyenCreds {
   clientId?: string | null;
   apiKeyMasked?: string | null;
   apiKeySet?: boolean;
+  hmacKeyMasked?: string | null;
+  hmacKeySet?: boolean;
 }
 
 interface TerminalRow {
@@ -483,12 +488,20 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const adyenWebhookUrl = useMemo(() => {
+    const merchantId = user?.merchantId;
+    if (!merchantId) return '';
+    const env = import.meta.env.VITE_API_URL as string | undefined;
+    const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
+    return `${base}/webhooks/adyen/${merchantId}`;
+  }, [user?.merchantId]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [adyen, setAdyen] = useState<AdyenCreds>({});
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [hmacKey, setHmacKey] = useState('');
   const [cardFeeFixed, setCardFeeFixed] = useState('0');
   const [cardFeePercent, setCardFeePercent] = useState('0');
   const [smtpPassword, setSmtpPassword] = useState('');
@@ -794,7 +807,12 @@ export default function Settings() {
       {
         id: 'payments-adyen',
         tab: 'payments',
-        keywords: ['adyen', 'swisspayout', 'terminal', t('adyenCredentials')],
+        keywords: ['adyen', 'swisspayout', 'terminal', 'tap to pay', 'softpos', t('adyenCredentials'), t('tapToPaySettings')],
+      },
+      {
+        id: 'payments-tap-to-pay',
+        tab: 'payments',
+        keywords: ['tap to pay', 'nfc', 'softpos', 'android', t('tapToPaySettings'), t('tapToPayEnabled')],
       },
       {
         id: 'business-profile',
@@ -1289,9 +1307,11 @@ export default function Settings() {
         adyenMerchantAccount: merchantAccount,
         adyenApiKey: apiKey || undefined,
         adyenClientId: clientId,
+        adyenHmacKey: hmacKey || undefined,
       });
       setAdyen(response.data.adyen || {});
       setApiKey('');
+      setHmacKey('');
       toast.success(t('adyenSaved'));
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to save Swisspayout credentials');
@@ -1337,7 +1357,9 @@ export default function Settings() {
         bankName: settings.bankName || null,
         bankAccountHolder: settings.bankAccountHolder || null,
         adyenLiveEnvironment: !!settings.adyenLiveEnvironment,
+        adyenLiveRegion: settings.adyenLiveRegion || 'EU',
         adyenUseLegacyEndpoint: !!settings.adyenUseLegacyEndpoint,
+        tapToPayEnabled: settings.tapToPayEnabled === true,
       });
       const next = response.data.merchant || response.data.settings || {};
       setSettings((prev) => (prev ? { ...prev, ...next } : prev));
@@ -2729,9 +2751,80 @@ export default function Settings() {
                         />
                       </Field>
                     </div>
+                    <div className="sm:col-span-2">
+                      <Field
+                        label={t('adyenHmacKey')}
+                        hint={
+                          adyen.hmacKeySet
+                            ? `${t('currentKey')}: ${adyen.hmacKeyMasked || '••••'}`
+                            : t('adyenHmacKeyHint')
+                        }
+                      >
+                        <input
+                          className="input"
+                          type="password"
+                          value={hmacKey}
+                          onChange={(e) => setHmacKey(e.target.value)}
+                          placeholder={adyen.hmacKeySet ? adyen.hmacKeyMasked || '••••' : t('adyenHmacKeyPlaceholder')}
+                          autoComplete="new-password"
+                        />
+                      </Field>
+                    </div>
                   </div>
                 </Section>
                 <SettingsSaveBar saving={savingAdyen} />
+              </form>
+
+              <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section
+                  id="payments-tap-to-pay"
+                  icon={CreditCard}
+                  accent={settingsDash.success}
+                  title={t('tapToPaySettings')}
+                  description={t('tapToPaySettingsHint')}
+                  highlight={isSectionHighlight('payments-tap-to-pay')}
+                  dimmed={normalizedQuery ? !isSectionVisible('payments-tap-to-pay') : false}
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={settings?.tapToPayEnabled === true}
+                      onChange={(e) =>
+                        setSettings((prev) =>
+                          prev ? { ...prev, tapToPayEnabled: e.target.checked } : prev
+                        )
+                      }
+                    />
+                    {t('tapToPayEnabled')}
+                  </label>
+                  <p className="text-xs muted">{t('tapToPayEnabledHint')}</p>
+                  {adyenWebhookUrl ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs muted">{t('adyenWebhookUrl')}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="block max-w-full break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-[11px]">
+                          {adyenWebhookUrl}
+                        </code>
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
+                          aria-label={t('copied')}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(adyenWebhookUrl).then(
+                              () => toast.success(t('copied')),
+                              () => toast.error(t('copyFailed'))
+                            );
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs muted">{t('adyenWebhookSetupHint')}</p>
+                    </div>
+                  ) : null}
+                </Section>
+                <SettingsSaveBar saving={savingWebposPay} />
               </form>
 
               <form onSubmit={saveCardFees} className="space-y-5">
@@ -2792,6 +2885,29 @@ export default function Settings() {
                     />
                     {t('adyenLiveMode')}
                   </label>
+                  {settings?.adyenLiveEnvironment ? (
+                    <div className="space-y-2">
+                      <p className="text-xs muted">{t('adyenLiveRegion')}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(['EU', 'US', 'AU', 'APSE'] as const).map((region) => (
+                          <button
+                            key={region}
+                            type="button"
+                            className={`rounded-lg border px-3 py-1.5 text-sm ${
+                              (settings.adyenLiveRegion || 'EU') === region
+                                ? 'border-teal-600 bg-teal-50 text-teal-800'
+                                : 'border-stone-200 bg-white text-stone-700'
+                            }`}
+                            onClick={() =>
+                              setSettings((prev) => (prev ? { ...prev, adyenLiveRegion: region } : prev))
+                            }
+                          >
+                            {region}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
