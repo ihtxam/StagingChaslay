@@ -88,7 +88,7 @@ import {
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import { getDeviceBridgeHealth, runDeviceBridgeTapToPay } from '@/lib/device-bridge';
+import { probeDeviceBridgeHealth, runDeviceBridgeTapToPay } from '@/lib/device-bridge';
 import {
   isLocalPrintStation,
   printKitchenViaAgentOrQueue,
@@ -1855,7 +1855,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     try {
-      const bridge = await getDeviceBridgeHealth();
+      const bridge = await (isAndroidWebPosTill() ? probeDeviceBridgeHealth(5) : probeDeviceBridgeHealth(1));
       setDeviceTapToPayReady(bridge.ok && bridge.tapToPayReady === true);
     } catch {
       setDeviceTapToPayReady(false);

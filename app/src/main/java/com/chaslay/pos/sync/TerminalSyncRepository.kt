@@ -153,6 +153,12 @@ class TerminalSyncRepository @Inject constructor(
             )
         }
 
+        // Tap to Pay: merchant panel toggle syncs to device (Chaslay cloud sync).
+        merged = merged.copy(
+            tapToPayEnabled = config.tapToPayEnabled,
+            paymentMethodsManagedByCloud = true
+        )
+
         // coursesEnabled is managed in POS Settings ? General (not overwritten by panel sync).
 
         config.checkout?.let { checkout ->

@@ -236,6 +236,7 @@ data class SyncPaymentMethodsDto(
     val cash: Boolean = true,
     val card: Boolean = true,
     val terminal: Boolean = false,
+    @SerializedName("tap_to_pay") val tapToPay: Boolean = false,
     @SerializedName("giftCard") val giftCard: Boolean = false
 )
 
@@ -299,6 +300,8 @@ data class PaymentConfigResponse(
     val default_terminal_id: String? = null,
     val terminals: List<SyncPaymentTerminalDto> = emptyList(),
     val terminal_ready: Boolean = false,
+    @SerializedName("tap_to_pay_ready") val tapToPayReady: Boolean = false,
+    @SerializedName("tap_to_pay_enabled") val tapToPayEnabled: Boolean = false,
     val methods: SyncPaymentMethodsDto? = null,
     val features: SyncFeaturesDto? = null,
     val checkout: SyncCheckoutDto? = null,

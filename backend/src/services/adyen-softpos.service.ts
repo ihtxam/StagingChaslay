@@ -144,3 +144,106 @@ export function buildSaleRequest(
 
   return { request, serviceId, saleId, transactionId };
 }
+
+interface ReversalEnvelope {
+  request: Record<string, unknown>;
+  serviceId: string;
+}
+
+/** Terminal API /sync base URL for the merchant's environment/region. */
+function terminalApiSyncUrl(merchant: Merchant): string {
+  if (!merchant.adyenLiveEnvironment) {
+    return "https://terminal-api-test.adyen.com/sync";
+  }
+  switch ((merchant.adyenLiveRegion || "EU").toUpperCase()) {
+    case "AU":
+      return "https://terminal-api-live-au.adyen.com/sync";
+    case "APSE":
+      return "https://terminal-api-live-apse.adyen.com/sync";
+    case "NEA":
+      return "https://terminal-api-live-nea.adyen.com/sync";
+    case "US":
+      return "https://terminal-api-live-us.adyen.com/sync";
+    default:
+      return "https://terminal-api-live.adyen.com/sync";
+  }
+}
+
+/**
+ * Build a ReversalRequest envelope for refunding a prior SoftPOS sale.
+ * The mobile client submits this via syncTerminalApiRequest (backend proxy).
+ */
+export function buildReversalRequest(
+  merchant: Merchant,
+  installationId: string,
+  originalServiceId: string,
+  amountMinor: number,
+  currency: string,
+): ReversalEnvelope {
+  const serviceId = randomUUID().slice(0, 10);
+  const saleId = `POS-${merchant.id}`;
+
+  const request = {
+    SaleToPOIRequest: {
+      MessageHeader: {
+        MessageClass: "Service",
+        MessageCategory: "Reversal",
+        MessageType: "Request",
+        ServiceID: serviceId,
+        SaleID: saleId,
+        POIID: installationId,
+        ProtocolVersion: "3.0",
+      },
+      ReversalRequest: {
+        OriginalPOITransaction: {
+          POITransactionID: {
+            TransactionID: originalServiceId,
+          },
+        },
+        ReversalReason: "MerchantCancel",
+        ReversedAmount: amountMinor / 100,
+      },
+    },
+  };
+
+  return { request, serviceId };
+}
+
+/**
+ * Forward a Terminal API request to Adyen's /sync endpoint (used for SoftPOS refunds).
+ */
+export async function syncTerminalApiRequest(
+  merchant: Merchant,
+  request: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const apiKey = merchant.adyenApiKey;
+  if (!apiKey) {
+    throw new Error("No Adyen API key configured for this merchant account.");
+  }
+
+  const header = (request.SaleToPOIRequest as Record<string, unknown> | undefined)
+    ?.MessageHeader as Record<string, unknown> | undefined;
+  const serviceId = String(header?.ServiceID || randomUUID().slice(0, 10));
+
+  const url = terminalApiSyncUrl(merchant);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "X-API-Key": apiKey,
+      "Content-Type": "application/json",
+      "Idempotency-Key": serviceId,
+    },
+    body: JSON.stringify(request),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Adyen Terminal API sync failed (${response.status}): ${text}`);
+  }
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error("Adyen Terminal API response was not valid JSON.");
+  }
+}

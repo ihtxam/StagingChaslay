@@ -60,8 +60,22 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
   }
 }
 
+/** Probe Bridge Reborn /health with backoff (tablet cold start). */
+export async function probeDeviceBridgeHealth(attempts = 5): Promise<DeviceBridgeHealth> {
+  let last: DeviceBridgeHealth = { ok: false };
+  const tries = Math.max(1, attempts);
+  for (let i = 0; i < tries; i++) {
+    last = await getDeviceBridgeHealth();
+    if (last.ok) return last;
+    if (i + 1 < tries) {
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  return last;
+}
+
 export async function isDeviceBridgeTapToPayReady(): Promise<boolean> {
-  const health = await getDeviceBridgeHealth();
+  const health = await probeDeviceBridgeHealth(3);
   return health.ok && health.tapToPayReady === true;
 }
 

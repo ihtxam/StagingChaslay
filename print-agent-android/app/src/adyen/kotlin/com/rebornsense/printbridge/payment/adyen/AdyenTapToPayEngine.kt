@@ -3,6 +3,7 @@ package com.rebornsense.printbridge.payment.adyen
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.appcompat.app.AppCompatActivity
 import com.adyen.ipp.api.InPersonPayments
 import com.adyen.ipp.api.payment.PaymentInterfaceType
 import com.adyen.ipp.api.payment.TransactionRequest
@@ -22,12 +23,20 @@ import java.io.IOException
 class AdyenTapToPayEngine : TapToPayEngine {
     private val http = OkHttpClient()
 
-    override fun isReady(): Boolean = TapToPayCallbackRouter.launcher != null
+    override fun isReady(): Boolean =
+        TapToPayCallbackRouter.launcher != null || adyenSdkAvailable()
 
     override fun readinessMessage(): String = when {
-        TapToPayCallbackRouter.launcher == null -> "Tap to Pay is still starting. Open Bridge Reborn once, then retry."
+        !adyenSdkAvailable() -> "Tap to Pay SDK is not available in this build."
+        TapToPayCallbackRouter.launcher == null ->
+            "Tap to Pay opens when you take a payment (Bridge Reborn is running)."
         else -> "Ready"
     }
+
+    private fun adyenSdkAvailable(): Boolean = runCatching {
+        Class.forName("com.adyen.ipp.api.InPersonPayments")
+        true
+    }.getOrDefault(false)
 
     override suspend fun processSale(activity: Activity, params: TapToPaySaleParams): TapToPaySaleOutcome {
         if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC)) {
@@ -36,6 +45,13 @@ class AdyenTapToPayEngine : TapToPayEngine {
                 status = "error",
                 message = "This device does not support Tap to Pay (no NFC).",
             )
+        }
+        if (TapToPayCallbackRouter.launcher == null && activity is AppCompatActivity) {
+            runCatching {
+                Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenBootstrap")
+                    .getMethod("register", AppCompatActivity::class.java)
+                    .invoke(null, activity)
+            }
         }
         val launcher = TapToPayCallbackRouter.launcher
             ?: return TapToPaySaleOutcome(

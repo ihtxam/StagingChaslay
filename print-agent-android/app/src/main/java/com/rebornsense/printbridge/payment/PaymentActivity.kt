@@ -12,6 +12,11 @@ import kotlinx.coroutines.launch
 class PaymentActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        runCatching {
+            Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenBootstrap")
+                .getMethod("register", AppCompatActivity::class.java)
+                .invoke(null, this)
+        }
         val params = PaymentCoordinator.consumePendingParams(intent)
         if (params == null) {
             PaymentCoordinator.complete(

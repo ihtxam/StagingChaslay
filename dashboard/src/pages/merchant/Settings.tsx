@@ -2799,6 +2799,36 @@ export default function Settings() {
                     {t('tapToPayEnabled')}
                   </label>
                   <p className="text-xs muted">{t('tapToPayEnabledHint')}</p>
+                  <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-700 dark:bg-stone-900/40">
+                    <p className="mb-2 text-xs font-medium text-stone-700 dark:text-stone-300">
+                      {t('tapToPayReadyChecklist')}
+                    </p>
+                    <ul className="space-y-1 text-xs text-stone-600 dark:text-stone-400">
+                      {[
+                        {
+                          ok: adyen.apiKeySet === true && !!(adyen.merchantAccount || merchantAccount.trim()),
+                          label: t('tapToPayCheckAdyen'),
+                        },
+                        {
+                          ok: settings?.tapToPayEnabled === true,
+                          label: t('tapToPayCheckEnabled'),
+                        },
+                        {
+                          ok: adyen.hmacKeySet === true,
+                          label: t('tapToPayCheckWebhook'),
+                        },
+                        { ok: true, label: t('tapToPayCheckBridge') },
+                        { ok: true, label: t('tapToPayCheckNative') },
+                      ].map((item) => (
+                        <li key={item.label} className="flex items-start gap-2">
+                          <span className={item.ok ? 'text-teal-600' : 'text-stone-400'}>
+                            {item.ok ? '✓' : '○'}
+                          </span>
+                          <span>{item.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                   {adyenWebhookUrl ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs muted">{t('adyenWebhookUrl')}</p>

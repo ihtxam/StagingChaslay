@@ -576,7 +576,19 @@ fun SettingsScreen(
             }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingSwitch(stringResource(R.string.tap_to_pay_enabled), state.tapToPayEnabled, viewModel::updateTapToPay)
+        SettingSwitch(
+            stringResource(R.string.tap_to_pay_enabled),
+            state.tapToPayEnabled,
+            viewModel::updateTapToPay,
+            enabled = !state.paymentMethodsManagedByCloud
+        )
+        if (state.paymentMethodsManagedByCloud) {
+            Text(
+                stringResource(R.string.tap_to_pay_managed_by_panel),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
         if (state.tapToPayEnabled) {
             Text(
                 stringResource(R.string.tap_to_pay_help),

@@ -828,7 +828,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
     fun updateReceiptTemplateName(value: String) = _uiState.update { it.copy(receiptTemplateName = value) }
-    fun updateTapToPay(enabled: Boolean) = _uiState.update { it.copy(tapToPayEnabled = enabled) }
+    fun updateTapToPay(enabled: Boolean) = _uiState.update {
+        it.copy(tapToPayEnabled = enabled, paymentMethodsManagedByCloud = false)
+    }
     fun updateAdyenEnabled(enabled: Boolean) = _uiState.update { it.copy(adyenTerminalEnabled = enabled) }
     fun updateAdyenTerminalId(value: String) = _uiState.update { it.copy(adyenTerminalId = value) }
     fun updateAdyenApiKey(value: String) = _uiState.update { it.copy(adyenApiKey = value) }

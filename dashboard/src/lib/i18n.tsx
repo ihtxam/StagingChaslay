@@ -3151,6 +3151,12 @@ const en: Dict = {
   tapToPayEnabled: 'Enable Tap to Pay',
   tapToPayEnabledHint:
     'When enabled and credentials are set, WebPOS on Android tablets and the native POS app can take NFC payments.',
+  tapToPayReadyChecklist: 'NFC readiness',
+  tapToPayCheckAdyen: 'Adyen API key and merchant account configured',
+  tapToPayCheckEnabled: 'Tap to Pay enabled in panel',
+  tapToPayCheckWebhook: 'Adyen webhook + HMAC key configured',
+  tapToPayCheckBridge: 'Bridge Reborn installed on Android tablet (WebPOS NFC)',
+  tapToPayCheckNative: 'Chaslay POS app signed in online (native NFC)',
   adyenLiveRegion: 'Live region',
   currentKey: 'Current key',
   apiKeyHint: 'Leave blank to keep the existing key.',
