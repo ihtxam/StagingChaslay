@@ -343,6 +343,13 @@ export class KioskService {
       adyenConfigured,
       cashPaymentEnabled: settings.cashPaymentEnabled !== false,
       cardPaymentEnabled: settings.cardPaymentEnabled !== false,
+      selectedTerminalId: terminalId || null,
+      terminals: terminals.map((t) => ({
+        id: t.id,
+        terminalId: t.terminalId,
+        terminalName: t.terminalName,
+        status: t.status,
+      })),
       printAgentNote:
         "Print Bridge is checked on this device at http://127.0.0.1:9101/health when you run Test connections.",
     };

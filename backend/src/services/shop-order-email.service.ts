@@ -41,6 +41,24 @@ export class ShopOrderEmailService {
     const orderNumber = String(order.orderNumber || order.id.slice(0, 8));
     const copy = shopOrderEmailCopy(kind, shop, orderNumber, locale);
 
+    const readyAt = order.estimatedReadyAt ? new Date(order.estimatedReadyAt) : null;
+    const readyAtLabel =
+      readyAt && !Number.isNaN(readyAt.getTime())
+        ? readyAt.toLocaleString(locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-CH', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'Europe/Zurich',
+          })
+        : null;
+    const etaBlock =
+      readyAtLabel && (kind === 'confirmed' || kind === 'ready')
+        ? `<p style="margin:12px 0;font-size:15px"><strong>${locale === 'fr' ? 'Prête estimée' : locale === 'de' ? 'Geschätzte Fertigstellung' : 'Estimated ready'}:</strong> ${readyAtLabel}</p>`
+        : '';
+    const etaText =
+      readyAtLabel && (kind === 'confirmed' || kind === 'ready')
+        ? `\n${locale === 'fr' ? 'Prête estimée' : locale === 'de' ? 'Geschätzte Fertigstellung' : 'Estimated ready'}: ${readyAtLabel}`
+        : '';
+
     const trackingUrl =
       order.fulfillmentChannel === 'delivery' && order.deliveryTrackingToken
         ? buildGuestOrderTrackingUrl(merchant, order.id, order.deliveryTrackingToken)
@@ -54,6 +72,7 @@ export class ShopOrderEmailService {
       <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#1c1917">
         <h1 style="font-size:20px">${copy.subject}</h1>
         <p>${copy.body}</p>
+        ${etaBlock}
         ${trackBlock}
         <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
           <tr><td style="padding:6px 0;color:#78716c">#</td><td style="padding:6px 0;text-align:right"><strong>${orderNumber}</strong></td></tr>
@@ -70,7 +89,7 @@ export class ShopOrderEmailService {
         to: order.customerEmail,
         subject: copy.subject,
         html,
-        text: `${copy.subject}\n${copy.body}\n#${orderNumber}\nTotal: ${order.total} CHF${textTrack}`,
+        text: `${copy.subject}\n${copy.body}${etaText}\n#${orderNumber}\nTotal: ${order.total} CHF${textTrack}`,
         merchantId,
         emailType: "shop_order",
       });

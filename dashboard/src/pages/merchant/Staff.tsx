@@ -1,10 +1,11 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
-import { ALL_PERMISSIONS, staffRoleDisplayName, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, isKioskOperatorRoleName, type Permission } from '@/lib/permissions';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
@@ -73,18 +74,31 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [editForm, setEditForm] = useState<StaffEditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [kioskLicensed, setKioskLicensed] = useState(false);
 
   const [staffForm, setStaffForm] = useState(emptyCreateForm);
+
+  const visiblePermissions = useMemo(
+    () => permissionsForMerchantAddon(ALL_PERMISSIONS, kioskLicensed),
+    [kioskLicensed]
+  );
+  const visibleRoles = useMemo(
+    () => roles.filter((r) => kioskLicensed || !isKioskOperatorRoleName(r.name)),
+    [roles, kioskLicensed]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rolesRes, staffRes] = await Promise.all([
+      const [rolesRes, staffRes, settingsRes] = await Promise.all([
         api.get('/merchant/roles'),
         api.get('/merchant/staff'),
+        api.get('/merchant/settings').catch(() => ({ data: { settings: {} } })),
       ]);
       setRoles(rolesRes.data.roles || []);
       setStaff(staffRes.data.staff || []);
+      const s = settingsRes.data?.settings || {};
+      setKioskLicensed(isKioskLicensed(s));
       if (!staffForm.roleId && rolesRes.data.roles?.[0]?.id) {
         setStaffForm((f) => ({ ...f, roleId: rolesRes.data.roles[0].id }));
       }
@@ -107,7 +121,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
   const saveRole = async () => {
     if (!editingRole) return;
     try {
-      await api.put(`/merchant/roles/${editingRole.id}`, { permissions: rolePerms });
+      await api.put(`/merchant/roles/${editingRole.id}`, {
+        permissions: permissionsForMerchantAddon(rolePerms, kioskLicensed),
+      });
       toast.success(t('staffRoleUpdated'));
       setEditingRole(null);
       notifyStaffRosterChanged();
@@ -350,7 +366,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                     });
                   }}
                 >
-                  {roles.map((r) => (
+                  {visibleRoles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {staffRoleDisplayName(r.name, t)}
                     </option>
@@ -552,7 +568,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
         </div>
       ) : (
         <div className="space-y-3">
-          {roles.map((role) => (
+          {visibleRoles.map((role) => (
             <div key={role.id} className="card p-4 flex items-center justify-between gap-3">
               <div>
                 <p className="font-medium">{staffRoleDisplayName(role.name, t)}</p>
@@ -627,7 +643,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                     });
                   }}
                 >
-                  {roles.map((r) => (
+                  {visibleRoles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {staffRoleDisplayName(r.name, t)}
                     </option>
@@ -847,7 +863,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
             </h3>
             <p className="mb-3 text-xs text-[var(--text-muted)]">{t('staffRoleBackOfficeHint')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-              {ALL_PERMISSIONS.map((p) => (
+              {visiblePermissions.map((p) => (
                 <label key={p} className="flex items-center gap-2 text-xs">
                   <input
                     type="checkbox"

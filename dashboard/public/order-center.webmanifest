@@ -1,0 +1,35 @@
+{
+  "id": "/merchant/order-center",
+  "name": "Reborn Order Center",
+  "short_name": "Orders",
+  "description": "Accept online orders, print to kitchen and receipt printers, daily report",
+  "start_url": "/merchant/order-center",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "portrait",
+  "background_color": "#17252B",
+  "theme_color": "#800020",
+  "lang": "en",
+  "categories": ["business", "food"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

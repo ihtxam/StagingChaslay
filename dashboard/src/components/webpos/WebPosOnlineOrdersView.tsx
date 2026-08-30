@@ -10,6 +10,7 @@ import {
   isAwaitingApproval,
   isAwaitingPaymentOrder,
   isActiveOnlineOrder,
+  isDeliveryOrPickupShopOrder,
   isPaidOrder,
   orderPlatformBadgeClass,
   orderPlatformBorderClass,
@@ -22,6 +23,7 @@ import {
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosPrepTimeSettingsModal from '@/components/webpos/WebPosPrepTimeSettingsModal';
+import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
 
 type OnlineStatusTab = 'active' | 'completed' | 'archives';
 type PlatformFilter = 'all' | 'shop' | 'justeat' | 'ubereats';
@@ -77,6 +79,7 @@ export default function WebPosOnlineOrdersView({
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectOrder, setRejectOrder] = useState<CenterOrder | null>(null);
+  const [etaAcceptOrder, setEtaAcceptOrder] = useState<CenterOrder | null>(null);
   const [prepOpen, setPrepOpen] = useState(false);
   const [printedToast, setPrintedToast] = useState<string | null>(null);
 
@@ -178,7 +181,13 @@ export default function WebPosOnlineOrdersView({
             type="button"
             disabled={busy}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-            onClick={() => void runAction(o, 'accept')}
+            onClick={() => {
+              if (isDeliveryOrPickupShopOrder(o)) {
+                setEtaAcceptOrder(o);
+              } else {
+                void runAction(o, 'accept');
+              }
+            }}
           >
             {t('webPosWorkflowAccept')}
           </button>
@@ -478,6 +487,20 @@ export default function WebPosOnlineOrdersView({
       />
 
       <WebPosPrepTimeSettingsModal open={prepOpen} onClose={() => setPrepOpen(false)} />
+
+      <OrderAcceptWithEtaModal
+        order={etaAcceptOrder}
+        busy={busyId === etaAcceptOrder?.id}
+        onAccept={(order, mins) => {
+          void runAction(order as CenterOrder, 'accept', { etaAdjustMinutes: mins }).then(() =>
+            setEtaAcceptOrder(null)
+          );
+        }}
+        onReject={(order) => {
+          setEtaAcceptOrder(null);
+          setRejectOrder(order as CenterOrder);
+        }}
+      />
     </div>
   );
 }

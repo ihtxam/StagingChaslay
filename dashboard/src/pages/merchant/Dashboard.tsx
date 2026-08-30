@@ -104,7 +104,7 @@ import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
-import MerchantOrderHub from './MerchantOrderHub';
+import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
 const WebsiteCms = lazy(() => import('./WebsiteCms'));
@@ -162,7 +162,7 @@ function MerchantShell() {
   const navigate = useNavigate();
   const isPosRoute = /^\/merchant\/pos\/?$/.test(location.pathname);
   const isWaiterRoute = /^\/merchant\/waiter\/?$/.test(location.pathname);
-  const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
+  const isOrderCenterRoute = /^\/merchant\/order-(center|hub)\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
   const isKioskRoute =
@@ -183,6 +183,7 @@ function MerchantShell() {
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
+  const [kioskLicensed, setKioskLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -267,7 +268,7 @@ function MerchantShell() {
     [jwtIsOwner, effective.permissions]
   );
   const hideChrome =
-    (((isPosRoute || isWaiterRoute || isOrderHubRoute) && posAppMode) ||
+    (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted)) ||
       (isKioskRoute && (!managerPanelAccess || kioskRestricted))) ||
     isPosEmbed;
@@ -310,6 +311,8 @@ function MerchantShell() {
       storekeeperAddonEnabled?: boolean;
       signageAddonEnabled?: boolean;
       signageEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
+      kioskEnabled?: boolean;
       maxLocations?: number | null;
     } | null) => {
       const feats = settings?.editionFeatures;
@@ -318,6 +321,7 @@ function MerchantShell() {
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
+      setKioskLicensed(isKioskLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
     };
@@ -334,6 +338,7 @@ function MerchantShell() {
           setInventoryLicensed(isInventoryLicensed(user));
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
+          setKioskLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
         });
     };
@@ -459,6 +464,13 @@ function MerchantShell() {
     [signageLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
+  const allowKiosk = useCallback(
+    (path: string) =>
+      kioskLicensed &&
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
+  );
+
   const { locations } = useLocationStore();
   const showHq = hqLicensed || locations.length > 1;
   const allowHq = useCallback(
@@ -505,6 +517,14 @@ function MerchantShell() {
     if (path === storekeeperHomePath()) return;
     navigate(storekeeperHomePath(), { replace: true });
   }, [jwtOwnerBypass, effective.permissions, location.pathname, navigate]);
+
+  // Kiosk addon not licensed — hide setup route.
+  useEffect(() => {
+    if (kioskLicensed) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (!isKioskPanelPath(path)) return;
+    navigate(backOfficeHomePath(effective.permissions, effective.isOwner), { replace: true });
+  }, [kioskLicensed, location.pathname, effective.permissions, effective.isOwner, navigate]);
 
   // Kiosk operator staff — setup panel only, not full merchant back office.
   useEffect(() => {
@@ -595,7 +615,7 @@ function MerchantShell() {
       icon: '📈',
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
-        { label: t('orderHubTitle'), path: '/merchant/order-hub', icon: '📲' },
+        { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
       ].filter((item) => allow(item.path)),
@@ -824,7 +844,7 @@ function MerchantShell() {
 
         <main
           className={
-            isPosLikeRoute && !isKioskRoute && posAppMode
+            (isPosLikeRoute || isOrderCenterRoute) && !isKioskRoute && posAppMode
               ? 'flex-1 overflow-hidden p-0 min-h-0'
               : 'panel-main flex-1 p-3 sm:p-4'
           }
@@ -839,13 +859,14 @@ function MerchantShell() {
               }
             />
             <Route
-              path="order-hub"
+              path="order-center"
               element={
-                <PanelRouteGuard path="/merchant/order-hub" allow={allow}>
-                  <MerchantOrderHub />
+                <PanelRouteGuard path="/merchant/order-center" allow={allow}>
+                  <OrderCenterApp />
                 </PanelRouteGuard>
               }
             />
+            <Route path="order-hub" element={<Navigate to="/merchant/order-center" replace />} />
             <Route
               path="orders"
               element={
