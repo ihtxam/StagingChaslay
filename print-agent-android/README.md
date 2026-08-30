@@ -214,6 +214,43 @@ One **universal APK** for all devices (Sunmi, Feitian, generic). Drivers load at
 
 ---
 
+## Troubleshooting (live testing)
+
+### Setup wizard not showing
+
+1. **Open Bridge Reborn** from the app drawer after installing from the panel. The service starts in the background, but the **setup wizard only runs when you open the app**.
+2. After each **APK update**, the wizard resets automatically (v0.3.6+). You should see it on first launch of the new version.
+3. If you skipped steps, use **Run setup wizard** on the main screen (orange banner or button below it).
+4. Complete **battery unrestricted** and **autostart** steps for your OEM (Sunmi, Feitian, etc.).
+
+### NFC / Tap to Pay not working
+
+Check the **Tap to Pay (NFC)** card on Bridge Reborn’s main screen:
+
+| Diagnostic | Meaning |
+|------------|---------|
+| **Adyen SDK: not in this APK** | You installed a **print-only stub** build (no Adyen keys at build time). Download the Tap to Pay APK from the merchant panel — it must be built with `adyenSdkApiKey` in `local.properties`. |
+| **Adyen SDK: bundled** | Correct APK variant. |
+| **NFC hardware: not available** | Tablet has no NFC — Tap to Pay cannot work on this device. |
+| **Tap to Pay: not ready** | Read the message (e.g. missing panel config). |
+
+**Merchant panel checklist:**
+
+1. Settings → Payments → **Enable Tap to Pay**
+2. Adyen **API key** + **merchant account** saved
+3. Adyen **webhook HMAC** key configured
+4. WebPOS on the tablet uses **Chrome** (same device as Bridge)
+
+**WebPOS card payment:** Express checkout **Card** uses NFC only when Bridge reports `tapToPayReady: true` on `http://127.0.0.1:9101/health`. Open Bridge once so `PaymentActivity` can register the Adyen launcher.
+
+**Verify health in Chrome on the tablet:** navigate to `http://127.0.0.1:9101/health` — expect `"hasAdyenSdk": true`, `"nfcAvailable": true`, `"tapToPayReady": true`.
+
+### Version check
+
+Bridge Reborn **0.3.6+** shows **Bridge Reborn vX.Y.Z** under the status line on the main screen. Match this to the version in Settings → Receipts & printers → Download Bridge Reborn.
+
+---
+
 ## Project structure
 
 ```

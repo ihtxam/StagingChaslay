@@ -23,14 +23,12 @@ import java.io.IOException
 class AdyenTapToPayEngine : TapToPayEngine {
     private val http = OkHttpClient()
 
-    override fun isReady(): Boolean =
-        TapToPayCallbackRouter.launcher != null || adyenSdkAvailable()
+    override fun isReady(): Boolean = adyenSdkAvailable()
 
     override fun readinessMessage(): String = when {
-        !adyenSdkAvailable() -> "Tap to Pay SDK is not available in this build."
-        TapToPayCallbackRouter.launcher == null ->
-            "Tap to Pay opens when you take a payment (Bridge Reborn is running)."
-        else -> "Ready"
+        !adyenSdkAvailable() ->
+            "This APK was built without the Adyen SDK. Install the Tap to Pay build from the merchant panel."
+        else -> "Ready — Tap to Pay starts when you take a card payment in WebPOS."
     }
 
     private fun adyenSdkAvailable(): Boolean = runCatching {

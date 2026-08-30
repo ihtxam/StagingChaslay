@@ -74,6 +74,7 @@ class BridgeHttpServer(
                         .put("printerReady", registry.hasReadyPrinter())
                         .put("queueDepth", queue.queueDepth())
                         .put("nfcAvailable", nfcAvailable)
+                        .put("hasAdyenSdk", BuildConfig.HAS_ADYEN_SDK)
                         .put("tapToPayReady", tapToPayReady)
                         .put("tapToPayMessage", tapToPayMessage)
                 )

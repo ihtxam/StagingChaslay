@@ -48,6 +48,8 @@ export type PosCheckoutSettings = {
   requireTableForDineIn: boolean;
   /** Express checkout + cart action buttons (Send, Payment, Tab). */
   actionButtonSize: ActionButtonSize;
+  /** Show quick Cash/Card/Terminal bar under products on WebPOS register. */
+  expressCheckoutEnabled: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -76,6 +78,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailDineInEnabled: false,
   requireTableForDineIn: true,
   actionButtonSize: 'md',
+  expressCheckoutEnabled: true,
 };
 
 export function isRetailPosMode(raw: unknown): boolean {
@@ -132,5 +135,6 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
       src.actionButtonSize === 'sm' || src.actionButtonSize === 'lg'
         ? src.actionButtonSize
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
+    expressCheckoutEnabled: src.expressCheckoutEnabled !== false,
   };
 }

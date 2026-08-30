@@ -31,6 +31,7 @@ import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSettingsNavigator
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
+import com.rebornsense.printbridge.BuildConfig
 
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
@@ -48,8 +49,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val wizardLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            pendingWizardLaunch = false
             updateOemSetupBanner()
+            updateTapToPayDiagnostics()
+            if (result.resultCode != RESULT_OK && needsSetupAttention()) {
+                // User dismissed wizard — banner stays visible with Run setup.
+                findViewById<View>(R.id.oemSetupBanner).visibility = View.VISIBLE
+            }
         }
 
     private val permissionLauncher =
@@ -73,12 +80,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OemSetupPreferences.syncInstalledVersion(this)
         runCatching {
             Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenBootstrap")
                 .getMethod("register", AppCompatActivity::class.java)
                 .invoke(null, this)
         }
         setContentView(R.layout.activity_main)
+        findViewById<TextView>(R.id.versionText).text =
+            getString(R.string.bridge_version_label, BuildConfig.VERSION_NAME)
         emptyPrintersText = findViewById(R.id.emptyPrintersText)
         printerAdapter = PrinterListAdapter(
             onSetDefault = { endpoint -> setDefaultPrinter(endpoint) },
@@ -91,7 +101,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrintDefault() }
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
         findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
+        findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
         updateOemSetupBanner()
+        updateTapToPayDiagnostics()
     }
 
     override fun onResume() {
@@ -99,6 +111,7 @@ class MainActivity : AppCompatActivity() {
         refreshPrinters()
         updateOemSetupBanner()
         updateServiceStatus()
+        updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
         maybeLaunchOemWizard()
     }
@@ -115,22 +128,68 @@ class MainActivity : AppCompatActivity() {
         openOemSetupWizard()
     }
 
+    private fun needsSetupAttention(): Boolean {
+        return !OemSetupPreferences.isWizardCompleted(this) ||
+            !OemSettingsNavigator.isBatteryOptimizationDisabled(this) ||
+            !BridgeHealthChecker.isHealthy()
+    }
+
     private fun openOemSetupWizard() {
+        pendingWizardLaunch = true
         wizardLauncher.launch(SetupWizardActivity.createIntent(this))
     }
 
     private fun updateOemSetupBanner() {
         val banner = findViewById<View>(R.id.oemSetupBanner)
         val summary = findViewById<TextView>(R.id.oemSetupBannerSummary)
-        val needsSetup = !OemSetupPreferences.isWizardCompleted(this) ||
-            !OemSettingsNavigator.isBatteryOptimizationDisabled(this)
+        val runSetupBtn = findViewById<Button>(R.id.runSetupBtn)
+        val needsSetup = needsSetupAttention()
         banner.visibility = if (needsSetup) View.VISIBLE else View.GONE
+        runSetupBtn.visibility = if (OemSetupPreferences.isWizardCompleted(this)) View.VISIBLE else View.GONE
         if (needsSetup) {
             summary.text = getString(
                 R.string.oem_setup_banner_summary,
                 DeviceProfiler.detect().displayName,
             )
         }
+    }
+
+    private fun updateTapToPayDiagnostics() {
+        val card = findViewById<View>(R.id.tapToPayDiagnosticsCard)
+        val text = findViewById<TextView>(R.id.tapToPayDiagnosticsText)
+        val health = BridgeHealthChecker.probeHealth()
+        card.visibility = View.VISIBLE
+        val sdkLine = getString(
+            if (BuildConfig.HAS_ADYEN_SDK) R.string.tap_to_pay_sdk_present else R.string.tap_to_pay_sdk_missing,
+        )
+        if (health == null) {
+            text.text = getString(
+                R.string.tap_to_pay_diag_offline,
+                sdkLine,
+                BuildConfig.VERSION_NAME,
+            )
+            return
+        }
+        val nfcLine = when (health.nfcAvailable) {
+            true -> getString(R.string.tap_to_pay_nfc_yes)
+            false -> getString(R.string.tap_to_pay_nfc_no)
+            null -> getString(R.string.tap_to_pay_nfc_unknown)
+        }
+        val readyLine = when (health.tapToPayReady) {
+            true -> getString(R.string.tap_to_pay_ready_yes)
+            false -> getString(
+                R.string.tap_to_pay_ready_no,
+                health.tapToPayMessage ?: getString(R.string.tap_to_pay_ready_unknown),
+            )
+            null -> getString(R.string.tap_to_pay_ready_unknown)
+        }
+        text.text = getString(
+            R.string.tap_to_pay_diag_summary,
+            sdkLine,
+            nfcLine,
+            readyLine,
+            health.version ?: BuildConfig.VERSION_NAME,
+        )
     }
 
     private fun requestNeededPermissions() {
@@ -197,6 +256,7 @@ class MainActivity : AppCompatActivity() {
             serviceCard.visibility = View.VISIBLE
             PrintBridgeLauncher.start(this)
         }
+        updateTapToPayDiagnostics()
     }
 
     private fun setupAutoStartSwitch() {

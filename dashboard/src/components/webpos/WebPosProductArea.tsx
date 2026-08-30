@@ -378,7 +378,8 @@ export default function WebPosProductArea({
         const showCash = expressMethods?.cash !== false;
         const showCard = expressMethods?.card !== false;
         const showTerminal = expressMethods?.terminal === true;
-        const hasQuickPay = (showCash || showCard || showTerminal) && !!onExpressPay;
+        const hasQuickPay =
+          expressCheckout && (showCash || showCard || showTerminal) && !!onExpressPay;
         const showPayRow = hasQuickPay || !!onOpenCheckout;
         if (!showPayRow) return null;
         return (

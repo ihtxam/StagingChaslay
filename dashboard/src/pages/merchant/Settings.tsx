@@ -153,6 +153,7 @@ interface SettingsData {
     retailDineInEnabled?: boolean;
     requireTableForDineIn?: boolean;
     actionButtonSize?: 'sm' | 'md' | 'lg';
+    expressCheckoutEnabled?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
@@ -781,6 +782,7 @@ export default function Settings() {
           t('discountsEnabled'),
           t('quickCashEnabled'),
           t('splitBillsEnabled'),
+          t('expressCheckoutEnabled'),
         ],
       },
       {
@@ -789,6 +791,7 @@ export default function Settings() {
         keywords: [
           'express',
           'express checkout',
+          t('expressCheckoutEnabled'),
           'cash',
           'card',
           'terminal',
@@ -841,6 +844,18 @@ export default function Settings() {
         id: 'payments-adyen',
         tab: 'payments',
         keywords: ['adyen', 'swisspayout', 'terminal', 'tap to pay', 'softpos', t('adyenCredentials'), t('tapToPaySettings')],
+      },
+      {
+        id: 'payments-express-checkout',
+        tab: 'payments',
+        keywords: [
+          'express',
+          'express checkout',
+          'quick pay',
+          'register',
+          t('expressCheckoutEnabled'),
+          t('webposPaymentMethods'),
+        ],
       },
       {
         id: 'payments-tap-to-pay',
@@ -1385,6 +1400,10 @@ export default function Settings() {
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
         webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        posCheckoutSettings: {
+          ...(settings.posCheckoutSettings || {}),
+          expressCheckoutEnabled: settings.posCheckoutSettings?.expressCheckoutEnabled !== false,
+        },
         bankIban: settings.bankIban || null,
         bankQrIban: settings.bankQrIban || null,
         bankName: settings.bankName || null,
@@ -2631,6 +2650,7 @@ export default function Settings() {
                       ['discountsEnabled', 'discountsEnabled'],
                       ['quickCashEnabled', 'quickCashEnabled'],
                       ['splitBillsEnabled', 'splitBillsEnabled'],
+                      ['expressCheckoutEnabled', 'expressCheckoutEnabled'],
                     ] as const
                   ).map(([key, labelKey]) => (
                     <label
@@ -2655,6 +2675,7 @@ export default function Settings() {
                     </label>
                   ))}
                 </div>
+                <p className="text-xs muted">{t('expressCheckoutEnabledHint')}</p>
                 <Field label={t('quickCashDenominations')} hint={t('quickCashDenominationsHint')}>
                   <input
                     className="input"
@@ -2808,6 +2829,51 @@ export default function Settings() {
               </form>
 
               <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section
+                  id="payments-express-checkout"
+                  icon={CreditCard}
+                  accent={settingsDash.info}
+                  title={t('expressCheckoutEnabled')}
+                  description={t('expressCheckoutEnabledHint')}
+                  highlight={isSectionHighlight('payments-express-checkout')}
+                  dimmed={normalizedQuery ? !isSectionVisible('payments-express-checkout') : false}
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={settings?.posCheckoutSettings?.expressCheckoutEnabled !== false}
+                      onChange={(e) =>
+                        setSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                posCheckoutSettings: {
+                                  ...(prev.posCheckoutSettings || {}),
+                                  expressCheckoutEnabled: e.target.checked,
+                                },
+                              }
+                            : prev
+                        )
+                      }
+                    />
+                    {t('expressCheckoutEnabled')}
+                  </label>
+                  <p className="text-xs muted">
+                    {t('webposPaymentMethodsMovedHint')}{' '}
+                    <button
+                      type="button"
+                      className="font-medium text-[var(--text)] underline underline-offset-2"
+                      onClick={() => {
+                        setSettingsQuery('express');
+                        selectTab('pos');
+                        setHighlightId('pos-payments');
+                      }}
+                    >
+                      {t('settingsPos')}
+                    </button>
+                  </p>
+                </Section>
                 <Section
                   id="payments-tap-to-pay"
                   icon={CreditCard}

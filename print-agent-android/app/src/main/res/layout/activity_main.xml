@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -18,6 +19,16 @@
             android:text="@string/status_starting"
             android:textAppearance="?attr/textAppearanceHeadline6"
             android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textStyle="bold"
+            tools:text="Bridge Reborn v0.3.6" />
 
         <TextView
             android:id="@+id/hintText"
@@ -55,6 +66,36 @@
                     android:layout_weight="1"
                     android:text="@string/status_service_checking"
                     android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/tapToPayDiagnosticsCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            app:cardElevation="2dp"
+            app:cardUseCompatPadding="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/tap_to_pay_diag_title"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tapToPayDiagnosticsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="?attr/textAppearanceBody2" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -138,6 +179,14 @@
                     android:text="@string/oem_setup_open_wizard" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <Button
+            android:id="@+id/runSetupBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            android:text="@string/oem_setup_run_setup" />
 
         <Button
             android:id="@+id/refreshBtn"

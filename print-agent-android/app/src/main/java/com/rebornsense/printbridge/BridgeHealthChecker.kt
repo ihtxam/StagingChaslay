@@ -24,8 +24,13 @@ object BridgeHealthChecker {
             if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             if (!body.contains("\"ok\":true") && !body.contains("\"ok\": true")) return null
-            val version = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.getOrNull(1)
-            HealthSnapshot(version = version)
+            HealthSnapshot(
+                version = jsonString(body, "version"),
+                nfcAvailable = jsonBoolean(body, "nfcAvailable"),
+                tapToPayReady = jsonBoolean(body, "tapToPayReady"),
+                tapToPayMessage = jsonString(body, "tapToPayMessage"),
+                hasAdyenSdk = jsonBoolean(body, "hasAdyenSdk"),
+            )
         } catch (_: Exception) {
             null
         } finally {
@@ -33,5 +38,21 @@ object BridgeHealthChecker {
         }
     }
 
-    data class HealthSnapshot(val version: String? = null)
+    private fun jsonString(body: String, key: String): String? =
+        Regex("\"$key\"\\s*:\\s*\"([^\"]*)\"").find(body)?.groupValues?.getOrNull(1)
+
+    private fun jsonBoolean(body: String, key: String): Boolean? =
+        when {
+            body.contains("\"$key\":true") || body.contains("\"$key\": true") -> true
+            body.contains("\"$key\":false") || body.contains("\"$key\": false") -> false
+            else -> null
+        }
+
+    data class HealthSnapshot(
+        val version: String? = null,
+        val nfcAvailable: Boolean? = null,
+        val tapToPayReady: Boolean? = null,
+        val tapToPayMessage: String? = null,
+        val hasAdyenSdk: Boolean? = null,
+    )
 }

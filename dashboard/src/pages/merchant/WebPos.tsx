@@ -9640,6 +9640,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     return next;
                   });
                 }}
+                expressCheckout={checkoutSettings.expressCheckoutEnabled !== false}
                 expressMethods={{
                   cash: enabledMethods.cash,
                   card: enabledMethods.card,

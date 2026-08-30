@@ -38,6 +38,8 @@
     <string name="oem_setup_banner_title">Background setup recommended</string>
     <string name="oem_setup_banner_summary">Your %1$s device may stop Bridge Reborn unless battery and autostart are configured.</string>
     <string name="oem_setup_open_wizard">Open setup wizard</string>
+    <string name="oem_setup_run_setup">Run setup wizard</string>
+    <string name="bridge_version_label">Bridge Reborn v%1$s</string>
     <string name="oem_setup_device_label">Detected device: %1$s</string>
     <string name="oem_setup_step_indicator">Step %1$d of %2$d</string>
     <string name="oem_setup_open_settings_failed">Could not open that settings screen. Open App info manually in Android Settings.</string>
@@ -74,4 +76,16 @@
     <string name="oem_step_open_webpos">Open WebPOS</string>
     <string name="oem_step_done_title">Setup complete</string>
     <string name="oem_step_done_desc">Bridge Reborn is configured to run in the background. Open WebPOS in Chrome — it will connect automatically. You can reopen this wizard anytime from the main screen.</string>
+
+    <string name="tap_to_pay_diag_title">Tap to Pay (NFC)</string>
+    <string name="tap_to_pay_sdk_present">Adyen SDK: bundled in this APK</string>
+    <string name="tap_to_pay_sdk_missing">Adyen SDK: not in this APK (print-only build)</string>
+    <string name="tap_to_pay_nfc_yes">NFC hardware: available</string>
+    <string name="tap_to_pay_nfc_no">NFC hardware: not available</string>
+    <string name="tap_to_pay_nfc_unknown">NFC hardware: unknown</string>
+    <string name="tap_to_pay_ready_yes">Tap to Pay: ready</string>
+    <string name="tap_to_pay_ready_no">Tap to Pay: not ready — %1$s</string>
+    <string name="tap_to_pay_ready_unknown">Tap to Pay: status unknown</string>
+    <string name="tap_to_pay_diag_offline">Bridge service offline.\n%1$s\nBridge version: %2$s</string>
+    <string name="tap_to_pay_diag_summary">%1$s\n%2$s\n%3$s\nBridge version: %4$s</string>
 </resources>

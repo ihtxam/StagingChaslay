@@ -13,6 +13,8 @@ export type DeviceBridgeHealth = {
   platform?: string;
   /** Device exposes NFC hardware */
   nfcAvailable?: boolean;
+  /** Adyen SDK bundled in Bridge APK (false = print-only stub build) */
+  hasAdyenSdk?: boolean;
   /** Adyen SoftPOS SDK initialized and ready for sales */
   tapToPayReady?: boolean;
   /** Human-readable reason when tapToPayReady is false */
@@ -51,6 +53,7 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
       version: data.version != null ? String(data.version) : undefined,
       platform: data.platform != null ? String(data.platform) : undefined,
       nfcAvailable: data.nfcAvailable === true,
+      hasAdyenSdk: data.hasAdyenSdk === true,
       tapToPayReady: data.tapToPayReady === true,
       tapToPayMessage:
         data.tapToPayMessage != null ? String(data.tapToPayMessage) : undefined,
