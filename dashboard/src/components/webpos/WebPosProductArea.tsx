@@ -20,6 +20,11 @@ import {
   normalizeActionButtonSize,
   type WebPosActionButtonSize,
 } from '@/lib/webpos-action-button-size';
+import {
+  shouldShowCategoryLayoutPicker,
+  type WebPosCategoryLayoutMode,
+} from '@/lib/webpos-category-layout';
+import WebPosCategoryLayoutPicker from '@/components/webpos/WebPosCategoryLayoutPicker';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import {
   POS_GIFT_CARDS_CATEGORY,
@@ -56,6 +61,8 @@ type Props = {
   productSort?: ProductGridSort;
   onToggleSortAlpha?: () => void;
   onToggleSortBestseller?: () => void;
+  categoryLayout?: WebPosCategoryLayoutMode;
+  onCategoryLayoutChange?: (mode: WebPosCategoryLayoutMode) => void;
   expressCheckout?: boolean;
   expressMethods?: { cash: boolean; card: boolean; terminal: boolean };
   onExpressPay?: (method: PosPaymentMethod) => void;
@@ -97,6 +104,8 @@ export default function WebPosProductArea({
   productSort = 'default',
   onToggleSortAlpha,
   onToggleSortBestseller,
+  categoryLayout = 'rows-3',
+  onCategoryLayoutChange,
   expressCheckout = false,
   expressMethods,
   onExpressPay,
@@ -118,6 +127,14 @@ export default function WebPosProductArea({
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
   const gridClass = TILE_GRID[tileSize] || TILE_GRID.md;
+  const categoryColumns: 2 | 3 =
+    isPhoneLayout && mobileGridStep >= 1 ? 3 : isPhoneLayout ? 2 : 3;
+  const categoryChipCount =
+    categories.length + (giftCardsEnabled ? 1 : 0) + 1 /* Tous */;
+  const showCategoryLayoutPicker = shouldShowCategoryLayoutPicker(
+    categoryChipCount,
+    categoryColumns
+  );
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
@@ -145,7 +162,9 @@ export default function WebPosProductArea({
               title={t('webPosGridTileSize')}
               aria-label={t('webPosGridTileSize')}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
-                isPhoneLayout && mobileGridStep > 0
+                isPhoneLayout &&
+                (mobileGridStep > 0 ||
+                  shouldShowCategoryLayoutPicker(categoryChipCount, categoryColumns))
                   ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
                   : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
               }`}
@@ -184,7 +203,23 @@ export default function WebPosProductArea({
             </button>
           ) : null}
         </div>
-        <div className="webpos-cat-scroll flex flex-wrap gap-1.5">
+        {showCategoryLayoutPicker && onCategoryLayoutChange ? (
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+              {t('webPosCategoryLayoutLabel')}
+            </p>
+            <WebPosCategoryLayoutPicker
+              value={categoryLayout}
+              onChange={onCategoryLayoutChange}
+              compact={false}
+            />
+          </div>
+        ) : null}
+        <div
+          className="webpos-cat-scroll flex flex-wrap gap-1.5"
+          data-cat-layout={categoryLayout}
+          data-cat-cols={String(categoryColumns)}
+        >
           <button
             type="button"
             onClick={() => onCategoryChange('all')}
