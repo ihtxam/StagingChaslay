@@ -66,7 +66,7 @@ router.get(`/${PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
   sendPrintAgentExe(res, PRINT_AGENT_SETUP_FILE);
 });
 
-router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
+function sendPrintBridgeApk(res: Response) {
   const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
   const desc = describePrintBridgeApk();
   if (!fileMagicOk(filePath, "apk") || !desc.available) {
@@ -83,7 +83,25 @@ router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
           ].join("\n")
       );
   }
-  sendBinary(res, filePath, PRINT_BRIDGE_APK_FILE, "application/vnd.android.package-archive", "inline");
+  const filename = `reborn-print-bridge-${desc.version || "latest"}.apk`;
+  sendBinary(res, filePath, filename, "application/vnd.android.package-archive", "attachment");
+}
+
+router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
+  sendPrintBridgeApk(res);
+});
+
+/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
+router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) => {
+  const desc = describePrintBridgeApk();
+  const requested = String(req.params.version || "").trim();
+  if (desc.version && requested && requested !== desc.version && requested !== "latest") {
+    return res
+      .status(404)
+      .type("text/plain")
+      .send(`This server has Bridge v${desc.version}, not v${requested}. Download /downloads/reborn-print-bridge-${desc.version}.apk`);
+  }
+  sendPrintBridgeApk(res);
 });
 
 router.use(

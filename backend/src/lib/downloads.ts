@@ -69,7 +69,10 @@ export function describePrintBridgeApk(): DownloadDescriptor {
     version,
     declaredVersion,
     versionMismatch,
-    downloadUrl: valid && !versionMismatch ? `/downloads/${PRINT_BRIDGE_APK_FILE}${cacheBust}` : null,
+    downloadUrl:
+      valid && !versionMismatch
+        ? `/downloads/reborn-print-bridge-${version || "latest"}.apk${cacheBust}`
+        : null,
     message: valid
       ? versionMismatch
         ? `Bridge APK on this server is still v${apkVersion} (manifest lists v${declaredVersion}). Rebuild print-agent-android and redeploy the APK.`

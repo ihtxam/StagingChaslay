@@ -1682,7 +1682,7 @@ const en: Dict = {
   printBridgeDownloadHint:
     'Install Bridge Reborn once on your Android tablet (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Run WebPOS in Chrome — Bridge Reborn handles printing and NFC tap-to-pay in the background via built-in, USB, Bluetooth, or Wi‑Fi printers. No second PC required.',
   printBridgeInstallSteps:
-    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Open WebPOS in Chrome when Bridge Reborn shows ready (port 9101).',
+    '1) Android Settings → Apps → Bridge Reborn → Uninstall. 2) Files / Downloads → delete every reborn-print-bridge*.apk. 3) Come back here and tap Install — Chrome must save a NEW file named reborn-print-bridge-0.3.9.apk. 4) Open that new file, then open the Bridge app. The green header must say v0.3.9. If it still says 0.2.3 you installed an old file from Downloads.',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
   printAgentVersionStatusLabel: 'Print Agent',
