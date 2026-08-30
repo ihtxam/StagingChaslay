@@ -7,6 +7,7 @@ enum class OemSetupAction {
     OPEN_BATTERY,
     OPEN_AUTOSTART,
     OPEN_BACKGROUND,
+    START_BRIDGE,
     INSTRUCTION_ONLY,
 }
 
@@ -39,6 +40,7 @@ object OemSetupSteps {
             actionLabelRes = R.string.oem_step_open_autostart,
             action = OemSetupAction.OPEN_AUTOSTART,
         ),
+        startBridgeStep(),
         doneStep(),
     )
 
@@ -52,6 +54,7 @@ object OemSetupSteps {
             actionLabelRes = R.string.oem_step_open_app_settings,
             action = OemSetupAction.OPEN_BACKGROUND,
         ),
+        startBridgeStep(),
         doneStep(),
     )
 
@@ -72,12 +75,14 @@ object OemSetupSteps {
             actionLabelRes = R.string.oem_step_mark_done,
             action = OemSetupAction.INSTRUCTION_ONLY,
         ),
+        startBridgeStep(),
         doneStep(),
     )
 
     private fun genericAndroidSteps(): List<OemSetupStep> = listOf(
         welcomeStep(),
         batteryStep(),
+        startBridgeStep(),
         doneStep(),
     )
 
@@ -87,6 +92,14 @@ object OemSetupSteps {
         descriptionRes = R.string.oem_step_welcome_desc,
         actionLabelRes = R.string.oem_step_continue,
         action = OemSetupAction.INSTRUCTION_ONLY,
+    )
+
+    private fun startBridgeStep(): OemSetupStep = OemSetupStep(
+        id = "start_bridge",
+        titleRes = R.string.oem_step_start_bridge_title,
+        descriptionRes = R.string.oem_step_start_bridge_desc,
+        actionLabelRes = R.string.oem_step_start_bridge_action,
+        action = OemSetupAction.START_BRIDGE,
     )
 
     private fun batteryStep(): OemSetupStep = OemSetupStep(
@@ -102,7 +115,7 @@ object OemSetupSteps {
         id = "done",
         titleRes = R.string.oem_step_done_title,
         descriptionRes = R.string.oem_step_done_desc,
-        actionLabelRes = R.string.oem_step_finish,
+        actionLabelRes = R.string.oem_step_open_webpos,
         action = OemSetupAction.INSTRUCTION_ONLY,
     )
 }

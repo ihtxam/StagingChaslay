@@ -16,6 +16,7 @@ type Props = {
   printerName: string;
   printSettings: PosPrintSettingsClient | null;
   checking: boolean;
+  starting?: boolean;
   onRefresh: () => Promise<void>;
   onConfirm: (opts: {
     printerName: string;
@@ -31,6 +32,7 @@ export default function WebPosBridgeSetupModal({
   printerName,
   printSettings,
   checking,
+  starting = false,
   onRefresh,
   onConfirm,
   onDismiss,
@@ -78,14 +80,25 @@ export default function WebPosBridgeSetupModal({
           <>
             <div className="mb-3 flex items-center gap-2 text-amber-600 dark:text-amber-300">
               <WifiOff className="h-5 w-5 shrink-0" aria-hidden />
-              <h2 className="text-lg font-bold text-[var(--text)]">{t('webPosBridgeSetupOfflineTitle')}</h2>
+              <h2 className="text-lg font-bold text-[var(--text)]">
+                {starting || checking
+                  ? t('webPosBridgeSetupStartingTitle')
+                  : t('webPosBridgeSetupOfflineTitle')}
+              </h2>
             </div>
-            <p className="text-sm text-[var(--text-muted)]">{t('webPosBridgeSetupOfflineBody')}</p>
-            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[var(--text-muted)]">
-              <li>{t('webPosBridgeSetupStepOpenApp')}</li>
-              <li>{t('webPosBridgeSetupStepAllowPermissions')}</li>
-              <li>{t('webPosBridgeSetupStepRetry')}</li>
-            </ol>
+            <p className="text-sm text-[var(--text-muted)]">
+              {starting || checking
+                ? t('webPosBridgeSetupStartingBody')
+                : t('webPosBridgeSetupOfflineBody')}
+            </p>
+            {!starting && !checking ? (
+              <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[var(--text-muted)]">
+                <li>{t('webPosBridgeSetupStepOpenApp')}</li>
+                <li>{t('webPosBridgeSetupStepRunWizard')}</li>
+                <li>{t('webPosBridgeSetupStepRetry')}</li>
+              </ol>
+            ) : null}
+            <p className="mt-3 text-sm text-[var(--text-muted)]">{t('webPosBridgeSetupOfflineHint')}</p>
           </>
         ) : null}
 
@@ -158,9 +171,9 @@ export default function WebPosBridgeSetupModal({
             <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} aria-hidden />
             {t('refresh')}
           </button>
-          {(mode === 'pick_printer' || mode === 'no_printers') && (
+          {(mode === 'pick_printer' || mode === 'no_printers' || mode === 'bridge_offline') && (
             <button type="button" className="btn-secondary" onClick={onDismiss}>
-              {t('webPosBridgeSetupLater')}
+              {mode === 'bridge_offline' ? t('webPosBridgeSetupContinueWithoutPrint') : t('webPosBridgeSetupLater')}
             </button>
           )}
         </div>

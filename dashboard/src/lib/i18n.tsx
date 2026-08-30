@@ -2447,11 +2447,18 @@ const en: Dict = {
   webPosPrintQueuedMainTill:
     'Sent to main till printer. Keep Reborn open on the PC with the Print Agent.',
   webPosBridgeSetupOfflineTitle: 'Bridge Reborn is not running',
+  webPosBridgeSetupStartingTitle: 'Starting Bridge Reborn…',
+  webPosBridgeSetupStartingBody:
+    'Web POS is waiting for Bridge Reborn on this tablet. This usually takes a few seconds after reboot or app update.',
   webPosBridgeSetupOfflineBody:
-    'This tablet is the main till. Open Bridge Reborn so kitchen and receipt prints stay on this device instead of queuing to a PC.',
+    'Printing and NFC payments need Bridge Reborn running in the background. Complete the setup wizard in the Bridge app once on this tablet.',
+  webPosBridgeSetupOfflineHint:
+    'You can continue taking sales without printing. Receipts and kitchen tickets will queue until Bridge is ready.',
   webPosBridgeSetupStepOpenApp: 'Open the Bridge Reborn app on this tablet',
+  webPosBridgeSetupStepRunWizard: 'Run the background setup wizard (battery, autostart, start service)',
   webPosBridgeSetupStepAllowPermissions: 'Allow Bluetooth and local network permissions if asked',
-  webPosBridgeSetupStepRetry: 'Tap Refresh below — Web POS will connect automatically',
+  webPosBridgeSetupStepRetry: 'Return here and tap Refresh — Web POS connects automatically',
+  webPosBridgeSetupContinueWithoutPrint: 'Continue without printing',
   webPosBridgeSetupNoPrintersTitle: 'No printers found',
   webPosBridgeSetupNoPrintersBody:
     'Bridge Reborn is running but no suitable printer was detected. Pair your Bluetooth kitchen printer in Android settings, then refresh the printer list in Bridge Reborn.',
@@ -6035,11 +6042,18 @@ const fr: Dict = {
   webPosPrintQueuedMainTill:
     'Envoyé à la caisse principale — gardez Reborn ouvert sur le PC.',
   webPosBridgeSetupOfflineTitle: 'Bridge Reborn n’est pas démarré',
+  webPosBridgeSetupStartingTitle: 'Démarrage de Bridge Reborn…',
+  webPosBridgeSetupStartingBody:
+    'Web POS attend Bridge Reborn sur cette tablette. Cela prend généralement quelques secondes après un redémarrage ou une mise à jour.',
   webPosBridgeSetupOfflineBody:
-    'Cette tablette est la caisse principale. Ouvrez Bridge Reborn pour que les impressions cuisine et ticket restent sur cet appareil au lieu d’être envoyées à un PC.',
+    'L’impression et les paiements NFC nécessitent Bridge Reborn en arrière-plan. Terminez l’assistant de configuration dans l’app Bridge une fois sur cette tablette.',
+  webPosBridgeSetupOfflineHint:
+    'Vous pouvez continuer les ventes sans impression. Les tickets seront mis en file jusqu’à ce que Bridge soit prêt.',
   webPosBridgeSetupStepOpenApp: 'Ouvrez l’application Bridge Reborn sur cette tablette',
+  webPosBridgeSetupStepRunWizard: 'Lancez l’assistant (batterie, démarrage auto, démarrer le service)',
   webPosBridgeSetupStepAllowPermissions: 'Autorisez Bluetooth et le réseau local si demandé',
-  webPosBridgeSetupStepRetry: 'Appuyez sur Actualiser ci-dessous — Web POS se connectera automatiquement',
+  webPosBridgeSetupStepRetry: 'Revenez ici et appuyez sur Actualiser — Web POS se connectera automatiquement',
+  webPosBridgeSetupContinueWithoutPrint: 'Continuer sans impression',
   webPosBridgeSetupNoPrintersTitle: 'Aucune imprimante trouvée',
   webPosBridgeSetupNoPrintersBody:
     'Bridge Reborn est actif mais aucune imprimante adaptée n’a été détectée. Associez votre imprimante cuisine Bluetooth dans les réglages Android, puis actualisez la liste dans Bridge Reborn.',
@@ -9583,11 +9597,18 @@ const de: Dict = {
   webPosPrintQueuedMainTill:
     'An die Hauptkasse gesendet. Reborn auf dem PC mit Druckagent geöffnet lassen.',
   webPosBridgeSetupOfflineTitle: 'Bridge Reborn läuft nicht',
+  webPosBridgeSetupStartingTitle: 'Bridge Reborn wird gestartet…',
+  webPosBridgeSetupStartingBody:
+    'Web POS wartet auf Bridge Reborn auf diesem Tablet. Das dauert nach Neustart oder Update meist ein paar Sekunden.',
   webPosBridgeSetupOfflineBody:
-    'Dieses Tablet ist die Hauptkasse. Öffnen Sie Bridge Reborn, damit Küchen- und Belegdrucke auf diesem Gerät bleiben und nicht an einen PC geschickt werden.',
+    'Druck und NFC-Zahlungen benötigen Bridge Reborn im Hintergrund. Führen Sie den Einrichtungsassistenten in der Bridge-App einmal auf diesem Tablet aus.',
+  webPosBridgeSetupOfflineHint:
+    'Sie können weiter verkaufen ohne zu drucken. Belege und Küchentickets werden in die Warteschlange gestellt, bis Bridge bereit ist.',
   webPosBridgeSetupStepOpenApp: 'Öffnen Sie die Bridge-Reborn-App auf diesem Tablet',
+  webPosBridgeSetupStepRunWizard: 'Einrichtungsassistent ausführen (Akku, Autostart, Dienst starten)',
   webPosBridgeSetupStepAllowPermissions: 'Erlauben Sie Bluetooth und lokales Netzwerk, falls gefragt',
-  webPosBridgeSetupStepRetry: 'Tippen Sie unten auf Aktualisieren — Web POS verbindet sich automatisch',
+  webPosBridgeSetupStepRetry: 'Kehren Sie hierher zurück und tippen Sie auf Aktualisieren — Web POS verbindet sich automatisch',
+  webPosBridgeSetupContinueWithoutPrint: 'Ohne Druck fortfahren',
   webPosBridgeSetupNoPrintersTitle: 'Keine Drucker gefunden',
   webPosBridgeSetupNoPrintersBody:
     'Bridge Reborn läuft, aber es wurde kein passender Drucker erkannt. Koppeln Sie Ihren Bluetooth-Küchendrucker in den Android-Einstellungen und aktualisieren Sie die Liste in Bridge Reborn.',

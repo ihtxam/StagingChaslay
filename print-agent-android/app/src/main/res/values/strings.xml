@@ -5,7 +5,10 @@
     <string name="notification_body">WebPOS in Chrome can print and take NFC payments on http://127.0.0.1:9101</string>
     <string name="status_ready">Bridge ready on port 9101</string>
     <string name="status_starting">Starting Bridge Reborn…</string>
-    <string name="open_webpos">Return to WebPOS in Chrome and tap Refresh printers in Settings.</string>
+    <string name="status_service_running">Background service running</string>
+    <string name="status_service_stopped">Background service not running</string>
+    <string name="status_service_checking">Checking Bridge service…</string>
+    <string name="open_webpos">Return to WebPOS in Chrome — sales work without printing; refresh when Bridge is ready.</string>
     <string name="refresh_printers">Refresh printers</string>
     <string name="test_print">Test print</string>
     <string name="test_print_ok">Test sent to %1$s</string>
@@ -46,8 +49,8 @@
     <string name="oem_step_open_battery">Allow unrestricted battery</string>
     <string name="oem_step_open_autostart">Open autostart settings</string>
     <string name="oem_step_open_app_settings">Open app settings</string>
-    <string name="oem_step_welcome_title">Keep printing after every restart</string>
-    <string name="oem_step_welcome_desc">Android may stop background apps to save battery. These quick steps make sure Bridge Reborn keeps running and reconnects to your USB, Bluetooth, and Wi‑Fi printers after every reboot.</string>
+    <string name="oem_step_welcome_title">Keep Bridge running for WebPOS</string>
+    <string name="oem_step_welcome_desc">WebPOS in Chrome needs Bridge Reborn running in the background for printing and NFC payments. These quick steps stop Android from closing Bridge after reboot or when you switch apps.</string>
     <string name="oem_step_battery_title">Disable battery restrictions</string>
     <string name="oem_step_battery_desc">Allow Bridge Reborn to run without battery limits. Tap the button below and choose Allow or Unrestricted when prompted.</string>
     <string name="oem_step_battery_done">Battery restriction is already disabled for Bridge Reborn.</string>
@@ -60,6 +63,15 @@
     <string name="oem_step_autostart_desc">Open your device\'s autostart or startup manager and enable Bridge Reborn. This prevents the system from blocking Bridge Reborn after reboot.</string>
     <string name="oem_step_lock_recents_title">Lock app in recent apps</string>
     <string name="oem_step_lock_recents_desc">Open recent apps, find Bridge Reborn, then tap the lock icon (or pull down) so Android does not close it when clearing other apps.</string>
+    <string name="oem_step_start_bridge_title">Start Bridge service</string>
+    <string name="oem_step_start_bridge_desc">Bridge Reborn runs as a foreground service on port 9101. Tap Start below — we verify WebPOS can reach it before you continue.</string>
+    <string name="oem_step_start_bridge_action">Start Bridge service</string>
+    <string name="oem_step_bridge_checking">Starting Bridge… checking http://127.0.0.1:9101/health</string>
+    <string name="oem_step_bridge_verified">Bridge is running (version %1$s). WebPOS can print and take NFC payments.</string>
+    <string name="oem_step_bridge_pending">Bridge is not responding yet. Tap Start Bridge service, then wait a few seconds.</string>
+    <string name="oem_step_bridge_failed">Bridge did not respond. Check notification permission, then tap Start Bridge service again.</string>
+    <string name="oem_step_bridge_version_unknown">unknown</string>
+    <string name="oem_step_open_webpos">Open WebPOS</string>
     <string name="oem_step_done_title">Setup complete</string>
-    <string name="oem_step_done_desc">Bridge Reborn is configured to run in the background. After reboot it will start automatically and reconnect to your printers. You can reopen this wizard anytime from the main screen.</string>
+    <string name="oem_step_done_desc">Bridge Reborn is configured to run in the background. Open WebPOS in Chrome — it will connect automatically. You can reopen this wizard anytime from the main screen.</string>
 </resources>

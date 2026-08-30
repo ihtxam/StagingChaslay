@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.rebornsense.printbridge.MainActivity
+import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
 import com.rebornsense.printbridge.print.DriverRegistry
@@ -42,6 +43,10 @@ class PrintBridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
+            registry.refresh(applicationContext)
+            return START_STICKY
+        }
         registry.refresh(applicationContext)
         return START_STICKY
     }
