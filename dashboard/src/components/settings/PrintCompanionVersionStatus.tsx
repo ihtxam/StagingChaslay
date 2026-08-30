@@ -86,7 +86,7 @@ export default function PrintCompanionVersionStatus({
         <span className="font-medium">{label}: </span>
         {message}
       </p>
-      {status.state === 'update_available' && downloadUrl ? (
+      {status.state === 'update_available' && downloadUrl && !versionMismatch ? (
         <>
           {kind === 'android-bridge' ? (
             <p className="mt-1 m-0 text-[var(--text-muted)]">{t('printBridgeUpdateUninstallSteps')}</p>

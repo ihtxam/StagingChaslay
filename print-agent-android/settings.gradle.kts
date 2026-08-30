@@ -12,11 +12,11 @@ plugins {
 }
 
 val localProps = java.util.Properties().apply {
-    val rootFile = rootProject.projectDir.parentFile?.resolve("local.properties")
-    val here = rootProject.file("local.properties")
+    val here = file("local.properties")
+    val rootFile = settingsDir.parentFile.resolve("local.properties")
     when {
         here.exists() -> here.inputStream().use { load(it) }
-        rootFile != null && rootFile.exists() -> rootFile.inputStream().use { load(it) }
+        rootFile.exists() -> rootFile.inputStream().use { load(it) }
     }
 }
 val adyenSdkApiKey: String = localProps.getProperty("adyenSdkApiKey").orEmpty()
