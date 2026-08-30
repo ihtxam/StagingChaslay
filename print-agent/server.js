@@ -21,7 +21,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.3";
+const VERSION = "1.9.4";
 const APP_NAME = "RebornPrintAgent";
 const LEGACY_APP_NAME = "ChaslayPrintAgent";
 const EXE_NAME = "reborn-print-agent.exe";
@@ -1008,6 +1008,7 @@ function startServer() {
         "print-dry-run",
         "cloud-relay",
         "bt-com-paced-spooler",
+        "com-serial-write-fallback",
       ],
     });
   });

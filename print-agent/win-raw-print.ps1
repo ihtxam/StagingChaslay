@@ -10,9 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.9.2: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Bluetooth / virtual-COM ports are paced (96-byte FlushPrinter slices) so
-# SPP/BLE buffers do not overflow; a feed+cut trailer is sent after drain.
+# v1.9.4: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Bluetooth / virtual-COM ports are paced; COM4+ serial skips FlushPrinter (it
+# often reports success with 0 bytes) and uses smaller WritePrinter chunks.
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -139,7 +139,7 @@ function Test-NeedsPacedWrite {
         return $true
     }
     # Cheap Chinese ESC/POS (Xprinter, RPP, Gprinter, …) — often on USB001 with a BT dongle.
-    if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
+    if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|pos-?80c|r80a?|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
         return $true
     }
     # Kitchen tickets over ~1.8 KB overflow many slow BT/COM buffers even when the port name is opaque.
@@ -184,13 +184,19 @@ function Get-BtCutTrailer {
     )
 }
 
+function Test-ComSerialPort {
+    param([string]$PortName)
+    return (($PortName + '').ToLowerInvariant() -match '^com\d+$')
+}
+
 function Write-RawChunks {
     param(
         [IntPtr]$Handle,
         [byte[]]$Data,
         [string]$Printer,
         [int]$ChunkSize = 4096,
-        [int]$DelayMs = 0
+        [int]$DelayMs = 0,
+        [switch]$ComSerialPort
     )
 
     if ($null -eq $Data -or $Data.Length -eq 0) {
@@ -207,27 +213,45 @@ function Write-RawChunks {
         [Array]::Copy($Data, $offset, $slice, 0, $len)
         $written = 0
         $usedFlush = $false
-        if ($DelayMs -gt 0) {
+        # FlushPrinter often returns true with written=0 on COM Bluetooth serial ports.
+        if ($DelayMs -gt 0 -and -not $ComSerialPort) {
             try {
                 $usedFlush = [RawPrinterHelper]::FlushPrinter($Handle, $slice, $len, [ref]$written, $DelayMs)
+                if ($usedFlush -and $written -lt $len) {
+                    $usedFlush = $false
+                }
             } catch {
                 $usedFlush = $false
             }
         }
         if (-not $usedFlush) {
-            if (-not [RawPrinterHelper]::WritePrinter($Handle, $slice, $len, [ref]$written)) {
-                $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-                throw "WritePrinter failed for '$Printer' (Win32=$err)."
+            $attempts = 0
+            $maxAttempts = if ($ComSerialPort) { 8 } else { 1 }
+            while ($attempts -lt $maxAttempts) {
+                $written = 0
+                if (-not [RawPrinterHelper]::WritePrinter($Handle, $slice, $len, [ref]$written)) {
+                    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                    throw "WritePrinter failed for '$Printer' (Win32=$err)."
+                }
+                if ($written -ge $len) { break }
+                $attempts++
+                if ($attempts -lt $maxAttempts) {
+                    Start-Sleep -Milliseconds 50
+                }
             }
             if ($DelayMs -gt 0) {
                 Start-Sleep -Milliseconds $DelayMs
             }
         }
-        if ($written -lt $len) {
+        if ($written -lt 1) {
             throw "WritePrinter short write for '$Printer': $written of $len bytes."
         }
         $totalWritten += $written
-        $offset += $len
+        if ($written -lt $len) {
+            $offset += $written
+        } else {
+            $offset += $len
+        }
         if ($DelayMs -gt 0 -and $offset -ge $Data.Length) {
             Start-Sleep -Milliseconds $DelayMs
         }
@@ -242,19 +266,20 @@ function Send-RawToPrinter {
     )
 
     $portName = Get-WinPrinterPortName -Printer $Printer
+    $isComPort = Test-ComSerialPort -PortName $portName
     $paced = Test-NeedsPacedWrite -Port $portName -Printer $Printer -ByteCount $Data.Length
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
-        $writeChunk = 96
-        $writeDelay = 100
+        $writeChunk = if ($isComPort) { 32 } else { 96 }
+        $writeDelay = if ($isComPort) { 120 } else { 100 }
     }
     $body = $Data
     if ($paced) {
         $split = Split-CutSuffix -Data $Data
         $body = $split[0]
     }
-    Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) body=$($body.Length) chunk=$writeChunk delayMs=$writeDelay paced=$paced"
+    Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) body=$($body.Length) chunk=$writeChunk delayMs=$writeDelay paced=$paced com=$isComPort"
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
     $docInfo.pDocName = "Reborn Receipt"
@@ -282,12 +307,14 @@ function Send-RawToPrinter {
                 $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "StartPagePrinter failed for '$Printer' (Win32=$err)."
             }
-            [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay)
+            [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay -ComSerialPort:$isComPort)
             if ($paced) {
                 $drainMs = [Math]::Min(1200 + [int]([Math]::Floor($body.Length / 6)), 10000)
+                if ($isComPort) { $drainMs += 200 }
                 Start-Sleep -Milliseconds $drainMs
-                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs 100)
-                Start-Sleep -Milliseconds 600
+                $cutDelay = if ($isComPort) { 100 } else { 80 }
+                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs $cutDelay -ComSerialPort:$isComPort)
+                Start-Sleep -Milliseconds $(if ($isComPort) { 800 } else { 600 })
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
