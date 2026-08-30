@@ -1264,9 +1264,12 @@ export default function Settings() {
         shopEnabled: !!settings.shopEnabled,
         acceptingOrders: settings.acceptingOrders !== false,
         acceptingReservations: settings.acceptingReservations !== false,
+<<<<<<< HEAD
         cartLayout: settings.cartLayout || 'hidden_slide',
         menuShowProductImages: settings.menuShowProductImages !== false,
         menuShowCategoryBanners: settings.menuShowCategoryBanners !== false,
+=======
+>>>>>>> origin/cursor/fix-deploy-accepting-mobile-ff54
         floorPlanEnabled: !!settings.floorPlanEnabled,
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
         coursesEnabled: !!settings.coursesEnabled,
