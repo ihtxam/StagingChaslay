@@ -15,7 +15,7 @@ import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
 import { OrderService } from "@/services/order.service";
 import { CustomerService } from "@/services/customer.service";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
-import { CatalogImportService } from "@/services/catalog-import.service";
+import { CatalogImportService, type ImportProgressEvent } from "@/services/catalog-import.service";
 import { DemoCatalogService } from "@/services/demo-catalog.service";
 import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
@@ -188,6 +188,40 @@ router.post("/products/import", upload.single("file"), async (req: Request, res:
   } catch (error) {
     console.error("Import failed:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Import failed" });
+  }
+});
+
+/**
+ * POST /api/merchant/products/import/stream
+ * Excel import with Server-Sent Events progress updates.
+ */
+router.post("/products/import/stream", upload.single("file"), async (req: Request, res: Response) => {
+  const merchantId = req.merchantId;
+  if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+  if (!req.file?.buffer) return res.status(400).json({ error: "Excel file is required (field: file)" });
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = (payload: ImportProgressEvent & { result?: Record<string, unknown> }) => {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  try {
+    const result = await CatalogImportService.importWorkbook(merchantId, req.file.buffer, {
+      onProgress: (event) => send(event),
+    });
+    send({ phase: "done", message: "Import complete", percent: 100, result: { success: result.success, ...result } });
+    res.end();
+  } catch (error) {
+    console.error("Import stream failed:", error);
+    send({
+      phase: "error",
+      message: error instanceof Error ? error.message : "Import failed",
+    });
+    res.end();
   }
 });
 

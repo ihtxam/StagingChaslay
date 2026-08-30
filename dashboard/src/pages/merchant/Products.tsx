@@ -1,10 +1,13 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Download,
   Edit2,
   FileSpreadsheet,
+  MoreHorizontal,
   Package,
   Plus,
   Search,
@@ -25,6 +28,8 @@ import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
+import ProductImportProgressModal from '@/components/ProductImportProgressModal';
+import { importCatalogWithProgress, type CatalogImportProgress } from '@/lib/catalog-import-stream';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
 import {
   labelMetaLine,
@@ -184,6 +189,8 @@ const emptyForm = (): FormState => ({
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
 });
 
+const PRODUCTS_PAGE_SIZE = 50;
+
 function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotForm[] {
   if (!Array.isArray(raw) || !raw.length) return [];
   return raw
@@ -325,6 +332,11 @@ export default function Products() {
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [storeName, setStoreName] = useState('');
   const [importingPhotos, setImportingPhotos] = useState(false);
+  const [productPage, setProductPage] = useState(1);
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const [importProgressOpen, setImportProgressOpen] = useState(false);
+  const [importProgress, setImportProgress] = useState<CatalogImportProgress | null>(null);
+  const [importFileName, setImportFileName] = useState('');
   const [productLimit, setProductLimit] = useState<{
     maxProducts: number | null;
     currentCount: number;
@@ -511,10 +523,20 @@ export default function Products() {
   };
 
   const onReorderFiltered = (nextFiltered: Product[]) => {
-    const filteredIds = new Set(nextFiltered.map((p) => p.id));
+    const filteredIdsSet = new Set(nextFiltered.map((p) => p.id));
     let i = 0;
-    const merged = products.map((p) => (filteredIds.has(p.id) ? nextFiltered[i++] : p));
+    const merged = products.map((p) => (filteredIdsSet.has(p.id) ? nextFiltered[i++] : p));
     void persistProductOrder(merged);
+  };
+
+  const onReorderPaginated = (nextPageItems: Product[]) => {
+    const start = (productPage - 1) * PRODUCTS_PAGE_SIZE;
+    const nextFiltered = [
+      ...filteredProducts.slice(0, start),
+      ...nextPageItems,
+      ...filteredProducts.slice(start + nextPageItems.length),
+    ];
+    onReorderFiltered(nextFiltered);
   };
 
   const filteredProducts = useMemo(() => {
@@ -538,6 +560,21 @@ export default function Products() {
       );
     });
   }, [products, selectedCategory, search, categories, channelFilter]);
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [search, selectedCategory, channelFilter]);
+
+  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PAGE_SIZE));
+
+  useEffect(() => {
+    if (productPage > totalProductPages) setProductPage(totalProductPages);
+  }, [productPage, totalProductPages]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * PRODUCTS_PAGE_SIZE;
+    return filteredProducts.slice(start, start + PRODUCTS_PAGE_SIZE);
+  }, [filteredProducts, productPage]);
 
   const filteredIds = useMemo(() => filteredProducts.map((p) => p.id), [filteredProducts]);
   const allFilteredSelected =
@@ -1127,13 +1164,13 @@ export default function Products() {
 
   const onImport = async (file: File) => {
     setImporting(true);
+    setImportFileName(file.name);
+    setImportProgress({ phase: 'parsing', percent: 0, message: 'Starting…' });
+    setImportProgressOpen(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await api.post('/merchant/products/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const r = await importCatalogWithProgress(file, (event) => {
+        setImportProgress(event);
       });
-      const r = response.data;
       toast.success(
         t('importDone')
           .replace('{categories}', String(r.categoriesCreated))
@@ -1144,11 +1181,19 @@ export default function Products() {
       if (r.errors?.length) toast.error(t('importRowErrors').replace('{n}', String(r.errors.length)));
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('importFailed'));
+      toast.error(error.message || error.response?.data?.error || t('importFailed'));
     } finally {
       setImporting(false);
+      setImportProgressOpen(false);
+      setImportProgress(null);
+      setImportFileName('');
       if (fileRef.current) fileRef.current.value = '';
     }
+  };
+
+  const runMoreAction = (action: () => void | Promise<void>) => {
+    setMoreActionsOpen(false);
+    void action();
   };
 
   if (loading) {
@@ -1174,89 +1219,137 @@ export default function Products() {
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            disabled={importingDemo}
-            onClick={onImportDemoClick}
-            className="btn-secondary"
-          >
-            <Sparkles size={14} />
-            {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
-          </button>
-          {hasDemoCatalog ? (
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="relative">
             <button
               type="button"
-              disabled={deletingDemoCatalog}
-              onClick={() => void onDeleteDemoCatalog()}
-              className="btn-secondary text-red-700"
-              title={t('deleteDemoProductsHint')}
+              className="btn-secondary inline-flex items-center gap-1.5"
+              aria-expanded={moreActionsOpen}
+              aria-haspopup="menu"
+              onClick={() => setMoreActionsOpen((open) => !open)}
             >
-              <Trash2 size={14} />
-              {deletingDemoCatalog ? t('deleteDemoProductsLoading') : t('deleteDemoProducts')}
+              <MoreHorizontal size={16} aria-hidden />
+              {t('productsMoreActions')}
+              <ChevronDown size={14} className={`transition ${moreActionsOpen ? 'rotate-180' : ''}`} aria-hidden />
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void downloadTemplate()}
-            className="btn-secondary"
-          >
-            <Download size={14} />
-            {t('templateShort')}
-          </button>
-          <button
-            type="button"
-            disabled={importing}
-            onClick={() => fileRef.current?.click()}
-            className="btn-secondary"
-          >
-            <FileSpreadsheet size={14} />
-            {importing ? t('importing') : t('importExcel')}
-          </button>
-          <button type="button" onClick={() => void exportCatalog()} className="btn-secondary">
-            <Download size={14} />
-            {t('exportExcel')}
-          </button>
-          <button
-            type="button"
-            disabled={importingPhotos}
-            onClick={() => void importMissingPhotos(selectedIds.length ? selectedIds : undefined)}
-            className="btn-secondary"
-          >
-            <Package size={14} />
-            {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
-          </button>
-          {showBarcodeTools ? (
-            <>
-          <button
-            type="button"
-            onClick={() => void generateMissing(selectedIds.length ? selectedIds : undefined)}
-            className="btn-secondary"
-          >
-            <Barcode size={14} />
-            {t('barcodeGenerateMissing')}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
-            }
-            className="btn-secondary"
-          >
-            <Printer size={14} />
-            {t('barcodePrintLabels')}
-          </button>
-            </>
-          ) : null}
+            {moreActionsOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-20 cursor-default"
+                  aria-label={t('close')}
+                  onClick={() => setMoreActionsOpen(false)}
+                />
+                <div
+                  className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[14rem] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-xl"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={importingDemo}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    onClick={() => runMoreAction(onImportDemoClick)}
+                  >
+                    <Sparkles size={14} aria-hidden />
+                    {importingDemo ? t('importDemoLoading') : t('importDemoContent')}
+                  </button>
+                  {hasDemoCatalog ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={deletingDemoCatalog}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                      onClick={() => runMoreAction(onDeleteDemoCatalog)}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                      {deletingDemoCatalog ? t('deleteDemoProductsLoading') : t('deleteDemoProducts')}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                    onClick={() => runMoreAction(downloadTemplate)}
+                  >
+                    <Download size={14} aria-hidden />
+                    {t('templateShort')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={importing}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    onClick={() => {
+                      setMoreActionsOpen(false);
+                      fileRef.current?.click();
+                    }}
+                  >
+                    <FileSpreadsheet size={14} aria-hidden />
+                    {importing ? t('importing') : t('importExcel')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                    onClick={() => runMoreAction(exportCatalog)}
+                  >
+                    <Download size={14} aria-hidden />
+                    {t('exportExcel')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={importingPhotos}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)] disabled:opacity-50"
+                    onClick={() =>
+                      runMoreAction(() => importMissingPhotos(selectedIds.length ? selectedIds : undefined))
+                    }
+                  >
+                    <Package size={14} aria-hidden />
+                    {importingPhotos ? t('productPhotosImporting') : t('productPhotosImportMissing')}
+                  </button>
+                  {showBarcodeTools ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                        onClick={() =>
+                          runMoreAction(() => generateMissing(selectedIds.length ? selectedIds : undefined))
+                        }
+                      >
+                        <Barcode size={14} aria-hidden />
+                        {t('barcodeGenerateMissing')}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                        onClick={() =>
+                          runMoreAction(() =>
+                            openPrintFor(selectedIds.length ? selectedProducts : filteredProducts)
+                          )
+                        }
+                      >
+                        <Printer size={14} aria-hidden />
+                        {t('barcodePrintLabels')}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={openCreate}
             disabled={atProductLimit}
-            className="btn-primary disabled:opacity-50"
+            className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base font-bold disabled:opacity-50"
             title={atProductLimit ? t('productLimitReached') : undefined}
           >
-            <Plus size={14} />
-            {t('addShort')}
+            <Plus size={18} aria-hidden />
+            {t('addProduct')}
           </button>
           <input
             ref={fileRef}
@@ -1413,11 +1506,11 @@ export default function Products() {
         <SortableContainer
           as="div"
           className="space-y-2"
-          items={filteredProducts}
-          onReorder={onReorderFiltered}
+          items={paginatedProducts}
+          onReorder={onReorderPaginated}
           disabled={reordering}
         >
-          {filteredProducts.map((product) => {
+          {paginatedProducts.map((product) => {
           const extras = product.extras || [];
           const tiers = product.bulkPricing || [];
           const sizes = product.specifications || [];
@@ -1638,6 +1731,43 @@ export default function Products() {
           );
         })}
         </SortableContainer>
+
+        {filteredProducts.length > PRODUCTS_PAGE_SIZE ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+            <span className="muted">
+              {t('productsPaginationShowing')
+                .replace('{from}', String((productPage - 1) * PRODUCTS_PAGE_SIZE + 1))
+                .replace(
+                  '{to}',
+                  String(Math.min(productPage * PRODUCTS_PAGE_SIZE, filteredProducts.length))
+                )
+                .replace('{total}', String(filteredProducts.length))}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-1 px-2 py-1 text-xs"
+                disabled={productPage <= 1}
+                onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft size={14} aria-hidden />
+                {t('previous')}
+              </button>
+              <span className="px-2 tabular-nums text-xs font-semibold">
+                {productPage} / {totalProductPages}
+              </span>
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-1 px-2 py-1 text-xs"
+                disabled={productPage >= totalProductPages}
+                onClick={() => setProductPage((p) => Math.min(totalProductPages, p + 1))}
+              >
+                {t('next')}
+                <ChevronRight size={14} aria-hidden />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {modalOpen && (
@@ -2653,6 +2783,12 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      <ProductImportProgressModal
+        open={importProgressOpen}
+        progress={importProgress}
+        fileName={importFileName}
+      />
 
       <BulkDeleteConfirmModal
         open={bulkDeleteOpen}

@@ -106,3 +106,76 @@ export function summarizeChannelHours(ch: ChannelHours): string {
     .map((g) => (g.start === g.end ? `${g.start} ${g.text}` : `${g.start}-${g.end} ${g.text}`))
     .join(' · ');
 }
+
+/** UI schedule block: one set of time slots applied to selected weekdays. */
+export type HoursScheduleBlock = {
+  id: string;
+  days: StoreHoursDayKey[];
+  slots: HoursSlot[];
+};
+
+export function newHoursScheduleBlock(
+  days: StoreHoursDayKey[] = [],
+  slots: HoursSlot[] = [{ open: '11:00', close: '14:00' }, { open: '17:00', close: '23:00' }]
+): HoursScheduleBlock {
+  return {
+    id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    days,
+    slots: cloneHoursSlots(slots),
+  };
+}
+
+/** Group days with identical slot arrays into editable schedule blocks. */
+export function channelHoursToBlocks(ch: ChannelHours | undefined): HoursScheduleBlock[] {
+  const groups = new Map<string, StoreHoursDayKey[]>();
+  for (const d of STORE_HOURS_DAYS) {
+    const slots = ch?.[d.key] || [];
+    const key = JSON.stringify(slots);
+    const days = groups.get(key) || [];
+    days.push(d.key);
+    groups.set(key, days);
+  }
+  const blocks: HoursScheduleBlock[] = [];
+  for (const [key, days] of groups) {
+    const slots = JSON.parse(key) as HoursSlot[];
+    blocks.push(newHoursScheduleBlock(days, slots));
+  }
+  return blocks.sort((a, b) => {
+    const aClosed = !a.slots.length;
+    const bClosed = !b.slots.length;
+    if (aClosed !== bClosed) return aClosed ? 1 : -1;
+    const aFirst = STORE_HOURS_DAYS.findIndex((d) => a.days.includes(d.key));
+    const bFirst = STORE_HOURS_DAYS.findIndex((d) => b.days.includes(d.key));
+    return aFirst - bFirst;
+  });
+}
+
+/** Expand schedule blocks back into per-day slot arrays for API storage. */
+export function blocksToChannelHours(blocks: HoursScheduleBlock[]): ChannelHours {
+  const out: ChannelHours = Object.fromEntries(
+    STORE_HOURS_DAYS.map((d) => [d.key, [] as HoursSlot[]])
+  );
+  for (const block of blocks) {
+    for (const day of block.days) {
+      out[day] = cloneHoursSlots(block.slots);
+    }
+  }
+  return out;
+}
+
+/** Ensure every weekday appears in exactly one block (unassigned days become closed). */
+export function normalizeScheduleBlocks(blocks: HoursScheduleBlock[]): HoursScheduleBlock[] {
+  const assigned = new Set<StoreHoursDayKey>();
+  const normalized: HoursScheduleBlock[] = [];
+  for (const block of blocks) {
+    const days = block.days.filter((d) => !assigned.has(d));
+    for (const d of days) assigned.add(d);
+    if (!days.length && !block.slots.length) continue;
+    normalized.push({ ...block, days, slots: cloneHoursSlots(block.slots) });
+  }
+  const missing = STORE_HOURS_DAYS.map((d) => d.key).filter((d) => !assigned.has(d));
+  if (missing.length) {
+    normalized.push(newHoursScheduleBlock(missing, []));
+  }
+  return normalized.length ? normalized : [newHoursScheduleBlock(STORE_HOURS_DAYS.map((d) => d.key), [])];
+}
