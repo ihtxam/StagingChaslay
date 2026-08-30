@@ -27,9 +27,24 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 
 /** Register SW before React boot so static assets get cached on the first online visit. */
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {
-    /* installability still works with manifest alone in many cases */
-  })
+  navigator.serviceWorker
+    .register('/sw.js')
+    .then((reg) => {
+      void reg.update();
+      const onStateChange = () => {
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      };
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        worker?.addEventListener('statechange', onStateChange);
+      });
+      if (reg.waiting) onStateChange();
+    })
+    .catch(() => {
+      /* installability still works with manifest alone in many cases */
+    });
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -305,6 +305,7 @@ import {
   WEBPOS_BELOW_9IN_MEDIA_QUERY,
   type WebPosCategoryLayoutMode,
 } from '@/lib/webpos-category-layout';
+import { activateWaitingServiceWorker, isStandalonePwaSession } from '@/lib/pwa-recover';
 import {
   clearPersistedWebPosCarts,
   draftsMapToRecord,
@@ -695,6 +696,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     document.title = APP_NAME;
+  }, []);
+
+  useEffect(() => {
+    if (!isStandalonePwaSession()) return;
+    void activateWaitingServiceWorker();
   }, []);
 
   useEffect(() => {
