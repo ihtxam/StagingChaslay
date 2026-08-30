@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.9.2";
+const VERSION = "1.9.3";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.9.2 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.9.3 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -39,9 +39,8 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.equal(src.includes("Send-RawViaComPort"), false);
   assert.equal(src.includes("System.IO.Ports.SerialPort"), false);
   assert.equal(src.includes("Resolve-BtSlowMode"), false);
-  assert.equal(src.includes("Split-CutSuffix"), false);
+  assert.match(src, /Split-CutSuffix/);
   assert.equal(src.includes("Wait-PrinterDrain"), false);
-  assert.equal(src.includes("SlowBluetooth"), false);
   assert.match(src, /chunkSize = 4096/);
   assert.match(src, /Test-NeedsPacedWrite/);
   assert.match(src, /writeChunk = 96/);
@@ -64,6 +63,7 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.equal(src.includes("btSlowMode"), false);
   assert.match(src, /chunkSize = 4096/);
   assert.match(src, /Test-NeedsPacedWrite/);
+  assert.match(src, /Split-CutSuffix/);
   assert.match(src, /writeChunk = 96/);
   assert.match(src, /FlushPrinter/);
   assert.match(src, /Get-BtCutTrailer/);

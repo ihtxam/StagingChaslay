@@ -336,11 +336,11 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.9.2+ paces Bluetooth / virtual-COM writes and sends a feed+cut trailer. */
-export const MIN_PRINT_AGENT_VERSION = '1.9.2';
+/** 1.9.3+ paces Chinese/BT thermal printers and sends a dedicated cut trailer. */
+export const MIN_PRINT_AGENT_VERSION = '1.9.3';
 
 const BT_COM_PRINTER_RE =
-  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-58|pos-80|mtp-|spp/i;
+  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
 
 /** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
 export const BLUETOOTH_KITCHEN_SETTLE_MS = 1800;

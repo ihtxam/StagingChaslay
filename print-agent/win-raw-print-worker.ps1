@@ -99,19 +99,52 @@ function Get-WinPrinterPortName {
 }
 
 function Test-NeedsPacedWrite {
-    param([string]$Port, [string]$Printer)
+    param([string]$Port, [string]$Printer, [int]$ByteCount = 0)
     $blob = ("{0} {1}" -f $Port, $Printer).ToLowerInvariant()
-    return $blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over'
+    if ($blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|bluetoothprinter|bt_') {
+        return $true
+    }
+    if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
+        return $true
+    }
+    if ($ByteCount -ge 1800) {
+        return $true
+    }
+    return $false
+}
+
+function Split-CutSuffix {
+    param([byte[]]$Data)
+    if ($null -eq $Data -or $Data.Length -lt 4) {
+        return ,@($Data, [byte[]]@())
+    }
+    $start = [Math]::Max(0, $Data.Length - 96)
+    for ($i = $Data.Length - 1; $i -ge $start; $i--) {
+        if ($Data[$i] -eq 0x1D -and ($i + 1) -lt $Data.Length -and $Data[$i + 1] -eq 0x56) {
+            $body = New-Object byte[] $i
+            if ($i -gt 0) { [Array]::Copy($Data, 0, $body, 0, $i) }
+            $trail = New-Object byte[] ($Data.Length - $i)
+            [Array]::Copy($Data, $i, $trail, 0, $trail.Length)
+            return ,@($body, $trail)
+        }
+        if ($Data[$i] -eq 0x1B -and ($i + 1) -lt $Data.Length -and $Data[$i + 1] -eq 0x64) {
+            $body = New-Object byte[] $i
+            if ($i -gt 0) { [Array]::Copy($Data, 0, $body, 0, $i) }
+            $trail = New-Object byte[] ($Data.Length - $i)
+            [Array]::Copy($Data, $i, $trail, 0, $trail.Length)
+            return ,@($body, $trail)
+        }
+    }
+    return ,@($Data, [byte[]]@())
 }
 
 function Get-BtCutTrailer {
     return [byte[]](
-        0x1B, 0x64, 0x0C,
-        0x1D, 0x56, 0x41, 0x30,
+        0x1B, 0x64, 0x0F,
+        0x1D, 0x56, 0x01,
         0x1D, 0x56, 0x00,
-        0x1B, 0x69,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        0x1B, 0x6D,
+        0x0A, 0x0A, 0x0A
     )
 }
 
@@ -173,14 +206,19 @@ function Send-RawToPrinter {
     )
 
     $portName = Get-WinPrinterPortName -Printer $Printer
-    $paced = Test-NeedsPacedWrite -Port $portName -Printer $Printer
+    $paced = Test-NeedsPacedWrite -Port $portName -Printer $Printer -ByteCount $Data.Length
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
         $writeChunk = 96
-        $writeDelay = 80
+        $writeDelay = 100
     }
-    Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) chunk=$writeChunk delayMs=$writeDelay"
+    $body = $Data
+    if ($paced) {
+        $split = Split-CutSuffix -Data $Data
+        $body = $split[0]
+    }
+    Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) body=$($body.Length) chunk=$writeChunk delayMs=$writeDelay paced=$paced"
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
     $docInfo.pDocName = "Reborn Receipt"
@@ -208,12 +246,12 @@ function Send-RawToPrinter {
                 $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "StartPagePrinter failed for '$Printer' (Win32=$err)."
             }
-            [void](Write-RawChunks -Handle $handle -Data $Data -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay)
+            [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay)
             if ($paced) {
-                $drainMs = [Math]::Min(800 + [int]([Math]::Floor($Data.Length / 8)), 8000)
+                $drainMs = [Math]::Min(1200 + [int]([Math]::Floor($body.Length / 6)), 10000)
                 Start-Sleep -Milliseconds $drainMs
-                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs 80)
-                Start-Sleep -Milliseconds 500
+                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs 100)
+                Start-Sleep -Milliseconds 600
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }

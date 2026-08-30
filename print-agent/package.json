@@ -1,6 +1,6 @@
 {
   "name": "reborn-print-agent",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "private": true,
   "description": "Local print service for Reborn - silent ESC/POS to Windows default printer",
   "main": "server.js",
