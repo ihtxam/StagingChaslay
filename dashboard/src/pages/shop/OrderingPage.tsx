@@ -1607,6 +1607,16 @@ export default function OrderingPage() {
         />
       )}
 
+      {pendingOffer && (
+        <ShopOfferPicker
+          offer={pendingOffer}
+          products={allMenuProducts}
+          priceOf={(p) => catalogUnitPrice(p.price)}
+          onClose={() => setPendingOffer(null)}
+          onConfirm={addOfferDealToCart}
+        />
+      )}
+
       <ShopChannelPrompt
         open={channelPromptOpen}
         title={t('shopChooseHow')}
