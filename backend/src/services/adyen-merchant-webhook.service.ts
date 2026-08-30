@@ -66,17 +66,15 @@ export class AdyenMerchantWebhookService {
       const item = normalizeNotificationItem(rawItem);
       if (!item) continue;
 
-      if (merchant.adyenHmacKey) {
+      const eventCode = String(item.eventCode || "").toUpperCase();
+      const hmacRequired = eventCode !== "REPORT_AVAILABLE";
+      if (hmacRequired) {
         if (!verifyAdyenNotificationHmac(item, merchant.adyenHmacKey)) {
           console.warn(
-            `[adyen-webhook] HMAC verification failed for merchant ${merchantId} event ${item.eventCode}`,
+            `[adyen-webhook] HMAC verification failed for merchant ${merchantId} event ${eventCode}`,
           );
           continue;
         }
-      } else {
-        console.warn(
-          `[adyen-webhook] No HMAC key configured for merchant ${merchantId}; accepting ${item.eventCode} without verification`,
-        );
       }
 
       const merchantAccount = item.merchantAccountCode || "";

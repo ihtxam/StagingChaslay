@@ -49,13 +49,36 @@ export function calculateAdyenNotificationHmac(
     .digest("base64");
 }
 
-/** Verify additionalData.hmacSignature on a notification item. */
+function isValidHmacKeyHex(hmacKeyHex: string): boolean {
+  const key = hmacKeyHex.trim();
+  return key.length > 0 && key.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(key);
+}
+
+/** Whether Adyen sent an HMAC signature on this notification item. */
+export function adyenNotificationHasHmacSignature(item: AdyenNotificationRequestItem): boolean {
+  return Boolean(item.additionalData?.[HMAC_SIGNATURE_KEY]);
+}
+
+/**
+ * Verify HMAC when configured. Matches swisspayoutpartner behaviour:
+ * - unsigned + no merchant key → accept
+ * - signed + no merchant key → reject
+ * - invalid hex key → reject
+ */
 export function verifyAdyenNotificationHmac(
   item: AdyenNotificationRequestItem,
-  hmacKeyHex: string,
+  hmacKeyHex: string | null | undefined,
 ): boolean {
   const received = item.additionalData?.[HMAC_SIGNATURE_KEY];
+  const key = (hmacKeyHex || "").trim();
+
+  if (!key || key === "your-hmac-key-here") {
+    return !received;
+  }
+
   if (!received) return false;
-  const expected = calculateAdyenNotificationHmac(item, hmacKeyHex);
+  if (!isValidHmacKeyHex(key)) return false;
+
+  const expected = calculateAdyenNotificationHmac(item, key);
   return secureCompare(expected, received);
 }

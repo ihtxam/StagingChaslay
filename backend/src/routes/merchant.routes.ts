@@ -1625,6 +1625,7 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           cash: merchant.webposCashEnabled !== false,
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,
+          tap_to_pay: tapToPayReady,
           giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
           invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },

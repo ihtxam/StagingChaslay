@@ -487,6 +487,7 @@ export class ChaslayCompatService {
       })),
       terminal_ready: terminalReady,
       tap_to_pay_ready: tapToPayReady,
+      tap_to_pay_enabled: merchant.tapToPayEnabled === true,
       methods: {
         express: merchant.webposExpressEnabled !== false,
         cash: merchant.webposCashEnabled !== false,
