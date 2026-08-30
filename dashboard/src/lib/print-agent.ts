@@ -623,13 +623,32 @@ async function agentFetchWithTimeout(
   }
 }
 
-export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth> {
+const HEALTH_CACHE_MS = 4000;
+let healthCache: { at: number; health: PrintAgentHealth } | null = null;
+
+function rememberPrintAgentHealth(health: PrintAgentHealth): PrintAgentHealth {
+  healthCache = { at: Date.now(), health };
+  return health;
+}
+
+/** Drop cached /health so the next probe hits the agent. */
+export function invalidatePrintAgentHealthCache(): void {
+  healthCache = null;
+}
+
+export async function getPrintAgentHealth(
+  retries = 0,
+  timeoutMs = 4000
+): Promise<PrintAgentHealth> {
+  if (retries === 0 && healthCache && Date.now() - healthCache.at < HEALTH_CACHE_MS) {
+    return healthCache.health;
+  }
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
-      return { ok: !!s.running };
+      return rememberPrintAgentHealth({ ok: !!s.running });
     } catch {
-      return { ok: true };
+      return rememberPrintAgentHealth({ ok: true });
     }
   }
   try {
@@ -637,7 +656,7 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
     let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {
       try {
-        const data = (await agentFetchWithTimeout('/health')) as {
+        const data = (await agentFetchWithTimeout('/health', undefined, timeoutMs)) as {
           ok?: boolean;
           version?: unknown;
           platform?: unknown;
@@ -647,13 +666,13 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
         const features = Array.isArray(data.features)
           ? data.features.map((f: unknown) => String(f))
           : undefined;
-        return {
+        return rememberPrintAgentHealth({
           ok: !!data.ok,
           version: data.version != null ? String(data.version) : undefined,
           platform: data.platform != null ? String(data.platform) : undefined,
           features,
           printerReady: data.printerReady === true,
-        };
+        });
       } catch (e) {
         lastErr = e;
         if (i + 1 < attempts) {
@@ -663,12 +682,13 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
     }
     throw lastErr;
   } catch {
-    return { ok: false };
+    return rememberPrintAgentHealth({ ok: false });
   }
 }
 
+/** Availability check used at checkout — one short probe, cached for a few seconds. */
 export async function isPrintAgentAvailable(): Promise<boolean> {
-  const health = await getPrintAgentHealth(isAndroidTabletDevice() ? 2 : 0);
+  const health = await getPrintAgentHealth(0, 1500);
   return health.ok;
 }
 

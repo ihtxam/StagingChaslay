@@ -99,6 +99,7 @@ import {
   shouldAutoPrintReceipt,
   cacheMerchantAutoPrintSettings,
 } from '@/lib/webpos-print-relay';
+import { resolvePrintAttempt, shouldSkipAutoPrint } from '@/lib/webpos-print-targets';
 import {
   buildPrinterProfileUpdate,
   evaluateBridgeSetupMode,
@@ -1873,14 +1874,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [categories]
   );
 
+  const firstBridgeProbeRef = useRef(true);
   const refreshAgent = useCallback(async () => {
-    const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
+    const firstProbe = firstBridgeProbeRef.current;
+    firstBridgeProbeRef.current = false;
+    const health = await (
+      isAndroidWebPosTill() && firstProbe
+        ? probePrintAgentHealth(8)
+        : getPrintAgentHealth()
+    );
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     try {
-      const bridge = await (isAndroidWebPosTill() ? probeDeviceBridgeHealth(5) : probeDeviceBridgeHealth(1));
+      const bridge = health.ok
+        ? await probeDeviceBridgeHealth(isAndroidWebPosTill() && firstProbe ? 5 : 1)
+        : { ok: false as const };
       setDeviceTapToPayReady(bridge.ok && bridge.tapToPayReady === true);
-      setDeviceTapToPayMessage(bridge.tapToPayMessage || null);
+      setDeviceTapToPayMessage(bridge.ok ? bridge.tapToPayMessage || null : null);
     } catch {
       setDeviceTapToPayReady(false);
       setDeviceTapToPayMessage(null);
@@ -1960,10 +1970,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
   }, [refreshAgent]);
 
+  /** Don't cover Payment / Confirm with the printer-setup overlay. */
+  useEffect(() => {
+    if (posView === 'checkout' || posView === 'success') {
+      setBridgeSetupOpen(false);
+    }
+  }, [posView]);
+
   /** Android tablet till: auto-connect single printer or prompt when Bridge/printers need setup. */
   useEffect(() => {
     if (!isAndroidWebPosTill()) return;
     if (!bridgeProbeComplete) return;
+    if (posView === 'checkout' || posView === 'success') return;
 
     const mode = evaluateBridgeSetupMode({
       agentOk,
@@ -1994,7 +2012,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     setBridgeSetupMode(mode);
     setBridgeSetupOpen(true);
-  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup, bridgeProbeComplete]);
+  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup, bridgeProbeComplete, posView]);
 
   const shiftsEnabledRef = useRef(shiftsEnabled);
   shiftsEnabledRef.current = shiftsEnabled;
@@ -5742,11 +5760,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const escpos = giftCardSaleReceiptEscPos(text, opts.code, logo);
     const dataBase64 = uint8ToBase64(escpos);
     const targets = printersForRole(printSettings, 'receipt');
-    const names =
-      targets.length > 0
-        ? targets.map((x) => x.name)
-        : [printerName || ''];
-    const named = names.map((n) => (n || '').trim()).filter(Boolean);
+    const attempt = resolvePrintAttempt({
+      roleTargets: targets,
+      fallbackName: printerName,
+      livePrinters: printers,
+      printersReady,
+      agentOk: bridgeProbeComplete ? agentOk : undefined,
+    });
+    if (attempt.skip) {
+      throw new Error(t('webPosPrintFailed'));
+    }
+    const named = attempt.names;
     let printedOk = 0;
     let queuedOk = 0;
     for (const label of named) {
@@ -6505,7 +6529,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
         const skipThermal =
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
-        if (!skipThermal && shouldAutoPrintReceipt(printSettings)) {
+        if (
+          !skipThermal &&
+          shouldAutoPrintReceipt(printSettings) &&
+          !shouldSkipAutoPrint({
+            roleTargets: printersForRole(printSettings, 'receipt'),
+            fallbackName: printerName,
+            livePrinters: printers,
+            printersReady,
+            agentOk: bridgeProbeComplete ? agentOk : undefined,
+          })
+        ) {
           try {
             await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl);
           } catch (e: unknown) {
@@ -6795,12 +6829,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
-    const names = (
-      targets.length > 0
-        ? targets.map((x) => x.name)
-        : [printerName || '']
-    ).slice(0, opts.singleTarget ? 1 : undefined);
-    const named = names.map((n) => (n || '').trim()).filter(Boolean);
+    const attempt = resolvePrintAttempt({
+      roleTargets: targets,
+      fallbackName: printerName,
+      livePrinters: printers,
+      printersReady,
+      agentOk: bridgeProbeComplete ? agentOk : undefined,
+    });
+    if (attempt.skip) {
+      if (opts.quiet) return;
+      throw new Error(t('webPosPrintFailed'));
+    }
+    const names = attempt.names.slice(0, opts.singleTarget ? 1 : undefined);
+    const named = names;
     const unsuitableNamed = named.filter((n) => isUnsuitableRawPrinter(n));
 
     // EOD to OneNote/PDF: browser text/PDF window instead of claiming RAW success.
@@ -7192,6 +7233,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
       (j) => (j.printerName || '').trim()
     );
+    if (
+      shouldSkipAutoPrint({
+        roleTargets: printJobs.map((j) => ({ name: j.printerName })),
+        fallbackName: printerName,
+        livePrinters: printers,
+        printersReady,
+        agentOk: bridgeProbeComplete ? agentOk : undefined,
+      })
+    ) {
+      if (opts?.forcePrint) {
+        toast.error(t('webPosNoKitchenPrinterConfigured'));
+      }
+      return;
+    }
     const crossFooters = buildKitchenCrossStationFooters(printJobs);
     const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
@@ -7238,7 +7293,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (mode === 'queued') queuedAny = true;
       }
       if (!printedAny) {
-        toast.error(t('webPosNoKitchenPrinterConfigured'));
+        if (opts?.forcePrint) {
+          toast.error(t('webPosNoKitchenPrinterConfigured'));
+        }
         return;
       }
       setPrinterDisconnected(false);
@@ -7248,7 +7305,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     if (opts?.dedicatedKitchenOnly) return;
 
-    toast.error(t('webPosNoKitchenPrinterConfigured'));
+    if (opts?.forcePrint) {
+      toast.error(t('webPosNoKitchenPrinterConfigured'));
+    }
     return;
   };
 
@@ -7939,7 +7998,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       !opts?.skipReceiptPrint &&
       method !== 'invoice' &&
       method !== 'pay_later' &&
-      shouldAutoPrintReceipt(printSettings);
+      shouldAutoPrintReceipt(printSettings) &&
+      !shouldSkipAutoPrint({
+        roleTargets: printersForRole(printSettings, 'receipt'),
+        fallbackName: printerName,
+        livePrinters: printers,
+        printersReady,
+        agentOk: bridgeProbeComplete ? agentOk : undefined,
+      });
     // Offline sales have no published receipt URL yet — still print text via local Print Agent.
     if (shouldPrintReceipt) {
       // Never hold checkout/busy on the print agent.
