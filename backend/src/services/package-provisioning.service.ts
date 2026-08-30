@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
+import { readKioskAddonEnabled, writeKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { EditionService } from "@/services/edition.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
@@ -20,7 +21,7 @@ function applyIncludedAddons(
   }
   if (addons.kds) patch.kdsAddonEnabled = true;
   if (addons.ods) patch.odsAddonEnabled = true;
-  if (addons.kiosk) patch.kioskAddonEnabled = true;
+  // kiosk flag is persisted via writeKioskAddonEnabled (SQL source of truth)
 }
 
 export class PackageProvisioningService {
@@ -28,6 +29,8 @@ export class PackageProvisioningService {
   static async applyPlan(merchantId: string, planId: string) {
     const plan = await SubscriptionPlansService.getById(planId);
     const db = getDb();
+    const kioskBefore = await readKioskAddonEnabled(merchantId).catch(() => false);
+    const bundleKiosk = plan.includedAddons?.kiosk === true;
 
     if (plan.editionId) {
       await EditionService.applyEditionDefaultsToMerchant(merchantId, plan.editionId);
@@ -53,6 +56,10 @@ export class PackageProvisioningService {
       .update(schema.merchants)
       .set(patch as typeof schema.merchants.$inferInsert)
       .where(eq(schema.merchants.id, merchantId));
+
+    if (bundleKiosk || kioskBefore) {
+      await writeKioskAddonEnabled(merchantId, true);
+    }
 
     return plan;
   }
@@ -87,7 +94,7 @@ export class PackageProvisioningService {
         patch.odsAddonEnabled = true;
         break;
       case "kiosk":
-        patch.kioskAddonEnabled = true;
+        await writeKioskAddonEnabled(merchantId, true);
         break;
       case "just_eat":
         patch.justEatAddonEnabled = true;

@@ -70,7 +70,7 @@ export default function KioskAdminPanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(false);
   const [settings, setSettings] = useState<KioskAdminSettings>({});
   const [serverDiag, setServerDiag] = useState<KioskDiagnostics | null>(null);
   const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);

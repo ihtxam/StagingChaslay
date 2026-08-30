@@ -49,3 +49,27 @@ export async function writeKioskAddonEnabled(
   }
   return readKioskAddonEnabled(merchantId);
 }
+
+export async function readKioskAddonEnabledMap(
+  merchantIds: string[]
+): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  if (merchantIds.length === 0) return out;
+  await ensureKioskAddonColumn();
+  const db = getDb();
+  const result = await db.execute(
+    sql`SELECT id, kiosk_addon_enabled FROM merchants WHERE id IN (${sql.join(
+      merchantIds.map((id) => sql`${id}`),
+      sql`, `
+    )})`
+  );
+  const rows = Array.isArray(result)
+    ? result
+    : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+  for (const raw of rows) {
+    const row = raw as Record<string, unknown>;
+    const id = String(row.id || "");
+    if (id) out.set(id, flagFromRow(row));
+  }
+  return out;
+}

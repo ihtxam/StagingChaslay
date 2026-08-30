@@ -49,6 +49,7 @@ import {
 import {
   isKioskAddonEnabled,
   readKioskAddonEnabled,
+  readKioskAddonEnabledMap,
   writeKioskAddonEnabled,
 } from "@/lib/kiosk-addon";
 import {
@@ -155,6 +156,9 @@ export class MerchantService {
       const odsById = await readOdsAddonEnabledMap(merchantIds).catch(
         () => new Map<string, boolean>()
       );
+      const kioskById = await readKioskAddonEnabledMap(merchantIds).catch(
+        () => new Map<string, boolean>()
+      );
 
       return merchants.map((m) => {
         const floor = floorByMerchant.get(m.id) ?? [];
@@ -168,7 +172,7 @@ export class MerchantService {
         const signageOn = signage?.enabled ?? isSignageAddonEnabled(m.signageAddonEnabled);
         const kdsOn = kdsById.get(m.id) ?? isKdsAddonEnabled(m.kdsAddonEnabled);
         const odsOn = odsById.get(m.id) ?? isOdsAddonEnabled(m.odsAddonEnabled);
-        const kioskOn = isKioskAddonEnabled(m.kioskAddonEnabled);
+        const kioskOn = kioskById.get(m.id) ?? isKioskAddonEnabled(m.kioskAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -536,6 +540,7 @@ export class MerchantService {
       const signageRequested = updates.signageAddonEnabled;
       const kdsRequested = updates.kdsAddonEnabled;
       const odsRequested = updates.odsAddonEnabled;
+      const kioskRequested = updates.kioskAddonEnabled;
       if (addonRequested !== undefined) {
         await ensureInventoryAddonColumn();
         updates.inventoryAddonEnabled = isInventoryAddonEnabled(addonRequested);
@@ -548,6 +553,9 @@ export class MerchantService {
       }
       if (odsRequested !== undefined) {
         updates.odsAddonEnabled = isOdsAddonEnabled(odsRequested);
+      }
+      if (kioskRequested !== undefined) {
+        updates.kioskAddonEnabled = isKioskAddonEnabled(kioskRequested);
       }
       const merchant = await withMerchantSchemaRetry(() =>
         db
@@ -575,6 +583,10 @@ export class MerchantService {
       if (odsRequested !== undefined) {
         const on = await writeOdsAddonEnabled(merchantId, odsRequested);
         Object.assign(merchant[0], { odsAddonEnabled: on, odsEnabled: on });
+      }
+      if (kioskRequested !== undefined) {
+        const on = await writeKioskAddonEnabled(merchantId, kioskRequested);
+        Object.assign(merchant[0], { kioskAddonEnabled: on, kioskEnabled: on });
       }
       return merchant[0];
     } catch (error) {
@@ -730,6 +742,7 @@ export class MerchantService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
     }
   ) {
     if (
@@ -737,7 +750,8 @@ export class MerchantService {
       addons.signageAddonEnabled === undefined &&
       addons.signageScreenLimit === undefined &&
       addons.kdsAddonEnabled === undefined &&
-      addons.odsAddonEnabled === undefined
+      addons.odsAddonEnabled === undefined &&
+      addons.kioskAddonEnabled === undefined
     ) {
       throw new Error("No addon updates provided");
     }
@@ -755,6 +769,9 @@ export class MerchantService {
     }
     if (addons.odsAddonEnabled !== undefined) {
       await writeOdsAddonEnabled(merchantId, addons.odsAddonEnabled);
+    }
+    if (addons.kioskAddonEnabled !== undefined) {
+      await writeKioskAddonEnabled(merchantId, addons.kioskAddonEnabled);
     }
     return this.getMerchantById(merchantId);
   }
