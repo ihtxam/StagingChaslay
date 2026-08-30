@@ -25,7 +25,9 @@ function sendBinary(
   res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
   res.setHeader("Content-Encoding", "identity");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Cache-Control", "public, max-age=3600");
+  const cacheControl =
+    filename.endsWith(".apk") ? "no-cache, must-revalidate" : "public, max-age=3600";
+  res.setHeader("Cache-Control", cacheControl);
   res.sendFile(filePath);
 }
 
@@ -95,7 +97,11 @@ router.use(
         res.setHeader("Content-Encoding", "identity");
       }
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "public, max-age=3600");
+      if (filePath.endsWith(".apk")) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      } else {
+        res.setHeader("Cache-Control", "public, max-age=3600");
+      }
     },
   })
 );

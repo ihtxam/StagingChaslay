@@ -1693,7 +1693,11 @@ const en: Dict = {
     'Bridge Reborn is not responding — open the Bridge app on this tablet, then tap Refresh printers.',
   panelHardRefresh: 'Hard refresh',
   printCompanionUpdateAvailable:
-    'Update available: v{latest} (you have v{installed}). Download and install the update.',
+    'Update available: v{latest} (you have v{installed}). Uninstall the old Bridge Reborn app in Android Settings, then tap Install update below.',
+  printBridgeApkNotPublished:
+    'The server APK is still v{apkVersion}. A newer release (v{declaredVersion}) is not deployed yet — downloading again will not upgrade Bridge. Ask your administrator to rebuild and deploy the APK.',
+  printBridgeUpdateUninstallSteps:
+    'Before updating: Android Settings → Apps → Bridge Reborn → Uninstall. Then return here and tap Install update. If the version does not change, the server still has an old APK file.',
   printCompanionUpToDate: 'Up to date (v{version}).',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
@@ -5362,7 +5366,11 @@ const fr: Dict = {
     'Bridge Reborn ne répond pas — ouvrez l’app Bridge sur cette tablette, puis Actualiser les imprimantes.',
   panelHardRefresh: 'Actualisation forcée',
   printCompanionUpdateAvailable:
-    'Mise à jour disponible : v{latest} (vous avez v{installed}). Téléchargez et installez la mise à jour.',
+    'Mise à jour disponible : v{latest} (vous avez v{installed}). Désinstallez Bridge Reborn dans Paramètres Android, puis appuyez sur Installer la mise à jour.',
+  printBridgeApkNotPublished:
+    'L’APK sur le serveur est encore en v{apkVersion}. Une version plus récente (v{declaredVersion}) n’est pas encore déployée — retélécharger ne mettra pas Bridge à jour.',
+  printBridgeUpdateUninstallSteps:
+    'Avant la mise à jour : Paramètres Android → Applications → Bridge Reborn → Désinstaller. Revenez ici et appuyez sur Installer la mise à jour.',
   printCompanionUpToDate: 'À jour (v{version}).',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
@@ -8982,7 +8990,11 @@ const de: Dict = {
     'Bridge Reborn antwortet nicht — öffnen Sie die Bridge-App auf diesem Tablet und tippen Sie auf Drucker aktualisieren.',
   panelHardRefresh: 'Hart aktualisieren',
   printCompanionUpdateAvailable:
-    'Update verfügbar: v{latest} (installiert: v{installed}). Update herunterladen und installieren.',
+    'Update verfügbar: v{latest} (installiert: v{installed}). Deinstallieren Sie Bridge Reborn in den Android-Einstellungen, dann tippen Sie auf Update installieren.',
+  printBridgeApkNotPublished:
+    'Die Server-APK ist noch v{apkVersion}. Ein neueres Release (v{declaredVersion}) ist noch nicht bereitgestellt — erneutes Herunterladen aktualisiert Bridge nicht.',
+  printBridgeUpdateUninstallSteps:
+    'Vor dem Update: Android-Einstellungen → Apps → Bridge Reborn → Deinstallieren. Dann hier „Update installieren“ tippen.',
   printCompanionUpToDate: 'Aktuell (v{version}).',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- OEM setup wizard state must not survive reinstall via Android backup. -->
+    <exclude domain="sharedpref" path="reborn_print_bridge_oem_setup.xml" />
+</full-backup-content>

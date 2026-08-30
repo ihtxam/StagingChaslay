@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { readApkMeta } from "@/lib/apk-meta";
 
 export const DOWNLOADS_ROOT = path.join(__dirname, "..", "..", "public", "downloads");
 export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
@@ -38,7 +39,11 @@ export type DownloadDescriptor = {
   filename: string;
   available: boolean;
   sizeBytes: number;
+  /** Version baked into the APK binary (what installs on the device). */
   version: string | null;
+  /** Version recorded in reborn-print-bridge.json (may be ahead of the APK if deploy skipped rebuild). */
+  declaredVersion?: string | null;
+  versionMismatch?: boolean;
   downloadUrl: string | null;
   message?: string;
 };
@@ -48,16 +53,27 @@ export function describePrintBridgeApk(): DownloadDescriptor {
   const manifest = readDownloadManifest("reborn-print-bridge");
   const valid = fileMagicOk(filePath, "apk");
   const stat = valid ? fs.statSync(filePath) : null;
+  const declaredVersion =
+    typeof manifest?.version === "string" ? manifest.version.trim() || null : null;
+  const apkVersion = valid ? readApkMeta(filePath).versionName : null;
+  const version = apkVersion ?? declaredVersion;
+  const versionMismatch =
+    !!apkVersion && !!declaredVersion && apkVersion !== declaredVersion;
+  const cacheBust = stat ? `?v=${encodeURIComponent(apkVersion || declaredVersion || String(stat.mtimeMs))}` : "";
   return {
     id: "print-bridge",
     name: "Reborn Print Bridge (Android)",
     filename: PRINT_BRIDGE_APK_FILE,
     available: valid,
     sizeBytes: stat?.size ?? 0,
-    version: typeof manifest?.version === "string" ? manifest.version : null,
-    downloadUrl: valid ? `/downloads/${PRINT_BRIDGE_APK_FILE}` : null,
+    version,
+    declaredVersion,
+    versionMismatch,
+    downloadUrl: valid ? `/downloads/${PRINT_BRIDGE_APK_FILE}${cacheBust}` : null,
     message: valid
-      ? undefined
+      ? versionMismatch
+        ? `Bridge APK on this server is still v${apkVersion} (manifest lists v${declaredVersion}). Rebuild print-agent-android and redeploy the APK.`
+        : undefined
       : "Print Bridge APK is not published on this server yet. Build from print-agent-android/ or contact support.",
   };
 }

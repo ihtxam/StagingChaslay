@@ -4294,14 +4294,18 @@ export default function Settings() {
                         <button
                           type="button"
                           className="btn-primary inline-flex"
-                          onClick={() => openPrintBridgeApkInstall(printBridgeDownloadUrl())}
+                          onClick={() =>
+                            openPrintBridgeApkInstall(
+                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
+                            )
+                          }
                         >
                           {t('installPrintBridge')}
                         </button>
                       ) : (
                         <a
                           className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                          href={printBridgeDownloadUrl()}
+                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
                         >
                           {t('downloadPrintBridge')}
                         </a>
@@ -4323,7 +4327,9 @@ export default function Settings() {
                         kind="android-bridge"
                         installedVersion={installedPrintCompanionVersion}
                         serverVersion={printBridgeManifest?.version}
-                        downloadUrl={printBridgeDownloadUrl()}
+                        declaredVersion={printBridgeManifest?.declaredVersion}
+                        versionMismatch={printBridgeManifest?.versionMismatch}
+                        downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
                         onAndroid={isAndroidDevice()}
                         agentChecked={printAgentHealthChecked}
                       />
