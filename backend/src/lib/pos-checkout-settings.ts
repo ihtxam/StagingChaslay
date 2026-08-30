@@ -56,7 +56,7 @@ export type PosCheckoutSettings = {
   requireTableForDineIn: boolean;
   /** Express checkout + cart action buttons (Send, Payment, Tab). */
   actionButtonSize: ActionButtonSize;
-  /** Show quick Cash/Card/Terminal bar under products on WebPOS register. */
+  /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
   expressCheckoutEnabled: boolean;
 };
 

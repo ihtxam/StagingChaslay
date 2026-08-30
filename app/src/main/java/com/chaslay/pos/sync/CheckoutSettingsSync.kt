@@ -42,6 +42,8 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
             "send_all_once"
         } else {
             "fire_per_course"
-        }
+        },
+        // Single panel toggle for Cash/Card/Terminal buttons under products.
+        expressEnabled = checkout.expressCheckoutEnabled
     )
 }

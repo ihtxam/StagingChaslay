@@ -275,7 +275,9 @@ data class SyncCheckoutDto(
     val retailDineInEnabled: Boolean = false,
     val requireTableForDineIn: Boolean? = null,
     /** fire_per_course | send_all_once */
-    val courseSendMode: String? = null
+    val courseSendMode: String? = null,
+    /** Show Cash/Card/Terminal quick-pay buttons under products. */
+    val expressCheckoutEnabled: Boolean = true
 )
 
 data class SyncScaleDto(
