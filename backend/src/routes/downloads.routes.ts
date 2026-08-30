@@ -91,10 +91,11 @@ router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
   sendPrintBridgeApk(res);
 });
 
-/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
-router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) => {
+/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy.
+ *  Use a regex — Express `:version.apk` stops at the first dot (so 0.3.9 404s). */
+router.get(/^\/reborn-print-bridge-([0-9]+\.[0-9]+\.[0-9]+|latest)\.apk$/, (req: Request, res: Response) => {
   const desc = describePrintBridgeApk();
-  const requested = String(req.params.version || "").trim();
+  const requested = String(req.params[0] || "").trim();
   if (desc.version && requested && requested !== desc.version && requested !== "latest") {
     return res
       .status(404)
