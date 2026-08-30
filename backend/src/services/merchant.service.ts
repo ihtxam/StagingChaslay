@@ -723,6 +723,11 @@ export class MerchantService {
           await this.updateMerchant(merchantId, patch);
         }
         await EditionService.applyEditionDefaultsToMerchant(merchantId, editionId);
+        const { PackageProvisioningService } = await import("./package-provisioning.service");
+        await PackageProvisioningService.applyEditionFeatureAddons(
+          merchantId,
+          edition.features as import("@/lib/edition-features").EditionFeatureKey[] | null
+        );
         return this.getMerchantById(merchantId);
       }
     }

@@ -1,7 +1,13 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
+import type { EditionFeatureKey } from "@/lib/edition-features";
+import { normalizeEditionFeatures } from "@/lib/edition-features";
 import { readKioskAddonEnabled, writeKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { writeInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { writeSignageAddonEnabled } from "@/lib/signage-addon";
+import { writeKdsAddonEnabled } from "@/lib/kds-addon";
+import { writeOdsAddonEnabled } from "@/lib/ods-addon";
 import { EditionService } from "@/services/edition.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 
@@ -25,6 +31,32 @@ function applyIncludedAddons(
 }
 
 export class PackageProvisioningService {
+  /**
+   * Turn on paid merchant add-on columns when the assigned edition includes them.
+   * Full / Legacy editions include inventory, signage, KDS, ODS, and kiosk in features.
+   */
+  static async applyEditionFeatureAddons(
+    merchantId: string,
+    features: EditionFeatureKey[] | null | undefined
+  ) {
+    const normalized = normalizeEditionFeatures(features ?? null);
+    if (normalized.includes("inventory")) {
+      await writeInventoryAddonEnabled(merchantId, true);
+    }
+    if (normalized.includes("digital_signage")) {
+      await writeSignageAddonEnabled(merchantId, true);
+    }
+    if (normalized.includes("kds")) {
+      await writeKdsAddonEnabled(merchantId, true);
+    }
+    if (normalized.includes("ods")) {
+      await writeOdsAddonEnabled(merchantId, true);
+    }
+    if (normalized.includes("self_order_kiosk")) {
+      await writeKioskAddonEnabled(merchantId, true);
+    }
+  }
+
   /** Apply a subscription package to a merchant (edition, limits, bundled addons). */
   static async applyPlan(merchantId: string, planId: string) {
     const plan = await SubscriptionPlansService.getById(planId);
@@ -33,7 +65,11 @@ export class PackageProvisioningService {
     const bundleKiosk = plan.includedAddons?.kiosk === true;
 
     if (plan.editionId) {
+      const edition = await EditionService.getById(plan.editionId);
       await EditionService.applyEditionDefaultsToMerchant(merchantId, plan.editionId);
+      if (edition?.features) {
+        await this.applyEditionFeatureAddons(merchantId, edition.features);
+      }
     }
 
     const patch: Record<string, unknown> = {

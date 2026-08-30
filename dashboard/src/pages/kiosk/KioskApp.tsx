@@ -45,6 +45,8 @@ import { printKioskOrder, type KioskPrintContext } from '@/lib/kiosk-print';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { setKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
 import KioskInstallHint from '@/components/kiosk/KioskInstallHint';
+import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
+import { useBarcodeWedge } from '@/lib/barcode-wedge';
 import {
   bindKioskInstallPrompt,
   ensureKioskManifest,
@@ -115,8 +117,6 @@ export default function KioskApp() {
   const barcodePendingStreamRef = useRef<MediaStream | null>(null);
   const barcodeScanRef = useRef<{ stop: () => void } | null>(null);
   const idleTimer = useRef<number | null>(null);
-  const scanBufferRef = useRef('');
-  const scanTimerRef = useRef<number | null>(null);
 
   const slides = config?.settings.promoSlides?.length
     ? config.settings.promoSlides
@@ -335,6 +335,27 @@ export default function KioskApp() {
     [productScanIndex, addProduct]
   );
 
+  const barcodeWedgeEnabled =
+    (step === 'menu' || step === 'membership') &&
+    !scanningMembership &&
+    !scanningBarcode &&
+    !adminPinOpen &&
+    !modifierProduct;
+
+  const onBarcodeWedgeScan = useCallback(
+    (code: string) => {
+      if (step === 'menu') handleProductScan(code);
+      else if (step === 'membership') void applyMembershipCode(code);
+    },
+    [step, handleProductScan, applyMembershipCode]
+  );
+
+  const { onCaptureInput: onBarcodeCaptureInput, onCaptureKeyDown: onBarcodeCaptureKeyDown } =
+    useBarcodeWedge({
+      enabled: barcodeWedgeEnabled,
+      onScan: onBarcodeWedgeScan,
+    });
+
   const stopMembershipCamera = useCallback(() => {
     membershipScanRef.current?.stop();
     membershipScanRef.current = null;
@@ -505,64 +526,6 @@ export default function KioskApp() {
     };
   }, [scanningBarcode, stopBarcodeCamera, attachBarcodeStream]);
 
-  useEffect(() => {
-    if (step !== 'menu' && step !== 'membership') return;
-
-    const clearScanTimer = () => {
-      if (scanTimerRef.current != null) {
-        window.clearTimeout(scanTimerRef.current);
-        scanTimerRef.current = null;
-      }
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (scanningMembership || scanningBarcode || adminPinOpen || modifierProduct) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      if (
-        tag === 'input' ||
-        tag === 'textarea' ||
-        tag === 'select' ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
-      if (e.key === 'Enter') {
-        const code = scanBufferRef.current.trim();
-        scanBufferRef.current = '';
-        clearScanTimer();
-        if (code.length >= 3) {
-          e.preventDefault();
-          if (step === 'menu') handleProductScan(code);
-          else if (step === 'membership') void applyMembershipCode(code);
-        }
-        return;
-      }
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        scanBufferRef.current += e.key;
-        clearScanTimer();
-        scanTimerRef.current = window.setTimeout(() => {
-          scanBufferRef.current = '';
-          scanTimerRef.current = null;
-        }, 120);
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      clearScanTimer();
-    };
-  }, [
-    step,
-    scanningMembership,
-    scanningBarcode,
-    adminPinOpen,
-    modifierProduct,
-    handleProductScan,
-    applyMembershipCode,
-  ]);
-
   const submitOrder = async (paymentMethod: 'cash' | 'card') => {
     if (!config || !cart.length) return;
     setSubmitting(true);
@@ -701,6 +664,11 @@ export default function KioskApp() {
       className={`kiosk-branded kiosk-shell kiosk-portrait ${screenSizeClass} flex flex-col bg-stone-100 text-stone-900 select-none touch-manipulation`}
       style={brandStyle}
     >
+      <BarcodeWedgeCapture
+        active={barcodeWedgeEnabled}
+        onInput={onBarcodeCaptureInput}
+        onKeyDown={onBarcodeCaptureKeyDown}
+      />
       {/* Top bar: promo slider + language */}
       <header className="kiosk-header relative overflow-hidden bg-stone-950 text-white">
         {config.settings.slideBannerText ? (

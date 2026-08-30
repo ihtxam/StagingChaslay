@@ -13,6 +13,9 @@ export const KIOSK_PRODUCT_SCAN_FORMATS = [
   'codabar',
   'itf',
   'qr_code',
+  'data_matrix',
+  'pdf417',
+  'aztec',
 ];
 
 /** QR and 2D codes used on membership / loyalty cards */

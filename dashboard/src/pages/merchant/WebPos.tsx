@@ -144,6 +144,8 @@ import WebPosComboModal, {
 } from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
+import { useBarcodeWedge } from '@/lib/barcode-wedge';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
@@ -1036,8 +1038,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
   const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
-  const scanBufferRef = useRef('');
-  const scanTimerRef = useRef<number | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   /** Open carts keyed by table / tab / channel (also mirrored to sessionStorage). */
   const openCartDraftsRef = useRef<Map<string, OpenCartDraft>>(
@@ -8630,52 +8630,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ]
   );
 
-  // Keyboard-wedge barcode scanner: buffer printable keys, Enter submits.
-  useEffect(() => {
-    const clearScanTimer = () => {
-      if (scanTimerRef.current != null) {
-        window.clearTimeout(scanTimerRef.current);
-        scanTimerRef.current = null;
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (pinGateRequired || pinModalOpen || (posView !== 'register' && posView !== 'checkout'))
-        return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      if (
-        tag === 'input' ||
-        tag === 'textarea' ||
-        tag === 'select' ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
-      if (e.key === 'Enter') {
-        const code = scanBufferRef.current.trim();
-        scanBufferRef.current = '';
-        clearScanTimer();
-        if (code.length >= 3) {
-          e.preventDefault();
-          handlePosScan(code);
-        }
-        return;
-      }
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        scanBufferRef.current += e.key;
-        clearScanTimer();
-        scanTimerRef.current = window.setTimeout(() => {
-          scanBufferRef.current = '';
-          scanTimerRef.current = null;
-        }, 120);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      clearScanTimer();
-    };
-  }, [handlePosScan, pinGateRequired, pinModalOpen, posView]);
+  const barcodeWedgeEnabled =
+    !pinGateRequired && !pinModalOpen && (posView === 'register' || posView === 'checkout');
+
+  const { onCaptureInput: onBarcodeCaptureInput, onCaptureKeyDown: onBarcodeCaptureKeyDown } =
+    useBarcodeWedge({
+      enabled: barcodeWedgeEnabled,
+      onScan: handlePosScan,
+    });
 
   const offlineNow = isWebPosCurrentlyOffline();
   const deviceTapToPayActive =
@@ -8926,6 +8888,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       data-phone={isPhoneViewport ? '1' : '0'}
       data-grid-step={isPhoneViewport ? String(gridMobileLayout) : undefined}
     >
+      <BarcodeWedgeCapture
+        active={barcodeWedgeEnabled}
+        onInput={onBarcodeCaptureInput}
+        onKeyDown={onBarcodeCaptureKeyDown}
+      />
       {reservationAlertUntil > Date.now() ? (
         <div
           className="shrink-0 border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-950 animate-pulse"
