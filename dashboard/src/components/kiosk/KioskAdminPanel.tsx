@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Copy,
   ExternalLink,
-  ImagePlus,
   Loader2,
   Play,
   Printer,
@@ -11,7 +10,6 @@ import {
   CreditCard,
   CheckCircle2,
   XCircle,
-  Trash2,
 } from 'lucide-react';
 import api from '@/lib/api';
 import axios from 'axios';
@@ -21,13 +19,12 @@ import {
   fetchKioskDiagnosticsByToken,
   kioskPublicUrl,
   saveKioskAdminSettingsByToken,
-  uploadKioskSlideImageByToken,
   type KioskAdminSettings,
   type KioskDiagnostics,
 } from '@/lib/kiosk-api';
 import { getPrintAgentHealth } from '@/lib/print-agent';
 import { getKioskAdminPin, isKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
-import { compressImageIfNeeded } from '@/lib/compress-image';
+import KioskSlideEditor from '@/components/kiosk/KioskSlideEditor';
 import { useI18n } from '@/lib/i18n';
 
 export type { KioskAdminSettings };
@@ -50,8 +47,6 @@ export default function KioskAdminPanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [uploadingSlideIdx, setUploadingSlideIdx] = useState<number | null>(null);
-  const slideFileRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [enabled, setEnabled] = useState(true);
   const [settings, setSettings] = useState<KioskAdminSettings>({});
   const [serverDiag, setServerDiag] = useState<KioskDiagnostics | null>(null);
@@ -134,12 +129,12 @@ export default function KioskAdminPanel({
       setPrintOk(health.ok);
       setPrintMessage(
         health.ok
-          ? `Bridge Reborn v${health.version || '?'} — ${health.printerReady ? 'printer ready' : 'no printer yet'}`
-          : 'Bridge Reborn not running on this device (install from Settings)',
+          ? `Print Bridge v${health.version || '?'} — ${health.printerReady ? 'printer ready' : 'no printer yet'}`
+          : 'Print Bridge not running on this device (install Reborn Print Bridge)',
       );
     } catch {
       setPrintOk(false);
-      setPrintMessage('Could not reach Bridge Reborn on http://127.0.0.1:9101');
+      setPrintMessage('Could not reach Print Bridge on http://127.0.0.1:9101');
     } finally {
       setTesting(false);
     }
@@ -165,48 +160,7 @@ export default function KioskAdminPanel({
     }
   };
 
-  const tokenModeEditable =
-    mode === 'merchant' || (mode === 'token' && !!accessToken && isKioskAdminUnlocked(accessToken));
-
-  const uploadSlideImage = async (idx: number, file: File | null) => {
-    if (!file || !tokenModeEditable) return;
-    setUploadingSlideIdx(idx);
-    try {
-      const compressed = await compressImageIfNeeded(file, {
-        maxBytes: 1024 * 1024,
-        maxWidth: 1920,
-        targetBytes: 700 * 1024,
-      });
-      let url: string;
-      if (mode === 'merchant') {
-        const fd = new FormData();
-        fd.append('file', compressed);
-        const res = await api.post('/merchant/kiosk/media', fd);
-        url = res.data?.url as string;
-      } else if (accessToken) {
-        const pin = getKioskAdminPin(accessToken);
-        if (!pin) {
-          toast.error(t('kioskAdminSessionExpired'));
-          return;
-        }
-        url = await uploadKioskSlideImageByToken(accessToken, pin, compressed);
-      } else {
-        return;
-      }
-      if (!url) throw new Error('Upload failed');
-      const next = [...(settings.promoSlides || [])];
-      next[idx] = { ...next[idx], imageUrl: url };
-      setSettings({ ...settings, promoSlides: next });
-      toast.success(t('imageUploaded'));
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || t('uploadFailed'));
-    } finally {
-      setUploadingSlideIdx(null);
-      const input = slideFileRefs.current[idx];
-      if (input) input.value = '';
-    }
-  };
+  const tokenModeEditable = mode === 'merchant' || (mode === 'token' && !!accessToken && isKioskAdminUnlocked(accessToken));
 
   const kioskUrl = token ? kioskPublicUrl(token) : '';
   const terminalOk =
@@ -239,18 +193,18 @@ export default function KioskAdminPanel({
       )}
 
       {mode === 'merchant' && !enabled ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           The self-order kiosk add-on is not enabled. Contact your reseller to activate it.
         </div>
       ) : null}
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <h2 className="font-semibold text-[var(--text)]">Connections</h2>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Test payment terminal registration and Bridge Reborn on this device before going live.
+        <h2 className="font-semibold">Connections</h2>
+        <p className="mt-1 text-sm text-stone-500">
+          Test payment terminal registration and Print Bridge on this device before going live.
         </p>
         <div className="mt-4 space-y-3">
-          <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
             {terminalOk ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             ) : (
@@ -260,7 +214,7 @@ export default function KioskAdminPanel({
               <p className="font-semibold flex items-center gap-2">
                 <CreditCard className="h-4 w-4" /> Payment terminal
               </p>
-              <p className="text-sm text-[var(--text-muted)]">
+              <p className="text-sm text-stone-600">
                 {serverDiag?.terminalConfigured
                   ? serverDiag.terminalRegistered
                     ? `Terminal: ${serverDiag.terminalLabel || 'registered'}${serverDiag.adyenConfigured ? '' : ' — Adyen credentials missing'}`
@@ -269,19 +223,19 @@ export default function KioskAdminPanel({
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
             {printOk === true ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             ) : printOk === false ? (
               <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
             ) : (
-              <Printer className="mt-0.5 h-5 w-5 shrink-0 text-[var(--text-muted)]" />
+              <Printer className="mt-0.5 h-5 w-5 shrink-0 text-stone-400" />
             )}
             <div>
               <p className="font-semibold flex items-center gap-2">
-                <Printer className="h-4 w-4" /> Bridge Reborn / printers
+                <Printer className="h-4 w-4" /> Print Bridge / printers
               </p>
-              <p className="text-sm text-[var(--text-muted)]">
+              <p className="text-sm text-stone-600">
                 {printMessage || 'Tap Test connections to check localhost:9101 on this tablet'}
               </p>
             </div>
@@ -301,7 +255,7 @@ export default function KioskAdminPanel({
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
           <h2 className="font-semibold">Kiosk URL</h2>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="flex-1 break-all rounded-lg bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text)]">{kioskUrl}</code>
+            <code className="flex-1 break-all rounded-lg bg-stone-100 px-3 py-2 text-sm">{kioskUrl}</code>
             <button type="button" className="btn-secondary inline-flex items-center gap-1" onClick={() => { void navigator.clipboard.writeText(kioskUrl); toast.success('Copied'); }}>
               <Copy className="h-4 w-4" /> Copy
             </button>
@@ -316,124 +270,129 @@ export default function KioskAdminPanel({
       ) : null}
 
       <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-        <div>
-          <h2 className="font-semibold">{t('kioskAttractTitle')}</h2>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskSlideImageHint')}</p>
+        <h2 className="font-semibold">Attract screen slider</h2>
+        <p className="text-sm text-stone-500">
+          Upload promo images, add large overlay text on each slide, and optional banner above the slider.
+        </p>
+        <label className="block">
+          <span className="text-sm font-semibold">Banner text (above slider)</span>
+          <input
+            className="input mt-1 w-full"
+            placeholder="e.g. Welcome — order here!"
+            value={settings.slideBannerText || ''}
+            disabled={!tokenModeEditable}
+            onChange={(e) => setSettings({ ...settings, slideBannerText: e.target.value })}
+          />
+        </label>
+        <KioskSlideEditor
+          slides={settings.promoSlides?.length ? settings.promoSlides : [{ title: '', subtitle: '' }]}
+          editable={tokenModeEditable}
+          mode={mode}
+          accessToken={accessToken}
+          onChange={(promoSlides) => setSettings({ ...settings, promoSlides })}
+        />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+        <h2 className="font-semibold">Branding &amp; main screen</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Attract headline</span>
+            <input
+              className="input mt-1 w-full"
+              placeholder={settings.name || 'Your restaurant name'}
+              value={settings.attractHeadline || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, attractHeadline: e.target.value })}
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Attract subheadline</span>
+            <input
+              className="input mt-1 w-full"
+              placeholder="Order here — pay at the counter or by card."
+              value={settings.attractSubheadline || ''}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, attractSubheadline: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Primary button color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandPrimaryColor || '#059669'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandPrimaryColor: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Secondary / accent color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandSecondaryColor || '#047857'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandSecondaryColor: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold">Button text color</span>
+            <input
+              type="color"
+              className="mt-1 h-10 w-full cursor-pointer rounded border border-stone-200"
+              value={settings.brandButtonTextColor || '#ffffff'}
+              disabled={!tokenModeEditable}
+              onChange={(e) => setSettings({ ...settings, brandButtonTextColor: e.target.value })}
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-semibold">Touch screen size (portrait)</span>
+            <select
+              className="input mt-1 w-full max-w-xs"
+              value={settings.screenSizeIn === 27 ? 27 : 23}
+              disabled={!tokenModeEditable}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  screenSizeIn: Number(e.target.value) === 27 ? 27 : 23,
+                })
+              }
+            >
+              <option value={23}>23&quot; vertical (1080×1920)</option>
+              <option value={27}>27&quot; vertical (1080×1920)</option>
+            </select>
+            <p className="mt-1 text-xs text-stone-500">
+              Scales buttons, text, and product tiles for your kiosk display. Use 27&quot; for larger touch targets.
+            </p>
+          </label>
         </div>
-        {(settings.promoSlides || []).map((slide, idx) => (
-          <div key={idx} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 md:grid-cols-3">
-            {slide.imageUrl ? (
-              <div className="relative md:col-span-3">
-                <img
-                  src={slide.imageUrl}
-                  alt=""
-                  className="h-36 w-full rounded-lg border border-stone-200 object-cover"
-                />
-                {tokenModeEditable ? (
-                  <button
-                    type="button"
-                    className="absolute right-2 top-2 rounded-lg bg-black/60 p-2 text-white hover:bg-black/80"
-                    aria-label={t('kioskRemoveSlide')}
-                    onClick={() => {
-                      const next = [...(settings.promoSlides || [])];
-                      next[idx] = { ...next[idx], imageUrl: undefined };
-                      setSettings({ ...settings, promoSlides: next });
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            {tokenModeEditable ? (
-              <div className="flex flex-wrap items-center gap-2 md:col-span-3">
-                <input
-                  ref={(el) => {
-                    slideFileRefs.current[idx] = el;
-                  }}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(e) => void uploadSlideImage(idx, e.target.files?.[0] || null)}
-                />
-                <button
-                  type="button"
-                  className="btn-secondary inline-flex items-center gap-2"
-                  disabled={uploadingSlideIdx === idx}
-                  onClick={() => slideFileRefs.current[idx]?.click()}
-                >
-                  {uploadingSlideIdx === idx ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImagePlus className="h-4 w-4" />
-                  )}
-                  {uploadingSlideIdx === idx ? t('uploading') : t('kioskSlideUploadImage')}
-                </button>
-              </div>
-            ) : null}
-            <input
-              className="input md:col-span-3"
-              placeholder={t('kioskSlideImageUrl')}
-              value={slide.imageUrl || ''}
-              disabled={!tokenModeEditable}
-              onChange={(e) => {
-                const next = [...(settings.promoSlides || [])];
-                next[idx] = { ...next[idx], imageUrl: e.target.value };
-                setSettings({ ...settings, promoSlides: next });
-              }}
-            />
-            <input
-              className="input"
-              placeholder={t('kioskSlideTitle')}
-              value={slide.title || ''}
-              disabled={!tokenModeEditable}
-              onChange={(e) => {
-                const next = [...(settings.promoSlides || [])];
-                next[idx] = { ...next[idx], title: e.target.value };
-                setSettings({ ...settings, promoSlides: next });
-              }}
-            />
-            <input
-              className="input md:col-span-2"
-              placeholder={t('kioskSlideSubtitle')}
-              value={slide.subtitle || ''}
-              disabled={!tokenModeEditable}
-              onChange={(e) => {
-                const next = [...(settings.promoSlides || [])];
-                next[idx] = { ...next[idx], subtitle: e.target.value };
-                setSettings({ ...settings, promoSlides: next });
-              }}
-            />
-            {tokenModeEditable && (settings.promoSlides || []).length > 1 ? (
-              <div className="md:col-span-3">
-                <button
-                  type="button"
-                  className="text-xs font-medium text-red-700 underline-offset-2 hover:underline"
-                  onClick={() => {
-                    const next = (settings.promoSlides || []).filter((_, i) => i !== idx);
-                    setSettings({ ...settings, promoSlides: next });
-                  }}
-                >
-                  {t('kioskRemoveSlide')}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ))}
-        {tokenModeEditable ? (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() =>
-              setSettings({
-                ...settings,
-                promoSlides: [...(settings.promoSlides || []), { title: '', subtitle: '' }],
-              })
-            }
-          >
-            {t('kioskAddSlide')}
-          </button>
-        ) : null}
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-sm font-semibold">Order type buttons on main screen</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.takeawayEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, takeawayEnabled: e.target.checked })} />
+            <span className="text-sm">Takeaway</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.deliveryEnabled === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, deliveryEnabled: e.target.checked })} />
+            <span className="text-sm">Delivery</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.dineInEnabled !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, dineInEnabled: e.target.checked })} />
+            <span className="text-sm">Dine in (table / badge)</span>
+          </label>
+        </div>
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-sm font-semibold">Print from this kiosk tablet</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.autoPrintKitchen !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintKitchen: e.target.checked })} />
+            <span className="text-sm">Auto-print kitchen ticket after order</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={settings.autoPrintReceipt === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintReceipt: e.target.checked })} />
+            <span className="text-sm">Auto-print guest receipt after order</span>
+          </label>
+        </div>
       </section>
 
       <section className="grid gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 md:grid-cols-2">

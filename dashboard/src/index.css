@@ -617,12 +617,223 @@ button {
     transform: translateZ(0);
   }
 
-  /* Self-order kiosk touch buttons */
+  /* Self-order kiosk — portrait 23" / 27" touch screens (1080×1920 typical) */
+  html.kiosk-lock,
+  html.kiosk-lock body,
+  html.kiosk-lock #root {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .kiosk-shell {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    font-size: var(--kiosk-font-base, 18px);
+  }
+
+  .kiosk-size-23 {
+    --kiosk-font-base: clamp(17px, 1.85vh, 22px);
+    --kiosk-header-min: clamp(180px, 24vh, 260px);
+    --kiosk-touch: 56px;
+    --kiosk-gap: clamp(0.75rem, 2vh, 1.25rem);
+    --kiosk-icon-lg: clamp(3.5rem, 8vh, 4.5rem);
+    --kiosk-choice-min-h: clamp(140px, 17vh, 200px);
+    --kiosk-product-img-h: clamp(7rem, 17vh, 10rem);
+    --kiosk-heading: clamp(1.75rem, 4.5vh, 2.75rem);
+    --kiosk-subheading: clamp(1.125rem, 2.8vh, 1.5rem);
+  }
+
+  .kiosk-size-27 {
+    --kiosk-font-base: clamp(19px, 2.05vh, 25px);
+    --kiosk-header-min: clamp(200px, 26vh, 300px);
+    --kiosk-touch: 64px;
+    --kiosk-gap: clamp(0.875rem, 2.2vh, 1.5rem);
+    --kiosk-icon-lg: clamp(4rem, 9vh, 5.25rem);
+    --kiosk-choice-min-h: clamp(160px, 19vh, 240px);
+    --kiosk-product-img-h: clamp(8rem, 19vh, 11.5rem);
+    --kiosk-heading: clamp(2rem, 5vh, 3.25rem);
+    --kiosk-subheading: clamp(1.25rem, 3.1vh, 1.75rem);
+  }
+
+  .kiosk-header {
+    min-height: var(--kiosk-header-min, 200px);
+    flex-shrink: 0;
+  }
+
+  .kiosk-header-overlay {
+    font-size: clamp(1.75rem, 5vw, 3rem);
+  }
+
+  .kiosk-attract {
+    gap: var(--kiosk-gap, 1rem);
+    padding: clamp(1.5rem, 4vh, 2.5rem);
+  }
+
+  .kiosk-attract-headline {
+    font-size: var(--kiosk-heading, 2.25rem);
+    line-height: 1.15;
+  }
+
+  .kiosk-attract-sub {
+    font-size: var(--kiosk-subheading, 1.25rem);
+    max-width: 36rem;
+  }
+
+  .kiosk-attract-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kiosk-gap, 1rem);
+    width: 100%;
+    max-width: min(560px, 92vw);
+  }
+
+  .kiosk-step-title {
+    font-size: var(--kiosk-heading, 2rem);
+    line-height: 1.15;
+  }
+
+  .kiosk-category-nav {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e7e5e4;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  .kiosk-category-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kiosk-category-pill {
+    flex-shrink: 0;
+    min-height: var(--kiosk-touch, 56px);
+    padding: 0.625rem 1.25rem;
+    border-radius: 9999px;
+    font-size: 1em;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 2px solid #e7e5e4;
+    background: #fff;
+    color: #44403c;
+  }
+
+  .kiosk-category-pill.kiosk-category-active {
+    border-color: var(--kiosk-primary, #059669);
+  }
+
+  .kiosk-product-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 1rem 0.5rem;
+  }
+
+  .kiosk-product-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--kiosk-gap, 0.75rem);
+  }
+
+  .kiosk-product-card img,
+  .kiosk-product-card .kiosk-product-img-placeholder {
+    height: var(--kiosk-product-img-h, 8rem);
+  }
+
+  .kiosk-footer-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    padding-bottom: max(0.875rem, env(safe-area-inset-bottom));
+    border-top: 1px solid #e7e5e4;
+    background: #fff;
+  }
+
+  .kiosk-table-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--kiosk-gap, 0.75rem);
+  }
+
+  .kiosk-table-btn {
+    min-height: var(--kiosk-touch, 56px);
+    padding: 1rem 0.5rem;
+    font-size: 1.25em;
+    font-weight: 700;
+  }
+
+  .kiosk-branded {
+    --kiosk-primary: #059669;
+    --kiosk-secondary: #047857;
+    --kiosk-btn-text: #ffffff;
+  }
   .kiosk-btn-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-bold text-white shadow-md disabled:opacity-40;
+    @apply inline-flex items-center justify-center rounded-2xl px-6 font-bold shadow-md disabled:opacity-40;
+    min-height: var(--kiosk-touch, 56px);
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+    font-size: 1.125em;
+    background-color: var(--kiosk-primary, #059669);
+    color: var(--kiosk-btn-text, #ffffff);
   }
   .kiosk-btn-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-6 py-4 text-lg font-semibold text-stone-800;
+    @apply inline-flex items-center justify-center rounded-2xl border-2 bg-white font-semibold text-stone-800;
+    min-height: var(--kiosk-touch, 56px);
+    padding: 0.875rem 1.5rem;
+    font-size: 1.0625em;
+    border-color: color-mix(in srgb, var(--kiosk-primary, #059669) 25%, #e7e5e4);
+  }
+  .kiosk-btn-choice {
+    @apply flex flex-col items-center justify-center rounded-3xl border-2 text-center shadow-lg active:scale-[0.98];
+    gap: var(--kiosk-gap, 1rem);
+    min-height: var(--kiosk-choice-min-h, 160px);
+    padding: clamp(1.25rem, 3vh, 2rem);
+    border-color: color-mix(in srgb, var(--kiosk-primary, #059669) 35%, #e7e5e4);
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 8%, white);
+  }
+  .kiosk-btn-choice-icon {
+    width: var(--kiosk-icon-lg, 4rem);
+    height: var(--kiosk-icon-lg, 4rem);
+    color: var(--kiosk-primary, #059669);
+  }
+  .kiosk-category-active {
+    background-color: var(--kiosk-primary, #059669) !important;
+    color: var(--kiosk-btn-text, #ffffff) !important;
+  }
+  .kiosk-text-accent {
+    color: var(--kiosk-primary, #059669);
+  }
+  .kiosk-cart-badge {
+    background-color: var(--kiosk-primary, #059669);
+    color: var(--kiosk-btn-text, #ffffff);
+  }
+  .kiosk-mode-active {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 10%, white) !important;
+    color: color-mix(in srgb, var(--kiosk-primary, #059669) 85%, black) !important;
+  }
+  .kiosk-table-selected {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background-color: var(--kiosk-primary, #059669) !important;
+    color: var(--kiosk-btn-text, #ffffff) !important;
+  }
+  .kiosk-checkout-card {
+    border-color: var(--kiosk-primary, #059669) !important;
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 8%, white) !important;
+  }
+  .kiosk-success-icon {
+    background: color-mix(in srgb, var(--kiosk-primary, #059669) 15%, white);
+    color: var(--kiosk-primary, #059669);
   }
 
   @media (pointer: coarse) {

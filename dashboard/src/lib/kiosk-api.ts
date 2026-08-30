@@ -2,15 +2,19 @@ import axios from 'axios';
 
 export type KioskPromoSlide = {
   imageUrl?: string;
+  overlayText?: string;
   title?: string;
   subtitle?: string;
 };
+
+export type KioskFulfillmentChannel = 'takeaway' | 'delivery' | 'dine_in';
 
 export type KioskConfig = {
   merchant: { id: string; name: string; slug: string };
   settings: {
     name: string;
     promoSlides: KioskPromoSlide[];
+    slideBannerText?: string;
     enabledLanguages: string[];
     defaultLanguage: string;
     tableMode: 'table' | 'badge' | 'both';
@@ -19,6 +23,17 @@ export type KioskConfig = {
     locationSlug?: string | null;
     cashPaymentEnabled?: boolean;
     cardPaymentEnabled?: boolean;
+    takeawayEnabled?: boolean;
+    deliveryEnabled?: boolean;
+    dineInEnabled?: boolean;
+    attractHeadline?: string;
+    attractSubheadline?: string;
+    brandPrimaryColor?: string;
+    brandSecondaryColor?: string;
+    brandButtonTextColor?: string;
+    autoPrintKitchen?: boolean;
+    autoPrintReceipt?: boolean;
+    screenSizeIn?: 23 | 27;
   };
   tables: Array<{ id: string; label: string }>;
 };
@@ -37,6 +52,7 @@ export type KioskAdminSettings = {
   accessToken?: string;
   name?: string;
   promoSlides?: KioskPromoSlide[];
+  slideBannerText?: string;
   enabledLanguages?: string[];
   defaultLanguage?: string;
   terminalId?: string | null;
@@ -49,6 +65,17 @@ export type KioskAdminSettings = {
   adminPin?: string;
   cashPaymentEnabled?: boolean;
   cardPaymentEnabled?: boolean;
+  takeawayEnabled?: boolean;
+  deliveryEnabled?: boolean;
+  dineInEnabled?: boolean;
+  attractHeadline?: string;
+  attractSubheadline?: string;
+  brandPrimaryColor?: string;
+  brandSecondaryColor?: string;
+  brandButtonTextColor?: string;
+  autoPrintKitchen?: boolean;
+  autoPrintReceipt?: boolean;
+  screenSizeIn?: 23 | 27;
 };
 
 export type KioskMenuCategory = {
@@ -98,17 +125,18 @@ export async function createKioskOrder(
       selectedExtras?: Array<{ id: string }>;
     }>;
     paymentMethod: 'cash' | 'card';
+    fulfillmentChannel?: KioskFulfillmentChannel;
     tableId?: string;
     badgeNumber?: string;
     locationSlug?: string;
     customerName?: string;
     membershipCardId?: string;
+    shippingAddress?: string;
   }
 ) {
   const res = await axios.post(`/api/shop/${slug}/orders`, {
     ...payload,
     orderSource: 'kiosk',
-    fulfillmentChannel: 'dine_in',
     guestCheckout: true,
     customerPhone: 'KIOSK',
   });
@@ -160,7 +188,7 @@ export async function uploadKioskSlideImageByToken(
   const fd = new FormData();
   fd.append('file', file);
   fd.append('pin', pin);
-  const res = await axios.post(`/api/kiosk/${token}/admin-media`, fd);
+  const res = await axios.post(`/api/kiosk/${token}/upload`, fd);
   const url = res.data?.url as string;
   if (!url) throw new Error('Upload failed');
   return url;

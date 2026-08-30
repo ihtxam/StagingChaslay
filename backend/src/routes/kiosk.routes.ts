@@ -122,15 +122,10 @@ router.put("/:token/admin-settings", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/:token/admin-media", (req: Request, res: Response, next) => {
+router.post("/:token/upload", (req: Request, res: Response, next) => {
   imageUpload.single("file")(req, res, (err: unknown) => {
     if (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : "Upload failed";
+      const message = err instanceof Error ? err.message : "Upload failed";
       return res.status(400).json({ error: message });
     }
     next();
@@ -143,20 +138,13 @@ router.post("/:token/admin-media", (req: Request, res: Response, next) => {
       return res.status(403).json({ error: "Invalid admin code" });
     }
     if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
-
     const saved = await saveMerchantImage({
       merchantId: merchant.id,
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
       originalName: req.file.originalname,
     });
-
-    res.status(201).json({
-      success: true,
-      url: saved.url,
-      mimeType: saved.mimeType,
-      size: saved.size,
-    });
+    res.status(201).json({ success: true, url: saved.url });
   } catch (error) {
     handleError(res, error, "Upload failed");
   }
@@ -212,43 +200,6 @@ kioskMerchantRouter.post("/settings/regenerate-token", async (req: Request, res:
     res.json({ success: true, settings });
   } catch (error) {
     handleError(res, error, "Failed to regenerate token");
-  }
-});
-
-kioskMerchantRouter.post("/media", (req: Request, res: Response, next) => {
-  imageUpload.single("file")(req, res, (err: unknown) => {
-    if (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : "Upload failed";
-      return res.status(400).json({ error: message });
-    }
-    next();
-  });
-}, async (req: Request, res: Response) => {
-  try {
-    const merchantId = req.merchantId;
-    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
-    if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
-
-    const saved = await saveMerchantImage({
-      merchantId,
-      buffer: req.file.buffer,
-      mimeType: req.file.mimetype,
-      originalName: req.file.originalname,
-    });
-
-    res.status(201).json({
-      success: true,
-      url: saved.url,
-      mimeType: saved.mimeType,
-      size: saved.size,
-    });
-  } catch (error) {
-    handleError(res, error, "Upload failed");
   }
 });
 

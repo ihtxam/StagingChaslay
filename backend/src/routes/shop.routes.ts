@@ -1994,11 +1994,21 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
     const payMethod =
       rawPay === "card" ? "card" : rawPay === "pay_later" ? "pay_later" : "cash";
-    const channel: FulfillmentChannel = isQrTableOrder || isKioskOrder
+
+    const rawKioskChannel = String(fulfillmentChannel || "").toLowerCase().replace(/-/g, "_");
+    const channel: FulfillmentChannel = isQrTableOrder
       ? "dine_in"
-      : fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
-        ? fulfillmentChannel
-        : "takeaway";
+      : isKioskOrder
+        ? rawKioskChannel === "takeaway" ||
+          rawKioskChannel === "delivery" ||
+          rawKioskChannel === "dine_in"
+          ? (rawKioskChannel as FulfillmentChannel)
+          : "dine_in"
+        : fulfillmentChannel === "dine_in" ||
+            fulfillmentChannel === "takeaway" ||
+            fulfillmentChannel === "delivery"
+          ? fulfillmentChannel
+          : "takeaway";
 
     if (!channelEnabled(merchant, channel)) {
       return res.status(400).json({ error: "This order type is not available" });
@@ -2049,7 +2059,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           : shippingAddress
             ? JSON.stringify(shippingAddress)
             : "";
-      if (!addr.trim()) {
+      if (!isKioskOrder && !addr.trim()) {
         return res.status(400).json({ error: "Delivery address is required" });
       }
     }
@@ -2692,6 +2702,29 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         printKitchen: true,
         orderSource: "qr_table",
       });
+    } else if (isKioskOrder) {
+      const kioskAutoAcceptCard = kioskSettings?.kioskAutoAcceptCard !== false;
+      const kioskShouldKitchen =
+        initialOrderStatus === "preparing" &&
+        (kioskAutoAcceptCash || (payMethod === "card" && kioskAutoAcceptCard));
+      if (kioskShouldKitchen) {
+        const { enterKitchenFromOrder } = await import("@/services/kitchen-ingress.service");
+        void enterKitchenFromOrder(merchant.id, order.id, {
+          printKitchen: true,
+          orderSource: "kiosk",
+        });
+      }
+      try {
+        const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+        await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "kiosk", {
+          printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+          printNotification: initialOrderStatus !== "preparing",
+          printKitchen: kioskShouldKitchen,
+          printReceipt: false,
+        });
+      } catch (printErr) {
+        console.warn("Kiosk order print enqueue failed:", printErr);
+      }
     }
 
     // Till notification on arrival; kitchen ticket when auto-accept, on-arrival setting, or later on Accept.
@@ -2702,12 +2735,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
     try {
       const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-        printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-        printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
-        printKitchen: kitchenOnArrival,
-        printReceipt: false,
-      });
+      if (!isKioskOrder) {
+        await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
+          printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+          printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
+          printKitchen: kitchenOnArrival,
+          printReceipt: false,
+        });
+      }
     } catch (printErr) {
       console.warn("Shop order notification print enqueue failed:", printErr);
     }
