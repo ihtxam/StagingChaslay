@@ -437,6 +437,35 @@ function ChannelGlyph({ ch, order }: { ch?: string | null; order?: PosOrder }) {
   return <Store size={14} />;
 }
 
+function KitchenProgressLabel({
+  progress,
+  kitchenEnabled,
+}: {
+  progress: { sent: number; ready: number; total: number };
+  kitchenEnabled?: boolean;
+}) {
+  if (kitchenEnabled && progress.sent > 0) {
+    return (
+      <span className="inline-flex items-center justify-center gap-1">
+        {progress.ready > 0 ? (
+          <ChefHat className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+        ) : null}
+        <span className="tabular-nums">
+          {progress.ready}/{progress.sent}
+        </span>
+      </span>
+    );
+  }
+  if (progress.sent > 0) {
+    return (
+      <span className="tabular-nums">
+        {progress.sent}/{progress.total || progress.sent}
+      </span>
+    );
+  }
+  return <span className="tabular-nums">{progress.total}</span>;
+}
+
 export default function WebPosOrdersPanel({
   open,
   embedded = false,
@@ -780,7 +809,71 @@ export default function WebPosOrdersPanel({
   const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
-  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart;
+  const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart as CartLine[];
+
+  const refreshKdsHeld = useCallback(
+    async (rows: HeldRow[]) => {
+      if (!kitchenEnabled) {
+        setKdsByTicket({});
+        return;
+      }
+      const keys = new Set<string>();
+      for (const h of rows) {
+        if (h.status !== 'sent_to_kitchen') continue;
+        const meta = parseHeldCartJson(h.cartJson);
+        const key = resolveKitchenTicketKey(meta);
+        if (key) keys.add(key);
+      }
+      if (!keys.size) {
+        setKdsByTicket({});
+        return;
+      }
+      const next: Record<string, { ready: number; sent: number; readyLineIds: string[] }> = {};
+      await Promise.all(
+        [...keys].map(async (key) => {
+          const status = await fetchKdsTicketStatus(key);
+          if (status) {
+            next[key] = {
+              ready: status.ready,
+              sent: status.sent || status.total,
+              readyLineIds: status.readyLineIds || [],
+            };
+          }
+        })
+      );
+      setKdsByTicket(next);
+    },
+    [kitchenEnabled]
+  );
+
+  const heldKitchenProgress = useCallback(
+    (h: HeldRow) => {
+      const lines = heldCartLines(h);
+      const meta = parseHeldCartJson(h.cartJson);
+      const key = resolveKitchenTicketKey(meta);
+      const local = kitchenProgressFromLines(lines);
+      return mergeKitchenProgress(local, key ? kdsByTicket[key] : null);
+    },
+    [kdsByTicket]
+  );
+
+  const heldLineReady = useCallback(
+    (h: HeldRow, line: CartLine) => {
+      if (line.kitchenReadyAt) return true;
+      const meta = parseHeldCartJson(h.cartJson);
+      const key = resolveKitchenTicketKey(meta);
+      const ids = key ? kdsByTicket[key]?.readyLineIds : null;
+      return !!ids?.includes(line.lineId);
+    },
+    [kdsByTicket]
+  );
+
+  useEffect(() => {
+    if (!open || !kitchenEnabled) return;
+    void refreshKdsHeld(held);
+    const timer = window.setInterval(() => void refreshKdsHeld(held), 8000);
+    return () => window.clearInterval(timer);
+  }, [open, kitchenEnabled, held, refreshKdsHeld]);
 
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
@@ -1501,6 +1594,7 @@ export default function WebPosOrdersPanel({
                     const h = item.held;
                     const selected = selectedHeld?.id === h.id;
                     const total = heldTotal(h);
+                    const kitchenProgress = heldKitchenProgress(h);
                     const heldMeta = parseHeldCartJson(h.cartJson);
                     return (
                       <li key={`h-${h.id}`}>
@@ -1546,6 +1640,14 @@ export default function WebPosOrdersPanel({
                               {heldMeta.tableLabel ? (
                                 <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">
                                   {t('table')} {heldMeta.tableLabel}
+                                </span>
+                              ) : null}
+                              {kitchenProgress.sent > 0 ? (
+                                <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                                  <KitchenProgressLabel
+                                    progress={kitchenProgress}
+                                    kitchenEnabled={kitchenEnabled}
+                                  />
                                 </span>
                               ) : null}
                             </div>
@@ -1767,6 +1869,17 @@ export default function WebPosOrdersPanel({
                       ? `${selectedHeld.staffName.trim()} · ${channelLabel(selectedHeld.channel)}`
                       : channelLabel(selectedHeld.channel)}
                   </p>
+                  {(() => {
+                    const progress = heldKitchenProgress(selectedHeld);
+                    return progress.sent > 0 ? (
+                      <p className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+                        <KitchenProgressLabel
+                          progress={progress}
+                          kitchenEnabled={kitchenEnabled}
+                        />
+                      </p>
+                    ) : null;
+                  })()}
                   <ul className="mt-4 space-y-2 text-sm">
                     {heldCartLines(selectedHeld).map((l, idx) => {
                       const ready =

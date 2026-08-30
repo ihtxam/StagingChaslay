@@ -2143,6 +2143,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           .get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts })
           .catch(() => ({ data: { productIds: [] } })),
       ]);
+
+      const pick = <T,>(idx: number, fallback: T): T =>
+        settled[idx].status === 'fulfilled' ? (settled[idx] as PromiseFulfilledResult<T>).value : fallback;
+
+      const settingsRes = pick(0, { data: {} } as { data: Record<string, unknown> });
+      const catRes = pick(1, { data: { categories: [] } } as { data: { categories: unknown[] } });
+      const prodRes = pick(2, { data: { products: [] } } as { data: { products: unknown[] } });
+      const webposRes = pick(3, { data: { config: null } } as { data: { config: null } });
+      const staffRes = pick(4, { data: { staff: [] } } as { data: { staff: unknown[] } });
+      const bestsellerRes = pick(5, { data: { productIds: [] } } as { data: { productIds: string[] } });
+
+      const settingsFailed = settled[0].status === 'rejected';
+      const productsFailed = settled[2].status === 'rejected';
+      if (settingsFailed && productsFailed) {
+        throw (settled[0] as PromiseRejectedResult).reason;
+      }
+      if (settingsFailed) {
+        console.warn('[WebPOS] settings load failed', (settled[0] as PromiseRejectedResult).reason);
+      }
+      if (productsFailed) {
+        console.warn('[WebPOS] products load failed', (settled[2] as PromiseRejectedResult).reason);
+      }
+
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
       setPrintSettings(merch?.posPrintSettings || null);

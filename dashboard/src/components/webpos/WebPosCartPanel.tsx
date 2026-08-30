@@ -793,7 +793,10 @@ export default function WebPosCartPanel({
           >
             {t('webPosCartOrdered')}
             {orderedLines.length ? (
-              <span className="ml-1 tabular-nums opacity-80">
+              <span className="ml-1 inline-flex items-center gap-0.5 tabular-nums opacity-80">
+                {kdsReadyCount > 0 ? (
+                  <ChefHat className="h-3 w-3 text-amber-600" aria-hidden />
+                ) : null}
                 ({kdsReadyCount > 0 ? `${kdsReadyCount}/` : ''}
                 {orderedLines.length})
               </span>

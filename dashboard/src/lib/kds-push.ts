@@ -43,6 +43,14 @@ export async function dismissKdsTicket(ticketKey: string): Promise<void> {
   }
 }
 
+export type KdsTicketStatus = {
+  readyLineIds: string[];
+  ready: number;
+  total: number;
+  sent: number;
+  status?: string;
+};
+
 export async function pushCartLinesToKds(opts: {
   ticketKey: string;
   orderNumber?: string | null;
@@ -84,7 +92,7 @@ export async function fetchKdsBoardStatus(): Promise<KdsBoardTicket[]> {
     const res = await api.get('/merchant/kds/board-status');
     return (res.data?.tickets || []) as KdsBoardTicket[];
   } catch {
-    return [];
+    return null;
   }
 }
 
