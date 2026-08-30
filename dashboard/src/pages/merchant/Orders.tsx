@@ -358,7 +358,7 @@ function OrderDeliveryPanel({
           </select>
         </label>
       ) : (
-        <p className="text-sm text-stone-800">
+        <p className="text-sm text-[var(--text)]">
           <span className="text-[var(--text-muted)]">{t('deliveryAssignedDriver')}:</span>{' '}
           {driver?.staffName || order.assignedDriverName || t('deliveryUnassigned')}
         </p>
@@ -366,18 +366,18 @@ function OrderDeliveryPanel({
       {isOnlineShopOrder(order) && order.deliveryTrackingToken && shopSlug ? (
         <button
           type="button"
-          className="text-xs font-semibold text-teal-800 underline-offset-2 hover:underline"
+          className="text-xs font-semibold text-teal-800 underline-offset-2 hover:underline dark:text-teal-300"
           onClick={() => void copyTrackingLink()}
         >
           {t('deliveryCopyTrackingLink')}
         </button>
       ) : null}
       {driverPoint && !driverPoint.stale ? (
-        <p className="text-xs text-emerald-800">
+        <p className="text-xs text-emerald-800 dark:text-emerald-300">
           {t('deliveryDriverOnWay').replace('{name}', driverPoint.name || '')}
         </p>
       ) : (
-        <p className="text-xs text-stone-500">{t('deliveryTrackingWaiting')}</p>
+        <p className="text-xs text-[var(--text-muted)]">{t('deliveryTrackingWaiting')}</p>
       )}
       <DeliveryLiveMap store={store} destination={destination} driver={driverPoint} heightClass="h-44" />
     </div>
@@ -990,8 +990,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               onClick={() => setTypeTab(id)}
               className={`${filterPill} h-8 text-[11px] ${
                 typeFilter === id
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-slate-400'
+                  ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg-elevated)]'
+                  : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border)] hover:bg-[var(--bg-muted)]'
               }`}
             >
               {label}

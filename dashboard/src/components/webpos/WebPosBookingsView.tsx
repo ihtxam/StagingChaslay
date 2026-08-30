@@ -15,6 +15,7 @@ import {
   zurichDayStartFromYmd,
 } from '@/lib/date-format';
 import { dispatchWebPosReservationCreated } from '@/lib/webpos-notifications';
+import { reservationStatusBadgeClass } from '@/lib/reservation-badges';
 
 type Reservation = {
   id: string;
@@ -198,18 +199,7 @@ export default function WebPosBookingsView() {
     }
   };
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-amber-100 text-amber-900',
-      confirmed: 'bg-emerald-100 text-emerald-900',
-      seated: 'bg-blue-100 text-blue-900',
-      completed: 'bg-stone-100 text-stone-600',
-      cancelled: 'bg-stone-100 text-stone-500',
-      rejected: 'bg-red-100 text-red-800',
-      no_show: 'bg-red-50 text-red-700',
-    };
-    return colors[status] || 'bg-stone-100 text-stone-700';
-  };
+  const statusBadge = reservationStatusBadgeClass;
 
   const pendingActions = (r: Reservation, compact = false) => {
     if (r.status !== 'pending') return null;
@@ -234,14 +224,14 @@ export default function WebPosBookingsView() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-stone-50">
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--webpos-bg)]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--webpos-border)] bg-[var(--webpos-surface)] px-4 py-3">
         <button
           type="button"
           className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
             scope === 'today'
               ? 'bg-[var(--webpos-accent)] text-white'
-              : 'bg-stone-100 text-stone-600'
+              : 'bg-[var(--webpos-surface-2)] text-[var(--webpos-text-muted)]'
           }`}
           onClick={() => setScope('today')}
         >
@@ -252,14 +242,14 @@ export default function WebPosBookingsView() {
           className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
             scope === 'future'
               ? 'bg-[var(--webpos-accent)] text-white'
-              : 'bg-stone-100 text-stone-600'
+              : 'bg-[var(--webpos-surface-2)] text-[var(--webpos-text-muted)]'
           }`}
           onClick={() => setScope('future')}
         >
           {t('reservationsFuture')}
         </button>
         {!autoAccept && pendingCount > 0 ? (
-          <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+          <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
             {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
           </span>
         ) : null}
@@ -285,15 +275,15 @@ export default function WebPosBookingsView() {
 
       <div className="min-h-0 flex-1 overflow-auto p-4 pb-24">
         {loading ? (
-          <p className="text-sm text-stone-500">{t('loading')}</p>
+          <p className="text-sm text-[var(--webpos-text-muted)]">{t('loading')}</p>
         ) : reservations.length === 0 ? (
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-[var(--webpos-text-muted)]">
             {scope === 'today' ? t('reservationsEmpty') : t('reservationsEmptyFuture')}
           </p>
         ) : scope === 'future' ? (
-          <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-xl border border-[var(--webpos-border)] bg-[var(--webpos-surface)] shadow-sm">
             <table className="min-w-full text-sm">
-              <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+              <thead className="border-b border-[var(--webpos-border)] bg-[var(--webpos-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--webpos-text-muted)]">
                 <tr>
                   <th className="px-3 py-2">{t('date')}</th>
                   <th className="px-3 py-2">{t('time')}</th>
@@ -308,7 +298,7 @@ export default function WebPosBookingsView() {
                 {reservations.map((r) => {
                   const dt = new Date(r.reservedAt);
                   return (
-                    <tr key={r.id} className="border-b border-stone-100 last:border-0">
+                    <tr key={r.id} className="border-b border-[var(--webpos-border)] last:border-0">
                       <td className="px-3 py-2 whitespace-nowrap">{formatDate(dt)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{formatTime(dt)}</td>
                       <td className="px-3 py-2 font-medium">{r.guestName}</td>
@@ -345,26 +335,26 @@ export default function WebPosBookingsView() {
         ) : (
           <ul className="space-y-3">
             {reservations.map((r) => (
-              <li key={r.id} className="rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+              <li key={r.id} className="overflow-hidden rounded-xl border border-[var(--webpos-border)] bg-[var(--webpos-surface)] shadow-sm">
                 <div className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold">{r.guestName}</p>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-[var(--webpos-text-muted)]">
                         {formatTime(r.reservedAt)} · {r.partySize} {t('reservationsGuests')}
                       </p>
-                      <p className="text-xs text-stone-500">{r.guestPhone}</p>
-                      {r.guestEmail ? <p className="text-xs text-stone-400">{r.guestEmail}</p> : null}
+                      <p className="text-xs text-[var(--webpos-text-muted)]">{r.guestPhone}</p>
+                      {r.guestEmail ? <p className="text-xs text-[var(--webpos-text-muted)]">{r.guestEmail}</p> : null}
                     </div>
                     <div className="text-right text-xs">
                       <p className={`inline-block rounded px-2 py-0.5 font-semibold uppercase ${statusBadge(r.status)}`}>
                         {r.status}
                       </p>
-                      <p className="mt-1 text-stone-500">{r.tableLabel || t('reservationsNoTable')}</p>
-                      <p className="text-stone-400">{r.code}</p>
+                      <p className="mt-1 text-[var(--webpos-text-muted)]">{r.tableLabel || t('reservationsNoTable')}</p>
+                      <p className="text-[var(--webpos-text-muted)]">{r.code}</p>
                     </div>
                   </div>
-                  {r.notes ? <p className="mt-2 text-xs text-stone-600">{r.notes}</p> : null}
+                  {r.notes ? <p className="mt-2 text-xs text-[var(--webpos-text-muted)]">{r.notes}</p> : null}
                   {!['cancelled', 'rejected', 'completed', 'no_show'].includes(r.status) ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button type="button" className="text-xs font-semibold text-indigo-700" onClick={() => openEdit(r)}>
@@ -379,7 +369,7 @@ export default function WebPosBookingsView() {
                   ) : null}
                 </div>
                 {r.status === 'pending' ? (
-                  <div className="border-t border-stone-100 bg-stone-50 px-4 py-3">
+                  <div className="border-t border-[var(--webpos-border)] bg-[var(--webpos-surface-2)] px-4 py-3">
                     {pendingActions(r)}
                   </div>
                 ) : null}
@@ -401,7 +391,7 @@ export default function WebPosBookingsView() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form
             onSubmit={saveEdit}
-            className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-4 shadow-xl space-y-3"
+            className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] p-4 shadow-xl space-y-3"
           >
             <h3 className="text-lg font-semibold">{t('reservationsEdit')}</h3>
             <input className="input" required value={editForm.guestName} onChange={(e) => setEditForm({ ...editForm, guestName: e.target.value })} placeholder={t('name')} />

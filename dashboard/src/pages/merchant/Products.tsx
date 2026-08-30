@@ -219,14 +219,14 @@ function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotFo
 const BUTTON_COLORS = ['#ffffff', '#facc15', '#7dd3fc', '#4ade80', '#f9a8d4', '#3370FE', '#0f172a'];
 
 const CATEGORY_COLORS = [
-  'bg-rose-50 text-rose-800 border-rose-100',
-  'bg-orange-50 text-orange-800 border-orange-100',
-  'bg-amber-50 text-amber-800 border-amber-100',
-  'bg-emerald-50 text-emerald-800 border-emerald-100',
-  'bg-sky-50 text-sky-800 border-sky-100',
-  'bg-violet-50 text-violet-800 border-violet-100',
-  'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-100',
-  'bg-slate-50 text-slate-800 border-slate-100',
+  'bg-rose-50 text-rose-800 border-rose-100 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900',
+  'bg-orange-50 text-orange-800 border-orange-100 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-900',
+  'bg-amber-50 text-amber-800 border-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900',
+  'bg-emerald-50 text-emerald-800 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900',
+  'bg-sky-50 text-sky-800 border-sky-100 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900',
+  'bg-violet-50 text-violet-800 border-violet-100 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900',
+  'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-100 dark:bg-fuchsia-950/40 dark:text-fuchsia-200 dark:border-fuchsia-900',
+  'bg-slate-50 text-slate-800 border-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
 ];
 
 const money = (value: string | number) =>
@@ -1450,7 +1450,7 @@ export default function Products() {
                   className="flex flex-1 items-center gap-4 text-left min-w-0"
                   onClick={() => setExpandedProduct(expanded ? null : product.id)}
                 >
-                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 overflow-hidden">
+                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--bg-muted)] text-[var(--text-muted)] overflow-hidden">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
@@ -1459,20 +1459,20 @@ export default function Products() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-semibold text-lg text-slate-900">{product.name}</h3>
+                      <h3 className="truncate font-semibold text-lg text-[var(--text)]">{product.name}</h3>
                       <HqCatalogBadge fromHq={hqProductIds.has(product.id)} />
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                      <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                         {productTypeLabel(product)}
                       </span>
                       {product.loyaltyRewardPoints != null &&
                         Number(product.loyaltyRewardPoints) >= 1 && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
                             {t('ptsFreeBadge').replace('{n}', String(product.loyaltyRewardPoints))}
                           </span>
                         )}
                     </div>
                     {product.description && (
-                      <p className="mt-0.5 text-sm text-slate-500 line-clamp-1">{product.description}</p>
+                      <p className="mt-0.5 text-sm text-[var(--text-muted)] line-clamp-1">{product.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       {showBarcodeTools ? (
@@ -1505,17 +1505,17 @@ export default function Products() {
                             value={String(product.barcode)}
                             height={18}
                             width={90}
-                            className="inline-flex items-center text-slate-600"
+                            className="inline-flex items-center text-[var(--text-muted)]"
                           />
                         </button>
                       ) : null}
-                      <span className="text-slate-500">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
+                      <span className="text-[var(--text-muted)]">{t('skuColon').replace('{sku}', product.sku || '-')}</span>
                       <span className={stockOk ? 'text-emerald-600' : 'text-amber-600'}>
                         {t('stockColon').replace('{n}', String(product.stock))}
                       </span>
-                      <span className="text-slate-500">{categoryName(product.categoryId)}</span>
+                      <span className="text-[var(--text-muted)]">{categoryName(product.categoryId)}</span>
                       {(extras.length > 0 || tiers.length > 0) && (
-                        <span className="text-slate-400">
+                        <span className="text-[var(--text-muted)] opacity-80">
                           {tiers.length ? t('tiersCount').replace('{n}', String(tiers.length)) : ''}
                           {tiers.length && extras.length ? ' · ' : ''}
                           {extras.length ? t('extrasCount').replace('{n}', String(extras.length)) : ''}
@@ -1523,7 +1523,7 @@ export default function Products() {
                       )}
                     </div>
                   </div>
-                  <span className="hidden sm:inline text-slate-400">
+                  <span className="hidden sm:inline text-[var(--text-muted)]">
                     {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </span>
                 </button>
@@ -1533,7 +1533,7 @@ export default function Products() {
                     <button
                       type="button"
                       onClick={() => openPrintFor([product])}
-                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                      className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
                       title={t('barcodePrintLabels')}
                     >
                       <Printer size={18} />
@@ -1542,7 +1542,7 @@ export default function Products() {
                   <button
                     type="button"
                     onClick={() => void openEdit(product)}
-                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                    className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
                     title={t('edit')}
                   >
                     <Edit2 size={18} />
@@ -2203,7 +2203,7 @@ export default function Products() {
                         setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
                       }}
                     />
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
                       {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
                     </p>
                     {form.loyaltyRewardPoints &&
@@ -2498,7 +2498,7 @@ export default function Products() {
                   <div className="text-sm font-semibold">{printTargets[0].name}</div>
                 ) : null}
                 {labelMetaLine(printTargets[0], labelOpts) ? (
-                  <div className="text-xs text-slate-600">{labelMetaLine(printTargets[0], labelOpts)}</div>
+                  <div className="text-xs text-[var(--text-muted)]">{labelMetaLine(printTargets[0], labelOpts)}</div>
                 ) : null}
                 <BarcodePreview
                   value={String(printTargets[0].barcode)}

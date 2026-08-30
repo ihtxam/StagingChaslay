@@ -474,6 +474,79 @@ button {
   .webpos-shell[data-appearance='night'] .hover\:bg-stone-100:hover {
     background-color: #303030 !important;
   }
+
+  /* Colored status / chip badges inside night POS */
+  .webpos-shell[data-appearance='night'] .bg-sky-50,
+  .webpos-shell[data-appearance='night'] .bg-sky-100 {
+    background-color: #0c4a6e !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-sky-800,
+  .webpos-shell[data-appearance='night'] .text-sky-900 {
+    color: #bae6fd !important;
+  }
+  .webpos-shell[data-appearance='night'] .border-sky-200,
+  .webpos-shell[data-appearance='night'] .border-sky-300 {
+    border-color: #075985 !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-amber-50,
+  .webpos-shell[data-appearance='night'] .bg-amber-100 {
+    background-color: #78350f !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-amber-700,
+  .webpos-shell[data-appearance='night'] .text-amber-800,
+  .webpos-shell[data-appearance='night'] .text-amber-900,
+  .webpos-shell[data-appearance='night'] .text-amber-950 {
+    color: #fde68a !important;
+  }
+  .webpos-shell[data-appearance='night'] .border-amber-200,
+  .webpos-shell[data-appearance='night'] .border-amber-300 {
+    border-color: #92400e !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-emerald-50,
+  .webpos-shell[data-appearance='night'] .bg-emerald-100 {
+    background-color: #064e3b !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-emerald-800,
+  .webpos-shell[data-appearance='night'] .text-emerald-900 {
+    color: #a7f3d0 !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-blue-100 {
+    background-color: #1e3a8a !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-blue-900 {
+    color: #bfdbfe !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-red-50,
+  .webpos-shell[data-appearance='night'] .bg-red-100 {
+    background-color: #7f1d1d !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-red-700,
+  .webpos-shell[data-appearance='night'] .text-red-800,
+  .webpos-shell[data-appearance='night'] .text-red-900 {
+    color: #fecaca !important;
+  }
+  .webpos-shell[data-appearance='night'] .border-red-200 {
+    border-color: #991b1b !important;
+  }
+  .webpos-shell[data-appearance='night'] .hover\:bg-red-100:hover {
+    background-color: #991b1b !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-indigo-700 {
+    color: #a5b4fc !important;
+  }
+  .webpos-shell[data-appearance='night'] .bg-violet-100 {
+    background-color: #4c1d95 !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-violet-700,
+  .webpos-shell[data-appearance='night'] .text-violet-900 {
+    color: #ddd6fe !important;
+  }
+  .webpos-shell[data-appearance='night'] .border-violet-300 {
+    border-color: #6d28d9 !important;
+  }
+  .webpos-shell[data-appearance='night'] .text-amber-700 {
+    color: #fde68a !important;
+  }
   .webpos-shell[data-appearance='night'] .webpos-category-chip {
     color: var(--webpos-text);
   }

@@ -13,6 +13,7 @@ import {
   zurichDayEndFromYmd,
   zurichDayStartFromYmd,
 } from '@/lib/date-format';
+import { reservationStatusBadgeClass } from '@/lib/reservation-badges';
 
 type Reservation = {
   id: string;
@@ -209,18 +210,7 @@ export default function Reservations() {
     }
   };
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-amber-100 text-amber-900',
-      confirmed: 'bg-emerald-100 text-emerald-900',
-      seated: 'bg-blue-100 text-blue-900',
-      completed: 'bg-stone-100 text-stone-600',
-      cancelled: 'bg-stone-100 text-stone-500',
-      rejected: 'bg-red-100 text-red-800',
-      no_show: 'bg-red-50 text-red-700',
-    };
-    return colors[status] || 'bg-stone-100 text-stone-700';
-  };
+  const statusBadge = reservationStatusBadgeClass;
 
   const pendingCount = useMemo(
     () => reservations.filter((r) => r.status === 'pending').length,
@@ -239,7 +229,7 @@ export default function Reservations() {
           <p className="text-sm muted mt-1">{t('reservationsHint')}</p>
         </div>
         {pendingCount > 0 ? (
-          <span className="text-sm rounded-lg bg-amber-100 text-amber-900 px-3 py-2">
+          <span className="text-sm rounded-lg bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100 px-3 py-2">
             {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
           </span>
         ) : null}
@@ -247,7 +237,7 @@ export default function Reservations() {
 
       <div className="space-y-4">
           {!enabled && (
-            <p className="text-sm rounded-md border border-amber-200 bg-amber-50 text-amber-900 px-3 py-2">
+            <p className="text-sm rounded-md border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 px-3 py-2">
               {t('reservationsDisabledHint')}
             </p>
           )}
@@ -255,14 +245,22 @@ export default function Reservations() {
             <div className="flex gap-2">
               <button
                 type="button"
-                className={`rounded-lg px-3 py-2 text-sm ${bookingsScope === 'today' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
+                className={`rounded-lg px-3 py-2 text-sm ${
+                  bookingsScope === 'today'
+                    ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg-elevated)]'
+                    : 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]'
+                }`}
                 onClick={() => setBookingsScope('today')}
               >
                 {t('reservationsToday')}
               </button>
               <button
                 type="button"
-                className={`rounded-lg px-3 py-2 text-sm ${bookingsScope === 'future' ? 'bg-slate-900 text-white' : 'border bg-white'}`}
+                className={`rounded-lg px-3 py-2 text-sm ${
+                  bookingsScope === 'future'
+                    ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg-elevated)]'
+                    : 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]'
+                }`}
                 onClick={() => setBookingsScope('future')}
               >
                 {t('reservationsFuture')}
@@ -353,7 +351,7 @@ export default function Reservations() {
                                 </button>
                               ) : null}
                               {['pending', 'confirmed'].includes(r.status) ? (
-                                <button type="button" className="text-xs text-red-700" onClick={() => setCancelOpen(r.id)}>
+                                <button type="button" className="text-xs text-red-700 dark:text-red-400" onClick={() => setCancelOpen(r.id)}>
                                   {t('cancel')}
                                 </button>
                               ) : null}
@@ -381,7 +379,7 @@ export default function Reservations() {
                       </span>
                       <span className="text-xs muted">{r.code}</span>
                       {r.discountPercent ? (
-                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold border border-amber-300">
+                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold border border-amber-300 dark:bg-amber-950/50 dark:text-amber-100 dark:border-amber-800">
                           {r.discountLabel || `${r.discountPercent}% off`}
                         </span>
                       ) : null}
@@ -445,7 +443,7 @@ export default function Reservations() {
                       <>
                         <button
                           type="button"
-                          className="text-xs text-red-700 px-2"
+                          className="text-xs text-red-700 dark:text-red-400 px-2"
                           onClick={() => setCancelOpen(r.id)}
                         >
                           {t('cancel')}
@@ -484,7 +482,7 @@ export default function Reservations() {
                       ))}
                     </select>
                     {r.tableLabel && r.discountPercent ? (
-                      <span className="text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                      <span className="text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-800">
                         Table {r.tableLabel} · {r.discountLabel || `${r.discountPercent}% off`}
                       </span>
                     ) : null}

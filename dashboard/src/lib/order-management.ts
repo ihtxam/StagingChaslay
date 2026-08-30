@@ -493,27 +493,27 @@ export function orderStatusBadgeClass(status: string): string {
   switch ((status || '').toLowerCase().replace(/-/g, '_')) {
     case 'pending':
     case 'pending_approval':
-      return 'bg-violet-100 text-violet-800';
+      return 'bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200';
     case 'accepted':
     case 'confirmed':
-      return 'bg-sky-100 text-sky-800';
+      return 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200';
     case 'preparing':
     case 'sent_to_kitchen':
     case 'held':
-      return 'bg-amber-100 text-amber-900';
+      return 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200';
     case 'ready':
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200';
     case 'out_for_delivery':
-      return 'bg-orange-100 text-orange-900';
+      return 'bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200';
     case 'completed':
-      return 'bg-stone-200 text-stone-700';
+      return 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200';
     case 'cancelled':
     case 'refunded':
-      return 'bg-rose-100 text-rose-800';
+      return 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200';
     case 'partially_refunded':
-      return 'bg-rose-50 text-rose-700';
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
     default:
-      return 'bg-stone-100 text-stone-600';
+      return 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
   }
 }
 
@@ -539,13 +539,13 @@ export function orderChannelBadgeClass(o: MerchantOrder): string {
   const ch = orderChannel(o);
   switch (ch) {
     case 'dine_in':
-      return 'bg-sky-100 text-sky-800';
+      return 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200';
     case 'takeaway':
-      return 'bg-amber-100 text-amber-900';
+      return 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200';
     case 'delivery':
-      return 'bg-orange-100 text-orange-900';
+      return 'bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200';
     default:
-      return 'bg-stone-100 text-stone-800';
+      return 'bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200';
   }
 }
 
