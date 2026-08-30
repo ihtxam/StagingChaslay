@@ -112,7 +112,11 @@ export function bindKioskInstallPrompt(): () => void {
   const onBip = (event: Event) => {
     if (!isKioskPath()) return;
     event.preventDefault();
-    deferredKioskInstall = event as BeforeInstallPromptEvent;
+    if (isKioskStandalone() || isKioskInstallHintDismissed()) return;
+    void isKioskPwaInstalled().then((installed) => {
+      if (installed) return;
+      deferredKioskInstall = event as BeforeInstallPromptEvent;
+    });
   };
 
   window.addEventListener('beforeinstallprompt', onBip);

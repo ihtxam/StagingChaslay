@@ -33,15 +33,20 @@ export default function KioskInstallHint() {
       }
       if (hasKioskInstallPrompt()) {
         setMode('install');
+      } else {
+        setMode('hidden');
       }
     })();
 
     const onBip = () => {
-      if (!isKioskStandalone() && !isKioskInstallHintDismissed()) {
-        void isKioskPwaInstalled().then((installed) => {
-          if (!installed) setMode('install');
-        });
-      }
+      if (isKioskStandalone() || isKioskInstallHintDismissed()) return;
+      void isKioskPwaInstalled().then((installed) => {
+        if (installed) {
+          setMode('use-icon');
+        } else if (hasKioskInstallPrompt()) {
+          setMode('install');
+        }
+      });
     };
     window.addEventListener('beforeinstallprompt', onBip);
 

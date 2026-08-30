@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { ThemeProvider } from './lib/theme'
+import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import './index.css'
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */
@@ -23,6 +24,11 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
       reloadOnce();
     }
   });
+}
+
+if (import.meta.env.PROD && typeof window !== 'undefined') {
+  probeRebornPwaInstalled();
+  bindRebornPwaInstallGuard();
 }
 
 /** Register SW before React boot so static assets get cached on the first online visit. */
