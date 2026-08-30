@@ -540,6 +540,7 @@ export type PrintAgentHealth = {
   version?: string;
   platform?: string;
   features?: string[];
+  printerReady?: boolean;
 };
 
 /** Android Bridge 0.3.2+ strips embedded cut and sends one BT trailer per job. */
@@ -641,6 +642,7 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
           version?: unknown;
           platform?: unknown;
           features?: unknown[];
+          printerReady?: unknown;
         };
         const features = Array.isArray(data.features)
           ? data.features.map((f: unknown) => String(f))
@@ -650,6 +652,7 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
           version: data.version != null ? String(data.version) : undefined,
           platform: data.platform != null ? String(data.platform) : undefined,
           features,
+          printerReady: data.printerReady === true,
         };
       } catch (e) {
         lastErr = e;

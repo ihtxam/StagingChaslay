@@ -203,6 +203,8 @@ export class KioskService {
           price: Number(p.price || 0),
           description: p.description || undefined,
           image: (p as { imageUrl?: string | null }).imageUrl || undefined,
+          barcode: (p as { barcode?: string | null }).barcode || undefined,
+          sku: (p as { sku?: string | null }).sku || undefined,
           modifierGroups: (groupsByProduct.get(p.id) || []).map(serializeGroup),
         })),
     }));

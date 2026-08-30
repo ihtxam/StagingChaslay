@@ -22,7 +22,8 @@ import {
   type KioskAdminSettings,
   type KioskDiagnostics,
 } from '@/lib/kiosk-api';
-import { getPrintAgentHealth } from '@/lib/print-agent';
+import KioskLaunchCheckModal from '@/components/kiosk/KioskLaunchCheckModal';
+import { runKioskConnectionChecks } from '@/lib/kiosk-connection-check';
 import { getKioskAdminPin, isKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
 import KioskSlideEditor from '@/components/kiosk/KioskSlideEditor';
 import { useI18n } from '@/lib/i18n';
@@ -52,6 +53,7 @@ export default function KioskAdminPanel({
   const [serverDiag, setServerDiag] = useState<KioskDiagnostics | null>(null);
   const [printOk, setPrintOk] = useState<boolean | null>(null);
   const [printMessage, setPrintMessage] = useState('');
+  const [launchCheckOpen, setLaunchCheckOpen] = useState(false);
 
   const token = accessToken || settings.accessToken || '';
 
@@ -118,20 +120,14 @@ export default function KioskAdminPanel({
     setTesting(true);
     setPrintOk(null);
     try {
-      if (mode === 'merchant') {
-        const diag = await api.get('/merchant/kiosk/diagnostics');
-        setServerDiag(diag.data.diagnostics || null);
-      } else if (token) {
-        const res = await fetchKioskDiagnosticsByToken(token);
-        setServerDiag(res);
-      }
-      const health = await getPrintAgentHealth();
-      setPrintOk(health.ok);
-      setPrintMessage(
-        health.ok
-          ? `Print Bridge v${health.version || '?'} — ${health.printerReady ? 'printer ready' : 'no printer yet'}`
-          : 'Print Bridge not running on this device (install Reborn Print Bridge)',
-      );
+      const report = await runKioskConnectionChecks({
+        mode,
+        token: token || undefined,
+        cardPaymentEnabled: settings.cardPaymentEnabled,
+      });
+      setServerDiag(report.serverDiag);
+      setPrintOk(report.printer.status === 'ok' || report.printer.status === 'warn');
+      setPrintMessage(report.printer.message);
     } catch {
       setPrintOk(false);
       setPrintMessage('Could not reach Print Bridge on http://127.0.0.1:9101');
@@ -145,8 +141,7 @@ export default function KioskAdminPanel({
       toast.error('Save settings first to generate kiosk URL');
       return;
     }
-    const url = kioskPublicUrl(token);
-    window.location.href = url;
+    setLaunchCheckOpen(true);
   };
 
   const regenerateToken = async () => {
@@ -452,6 +447,15 @@ export default function KioskAdminPanel({
           <Play className="h-4 w-4" /> Launch customer kiosk
         </button>
       </div>
+
+      <KioskLaunchCheckModal
+        open={launchCheckOpen}
+        kioskUrl={kioskUrl}
+        mode={mode}
+        token={token || undefined}
+        cardPaymentEnabled={settings.cardPaymentEnabled}
+        onClose={() => setLaunchCheckOpen(false)}
+      />
     </div>
   );
 }
