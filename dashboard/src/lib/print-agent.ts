@@ -26,6 +26,10 @@ export type ScaleDevice = {
   manufacturer?: string;
   pnpDeviceId?: string;
   name?: string;
+  /** Android Bridge: stable usb:VID:PID[:serial] address */
+  usbAddress?: string;
+  connectionType?: string;
+  hasPermission?: boolean;
 };
 
 declare global {
@@ -762,6 +766,24 @@ export type ScaleReading = {
   isTare?: boolean;
 };
 
+/** Android Bridge / native POS stable USB scale address. */
+export function isUsbScaleAddress(value?: string | null): boolean {
+  const v = String(value || '').trim().toLowerCase();
+  return v.startsWith('usb:') || v.startsWith('/dev/bus/usb');
+}
+
+export function formatScaleUsbLabel(address: string): string {
+  const raw = String(address || '').trim();
+  if (!raw) return '';
+  if (!isUsbScaleAddress(raw)) return raw;
+  const body = raw.replace(/^usb:/i, '');
+  const parts = body.split(':');
+  if (parts.length >= 2) {
+    return `USB scale (${parts[0]}:${parts[1]})`;
+  }
+  return raw;
+}
+
 /** Normalize COM port for Windows serial open (COM10+ needs \\.\ prefix). */
 export function normalizeScalePort(port: string): string {
   const raw = String(port || '').trim();
@@ -784,7 +806,11 @@ export function formatScalePortLabel(port: string): string {
 }
 
 export function formatScaleDeviceLabel(device: ScaleDevice | string): string {
-  if (typeof device === 'string') return formatScalePortLabel(device);
+  if (typeof device === 'string') {
+    return isUsbScaleAddress(device) ? formatScaleUsbLabel(device) : formatScalePortLabel(device);
+  }
+  const usb = String(device.usbAddress || '').trim();
+  if (isUsbScaleAddress(usb)) return String(device.name || device.caption || formatScaleUsbLabel(usb));
   const port = formatScalePortLabel(device.port || '');
   const name = String(device.name || device.caption || '')
     .replace(/\s*\(COM\d+\)\s*$/i, '')
@@ -792,7 +818,7 @@ export function formatScaleDeviceLabel(device: ScaleDevice | string): string {
   if (name && port && !stableDeviceKey(name).includes(stableDeviceKey(port))) {
     return `${name} · ${port}`;
   }
-  return name || port;
+  return name || port || formatScaleUsbLabel(usb);
 }
 
 export function resolveScaleDevice(
@@ -845,13 +871,20 @@ export async function listScaleDevices(): Promise<{ ports: string[]; devices: Sc
   try {
     const data = await agentFetch('/scale/ports');
     const devices: ScaleDevice[] = Array.isArray(data?.devices)
-      ? data.devices.map((d: any) => ({
-          port: formatScalePortLabel(String(d.port || d.name || '')),
-          caption: d.caption ? String(d.caption) : undefined,
-          manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
-          pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
-          name: d.name ? String(d.name) : undefined,
-        }))
+      ? data.devices.map((d: any) => {
+          const port = String(d.port || d.usbAddress || d.name || '');
+          const usbAddress = d.usbAddress ? String(d.usbAddress) : isUsbScaleAddress(port) ? port : undefined;
+          return {
+            port: isUsbScaleAddress(port) ? port : formatScalePortLabel(port),
+            caption: d.caption ? String(d.caption) : undefined,
+            manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
+            pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
+            name: d.name ? String(d.name) : undefined,
+            usbAddress,
+            connectionType: d.connectionType ? String(d.connectionType) : undefined,
+            hasPermission: d.hasPermission === true,
+          };
+        })
       : [];
     const ports = Array.isArray(data?.ports)
       ? data.ports.map((p: unknown) => formatScalePortLabel(String(p)))
@@ -868,15 +901,21 @@ export async function listScaleDevices(): Promise<{ ports: string[]; devices: Sc
   }
 }
 
-/** One Aclas reading from Print Agent (null if no frame yet). */
+/** One Aclas reading from Print Agent / Bridge (null if no frame yet). */
 export async function readScaleWeight(
   port: string,
   timeoutMs = 2500,
-  opts?: { hint?: string | null; deviceId?: string | null }
-): Promise<{ reading: ScaleReading | null; message?: string; resolvedPort?: string }> {
-  const normalized = normalizeScalePort(port);
-  if (!normalized && !opts?.hint && !opts?.deviceId) {
-    throw new Error('COM port required (e.g. COM3)');
+  opts?: { hint?: string | null; deviceId?: string | null; usbAddress?: string | null }
+): Promise<{
+  reading: ScaleReading | null;
+  message?: string;
+  resolvedPort?: string;
+  resolvedUsbAddress?: string;
+}> {
+  const usb = String(opts?.usbAddress || (isUsbScaleAddress(port) ? port : '')).trim();
+  const normalized = isUsbScaleAddress(usb) ? '' : normalizeScalePort(port);
+  if (!normalized && !opts?.hint && !opts?.deviceId && !usb) {
+    throw new Error('Scale port or USB address required');
   }
   const q = new URLSearchParams({
     timeoutMs: String(timeoutMs),
@@ -884,11 +923,22 @@ export async function readScaleWeight(
   if (normalized) q.set('port', normalized);
   if (opts?.hint) q.set('hint', String(opts.hint));
   if (opts?.deviceId) q.set('deviceId', String(opts.deviceId));
+  if (usb) q.set('usbAddress', usb);
   const data = await agentFetch(`/scale/reading?${q.toString()}`);
+  const resolvedUsb = data?.resolvedUsbAddress
+    ? String(data.resolvedUsbAddress)
+    : data?.resolvedPort && isUsbScaleAddress(data.resolvedPort)
+      ? String(data.resolvedPort)
+      : undefined;
   return {
     reading: (data?.reading as ScaleReading | null) || null,
     message: data?.message ? String(data.message) : undefined,
-    resolvedPort: data?.resolvedPort ? formatScalePortLabel(String(data.resolvedPort)) : undefined,
+    resolvedPort: data?.resolvedPort
+      ? isUsbScaleAddress(String(data.resolvedPort))
+        ? undefined
+        : formatScalePortLabel(String(data.resolvedPort))
+      : undefined,
+    resolvedUsbAddress: resolvedUsb,
   };
 }
 

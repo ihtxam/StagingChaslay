@@ -85,6 +85,8 @@ Bind **127.0.0.1:9101** only (not LAN-exposed).
 
 Optional later: `/scale/reading` for USB serial scales (Aclas on OTG / RJ11 adapters).
 
+**Implemented in Bridge 0.3.4+:** `GET /scale/ports` lists USB scale devices; `GET /scale/reading?usbAddress=usb:VID:PID&timeoutMs=1200` returns live Aclas weight for WebPOS.
+
 ---
 
 ## Printer connections (priority for development)

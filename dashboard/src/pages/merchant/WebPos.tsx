@@ -2791,6 +2791,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [agentOk, printersReady, printers, printerName, printSettings, t]);
 
   const scalePortHealRef = useRef<string | null>(null);
+  const scaleUsbHealRef = useRef<string | null>(null);
 
   const healScalePort = useCallback(
     (resolvedPort: string) => {
@@ -2801,6 +2802,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (scalePortHealRef.current === want) return;
       scalePortHealRef.current = want;
       const next = { ...printSettings, scaleComPort: want, scaleEnabled: true };
+      setPrintSettings(next);
+      void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
+    },
+    [printSettings, scaleFeatureEnabled]
+  );
+
+  const healScaleUsbAddress = useCallback(
+    (resolvedAddress: string) => {
+      if (!scaleFeatureEnabled || !printSettings) return;
+      const want = resolvedAddress.trim();
+      if (!want) return;
+      const have = (printSettings.scaleUsbAddress || '').trim();
+      if (want === have) return;
+      if (scaleUsbHealRef.current === want) return;
+      scaleUsbHealRef.current = want;
+      const next = { ...printSettings, scaleUsbAddress: want, scaleEnabled: true };
       setPrintSettings(next);
       void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
     },
@@ -10007,9 +10024,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         pricePerKg={Number(pendingWeighed?.price) || 0}
         weightUnit={pendingWeighed?.weightUnit}
         configuredPort={printSettings?.scaleComPort}
+        configuredUsbAddress={printSettings?.scaleUsbAddress}
         configuredDeviceName={printSettings?.scaleDeviceName}
         configuredDeviceId={printSettings?.scaleDeviceId}
         onPortResolved={healScalePort}
+        onUsbAddressResolved={healScaleUsbAddress}
         onClose={() => setPendingWeighed(null)}
         onConfirm={(weightKg) => {
           if (!pendingWeighed) return;
