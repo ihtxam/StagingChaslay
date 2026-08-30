@@ -255,7 +255,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildTestTicket(): ByteArray {
-        val text = "Reborn Print Bridge\nTest print OK\n\n"
+        val text = "Bridge Reborn\nTest print OK\n\n"
         val init = byteArrayOf(0x1B, 0x40)
         val feed = byteArrayOf(0x0A, 0x0A, 0x0A)
         val cut = byteArrayOf(0x1D, 0x56, 0x00)

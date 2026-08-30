@@ -25,7 +25,7 @@ class AdyenTapToPayEngine : TapToPayEngine {
     override fun isReady(): Boolean = TapToPayCallbackRouter.launcher != null
 
     override fun readinessMessage(): String = when {
-        TapToPayCallbackRouter.launcher == null -> "Tap to Pay is still starting. Open Device Bridge once, then retry."
+        TapToPayCallbackRouter.launcher == null -> "Tap to Pay is still starting. Open Bridge Reborn once, then retry."
         else -> "Ready"
     }
 

@@ -9,7 +9,7 @@ class TapToPayEngineStub : TapToPayEngine {
     override fun isReady(): Boolean = false
 
     override fun readinessMessage(): String =
-        "Tap to Pay requires Device Bridge build with Adyen SDK (see print-agent-android README)."
+        "Tap to Pay requires Bridge Reborn build with Adyen SDK (see print-agent-android README)."
 
     override suspend fun processSale(activity: Activity, params: TapToPaySaleParams): TapToPaySaleOutcome {
         return TapToPaySaleOutcome(

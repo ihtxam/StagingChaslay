@@ -1,6 +1,6 @@
 # Device hardware notes (Reborn stock)
 
-Reference for Print Bridge driver development and QA devices.
+Reference for Bridge Reborn driver development and QA devices.
 
 **One universal APK** — drivers are chosen at runtime. We do **not** ship Sunmi-only builds.
 

@@ -1,10 +1,10 @@
 <resources>
-    <string name="app_name">Reborn Print Bridge</string>
-    <string name="notification_channel">Print Bridge</string>
-    <string name="notification_title">Reborn Print Bridge running</string>
-    <string name="notification_body">WebPOS can print on http://127.0.0.1:9101</string>
+    <string name="app_name">Bridge Reborn</string>
+    <string name="notification_channel">Bridge Reborn</string>
+    <string name="notification_title">Bridge Reborn running</string>
+    <string name="notification_body">WebPOS in Chrome can print and take NFC payments on http://127.0.0.1:9101</string>
     <string name="status_ready">Bridge ready on port 9101</string>
-    <string name="status_starting">Starting print bridge…</string>
+    <string name="status_starting">Starting Bridge Reborn…</string>
     <string name="open_webpos">Return to WebPOS in Chrome and tap Refresh printers in Settings.</string>
     <string name="refresh_printers">Refresh printers</string>
     <string name="test_print">Test print</string>
@@ -24,16 +24,16 @@
     <string name="test_print_default">Test print (default printer)</string>
     <string name="test_print_socket_closed">Printer connection closed too early. Try Test on the specific printer row, or re-pair Bluetooth.</string>
     <string name="test_print_bluetooth_failed">Bluetooth print failed: %1$s</string>
-    <string name="test_print_bluetooth_permission_denied">Bluetooth permission required. Allow Nearby devices for Reborn Print Bridge in Android Settings, then try again.</string>
+    <string name="test_print_bluetooth_permission_denied">Bluetooth permission required. Allow Nearby devices for Bridge Reborn in Android Settings, then try again.</string>
     <string name="no_printers_yet">No printers found yet. Connect USB or pair Bluetooth, or add a LAN IP.</string>
     <string name="auto_start_title">Start automatically on reboot</string>
-    <string name="auto_start_summary">Runs Print Bridge in the background after every restart and reconnects USB, Bluetooth, and Wi‑Fi printers.</string>
-    <string name="auto_start_enabled_toast">Print Bridge will start automatically after reboot</string>
-    <string name="auto_start_disabled_toast">Print Bridge will not start after reboot until you open this app</string>
+    <string name="auto_start_summary">Runs Bridge Reborn in the background after every restart and reconnects USB, Bluetooth, and Wi‑Fi printers.</string>
+    <string name="auto_start_enabled_toast">Bridge Reborn will start automatically after reboot</string>
+    <string name="auto_start_disabled_toast">Bridge Reborn will not start after reboot until you open this app</string>
 
-    <string name="oem_setup_title">Keep Print Bridge running</string>
+    <string name="oem_setup_title">Keep Bridge Reborn running</string>
     <string name="oem_setup_banner_title">Background setup recommended</string>
-    <string name="oem_setup_banner_summary">Your %1$s device may stop Print Bridge unless battery and autostart are configured.</string>
+    <string name="oem_setup_banner_summary">Your %1$s device may stop Bridge Reborn unless battery and autostart are configured.</string>
     <string name="oem_setup_open_wizard">Open setup wizard</string>
     <string name="oem_setup_device_label">Detected device: %1$s</string>
     <string name="oem_setup_step_indicator">Step %1$d of %2$d</string>
@@ -47,19 +47,19 @@
     <string name="oem_step_open_autostart">Open autostart settings</string>
     <string name="oem_step_open_app_settings">Open app settings</string>
     <string name="oem_step_welcome_title">Keep printing after every restart</string>
-    <string name="oem_step_welcome_desc">Android may stop background apps to save battery. These quick steps make sure Print Bridge keeps running and reconnects to your USB, Bluetooth, and Wi‑Fi printers after every reboot.</string>
+    <string name="oem_step_welcome_desc">Android may stop background apps to save battery. These quick steps make sure Bridge Reborn keeps running and reconnects to your USB, Bluetooth, and Wi‑Fi printers after every reboot.</string>
     <string name="oem_step_battery_title">Disable battery restrictions</string>
-    <string name="oem_step_battery_desc">Allow Reborn Print Bridge to run without battery limits. Tap the button below and choose Allow or Unrestricted when prompted.</string>
-    <string name="oem_step_battery_done">Battery restriction is already disabled for Print Bridge.</string>
+    <string name="oem_step_battery_desc">Allow Bridge Reborn to run without battery limits. Tap the button below and choose Allow or Unrestricted when prompted.</string>
+    <string name="oem_step_battery_done">Battery restriction is already disabled for Bridge Reborn.</string>
     <string name="oem_step_battery_pending">Battery restriction is still active. Tap Allow unrestricted battery, then return here.</string>
     <string name="oem_step_sunmi_autostart_title">Allow Sunmi autostart</string>
-    <string name="oem_step_sunmi_autostart_desc">On Sunmi devices, open Autostart management and enable Reborn Print Bridge so it starts automatically after reboot.</string>
+    <string name="oem_step_sunmi_autostart_desc">On Sunmi devices, open Autostart management and enable Bridge Reborn so it starts automatically after reboot.</string>
     <string name="oem_step_feitian_background_title">Allow background activity</string>
-    <string name="oem_step_feitian_background_desc">On Feitian devices, open App info for Reborn Print Bridge, then set Battery to Unrestricted and allow background activity if shown.</string>
+    <string name="oem_step_feitian_background_desc">On Feitian devices, open App info for Bridge Reborn, then set Battery to Unrestricted and allow background activity if shown.</string>
     <string name="oem_step_autostart_title">Allow autostart</string>
-    <string name="oem_step_autostart_desc">Open your device\'s autostart or startup manager and enable Reborn Print Bridge. This prevents the system from blocking Print Bridge after reboot.</string>
+    <string name="oem_step_autostart_desc">Open your device\'s autostart or startup manager and enable Bridge Reborn. This prevents the system from blocking Bridge Reborn after reboot.</string>
     <string name="oem_step_lock_recents_title">Lock app in recent apps</string>
-    <string name="oem_step_lock_recents_desc">Open recent apps, find Reborn Print Bridge, then tap the lock icon (or pull down) so Android does not close it when clearing other apps.</string>
+    <string name="oem_step_lock_recents_desc">Open recent apps, find Bridge Reborn, then tap the lock icon (or pull down) so Android does not close it when clearing other apps.</string>
     <string name="oem_step_done_title">Setup complete</string>
-    <string name="oem_step_done_desc">Print Bridge is configured to run in the background. After reboot it will start automatically and reconnect to your printers. You can reopen this wizard anytime from the main screen.</string>
+    <string name="oem_step_done_desc">Bridge Reborn is configured to run in the background. After reboot it will start automatically and reconnect to your printers. You can reopen this wizard anytime from the main screen.</string>
 </resources>

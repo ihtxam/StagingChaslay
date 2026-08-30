@@ -1,7 +1,7 @@
-# Reborn Device Bridge (Android)
+# Bridge Reborn (Android)
 
-Companion app for **WebPOS on Android POS hardware** — not a POS app.  
-WebPOS stays 100% in Chrome/PWA; this bridge is the local **print + NFC payment** layer (same role as Windows Print Agent for printing).
+Companion app for **WebPOS in Chrome** on Android tablets and handhelds — not a POS app.  
+WebPOS stays 100% in Chrome/PWA; Bridge Reborn is the local **print + NFC tap-to-pay** layer (same role as Windows Print Agent for printing).
 
 ## Problem
 
@@ -16,7 +16,7 @@ Merchants use **one device only** (tablet or handheld) — no Windows hub PC.
 A small **always-on foreground service** on the device:
 
 ```
-WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Device Bridge  →  printer / NFC
+WebPOS (Chrome/PWA)  →  http://127.0.0.1:9101  →  Bridge Reborn  →  printer / NFC
 ```
 
 **Same HTTP contract as Windows Print Agent** for printing — plus `/tap-to-pay` when the APK is built with Adyen SDK keys.
@@ -32,14 +32,14 @@ When the merchant has Adyen configured and the tablet has NFC:
 | `/health` | GET | Adds `nfcAvailable`, `tapToPayReady`, `tapToPayMessage` |
 | `/tap-to-pay` | POST | `{ amount_minor, currency, api_base_url, auth_token, reference? }` → `{ ok, status, reference, message }` |
 
-WebPOS passes the dashboard JWT from `localStorage`; the bridge calls `/api/tap-to-pay/*` on your backend (same as native POS app).
+WebPOS passes the dashboard JWT from `localStorage`; the bridge calls `/api/tap-to-pay/*` on your backend.
 
 **Build with Adyen:** set `adyenSdkApiKey` in repo-root `local.properties` (see `local.properties.example`). Without keys, printing still works; tap-to-pay returns a clear error.
 
 **Plug-and-play flow:**
-1. Install Device Bridge APK (same download as Print Bridge)
+1. Install Bridge Reborn APK from Settings
 2. Open once so Tap to Pay launcher registers
-3. Open WebPOS in Chrome — Card payments automatically use NFC when bridge reports `tapToPayReady`
+3. Open WebPOS in Chrome — Card payments automatically use NFC when Bridge Reborn reports `tapToPayReady`
 
 ---
 
@@ -196,7 +196,7 @@ Tailored steps per profile:
 
 - `dashboard/src/lib/print-agent.ts` → `localhost:9101`
 - Android single-device: local print only, no cloud hub relay
-- Settings → **Download Print Bridge (Android)**
+- Settings → **Download Bridge Reborn (Android)**
 
 ---
 

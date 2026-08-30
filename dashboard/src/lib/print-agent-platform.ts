@@ -1,5 +1,5 @@
 /**
- * Platform detection and download URLs for Print Agent (Windows) vs Print Bridge (Android).
+ * Platform detection and download URLs for Print Agent (Windows) vs Bridge Reborn (Android).
  */
 
 import { compareAgentVersion, isBridgeVersion } from '@/lib/print-agent';
@@ -96,7 +96,7 @@ async function fetchDownloadManifest(
 export async function fetchPrintBridgeManifest(): Promise<DownloadManifest> {
   return fetchDownloadManifest(
     printBridgeManifestUrl(),
-    'Print Bridge download is not available on this server yet.'
+    'Bridge Reborn download is not available on this server yet.'
   );
 }
 

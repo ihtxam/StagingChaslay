@@ -1,8 +1,8 @@
 /**
- * Reborn Device Bridge — tap-to-pay on Android tablets running WebPOS in Chrome.
+ * Bridge Reborn — tap-to-pay on Android tablets running WebPOS in Chrome.
  *
- * Same companion APK as Print Bridge (localhost :9101). Printing and NFC payments
- * share one always-on foreground service; WebPOS stays a normal PWA.
+ * Companion APK (localhost :9101). Printing and NFC payments share one
+ * always-on foreground service; WebPOS stays a normal PWA in Chrome.
  */
 
 import { PRINT_AGENT_URL } from '@/lib/print-agent';
@@ -97,7 +97,7 @@ export async function runDeviceBridgeTapToPay(
       return {
         ok: false,
         status: 'error',
-        message: String(data.error || data.message || `Device Bridge HTTP ${res.status}`),
+        message: String(data.error || data.message || `Bridge Reborn HTTP ${res.status}`),
       };
     }
     const status = String(data.status || (data.ok === true ? 'approved' : 'error'));
@@ -115,7 +115,7 @@ export async function runDeviceBridgeTapToPay(
     return {
       ok: false,
       status: aborted ? 'cancelled' : 'error',
-      message: aborted ? 'Payment cancelled.' : 'Could not reach Device Bridge.',
+      message: aborted ? 'Payment cancelled.' : 'Could not reach Bridge Reborn.',
     };
   } finally {
     clearTimeout(timer);

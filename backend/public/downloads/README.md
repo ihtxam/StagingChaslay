@@ -28,7 +28,7 @@ Skip with `SKIP_PRINT_AGENT_BUILD=1` if you already uploaded a binary.
 
 Legacy `chaslayreborn-*` URLs redirect to the Reborn filenames.
 
-## Print Bridge (Android APK)
+## Bridge Reborn (Android APK)
 
 `reborn-print-bridge.apk` is **gitignored**. Built from `print-agent-android/`.
 

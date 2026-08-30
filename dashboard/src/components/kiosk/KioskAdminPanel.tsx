@@ -132,12 +132,12 @@ export default function KioskAdminPanel({
       setPrintOk(health.ok);
       setPrintMessage(
         health.ok
-          ? `Print Bridge v${health.version || '?'} — ${health.printerReady ? 'printer ready' : 'no printer yet'}`
-          : 'Print Bridge not running on this device (install Reborn Print Bridge)',
+          ? `Bridge Reborn v${health.version || '?'} — ${health.printerReady ? 'printer ready' : 'no printer yet'}`
+          : 'Bridge Reborn not running on this device (install from Settings)',
       );
     } catch {
       setPrintOk(false);
-      setPrintMessage('Could not reach Print Bridge on http://127.0.0.1:9101');
+      setPrintMessage('Could not reach Bridge Reborn on http://127.0.0.1:9101');
     } finally {
       setTesting(false);
     }
@@ -236,7 +236,7 @@ export default function KioskAdminPanel({
       <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
         <h2 className="font-semibold">Connections</h2>
         <p className="mt-1 text-sm text-stone-500">
-          Test payment terminal registration and Print Bridge on this device before going live.
+          Test payment terminal registration and Bridge Reborn on this device before going live.
         </p>
         <div className="mt-4 space-y-3">
           <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-3">
@@ -268,7 +268,7 @@ export default function KioskAdminPanel({
             )}
             <div>
               <p className="font-semibold flex items-center gap-2">
-                <Printer className="h-4 w-4" /> Print Bridge / printers
+                <Printer className="h-4 w-4" /> Bridge Reborn / printers
               </p>
               <p className="text-sm text-stone-600">
                 {printMessage || 'Tap Test connections to check localhost:9101 on this tablet'}

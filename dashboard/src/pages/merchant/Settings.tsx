@@ -3560,8 +3560,8 @@ export default function Settings() {
                   </div>
                 </Field>
                 <Field
-                  label="Scale USB address (Android POS)"
-                  hint="Stable USB address from Android Settings → Printers & Scale. Synced on menu sync."
+                  label="Scale USB address (Bridge Reborn)"
+                  hint="Stable USB address from Bridge Reborn or Android Settings → Printers & Scale. Synced on menu sync."
                 >
                   <input
                     className="input font-mono text-sm"
@@ -3992,7 +3992,7 @@ export default function Settings() {
                       printBridgeManifest?.available === false ? (
                         <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                           {printBridgeManifest.message ||
-                            'Print Bridge APK is not published on this server yet. Contact support or try again after the next platform update.'}
+                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
                         </p>
                       ) : (
                         <a

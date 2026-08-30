@@ -1590,17 +1590,17 @@ const en: Dict = {
   printAgentDownloadHint:
     'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
-  downloadPrintBridge: 'Download Print Bridge (Android)',
+  downloadPrintBridge: 'Download Bridge Reborn (Android)',
   printBridgeDownloadHint:
-    'Install once on your Android POS tablet or handheld (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Runs in the background so WebPOS can print via built-in, USB, Bluetooth, or Wi‑Fi printers — no second PC.',
+    'Install Bridge Reborn once on your Android tablet (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Run WebPOS in Chrome — Bridge Reborn handles printing and NFC tap-to-pay in the background via built-in, USB, Bluetooth, or Wi‑Fi printers. No second PC required.',
   printBridgeInstallSteps:
-    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Returns to WebPOS when the bridge shows ready (port 9101).',
+    'Install the APK, allow notifications, USB, and Bluetooth, then pick your printer(s) in the setup wizard. Works with built-in printers (D3 Mini, D2s Plus), USB thermals, Bluetooth, and LAN. Open WebPOS in Chrome when Bridge Reborn shows ready (port 9101).',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
   printAgentVersionStatusLabel: 'Print Agent',
-  printBridgeVersionStatusLabel: 'Print Bridge',
+  printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'No Print Agent detected on this device.',
-  printBridgeNotInstalled: 'Print Bridge not installed on this device.',
+  printBridgeNotInstalled: 'Bridge Reborn not installed on this device.',
   printCompanionUpdateAvailable:
     'Update available: v{latest} (you have v{installed}). Download and install the update.',
   printCompanionUpToDate: 'Up to date (v{version}).',
@@ -5016,17 +5016,17 @@ const fr: Dict = {
   printAgentDownloadHint:
     'Installez Reborn Print Agent une seule fois sur le PC caisse. L’agent démarre avec Windows — plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
-  downloadPrintBridge: 'Télécharger Print Bridge (Android)',
+  downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
   printBridgeDownloadHint:
-    'Installez sur tablette Sunmi (D3 Mini, D2s Plus), Feitian F310A ou autre Android. Impression intégrée, USB, Bluetooth ou Wi‑Fi — sans second PC.',
+    'Installez Bridge Reborn sur tablette Sunmi (D3 Mini, D2s Plus), Feitian F310A ou autre Android. Utilisez WebPOS dans Chrome — Bridge Reborn gère l’impression et le paiement NFC sans contact en arrière-plan (imprimante intégrée, USB, Bluetooth ou Wi‑Fi). Aucun second PC.',
   printBridgeInstallSteps:
-    'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis revenez au WebPOS (port 9101).',
+    'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis ouvrez WebPOS dans Chrome quand Bridge Reborn est prêt (port 9101).',
   printAgentInstallSteps:
     'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Fichiers dans %LOCALAPPDATA%\\RebornPrintAgent.',
   printAgentVersionStatusLabel: 'Print Agent',
-  printBridgeVersionStatusLabel: 'Print Bridge',
+  printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Aucun Print Agent détecté sur cet appareil.',
-  printBridgeNotInstalled: 'Print Bridge non installé sur cet appareil.',
+  printBridgeNotInstalled: 'Bridge Reborn non installé sur cet appareil.',
   printCompanionUpdateAvailable:
     'Mise à jour disponible : v{latest} (vous avez v{installed}). Téléchargez et installez la mise à jour.',
   printCompanionUpToDate: 'À jour (v{version}).',
@@ -6004,6 +6004,8 @@ const fr: Dict = {
   webPosPayCancelled: 'Paiement annulé',
   webPosPayFailed: 'Paiement échoué',
   webPosPayCompleteOnTerminal: 'Finalisez le paiement sur le terminal…',
+  webPosPayTapOnDevice: 'Approchez la carte ou le téléphone sur cet appareil…',
+  webPosTapToPaySignIn: 'Connectez-vous au tableau de bord pour utiliser Tap to Pay sur cet appareil.',
   webPosPayCancelledMsg: 'Le paiement a été annulé sur le terminal.',
   webPosPayFailedMsg: 'Le terminal n’a pas pu finaliser ce paiement.',
   webPosRetry: 'Réessayer',
@@ -8405,17 +8407,17 @@ const de: Dict = {
   printAgentDownloadHint:
     'Reborn Print Agent einmal auf dem Kassen-PC installieren. Der Agent startet mit Windows — start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
-  downloadPrintBridge: 'Print Bridge herunterladen (Android)',
+  downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
   printBridgeDownloadHint:
-    'Für Sunmi D3 Mini, D2s Plus, Feitian F310A oder andere Android-Geräte. Integrierter, USB-, Bluetooth- oder WLAN-Druck — ohne zweiten PC.',
+    'Bridge Reborn einmal auf Sunmi D3 Mini, D2s Plus, Feitian F310A oder anderen Android-Tablets installieren. WebPOS in Chrome nutzen — Bridge Reborn übernimmt Druck und NFC-Tap-to-Pay im Hintergrund (integriert, USB, Bluetooth oder WLAN). Kein zweiter PC nötig.',
   printBridgeInstallSteps:
-    'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann zurück zum WebPOS (Port 9101).',
+    'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann WebPOS in Chrome öffnen, wenn Bridge Reborn bereit ist (Port 9101).',
   printAgentInstallSteps:
     'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien in %LOCALAPPDATA%\\RebornPrintAgent.',
   printAgentVersionStatusLabel: 'Print Agent',
-  printBridgeVersionStatusLabel: 'Print Bridge',
+  printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Kein Print Agent auf diesem Gerät erkannt.',
-  printBridgeNotInstalled: 'Print Bridge ist auf diesem Gerät nicht installiert.',
+  printBridgeNotInstalled: 'Bridge Reborn ist auf diesem Gerät nicht installiert.',
   printCompanionUpdateAvailable:
     'Update verfügbar: v{latest} (installiert: v{installed}). Update herunterladen und installieren.',
   printCompanionUpToDate: 'Aktuell (v{version}).',
@@ -9393,6 +9395,8 @@ const de: Dict = {
   webPosPayCancelled: 'Zahlung abgebrochen',
   webPosPayFailed: 'Zahlung fehlgeschlagen',
   webPosPayCompleteOnTerminal: 'Zahlung am Terminal abschliessen…',
+  webPosPayTapOnDevice: 'Karte oder Telefon an dieses Gerät halten…',
+  webPosTapToPaySignIn: 'Melden Sie sich im Dashboard an, um Tap to Pay auf diesem Gerät zu nutzen.',
   webPosPayCancelledMsg: 'Die Zahlung wurde am Terminal abgebrochen.',
   webPosPayFailedMsg: 'Das Terminal konnte diese Zahlung nicht abschliessen.',
   webPosRetry: 'Erneut versuchen',
