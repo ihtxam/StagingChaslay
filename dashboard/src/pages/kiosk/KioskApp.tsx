@@ -771,7 +771,43 @@ export default function KioskApp() {
               Scan your membership QR code with the camera or a handheld scanner to earn points.
             </p>
             {scanningMembership ? (
-              <video ref={videoRef} className="mt-6 max-h-[40vh] w-full max-w-md rounded-2xl bg-black" muted playsInline />
+              <div className="mt-6 w-full max-w-md">
+                {membershipCameraError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-center text-amber-900">
+                    <p className="text-sm">{membershipCameraError}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMembershipCameraError(null);
+                        setScanningMembership(false);
+                      }}
+                      className="kiosk-btn-secondary mt-4 min-w-[200px]"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <video
+                      ref={membershipVideoCallbackRef}
+                      className="max-h-[40vh] w-full rounded-2xl bg-black object-cover"
+                      muted
+                      playsInline
+                      autoPlay
+                    />
+                    <p className="mt-2 text-center text-sm text-stone-500">
+                      Point at your membership QR code
+                    </p>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setScanningMembership(false)}
+                  className="kiosk-btn-secondary mt-4 w-full"
+                >
+                  Cancel scan
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
@@ -833,12 +869,29 @@ export default function KioskApp() {
               </div>
               {scanningBarcode ? (
                 <div className="mb-4 overflow-hidden rounded-2xl border border-stone-200 bg-black">
-                  <video
-                    ref={barcodeVideoRef}
-                    className="mx-auto max-h-56 w-full max-w-lg"
-                    muted
-                    playsInline
-                  />
+                  {barcodeCameraError ? (
+                    <div className="bg-amber-50 px-4 py-4 text-center text-sm text-amber-900">
+                      <p>{barcodeCameraError}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBarcodeCameraError(null);
+                          setScanningBarcode(false);
+                        }}
+                        className="kiosk-btn-secondary mt-3 text-sm"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : (
+                    <video
+                      ref={barcodeVideoCallbackRef}
+                      className="mx-auto max-h-56 w-full max-w-lg object-cover"
+                      muted
+                      playsInline
+                      autoPlay
+                    />
+                  )}
                   <p className="bg-stone-900 px-4 py-2 text-center text-sm text-stone-200">
                     Point at a product barcode — or use a USB scanner
                   </p>
