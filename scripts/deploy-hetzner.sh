@@ -431,6 +431,32 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
       "  \"signed\": false" \
       "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
     echo "Print Bridge APK ready: $BRIDGE_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
+    # Verify baked-in APK version matches build.gradle (manifest JSON alone is not enough).
+    APK_VERSION="$(
+      python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
+import re, sys, zipfile, zlib
+apk = sys.argv[1]
+with zipfile.ZipFile(apk) as z:
+    data = z.read("AndroidManifest.xml")
+vers = set()
+for i in range(len(data) - 6):
+    if data[i] == 0x30 and data[i+1] == 0 and data[i+2] == 0x2e and data[i+3] == 0:
+        j, s = i, ""
+        while j + 1 < len(data):
+            lo, hi = data[j], data[j+1]
+            if hi or lo == 0 or not ((0x30 <= lo <= 0x39) or lo == 0x2e):
+                break
+            s += chr(lo)
+            j += 2
+        if re.fullmatch(r"0\.\d+\.\d+", s):
+            vers.add(s)
+print(sorted(vers)[-1] if vers else "")
+PY
+    )"
+    if [[ -n "$APK_VERSION" && "$APK_VERSION" != "$BRIDGE_VERSION" ]]; then
+      echo "ERROR: APK versionName=$APK_VERSION but build.gradle has $BRIDGE_VERSION"
+      exit 1
+    fi
   else
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
     echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
@@ -677,7 +703,11 @@ BRIDGE_LEN="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-leng
 BRIDGE_CT="$(printf '%s' "$BRIDGE_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
 BRIDGE_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-print-bridge.apk" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
 BRIDGE_JSON_VERSION="$(curl -sf "${APP_URL}/downloads/reborn-print-bridge.json" 2>/dev/null | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+BRIDGE_MISMATCH="$(curl -sf "${APP_URL}/downloads/reborn-print-bridge.json" 2>/dev/null | grep -oE '"versionMismatch"[[:space:]]*:[[:space:]]*true' || true)"
 echo "print-bridge download: Content-Type=${BRIDGE_CT:-?} Content-Length=${BRIDGE_LEN:-?} magic=${BRIDGE_MAGIC:-?} version=${BRIDGE_JSON_VERSION:-?}"
+if [[ -n "$BRIDGE_MISMATCH" ]]; then
+  echo "WARNING: print-bridge JSON version does not match APK binary — tablets cannot upgrade until APK is rebuilt"
+fi
 if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; then
   echo "WARNING: print-bridge download is not a valid APK (expected PK / >100KB) or not published yet"
 else

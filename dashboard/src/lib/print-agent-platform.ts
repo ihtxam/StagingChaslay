@@ -14,6 +14,8 @@ export type DownloadManifest = {
   downloadUrl: string | null;
   message?: string;
   version?: string | null;
+  declaredVersion?: string | null;
+  versionMismatch?: boolean;
   sizeBytes?: number;
 };
 
@@ -97,6 +99,8 @@ async function fetchDownloadManifest(
       downloadUrl: data.downloadUrl || null,
       message: data.message,
       version: data.version ?? null,
+      declaredVersion: data.declaredVersion ?? null,
+      versionMismatch: data.versionMismatch === true,
       sizeBytes: data.sizeBytes,
     };
   } catch {
