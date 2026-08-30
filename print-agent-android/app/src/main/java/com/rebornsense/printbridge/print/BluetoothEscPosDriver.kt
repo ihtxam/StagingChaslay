@@ -16,13 +16,11 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     private data class CachedSocket(val socket: BluetoothSocket, var lastUsedMs: Long)
 
-    /** Same trailer as Windows print-agent Get-BtCutTrailer (feed + cut variants). */
+    /** One full cut + short feed — cheap clones beep on every GS V / ESC m variant. */
     private val btCutTrailer: ByteArray = byteArrayOf(
-        0x1B, 0x64, 0x0F,
-        0x1D, 0x56, 0x01,
+        0x1B, 0x64, 0x05,
         0x1D, 0x56, 0x00,
-        0x1B, 0x6D,
-        0x0A, 0x0A, 0x0A,
+        0x0A, 0x0A,
     )
 
     @SuppressLint("MissingPermission")

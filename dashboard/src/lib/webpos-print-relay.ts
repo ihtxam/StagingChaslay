@@ -1,8 +1,9 @@
 import api from '@/lib/api';
 import {
   agentSupportsBtCutTrailer,
-  isPrintAgentAvailable,
   getPrintAgentHealth,
+  isAndroidTabletDevice,
+  isPrintAgentAvailable,
   looksLikeBluetoothOrComPrinter,
   printViaAgent,
   settleAfterBluetoothKitchenPrint,
@@ -139,6 +140,7 @@ export async function enqueueEscPosPrintJob(opts: {
 export function isLocalPrintStation(agentOnline: boolean): boolean {
   if (agentOnline) return true;
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  if (isAndroidTabletDevice()) return true;
   const ua = navigator.userAgent || '';
   if (/Mobile|Android|iPhone|iPod/i.test(ua) && !/iPad|Tablet/i.test(ua)) return false;
   if (window.matchMedia && !window.matchMedia('(min-width: 1024px)').matches) return false;

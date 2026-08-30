@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Menu } from 'lucide-react';
+import { ArrowLeft, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AcceptingMenu from '@/components/AcceptingMenu';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useTheme } from '@/lib/theme';
 import { useAuthStore } from '@/store/auth';
 
 interface MerchantCompactStatusRowProps {
@@ -29,6 +30,7 @@ export default function MerchantCompactStatusRow({
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const platformUi = usePlatformMessagesUi();
+  const { theme, toggleTheme } = useTheme();
 
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
@@ -75,6 +77,12 @@ export default function MerchantCompactStatusRow({
     navigate('/superadmin/merchants');
   };
 
+  const hardRefresh = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('_cb', String(Date.now()));
+    window.location.replace(url.toString());
+  };
+
   return (
     <div className="flex min-w-0 items-center justify-end gap-2 text-xs text-[var(--text-muted)]">
       {showMenuButton && onMenuClick ? (
@@ -87,6 +95,26 @@ export default function MerchantCompactStatusRow({
           <Menu className="w-4 h-4" />
         </button>
       ) : null}
+
+      <button
+        type="button"
+        onClick={hardRefresh}
+        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0"
+        aria-label={t('panelHardRefresh')}
+        title={t('panelHardRefresh')}
+      >
+        <RefreshCw className="w-3.5 h-3.5" />
+      </button>
+
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0"
+        aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      >
+        {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+      </button>
 
       {impersonating ? (
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-amber-950 dark:bg-amber-950/50 dark:text-amber-100">

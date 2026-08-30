@@ -21,9 +21,9 @@
 }
 
 html.dark {
-  --bg: #0b1220;
-  --bg-elevated: #111827;
-  --bg-muted: #1f2937;
+  --bg: #0f1419;
+  --bg-elevated: #151b24;
+  --bg-muted: #1c2430;
   --text: #e5e7eb;
   --text-muted: #9ca3af;
   --border: #2d3748;
@@ -128,6 +128,14 @@ button {
     --sidebar-divider: rgba(255, 255, 255, 0.18);
     background: linear-gradient(145deg, var(--brand-burgundy) 0%, var(--brand-burgundy-light) 100%);
     color: var(--brand-warm-white);
+  }
+
+  html.dark .panel-sidebar {
+    background: linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--brand-burgundy) 88%, #0f1419) 0%,
+      color-mix(in srgb, var(--brand-burgundy-light) 72%, #151b24) 100%
+    );
   }
 
   .panel-sidebar-footer {

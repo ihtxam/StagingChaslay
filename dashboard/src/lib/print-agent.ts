@@ -548,7 +548,45 @@ export function agentSupportsBtCutTrailer(health: PrintAgentHealth | null | unde
   return false;
 }
 
-export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
+/** Android tablet (Bridge host) — wider than phone waiter layout. */
+export function isAndroidTabletDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (!/android/i.test(ua)) return false;
+  if (/tablet|pad|sm-t|lenovo tab|galaxy tab/i.test(ua)) return true;
+  if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches) return true;
+  return false;
+}
+
+async function agentFetchWithTimeout(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = 4000
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const method = (init?.method || 'GET').toUpperCase();
+    const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+    if (method !== 'GET' && method !== 'HEAD' && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const res = await fetch(`${PRINT_AGENT_URL}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(collectPrintErrorText(err) || `Print agent HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth> {
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
@@ -558,23 +596,40 @@ export async function getPrintAgentHealth(): Promise<PrintAgentHealth> {
     }
   }
   try {
-    const data = await agentFetch('/health');
-    const features = Array.isArray(data.features)
-      ? data.features.map((f: unknown) => String(f))
-      : undefined;
-    return {
-      ok: !!data.ok,
-      version: data.version != null ? String(data.version) : undefined,
-      platform: data.platform != null ? String(data.platform) : undefined,
-      features,
-    };
+    const attempts = Math.max(1, retries + 1);
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const data = (await agentFetchWithTimeout('/health')) as {
+          ok?: boolean;
+          version?: unknown;
+          platform?: unknown;
+          features?: unknown[];
+        };
+        const features = Array.isArray(data.features)
+          ? data.features.map((f: unknown) => String(f))
+          : undefined;
+        return {
+          ok: !!data.ok,
+          version: data.version != null ? String(data.version) : undefined,
+          platform: data.platform != null ? String(data.platform) : undefined,
+          features,
+        };
+      } catch (e) {
+        lastErr = e;
+        if (i + 1 < attempts) {
+          await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+        }
+      }
+    }
+    throw lastErr;
   } catch {
     return { ok: false };
   }
 }
 
 export async function isPrintAgentAvailable(): Promise<boolean> {
-  const health = await getPrintAgentHealth();
+  const health = await getPrintAgentHealth(isAndroidTabletDevice() ? 2 : 0);
   return health.ok;
 }
 

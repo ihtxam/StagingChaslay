@@ -1601,6 +1601,9 @@ const en: Dict = {
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'No Print Agent detected on this device.',
   printBridgeNotInstalled: 'Bridge Reborn not installed on this device.',
+  printBridgeNotResponding:
+    'Bridge Reborn is not responding — open the Bridge app on this tablet, then tap Refresh printers.',
+  panelHardRefresh: 'Hard refresh',
   printCompanionUpdateAvailable:
     'Update available: v{latest} (you have v{installed}). Download and install the update.',
   printCompanionUpToDate: 'Up to date (v{version}).',
@@ -5027,6 +5030,9 @@ const fr: Dict = {
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Aucun Print Agent détecté sur cet appareil.',
   printBridgeNotInstalled: 'Bridge Reborn non installé sur cet appareil.',
+  printBridgeNotResponding:
+    'Bridge Reborn ne répond pas — ouvrez l’app Bridge sur cette tablette, puis Actualiser les imprimantes.',
+  panelHardRefresh: 'Actualisation forcée',
   printCompanionUpdateAvailable:
     'Mise à jour disponible : v{latest} (vous avez v{installed}). Téléchargez et installez la mise à jour.',
   printCompanionUpToDate: 'À jour (v{version}).',
@@ -8418,6 +8424,9 @@ const de: Dict = {
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Kein Print Agent auf diesem Gerät erkannt.',
   printBridgeNotInstalled: 'Bridge Reborn ist auf diesem Gerät nicht installiert.',
+  printBridgeNotResponding:
+    'Bridge Reborn antwortet nicht — öffnen Sie die Bridge-App auf diesem Tablet und tippen Sie auf Drucker aktualisieren.',
+  panelHardRefresh: 'Hart aktualisieren',
   printCompanionUpdateAvailable:
     'Update verfügbar: v{latest} (installiert: v{installed}). Update herunterladen und installieren.',
   printCompanionUpToDate: 'Aktuell (v{version}).',

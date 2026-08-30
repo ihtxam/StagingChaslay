@@ -1635,11 +1635,9 @@ function escUnderline(on: boolean): Uint8Array {
  */
 export function escposFeedAndCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x0f, // ESC d 15 — feed for label/sticker gap
-    0x1d, 0x56, 0x01, // GS V 1 partial cut (common on Chinese clones)
-    0x1d, 0x56, 0x00, // GS V 0 full cut
-    0x1b, 0x6d, // ESC m partial cut
-    0x0a, 0x0a, 0x0a, // line feeds as last-resort advance
+    0x1b, 0x64, 0x05, // ESC d 5 — short feed before cut
+    0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
+    0x0a, 0x0a,
   ]);
 }
 
