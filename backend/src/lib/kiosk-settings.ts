@@ -43,7 +43,7 @@ export type KioskSettings = {
   brandPrimaryColor?: string;
   brandSecondaryColor?: string;
   brandButtonTextColor?: string;
-  /** Print kitchen ticket from kiosk tablet after order (via Print Bridge). */
+  /** Send kitchen ticket to main till (kitchen routing) — not printed locally on kiosk. */
   autoPrintKitchen?: boolean;
   /** Print guest receipt from kiosk tablet after order. */
   autoPrintReceipt?: boolean;

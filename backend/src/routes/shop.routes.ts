@@ -2704,7 +2704,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       });
     } else if (isKioskOrder) {
       const kioskAutoAcceptCard = kioskSettings?.kioskAutoAcceptCard !== false;
+      const kioskKitchenEnabled = kioskSettings?.autoPrintKitchen !== false;
       const kioskShouldKitchen =
+        kioskKitchenEnabled &&
         initialOrderStatus === "preparing" &&
         (kioskAutoAcceptCash || (payMethod === "card" && kioskAutoAcceptCard));
       if (kioskShouldKitchen) {

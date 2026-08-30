@@ -649,7 +649,9 @@ export class OrderService {
           const source =
             order.orderSource === "justeat" || order.orderSource === "ubereats"
               ? order.orderSource
-              : "online_shop";
+              : order.orderSource === "kiosk"
+                ? "kiosk"
+                : "online_shop";
           await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
             printKitchen: true,
             printDeliveryReceipt: false,
@@ -670,7 +672,9 @@ export class OrderService {
               orderSource:
                 order.orderSource === "justeat" || order.orderSource === "ubereats"
                   ? order.orderSource
-                  : "online_shop",
+                  : order.orderSource === "kiosk"
+                    ? "kiosk"
+                    : "online_shop",
             })
           )
           .catch(() => {});

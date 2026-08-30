@@ -643,10 +643,12 @@ export default function KioskAdminPanel({
           </div>
           <div className="space-y-2 border-t border-[var(--border)] pt-3">
             <p className="text-sm font-semibold text-[var(--text)]">{t('kioskPrintTitle')}</p>
+            <p className="text-xs text-stone-500">{t('kioskAutoPrintKitchenHint')}</p>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={settings.autoPrintKitchen !== false} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintKitchen: e.target.checked })} />
               <span className="text-sm">{t('kioskAutoPrintKitchen')}</span>
             </label>
+            <p className="text-xs text-stone-500">{t('kioskAutoPrintReceiptHint')}</p>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={settings.autoPrintReceipt === true} disabled={!tokenModeEditable} onChange={(e) => setSettings({ ...settings, autoPrintReceipt: e.target.checked })} />
               <span className="text-sm">{t('kioskAutoPrintReceipt')}</span>

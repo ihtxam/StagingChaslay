@@ -596,13 +596,12 @@ export default function KioskApp() {
         badgeNumber: badgeNumber || undefined,
       };
       setLastPrintCtx(printCtx);
-      if (config.settings.autoPrintKitchen !== false || config.settings.autoPrintReceipt) {
-        const printed = await printKioskOrder(printCtx, {
-          kitchen: config.settings.autoPrintKitchen !== false,
-          receipt: config.settings.autoPrintReceipt === true,
-        });
-        if (!printed.kitchen && !printed.receipt) {
-          toast.error('Could not print — check Print Bridge on this device');
+      // Kitchen tickets: backend enqueues to main till when autoPrintKitchen is on (same hub as WebPOS).
+      // Guest receipt may print locally on this kiosk when Print Bridge is configured.
+      if (config.settings.autoPrintReceipt) {
+        const printed = await printKioskOrder(printCtx, { kitchen: false, receipt: true });
+        if (!printed.receipt) {
+          toast.error('Could not print guest receipt — check Print Bridge on this device');
         }
       }
       setStep('success');
@@ -629,10 +628,13 @@ export default function KioskApp() {
     setReprinting(true);
     try {
       const printed = await printKioskOrder(lastPrintCtx, { kitchen: true, receipt: true });
-      if (printed.kitchen || printed.receipt) {
-        toast.success('Sent to printer');
+      const parts: string[] = [];
+      if (printed.receipt) parts.push('Guest receipt sent to kiosk printer');
+      if (printed.kitchenQueued) parts.push('Kitchen ticket queued to main till');
+      if (parts.length) {
+        toast.success(parts.join(' · '));
       } else {
-        toast.error('Print Bridge not available on this device');
+        toast.error('Could not print — check Print Bridge on this device or main till connection');
       }
     } finally {
       setReprinting(false);
