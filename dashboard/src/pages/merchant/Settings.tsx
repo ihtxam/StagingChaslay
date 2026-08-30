@@ -89,7 +89,7 @@ import Staff from './Staff';
 import DeliveryTrackingPage from './DeliveryTracking';
 import { useAuthStore } from '@/store/auth';
 import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/permissions';
-import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
+import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
 
 interface SettingsData {
@@ -596,6 +596,23 @@ export default function Settings() {
     [settings?.posCheckoutSettings?.posMode]
   );
 
+  const isRetailMerchant = useMemo(() => {
+    if (!settings) return false;
+    if (settings.businessCategory === 'retail') return true;
+    if (settings.businessCategory === 'restaurant') return false;
+    return (settings.posCheckoutSettings?.posMode || 'restaurant') === 'retail';
+  }, [settings]);
+
+  const showTablesSettings = useMemo(() => {
+    if (isRetailMerchant) return false;
+    return hasEditionFeature(settings?.editionFeatures ?? null, 'pos_tables');
+  }, [isRetailMerchant, settings?.editionFeatures]);
+
+  const showCoursesSettings = useMemo(() => {
+    if (isRetailMerchant) return false;
+    return hasEditionFeature(settings?.editionFeatures ?? null, 'pos_courses');
+  }, [isRetailMerchant, settings?.editionFeatures]);
+
   const canOpenSettingsTab = useCallback(
     (tabId: TabId) => {
       if (
@@ -625,8 +642,14 @@ export default function Settings() {
   );
 
   const visibleTabs = useMemo(
-    () => tabs.filter((item) => canOpenSettingsTab(item.id)),
-    [canOpenSettingsTab, tabs]
+    () =>
+      tabs.filter((item) => {
+        if (!canOpenSettingsTab(item.id)) return false;
+        if (item.id === 'tables' && !showTablesSettings) return false;
+        if (item.id === 'reservations' && isRetailMerchant) return false;
+        return true;
+      }),
+    [canOpenSettingsTab, isRetailMerchant, showTablesSettings, tabs]
   );
 
   const selectTab = useCallback(
@@ -651,6 +674,16 @@ export default function Settings() {
     if (!canOpenSettingsTab(fromUrl)) return;
     setTab((current) => (current === fromUrl ? current : fromUrl));
   }, [canOpenSettingsTab, searchParams]);
+
+  useEffect(() => {
+    if (!settings) return;
+    if (tab === 'tables' && !showTablesSettings) {
+      selectTab('pos');
+    }
+    if (tab === 'reservations' && isRetailMerchant) {
+      selectTab('business');
+    }
+  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab]);
 
   const searchIndex = useMemo<SettingsSearchEntry[]>(
     () => [
@@ -1592,10 +1625,7 @@ export default function Settings() {
       settings.editionFeatures,
       normalizeBusinessModule(settings.businessCategory)
     );
-  const posRetailMode =
-    settings?.businessCategory === 'retail' ||
-    (!settings?.businessCategory &&
-      (settings?.posCheckoutSettings?.posMode || 'restaurant') === 'retail');
+  const posRetailMode = isRetailMerchant;
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
@@ -2072,8 +2102,8 @@ export default function Settings() {
                 id="pos-mode"
                 icon={Monitor}
                 accent={settingsDash.accent}
-                title={t('settingsTablesFeatures')}
-                description={t('posTablesEnabledHint')}
+                title={posRetailMode ? t('posRetailOrderTypes') : t('settingsTablesFeatures')}
+                description={posRetailMode ? t('posRetailOrderTypesHint') : t('posTablesEnabledHint')}
                 highlight={isSectionHighlight('pos-mode')}
                 dimmed={normalizedQuery ? !isSectionVisible('pos-mode') : false}
               >
@@ -2533,6 +2563,7 @@ export default function Settings() {
                 ) : null}
               </Section>
 
+              {showCoursesSettings ? (
               <Section
                 id="pos-courses"
                 icon={Monitor}
@@ -2581,6 +2612,7 @@ export default function Settings() {
                   </Field>
                 ) : null}
               </Section>
+              ) : null}
 
               <Section
                 id="pos-checkout"
