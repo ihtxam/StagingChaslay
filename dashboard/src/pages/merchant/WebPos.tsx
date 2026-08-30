@@ -298,10 +298,9 @@ function blurPosInputs() {
   }
 }
 import {
-  cycleCategoryLayout,
   persistCategoryLayout,
   readStoredCategoryLayout,
-  shouldShowCategoryLayoutPicker,
+  WEBPOS_BELOW_9IN_MEDIA_QUERY,
   type WebPosCategoryLayoutMode,
 } from '@/lib/webpos-category-layout';
 import {
@@ -1009,6 +1008,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
     return !window.matchMedia('(min-width: 640px)').matches;
   });
+  /** Small tablets & phones below ~9" (≤767px) — category row filter. */
+  const [isBelow9InchViewport, setIsBelow9InchViewport] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return true;
+    return window.matchMedia(WEBPOS_BELOW_9IN_MEDIA_QUERY).matches;
+  });
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
@@ -1346,18 +1350,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mqLg = window.matchMedia('(min-width: 1024px)');
     const mqSm = window.matchMedia('(min-width: 640px)');
+    const mqBelow9In = window.matchMedia(WEBPOS_BELOW_9IN_MEDIA_QUERY);
     const sync = () => {
       const lgUp = mqLg.matches;
       setIsNarrowViewport(!lgUp);
       setIsPhoneViewport(!mqSm.matches);
+      setIsBelow9InchViewport(mqBelow9In.matches);
       if (lgUp) setMobileCartOpen(false);
     };
     sync();
     mqLg.addEventListener('change', sync);
     mqSm.addEventListener('change', sync);
+    mqBelow9In.addEventListener('change', sync);
     return () => {
       mqLg.removeEventListener('change', sync);
       mqSm.removeEventListener('change', sync);
+      mqBelow9In.removeEventListener('change', sync);
     };
   }, []);
 
@@ -9607,27 +9615,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 tileSize={gridTileSize}
                 mobileGridStep={gridMobileLayout}
                 isPhoneLayout={isPhoneViewport}
+                isBelow9Inch={isBelow9InchViewport}
                 categoryLayout={categoryLayout}
                 onCategoryLayoutChange={(mode) => {
                   setCategoryLayout(mode);
                   persistCategoryLayout(mode);
                 }}
                 onCycleTileSize={() => {
-                  const catCount =
-                    visibleCategories.length + (giftCardsEnabled ? 1 : 0) + 1;
-                  const catCols: 2 | 3 =
-                    isPhoneViewport && gridMobileLayout >= 1 ? 3 : isPhoneViewport ? 2 : 3;
-                  if (
-                    isPhoneViewport &&
-                    shouldShowCategoryLayoutPicker(catCount, catCols)
-                  ) {
-                    setCategoryLayout((cur) => {
-                      const next = cycleCategoryLayout(cur);
-                      persistCategoryLayout(next);
-                      return next;
-                    });
-                    return;
-                  }
                   if (isPhoneViewport) {
                     setGridMobileLayout((cur) => {
                       const next = ((cur + 1) % 3) as MobileGridLayoutStep;

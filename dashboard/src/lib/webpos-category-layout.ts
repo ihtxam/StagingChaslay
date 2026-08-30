@@ -1,21 +1,27 @@
-/** Category strip layout on register — persisted per device. */
-export type WebPosCategoryLayoutMode = 'scroll' | 'rows-2' | 'rows-3' | 'wrap';
+/** Category strip row count on small screens — persisted per device. */
+export type WebPosCategoryLayoutMode = 'rows-2' | 'rows-3';
 
 export const WEBPOS_CATEGORY_LAYOUT_KEY = 'webpos.grid.categoryLayout';
 
-export const CATEGORY_LAYOUT_MODES: WebPosCategoryLayoutMode[] = [
-  'scroll',
-  'rows-2',
-  'rows-3',
-  'wrap',
-];
+/** ~9" portrait tablets (e.g. iPad mini) are ≤768px wide at typical DPI. */
+export const WEBPOS_BELOW_9IN_MIN_WIDTH_PX = 768;
+
+export const WEBPOS_BELOW_9IN_MEDIA_QUERY = `(max-width: ${WEBPOS_BELOW_9IN_MIN_WIDTH_PX - 1}px)`;
+
+export const CATEGORY_LAYOUT_MODES: WebPosCategoryLayoutMode[] = ['rows-2', 'rows-3'];
+
+function normalizeCategoryLayout(value: string | null): WebPosCategoryLayoutMode | null {
+  if (value === 'rows-2' || value === 'rows-3') return value;
+  // Migrate legacy modes from earlier builds.
+  if (value === 'scroll' || value === 'wrap') return 'rows-3';
+  return null;
+}
 
 export function readStoredCategoryLayout(): WebPosCategoryLayoutMode {
   try {
     const v = localStorage.getItem(WEBPOS_CATEGORY_LAYOUT_KEY);
-    if (v && CATEGORY_LAYOUT_MODES.includes(v as WebPosCategoryLayoutMode)) {
-      return v as WebPosCategoryLayoutMode;
-    }
+    const normalized = normalizeCategoryLayout(v);
+    if (normalized) return normalized;
   } catch {
     /* ignore */
   }
@@ -30,24 +36,7 @@ export function persistCategoryLayout(mode: WebPosCategoryLayoutMode) {
   }
 }
 
-export function cycleCategoryLayout(
-  current: WebPosCategoryLayoutMode
-): WebPosCategoryLayoutMode {
-  const idx = CATEGORY_LAYOUT_MODES.indexOf(current);
-  const next = (idx + 1) % CATEGORY_LAYOUT_MODES.length;
-  return CATEGORY_LAYOUT_MODES[next];
-}
-
-/** Estimate wrapped rows for the category strip (phone grid columns). */
-export function estimateCategoryRows(itemCount: number, columns: 2 | 3): number {
-  if (itemCount <= 0) return 0;
-  return Math.ceil(itemCount / columns);
-}
-
-export function shouldShowCategoryLayoutPicker(
-  itemCount: number,
-  columns: 2 | 3,
-  thresholdRows = 3
-): boolean {
-  return estimateCategoryRows(itemCount, columns) > thresholdRows;
+export function isBelow9InchViewport(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return true;
+  return window.matchMedia(WEBPOS_BELOW_9IN_MEDIA_QUERY).matches;
 }
