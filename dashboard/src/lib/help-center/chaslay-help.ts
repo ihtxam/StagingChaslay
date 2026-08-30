@@ -35,6 +35,12 @@ const en: HelpCategory[] = [
         body: 'Go to Settings → Business. Enter your trading name, address, phone, VAT number, and opening hours. These details appear on receipts, kitchen tickets, and your online shop. Save changes before opening Web POS or printing your first sale.',
       },
       {
+        id: 'business-info',
+        title: 'Set up business information',
+        summary: 'Name, address, VAT, hours, and receipt details.',
+        body: 'Go to Settings → Business. Enter your trading name, address, phone, VAT number, and opening hours. These details appear on receipts, kitchen tickets, and your online shop. Save changes before opening Web POS or printing your first sale.',
+      },
+      {
         id: 'language',
         title: 'Change panel language',
         summary: 'Switch between English, French, and German.',

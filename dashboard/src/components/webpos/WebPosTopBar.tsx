@@ -992,6 +992,16 @@ export function WebPosSettingsDropdown({
           {t('webPosSendLogs')}
         </button>
       ) : null}
+      {onSendLogs ? (
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
+          onClick={onSendLogs}
+        >
+          <FileText size={16} />
+          {t('webPosSendLogs')}
+        </button>
+      ) : null}
       <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>
