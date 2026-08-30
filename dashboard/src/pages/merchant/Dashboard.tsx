@@ -72,7 +72,9 @@ import {
   isStorekeeperPanelPath,
   isKioskOnlyStaff,
   isKioskRestrictedStaff,
+  isKioskHomeLocation,
   isKioskPanelPath,
+  isKioskSettingsTab,
   kioskHomePath,
   isWaiterRestrictedStaff,
   isWaiterPanelPath,
@@ -99,8 +101,6 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
-import SignagePage from './SignagePage';
-import KioskSettingsPage from './KioskSettingsPage';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -165,7 +165,9 @@ function MerchantShell() {
   const isOrderHubRoute = /^\/merchant\/order-hub\/?$/.test(location.pathname);
   const isDriverRoute = /^\/merchant\/delivery\/driver\/?$/.test(location.pathname);
   const isStorekeeperRoute = /^\/merchant\/storekeeper\/?$/.test(location.pathname);
-  const isKioskRoute = /^\/merchant\/kiosk\/?$/.test(location.pathname);
+  const isKioskRoute =
+    /^\/merchant\/kiosk\/?$/.test(location.pathname) ||
+    (location.pathname.replace(/\/$/, '') === '/merchant/settings' && isKioskSettingsTab(location.search));
   const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute || isKioskRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
@@ -509,17 +511,16 @@ function MerchantShell() {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = effective.permissions;
     if (!isKioskRestrictedStaff(perms, false)) return;
-    if (isKioskPanelPath(location.pathname)) return;
+    if (isKioskPanelPath(location.pathname, location.search)) return;
     navigate(kioskHomePath(), { replace: true });
-  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
+  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (jwtOwnerBypass) return;
     if (!isKioskOnlyStaff(effective.permissions, false)) return;
-    const path = location.pathname.replace(/\/$/, '') || '/merchant';
-    if (path === kioskHomePath()) return;
+    if (isKioskHomeLocation(location.pathname, location.search)) return;
     navigate(kioskHomePath(), { replace: true });
-  }, [jwtIsOwner, effective.permissions, location.pathname, navigate]);
+  }, [jwtIsOwner, effective.permissions, location.pathname, location.search, navigate]);
 
   // PIN-scoped staff without back-office access cannot browse the manager panel.
   useEffect(() => {
@@ -530,7 +531,9 @@ function MerchantShell() {
       return;
     }
     if (isKioskOnlyStaff(effective.permissions, false)) {
-      if (path !== kioskHomePath()) navigate(kioskHomePath(), { replace: true });
+      if (!isKioskHomeLocation(location.pathname, location.search)) {
+        navigate(kioskHomePath(), { replace: true });
+      }
       return;
     }
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) {
@@ -685,10 +688,6 @@ function MerchantShell() {
         { label: 'Chaslay Page Builder (beta)', path: '/merchant/chaslay-page-builder', icon: '🧩' },
       ].filter((item) => allow(item.path)),
     },
-    ...(allowSignage('/merchant/signage')
-      ? [{ label: t('signageNav'), path: '/merchant/signage', icon: '📺' }]
-      : []),
-    ...(allow('/merchant/kiosk') ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }] : []),
   ]
     .filter((entry) => {
       if ('children' in entry && Array.isArray(entry.children)) {
@@ -731,7 +730,7 @@ function MerchantShell() {
   const menuItems = kioskRestricted
     ? [
         ...(allow('/merchant/kiosk')
-          ? [{ label: t('kioskNav'), path: '/merchant/kiosk', icon: '🖥️' }]
+          ? [{ label: t('kioskNav'), path: kioskHomePath(), icon: '🖥️' }]
           : []),
       ].filter((entry) => {
         if ('children' in entry && Array.isArray(entry.children)) {
@@ -1059,22 +1058,8 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route
-              path="signage"
-              element={
-                <PanelRouteGuard path="/merchant/signage" allow={allowSignage}>
-                  <SignagePage />
-                </PanelRouteGuard>
-              }
-            />
-            <Route
-              path="kiosk"
-              element={
-                <PanelRouteGuard path="/merchant/kiosk" allow={allow}>
-                  <KioskSettingsPage />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="signage" element={<Navigate to="/merchant/settings?tab=signage" replace />} />
+            <Route path="kiosk" element={<Navigate to={kioskHomePath()} replace />} />
             <Route
               path="terminals"
               element={

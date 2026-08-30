@@ -54,11 +54,21 @@ interface SidebarProps {
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
 
-function isPathActive(pathname: string, itemPath?: string): boolean {
+function isPathActive(pathname: string, itemPath?: string, search = ''): boolean {
   if (!itemPath) return false;
-  const isRoot = itemPath === '/merchant' || itemPath === '/superadmin' || itemPath === '/reseller';
-  if (isRoot) return pathname === itemPath;
-  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+  const [basePath, query = ''] = itemPath.split('?');
+  const isRoot = basePath === '/merchant' || basePath === '/superadmin' || basePath === '/reseller';
+  const pathMatches = isRoot
+    ? pathname === basePath
+    : pathname === basePath || pathname.startsWith(`${basePath}/`);
+  if (!pathMatches) return false;
+  if (!query) return true;
+  const want = new URLSearchParams(query);
+  const have = new URLSearchParams(search);
+  for (const [key, value] of want.entries()) {
+    if (have.get(key) !== value) return false;
+  }
+  return true;
 }
 
 function loadOpenGroups(panelKey: string): Set<string> {
@@ -117,7 +127,7 @@ export default function Sidebar({
     const ids = new Set<string>();
     for (const entry of menuItems) {
       if (!entry.id || !entry.children?.length) continue;
-      if (entry.children.some((c) => isPathActive(location.pathname, c.path))) {
+      if (entry.children.some((c) => isPathActive(location.pathname, c.path, location.search))) {
         ids.add(entry.id);
       }
     }
@@ -270,7 +280,7 @@ export default function Sidebar({
               to={quickAction.path}
               onClick={closeMobile}
               className={`flex items-center justify-center gap-2 w-full px-4 py-3.5 rounded-lg text-sm font-bold uppercase tracking-wide transition-colors shadow-lg ${
-                isPathActive(location.pathname, quickAction.path)
+                isPathActive(location.pathname, quickAction.path, location.search)
                   ? 'bg-emerald-400 text-white ring-2 ring-emerald-300/60'
                   : 'bg-[#22c55e] hover:bg-emerald-400 text-white'
               }`}
@@ -288,7 +298,7 @@ export default function Sidebar({
             const children = entry.children?.filter(Boolean) ?? [];
 
             if (children.length === 0 && entry.path) {
-              const active = isPathActive(location.pathname, entry.path);
+              const active = isPathActive(location.pathname, entry.path, location.search);
               return (
                 <Link
                   key={entry.path}
@@ -306,7 +316,7 @@ export default function Sidebar({
 
             if (children.length === 1 && !entry.id) {
               const only = children[0];
-              const active = isPathActive(location.pathname, only.path);
+              const active = isPathActive(location.pathname, only.path, location.search);
               return (
                 <Link
                   key={only.path}
@@ -326,7 +336,7 @@ export default function Sidebar({
 
             const groupId = entry.id || entry.label;
             const isOpenGroup = openGroups.has(groupId);
-            const parentActive = children.some((c) => isPathActive(location.pathname, c.path));
+            const parentActive = children.some((c) => isPathActive(location.pathname, c.path, location.search));
 
             return (
               <div key={groupId} className="space-y-0.5">
@@ -363,7 +373,7 @@ export default function Sidebar({
                           </p>
                         );
                       }
-                      const active = isPathActive(location.pathname, child.path);
+                      const active = isPathActive(location.pathname, child.path, location.search);
                       return (
                         <Link
                           key={child.path}
@@ -391,7 +401,7 @@ export default function Sidebar({
               to={shopPath}
               onClick={closeMobile}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
-                isPathActive(location.pathname, shopPath)
+                isPathActive(location.pathname, shopPath, location.search)
                   ? 'bg-black/25 text-white shadow-sm'
                   : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
@@ -408,7 +418,7 @@ export default function Sidebar({
               to={profileMenu.settingsPath}
               onClick={closeMobile}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
-                isPathActive(location.pathname, profileMenu.settingsPath)
+                isPathActive(location.pathname, profileMenu.settingsPath, location.search)
                   ? 'bg-black/25 text-white shadow-sm'
                   : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}

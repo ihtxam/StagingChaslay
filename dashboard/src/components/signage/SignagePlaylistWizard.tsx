@@ -144,17 +144,17 @@ export default function SignagePlaylistWizard({ open, categories, onClose, onCre
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 p-4">
-        <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90dvh] overflow-y-auto">
+        <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-elevated)] shadow-xl max-h-[90dvh] overflow-y-auto">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <div>
               <h2 className="font-bold">{t('signageWizardTitle')}</h2>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 {t('signageWizardStep').replace('{n}', String(step)).replace('{total}', '2')}
               </p>
             </div>
             <button
               type="button"
-              className="p-2 rounded-lg hover:bg-stone-100"
+              className="p-2 rounded-lg hover:bg-[var(--bg-muted)]"
               onClick={() => {
                 reset();
                 onClose();
@@ -166,7 +166,7 @@ export default function SignagePlaylistWizard({ open, categories, onClose, onCre
 
           {step === 1 ? (
             <div className="p-4 space-y-4">
-              <p className="text-sm text-stone-600">{t('signagePlaylistHelp')}</p>
+              <p className="text-sm text-[var(--text-muted)]">{t('signagePlaylistHelp')}</p>
               <label className="block text-sm">
                 {t('signagePlaylistName')}
                 <input
@@ -204,7 +204,7 @@ export default function SignagePlaylistWizard({ open, categories, onClose, onCre
             </div>
           ) : (
             <div className="p-4 space-y-4">
-              <p className="text-sm text-stone-600">{t('signageWizardStep2Slides')}</p>
+              <p className="text-sm text-[var(--text-muted)]">{t('signageWizardStep2Slides')}</p>
               {slides.length ? (
                 <ul className="space-y-2">
                   {slides.map((slide, idx) => {
@@ -212,18 +212,18 @@ export default function SignagePlaylistWizard({ open, categories, onClose, onCre
                     return (
                       <li
                         key={slide.tempId}
-                        className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2"
+                        className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2"
                       >
                         <Icon className="h-4 w-4 shrink-0 text-teal-600" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-stone-500">
+                          <p className="text-xs font-semibold text-[var(--text-muted)]">
                             {t('signageSlideN').replace('{n}', String(idx + 1))}
                           </p>
                           <p className="text-sm truncate">{slideDraftLabel(slide, t, categories)}</p>
                         </div>
                         <button
                           type="button"
-                          className="p-1.5 rounded-lg hover:bg-stone-100"
+                          className="p-1.5 rounded-lg hover:bg-[var(--bg-muted)]"
                           title={t('edit')}
                           onClick={() => {
                             setEditingSlide(slide);
@@ -245,7 +245,7 @@ export default function SignagePlaylistWizard({ open, categories, onClose, onCre
                   })}
                 </ul>
               ) : (
-                <p className="text-sm text-stone-500">{t('signageSlideListEmpty')}</p>
+                <p className="text-sm text-[var(--text-muted)]">{t('signageSlideListEmpty')}</p>
               )}
               <button
                 type="button"

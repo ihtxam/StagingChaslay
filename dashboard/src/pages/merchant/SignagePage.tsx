@@ -24,7 +24,7 @@ function signagePublicUrl(screen: Pick<SignageScreen, 'shortCode' | 'token'>): s
   return `${origin.replace(/\/$/, '')}/tv/${code}`;
 }
 
-export default function SignagePage() {
+export default function SignagePage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<'screens' | 'playlists'>('screens');
   const [screens, setScreens] = useState<SignageScreen[]>([]);
@@ -148,18 +148,28 @@ export default function SignagePage() {
   };
 
   return (
-    <div className="max-w-5xl space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">{t('signageTitle')}</h1>
-        <p className="mt-1 text-sm text-stone-500">{t('signageHint')}</p>
-        <p className="mt-1 text-xs text-stone-400">{t('signageSaveLiveHint')}</p>
-      </div>
+    <div className={embedded ? 'space-y-4' : 'max-w-5xl space-y-4'}>
+      {!embedded ? (
+        <div>
+          <h1 className="text-xl font-bold">{t('signageTitle')}</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{t('signageHint')}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('signageSaveLiveHint')}</p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-lg font-bold text-[var(--text)]">{t('signageTitle')}</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{t('signageHint')}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('signageSaveLiveHint')}</p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button
           type="button"
           className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-            tab === 'screens' ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700'
+            tab === 'screens'
+              ? 'bg-teal-600 text-white'
+              : 'bg-[var(--bg-muted)] text-[var(--text-muted)]'
           }`}
           onClick={() => setTab('screens')}
         >
@@ -168,7 +178,9 @@ export default function SignagePage() {
         <button
           type="button"
           className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-            tab === 'playlists' ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700'
+            tab === 'playlists'
+              ? 'bg-teal-600 text-white'
+              : 'bg-[var(--bg-muted)] text-[var(--text-muted)]'
           }`}
           onClick={() => setTab('playlists')}
         >
@@ -176,11 +188,11 @@ export default function SignagePage() {
         </button>
       </div>
 
-      {loading ? <p className="text-sm text-stone-500">{t('loading')}</p> : null}
+      {loading ? <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p> : null}
 
       {tab === 'screens' ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 space-y-3">
             <p className="text-sm font-medium">{t('signageAddScreen')}</p>
             <input
               className="input w-full"
@@ -258,25 +270,25 @@ export default function SignagePage() {
           </div>
 
           {!screens.length ? (
-            <p className="text-sm text-stone-500">{t('signageNoScreens')}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('signageNoScreens')}</p>
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2">
               {screens.map((s) => {
                 const url = signagePublicUrl(s);
                 const code = s.shortCode || s.token.slice(0, 8);
                 return (
-                  <li key={s.id} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3">
+                  <li key={s.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-stone-900">{s.name}</p>
+                        <p className="font-semibold text-[var(--text)]">{s.name}</p>
                         <p className="mt-1 text-2xl font-mono font-bold tracking-wider text-teal-700">{code}</p>
-                        <p className="mt-1 text-xs text-stone-500 break-all">{url}</p>
+                        <p className="mt-1 text-xs text-[var(--text-muted)] break-all">{url}</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
+                      <span className="shrink-0 rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-muted)]">
                         {s.screenSizeIn || 32}"
                       </span>
                     </div>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-[var(--text-muted)]">
                       {s.orientation === 'portrait' ? t('signagePortrait') : t('signageLandscape')}
                       {' · '}
                       {t(TEMPLATES.find((x) => x.id === s.template)?.key || 'signageTemplateDarkPizza')}
@@ -284,21 +296,21 @@ export default function SignagePage() {
                     <div className="flex flex-wrap gap-2 mt-auto">
                       <button
                         type="button"
-                        className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs font-semibold hover:bg-stone-50"
+                        className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)]"
                         onClick={() => setEditingScreenId(s.id)}
                       >
                         {t('edit')}
                       </button>
-                      <button type="button" className="rounded-lg border border-stone-300 p-1.5 hover:bg-stone-50" title={t('signageCopyUrl')} onClick={() => void copyUrl(s)}>
+                      <button type="button" className="rounded-lg border border-[var(--border)] p-1.5 hover:bg-[var(--bg-muted)]" title={t('signageCopyUrl')} onClick={() => void copyUrl(s)}>
                         <Copy className="h-4 w-4" />
                       </button>
-                      <button type="button" className="rounded-lg border border-stone-300 p-1.5 hover:bg-stone-50" title={t('signagePreviewQr')} onClick={() => setQrToken(s.shortCode || s.token)}>
+                      <button type="button" className="rounded-lg border border-[var(--border)] p-1.5 hover:bg-[var(--bg-muted)]" title={t('signagePreviewQr')} onClick={() => setQrToken(s.shortCode || s.token)}>
                         <QrCode className="h-4 w-4" />
                       </button>
-                      <button type="button" className="rounded-lg border border-stone-300 p-1.5 hover:bg-stone-50" title={t('signageRotateToken')} onClick={() => void rotateToken(s.id)}>
+                      <button type="button" className="rounded-lg border border-[var(--border)] p-1.5 hover:bg-[var(--bg-muted)]" title={t('signageRotateToken')} onClick={() => void rotateToken(s.id)}>
                         <RefreshCw className="h-4 w-4" />
                       </button>
-                      <button type="button" className="rounded-lg border border-red-200 p-1.5 text-red-700 hover:bg-red-50" title={t('delete')} onClick={() => void removeScreen(s.id)}>
+                      <button type="button" className="rounded-lg border border-red-300 p-1.5 text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40" title={t('delete')} onClick={() => void removeScreen(s.id)}>
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -310,20 +322,20 @@ export default function SignagePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
-            <p className="text-sm font-medium text-teal-900">{t('signagePlaylistWhatTitle')}</p>
-            <p className="mt-1 text-sm text-teal-800/90">{t('signagePlaylistHelp')}</p>
+          <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-900/50 dark:bg-teal-950/30">
+            <p className="text-sm font-medium text-teal-900 dark:text-teal-100">{t('signagePlaylistWhatTitle')}</p>
+            <p className="mt-1 text-sm text-teal-800/90 dark:text-teal-200/90">{t('signagePlaylistHelp')}</p>
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-stone-700">{t('signagePlaylists')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text)]">{t('signagePlaylists')}</h2>
             <button type="button" className="btn-primary text-sm inline-flex items-center gap-1" onClick={() => setWizardOpen(true)}>
               <Plus className="h-4 w-4" /> {t('signageAddPlaylist')}
             </button>
           </div>
 
           {!playlists.length ? (
-            <p className="text-sm text-stone-500">{t('signageNoPlaylists')}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('signageNoPlaylists')}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {playlists.map((p) => {
@@ -331,21 +343,21 @@ export default function SignagePage() {
                 return (
                   <div
                     key={p.id}
-                    className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3"
+                    className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 flex flex-col gap-3"
                   >
                     <div>
-                      <p className="font-semibold text-stone-900">{p.name}</p>
-                      <p className="mt-1 text-xs text-stone-500">
+                      <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
                         {t(TEMPLATES.find((x) => x.id === p.template)?.key || 'signageTemplateDarkPizza')}
                       </p>
-                      <p className="mt-2 text-xs text-stone-600">
+                      <p className="mt-2 text-xs text-[var(--text-muted)]">
                         {slideCount} {t('signageSlides').toLowerCase()} · {t(scheduleSummaryKey(p.schedule))}
                       </p>
                     </div>
                     <div className="flex gap-2 mt-auto">
                       <button
                         type="button"
-                        className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs font-semibold hover:bg-stone-50"
+                        className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)]"
                         onClick={() => setEditingPlaylistId(p.id)}
                       >
                         {t('edit')}
@@ -387,7 +399,7 @@ export default function SignagePage() {
 
       {qrToken ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center space-y-3">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 text-center space-y-3">
             <h2 className="font-bold">{t('signagePreviewQr')}</h2>
             <img
               src={qrImageUrl(signagePublicUrl({ shortCode: qrToken.length <= 8 ? qrToken : null, token: qrToken }), 240)}
@@ -395,7 +407,7 @@ export default function SignagePage() {
               className="mx-auto h-56 w-56"
             />
             <p className="font-mono text-2xl font-bold text-teal-700">{qrToken.length <= 8 ? qrToken : qrToken.slice(0, 8)}</p>
-            <p className="break-all font-mono text-xs text-stone-500">{signagePublicUrl({ shortCode: qrToken.length <= 8 ? qrToken : null, token: qrToken })}</p>
+            <p className="break-all font-mono text-xs text-[var(--text-muted)]">{signagePublicUrl({ shortCode: qrToken.length <= 8 ? qrToken : null, token: qrToken })}</p>
             <div className="flex justify-center gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={() => void copyUrl({ shortCode: qrToken.length <= 8 ? qrToken : null, token: qrToken })}>
                 {t('signageCopyUrl')}
