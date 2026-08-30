@@ -3,6 +3,8 @@ import {
   resolvePrintCompanionInstallStatus,
   type PrintCompanionInstallStatus,
   type PrintCompanionKind,
+  isAndroidDevice,
+  openPrintBridgeApkInstall,
 } from '@/lib/print-agent-platform';
 
 type Props = {
@@ -74,13 +76,23 @@ export default function PrintCompanionVersionStatus({
         {message}
       </p>
       {status.state === 'update_available' && downloadUrl ? (
-        <a
-          className="mt-1 inline-flex text-sm font-medium text-teal-700 underline hover:text-teal-900"
-          href={downloadUrl}
-          download={kind === 'android-bridge' ? 'reborn-print-bridge.apk' : 'reborn-print-agent-setup.exe'}
-        >
-          {kind === 'android-bridge' ? t('downloadPrintBridge') : t('downloadPrintAgent')}
-        </a>
+        isAndroidDevice() && kind === 'android-bridge' ? (
+          <button
+            type="button"
+            className="mt-1 inline-flex text-sm font-medium text-teal-700 underline hover:text-teal-900"
+            onClick={() => openPrintBridgeApkInstall(downloadUrl)}
+          >
+            {t('installPrintBridgeUpdate')}
+          </button>
+        ) : (
+          <a
+            className="mt-1 inline-flex text-sm font-medium text-teal-700 underline hover:text-teal-900"
+            href={downloadUrl}
+            download={kind === 'android-bridge' ? undefined : 'reborn-print-agent-setup.exe'}
+          >
+            {kind === 'android-bridge' ? t('downloadPrintBridge') : t('downloadPrintAgent')}
+          </a>
+        )
       ) : null}
     </div>
   );

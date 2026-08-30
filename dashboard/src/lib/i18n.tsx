@@ -1676,6 +1676,9 @@ const en: Dict = {
     'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Download Bridge Reborn (Android)',
+  installPrintBridge: 'Install Bridge Reborn',
+  installPrintBridgeUpdate: 'Install update',
+  printBridgeAlreadyInstalled: 'Bridge Reborn is installed on this tablet (v{version}). Open the Bridge app — do not download again unless updating.',
   printBridgeDownloadHint:
     'Install Bridge Reborn once on your Android tablet (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Run WebPOS in Chrome — Bridge Reborn handles printing and NFC tap-to-pay in the background via built-in, USB, Bluetooth, or Wi‑Fi printers. No second PC required.',
   printBridgeInstallSteps:
@@ -5341,6 +5344,10 @@ const fr: Dict = {
     'Installez Reborn Print Agent une seule fois sur le PC caisse. L’agent démarre avec Windows — plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
+  installPrintBridge: 'Installer Bridge Reborn',
+  installPrintBridgeUpdate: 'Installer la mise à jour',
+  printBridgeAlreadyInstalled:
+    'Bridge Reborn est installé sur cette tablette (v{version}). Ouvrez l’app Bridge — ne retéléchargez pas sauf mise à jour.',
   printBridgeDownloadHint:
     'Installez Bridge Reborn sur tablette Sunmi (D3 Mini, D2s Plus), Feitian F310A ou autre Android. Utilisez WebPOS dans Chrome — Bridge Reborn gère l’impression et le paiement NFC sans contact en arrière-plan (imprimante intégrée, USB, Bluetooth ou Wi‑Fi). Aucun second PC.',
   printBridgeInstallSteps:
@@ -8957,6 +8964,10 @@ const de: Dict = {
     'Reborn Print Agent einmal auf dem Kassen-PC installieren. Der Agent startet mit Windows — start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
+  installPrintBridge: 'Bridge Reborn installieren',
+  installPrintBridgeUpdate: 'Update installieren',
+  printBridgeAlreadyInstalled:
+    'Bridge Reborn ist auf diesem Tablet installiert (v{version}). Öffnen Sie die Bridge-App — nicht erneut herunterladen, außer für ein Update.',
   printBridgeDownloadHint:
     'Bridge Reborn einmal auf Sunmi D3 Mini, D2s Plus, Feitian F310A oder anderen Android-Tablets installieren. WebPOS in Chrome nutzen — Bridge Reborn übernimmt Druck und NFC-Tap-to-Pay im Hintergrund (integriert, USB, Bluetooth oder WLAN). Kein zweiter PC nötig.',
   printBridgeInstallSteps:

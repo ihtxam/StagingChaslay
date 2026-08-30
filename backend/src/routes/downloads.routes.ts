@@ -14,9 +14,15 @@ import {
 
 const router = Router();
 
-function sendBinary(res: Response, filePath: string, filename: string, contentType: string) {
+function sendBinary(
+  res: Response,
+  filePath: string,
+  filename: string,
+  contentType: string,
+  disposition: "attachment" | "inline" = "attachment"
+) {
   res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
   res.setHeader("Content-Encoding", "identity");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "public, max-age=3600");
@@ -73,7 +79,7 @@ router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
         ].join("\n")
       );
   }
-  sendBinary(res, filePath, PRINT_BRIDGE_APK_FILE, "application/vnd.android.package-archive");
+  sendBinary(res, filePath, PRINT_BRIDGE_APK_FILE, "application/vnd.android.package-archive", "inline");
 });
 
 router.use(

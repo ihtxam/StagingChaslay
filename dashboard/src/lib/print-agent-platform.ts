@@ -39,6 +39,21 @@ export function printBridgeDownloadUrl(): string {
   return `${api}/downloads/reborn-print-bridge.apk`;
 }
 
+/** Open Bridge APK install on Android (package installer) instead of saving duplicate files. */
+export function openPrintBridgeApkInstall(url?: string): void {
+  if (typeof window === 'undefined') return;
+  window.location.assign(url || printBridgeDownloadUrl());
+}
+
+export function isBridgeAlreadyInstalled(
+  agentOk: boolean,
+  installedVersion: string | null | undefined
+): boolean {
+  if (!agentOk) return false;
+  const v = String(installedVersion || '').trim();
+  return !!v && isBridgeVersion(v);
+}
+
 export function printAgentDownloadUrl(): string {
   const api = apiOrigin();
   if (!api || api.startsWith('/')) {

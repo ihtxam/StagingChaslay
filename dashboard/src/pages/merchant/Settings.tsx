@@ -68,6 +68,8 @@ import {
   fetchPrintBridgeManifest,
   fetchPrintAgentManifest,
   isAndroidDevice,
+  isBridgeAlreadyInstalled,
+  openPrintBridgeApkInstall,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
   preferredPrintCompanion,
@@ -4326,11 +4328,25 @@ export default function Settings() {
                           {printBridgeManifest.message ||
                             'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
                         </p>
+                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) ? (
+                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                          {t('printBridgeAlreadyInstalled').replace(
+                            '{version}',
+                            installedPrintCompanionVersion || ''
+                          )}
+                        </p>
+                      ) : isAndroidDevice() ? (
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex"
+                          onClick={() => openPrintBridgeApkInstall(printBridgeDownloadUrl())}
+                        >
+                          {t('installPrintBridge')}
+                        </button>
                       ) : (
                         <a
                           className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
                           href={printBridgeDownloadUrl()}
-                          download="reborn-print-bridge.apk"
                         >
                           {t('downloadPrintBridge')}
                         </a>
