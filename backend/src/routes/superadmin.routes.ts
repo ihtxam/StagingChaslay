@@ -1005,4 +1005,549 @@ router.get("/analytics/subscription-distribution", async (req: Request, res: Res
   }
 });
 
+// ============================================================================
+// EDITIONS
+// ============================================================================
+
+router.get("/editions/catalog", (_req: Request, res: Response) => {
+  res.json({ success: true, groups: EDITION_FEATURE_GROUPS, allFeatures: ALL_EDITION_FEATURES });
+});
+
+router.get("/editions", async (req: Request, res: Response) => {
+  try {
+    await EditionService.ensureDefaults();
+    const editions = await EditionService.list({
+      ownerType: "platform",
+      includeInactive: req.query.all === "1",
+    });
+    res.json({ success: true, editions });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list editions" });
+  }
+});
+
+router.post("/editions", async (req: Request, res: Response) => {
+  try {
+    const edition = await EditionService.create({
+      name: req.body?.name,
+      note: req.body?.note,
+      businessCategory: req.body?.businessCategory,
+      features: req.body?.features,
+      ownerType: "platform",
+    });
+    res.status(201).json({ success: true, edition });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create edition" });
+  }
+});
+
+router.put("/editions/:editionId", async (req: Request, res: Response) => {
+  try {
+    const edition = await EditionService.update(
+      req.params.editionId,
+      {
+        name: req.body?.name,
+        note: req.body?.note,
+        businessCategory: req.body?.businessCategory,
+        features: req.body?.features,
+        isActive: req.body?.isActive,
+      },
+      { requireOwnerType: "platform" }
+    );
+    res.json({ success: true, edition });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update edition" });
+  }
+});
+
+router.delete("/editions/:editionId", async (req: Request, res: Response) => {
+  try {
+    const edition = await EditionService.softDelete(req.params.editionId, {
+      requireOwnerType: "platform",
+    });
+    res.json({ success: true, edition });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.patch("/merchants/:merchantId/edition", async (req: Request, res: Response) => {
+  try {
+    const { editionId, resellerId, planBillingPaid, subscriptionPlan } = req.body || {};
+
+    if (
+      editionId !== undefined ||
+      planBillingPaid !== undefined ||
+      subscriptionPlan !== undefined
+    ) {
+      await MerchantService.updateMerchantPlan(req.params.merchantId, {
+        editionId,
+        planBillingPaid,
+        subscriptionPlan,
+      }, { allowClearEdition: true });
+    }
+
+    if (resellerId !== undefined) {
+      await MerchantService.updateMerchant(req.params.merchantId, {
+        resellerId: resellerId || null,
+      } as any);
+    }
+
+    const merchant = await MerchantService.getMerchantById(req.params.merchantId);
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * PATCH /api/superadmin/merchants/:merchantId/plan
+ * Set POS edition and plan billing status.
+ */
+router.patch("/merchants/:merchantId/plan", async (req: Request, res: Response) => {
+  try {
+    const { editionId, planBillingPaid, subscriptionPlan } = req.body || {};
+    const merchant = await MerchantService.updateMerchantPlan(req.params.merchantId, {
+      editionId,
+      planBillingPaid,
+      subscriptionPlan,
+    }, { allowClearEdition: true });
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update plan" });
+  }
+});
+
+// ============================================================================
+// RESELLERS
+// ============================================================================
+
+router.get("/resellers", async (req: Request, res: Response) => {
+  try {
+    const resellers = await ResellerService.list({
+      search: typeof req.query.search === "string" ? req.query.search : undefined,
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+    });
+    res.json({ success: true, resellers });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.post("/resellers", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.create({
+      name: req.body?.name,
+      email: req.body?.email,
+      password: req.body?.password,
+      phone: req.body?.phone,
+      licenseSeats: req.body?.licenseSeats != null ? Number(req.body.licenseSeats) : 0,
+      createdBySuperadminId: req.user?.id,
+    });
+    res.status(201).json({ success: true, reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.get("/resellers/:resellerId", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.getById(req.params.resellerId);
+    if (!reseller) return res.status(404).json({ error: "Reseller not found" });
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.put("/resellers/:resellerId", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.update(req.params.resellerId, {
+      name: req.body?.name,
+      phone: req.body?.phone,
+      status: req.body?.status,
+      password: req.body?.password,
+      licenseSeats:
+        req.body?.licenseSeats != null ? Number(req.body.licenseSeats) : undefined,
+    });
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * POST /api/superadmin/resellers/:resellerId/allocate-seats
+ * Body: { seats } absolute OR { delta } relative
+ */
+router.post("/resellers/:resellerId/allocate-seats", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.allocateLicenseSeats(req.params.resellerId, {
+      seats: req.body?.seats != null ? Number(req.body.seats) : undefined,
+      delta: req.body?.delta != null ? Number(req.body.delta) : undefined,
+    });
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/superadmin/resellers/:resellerId/billing
+ * Invoice-style platform billing summary (what reseller owes Reborn)
+ */
+router.get("/resellers/:resellerId/billing", async (req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const month = req.query.month ? Number(req.query.month) : undefined;
+    const invoice = await ResellerBillingService.getResellerInvoice(req.params.resellerId, {
+      year,
+      month,
+    });
+    res.json({ success: true, invoice });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * GET /api/superadmin/reseller-billing/prices
+ */
+router.get("/reseller-billing/prices", async (_req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const prices = await ResellerBillingService.getPriceList();
+    res.json({ success: true, prices });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
+ * PUT /api/superadmin/reseller-billing/prices
+ */
+router.put("/reseller-billing/prices", async (req: Request, res: Response) => {
+  try {
+    const { ResellerBillingService } = await import("@/services/reseller-billing.service");
+    const prices = await ResellerBillingService.setPriceList(req.body || {});
+    res.json({ success: true, prices });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.post("/resellers/:resellerId/impersonate", async (req: Request, res: Response) => {
+  try {
+    const result = await ResellerService.impersonateToken(req.params.resellerId, req.user!.id);
+    res.json({ success: true, token: result.token, reseller: result.reseller });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.post("/resellers/ensure-agency", async (req: Request, res: Response) => {
+  try {
+    const reseller = await ResellerService.ensureChaslayAgency(req.user?.id);
+    res.json({ success: true, reseller });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+// ============================================================================
+// PLATFORM SHOP (catalog sold to merchants)
+// ============================================================================
+
+router.get("/platform-shop/products", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const products = await PlatformShopService.listProducts(false);
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list products" });
+  }
+});
+
+router.post("/platform-shop/products", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.createProduct(req.body || {});
+    res.status(201).json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create product" });
+  }
+});
+
+router.put("/platform-shop/products/:productId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.updateProduct(req.params.productId, req.body || {});
+    res.json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update product" });
+  }
+});
+
+router.delete("/platform-shop/products/:productId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const product = await PlatformShopService.deleteProduct(req.params.productId);
+    res.json({ success: true, product });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate product" });
+  }
+});
+
+router.post(
+  "/platform-shop/products/:productId/image",
+  imageUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const { PlatformShopService } = await import("@/services/platform-shop.service");
+      const { isAllowedImageMime } = await import("@/services/media-upload.service");
+      if (!req.file?.buffer) return res.status(400).json({ error: "Image file is required (field: file)" });
+      if (!isAllowedImageMime(req.file.mimetype)) {
+        return res.status(400).json({ error: "Only JPEG, PNG, WebP, or GIF images are allowed" });
+      }
+      const saved = await PlatformShopService.saveProductImage(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+      const product = await PlatformShopService.updateProduct(req.params.productId, {
+        imageUrl: saved.url,
+      });
+      res.json({ success: true, product, image: saved });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to upload image" });
+    }
+  }
+);
+
+router.get("/platform-shop/vouchers", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const vouchers = await PlatformShopService.listVouchers(false);
+    res.json({ success: true, vouchers });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list vouchers" });
+  }
+});
+
+router.post("/platform-shop/vouchers", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const voucher = await PlatformShopService.createVoucher(req.body || {});
+    res.status(201).json({ success: true, voucher });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create voucher" });
+  }
+});
+
+router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const voucher = await PlatformShopService.updateVoucher(req.params.voucherId, req.body || {});
+    res.json({ success: true, voucher });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update voucher" });
+  }
+});
+
+router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const orders = await PlatformShopService.listAllOrders();
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
+  }
+});
+
+router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update order" });
+  }
+});
+
+// ============================================================================
+// SYSTEM LOGS & PLATFORM MESSAGES
+// ============================================================================
+
+router.get("/system-logs", async (req: Request, res: Response) => {
+  try {
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const result = await PlatformLogService.list({
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 50,
+      level: String(req.query.level || "") || undefined,
+      category: String(req.query.category || "") || undefined,
+      from: req.query.from ? new Date(String(req.query.from)) : undefined,
+      to: req.query.to ? new Date(String(req.query.to)) : undefined,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list logs" });
+  }
+});
+
+router.post("/system-logs", async (req: Request, res: Response) => {
+  try {
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const log = await PlatformLogService.write({
+      ...req.body,
+      actorRole: "superadmin",
+      actorId: req.user?.id,
+    });
+    res.status(201).json({ success: true, log });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to write log" });
+  }
+});
+
+router.get("/platform-messages", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const messages = await PlatformMessageService.listAll(req.query.all === "1");
+    res.json({ success: true, messages });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list messages" });
+  }
+});
+
+router.post("/platform-messages", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const { PlatformLogService } = await import("@/services/platform-log.service");
+    const message = await PlatformMessageService.create({
+      ...req.body,
+      createdBySuperadminId: req.user?.id,
+    });
+    await PlatformLogService.write({
+      level: "info",
+      category: "platform_message",
+      message: `Published ${message.kind}: ${message.title}`,
+      actorRole: "superadmin",
+      actorId: req.user?.id,
+      metadata: { messageId: message.id, audience: message.audience },
+    });
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create message" });
+  }
+});
+
+router.put("/platform-messages/:messageId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const message = await PlatformMessageService.update(req.params.messageId, req.body || {});
+    res.json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update message" });
+  }
+});
+
+router.delete("/platform-messages/:messageId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformMessageService } = await import("@/services/platform-message.service");
+    const message = await PlatformMessageService.remove(req.params.messageId);
+    res.json({ success: true, message });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate message" });
+  }
+});
+
+// ============================================================================
+// SUPPORT TICKETS & AGENTS
+// ============================================================================
+
+router.get("/support/tickets", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const tickets = await SupportTicketService.listAllTickets({
+      status: String(req.query.status || "all"),
+      category: String(req.query.category || "") || undefined,
+      assignedTo: String(req.query.assignedTo || "") || undefined,
+    });
+    res.json({ success: true, tickets });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list tickets" });
+  }
+});
+
+router.get("/support/tickets/:ticketId", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const ticket = await SupportTicketService.getTicketWithMessages(req.params.ticketId);
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Ticket not found" });
+  }
+});
+
+router.post("/support/tickets/:ticketId/reply", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const body = String(req.body?.body || "").trim();
+    if (!body) return res.status(400).json({ error: "Message is required" });
+    const existing = await SupportTicketService.getTicketWithMessages(req.params.ticketId);
+    if (existing.category !== "technical") {
+      return res.status(403).json({
+        error: "Non-technical tickets are handled by the merchant's reseller (information only).",
+      });
+    }
+    const ticket = await SupportTicketService.addReply(req.params.ticketId, {
+      authorRole: "superadmin",
+      authorId: req.user?.id,
+      authorName: req.user?.name,
+      body,
+      closeTicket: !!req.body?.close,
+    });
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to reply" });
+  }
+});
+
+router.patch("/support/tickets/:ticketId/assign", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const ticket = await SupportTicketService.assignTicket(
+      req.params.ticketId,
+      req.body?.assignedToSuperadminId || null
+    );
+    res.json({ success: true, ticket });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to assign" });
+  }
+});
+
+router.get("/support/agents", async (_req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const agents = await SupportTicketService.listSuperadminsForSupportMgmt();
+    res.json({ success: true, agents });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list agents" });
+  }
+});
+
+router.patch("/support/agents/:superadminId", async (req: Request, res: Response) => {
+  try {
+    const { SupportTicketService } = await import("@/services/support-ticket.service");
+    const agent = await SupportTicketService.setSupportAgent(
+      req.params.superadminId,
+      !!req.body?.handlesSupport
+    );
+    res.json({ success: true, agent });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update agent" });
+  }
+});
+
 export default router;
