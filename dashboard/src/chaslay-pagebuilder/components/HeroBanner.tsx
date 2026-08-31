@@ -58,6 +58,9 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
   const {
     connectors: { connect, drag },
   } = useNode();
+  const { enabled: editorEnabled } = useEditor((state) => ({
+    enabled: state.options.enabled,
+  }));
 
   const enableSlider = mergedProps.enableSlider || false;
   const sliderImages = mergedProps.sliderImages || [];
@@ -75,14 +78,13 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
 
   // Auto-rotation timer (live preview only — disabled in editor)
   useEffect(() => {
-    if (!enableSlider || sliderImages.length <= 1) return;
-    const { enabled: editorEnabled } = query.getOptions();
     if (editorEnabled) return;
+    if (!enableSlider || sliderImages.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % sliderImages.length);
     }, sliderSpeed * 1000);
     return () => clearInterval(interval);
-  }, [enableSlider, sliderImages.length, sliderSpeed]);
+  }, [editorEnabled, enableSlider, sliderImages.length, sliderSpeed]);
 
   const hasBackground = enableSlider ? sliderImages.length > 0 : !!mergedProps.backgroundImage;
 
