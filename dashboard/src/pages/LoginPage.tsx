@@ -21,6 +21,29 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+function loginErrorMessage(
+  error: unknown,
+  t: (key: string) => string
+): string {
+  const err = error as {
+    response?: { data?: { error?: string }; status?: number };
+    message?: string;
+    code?: string;
+  };
+  if (err.response?.data?.error) return err.response.data.error;
+  if (err.response?.status === 500 || err.response?.status === 502 || err.response?.status === 503) {
+    return t('loginServerUnavailable');
+  }
+  const msg = String(err.message || '');
+  if (
+    err.code === 'ERR_NETWORK' ||
+    /network error|failed to fetch|load failed|networkerror/i.test(msg)
+  ) {
+    return t('loginNetworkError');
+  }
+  return msg || t('loginFailed');
+}
+
 type UnifiedLoginResponse = {
   token?: string;
   kind?: 'superadmin' | 'reseller' | 'merchant' | 'staff';
@@ -161,8 +184,7 @@ export default function LoginPage() {
       toast.success(t('loginWelcome'));
       navigate(posEmbedReturnPath() ?? homePathForUser(hit.user), { replace: true });
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { error?: string } }; message?: string };
-      toast.error(err.response?.data?.error || err.message || t('loginFailed'));
+      toast.error(loginErrorMessage(error, t));
     } finally {
       setIsLoading(false);
     }
