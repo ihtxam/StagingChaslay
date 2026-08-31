@@ -87,33 +87,38 @@ bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
 
 ---
 
-## 3. Auto-deploy on every push to `main`
+## 3. Deploy workflows
 
-Two workflows — **Chaslay test first**, then **Rebornsense production**:
+Two separate repos — each auto-deploys to its own server on push to `main`:
 
-| Order | Workflow | Server secret | Stack | Domains |
-|-------|----------|---------------|-------|---------|
-| 1 | `deploy-hetzner.yml` | `HETZNER_HOST` | `chaslay` | `app.chaslay.com`, … |
-| 2 | `deploy-rebornsense.yml` | `REBORN_HETZNER_HOST` | `rebornsense` | `app.rebornsense.com`, … |
+| When user says | Repo | Server | Path | Auto-deploy |
+|----------------|------|--------|------|-------------|
+| push to **test** / **chaslay** | [rebornChaslay](https://github.com/ihtxam/rebornChaslay) | `116.202.26.15` | `/root/rebornChaslay` | yes on `main` |
+| push to **production** / **reborn** | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | yes on `main` |
 
-Rebornsense deploy runs **only after** the Chaslay deploy succeeds (or via manual **Run workflow**).
+When asking an agent to push, always specify **test/chaslay** or **production/reborn** so the correct repo is updated.
 
-### Chaslay test server (deploy first)
+| Environment | Workflow | Trigger | Server secret | Stack | Domains |
+|-------------|----------|---------|---------------|-------|---------|
+| Chaslay test/staging | `deploy-hetzner.yml` in **rebornChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
+| Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Auto on push to `main` | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
 
-Repo → **Settings → Secrets and variables → Actions**:
+Test on Chaslay first, then merge/cherry-pick into rebornSense and push to `main` for production.
+
+### Chaslay test server (rebornChaslay repo)
+
+Configure secrets in **rebornChaslay** → Settings → Secrets and variables → Actions (not in this repo):
 
 | Secret | Example |
 |--------|---------|
-| `HETZNER_HOST` | `116.202.26.15` (Chaslay test VPS — **not** Rebornsense production) |
+| `HETZNER_HOST` | `116.202.26.15` |
 | `HETZNER_USER` | `root` |
 | `HETZNER_SSH_KEY` | Private key (PEM) that can SSH to the Chaslay server |
-| `HETZNER_DEPLOY_PATH` | `/root/FoodTruckPOS` (optional) |
+| `HETZNER_DEPLOY_PATH` | `/root/rebornChaslay` (optional) |
 | `HETZNER_DEPLOY_STACK` | `chaslay` (optional; default is `chaslay`) |
 | `HETZNER_SSH_PORT` | `22` (optional) |
 
-On the server, add the matching **public key** to `~/.ssh/authorized_keys`.
-
-Every `git push` to `main` deploys here first.
+Every `git push` to `main` in **rebornChaslay** deploys to the test server.
 
 ### Rebornsense production (`app.rebornsense.com`)
 
@@ -136,11 +141,11 @@ Add these secrets (do **not** reuse `HETZNER_HOST` for production):
 | `REBORN_HETZNER_SSH_KEY` | Private key for the Rebornsense server |
 | `REBORN_HETZNER_DEPLOY_PATH` | `/root/rebornSense` (optional) |
 
-Workflow: `.github/workflows/deploy-rebornsense.yml` (after Chaslay deploy succeeds, or manual dispatch).
+Workflow: `.github/workflows/deploy-rebornsense.yml` (auto on push to `main` in this repo).
 
 Caddy config: `deploy/Caddyfile.rebornsense`
 
-**Why two workflows?** Running both against the same server caused Docker name conflicts (`rebornsense-api-1 already in use`). Keep `HETZNER_HOST` on the Chaslay test box only.
+**Why two repos?** Each repo deploys only to its own server. Do not add Chaslay deploy workflows here or Rebornsense workflows in rebornChaslay.
 
 #### First-time / broken deploy on `91.98.41.165`
 
