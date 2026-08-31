@@ -151,22 +151,25 @@ function MerchantsPage() {
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const [m, e, p, pl] = await Promise.all([
-        api.get('/reseller/merchants', { params: { search: search || undefined } }),
-        api.get('/reseller/editions'),
-        api.get('/reseller/licenses/pool'),
-        api.get('/reseller/plans'),
-      ]);
-      setMerchants(m.data.merchants || []);
-      setEditions(e.data.editions || []);
-      setPool(p.data.pool || pool);
-      const activePlans = (pl.data.plans || []).filter(
+    const [m, e, p, pl] = await Promise.allSettled([
+      api.get('/reseller/merchants', { params: { search: search || undefined } }),
+      api.get('/reseller/editions'),
+      api.get('/reseller/licenses/pool'),
+      api.get('/reseller/plans'),
+    ]);
+    if (m.status === 'fulfilled') {
+      setMerchants(m.value.data.merchants || []);
+    } else {
+      const err = m.reason as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('resellerLoadFailed'));
+    }
+    if (e.status === 'fulfilled') setEditions(e.value.data.editions || []);
+    if (p.status === 'fulfilled') setPool(p.value.data.pool || pool);
+    if (pl.status === 'fulfilled') {
+      const activePlans = (pl.value.data.plans || []).filter(
         (plan: { isActive?: boolean }) => plan.isActive !== false
       );
       if (activePlans.length) setSubscriptionPlans(activePlans);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('resellerLoadFailed'));
     }
   }, [search, t]);
 

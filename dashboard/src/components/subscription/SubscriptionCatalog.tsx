@@ -111,21 +111,25 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
   const [savingAddon, setSavingAddon] = useState(false);
 
   const load = async () => {
-    try {
-      setLoading(true);
-      const [plansRes, editionsRes, addonsRes] = await Promise.all([
-        api.get(`/${apiPrefix}/plans`),
-        api.get(`/${apiPrefix}/editions`),
-        api.get(`/${apiPrefix}/addons`),
-      ]);
-      setPlans(plansRes.data.plans || []);
-      setEditions(editionsRes.data.editions || []);
-      setAddons(addonsRes.data.addons || []);
-    } catch {
+    setLoading(true);
+    const [plansRes, editionsRes, addonsRes] = await Promise.allSettled([
+      api.get(`/${apiPrefix}/plans`),
+      api.get(`/${apiPrefix}/editions`),
+      api.get(`/${apiPrefix}/addons`),
+    ]);
+    if (plansRes.status === 'fulfilled') setPlans(plansRes.value.data.plans || []);
+    if (editionsRes.status === 'fulfilled') setEditions(editionsRes.value.data.editions || []);
+    if (addonsRes.status === 'fulfilled') setAddons(addonsRes.value.data.addons || []);
+    if (
+      plansRes.status === 'rejected' &&
+      editionsRes.status === 'rejected' &&
+      addonsRes.status === 'rejected'
+    ) {
       toast.error('Failed to load subscription catalog');
-    } finally {
-      setLoading(false);
+    } else if (plansRes.status === 'rejected' || addonsRes.status === 'rejected') {
+      toast.error('Some catalog items failed to load');
     }
+    setLoading(false);
   };
 
   useEffect(() => {

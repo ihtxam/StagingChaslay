@@ -3387,6 +3387,14 @@ export const posCashMovements = pgTable(
   })
 );
 
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one, many }) => ({
+  edition: one(editions, {
+    fields: [subscriptionPlans.editionId],
+    references: [editions.id],
+  }),
+  payments: many(subscriptionPayments),
+}));
+
 export const subscriptionAddonsRelations = relations(subscriptionAddons, ({ many }) => ({
   merchantSubscriptions: many(merchantAddonSubscriptions),
   payments: many(subscriptionAddonPayments),

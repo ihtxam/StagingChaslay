@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
 import { queryRaw, withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
@@ -91,19 +91,66 @@ function normalizeSlug(slug: string) {
 }
 
 export class SubscriptionPlansService {
+  /** Attach edition rows without relying on drizzle relational `with`. */
+  private static async withEditions<T extends { editionId?: string | null }>(
+    plans: T[]
+  ): Promise<Array<T & { edition: typeof schema.editions.$inferSelect | null }>> {
+    const ids = [
+      ...new Set(
+        plans
+          .map((p) => p.editionId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      ),
+    ];
+    if (!ids.length) {
+      return plans.map((p) => ({ ...p, edition: null }));
+    }
+    const db = getDb();
+    const editions = await db
+      .select()
+      .from(schema.editions)
+      .where(inArray(schema.editions.id, ids));
+    const byId = new Map(editions.map((e) => [e.id, e]));
+    return plans.map((p) => ({
+      ...p,
+      edition: p.editionId ? byId.get(p.editionId) ?? null : null,
+    }));
+  }
+
+  /**
+   * List packages without `with: { edition }` — that relational join throws
+   * `Cannot read properties of undefined (reading 'referencedTable')` when
+   * `subscriptionPlansRelations` is missing from the schema export.
+   */
+  private static async listPlansByOwner(resellerId: string, includeInactive: boolean) {
+    const db = getDb();
+    const where = and(
+      eq(schema.subscriptionPlans.ownerType, "reseller"),
+      eq(schema.subscriptionPlans.ownerId, resellerId)
+    );
+    try {
+      const plans = await db.query.subscriptionPlans.findMany({
+        where,
+        orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+        with: { edition: true },
+      });
+      if (includeInactive) return plans;
+      return plans.filter((p) => p.isActive);
+    } catch (error) {
+      console.warn("[plans] relational list failed, using select + edition attach:", error);
+      const plans = await db.query.subscriptionPlans.findMany({
+        where,
+        orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+      });
+      const withEdition = await this.withEditions(plans);
+      if (includeInactive) return withEdition;
+      return withEdition.filter((p) => p.isActive);
+    }
+  }
+
   /** Packages owned by one reseller (including Reborn Direct). */
   static async listForReseller(resellerId: string, includeInactive = true) {
-    const db = getDb();
-    const plans = await db.query.subscriptionPlans.findMany({
-      where: and(
-        eq(schema.subscriptionPlans.ownerType, "reseller"),
-        eq(schema.subscriptionPlans.ownerId, resellerId)
-      ),
-      orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
-      with: { edition: true },
-    });
-    if (includeInactive) return plans;
-    return plans.filter((p) => p.isActive);
+    return this.listPlansByOwner(resellerId, includeInactive);
   }
 
   static async listAll(
@@ -130,16 +177,26 @@ export class SubscriptionPlansService {
   static async listPublicForMerchant(merchantId: string) {
     const sellerId = await PlatformResellerService.resolveForMerchant(merchantId);
     const db = getDb();
-    return db.query.subscriptionPlans.findMany({
-      where: and(
-        eq(schema.subscriptionPlans.isActive, true),
-        eq(schema.subscriptionPlans.isPublic, true),
-        eq(schema.subscriptionPlans.ownerType, "reseller"),
-        eq(schema.subscriptionPlans.ownerId, sellerId)
-      ),
-      orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
-      with: { edition: true },
-    });
+    const where = and(
+      eq(schema.subscriptionPlans.isActive, true),
+      eq(schema.subscriptionPlans.isPublic, true),
+      eq(schema.subscriptionPlans.ownerType, "reseller"),
+      eq(schema.subscriptionPlans.ownerId, sellerId)
+    );
+    try {
+      return await db.query.subscriptionPlans.findMany({
+        where,
+        orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+        with: { edition: true },
+      });
+    } catch (error) {
+      console.warn("[plans] public merchant list failed, using select + edition attach:", error);
+      const plans = await db.query.subscriptionPlans.findMany({
+        where,
+        orderBy: [asc(schema.subscriptionPlans.sortOrder), asc(schema.subscriptionPlans.name)],
+      });
+      return this.withEditions(plans);
+    }
   }
 
   static async getById(id: string) {
