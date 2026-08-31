@@ -34,6 +34,7 @@ import KioskTokenAdminPage from '@/pages/kiosk/KioskTokenAdminPage';
 import SignageDisplayPage from '@/pages/SignageDisplayPage';
 import StatusPage from '@/pages/StatusPage';
 import PwaLaunchGuide from '@/components/PwaLaunchGuide';
+import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 
@@ -414,6 +415,9 @@ function App() {
           {/* shop.domain/{slug} - Reborn-style path shops */}
           {shopHub && (
             <>
+              <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant/*" element={<PanelLoginRedirect />} />
+              <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
               <Route
                 path="/:merchantSlug/menu"
                 element={
@@ -508,6 +512,9 @@ function App() {
           {/* {slug}.domain - merchant subdomain shops */}
           {merchantSubdomain && (
             <>
+              <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant/*" element={<PanelLoginRedirect />} />
+              <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
                 path="/menu"
                 element={
@@ -602,6 +609,9 @@ function App() {
           {/* Custom merchant domain (apex / www) */}
           {customDomain && (
             <>
+              <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant/*" element={<PanelLoginRedirect />} />
+              <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
                 path="/menu"
                 element={
