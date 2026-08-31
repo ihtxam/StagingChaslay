@@ -457,6 +457,21 @@ export default function Merchants() {
     }
   };
 
+  const [revokingSessionsId, setRevokingSessionsId] = useState<string | null>(null);
+
+  const handleRevokeSessions = async (merchantId: string) => {
+    if (!window.confirm(t('revokeAllSessionsHint'))) return;
+    setRevokingSessionsId(merchantId);
+    try {
+      await api.post(`/superadmin/merchants/${merchantId}/revoke-sessions`);
+      toast.success(t('revokeAllSessionsDone'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('revokeAllSessionsFailed'));
+    } finally {
+      setRevokingSessionsId(null);
+    }
+  };
+
   const handleSuspend = async (merchantId: string) => {
     try {
       await api.post(`/superadmin/merchants/${merchantId}/suspend`);
@@ -1601,7 +1616,15 @@ export default function Merchants() {
                     </button>
                   </div>
                 </div>
-                <div className="flex justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={revokingSessionsId === showDetail.id}
+                    onClick={() => void handleRevokeSessions(showDetail.id)}
+                  >
+                    {revokingSessionsId === showDetail.id ? '…' : t('revokeAllSessions')}
+                  </button>
                   <button
                     type="button"
                     className="btn-primary"

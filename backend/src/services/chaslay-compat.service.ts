@@ -236,6 +236,7 @@ export class ChaslayCompatService {
       role: "merchant",
       merchantId: merchant.id,
       name: merchant.name,
+      authEpoch: Number(merchant.authEpoch ?? 0),
     });
     const dashboardUser = {
       id: merchant.id,
@@ -296,6 +297,7 @@ export class ChaslayCompatService {
       name: staff.name,
       roleName,
       permissions,
+      authEpoch: Number(merchant.authEpoch ?? 0),
     });
     const dashboardUser = {
       id: staff.id,

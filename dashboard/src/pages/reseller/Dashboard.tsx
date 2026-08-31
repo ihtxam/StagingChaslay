@@ -149,6 +149,7 @@ function MerchantsPage() {
   const [savingLimits, setSavingLimits] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [revokingSessionsId, setRevokingSessionsId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [m, e, p, pl] = await Promise.allSettled([
@@ -235,6 +236,19 @@ function MerchantsPage() {
       toast.error(err.response?.data?.error || t('resellerSaveFailed'));
     } finally {
       setStatusBusyId(null);
+    }
+  };
+
+  const revokeAllSessions = async (m: { id: string; name: string }) => {
+    if (!window.confirm(t('revokeAllSessionsHint'))) return;
+    setRevokingSessionsId(m.id);
+    try {
+      await api.post(`/reseller/merchants/${m.id}/revoke-sessions`);
+      toast.success(t('revokeAllSessionsDone'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('revokeAllSessionsFailed'));
+    } finally {
+      setRevokingSessionsId(null);
     }
   };
 
@@ -794,6 +808,14 @@ function MerchantsPage() {
                       {t('suspend')}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className="text-stone-700 hover:underline disabled:opacity-40"
+                    disabled={revokingSessionsId === m.id}
+                    onClick={() => void revokeAllSessions(m)}
+                  >
+                    {revokingSessionsId === m.id ? '…' : t('revokeAllSessions')}
+                  </button>
                   <button
                     type="button"
                     className="text-rose-700 hover:underline"
