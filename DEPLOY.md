@@ -93,21 +93,21 @@ Two separate repos — each auto-deploys to its own server on push to `main`:
 
 | When user says | Repo | Server | Path | Auto-deploy |
 |----------------|------|--------|------|-------------|
-| push to **test** / **chaslay** | [rebornChaslay](https://github.com/ihtxam/rebornChaslay) | `116.202.26.15` | `/root/rebornChaslay` | yes on `main` |
+| push to **test** / **chaslay** | [StagingChaslay](https://github.com/ihtxam/StagingChaslay) | `116.202.26.15` | `/root/rebornChaslay` | yes on `main` |
 | push to **production** / **reborn** | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | yes on `main` |
 
 When asking an agent to push, always specify **test/chaslay** or **production/reborn** so the correct repo is updated.
 
 | Environment | Workflow | Trigger | Server secret | Stack | Domains |
 |-------------|----------|---------|---------------|-------|---------|
-| Chaslay test/staging | `deploy-hetzner.yml` in **rebornChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
+| Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
 | Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Auto on push to `main` | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
 
 Test on Chaslay first, then merge/cherry-pick into rebornSense and push to `main` for production.
 
-### Chaslay test server (rebornChaslay repo)
+### Chaslay test server (StagingChaslay repo)
 
-Configure secrets in **rebornChaslay** → Settings → Secrets and variables → Actions (not in this repo):
+Configure secrets in **StagingChaslay** → Settings → Secrets and variables → Actions (not in this repo):
 
 | Secret | Example |
 |--------|---------|
@@ -118,7 +118,7 @@ Configure secrets in **rebornChaslay** → Settings → Secrets and variables �
 | `HETZNER_DEPLOY_STACK` | `chaslay` (optional; default is `chaslay`) |
 | `HETZNER_SSH_PORT` | `22` (optional) |
 
-Every `git push` to `main` in **rebornChaslay** deploys to the test server.
+Every `git push` to `main` in **StagingChaslay** deploys to the test server.
 
 ### Rebornsense production (`app.rebornsense.com`)
 
@@ -145,7 +145,7 @@ Workflow: `.github/workflows/deploy-rebornsense.yml` (auto on push to `main` in 
 
 Caddy config: `deploy/Caddyfile.rebornsense`
 
-**Why two repos?** Each repo deploys only to its own server. Do not add Chaslay deploy workflows here or Rebornsense workflows in rebornChaslay.
+**Why two repos?** Each repo deploys only to its own server. Do not add Chaslay deploy workflows here or Rebornsense workflows in StagingChaslay.
 
 #### First-time / broken deploy on `91.98.41.165`
 
