@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   "VIEW_REPORTS",
   /** See company-wide / all-staff sales in reports and EOD (without this = own sales only). */
   "VIEW_ALL_SALES",
+  /** Permanently remove completed cash sales from POS history and reports (gandola role). */
+  "GANDOLA_PURGE",
   "MANAGE_PRODUCTS",
   "MANAGE_CUSTOMERS",
   "MANAGE_OFFERS",
@@ -179,6 +181,20 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
   },
   {
+    /** Hidden bulk delete of completed cash sales from POS history and reports. */
+    name: "gandola",
+    isSystem: true,
+    sortOrder: 58,
+    permissions: [
+      "USE_WEBPOS",
+      "VIEW_ORDER_HISTORY",
+      "VIEW_ALL_SALES",
+      "VIEW_REPORTS",
+      "END_OF_DAY",
+      "GANDOLA_PURGE",
+    ],
+  },
+  {
     /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
     name: "Storekeeper",
     isSystem: true,
@@ -277,6 +293,7 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [
   "VIEW_REPORTS",
   "VIEW_ALL_SALES",
+  "GANDOLA_PURGE",
   "ACCESS_PANEL",
   "OPEN_CASH_DRAWER",
   "MANAGE_SETTINGS",
@@ -313,6 +330,7 @@ const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
   "ACCESS_PANEL",
   "VIEW_REPORTS",
   "VIEW_ALL_SALES",
+  "GANDOLA_PURGE",
   "MANAGE_STAFF",
   "MANAGE_ROLES",
   "MANAGE_BILLING",

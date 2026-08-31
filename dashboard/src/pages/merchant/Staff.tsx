@@ -689,6 +689,9 @@ export default function StaffPage({
                 {role.name.trim().toLowerCase() === 'order center operator' ? (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleOrderCenterHint')}</p>
                 ) : null}
+                {role.name.trim().toLowerCase() === 'gandola' ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleGandolaHint')}</p>
+                ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
                 {t('staffEditPermissions')}

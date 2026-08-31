@@ -87,6 +87,12 @@ import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
+import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
+import {
+  isGandolaPurgeEligible,
+  orderMatchesPaymentFilter,
+} from '@/lib/gandola-purge';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import {
   mergeOrdersWithOnlineForAllFilter,
@@ -275,6 +281,8 @@ type Props = {
   onOpenDeliveryHub?: () => void;
   /** Owner/manager only — unlock cash sales adjustment via search icon taps */
   canSalesAdjust?: boolean;
+  /** Gandola role — five taps on earthworm unlocks permanent cash order deletion */
+  canGandolaPurge?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
   /** Merchant Settings — auto-print receipt after collect payment */
@@ -506,6 +514,7 @@ export default function WebPosOrdersPanel({
   onChannelFilterChange,
   onOpenDeliveryHub,
   canSalesAdjust = false,
+  canGandolaPurge = false,
   kitchenEnabled = true,
   autoPrintReceipt = true,
   taxIncludedInPrice,
@@ -554,6 +563,10 @@ export default function WebPosOrdersPanel({
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const [purgeMode, setPurgeMode] = useState(false);
+  const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
+  const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
+  const [purgeBusy, setPurgeBusy] = useState(false);
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
   const [kdsByTicket, setKdsByTicket] = useState<
     Record<string, { ready: number; sent: number; readyLineIds: string[] }>
@@ -833,11 +846,20 @@ export default function WebPosOrdersPanel({
     return items;
   }, [held, ordersForList, statusFilter, channelFilter, search]);
 
+  const displayItems = useMemo(() => {
+    if (!purgeMode) return listItems;
+    return listItems.filter((item) => {
+      if (item.kind !== 'order') return false;
+      if (!isGandolaPurgeEligible(item.order)) return false;
+      return orderMatchesPaymentFilter(item.order, purgePaymentFilter);
+    });
+  }, [listItems, purgeMode, purgePaymentFilter]);
+
   const pageSize = ordersView === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
-  const pageCount = Math.max(1, Math.ceil(listItems.length / pageSize));
-  const pageItems = listItems.slice(page * pageSize, page * pageSize + pageSize);
-  const rangeStart = listItems.length === 0 ? 0 : page * pageSize + 1;
-  const rangeEnd = Math.min(listItems.length, (page + 1) * pageSize);
+  const pageCount = Math.max(1, Math.ceil(displayItems.length / pageSize));
+  const pageItems = displayItems.slice(page * pageSize, page * pageSize + pageSize);
+  const rangeStart = displayItems.length === 0 ? 0 : page * pageSize + 1;
+  const rangeEnd = Math.min(displayItems.length, (page + 1) * pageSize);
   const money = (n: number) => `CHF ${Number(n || 0).toFixed(2)}`;
 
   const heldCartLines = (h: HeldRow) => parseHeldCartJson(h.cartJson).cart as CartLine[];
@@ -1186,8 +1208,73 @@ export default function WebPosOrdersPanel({
 
   /** Unpaid collectable orders show detail first; collect from the side panel. */
   const openOrderClick = (o: PosOrder) => {
+    if (purgeMode) {
+      if (!isGandolaPurgeEligible(o)) return;
+      setSelectedPurgeIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(o.id)) next.delete(o.id);
+        else next.add(o.id);
+        return next;
+      });
+      return;
+    }
     setCollectFor(null);
     selectOrder(o);
+  };
+
+  const enterPurgeMode = () => {
+    setPurgeMode(true);
+    setStatusFilter('completed');
+    setPurgePaymentFilter('cash');
+    setSelectedPurgeIds(new Set());
+    setSelectedOrder(null);
+    setSelectedHeld(null);
+    setPage(0);
+    toast.success(t('gandolaPurgeMode'), { duration: 4000 });
+  };
+
+  const exitPurgeMode = () => {
+    setPurgeMode(false);
+    setSelectedPurgeIds(new Set());
+  };
+
+  const selectAllPurgeVisible = () => {
+    const ids = displayItems
+      .filter((item): item is { kind: 'order'; order: PosOrder } => item.kind === 'order')
+      .map((item) => item.order.id);
+    setSelectedPurgeIds(new Set(ids));
+  };
+
+  const purgeSelectedOrders = async () => {
+    const ids = [...selectedPurgeIds];
+    if (!ids.length) return;
+    const ok = window.confirm(t('gandolaPurgeConfirm').replace('{n}', String(ids.length)));
+    if (!ok) return;
+    setPurgeBusy(true);
+    try {
+      const res = await api.post('/merchant/pos/orders/purge', { orderIds: ids });
+      const result = res.data?.result as {
+        deletedCount?: number;
+        skippedIds?: string[];
+      };
+      const deleted = Number(result?.deletedCount || 0);
+      const skipped = result?.skippedIds?.length || 0;
+      if (skipped > 0) {
+        toast.success(
+          t('gandolaPurgeSkipped')
+            .replace('{deleted}', String(deleted))
+            .replace('{skipped}', String(skipped))
+        );
+      } else {
+        toast.success(t('gandolaPurgeSuccess').replace('{n}', String(deleted)));
+      }
+      setSelectedPurgeIds(new Set());
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('gandolaPurgeFailed'));
+    } finally {
+      setPurgeBusy(false);
+    }
   };
 
   const orderActionMenu = (
@@ -1348,6 +1435,9 @@ export default function WebPosOrdersPanel({
             {canSalesAdjust ? (
               <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
             ) : null}
+            {canGandolaPurge ? (
+              <SecretGandolaTapButton onUnlock={enterPurgeMode} />
+            ) : null}
             <input
               type="search"
               className="min-w-0 w-full rounded-lg border border-stone-200 bg-stone-50 py-2 px-3 text-sm"
@@ -1438,7 +1528,7 @@ export default function WebPosOrdersPanel({
             {!isOnlineMode ? (
               <>
             <span className="tabular-nums">
-              {rangeStart}-{rangeEnd} / {listItems.length}
+              {rangeStart}-{rangeEnd} / {displayItems.length}
             </span>
             <button
               type="button"
@@ -1477,6 +1567,23 @@ export default function WebPosOrdersPanel({
             ) : null}
           </div>
         </div>
+        {purgeMode ? (
+          <GandolaPurgeToolbar
+            selectedCount={selectedPurgeIds.size}
+            visibleCount={displayItems.length}
+            paymentFilter={purgePaymentFilter}
+            onPaymentFilterChange={(value) => {
+              setPurgePaymentFilter(value);
+              setSelectedPurgeIds(new Set());
+              setPage(0);
+            }}
+            onSelectAll={selectAllPurgeVisible}
+            onClearSelection={() => setSelectedPurgeIds(new Set())}
+            onDelete={() => void purgeSelectedOrders()}
+            onExit={exitPurgeMode}
+            deleting={purgeBusy}
+          />
+        ) : null}
         <div
           className={`relative flex min-h-0 flex-1 flex-col lg:flex-row ${
             detailOpen ? 'overflow-hidden lg:overflow-visible' : ''
@@ -1581,13 +1688,28 @@ export default function WebPosOrdersPanel({
                   const idLabel = orderListPrimaryLabel(o);
                   const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
                   const itemCount = Array.isArray(o.items) ? o.items.length : 0;
+                  const purgeSelected = purgeMode && selectedPurgeIds.has(o.id);
                   return (
                     <button
                       key={`og-${o.id}`}
                       type="button"
                         onClick={() => openOrderClick(o)}
-                        className={`flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 hover:ring-teal-400 ${orderBorderClass(o)}`}
+                        className={`relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-xl border-2 bg-white text-left text-stone-900 shadow-sm transition hover:ring-2 ${
+                          purgeSelected ? 'ring-2 ring-red-500 border-red-300' : 'hover:ring-teal-400'
+                        } ${orderBorderClass(o)}`}
                     >
+                      {purgeMode ? (
+                        <span
+                          className={`absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 text-[11px] font-bold ${
+                            purgeSelected
+                              ? 'border-red-600 bg-red-600 text-white'
+                              : 'border-stone-300 bg-white text-transparent'
+                          }`}
+                          aria-hidden
+                        >
+                          ✓
+                        </span>
+                      ) : null}
                       <div
                         className={`flex items-center justify-between gap-1 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ${orderHeaderClass(o)}`}
                       >
@@ -1723,7 +1845,9 @@ export default function WebPosOrdersPanel({
                     );
                   }
                   const o = item.order;
-                  const selected = selectedOrder?.id === o.id;
+                  const selected = purgeMode
+                    ? selectedPurgeIds.has(o.id)
+                    : selectedOrder?.id === o.id;
                   const isSplitRow = o.masterOrderId && (splitCounts.get(o.masterOrderId) || 0) > 1;
                   const isCompletedSale = !canCancelOrder(o);
                   const showPosCancel = canCancel && canCancelPosAwaitingOrder(o);
@@ -1740,9 +1864,21 @@ export default function WebPosOrdersPanel({
                         type="button"
                         onClick={() => openOrderClick(o)}
                         className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
-                          selected ? 'bg-teal-50' : ''
+                          selected ? (purgeMode ? 'bg-red-50' : 'bg-teal-50') : ''
                         }`}
                       >
+                        {purgeMode ? (
+                          <span
+                            className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-[11px] font-bold sm:mt-0 ${
+                              selected
+                                ? 'border-red-600 bg-red-600 text-white'
+                                : 'border-stone-300 bg-white text-transparent'
+                            }`}
+                            aria-hidden
+                          >
+                            ✓
+                          </span>
+                        ) : null}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -1892,9 +2028,11 @@ export default function WebPosOrdersPanel({
           {!isOnlineMode ? (
           <aside
             className={
-              detailOpen
-                ? 'fixed inset-0 z-[45] flex min-h-0 w-full flex-col bg-stone-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0'
-                : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+              purgeMode
+                ? 'hidden'
+                : detailOpen
+                  ? 'fixed inset-0 z-[45] flex min-h-0 w-full flex-col bg-stone-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0'
+                  : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
             }
           >
             {selectedHeld ? (

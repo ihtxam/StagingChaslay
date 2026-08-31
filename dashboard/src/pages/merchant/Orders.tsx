@@ -49,11 +49,17 @@ import {
 } from '@/components/settings/SettingsReportUi';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
+import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
+import {
+  isGandolaPurgeEligible,
+  orderMatchesPaymentFilter,
+} from '@/lib/gandola-purge';
+import { hasPermission, type Permission } from '@/lib/permissions';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
 import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import { useAuthStore } from '@/store/auth';
-import { hasPermission, type Permission } from '@/lib/permissions';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice' | 'programmed';
@@ -400,6 +406,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const canSalesAdjust =
     jwtIsOwner ||
     hasPermission(user?.permissions as Permission[] | undefined, 'VIEW_ALL_SALES', false);
+  const canGandolaPurge =
+    jwtIsOwner ||
+    hasPermission(user?.permissions as Permission[] | undefined, 'GANDOLA_PURGE', false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [heldRows, setHeldRows] = useState<HeldRow[]>([]);
@@ -443,6 +452,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
+  const [purgeMode, setPurgeMode] = useState(false);
+  const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
+  const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
+  const [purgeBusy, setPurgeBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [collectOpen, setCollectOpen] = useState(false);
   const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
@@ -621,6 +634,63 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     dateTo,
   ]);
 
+  const displayList = useMemo(() => {
+    if (!purgeMode) return list;
+    return list.filter((order) => {
+      if (isHeldListRow(order)) return false;
+      if (!isGandolaPurgeEligible(order)) return false;
+      return orderMatchesPaymentFilter(order, purgePaymentFilter);
+    });
+  }, [list, purgeMode, purgePaymentFilter]);
+
+  const enterPurgeMode = () => {
+    setPurgeMode(true);
+    setStatusFilter('completed');
+    setPaymentFilter('cash');
+    setPurgePaymentFilter('cash');
+    setSelectedPurgeIds(new Set());
+    setSelected(null);
+    toast.success(t('gandolaPurgeMode'), { duration: 4000 });
+  };
+
+  const exitPurgeMode = () => {
+    setPurgeMode(false);
+    setSelectedPurgeIds(new Set());
+  };
+
+  const selectAllPurgeVisible = () => {
+    setSelectedPurgeIds(new Set(displayList.map((order) => order.id)));
+  };
+
+  const purgeSelectedOrders = async () => {
+    const ids = [...selectedPurgeIds];
+    if (!ids.length) return;
+    const ok = window.confirm(t('gandolaPurgeConfirm').replace('{n}', String(ids.length)));
+    if (!ok) return;
+    setPurgeBusy(true);
+    try {
+      const res = await api.post('/merchant/pos/orders/purge', { orderIds: ids });
+      const result = res.data?.result as { deletedCount?: number; skippedIds?: string[] };
+      const deleted = Number(result?.deletedCount || 0);
+      const skipped = result?.skippedIds?.length || 0;
+      if (skipped > 0) {
+        toast.success(
+          t('gandolaPurgeSkipped')
+            .replace('{deleted}', String(deleted))
+            .replace('{skipped}', String(skipped))
+        );
+      } else {
+        toast.success(t('gandolaPurgeSuccess').replace('{n}', String(deleted)));
+      }
+      setSelectedPurgeIds(new Set());
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('gandolaPurgeFailed'));
+    } finally {
+      setPurgeBusy(false);
+    }
+  };
+
   const openInvoice = async (order: MerchantOrder, mode: 'view' | 'download') => {
     setPdfBusy(true);
     try {
@@ -637,6 +707,16 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   };
 
   const openDetail = async (order: MerchantOrder) => {
+    if (purgeMode) {
+      if (isHeldListRow(order) || !isGandolaPurgeEligible(order)) return;
+      setSelectedPurgeIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(order.id)) next.delete(order.id);
+        else next.add(order.id);
+        return next;
+      });
+      return;
+    }
     setCollectOpen(false);
     if (isHeldListRow(order)) {
       setSelected(order);
@@ -898,6 +978,12 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
             />
           ) : null}
+          {canGandolaPurge ? (
+            <SecretGandolaTapButton
+              onUnlock={enterPurgeMode}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
+            />
+          ) : null}
           <input
             type="search"
             className={`${compactControl} min-w-[10rem] flex-1 basis-[12rem] sm:max-w-[16rem]`}
@@ -1035,13 +1121,31 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         </div>
       )}
 
+      {purgeMode ? (
+        <GandolaPurgeToolbar
+          selectedCount={selectedPurgeIds.size}
+          visibleCount={displayList.length}
+          paymentFilter={purgePaymentFilter}
+          onPaymentFilterChange={(value) => {
+            setPurgePaymentFilter(value);
+            setPaymentFilter(value);
+            setSelectedPurgeIds(new Set());
+          }}
+          onSelectAll={selectAllPurgeVisible}
+          onClearSelection={() => setSelectedPurgeIds(new Set())}
+          onDelete={() => void purgeSelectedOrders()}
+          onExit={exitPurgeMode}
+          deleting={purgeBusy}
+        />
+      ) : null}
+
       <div className="grid gap-2.5 sm:grid-cols-2">
-        {list.length === 0 && (
+        {displayList.length === 0 && (
           <div className="col-span-full rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] py-12 text-center text-sm text-[var(--text-muted)]">
             {showingInvoices ? t('invoicesEmpty') : t('ordersEmpty')}
           </div>
         )}
-        {list.map((order) => {
+        {displayList.map((order) => {
           const ch = orderChannel(order);
           const online = isOnlineShopOrder(order);
           const title = showingInvoices
@@ -1051,10 +1155,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
             : orderListPrimaryLabel(order) || order.id.slice(0, 8);
           const heldKitchen = isHeldListRow(order);
           const invoicePaid = isPaidOrder(order);
+          const purgeSelected = purgeMode && selectedPurgeIds.has(order.id);
           return (
             <article
               key={order.id}
               className={`cursor-pointer overflow-hidden rounded-xl border border-[var(--border)] border-l-[3px] bg-[var(--bg-elevated)] p-3.5 shadow-sm transition hover:shadow-md ${
+                purgeSelected ? 'ring-2 ring-red-400' : ''
+              } ${
                 online ? ONLINE_CHANNEL_BORDER : CHANNEL_BORDER[ch] || 'border-l-slate-400'
               }`}
               onClick={() => void openDetail(order)}

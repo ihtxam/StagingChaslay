@@ -8590,6 +8590,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ALL_SALES', false));
+  const canGandolaPurge =
+    ownerOnRegister ||
+    !staffConfigured ||
+    (!!webposStaff && hasPermission(staffPerms, 'GANDOLA_PURGE', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
   const showEodButton = canPrintEodReport;
 
@@ -9696,6 +9700,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setDeliveryHubMinimized(false);
             }}
             canSalesAdjust={canViewAllSales}
+            canGandolaPurge={canGandolaPurge}
           />
         ) : (
           <div
