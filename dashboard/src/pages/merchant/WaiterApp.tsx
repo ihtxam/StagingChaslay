@@ -9,6 +9,7 @@ import {
   Plus,
   ShoppingBag,
   Table2,
+  UserCircle2,
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -81,11 +82,13 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const merchantId = authUser?.merchantId;
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
-  const [pinGateOpen, setPinGateOpen] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
   const [posAuthAlert, setPosAuthAlert] = useState<{
     title?: string;
     message: string;
@@ -120,6 +123,17 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     hasStaffPins: staffConfigured,
     pinSession: staff,
   });
+
+  const openPinGate = useCallback(() => {
+    setPinModalMode('gate');
+    setPinModalOpen(true);
+  }, []);
+
+  const openPinSwitch = useCallback(() => {
+    if (!staffConfigured) return;
+    setPinModalMode('switch');
+    setPinModalOpen(true);
+  }, [staffConfigured]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
@@ -194,8 +208,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   }, [t, authUser?.staffId, authUser?.role, authUser?.permissions]);
 
   useEffect(() => {
-    if (!loading && pinRequired) setPinGateOpen(true);
-  }, [loading, pinRequired]);
+    if (!loading && pinRequired) openPinGate();
+  }, [loading, pinRequired, openPinGate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -582,11 +596,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         message: t('webPosSessionKickedReclaim'),
         variant: 'warning',
       });
-      setPinGateOpen(true);
+      openPinGate();
     };
     window.addEventListener(POS_SESSION_KICKED_EVENT, onKicked);
     return () => window.removeEventListener(POS_SESSION_KICKED_EVENT, onKicked);
-  }, [t]);
+  }, [t, openPinGate]);
 
   const onPinSuccess = async (s: {
     id: string;
@@ -627,7 +641,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           message: reg.error || t('webPosSessionRegisterFailed'),
           variant: 'error',
         });
-        setPinGateOpen(true);
+        openPinGate();
         return;
       }
       console.warn('[waiter] session register skipped (schema):', reg.error);
@@ -635,19 +649,25 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     saveWebPosStaffSession(session);
     setStaff(session);
     notifyWebPosStaffSessionChanged();
-    setPinGateOpen(false);
+    setPinModalOpen(false);
     if (reg.ok && reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }
   };
 
-  const handleLogout = async () => {
+  const handleSwitchUser = async () => {
     await revokePosSession();
     clearWebPosStaffSession();
     setStaff(null);
     notifyWebPosStaffSessionChanged();
     resetOrder();
-    setPinGateOpen(true);
+    openPinSwitch();
+  };
+
+  const handleLogout = async () => {
+    await revokePosSession();
+    logout();
+    navigate('/login', { replace: true });
   };
 
   const sendToKitchen = async () => {
@@ -731,7 +751,20 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-800 px-3 py-2 sm:px-4 sm:py-3">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-stone-500 sm:text-xs">{t('waiterAppTitle')}</p>
-          <p className="truncate font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate font-semibold">{staff?.name || t('waiterAppSubtitle')}</p>
+            {staffConfigured && staff ? (
+              <button
+                type="button"
+                onClick={() => void handleSwitchUser()}
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-emerald-300 hover:bg-stone-800"
+                aria-label={t('webPosSwitchUser')}
+                title={t('webPosSwitchUser')}
+              >
+                <UserCircle2 size={16} aria-hidden />
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {showBackOffice ? (
@@ -748,6 +781,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
             type="button"
             onClick={() => void handleLogout()}
             className="inline-flex items-center gap-1.5 rounded-xl border border-stone-700 px-2.5 py-2 text-sm sm:gap-2 sm:px-3"
+            aria-label={t('logout')}
+            title={t('logout')}
           >
             <LogOut className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">{t('logout')}</span>
@@ -941,9 +976,9 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         minMs={posAuthAlert?.variant === 'warning' ? 4000 : 8000}
       />
       <WebPosPinModal
-        open={pinGateOpen}
-        mode="gate"
-        onClose={() => setPinGateOpen(false)}
+        open={pinModalOpen}
+        mode={pinModalMode}
+        onClose={() => setPinModalOpen(false)}
         onSuccess={onPinSuccess}
       />
 
