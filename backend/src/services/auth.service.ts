@@ -25,6 +25,8 @@ export interface JWTPayload {
   permissions?: string[];
   /** Set when a superadmin opens a merchant or reseller panel */
   impersonatedBy?: string;
+  /** Merchant auth epoch at token issue — bumped to revoke all sessions. */
+  authEpoch?: number;
 }
 
 export class AuthService {
@@ -63,6 +65,41 @@ export class AuthService {
       return jwt.verify(token, this.JWT_SECRET) as JWTPayload;
     } catch (error) {
       throw new Error("Invalid or expired token");
+    }
+  }
+
+  static async getMerchantAuthEpoch(merchantId: string): Promise<number> {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { authEpoch: true },
+    });
+    return Number(merchant?.authEpoch ?? 0);
+  }
+
+  static async bumpMerchantAuthEpoch(merchantId: string): Promise<number> {
+    const db = getDb();
+    const rows = await db
+      .update(schema.merchants)
+      .set({
+        authEpoch: sql`COALESCE(${schema.merchants.authEpoch}, 0) + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.merchants.id, merchantId))
+      .returning({ authEpoch: schema.merchants.authEpoch });
+    return Number(rows[0]?.authEpoch ?? 1);
+  }
+
+  /** Reject merchant/staff JWTs issued before the latest auth epoch bump. */
+  static async assertMerchantTokenEpoch(payload: JWTPayload): Promise<void> {
+    if (!payload.merchantId) return;
+    if (payload.role === "superadmin" || payload.role === "reseller" || payload.role === "customer") {
+      return;
+    }
+    const current = await this.getMerchantAuthEpoch(payload.merchantId);
+    const tokenEpoch = payload.authEpoch ?? 0;
+    if (tokenEpoch < current) {
+      throw new Error("Session revoked — please sign in again");
     }
   }
 
@@ -181,6 +218,7 @@ export class AuthService {
       role: "merchant",
       merchantId: merchant.id,
       name: merchant.name,
+      authEpoch: Number(merchant.authEpoch ?? 0),
     });
 
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
@@ -226,7 +264,7 @@ export class AuthService {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, staff.merchantId),
-      columns: { status: true, maxLocations: true },
+      columns: { status: true, maxLocations: true, authEpoch: true },
     });
     if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
       throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
@@ -241,6 +279,7 @@ export class AuthService {
       name: staff.name,
       roleName: role?.name,
       permissions,
+      authEpoch: Number(merchant.authEpoch ?? 0),
     });
 
     const inventoryOn = await readInventoryAddonEnabled(staff.merchantId).catch(() => false);
@@ -468,6 +507,7 @@ export class AuthService {
       merchantId: merchant.id,
       name: merchant.name,
       impersonatedBy: superadminId,
+      authEpoch: Number(merchant.authEpoch ?? 0),
     });
 
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>

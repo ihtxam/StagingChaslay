@@ -797,11 +797,24 @@ export class MerchantService {
         .where(eq(schema.merchants.id, merchantId))
         .returning();
 
+      await MerchantService.revokeAllAuthSessions(merchantId);
+
       return merchant[0];
     } catch (error) {
       console.error("Error suspending merchant:", error);
       throw error;
     }
+  }
+
+  /**
+   * Invalidate all dashboard JWTs and revoke active POS/waiter device sessions.
+   */
+  static async revokeAllAuthSessions(merchantId: string) {
+    const { AuthService } = await import("@/services/auth.service");
+    const { PosSessionsService } = await import("@/services/pos-sessions.service");
+    await AuthService.bumpMerchantAuthEpoch(merchantId);
+    await PosSessionsService.revokeAllForMerchant(merchantId);
+    return { ok: true };
   }
 
   /**

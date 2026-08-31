@@ -358,4 +358,17 @@ export class PosSessionsService {
       );
     return { ok: true };
   }
+
+  /** Revoke every active POS / waiter session for a merchant (force logout all devices). */
+  static async revokeAllForMerchant(merchantId: string) {
+    const db = getDb();
+    await ensurePosSessionsSchema();
+    await db
+      .update(schema.posSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(eq(schema.posSessions.merchantId, merchantId), isNull(schema.posSessions.revokedAt))
+      );
+    return { ok: true };
+  }
 }

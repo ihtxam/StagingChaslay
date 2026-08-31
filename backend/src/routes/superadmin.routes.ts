@@ -647,6 +647,23 @@ router.post("/merchants/:merchantId/suspend", async (req: Request, res: Response
 });
 
 /**
+ * POST /api/superadmin/merchants/:merchantId/revoke-sessions
+ * Force logout merchant from all dashboard JWTs and POS/waiter devices.
+ */
+router.post("/merchants/:merchantId/revoke-sessions", async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    await MerchantService.revokeAllAuthSessions(merchantId);
+    res.json({ success: true, message: "All merchant sessions revoked" });
+  } catch (error) {
+    console.error("Error revoking merchant sessions:", error);
+    res
+      .status(400)
+      .json({ error: error instanceof Error ? error.message : "Failed to revoke sessions" });
+  }
+});
+
+/**
  * POST /api/superadmin/merchants/:merchantId/reactivate
  * Reactivate merchant account
  */

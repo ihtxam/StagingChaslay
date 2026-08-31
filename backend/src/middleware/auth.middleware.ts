@@ -14,7 +14,7 @@ declare global {
 /**
  * Middleware to verify JWT token
  */
-export function verifyToken(req: Request, res: Response, next: NextFunction) {
+export async function verifyToken(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
 
@@ -24,6 +24,7 @@ export function verifyToken(req: Request, res: Response, next: NextFunction) {
 
     const token = authHeader.substring(7);
     const payload = AuthService.verifyToken(token);
+    await AuthService.assertMerchantTokenEpoch(payload);
 
     req.user = payload;
     if (payload.merchantId) {
@@ -32,7 +33,8 @@ export function verifyToken(req: Request, res: Response, next: NextFunction) {
 
     next();
   } catch (error) {
-    res.status(401).json({ error: "Invalid or expired token" });
+    const message = error instanceof Error ? error.message : "Invalid or expired token";
+    res.status(401).json({ error: message });
   }
 }
 

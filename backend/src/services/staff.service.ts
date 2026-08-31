@@ -623,6 +623,7 @@ export class StaffService {
       name: staff.name,
       roleName: role?.name || "Staff",
       permissions,
+      authEpoch: await AuthService.getMerchantAuthEpoch(merchantId),
     });
     return {
       id: staff.id,

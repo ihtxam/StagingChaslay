@@ -457,6 +457,22 @@ router.post("/merchants/:merchantId/suspend", async (req: Request, res: Response
 });
 
 /**
+ * POST /api/reseller/merchants/:merchantId/revoke-sessions
+ * Force logout a reseller-owned merchant from all devices.
+ */
+router.post("/merchants/:merchantId/revoke-sessions", async (req: Request, res: Response) => {
+  try {
+    await ResellerService.assertOwnsMerchant(resellerId(req), req.params.merchantId);
+    const { MerchantService } = await import("@/services/merchant.service");
+    await MerchantService.revokeAllAuthSessions(req.params.merchantId);
+    res.json({ success: true, message: "All merchant sessions revoked" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to revoke sessions";
+    res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+/**
  * POST /api/reseller/merchants/:merchantId/reactivate
  * Unsuspend a reseller-owned merchant.
  */

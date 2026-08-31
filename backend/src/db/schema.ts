@@ -388,6 +388,8 @@ export const merchants = pgTable(
      */
     deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
+    /** Incremented to invalidate all merchant/staff JWTs and force re-login. */
+    authEpoch: integer("auth_epoch").default(0).notNull(),
     subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("free"), // free, starter, professional, enterprise
     trialEndsAt: timestamp("trial_ends_at"),
     subscriptionEndsAt: timestamp("subscription_ends_at"),
