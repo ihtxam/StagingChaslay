@@ -145,6 +145,15 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+/** Alias for probes that expect /api/health (dashboard same-origin /api prefix). */
+app.get("/api/health", (_req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    service: "reborn-backend",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 /** Idempotent DB column repair — GET or POST (browser-safe). */
 async function handleSchemaRepair(_req: Request, res: Response) {
   try {
