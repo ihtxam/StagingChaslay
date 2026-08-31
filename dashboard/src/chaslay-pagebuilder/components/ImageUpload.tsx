@@ -5,8 +5,9 @@ import React, { useRef, useState } from 'react';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
-import { Upload, X, Image as ImageIcon, Link } from 'lucide-react';
+import { Upload, X, Link } from 'lucide-react';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
+import { uploadPageBuilderImage } from '@/lib/chaslay-pagebuilder/upload-image';
 
 interface ImageUploadProps {
   value?: string;
@@ -45,43 +46,36 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     setError(null);
     setIsLoading(true);
 
-    // Check file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       setIsLoading(false);
       return;
     }
 
-    // Check file size
-    const fileSizeKB = file.size / 1024;
-    if (fileSizeKB > maxSizeKB) {
-      setError(`Image too large. Max size: ${maxSizeKB}KB`);
+    // Hard cap — phone photos are often 5–15 MB and freeze the editor if embedded as base64.
+    const hardMaxBytes = Math.max(maxSizeKB, 800) * 1024;
+    if (file.size > hardMaxBytes) {
+      setError(`Image too large. Please use a file under ${Math.round(hardMaxBytes / 1024)}KB or paste a URL.`);
       setIsLoading(false);
       return;
     }
 
     try {
-      const base64 = await fileToBase64(file);
-      onChange(base64);
+      const url = await uploadPageBuilderImage(file, {
+        maxBytes: maxSizeKB * 1024,
+        targetBytes: Math.min(maxSizeKB * 1024, 320 * 1024),
+        maxWidth: aspectRatio === 'auto' ? 1200 : 1800,
+      });
+      onChange(url);
     } catch (err) {
-      setError('Failed to process image');
+      const message = err instanceof Error ? err.message : 'Failed to upload image';
+      setError(message);
     } finally {
       setIsLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
   };
 
   const handleUrlSubmit = () => {
@@ -108,6 +102,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               src={value}
               alt="Uploaded"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
               onError={() => setError('Failed to load image')}
             />
           </div>
@@ -165,7 +161,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                       <div className="text-center">
                         <p className="text-sm font-medium">Click to upload</p>
                         <p className="text-xs text-muted-foreground">
-                          Max {maxSizeKB}KB, JPG/PNG/GIF
+                          Compressed &amp; stored on server · Max {maxSizeKB}KB
                         </p>
                       </div>
                     </>
@@ -174,7 +170,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   onChange={handleFileChange}
                   className="hidden"
                 />

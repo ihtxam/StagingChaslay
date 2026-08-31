@@ -7,6 +7,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Upload, X, Link as LinkIcon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
+import { uploadPageBuilderImage } from '@/lib/chaslay-pagebuilder/upload-image';
 
 interface MultiImageUploadProps {
   label?: string;
@@ -16,14 +17,6 @@ interface MultiImageUploadProps {
   maxSizeKB?: number;
   className?: string;
 }
-
-const fileToBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 
 export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   label = 'Images',
@@ -52,14 +45,15 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       truncated = true;
     }
 
+    const hardMaxBytes = Math.max(maxSizeKB, 800) * 1024;
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
         setError(`"${file.name}" is not an image`);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
-      if (file.size / 1024 > maxSizeKB) {
-        setError(`"${file.name}" is larger than ${maxSizeKB}KB`);
+      if (file.size > hardMaxBytes) {
+        setError(`"${file.name}" is larger than ${Math.round(hardMaxBytes / 1024)}KB`);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
@@ -67,13 +61,22 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
 
     setIsUploading(true);
     try {
-      const base64s = await Promise.all(files.map(fileToBase64));
-      onChange([...images, ...base64s]);
+      const urls: string[] = [];
+      for (const file of files) {
+        const url = await uploadPageBuilderImage(file, {
+          maxBytes: maxSizeKB * 1024,
+          targetBytes: Math.min(maxSizeKB * 1024, 320 * 1024),
+          maxWidth: 1800,
+        });
+        urls.push(url);
+      }
+      onChange([...images, ...urls]);
       if (truncated) {
         setError(`Only the first ${maxPerUpload} images were added (limit per upload).`);
       }
-    } catch {
-      setError('Failed to process one or more images');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to upload one or more images';
+      setError(message);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -103,14 +106,18 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
         <Label>{label} <span className="text-xs text-muted-foreground font-normal">({images.length})</span></Label>
       </div>
 
-      {/* Thumbnails grid */}
       {images.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {images.map((src, i) => (
-            <div key={i} className="relative group rounded-md overflow-hidden border bg-muted aspect-square">
+            <div key={`${i}-${src.slice(0, 32)}`} className="relative group rounded-md overflow-hidden border bg-muted aspect-square">
               {src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
+                <img
+                  src={src}
+                  alt={`Image ${i + 1}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Empty</div>
               )}
@@ -127,8 +134,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
         </div>
       )}
 
-      {/* Edit existing URLs (in case user wants to swap) */}
-      {images.length > 0 && images.some(src => src && !src.startsWith('data:')) && (
+      {images.length > 0 && images.some((src) => src && !src.startsWith('data:')) && (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Edit URLs</summary>
           <div className="space-y-1 mt-2 max-h-40 overflow-y-auto">
@@ -136,7 +142,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
               <div key={i} className="flex gap-2">
                 <span className="text-muted-foreground w-6 text-center pt-1">{i + 1}</span>
                 <Input
-                  value={src.startsWith('data:') ? '(uploaded file)' : src}
+                  value={src.startsWith('data:') ? '(legacy embedded image — re-upload to replace)' : src}
                   onChange={(e) => replaceAt(i, e.target.value)}
                   className="h-7 text-xs"
                   placeholder="https://…"
@@ -151,7 +157,6 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
         </details>
       )}
 
-      {/* Add new images */}
       {isUrlMode ? (
         <div className="space-y-2">
           <div className="flex gap-2">
@@ -187,7 +192,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
                 <Upload className="h-5 w-5 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium">Click to upload images</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Up to {maxPerUpload} per upload · Max {maxSizeKB}KB each · JPG/PNG/GIF/WebP
+                  Up to {maxPerUpload} per upload · Compressed on server · Max {maxSizeKB}KB each
                 </p>
               </>
             )}
@@ -195,7 +200,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             multiple
             onChange={handleFileChange}
             className="hidden"
