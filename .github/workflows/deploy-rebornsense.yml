@@ -1,28 +1,44 @@
 name: Deploy to Rebornsense
 
+# Rebornsense production — runs after Chaslay test deploy succeeds (or manual dispatch).
+# Requires REBORN_HETZNER_* secrets. Do NOT point HETZNER_HOST at this server.
+
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Deploy to Hetzner
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
 
 concurrency:
-  group: deploy-rebornsense
+  group: deploy-rebornsense-production
   cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Chaslay first: only promote to production when the test deploy succeeded.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success') }}
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.REBORN_HETZNER_HOST || secrets.HETZNER_HOST }}
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
           username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
           key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
           script_stop: true
           script: |
+            if [[ -z "${{ secrets.REBORN_HETZNER_HOST }}" ]]; then
+              echo "ERROR: Set REBORN_HETZNER_HOST to the Rebornsense production server IP."
+              echo "HETZNER_HOST should point at the Chaslay test server only."
+              exit 1
+            fi
             export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             export DEPLOY_STACK=rebornsense
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"

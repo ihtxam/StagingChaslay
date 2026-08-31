@@ -89,37 +89,45 @@ bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
 
 ## 3. Auto-deploy on every push to `main`
 
-A GitHub Actions workflow (`.github/workflows/deploy-hetzner.yml`) SSHs into your VPS and runs `scripts/deploy-hetzner.sh`.
+Two workflows — **Chaslay test first**, then **Rebornsense production**:
 
-### One-time GitHub setup
+| Order | Workflow | Server secret | Stack | Domains |
+|-------|----------|---------------|-------|---------|
+| 1 | `deploy-hetzner.yml` | `HETZNER_HOST` | `chaslay` | `app.chaslay.com`, … |
+| 2 | `deploy-rebornsense.yml` | `REBORN_HETZNER_HOST` | `rebornsense` | `app.rebornsense.com`, … |
 
-Repo ? **Settings ? Secrets and variables ? Actions** ? add:
+Rebornsense deploy runs **only after** the Chaslay deploy succeeds (or via manual **Run workflow**).
+
+### Chaslay test server (deploy first)
+
+Repo → **Settings → Secrets and variables → Actions**:
 
 | Secret | Example |
 |--------|---------|
-| `HETZNER_HOST` | `116.202.26.15` |
+| `HETZNER_HOST` | `116.202.26.15` (Chaslay test VPS — **not** Rebornsense production) |
 | `HETZNER_USER` | `root` |
-| `HETZNER_SSH_KEY` | Private key (PEM) that can SSH to the server |
-| `HETZNER_DEPLOY_PATH` | `/root/rebornSense` on Rebornsense (`91.98.41.165`); `/root/FoodTruckPOS` on Chaslay (optional) |
+| `HETZNER_SSH_KEY` | Private key (PEM) that can SSH to the Chaslay server |
+| `HETZNER_DEPLOY_PATH` | `/root/FoodTruckPOS` (optional) |
+| `HETZNER_DEPLOY_STACK` | `chaslay` (optional; default is `chaslay`) |
 | `HETZNER_SSH_PORT` | `22` (optional) |
 
 On the server, add the matching **public key** to `~/.ssh/authorized_keys`.
 
-After that, every `git push` to `main` rebuilds Docker and runs migrations automatically.
+Every `git push` to `main` deploys here first.
 
-### Rebornsense (`app.rebornsense.com`)
+### Rebornsense production (`app.rebornsense.com`)
 
 `app.rebornsense.com` runs on a **separate** VPS:
 
 | | |
 |--|--|
 | **Server IP** | `91.98.41.165` |
-| **Deploy path** | `/root/rebornSense` (GitHub Actions default) |
+| **Deploy path** | `/root/rebornSense` |
 | **Legacy path** | `/root/FoodTruckPOS` (old name; may exist without `.git`) |
 | **Repo** | `git@github.com:ihtxam/rebornSense.git` (private) |
 | **Stack flag** | `DEPLOY_STACK=rebornsense` |
 
-Pushes to `main` only auto-deploy **chaslay.com** unless you add Rebornsense GitHub secrets:
+Add these secrets (do **not** reuse `HETZNER_HOST` for production):
 
 | Secret | Example |
 |--------|---------|
@@ -128,9 +136,11 @@ Pushes to `main` only auto-deploy **chaslay.com** unless you add Rebornsense Git
 | `REBORN_HETZNER_SSH_KEY` | Private key for the Rebornsense server |
 | `REBORN_HETZNER_DEPLOY_PATH` | `/root/rebornSense` (optional) |
 
-Workflow: `.github/workflows/deploy-rebornsense.yml` (runs on every `main` push when secrets exist).
+Workflow: `.github/workflows/deploy-rebornsense.yml` (after Chaslay deploy succeeds, or manual dispatch).
 
 Caddy config: `deploy/Caddyfile.rebornsense`
+
+**Why two workflows?** Running both against the same server caused Docker name conflicts (`rebornsense-api-1 already in use`). Keep `HETZNER_HOST` on the Chaslay test box only.
 
 #### First-time / broken deploy on `91.98.41.165`
 
