@@ -589,6 +589,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                 {role.name.trim().toLowerCase() === 'kiosk operator' ? (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleKioskHint')}</p>
                 ) : null}
+                {role.name.trim().toLowerCase() === 'gandola' ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleGandolaHint')}</p>
+                ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
                 {t('staffEditPermissions')}

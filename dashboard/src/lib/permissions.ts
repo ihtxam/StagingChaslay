@@ -22,6 +22,7 @@ export type Permission =
   | 'REFUND_ORDERS'
   | 'VIEW_REPORTS'
   | 'VIEW_ALL_SALES'
+  | 'GANDOLA_PURGE'
   | 'MANAGE_PRODUCTS'
   | 'MANAGE_CUSTOMERS'
   | 'MANAGE_OFFERS'
@@ -49,6 +50,10 @@ export function isKioskOperatorRoleName(name: string): boolean {
   return name.trim().toLowerCase() === 'kiosk operator';
 }
 
+export function isGandolaRoleName(name: string): boolean {
+  return name.trim().toLowerCase() === 'gandola';
+}
+
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
   'USE_WEBPOS',
@@ -65,6 +70,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'REFUND_ORDERS',
   'VIEW_REPORTS',
   'VIEW_ALL_SALES',
+  'GANDOLA_PURGE',
   'MANAGE_PRODUCTS',
   'MANAGE_CUSTOMERS',
   'MANAGE_OFFERS',
@@ -243,6 +249,7 @@ export function staffRoleDisplayName(name: string, t: (key: string) => string): 
   if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
   if (n === 'storekeeper') return t('staffRoleStorekeeper');
   if (n === 'kiosk operator') return t('staffRoleKiosk');
+  if (n === 'gandola') return t('staffRoleGandola');
   return name;
 }
 
