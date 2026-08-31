@@ -22,6 +22,7 @@ import {
 } from '@/lib/webpos-print-relay';
 import {
   backOfficeHomePath,
+  canJwtReturnToPanel,
   canStaffOpenBackOffice,
   hasPermission,
   isMerchantOwnerJwt,
@@ -82,6 +83,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
+  const impersonating = useAuthStore((s) => s.impersonating);
+  const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
   const merchantId = authUser?.merchantId;
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
@@ -143,11 +146,47 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  const showBackOffice = canStaffOpenBackOffice(
-    (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined,
-    authUser?.loginHome,
-    jwtIsOwner
-  );
+  const showBackOffice =
+    impersonating ||
+    canJwtReturnToPanel(
+      (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined,
+      jwtIsOwner,
+      authUser?.role
+    ) ||
+    canStaffOpenBackOffice(
+      (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined,
+      authUser?.loginHome,
+      jwtIsOwner
+    );
+
+  const goToBackOffice = useCallback(() => {
+    if (impersonating) {
+      const returnUserRaw = sessionStorage.getItem('sa_return_user');
+      let returnRole: string | null = null;
+      try {
+        returnRole = returnUserRaw ? (JSON.parse(returnUserRaw) as { role?: string }).role || null : null;
+      } catch {
+        returnRole = null;
+      }
+      if (!stopImpersonation()) {
+        toast.error(t('webPosPanelDenied'));
+        navigate('/login');
+        return;
+      }
+      navigate(returnRole === 'reseller' ? '/reseller/merchants' : '/superadmin/merchants');
+      return;
+    }
+    const perms = (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined;
+    navigate(backOfficeHomePath(perms, jwtIsOwner));
+  }, [
+    impersonating,
+    stopImpersonation,
+    staff?.permissions,
+    authUser?.permissions,
+    jwtIsOwner,
+    navigate,
+    t,
+  ]);
 
   useEffect(() => {
     if (!staffPinsKnown) return;
@@ -770,11 +809,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           {showBackOffice ? (
             <button
               type="button"
-              onClick={() => navigate(backOfficeHomePath(staff?.permissions, false))}
+              onClick={goToBackOffice}
               className="hidden items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-sm sm:inline-flex"
             >
               <PanelLeft className="h-4 w-4" aria-hidden />
-              {t('webPosBackOffice')}
+              {impersonating ? t('backToSuperadmin') : t('webPosBackOffice')}
             </button>
           ) : null}
           <button

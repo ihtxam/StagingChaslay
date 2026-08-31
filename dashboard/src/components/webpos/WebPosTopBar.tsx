@@ -604,6 +604,7 @@ export function WebPosSettingsDropdown({
   showEodButton,
   onEodReport,
   canShowPanel,
+  panelButtonLabel,
   appMode = true,
   onShowPanel,
   colorTheme = 'teal',
@@ -640,6 +641,7 @@ export function WebPosSettingsDropdown({
   showEodButton?: boolean;
   onEodReport?: () => void;
   canShowPanel?: boolean;
+  panelButtonLabel?: string;
   appMode?: boolean;
   onShowPanel?: () => void;
   colorTheme?: WebPosColorTheme;
@@ -688,7 +690,7 @@ export function WebPosSettingsDropdown({
             onClick={onShowPanel}
           >
             <PanelLeft size={16} />
-            {t('webPosBackOffice')}
+            {panelButtonLabel || t('webPosBackOffice')}
           </button>
         ) : null}
         <div className="grid grid-cols-2 gap-1.5">
@@ -982,16 +984,6 @@ export function WebPosSettingsDropdown({
         ) : null}
       </div>
 
-      {onSendLogs ? (
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-left text-xs font-semibold text-teal-900 hover:bg-teal-100"
-          onClick={onSendLogs}
-        >
-          <FileText size={16} />
-          {t('webPosSendLogs')}
-        </button>
-      ) : null}
       {onSendLogs ? (
         <button
           type="button"

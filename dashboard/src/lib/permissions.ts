@@ -454,14 +454,14 @@ export function isFloorWaiterStaff(
   );
 }
 
-/** Staff may open merchant back office only when login destination allows panel access. */
+/** Staff may open merchant back office when their role grants panel/catalog/orders access. */
 export function canStaffOpenBackOffice(
   permissions: Permission[] | undefined,
-  loginHome?: StaffLoginHome | string | null,
+  _loginHome?: StaffLoginHome | string | null,
   isOwner = false
 ): boolean {
   if (isOwner) return true;
-  if (normalizeStaffLoginHome(loginHome) === 'pos') return false;
+  if (jwtHasPanelAccess(permissions, false, 'staff')) return true;
   if (isFloorWaiterStaff(permissions, false)) return false;
   if (isStorekeeperRestrictedStaff(permissions, false)) return false;
   if (isWaiterRestrictedStaff(permissions, false)) {
@@ -471,6 +471,15 @@ export function canStaffOpenBackOffice(
     );
   }
   return jwtHasPanelAccess(permissions, false, 'staff');
+}
+
+/** JWT holder may leave POS for merchant back office (loginHome does not block return navigation). */
+export function canJwtReturnToPanel(
+  jwtPermissions: Permission[] | undefined,
+  isOwner: boolean,
+  authRole?: string | null
+): boolean {
+  return jwtHasPanelAccess(jwtPermissions, isOwner, authRole);
 }
 
 /**

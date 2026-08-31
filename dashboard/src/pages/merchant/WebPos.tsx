@@ -481,6 +481,7 @@ import {
 import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-bell';
 import {
   backOfficeHomePath,
+  canJwtReturnToPanel,
   deliveryDriverHomePath,
   getEffectivePanelAccess,
   hasPermission,
@@ -716,6 +717,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [searchParams, setSearchParams]);
 
   const authUser = useAuthStore((s) => s.user);
+  const impersonating = useAuthStore((s) => s.impersonating);
+  const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -1410,6 +1413,36 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [settingsOpen]);
 
   const showPanelMenus = useCallback(() => {
+    if (impersonating) {
+      const returnUserRaw = sessionStorage.getItem('sa_return_user');
+      let returnRole: string | null = null;
+      try {
+        returnRole = returnUserRaw ? (JSON.parse(returnUserRaw) as { role?: string }).role || null : null;
+      } catch {
+        returnRole = null;
+      }
+      if (!stopImpersonation()) {
+        toast.error(t('webPosPanelDenied'));
+        navigate('/login');
+        return;
+      }
+      navigate(returnRole === 'reseller' ? '/reseller/merchants' : '/superadmin/merchants');
+      return;
+    }
+    const jwtPanel = canJwtReturnToPanel(
+      authUser?.permissions as Permission[] | undefined,
+      jwtIsOwner,
+      authUser?.role
+    );
+    if (jwtPanel) {
+      window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      navigate(
+        jwtIsOwner
+          ? '/merchant'
+          : backOfficeHomePath(authUser?.permissions as Permission[] | undefined, false)
+      );
+      return;
+    }
     const access = getEffectivePanelAccess({
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: jwtIsOwner,
@@ -1428,7 +1461,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     navigate(backOfficeHomePath(access.permissions, false));
-  }, [jwtIsOwner, authUser?.permissions, staffConfigured, webposStaff, t, navigate]);
+  }, [
+    impersonating,
+    stopImpersonation,
+    jwtIsOwner,
+    authUser?.permissions,
+    authUser?.role,
+    staffConfigured,
+    webposStaff,
+    t,
+    navigate,
+  ]);
 
   const enterPosApp = useCallback(() => {
     window.dispatchEvent(new CustomEvent('webpos:enter-app'));
@@ -8356,7 +8399,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ownerOnRegister ||
     !staffConfigured ||
     (!!webposStaff && hasPermission(staffPerms, 'VIEW_ORDER_HISTORY', false));
-  const canShowBackOffice = canOpenPanel || canManageProducts || canViewOrders;
+  const jwtPanelAccess = canJwtReturnToPanel(
+    authUser?.permissions as Permission[] | undefined,
+    jwtIsOwner,
+    authUser?.role
+  );
+  const canShowBackOffice =
+    impersonating || jwtPanelAccess || canOpenPanel || canManageProducts || canViewOrders;
   const canManageOnlineShop = ownerOnRegister
     ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', true) ||
       hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
@@ -9119,6 +9168,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             showEodButton={showEodButton}
             onEodReport={openEodPrint}
             canShowPanel={canShowBackOffice}
+            panelButtonLabel={impersonating ? t('backToSuperadmin') : undefined}
             appMode={appMode}
             onShowPanel={() => {
               setSettingsOpen(false);

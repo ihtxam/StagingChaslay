@@ -366,6 +366,19 @@ function MerchantShell() {
 
   useEffect(() => {
     const showPanel = () => {
+      const jwtPanel = jwtHasPanelAccess(
+        user?.permissions as Permission[] | undefined,
+        jwtIsOwner,
+        user?.role
+      );
+      if (jwtPanel) {
+        setPosAppMode(false);
+        const path = location.pathname.replace(/\/$/, '') || '/merchant';
+        if (path === '/merchant/pos' || path === '/merchant/waiter') {
+          navigate(jwtIsOwner ? '/merchant' : backOfficeHomePath(user?.permissions as Permission[] | undefined, false));
+        }
+        return;
+      }
       const access = getEffectivePanelAccess({
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
