@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useEditor, Element } from '@craftjs/core';
 import {
   Container,
@@ -1029,8 +1029,51 @@ const sections: Section[] = [
   },
 ];
 
+function ToolboxVariant({
+  sectionId,
+  nameKey,
+  descriptionKey,
+  preview,
+  component,
+  onAdd,
+  t,
+}: {
+  sectionId: string;
+  nameKey: string;
+  descriptionKey: string;
+  preview: React.ReactNode;
+  component: React.ReactElement;
+  onAdd: () => void;
+  t: (key: string) => string;
+}) {
+  const { connectors } = useEditor();
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    connectors.create(ref.current, component);
+  }, [connectors, component]);
+
+  return (
+    <div
+      key={`${sectionId}-${nameKey}`}
+      ref={ref}
+      onClick={onAdd}
+      className="cursor-pointer p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors group"
+    >
+      <div className="mb-2">{preview}</div>
+      <div className="px-1">
+        <span className="text-xs font-medium block truncate">{t(nameKey)}</span>
+        <span className="text-[10px] text-muted-foreground block truncate">
+          {t(descriptionKey)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export const Toolbox: React.FC = () => {
-  const { connectors, actions, query } = useEditor();
+  const { actions, query } = useEditor();
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const t = useTranslations('homepageBuilder');
 
@@ -1080,24 +1123,16 @@ export const Toolbox: React.FC = () => {
                 {isExpanded && (
                   <div className="ml-2 pl-4 border-l border-muted space-y-2 py-2">
                     {section.variants.map((variant) => (
-                      <div
+                      <ToolboxVariant
                         key={`${section.id}-${variant.nameKey}`}
-                        ref={(ref) => {
-                          if (ref) {
-                            connectors.create(ref, variant.component);
-                          }
-                        }}
-                        onClick={() => handleClickToAdd(variant.component)}
-                        className="cursor-pointer p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors group"
-                      >
-                        <div className="mb-2">{variant.preview}</div>
-                        <div className="px-1">
-                          <span className="text-xs font-medium block truncate">{t(variant.nameKey)}</span>
-                          <span className="text-[10px] text-muted-foreground block truncate">
-                            {t(variant.descriptionKey)}
-                          </span>
-                        </div>
-                      </div>
+                        sectionId={section.id}
+                        nameKey={variant.nameKey}
+                        descriptionKey={variant.descriptionKey}
+                        preview={variant.preview}
+                        component={variant.component}
+                        onAdd={() => handleClickToAdd(variant.component)}
+                        t={t}
+                      />
                     ))}
                   </div>
                 )}

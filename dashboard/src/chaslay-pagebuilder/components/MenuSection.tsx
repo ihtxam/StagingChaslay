@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useNode } from '@craftjs/core';
+import { useNode, useEditor } from '@craftjs/core';
 import { MenuSectionProps } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
@@ -49,12 +49,15 @@ export const MenuSection: React.FC<MenuSectionProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { enabled: editorEnabled } = useEditor((state) => ({
+    enabled: state.options.enabled,
+  }));
   const { categories, products, loading } = useMenuData();
 
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef(0);
   const [isHovered, setIsHovered] = useState(false);
-  const [scrollPosition, setScrollPosition] = useState(0);
 
   // If featuredProductIds is set, honor that explicit order.
   // Category filter still applies on top.
@@ -71,45 +74,46 @@ export const MenuSection: React.FC<MenuSectionProps> & {
 
   const displayProducts = filteredProducts.slice(0, mergedProps.maxProducts || 12);
 
-  // Auto-scroll effect (carousel only)
+  // Auto-scroll in live preview only — disabled in the editor to avoid CPU spikes.
   useEffect(() => {
+    if (editorEnabled) return;
     if (mergedProps.layout === 'grid') return;
     if (!carouselRef.current || isHovered || displayProducts.length === 0) return;
 
     const scrollSpeed = (mergedProps.autoScrollSpeed || 4) * 1000;
     const cardWidth = 280;
-    const maxScroll = carouselRef.current.scrollWidth - carouselRef.current.clientWidth;
 
     const interval = setInterval(() => {
-      if (carouselRef.current) {
-        const newPosition = scrollPosition + cardWidth;
-        if (newPosition >= maxScroll) {
-          carouselRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-          setScrollPosition(0);
-        } else {
-          carouselRef.current.scrollTo({ left: newPosition, behavior: 'smooth' });
-          setScrollPosition(newPosition);
-        }
+      const el = carouselRef.current;
+      if (!el) return;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      const newPosition = scrollPositionRef.current + cardWidth;
+      if (newPosition >= maxScroll) {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+        scrollPositionRef.current = 0;
+      } else {
+        el.scrollTo({ left: newPosition, behavior: 'smooth' });
+        scrollPositionRef.current = newPosition;
       }
     }, scrollSpeed);
 
     return () => clearInterval(interval);
-  }, [isHovered, scrollPosition, displayProducts.length, mergedProps.autoScrollSpeed, mergedProps.layout]);
+  }, [editorEnabled, isHovered, displayProducts.length, mergedProps.autoScrollSpeed, mergedProps.layout]);
 
   const scrollLeft = () => {
     if (carouselRef.current) {
-      const newPosition = Math.max(0, scrollPosition - 280);
+      const newPosition = Math.max(0, scrollPositionRef.current - 280);
       carouselRef.current.scrollTo({ left: newPosition, behavior: 'smooth' });
-      setScrollPosition(newPosition);
+      scrollPositionRef.current = newPosition;
     }
   };
 
   const scrollRight = () => {
     if (carouselRef.current) {
       const maxScroll = carouselRef.current.scrollWidth - carouselRef.current.clientWidth;
-      const newPosition = Math.min(maxScroll, scrollPosition + 280);
+      const newPosition = Math.min(maxScroll, scrollPositionRef.current + 280);
       carouselRef.current.scrollTo({ left: newPosition, behavior: 'smooth' });
-      setScrollPosition(newPosition);
+      scrollPositionRef.current = newPosition;
     }
   };
 

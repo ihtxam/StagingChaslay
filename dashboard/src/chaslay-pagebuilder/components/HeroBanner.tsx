@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useNode } from '@craftjs/core';
+import { useNode, useEditor } from '@craftjs/core';
 import { HeroBannerProps } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
@@ -73,9 +73,11 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
     }
   }, [sliderImages.length, currentSlide, enableSlider]);
 
-  // Auto-rotation timer
+  // Auto-rotation timer (live preview only — disabled in editor)
   useEffect(() => {
     if (!enableSlider || sliderImages.length <= 1) return;
+    const { enabled: editorEnabled } = query.getOptions();
+    if (editorEnabled) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % sliderImages.length);
     }, sliderSpeed * 1000);
