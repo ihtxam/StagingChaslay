@@ -369,6 +369,9 @@ const en: Dict = {
   loginSignIn: 'Sign in',
   loginSigningIn: 'Signing in…',
   loginFailed: 'Incorrect email or password.',
+  loginNetworkError:
+    'Cannot reach the server. Check your internet connection, or try again in a minute if the site is being updated.',
+  loginServerUnavailable: 'The server is temporarily unavailable. Please try again in a minute.',
   loginStaffUsePin:
     'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.',
   loginWelcome: 'Signed in',
@@ -4143,6 +4146,9 @@ const fr: Dict = {
   loginSignIn: 'Se connecter',
   loginSigningIn: 'Connexion…',
   loginFailed: 'E-mail ou mot de passe incorrect.',
+  loginNetworkError:
+    'Impossible de joindre le serveur. Vérifiez votre connexion ou réessayez dans une minute.',
+  loginServerUnavailable: 'Le serveur est temporairement indisponible. Réessayez dans une minute.',
   loginStaffUsePin:
     'Ce compte utilise un PIN caisse. Connectez-vous à la caisse avec le PIN, ou demandez au propriétaire de définir un mot de passe officiel dans Utilisateurs et rôles.',
   loginWelcome: 'Connecté',
@@ -7767,6 +7773,9 @@ const de: Dict = {
   loginSignIn: 'Anmelden',
   loginSigningIn: 'Anmeldung…',
   loginFailed: 'E-Mail oder Passwort ungültig.',
+  loginNetworkError:
+    'Server nicht erreichbar. Internet prüfen oder in einer Minute erneut versuchen.',
+  loginServerUnavailable: 'Server vorübergehend nicht verfügbar. Bitte in einer Minute erneut versuchen.',
   loginStaffUsePin:
     'Dieses Konto nutzt eine Kassen-PIN. Melden Sie sich an der Kasse mit der PIN an, oder bitten Sie den Inhaber, in Benutzer & Rollen ein offizielles Login-Passwort festzulegen.',
   loginWelcome: 'Angemeldet',

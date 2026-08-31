@@ -732,6 +732,43 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" ]]; then
 fi
 
 echo "=== Health checks ==="
+ensure_stack_healthy() {
+  echo "=== Ensure API / dashboard / Caddy are up ==="
+  local attempt api_ok ext_code
+  for attempt in 1 2 3; do
+    if dc exec -T api wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1; then
+      api_ok=1
+      break
+    fi
+    echo "API not healthy (attempt $attempt) — restarting api"
+    dc up -d api 2>/dev/null || true
+    dc restart api 2>/dev/null || true
+    sleep 12
+  done
+  if [[ -z "${api_ok:-}" ]]; then
+    echo "ERROR: API still unhealthy after retries"
+    dc ps
+    dc logs --tail=40 api 2>/dev/null || true
+    return 1
+  fi
+  dc up -d dashboard caddy 2>/dev/null || true
+  dc restart dashboard caddy 2>/dev/null || true
+  sleep 8
+  for attempt in 1 2 3; do
+    ext_code="$(curl -s -o /dev/null -w "%{http_code}" "${APP_URL}/api/health" 2>/dev/null || echo 000)"
+    if [[ "$ext_code" == "200" ]]; then
+      echo "External API health OK (${APP_URL}/api/health)"
+      return 0
+    fi
+    echo "External health HTTP ${ext_code} (attempt $attempt) — recycling caddy + api"
+    dc up -d --force-recreate api caddy 2>/dev/null || dc up -d api caddy 2>/dev/null || true
+    sleep 15
+  done
+  echo "WARNING: external health still not 200 (last HTTP ${ext_code})"
+  return 0
+}
+
+ensure_stack_healthy || true
 API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || dc exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
 curl -sf "${API_URL}/health" || true
