@@ -22,6 +22,7 @@ import {
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
+import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import {
   CashDrawerBreakdown,
   type CashDrawerShift,
@@ -208,6 +209,8 @@ export default function Overview() {
           <p className="page-sub">{t('overviewSub')}</p>
         </div>
       </div>
+
+      <OnlineOrderOpsBar />
 
       <div className="flex flex-wrap gap-2">
         {presets.map((p) => (
