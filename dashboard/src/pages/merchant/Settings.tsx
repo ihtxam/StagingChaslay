@@ -694,8 +694,12 @@ export default function Settings() {
     }
   }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab]);
 
+  const normalizedQuery = settingsQuery.trim().toLowerCase();
+
   const searchIndex = useMemo<SettingsSearchEntry[]>(
-    () => [
+    () => {
+      if (!normalizedQuery) return [];
+      return [
       {
         id: 'pos-mode',
         tab: 'pos',
@@ -964,11 +968,11 @@ export default function Settings() {
         tab: 'language',
         keywords: ['language', 'langue', 'sprache', t('language')],
       },
-    ],
-    [t]
+    ];
+    },
+    [normalizedQuery, t]
   );
 
-  const normalizedQuery = settingsQuery.trim().toLowerCase();
   const matchedSearch = useMemo(() => {
     if (!normalizedQuery) return [] as SettingsSearchEntry[];
     return searchIndex.filter((entry) =>

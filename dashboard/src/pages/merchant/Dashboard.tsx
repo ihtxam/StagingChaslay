@@ -47,6 +47,7 @@ import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
+import { isTillPrintHubCandidate } from '@/lib/webpos-print-relay';
 import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
 import Reports from './Reports';
 import api from '@/lib/api';
@@ -648,7 +649,8 @@ function MerchantShell() {
   );
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
-  useTillPrintHub({ enabled: !isPosLikeRoute });
+  const tillPrintHubEnabled = !isPosLikeRoute && isTillPrintHubCandidate();
+  useTillPrintHub({ enabled: tillPrintHubEnabled });
   const loadLocations = useLocationStore((s) => s.load);
 
   useEffect(() => {
