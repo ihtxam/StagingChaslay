@@ -73,6 +73,11 @@ import {
   isStorekeeperPanelPath,
   isKioskOnlyStaff,
   isKioskRestrictedStaff,
+  isOrderCenterOnlyStaff,
+  isOrderCenterRestrictedStaff,
+  isOrderCenterPanelPath,
+  orderCenterHomePath,
+  isOrderCenterHomeLocation,
   isKioskHomeLocation,
   isKioskPanelPath,
   isKioskSettingsTab,
@@ -264,6 +269,10 @@ function MerchantShell() {
     () => !jwtIsOwner && isKioskRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
+  const orderCenterRestricted = useMemo(
+    () => !jwtIsOwner && isOrderCenterRestrictedStaff(effective.permissions, false),
+    [jwtIsOwner, effective.permissions]
+  );
   const waiterRestricted = useMemo(
     () => !jwtIsOwner && isWaiterRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
@@ -271,7 +280,8 @@ function MerchantShell() {
   const hideChrome =
     (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted)) ||
-      (isKioskRoute && (!managerPanelAccess || kioskRestricted))) ||
+      (isKioskRoute && (!managerPanelAccess || kioskRestricted)) ||
+      (isOrderCenterRoute && (!managerPanelAccess || orderCenterRestricted))) ||
     isPosEmbed;
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
@@ -279,13 +289,15 @@ function MerchantShell() {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return isDriverRoute;
     if (isStorekeeperOnlyStaff(effective.permissions, false)) return isStorekeeperRoute;
     if (isKioskOnlyStaff(effective.permissions, false)) return isKioskRoute;
+    if (isOrderCenterOnlyStaff(effective.permissions, false)) return isOrderCenterRoute;
     return isPosLikeRoute;
-  }, [effective.permissions, isDriverRoute, isStorekeeperRoute, isKioskRoute, isPosLikeRoute]);
+  }, [effective.permissions, isDriverRoute, isStorekeeperRoute, isKioskRoute, isOrderCenterRoute, isPosLikeRoute]);
 
   const pinRestrictedHomePath = useMemo(() => {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(effective.permissions, false)) return storekeeperHomePath();
     if (isKioskOnlyStaff(effective.permissions, false)) return kioskHomePath();
+    if (isOrderCenterOnlyStaff(effective.permissions, false)) return orderCenterHomePath();
     if (hasPermission(effective.permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
     return '/merchant/pos';
   }, [effective.permissions]);
@@ -556,6 +568,22 @@ function MerchantShell() {
     navigate(kioskHomePath(), { replace: true });
   }, [jwtIsOwner, effective.permissions, location.pathname, location.search, navigate]);
 
+  // Order center operator — handheld PWA only, not full merchant panel.
+  useEffect(() => {
+    if (jwtOwnerBypass || user?.role !== 'staff') return;
+    const perms = effective.permissions;
+    if (!isOrderCenterRestrictedStaff(perms, false)) return;
+    if (isOrderCenterPanelPath(location.pathname)) return;
+    navigate(orderCenterHomePath(), { replace: true });
+  }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (jwtOwnerBypass) return;
+    if (!isOrderCenterOnlyStaff(effective.permissions, false)) return;
+    if (isOrderCenterHomeLocation(location.pathname)) return;
+    navigate(orderCenterHomePath(), { replace: true });
+  }, [jwtOwnerBypass, effective.permissions, location.pathname, navigate]);
+
   // PIN-scoped staff without back-office access cannot browse the manager panel.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenBackOffice) return;
@@ -567,6 +595,12 @@ function MerchantShell() {
     if (isKioskOnlyStaff(effective.permissions, false)) {
       if (!isKioskHomeLocation(location.pathname, location.search)) {
         navigate(kioskHomePath(), { replace: true });
+      }
+      return;
+    }
+    if (isOrderCenterOnlyStaff(effective.permissions, false)) {
+      if (!isOrderCenterHomeLocation(location.pathname)) {
+        navigate(orderCenterHomePath(), { replace: true });
       }
       return;
     }
@@ -762,7 +796,19 @@ function MerchantShell() {
     return false;
   });
 
-  const menuItems = kioskRestricted
+  const menuItems = orderCenterRestricted
+    ? [
+        ...(allow('/merchant/order-center')
+          ? [{ label: t('orderCenterTitle'), path: orderCenterHomePath(), icon: '📲' }]
+          : []),
+      ].filter((entry) => {
+        if ('children' in entry && Array.isArray(entry.children)) {
+          return entry.children.length > 0;
+        }
+        if (entry.path) return allow(entry.path);
+        return false;
+      })
+    : kioskRestricted
     ? [
         ...(allow('/merchant/kiosk')
           ? [{ label: t('kioskNav'), path: kioskHomePath(), icon: '🖥️' }]
@@ -806,7 +852,8 @@ function MerchantShell() {
       ? waiterMenuItems
       : fullMenuItems;
 
-  const panelChromeRestricted = kioskRestricted || storekeeperRestricted || waiterRestricted;
+  const panelChromeRestricted =
+    orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
 
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
@@ -819,7 +866,7 @@ function MerchantShell() {
           registerDisplay={registerDisplay}
           showStaffSwitch={hasStaffPins}
           quickAction={
-            !storekeeperRestricted && !kioskRestricted && showWebPosQuickAction
+            !storekeeperRestricted && !kioskRestricted && !orderCenterRestricted && showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
               : null
           }

@@ -4,11 +4,13 @@
  * shop open/close toggles.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Check,
   ChefHat,
   History,
   Loader2,
+  LogOut,
   Printer,
   RefreshCw,
   TrendingUp,
@@ -118,7 +120,9 @@ function orderDay(iso: string): string {
 
 export default function OrderCenterApp() {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const [tab, setTab] = useState<CenterTab>('live');
   const [orders, setOrders] = useState<CenterOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -596,6 +600,18 @@ export default function OrderCenterApp() {
               aria-label={t('refresh')}
             >
               <RefreshCw className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              className="btn-secondary p-2"
+              onClick={() => {
+                logout();
+                navigate('/login', { replace: true });
+              }}
+              aria-label={t('logout')}
+              title={t('logout')}
+            >
+              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>
