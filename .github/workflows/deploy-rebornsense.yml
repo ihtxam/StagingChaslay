@@ -1,15 +1,19 @@
 name: Deploy to Rebornsense
 
-# Rebornsense production — auto-deploy on every push to main.
+# Rebornsense production — manual deploy ONLY after staging is verified.
 # Repo: https://github.com/ihtxam/rebornSense
 # Server: app.rebornsense.com @ 91.98.41.165 (/root/rebornSense)
-# Requires REBORN_HETZNER_* secrets (not HETZNER_* — test uses rebornChaslay repo).
+# Requires REBORN_HETZNER_* secrets (not HETZNER_* — test uses StagingChaslay repo).
+#
+# Workflow: test on app.chaslay.com first (Sync to StagingChaslay), then run this.
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to deploy (default main — use after staging sign-off)
+        type: string
+        default: main
 
 concurrency:
   group: deploy-rebornsense-production

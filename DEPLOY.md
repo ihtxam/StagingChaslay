@@ -89,21 +89,28 @@ bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
 
 ## 3. Deploy workflows
 
-Two separate repos — each auto-deploys to its own server on push to `main`:
+**Staging first, production second.** Test every change on Chaslay before it reaches Rebornsense.
 
-| When user says | Repo | Server | Path | Auto-deploy |
-|----------------|------|--------|------|-------------|
-| push to **test** / **chaslay** | [StagingChaslay](https://github.com/ihtxam/StagingChaslay) | `116.202.26.15` | `/root/rebornChaslay` | yes on `main` |
-| push to **production** / **reborn** | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | yes on `main` |
+| Step | When user says | What to do | Result |
+|------|----------------|------------|--------|
+| 1 — **Test** | push to **test** / **chaslay** | Merge code to `rebornSense`, then run **Actions → Sync to StagingChaslay** (or push directly to [StagingChaslay](https://github.com/ihtxam/StagingChaslay) `main`) | `app.chaslay.com` updates |
+| 2 — **Verify** | — | QA on `app.chaslay.com` | — |
+| 3 — **Production** | push to **production** / **reborn** | Merge to `rebornSense` `main`, then run **Actions → Deploy to Rebornsense** | `app.rebornsense.com` updates |
 
-When asking an agent to push, always specify **test/chaslay** or **production/reborn** so the correct repo is updated.
+Pushing to `rebornSense` `main` alone does **not** deploy anywhere. Each environment has its own explicit workflow.
+
+| Environment | Repo | Server | Path | How it deploys |
+|-------------|------|--------|------|----------------|
+| Chaslay test/staging | [StagingChaslay](https://github.com/ihtxam/StagingChaslay) | `116.202.26.15` | `/root/StagingChaslay` | Auto on push to `main` in StagingChaslay (usually via sync workflow) |
+| Rebornsense production | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | Manual: **Actions → Deploy to Rebornsense** |
+
+When asking an agent to deploy, always specify **test/chaslay** or **production/reborn**.
 
 | Environment | Workflow | Trigger | Server secret | Stack | Domains |
 |-------------|----------|---------|---------------|-------|---------|
 | Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
-| Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Auto on push to `main` | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
-
-Test on Chaslay first, then merge/cherry-pick into rebornSense and push to `main` for production.
+| Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
+| Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
 
 ### Chaslay test server (StagingChaslay repo)
 
@@ -114,7 +121,7 @@ Configure secrets in **StagingChaslay** → Settings → Secrets and variables �
 | `HETZNER_HOST` | `116.202.26.15` |
 | `HETZNER_USER` | `root` |
 | `HETZNER_SSH_KEY` | Private key (PEM) that can SSH to the Chaslay server |
-| `HETZNER_DEPLOY_PATH` | `/root/rebornChaslay` (optional) |
+| `HETZNER_DEPLOY_PATH` | `/root/StagingChaslay` (optional) |
 | `HETZNER_DEPLOY_STACK` | `chaslay` (optional; default is `chaslay`) |
 | `HETZNER_SSH_PORT` | `22` (optional) |
 
@@ -147,7 +154,7 @@ Caddy config: `deploy/Caddyfile.rebornsense`
 
 **Why two repos?** Each repo deploys only to its own server. Do not add Chaslay deploy workflows here or Rebornsense workflows in StagingChaslay.
 
-### StagingChaslay sync (one-time setup)
+### StagingChaslay sync (push to test)
 
 Cloud agents and `cursor[bot]` **cannot** push to `ihtxam/StagingChaslay` (403 — no write access). The default `GITHUB_TOKEN` in Actions also **cannot** push to another repo without a PAT.
 
@@ -157,10 +164,11 @@ Cloud agents and `cursor[bot]` **cannot** push to `ihtxam/StagingChaslay` (403 �
 2. In **rebornSense** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
    - Name: `STAGING_CHASLAY_SYNC_TOKEN`
    - Value: the PAT
-3. Merge or push `.github/workflows/sync-staging-chaslay.yml` to `main`. Every push to `main` here mirrors code to StagingChaslay and triggers the Chaslay test deploy.
-4. To sync immediately without waiting for a code push: **Actions** → **Sync to StagingChaslay** → **Run workflow**.
+3. To deploy to test: **Actions** → **Sync to StagingChaslay** → **Run workflow** (pick branch if not `main`).
 
-The sync workflow swaps in `.github/staging-overlay/deploy-hetzner.yml` and strips rebornSense-only workflows before pushing. Histories may diverge — the workflow **force-pushes** by default.
+The sync workflow swaps in `.github/staging-overlay/deploy-hetzner.yml` and strips rebornSense-only workflows before pushing. That push triggers the Chaslay auto-deploy on `app.chaslay.com`. Histories may diverge — the workflow **force-pushes** by default.
+
+**Do not run Deploy to Rebornsense until you have verified the same code on staging.**
 
 **Alternative (not recommended for agents):** add `cursor[bot]` as a collaborator on StagingChaslay (Settings → Collaborators → Add people → invite `cursor[bot]` with Write). Manual pushes would work but still fail in unattended agent runs without your OAuth.
 
