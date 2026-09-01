@@ -93,19 +93,12 @@ export default function ChaslayPageBuilderList() {
 
   return (
     <div className="chaslay-pagebuilder-root p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Chaslay Page Builder (beta)</strong> — Craft.js drag-and-drop editor imported from Chaslay for
-        testing. Your existing OpenPage website CMS at{' '}
-        <Link to="/merchant/website" className="underline">
-          Website
-        </Link>{' '}
-        is unchanged.
-      </div>
-
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Chaslay Page Builder</h1>
-          <p className="text-sm text-muted-foreground">Create and manage Craft.js storefront layouts</p>
+          <h1 className="text-2xl font-bold">Website</h1>
+          <p className="text-sm text-muted-foreground">
+            Design your shop homepage with drag-and-drop blocks. Activate a layout to publish it on your online shop.
+          </p>
         </div>
         <button
           type="button"

@@ -57,8 +57,8 @@ export const MenuGrid: React.FC<MenuGridProps> & {
   const displayProducts = orderedProducts.slice(0, 6);
 
   // Format price helper
-  const formatPrice = (product: any) => {
-    const price = product.details?.[0]?.price || 0;
+  const formatPrice = (product: { price?: number; details?: Array<{ price?: number }> }) => {
+    const price = product.price ?? product.details?.[0]?.price ?? 0;
     return `CHF ${Number(price).toFixed(2)}`;
   };
 

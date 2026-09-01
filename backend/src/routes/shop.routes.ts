@@ -17,6 +17,7 @@ import { AdyenService } from "@/services/adyen.service";
 import { AuthService } from "@/services/auth.service";
 import { ModifierService } from "@/services/modifier.service";
 import { CmsService } from "@/services/cms.service";
+import { ChaslayPagebuilderService } from "@/services/chaslay-pagebuilder.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
@@ -724,13 +725,54 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
     if (!merchant?.shopEnabled) {
       return res.status(404).json({ error: "Shop not found or closed" });
     }
+    if (!merchant.cmsHomepageEnabled) {
+      return res.status(404).json({ error: "Homepage not published" });
+    }
+
+    const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
+    if (chaslay?.editor_state) {
+      return res.json({
+        success: true,
+        data: {
+          engine: "chaslay",
+          id: chaslay.id,
+          title: chaslay.name,
+          slug: "home",
+          isHomepage: true,
+          editorState: chaslay.editor_state,
+          seoTitle: chaslay.name,
+          seoDescription: merchant.description || "",
+          publishedAt: chaslay.updated_at,
+          merchant: {
+            id: merchant.id,
+            name: merchant.name,
+            slug: merchant.slug,
+            subdomain: merchant.subdomain,
+            customDomain: merchant.customDomain,
+            shopLogoUrl: merchant.shopLogoUrl,
+            shopBannerUrl: merchant.shopBannerUrl,
+            storeHours: merchant.storeHours || {},
+            address: merchant.address,
+            city: merchant.city,
+            phone: merchant.phone,
+            reservationsEnabled: !!merchant.reservationsEnabled,
+            acceptingOrders: merchant.acceptingOrders !== false,
+            acceptingReservations: merchant.acceptingReservations !== false,
+            vacation: vacationPublicPayload(merchant.vacationSettings),
+            language: merchant.shopLanguage || merchant.panelLanguage || "en",
+          },
+        },
+      });
+    }
+
     const page = await CmsService.getPublishedHomepage(merchant.id);
-    if (!page || !merchant.cmsHomepageEnabled) {
+    if (!page) {
       return res.status(404).json({ error: "Homepage not published" });
     }
     res.json({
       success: true,
       data: {
+        engine: "openpage",
         id: page.id,
         title: page.title,
         slug: page.slug,

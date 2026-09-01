@@ -1,8 +1,8 @@
 {
-  "id": "/",
+  "id": "https://app.rebornsense.com/",
   "name": "Reborn",
   "short_name": "Reborn",
-  "description": "Reborn — installable Windows app",
+  "description": "Reborn POS — install once, open from home screen",
   "start_url": "/merchant/pos",
   "scope": "/",
   "display": "standalone",

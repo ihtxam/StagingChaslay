@@ -4,6 +4,7 @@ import axios from 'axios';
 import { resolveShopKey } from '@/lib/shop-cart';
 import OrderingPage from './OrderingPage';
 import ShopHomePage from './ShopHomePage';
+import ChaslayShopHomePage from './ChaslayShopHomePage';
 import { useI18n } from '@/lib/i18n';
 
 /**
@@ -13,7 +14,7 @@ export default function ShopEntry() {
   const { t } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
-  const [mode, setMode] = useState<'loading' | 'cms' | 'menu'>('loading');
+  const [mode, setMode] = useState<'loading' | 'cms' | 'chaslay' | 'menu'>('loading');
 
   useEffect(() => {
     if (!shopKey) {
@@ -28,8 +29,10 @@ export default function ShopEntry() {
         if (cancelled) return;
         if (data?.cmsHomepageEnabled) {
           try {
-            await axios.get(`/api/shop/${shopKey}/pages/home`);
-            if (!cancelled) setMode('cms');
+            const homeRes = await axios.get(`/api/shop/${shopKey}/pages/home`);
+            if (!cancelled) {
+              setMode(homeRes.data?.data?.engine === 'chaslay' ? 'chaslay' : 'cms');
+            }
             return;
           } catch {
             /* fall through to menu */
@@ -52,6 +55,7 @@ export default function ShopEntry() {
       </div>
     );
   }
+  if (mode === 'chaslay') return <ChaslayShopHomePage />;
   if (mode === 'cms') return <ShopHomePage />;
   return <OrderingPage />;
 }

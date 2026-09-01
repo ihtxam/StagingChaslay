@@ -2,13 +2,15 @@
 'use client';
 
 import React from 'react';
-import { useNode } from '@craftjs/core';
+import { useNode, useEditor } from '@craftjs/core';
 import { ReservationFormProps } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import InlineReservationsWidget from '@/components/shop/InlineReservationsWidget';
+import { useStorefront } from '../StorefrontContext';
 
 const defaultProps: ReservationFormProps = {
   title: 'Reserve a Table',
@@ -32,6 +34,27 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { isStorefront, shopKey, basePath } = useStorefront();
+  const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
+
+  if (isStorefront && !enabled && shopKey) {
+    return (
+      <section
+        className="hb-section px-4 py-10 md:px-10 md:py-14"
+        style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor }}
+      >
+        <div className="mx-auto max-w-2xl space-y-6">
+          {mergedProps.title ? (
+            <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">{mergedProps.title}</h2>
+          ) : null}
+          {mergedProps.subtitle ? (
+            <p className="text-center text-sm opacity-80 md:text-base">{mergedProps.subtitle}</p>
+          ) : null}
+          <InlineReservationsWidget shopKey={shopKey} base={basePath} embedded title={mergedProps.title} />
+        </div>
+      </section>
+    );
+  }
 
   if (mergedProps.layout === 'inline') {
     const borderColor = mergedProps.textColor === '#ffffff' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';

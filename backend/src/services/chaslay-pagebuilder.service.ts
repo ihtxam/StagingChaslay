@@ -189,6 +189,10 @@ export class ChaslayPagebuilderService {
         .set({ isActive: true, updatedAt: new Date() })
         .where(eq(schema.chaslayHomepageBuilders.id, id))
         .returning();
+      await db
+        .update(schema.merchants)
+        .set({ cmsHomepageEnabled: true, updatedAt: new Date() })
+        .where(eq(schema.merchants.id, merchantId));
       return { id: row.id, name: row.name, is_active: true };
     });
   }
@@ -204,6 +208,19 @@ export class ChaslayPagebuilderService {
         )
         .returning();
       if (!row) throw new Error("Homepage builder not found");
+      const otherActive = await db.query.chaslayHomepageBuilders.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
+          eq(schema.chaslayHomepageBuilders.isActive, true)
+        ),
+        columns: { id: true },
+      });
+      if (!otherActive) {
+        await db
+          .update(schema.merchants)
+          .set({ cmsHomepageEnabled: false, updatedAt: new Date() })
+          .where(eq(schema.merchants.id, merchantId));
+      }
       return { id: row.id, name: row.name, is_active: false };
     });
   }
