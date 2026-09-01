@@ -45,7 +45,13 @@ const imageUpload = multer({
   },
 });
 
-const POS_SAFE_SETTINGS_KEYS = new Set(["posColorTheme", "panelLanguage"]);
+const POS_SAFE_SETTINGS_KEYS = new Set([
+  "posColorTheme",
+  "panelLanguage",
+  "acceptingOrders",
+  "acceptingReservations",
+  "reservationsEnabled",
+]);
 
 /** Staff can use POS/catalog APIs; writes to catalog/settings/billing stay permission-gated. */
 function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunction) {

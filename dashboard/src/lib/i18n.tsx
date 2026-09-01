@@ -3079,6 +3079,9 @@ const en: Dict = {
   staffRoleKiosk: 'Kiosk operator',
   staffRoleKioskHint:
     'Opens kiosk setup only — configure sliders, payment methods, test connections, and launch customer mode. No full panel access.',
+  staffRoleOrderCenter: 'Order center operator',
+  staffRoleOrderCenterHint:
+    'Opens the Order Center app only — accept online orders, print tickets, and view daily summary. No full panel access.',
   kioskNav: 'Self-order kiosk',
   kioskAddonDisabled: 'The self-order kiosk add-on is not enabled for this merchant. Contact your reseller to activate it.',
   kioskSetupTitle: 'Kiosk setup',
@@ -6721,6 +6724,9 @@ const fr: Dict = {
   staffRoleKiosk: 'Opérateur borne',
   staffRoleKioskHint:
     'Accès à la configuration borne uniquement — sliders, paiements, tests de connexion et lancement du mode client. Pas d’accès au panneau complet.',
+  staffRoleOrderCenter: 'Opérateur centre de commande',
+  staffRoleOrderCenterHint:
+    'Ouvre uniquement le centre de commande — accepter les commandes en ligne, imprimer et voir le résumé du jour. Pas d’accès au panneau complet.',
   kioskNav: 'Borne de commande',
   kioskAddonDisabled: 'Le module borne de commande n’est pas activé pour ce commerce. Contactez votre revendeur.',
   kioskSetupTitle: 'Configuration borne',
@@ -10352,6 +10358,9 @@ const de: Dict = {
   staffRoleKiosk: 'Kiosk-Betreiber',
   staffRoleKioskHint:
     'Nur Kiosk-Einrichtung — Slider, Zahlungsarten, Verbindungstests und Start des Kundenmodus. Kein volles Panel.',
+  staffRoleOrderCenter: 'Bestellzentrum-Betreiber',
+  staffRoleOrderCenterHint:
+    'Öffnet nur das Bestellzentrum — Online-Bestellungen annehmen, drucken und Tagesübersicht. Kein volles Panel.',
   kioskNav: 'Selbstbestell-Kiosk',
   kioskAddonDisabled: 'Das Kiosk-Modul ist für diesen Händler nicht aktiviert. Wenden Sie sich an Ihren Reseller.',
   kioskSetupTitle: 'Kiosk-Einrichtung',

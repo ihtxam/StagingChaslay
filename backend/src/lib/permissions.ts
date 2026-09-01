@@ -171,6 +171,13 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     sortOrder: 56,
     permissions: ["MANAGE_KIOSK"],
   },
+  {
+    /** Handheld / Chrome order center PWA — live online orders, print, daily summary. No panel. */
+    name: "Order center operator",
+    isSystem: true,
+    sortOrder: 57,
+    permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
+  },
 ];
 
 /**
@@ -240,6 +247,8 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
   "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
   "/merchant/kiosk": ["MANAGE_KIOSK", "MANAGE_SETTINGS"],
+  "/merchant/order-center": ["VIEW_ORDER_HISTORY"],
+  "/merchant/order-hub": ["VIEW_ORDER_HISTORY"],
 };
 
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
@@ -255,6 +264,7 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
   "DELIVERY_ORDERS",
   "VIEW_DELIVERY_TRACKING",
   "MANAGE_KIOSK",
+  "VIEW_ORDER_HISTORY",
 ];
 
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [

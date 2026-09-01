@@ -49,6 +49,10 @@ export function isKioskOperatorRoleName(name: string): boolean {
   return name.trim().toLowerCase() === 'kiosk operator';
 }
 
+export function isOrderCenterOperatorRoleName(name: string): boolean {
+  return name.trim().toLowerCase() === 'order center operator';
+}
+
 export const ALL_PERMISSIONS: Permission[] = [
   'USE_POS',
   'USE_WEBPOS',
@@ -209,6 +213,7 @@ export function backOfficeHomePath(
   if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
   if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
   if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
+  if (isOrderCenterOnlyStaff(permissions, isOwner)) return orderCenterHomePath();
   if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
@@ -244,6 +249,7 @@ export function staffRoleDisplayName(name: string, t: (key: string) => string): 
   if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
   if (n === 'storekeeper') return t('staffRoleStorekeeper');
   if (n === 'kiosk operator') return t('staffRoleKiosk');
+  if (n === 'order center operator') return t('staffRoleOrderCenter');
   return name;
 }
 
@@ -256,6 +262,9 @@ export function canAccessRoute(
 ): boolean {
   if (!canAccessBusinessModuleRoute(path, businessModule)) return false;
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
+  if (isOrderCenterOnlyStaff(permissions, isOwner)) {
+    return isOrderCenterPanelPath(path);
+  }
   if (isOwner) return true;
   const required = resolvePanelRoutePermissions(path);
   if (required === null) return false;
@@ -417,6 +426,46 @@ export function isKioskHomeLocation(pathname: string, search = ''): boolean {
   const path = pathname.replace(/\/$/, '') || '/merchant';
   if (path === '/merchant/kiosk') return true;
   return path === '/merchant/settings' && isKioskSettingsTab(search);
+}
+
+/** Order center PWA only — live online orders, print, history, daily report. No full panel. */
+export function isOrderCenterOnlyStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return false;
+  if (hasPermission(permissions, 'USE_POS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_SETTINGS', false)) return false;
+  return true;
+}
+
+export function isOrderCenterRestrictedStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  return true;
+}
+
+export function isOrderCenterPanelPath(pathname: string): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  return path === '/merchant/order-center' || path === '/merchant/order-hub';
+}
+
+export function orderCenterHomePath(): string {
+  return '/merchant/order-center';
+}
+
+export function isOrderCenterHomeLocation(pathname: string): boolean {
+  return isOrderCenterPanelPath(pathname);
 }
 
 /** Register POS / waiter — PIN session restricts panel access on these routes only. */

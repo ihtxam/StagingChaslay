@@ -7,8 +7,10 @@ import {
   isDeliveryDriverOnlyStaff,
   isStorekeeperOnlyStaff,
   isKioskOnlyStaff,
+  isOrderCenterOnlyStaff,
   isWaiterRestrictedStaff,
   kioskHomePath,
+  orderCenterHomePath,
   storekeeperHomePath,
   waiterRestrictedHomePath,
   type Permission,
@@ -30,6 +32,7 @@ export function homePathForUser(
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
     if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
     if (isKioskOnlyStaff(perms, user.isOwner === true)) return kioskHomePath();
+    if (isOrderCenterOnlyStaff(perms, user.isOwner === true)) return orderCenterHomePath();
     if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
       return waiterRestrictedHomePath(perms);
     }
@@ -55,6 +58,7 @@ export function homePathForUser(
   if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
   if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
   if (isKioskOnlyStaff(perms, user.isOwner === true)) return kioskHomePath();
+  if (isOrderCenterOnlyStaff(perms, user.isOwner === true)) return orderCenterHomePath();
   if (isWaiterRestrictedStaff(perms, user.isOwner === true)) {
     return waiterRestrictedHomePath(perms);
   }
