@@ -1,0 +1,34 @@
+name: Deploy to Hetzner
+
+# StagingChaslay — auto-deploy on every push to main.
+# Repo: https://github.com/ihtxam/StagingChaslay
+# Server: app.chaslay.com @ 116.202.26.15 (/root/StagingChaslay)
+# Requires HETZNER_* secrets (not REBORN_HETZNER_* — production uses rebornSense repo).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hetzner-chaslay
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
+            export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
+            export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"
+            bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"

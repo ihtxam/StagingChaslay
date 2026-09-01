@@ -147,6 +147,23 @@ Caddy config: `deploy/Caddyfile.rebornsense`
 
 **Why two repos?** Each repo deploys only to its own server. Do not add Chaslay deploy workflows here or Rebornsense workflows in StagingChaslay.
 
+### StagingChaslay sync (one-time setup)
+
+Cloud agents and `cursor[bot]` **cannot** push to `ihtxam/StagingChaslay` (403 — no write access). The default `GITHUB_TOKEN` in Actions also **cannot** push to another repo without a PAT.
+
+**One-time setup** (your GitHub account, ~2 minutes):
+
+1. Create a [fine-grained PAT](https://github.com/settings/tokens?type=beta) or [classic PAT](https://github.com/settings/tokens) with **`repo`** scope (write access to `ihtxam/StagingChaslay`).
+2. In **rebornSense** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
+   - Name: `STAGING_CHASLAY_SYNC_TOKEN`
+   - Value: the PAT
+3. Merge or push `.github/workflows/sync-staging-chaslay.yml` to `main`. Every push to `main` here mirrors code to StagingChaslay and triggers the Chaslay test deploy.
+4. To sync immediately without waiting for a code push: **Actions** → **Sync to StagingChaslay** → **Run workflow**.
+
+The sync workflow swaps in `.github/staging-overlay/deploy-hetzner.yml` and strips rebornSense-only workflows before pushing. Histories may diverge — the workflow **force-pushes** by default.
+
+**Alternative (not recommended for agents):** add `cursor[bot]` as a collaborator on StagingChaslay (Settings → Collaborators → Add people → invite `cursor[bot]` with Write). Manual pushes would work but still fail in unattended agent runs without your OAuth.
+
 #### First-time / broken deploy on `91.98.41.165`
 
 If `bash scripts/deploy-hetzner.sh` fails with **`fatal: not a git repository`**, the server tree was copied or cloned without git history. Fix with one of the options below (run on the server as **root**).
