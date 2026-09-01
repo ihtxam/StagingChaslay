@@ -5,7 +5,8 @@ name: Deploy to Rebornsense
 # Server: app.rebornsense.com @ 91.98.41.165 (/root/rebornSense)
 # Requires REBORN_HETZNER_* secrets (not HETZNER_* — test uses StagingChaslay repo).
 #
-# Workflow: test on app.chaslay.com first, then update `.deploy/rebornsense-production` to deploy production.
+# Workflow: test on app.chaslay.com first, then ask the agent to "push to production"
+# (agent runs: gh workflow run deploy-rebornsense.yml)
 
 on:
   push:

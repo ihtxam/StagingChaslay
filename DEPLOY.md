@@ -89,15 +89,29 @@ bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
 
 ## 3. Deploy workflows
 
-**Staging first, production second.** Test every change on Chaslay before it reaches Rebornsense.
+**Staging first, production second.** You test on Chaslay; production only when you ask.
 
-| Step | When user says | What to do | Result |
-|------|----------------|------------|--------|
-| 1 — **Staging** | merge to `main` / push to **test** / **chaslay** | Merge PR to `rebornSense` `main` (auto-syncs to StagingChaslay) or run `bash scripts/agent-deploy.sh staging` | `app.chaslay.com` updates |
-| 2 — **Verify** | — | QA on `app.chaslay.com` | — |
-| 3 — **Production** | push to **production** / **reborn** | Run `bash scripts/agent-deploy.sh production` (touches `.deploy/rebornsense-production` and pushes `main`) | `app.rebornsense.com` updates |
+### What you do (two messages — nothing else)
 
-Pushing to `rebornSense` `main` **auto-deploys staging** (via `sync-staging-chaslay.yml`). Production still requires an explicit deploy trigger (`.deploy/rebornsense-production` or `agent-deploy.sh production`).
+| You say | What happens | You touch files? |
+|---------|--------------|------------------|
+| **"push to staging"** / merge PR | Agent merges → `main` → **staging auto-deploys** (`app.chaslay.com`) | **No** |
+| Test on `app.chaslay.com` | — | — |
+| **"push to production"** | Agent runs production deploy → `app.rebornsense.com` updates | **No** |
+
+You never edit `.deploy/`, GitHub Actions, or SSH. The agent handles deploy commands.
+
+### What the agent runs
+
+```bash
+# After merging your fix to main (staging already triggered by the push):
+bash scripts/agent-deploy.sh staging      # optional: wait for staging deploy to finish
+
+# When you say "push to production":
+bash scripts/agent-deploy.sh production   # triggers Deploy to Rebornsense workflow
+```
+
+Pushing to `rebornSense` `main` **only deploys staging** (sync → StagingChaslay → `app.chaslay.com`). Production does **not** run until you ask.
 
 | Environment | Repo | Server | Path | How it deploys |
 |-------------|------|--------|------|----------------|

@@ -107,7 +107,13 @@ deploy_staging_github() {
 }
 
 deploy_production_github() {
-  echo "=== Production via GitHub (touch deploy trigger + push main) ==="
+  echo "=== Production deploy (app.rebornsense.com) ==="
+  if command -v gh >/dev/null 2>&1; then
+    gh workflow run deploy-rebornsense.yml --ref main -f ref=main
+    wait_for_workflow deploy-rebornsense.yml 1200
+    return
+  fi
+  echo "gh CLI unavailable — falling back to deploy trigger commit"
   local stamp
   stamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   cat >.deploy/rebornsense-production <<EOF
