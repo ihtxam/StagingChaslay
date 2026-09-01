@@ -3,7 +3,7 @@
  * Survives cart reset after Send/Pay. Auto-retries on a configurable interval while the page is open.
  */
 import { useEffect, useState } from 'react';
-import { friendlyPrintAgentError, printViaAgent } from '@/lib/print-agent';
+import { friendlyPrintAgentError, listAgentPrinters, printViaAgent, resolveLivePrinterName } from '@/lib/print-agent';
 
 function safeJobError(error: unknown, printerName?: string): string {
   return friendlyPrintAgentError(error, printerName);
@@ -57,6 +57,29 @@ let jobs: PendingPrintJob[] = loadJobs();
 let retryTimer: number | null = null;
 let retryInFlight = false;
 let retryConfig: PrintQueueRetryConfig = { ...DEFAULT_RETRY_CONFIG };
+let cachedLivePrinters: Awaited<ReturnType<typeof listAgentPrinters>> | null = null;
+let cachedLivePrintersAt = 0;
+
+async function livePrintersForRetry(): Promise<Awaited<ReturnType<typeof listAgentPrinters>>> {
+  const now = Date.now();
+  if (cachedLivePrinters && now - cachedLivePrintersAt < 15_000) return cachedLivePrinters;
+  try {
+    cachedLivePrinters = await listAgentPrinters();
+    cachedLivePrintersAt = now;
+    return cachedLivePrinters;
+  } catch {
+    cachedLivePrinters = [];
+    cachedLivePrintersAt = now;
+    return [];
+  }
+}
+
+async function resolveQueuedPrinterName(configured?: string): Promise<string | undefined> {
+  const want = String(configured || '').trim();
+  if (!want) return undefined;
+  const live = await livePrintersForRetry();
+  return resolveLivePrinterName(want, live) || want;
+}
 
 function loadJobs(): PendingPrintJob[] {
   try {
@@ -273,7 +296,7 @@ export async function reprintPrintJobs(ids: Iterable<string>): Promise<{ ok: num
   for (const job of targets) {
     try {
       await printViaAgent({
-        printerName: job.printerName,
+        printerName: await resolveQueuedPrinterName(job.printerName),
         dataBase64: job.dataBase64,
         text: job.text,
       });
@@ -310,7 +333,7 @@ async function autoRetryOnce(): Promise<number> {
       }
       try {
         await printViaAgent({
-          printerName: job.printerName,
+          printerName: await resolveQueuedPrinterName(job.printerName),
           dataBase64: job.dataBase64,
           text: job.text,
         });

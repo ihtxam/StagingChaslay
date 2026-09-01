@@ -4421,6 +4421,8 @@ export default function Settings() {
                                 isConfiguredPrinterMissing(p.name, agentPrinters, {
                                   agentOk: printAgentOk,
                                   printersReady: agentPrinters.length > 0,
+                                  portName: p.portName,
+                                  matchHint: p.matchHint,
                                 })
                             )
                           ? 'text-amber-800'
@@ -4433,6 +4435,8 @@ export default function Settings() {
                             isConfiguredPrinterMissing(p.name, agentPrinters, {
                               agentOk: printAgentOk,
                               printersReady: agentPrinters.length > 0,
+                              portName: p.portName,
+                              matchHint: p.matchHint,
                             })
                           )
                         ? t('webPosPrinterDisconnectedShort')
@@ -4445,6 +4449,8 @@ export default function Settings() {
                   const savedNameMissing = isConfiguredPrinterMissing(p.name, agentPrinters, {
                     agentOk: printAgentOk,
                     printersReady: agentPrinters.length > 0,
+                    portName: p.portName,
+                    matchHint: p.matchHint,
                   });
                   const healCandidates = savedNameMissing
                     ? findPrinterHealCandidates(p.name, agentPrinters)

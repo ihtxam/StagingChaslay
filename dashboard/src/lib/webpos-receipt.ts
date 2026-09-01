@@ -2616,6 +2616,8 @@ export function filterKitchenItems(
 
 export type KitchenPrintJob = {
   printerName: string;
+  portName?: string | null;
+  matchHint?: string | null;
   paperWidthMm: 58 | 80;
   items: KitchenTicketItem[];
 };
@@ -2649,6 +2651,8 @@ export function buildKitchenPrintJobs(
     if (!filtered.length) continue;
     jobs.push({
       printerName: kp.name,
+      portName: kp.portName ?? null,
+      matchHint: kp.matchHint ?? null,
       paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
       items: filtered,
     });
@@ -2723,6 +2727,8 @@ export function resolveKitchenPrintJobs(
       return [
         {
           printerName: kp.name,
+          portName: kp.portName ?? null,
+          matchHint: kp.matchHint ?? null,
           paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
           items: filtered,
         },

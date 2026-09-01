@@ -155,6 +155,21 @@ function scoreDeviceMatch(configured: string, candidate: string): number {
   return 0;
 }
 
+function normalizeComPortLabel(port?: string | null): string {
+  const raw = String(port || '')
+    .trim()
+    .toUpperCase()
+    .replace(/^\\\\\.\\/i, '');
+  const m = raw.match(/^(COM\d+)$/);
+  return m ? m[1] : raw;
+}
+
+function findAgentPrinterByPort(port: string, printers: AgentPrinter[]): AgentPrinter | null {
+  const want = normalizeComPortLabel(port);
+  if (!want) return null;
+  return printers.find((p) => normalizeComPortLabel(p.portName) === want) || null;
+}
+
 /** Map a saved Windows name to the live queue name (exact, case, or device-key match). */
 export function resolveAgentPrinterName(
   configuredName: string,
@@ -166,9 +181,9 @@ export function resolveAgentPrinterName(
   if (exact) return exact.name;
   const ci = printers.find((p) => p.name.toLowerCase() === want.toLowerCase());
   if (ci) return ci.name;
-  const wantPort = want.toUpperCase().match(/^COM\d+$/)?.[0] || '';
-  if (wantPort) {
-    const byPort = printers.find((p) => String(p.portName || '').toUpperCase() === wantPort);
+  const wantPort = normalizeComPortLabel(want.match(/^COM\d+$/)?.[0] || want);
+  if (wantPort.startsWith('COM')) {
+    const byPort = findAgentPrinterByPort(wantPort, printers);
     if (byPort) return byPort.name;
   }
   const scored = printers
@@ -184,6 +199,78 @@ export function resolveAgentPrinterName(
     .filter((x) => x.score >= 12)
     .sort((a, b) => b.score - a.score);
   return scored[0]?.p.name || null;
+}
+
+export type PrinterResolutionHints = {
+  portName?: string | null;
+  matchHint?: string | null;
+};
+
+function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
+  const suitable = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  return (
+    suitable.find((p) => p.isDefault) ||
+    suitable.find((p) => looksLikeThermal80mm(p.name)) ||
+    suitable[0] ||
+    null
+  );
+}
+
+/**
+ * Resolve a saved printer profile to the current Windows queue name.
+ * Falls back to stored COM port / match hint, similarity heal, then default printer.
+ */
+export function resolveLivePrinterName(
+  configuredName: string,
+  livePrinters: AgentPrinter[],
+  hints?: PrinterResolutionHints
+): string | null {
+  const want = String(configuredName || '').trim();
+  if (!livePrinters.length) return want || null;
+
+  if (want) {
+    const resolved = resolveAgentPrinterName(want, livePrinters);
+    if (resolved) return resolved;
+  }
+
+  const byPort = findAgentPrinterByPort(hints?.portName, livePrinters);
+  if (byPort) return byPort.name;
+
+  const hint = String(hints?.matchHint || '').trim();
+  if (hint) {
+    const byHint = resolveAgentPrinterName(hint, livePrinters);
+    if (byHint) return byHint;
+  }
+
+  const heal = suggestPrinterAutoHeal(want || hint, livePrinters);
+  if (heal) return heal.name;
+
+  const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
+  if (candidates[0]?.name) return candidates[0].name;
+
+  return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
+
+/** Clear or remap stale localStorage till printer when Windows renames a queue. */
+export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string | null {
+  if (typeof localStorage === 'undefined' || !livePrinters.length) return null;
+  let stored = '';
+  try {
+    stored = String(localStorage.getItem(WEBPOS_PRINTER_STORAGE_KEY) || '').trim();
+  } catch {
+    return null;
+  }
+  if (!stored) return null;
+  const resolved = resolveLivePrinterName(stored, livePrinters);
+  if (!resolved || resolved === stored) return null;
+  try {
+    localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, resolved);
+  } catch {
+    /* ignore */
+  }
+  return resolved;
 }
 
 /** Dedupe agent enumeration by exact Windows queue name. */
@@ -224,11 +311,14 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
   let changed = false;
   const next = profiles.map((p) => {
     const name = String(p.name || '').trim();
-    if (!name) return p;
-    const resolved = resolveAgentPrinterName(name, livePrinters);
+    if (!name && !String(p.portName || '').trim()) return p;
+    const resolved = resolveLivePrinterName(name, livePrinters, {
+      portName: p.portName,
+      matchHint: p.matchHint,
+    });
     if (resolved) {
-      if (resolved === name) return p;
       const picked = livePrinters.find((ap) => ap.name === resolved);
+      if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
       changed = true;
       return {
         ...p,
@@ -237,31 +327,23 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
         matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
       };
     }
-    const heal = suggestPrinterAutoHeal(name, livePrinters);
-    if (heal) {
-      changed = true;
-      return {
-        ...p,
-        name: heal.name,
-        portName: heal.portName ?? p.portName ?? null,
-        matchHint: heal.matchHint ?? heal.driverName ?? p.matchHint ?? null,
-      };
-    }
     changed = true;
     return { ...p, name: '' };
   });
   return { profiles: next, changed };
 }
 
-/** Drop saved profiles that no longer map to a live Windows queue. */
 export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
   livePrinters: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
   const next = profiles.filter((p) => {
     const name = String(p.name || '').trim();
-    if (!name) return false;
-    return !!resolveAgentPrinterName(name, livePrinters);
+    if (!name && !String(p.portName || '').trim()) return false;
+    return !!resolveLivePrinterName(name, livePrinters, {
+      portName: p.portName,
+      matchHint: p.matchHint,
+    });
   });
   return { profiles: next, changed: next.length !== profiles.length };
 }
@@ -282,14 +364,21 @@ export function reconcileAndPrunePosPrinterProfiles<T extends PosPrinterProfileL
 /** Agent is up but the stored Windows name is gone (rename / 1801). */
 export function isConfiguredPrinterMissing(
   configuredName: string,
-  printers: Array<{ name: string }>,
-  opts?: { agentOk?: boolean; printersReady?: boolean }
+  printers: Array<{ name: string; portName?: string; matchHint?: string }>,
+  opts?: {
+    agentOk?: boolean;
+    printersReady?: boolean;
+    portName?: string | null;
+    matchHint?: string | null;
+  }
 ): boolean {
   const name = String(configuredName || '').trim();
-  if (!name) return false;
+  const portName = opts?.portName;
+  const matchHint = opts?.matchHint;
+  if (!name && !String(portName || '').trim()) return false;
   if (opts?.agentOk === false) return false;
   if (opts?.printersReady === false) return false;
-  return !resolveAgentPrinterName(name, printers as AgentPrinter[]);
+  return !resolveLivePrinterName(name, printers as AgentPrinter[], { portName, matchHint });
 }
 
 /** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */

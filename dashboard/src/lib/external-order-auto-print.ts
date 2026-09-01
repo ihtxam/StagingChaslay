@@ -1,19 +1,25 @@
 import api from '@/lib/api';
 import { printDeliveryReceiptForOrder } from '@/lib/print-delivery-slip';
 import {
-  buildKitchenPrintJobs,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateOrderNotificationTicketEscPos,
   generateReservationTicketEscPos,
   printersForRole,
   resolveKitchenPaperWidthMm,
+  resolveKitchenPrintJobs,
   resolveReceiptLanguage,
   uint8ToBase64,
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
 import { isRetailPosMode } from '@/lib/pos-checkout';
+import {
+  isPrintAgentAvailable,
+  listAgentPrinters,
+  resolveLivePrinterName,
+  syncWebPosLocalPrinterName,
+} from '@/lib/print-agent';
 import {
   printKitchenViaAgentOrQueue,
   printViaAgentOrQueue,
@@ -113,13 +119,33 @@ async function printKitchenTickets(
   };
 
   let printedAny = false;
-  const printJobs = buildKitchenPrintJobs(receiptItems, printSettings);
+  const agentOnline = await isPrintAgentAvailable();
+  let livePrinters: Awaited<ReturnType<typeof listAgentPrinters>> = [];
+  if (agentOnline) {
+    try {
+      livePrinters = await listAgentPrinters();
+      syncWebPosLocalPrinterName(livePrinters);
+    } catch {
+      livePrinters = [];
+    }
+  }
+
+  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
+    (j) => (j.printerName || '').trim() || (j.portName || '').trim()
+  );
+  const fallbackLocal =
+    resolveLivePrinterName(
+      localStorage.getItem('manupos_webpos_printer') || '',
+      livePrinters
+    ) ||
+    localStorage.getItem('manupos_webpos_printer') ||
+    '';
   const targets =
     printJobs.length > 0
       ? printJobs
       : [
           {
-            printerName: localStorage.getItem('manupos_webpos_printer') || '',
+            printerName: fallbackLocal,
             paperWidthMm: resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80),
             items: receiptItems,
           },
@@ -127,6 +153,12 @@ async function printKitchenTickets(
 
   for (const job of targets) {
     if (!job.items.length) continue;
+    const configuredName = (job.printerName || '').trim();
+    const resolvedName = resolveLivePrinterName(configuredName, livePrinters, {
+      portName: job.portName,
+      matchHint: job.matchHint,
+    });
+    if (!resolvedName) continue;
     const paper = job.paperWidthMm ?? resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
     const escpos = generateKitchenTicketEscPos({
       ...kitchenOpts,
@@ -134,10 +166,11 @@ async function printKitchenTickets(
       paperWidthMm: paper,
     });
     await printKitchenViaAgentOrQueue({
-      printerName: job.printerName || undefined,
+      printerName: resolvedName,
       dataBase64: uint8ToBase64(escpos),
       orderId,
-      configuredName: job.printerName,
+      configuredName,
+      printers: livePrinters,
     });
     printedAny = true;
   }
@@ -149,10 +182,15 @@ async function printKitchenTickets(
       items: receiptItems,
       paperWidthMm: paper,
     });
+    const configuredName = fallbackLocal;
+    const resolvedName = resolveLivePrinterName(configuredName, livePrinters) || configuredName;
+    if (!resolvedName) return;
     await printKitchenViaAgentOrQueue({
-      printerName: localStorage.getItem('manupos_webpos_printer') || undefined,
+      printerName: resolvedName,
       dataBase64: uint8ToBase64(escpos),
       orderId,
+      configuredName,
+      printers: livePrinters,
     });
   }
 }

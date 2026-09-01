@@ -84,7 +84,9 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
+  resolveLivePrinterName,
   suggestPrinterAutoHeal,
+  syncWebPosLocalPrinterName,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
@@ -1938,8 +1940,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const list = await listAgentPrinters();
       setPrinters(list);
       setPrintersReady(true);
+      const healedLocal = syncWebPosLocalPrinterName(list);
       setPrinterName((current) => {
         const trimmed = (current || '').trim();
+        if (healedLocal) return healedLocal;
         if (!trimmed) {
           if (!list.length) return current;
           const def =
@@ -1948,7 +1952,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             list[0];
           return def?.name || current;
         }
-        return resolveAgentPrinterName(trimmed, list) || '';
+        return resolveLivePrinterName(trimmed, list) || '';
       });
       setPrintSettings((ps) => {
         if (!ps?.printers?.length) return ps;
@@ -2953,7 +2957,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setPrinterName(heal.name);
         setPrinterDisconnected(false);
         toast.success(t('webPosPrinterAutoHealed').replace('{name}', heal.name));
-      } else if (!heal) {
+      } else if (!resolveLivePrinterName(configured, printers)) {
         setPrinterDisconnected(true);
       }
     } else if (configured) {
@@ -2965,14 +2969,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     let changed = false;
     const nextProfiles = profiles.map((p) => {
       const name = (p.name || '').trim();
-      if (!name || !isConfiguredPrinterMissing(name, printers)) return p;
-      const heal = suggestPrinterAutoHeal(name, printers);
-      if (!heal) return p;
-      const key = `set:${p.id}:${name}->${heal.name}`;
+      if (!name && !String(p.portName || '').trim()) return p;
+      const resolved = resolveLivePrinterName(name, printers, {
+        portName: p.portName,
+        matchHint: p.matchHint,
+      });
+      if (!resolved || resolved === name) return p;
+      const key = `set:${p.id}:${name}->${resolved}`;
       if (printerHealAttemptedRef.current.has(key)) return p;
       printerHealAttemptedRef.current.add(key);
       changed = true;
-      return { ...p, name: heal.name };
+      const picked = printers.find((ap) => ap.name === resolved);
+      return {
+        ...p,
+        name: resolved,
+        portName: picked?.portName ?? p.portName ?? null,
+        matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+      };
     });
     if (!changed) return;
     const next = { ...printSettings, printers: nextProfiles };
@@ -5468,14 +5481,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
       const escpos = generateKitchenMessageTicketEscPos(msgOpts);
       const text = generateKitchenMessageTicketText(msgOpts);
+      const kitchenProfile = (printSettings?.printers || []).find(
+        (p) => p.enabled !== false && p.printKitchenTickets && (p.name || p.portName)
+      );
+      const configuredKitchenName = (kitchenProfile?.name || printerName || '').trim();
+      const resolvedKitchenName =
+        resolveLivePrinterName(configuredKitchenName, printers, {
+          portName: kitchenProfile?.portName,
+          matchHint: kitchenProfile?.matchHint,
+        }) || configuredKitchenName;
       void printKitchenViaAgentOrQueue({
-        printerName: printerName || undefined,
+        printerName: resolvedKitchenName || undefined,
         dataBase64: uint8ToBase64(escpos),
         text,
         orderId: orderNumber,
         retryLocally: printRetryLocally,
         printers,
-        configuredName: printerName,
+        configuredName: configuredKitchenName,
         jobKind: 'kitchen',
         jobLabel: orderNumber || t('webPosPrintJobKitchen'),
       }).catch((e: unknown) => {
@@ -6893,7 +6915,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const configured = (name || '').trim();
       const label =
         configured && printers.length > 0
-          ? resolveAgentPrinterName(configured, printers) || ''
+          ? resolveLivePrinterName(configured, printers) || ''
           : configured;
       if (!label) continue;
       if (label && isUnsuitableRawPrinter(label)) {
@@ -7241,10 +7263,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       let printedAny = false;
       for (const job of printJobs) {
         const configuredName = (job.printerName || '').trim();
-        const resolvedName =
-          printers.length > 0
-            ? resolveAgentPrinterName(configuredName, printers)
-            : configuredName;
+        const resolvedName = resolveLivePrinterName(configuredName, printers, {
+          portName: job.portName,
+          matchHint: job.matchHint,
+        });
         if (!resolvedName) continue;
         printedAny = true;
         const paperWidthMm = job.paperWidthMm;

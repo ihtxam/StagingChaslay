@@ -5,9 +5,12 @@ import {
   isAndroidTabletDevice,
   isAndroidWebPosTill,
   isPrintAgentAvailable,
+  listAgentPrinters,
   looksLikeBluetoothOrComPrinter,
   printViaAgent,
+  resolveLivePrinterName,
   settleAfterBluetoothKitchenPrint,
+  syncWebPosLocalPrinterName,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { escposKitchenCut, uint8ToBase64 } from '@/lib/webpos-receipt';
@@ -358,6 +361,13 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
       const localDeviceId = webPosDeviceId();
       const agentHealth = await getPrintAgentHealth().catch(() => ({ ok: false }));
       const skipBtCutFollowUp = agentSupportsBtCutTrailer(agentHealth);
+      let livePrinters: AgentPrinter[] = [];
+      try {
+        livePrinters = await listAgentPrinters();
+        syncWebPosLocalPrinterName(livePrinters);
+      } catch {
+        livePrinters = [];
+      }
       const res = await api.get('/merchant/pos/print-jobs/pending', {
         params: { jobType: 'ESCPOS', limit: 15 },
       });
@@ -430,18 +440,21 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           continue;
         }
         try {
+          const configuredPrinter = String(p.printerName || '').trim();
+          const resolvedPrinter =
+            resolveLivePrinterName(configuredPrinter, livePrinters) || configuredPrinter || undefined;
           await printViaAgent({
-            printerName: p.printerName,
+            printerName: resolvedPrinter,
             dataBase64: p.dataBase64,
             text: p.text,
           });
           if (relayKind === 'kitchen') {
             try {
-              const livePrinter = (p.printerName || '').trim();
+              const livePrinter = resolvedPrinter || '';
               if (looksLikeBluetoothOrComPrinter(livePrinter) && !skipBtCutFollowUp) {
                 await new Promise((r) => setTimeout(r, 450));
                 await printViaAgent({
-                  printerName: p.printerName,
+                  printerName: resolvedPrinter,
                   dataBase64: uint8ToBase64(escposFeedAndCut()),
                 });
               }
