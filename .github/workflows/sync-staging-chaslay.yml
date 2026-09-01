@@ -38,6 +38,8 @@ jobs:
         if: steps.token.outputs.configured == 'true'
         with:
           fetch-depth: 0
+          # GITHUB_TOKEN cannot push cross-repo; must not override PAT in push URL
+          persist-credentials: false
 
       - name: Prepare staging tree
         if: steps.token.outputs.configured == 'true'
