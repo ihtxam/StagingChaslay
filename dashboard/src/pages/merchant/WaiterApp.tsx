@@ -177,6 +177,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     const perms = (staff?.permissions ?? authUser?.permissions) as Permission[] | undefined;
+    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
     navigate(backOfficeHomePath(perms, jwtIsOwner));
   }, [
     impersonating,

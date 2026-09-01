@@ -829,9 +829,9 @@ export function getEffectivePanelAccess(opts: {
     const pinHasPanelAccess = hasPermission(permissions, 'ACCESS_PANEL', false);
     const onPosFloor = opts.pathname ? isPosFloorPath(opts.pathname) : false;
     const managerJwt = jwtHasPanelAccess(opts.jwtPermissions, opts.isOwner, opts.authRole);
-    // Restore JWT panel access only when the clocked-in PIN user also has ACCESS_PANEL
+    // Restore JWT panel access when the clocked-in PIN user also has ACCESS_PANEL
     // (manager on their own PIN). Owner/manager JWT must never bypass a restricted cashier/waiter PIN.
-    if (managerJwt && !onPosFloor && pinHasPanelAccess) {
+    if (managerJwt && pinHasPanelAccess) {
       return { ...jwtAccess(), pinActive: true };
     }
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);

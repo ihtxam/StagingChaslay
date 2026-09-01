@@ -60,6 +60,7 @@ import { homePathForUser } from '@/lib/auth-home';
 import {
   canAccessRoute,
   canShowWebPosQuickAction,
+  canJwtReturnToPanel,
   backOfficeHomePath,
   deliveryDriverHomePath,
   getEffectivePanelAccess,
@@ -366,7 +367,7 @@ function MerchantShell() {
 
   useEffect(() => {
     const showPanel = () => {
-      const jwtPanel = jwtHasPanelAccess(
+      const jwtPanel = canJwtReturnToPanel(
         user?.permissions as Permission[] | undefined,
         jwtIsOwner,
         user?.role
@@ -594,10 +595,11 @@ function MerchantShell() {
     navigate(waiterRestrictedHomePath(perms), { replace: true });
   }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
 
-  // Floor waiters (and POS-destination staff) cannot browse the manager panel.
+  // Floor waiters (and POS-destination staff) cannot browse the manager panel — unless they have panel access.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = user?.permissions as Permission[] | undefined;
+    if (canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
     const floorOnly = isFloorWaiterStaff(perms, false);
     const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos';
     if (!floorOnly && !posDest) return;
