@@ -43,6 +43,7 @@ import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
+import OrderCenterPrintOptions from '@/components/merchant/OrderCenterPrintOptions';
 import {
   generateEodReportText,
   logoUrlToEscPos,
@@ -238,7 +239,7 @@ export default function OrderCenterApp() {
       if (freshPending.length > 0) {
         for (const o of freshPending) {
           unactionedAlertRef.add(o.id);
-          void maybePrintOnlineOrderOnArrival(o, merchantSettings);
+          void maybePrintOnlineOrderOnArrival(o, merchantSettings, { useOrderCenterPrefs: true });
           const zip = extractZipFromAddress(o.shippingAddress);
           speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -332,6 +333,7 @@ export default function OrderCenterApp() {
     opts?: {
       printAfterAccept?: boolean;
       orderSource?: string | null;
+      fulfillmentChannel?: string | null;
       etaAdjustMinutes?: number;
     }
   ) => {
@@ -346,7 +348,7 @@ export default function OrderCenterApp() {
         toast.success(t('orderAccepted'));
         if (opts?.printAfterAccept !== false) {
           try {
-            await printOrderCenterTickets(orderId, opts?.orderSource);
+            await printOrderCenterTickets(orderId, opts?.orderSource, opts?.fulfillmentChannel);
             toast.success(t('orderCenterPrinted'));
           } catch (e: unknown) {
             toastPrintError(e, t, 'orderCenterPrintFailed');
@@ -376,6 +378,7 @@ export default function OrderCenterApp() {
     try {
       await runAction(order.id, 'accept', {
         orderSource: order.orderSource,
+        fulfillmentChannel: order.fulfillmentChannel,
         etaAdjustMinutes: prepMinutes,
       });
     } finally {
@@ -397,7 +400,7 @@ export default function OrderCenterApp() {
   const printOrder = async (o: CenterOrder) => {
     setBusyId(o.id);
     try {
-      await printOrderCenterTickets(o.id, o.orderSource);
+      await printOrderCenterTickets(o.id, o.orderSource, o.fulfillmentChannel);
       toast.success(t('orderCenterPrinted'));
     } catch (e: unknown) {
       toastPrintError(e, t, 'orderCenterPrintFailed');
@@ -514,7 +517,13 @@ export default function OrderCenterApp() {
               type="button"
               disabled={busyId === o.id}
               className="btn-primary inline-flex flex-1 min-w-[7rem] items-center justify-center gap-2 py-3"
-              onClick={() => void runAction(o.id, 'accept', { orderSource: o.orderSource, etaAdjustMinutes: 30 })}
+              onClick={() =>
+                void runAction(o.id, 'accept', {
+                  orderSource: o.orderSource,
+                  fulfillmentChannel: o.fulfillmentChannel,
+                  etaAdjustMinutes: 30,
+                })
+              }
             >
               <Check className="h-5 w-5" />
               {t('accept')}
@@ -594,6 +603,7 @@ export default function OrderCenterApp() {
                   : t('orderCenterPrintBridgeRequired')
               }
             />
+            <OrderCenterPrintOptions />
             <AcceptingMenu />
             <button
               type="button"

@@ -244,7 +244,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       try {
         await api.post(`/merchant/orders/${order.id}/action`, { action: 'accept' });
         try {
-          await printOrderCenterTickets(order.id, order.orderSource);
+          await printOrderCenterTickets(order.id, order.orderSource, order.fulfillmentChannel);
         } catch {
           /* print optional */
         }

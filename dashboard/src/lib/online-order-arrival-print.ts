@@ -1,6 +1,7 @@
 import { processAutoPrintOrderJob } from '@/lib/external-order-auto-print';
 import { readDeliveryAutoAccept } from '@/lib/delivery-auto-accept';
 import { isAwaitingApproval } from '@/lib/order-management';
+import { buildOrderCenterPrintJob } from '@/lib/order-center-print-prefs';
 
 const printedOnArrivalIds = new Set<string>();
 
@@ -11,10 +12,11 @@ type ArrivalOrder = {
   status?: string;
 };
 
-/** Client-side kitchen / notification print when an online order first arrives (before accept). */
+/** Client-side print when an online order first arrives (before accept). */
 export async function maybePrintOnlineOrderOnArrival(
   order: ArrivalOrder,
-  settings: Record<string, unknown>
+  settings: Record<string, unknown>,
+  opts?: { useOrderCenterPrefs?: boolean }
 ): Promise<void> {
   const orderId = String(order.id || '').trim();
   if (!orderId || printedOnArrivalIds.has(orderId)) return;
@@ -25,18 +27,24 @@ export async function maybePrintOnlineOrderOnArrival(
   if (ps.autoPrintOnlineOrdersOnArrival !== true) return;
 
   printedOnArrivalIds.add(orderId);
-  const delivery = String(order.fulfillmentChannel || '').toLowerCase() === 'delivery';
 
   try {
-    await processAutoPrintOrderJob({
-      kind: 'auto_print_order',
-      orderId,
-      orderSource: order.orderSource || undefined,
-      printKitchen: true,
-      printDeliveryReceipt: delivery,
-      printReceipt: false,
-      printNotification: !delivery,
-    });
+    const job = opts?.useOrderCenterPrefs
+      ? buildOrderCenterPrintJob(orderId, order.orderSource, order.fulfillmentChannel)
+      : (() => {
+          const delivery = String(order.fulfillmentChannel || '').toLowerCase() === 'delivery';
+          return {
+            kind: 'auto_print_order' as const,
+            orderId,
+            orderSource: order.orderSource || undefined,
+            printKitchen: true,
+            printDeliveryReceipt: delivery,
+            printReceipt: false,
+            printNotification: !delivery,
+          };
+        })();
+    if (!job.printKitchen && !job.printReceipt && !job.printDeliveryReceipt) return;
+    await processAutoPrintOrderJob({ ...job, force: true });
   } catch {
     printedOnArrivalIds.delete(orderId);
   }

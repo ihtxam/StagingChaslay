@@ -25,6 +25,7 @@ import {
   printViaAgentOrQueue,
   isMerchantAutoPrintKitchenEnabled,
   isMerchantAutoPrintReceiptEnabled,
+  resolvePrintRetryLocally,
 } from '@/lib/webpos-print-relay';
 
 export type AutoPrintOrderPayload = {
@@ -37,6 +38,8 @@ export type AutoPrintOrderPayload = {
   orderSource?: string;
   /** Manual reprint from Order Center — bypass merchant auto-print toggles */
   force?: boolean;
+  /** Order Center: kitchen ticket only on this device's printer (never queue to main till). */
+  kitchenLocalOnly?: boolean;
 };
 
 type MerchantCtx = {
@@ -89,7 +92,8 @@ async function printKitchenTickets(
   orderId: string,
   source: string,
   printSettings: PosPrintSettingsClient | null,
-  lang: string
+  lang: string,
+  kitchenLocalOnly?: boolean
 ) {
   const receiptItems = (order.items || []).map((i) =>
     buildKitchenTicketItemFromLine({
@@ -130,9 +134,11 @@ async function printKitchenTickets(
     }
   }
 
-  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
-    (j) => (j.printerName || '').trim() || (j.portName || '').trim()
-  );
+  const printJobs = kitchenLocalOnly
+    ? []
+    : resolveKitchenPrintJobs(receiptItems, printSettings).filter(
+        (j) => (j.printerName || '').trim() || (j.portName || '').trim()
+      );
   const fallbackLocal =
     resolveLivePrinterName(
       localStorage.getItem('manupos_webpos_printer') || '',
@@ -171,6 +177,7 @@ async function printKitchenTickets(
       orderId,
       configuredName,
       printers: livePrinters,
+      retryLocally: kitchenLocalOnly ? true : resolvePrintRetryLocally(agentOnline),
     });
     printedAny = true;
   }
@@ -191,6 +198,7 @@ async function printKitchenTickets(
       orderId,
       configuredName,
       printers: livePrinters,
+      retryLocally: kitchenLocalOnly ? true : resolvePrintRetryLocally(agentOnline),
     });
   }
 }
@@ -240,7 +248,14 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
     !isRetailPosMode(settings.posCheckoutSettings) &&
     (payload.force || isMerchantAutoPrintKitchenEnabled(printSettings))
   ) {
-    await printKitchenTickets(order, orderId, source, printSettings, lang);
+    await printKitchenTickets(
+      order,
+      orderId,
+      source,
+      printSettings,
+      lang,
+      payload.kitchenLocalOnly === true
+    );
   }
 
   const receiptAutoPrintAllowed =
