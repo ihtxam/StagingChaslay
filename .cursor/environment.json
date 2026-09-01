@@ -1,0 +1,7 @@
+{
+  "name": "rebornSense Cloud Agent",
+  "install": "bash scripts/cloud-agent-setup-ssh.sh",
+  "repositoryDependencies": [
+    "github.com/ihtxam/StagingChaslay"
+  ]
+}
