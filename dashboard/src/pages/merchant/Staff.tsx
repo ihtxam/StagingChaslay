@@ -517,7 +517,7 @@ export default function StaffPage({
             </div>
           ) : null}
 
-          <div className="card !p-0 table-scroll">
+          <div className="hidden sm:block card !p-0 table-scroll">
             <table className="w-full text-sm min-w-[560px]">
               <thead className="bg-[var(--bg-muted)] text-left">
                 <tr>
@@ -585,6 +585,67 @@ export default function StaffPage({
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="sm:hidden space-y-2">
+            {staff.map((s) => (
+              <div key={s.id} className="card p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{s.name}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {staffRoleDisplayName(s.roleName, t)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      className="text-[var(--text)] text-xs font-medium underline-offset-2 hover:underline"
+                      onClick={() => openStaffEdit(s)}
+                    >
+                      {t('edit')}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-red-600 text-xs"
+                      onClick={() => void removeStaff(s.id)}
+                    >
+                      {t('remove')}
+                    </button>
+                  </div>
+                </div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <div>
+                    <dt className="text-[var(--text-muted)]">{t('staffPinCol')}</dt>
+                    <dd className="font-mono tabular-nums tracking-wider">
+                      {s.pin ? (
+                        s.pin
+                      ) : s.pinSet ? (
+                        <span title={t('staffPinHiddenHint')}>{t('staffPinHidden')}</span>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">{t('staffPanelCol')}</dt>
+                    <dd className="truncate">
+                      {s.canAccessPanel || s.email ? s.email || t('yes') : t('no')}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-[var(--text-muted)]">{t('staffLoginHomeCol')}</dt>
+                    <dd>
+                      {s.canAccessPanel || s.email
+                        ? s.loginHome === 'pos'
+                          ? t('staffLoginHomePos')
+                          : t('staffLoginHomePanel')
+                        : '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
           </div>
         </div>
       ) : (

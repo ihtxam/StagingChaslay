@@ -163,6 +163,14 @@ export async function enqueueEscPosPrintJob(opts: {
 }
 
 /**
+ * True when this browser may host the till print hub (poll local Print Agent, drain jobs).
+ * Mobile phones and narrow layouts without a local agent should not probe localhost.
+ */
+export function isTillPrintHubCandidate(): boolean {
+  return isLocalPrintStation(false);
+}
+
+/**
  * True when this browser is the register PC (local Print Agent + 8s retry queue).
  * Phones and narrow WebPOS layouts without a local agent queue jobs to the main till.
  */
