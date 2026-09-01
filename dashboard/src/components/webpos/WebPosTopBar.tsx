@@ -195,6 +195,8 @@ type Props = {
   notificationsPanel?: React.ReactNode;
   onSwitchUser: () => void;
   onOpenDrawer: () => void;
+  canShowPanel?: boolean;
+  onShowPanel?: () => void;
   tableBadge?: string | null;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -257,6 +259,8 @@ export default function WebPosTopBar({
   notificationsPanel,
   onSwitchUser,
   onOpenDrawer,
+  canShowPanel = false,
+  onShowPanel,
   tableBadge,
   shiftsEnabled,
   shiftOpen,
@@ -457,6 +461,22 @@ export default function WebPosTopBar({
             <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
             <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
           </button>
+
+          {canShowPanel && onShowPanel ? (
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100 lg:hidden"
+              onClick={() => {
+                closeMobileSearch();
+                if (settingsOpen) onCloseSettings();
+                onShowPanel();
+              }}
+              title={t('webPosBackOffice')}
+              aria-label={t('webPosBackOffice')}
+            >
+              <PanelLeft size={18} />
+            </button>
+          ) : null}
 
           {canDrawer ? (
             <button

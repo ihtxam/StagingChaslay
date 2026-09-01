@@ -9105,6 +9105,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
+        canShowPanel={canShowBackOffice}
+        onShowPanel={showPanelMenus}
         tableBadge={tableBadge}
         shiftsEnabled={shiftsEnabled}
         shiftOpen={!!openShift}
