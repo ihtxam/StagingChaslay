@@ -62,11 +62,20 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
-import { fetchKdsBoardStatus, buildKdsReadyMap, lineKitchenReady, type KdsBoardTicket } from '@/lib/kds-push';
 import {
+  fetchKdsBoardStatus,
+  buildKdsReadyMap,
+  fetchKdsTicketStatus,
+  lineKitchenReady,
+  type KdsBoardTicket,
+} from '@/lib/kds-push';
+import {
+  kitchenProgressFromLines,
   kitchenTicketKeyBase,
+  mergeKitchenProgress,
   resolveKitchenTicketKey,
 } from '@/lib/kitchen-progress';
+import type { CartLine } from '@/components/webpos/types';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
@@ -535,6 +544,9 @@ export default function WebPosOrdersPanel({
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
   const [salesAdjOpen, setSalesAdjOpen] = useState(false);
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
+  const [kdsByTicket, setKdsByTicket] = useState<
+    Record<string, { ready: number; sent: number; readyLineIds: string[] }>
+  >({});
 
   useEffect(() => {
     if (!open || !kitchenEnabled) return;
