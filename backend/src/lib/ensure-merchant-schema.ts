@@ -1410,7 +1410,10 @@ export async function ensurePosSessionsSchema(): Promise<void> {
 }
 
 /** Create one default location per merchant and backfill orders/POS sessions. */
+let defaultLocationsBackfillDone = false;
+
 export async function backfillDefaultLocations(): Promise<void> {
+  if (defaultLocationsBackfillDone) return;
   try {
     await execSql(`
       INSERT INTO locations (merchant_id, name, slug, business_category, address, city, country, is_default, status)
@@ -1442,6 +1445,7 @@ export async function backfillDefaultLocations(): Promise<void> {
         AND l.is_default = true
         AND ps.location_id IS NULL
     `);
+    defaultLocationsBackfillDone = true;
   } catch (err) {
     console.warn("[schema] default location backfill failed:", err);
   }
