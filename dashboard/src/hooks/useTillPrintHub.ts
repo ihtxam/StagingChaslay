@@ -8,6 +8,9 @@ type Opts = {
   onReservation?: () => void;
 };
 
+const POLL_MS_AGENT_OK = 2500;
+const POLL_MS_AGENT_OFFLINE = 8000;
+
 /**
  * Drain server print jobs on this PC (Print Agent) and keep the agent paired
  * so it can poll even if this tab is later minimized.
@@ -34,28 +37,44 @@ export function useTillPrintHub({ enabled, onRemoteKitchen, onReservation }: Opt
     if (!enabled) return;
     let cancelled = false;
     let timer: number | null = null;
+    let inFlight = false;
+
+    const clearTimer = () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+
     const schedule = (ms: number) => {
       if (cancelled) return;
+      clearTimer();
       timer = window.setTimeout(() => {
         void tick();
       }, ms);
     };
+
     const tick = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      clearTimer();
+      inFlight = true;
+      let nextMs = POLL_MS_AGENT_OFFLINE;
       try {
         if (!(await isPrintAgentAvailable())) {
-          schedule(8000);
           return;
         }
         const result = await processPendingEscPosPrintJobs();
         if (result.remoteKitchenDone > 0) onRemoteKitchen?.();
         if (result.reservationDone > 0) onReservation?.();
+        nextMs = POLL_MS_AGENT_OK;
       } catch {
         /* best-effort */
       } finally {
-        schedule(2500);
+        inFlight = false;
+        schedule(nextMs);
       }
     };
+
     const onVisible = () => {
       if (document.visibilityState === 'visible') void tick();
     };
@@ -63,7 +82,8 @@ export function useTillPrintHub({ enabled, onRemoteKitchen, onReservation }: Opt
     void tick();
     return () => {
       cancelled = true;
-      if (timer != null) window.clearTimeout(timer);
+      inFlight = false;
+      clearTimer();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [enabled, onRemoteKitchen, onReservation]);
