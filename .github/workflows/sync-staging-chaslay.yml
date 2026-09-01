@@ -4,9 +4,12 @@ name: Sync to StagingChaslay
 # cursor[bot] cannot push to StagingChaslay (403); GITHUB_TOKEN cannot push cross-repo.
 # One-time setup: add STAGING_CHASLAY_SYNC_TOKEN to rebornSense repo secrets (see DEPLOY.md).
 #
-# Run this when the user says "push to test". Do NOT run production deploy until staging is verified.
+# Auto-sync on push to main (staging only). Production deploy stays manual.
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
