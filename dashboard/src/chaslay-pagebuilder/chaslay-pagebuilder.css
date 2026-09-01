@@ -40,7 +40,21 @@
 .chaslay-pagebuilder-root .text-accent-foreground { color: hsl(var(--accent-foreground)); }
 .chaslay-pagebuilder-root .bg-destructive { background-color: hsl(var(--destructive)); }
 .chaslay-pagebuilder-root .text-destructive { color: hsl(var(--destructive)); }
-.chaslay-pagebuilder-root .border-border { border-color: hsl(var(--border)); }
+
+/* Public shop homepage — inherit shop theme tokens where available */
+.chaslay-storefront-page {
+  color: var(--color-text-0, inherit);
+  background: var(--color-bg-0, #fff);
+}
+
+.chaslay-storefront-page .hb-section {
+  font-family: var(--shop-font-body, system-ui, sans-serif);
+}
+
+.chaslay-storefront-page a {
+  color: var(--color-accent, inherit);
+}
+
 .chaslay-pagebuilder-root .border-input { border-color: hsl(var(--input)); }
 .chaslay-pagebuilder-root .ring-ring { --tw-ring-color: hsl(var(--ring)); }
 

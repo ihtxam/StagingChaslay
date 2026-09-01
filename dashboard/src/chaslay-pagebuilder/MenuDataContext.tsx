@@ -1,9 +1,11 @@
 // @ts-nocheck
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { fetchCmsMenuCatalog } from '@/components/shop/cms/CmsDynamicBlocks';
 import { getProducts, getCategories } from '@/lib/chaslay-pagebuilder/api';
 import type { ChaslayMenuCategory, ChaslayMenuProduct } from './menu-types';
+import { useStorefront } from './StorefrontContext';
 
 interface MenuDataContextType {
   categories: ChaslayMenuCategory[];
@@ -25,7 +27,43 @@ interface MenuDataProviderProps {
   children: ReactNode;
 }
 
+function mapShopCatalog(data: {
+  categories?: Array<{
+    id: string;
+    name: string;
+    items?: Array<{
+      id: string;
+      name: string;
+      price: number;
+      description?: string;
+      image?: string;
+      categoryId?: string | null;
+    }>;
+  }>;
+}) {
+  const categories: ChaslayMenuCategory[] = (data.categories || []).map((c) => ({
+    id: String(c.id),
+    name: c.name,
+  }));
+  const products: ChaslayMenuProduct[] = [];
+  for (const cat of data.categories || []) {
+    for (const item of cat.items || []) {
+      products.push({
+        id: String(item.id),
+        product_name: item.name,
+        product_description: item.description ?? null,
+        product_image: item.image ?? null,
+        price: item.price,
+        image: item.image ?? null,
+        category_id: item.categoryId ? String(item.categoryId) : String(cat.id),
+      });
+    }
+  }
+  return { categories, products };
+}
+
 export const MenuDataProvider: React.FC<MenuDataProviderProps> = ({ children }) => {
+  const { shopKey, isStorefront } = useStorefront();
   const [categories, setCategories] = useState<ChaslayMenuCategory[]>([]);
   const [products, setProducts] = useState<ChaslayMenuProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +73,14 @@ export const MenuDataProvider: React.FC<MenuDataProviderProps> = ({ children }) 
     const fetchData = async () => {
       try {
         setLoading(true);
+        if (isStorefront && shopKey) {
+          const catalog = await fetchCmsMenuCatalog(shopKey);
+          const mapped = mapShopCatalog({ categories: catalog?.categories || [] });
+          setCategories(mapped.categories);
+          setProducts(mapped.products);
+          return;
+        }
+
         const [categoriesRes, productsRes] = await Promise.all([
           getCategories(),
           getProducts({ per_page: 1000, status: 1 }),
@@ -69,8 +115,8 @@ export const MenuDataProvider: React.FC<MenuDataProviderProps> = ({ children }) 
       }
     };
 
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [isStorefront, shopKey]);
 
   return (
     <MenuDataContext.Provider value={{ categories, products, loading, error }}>

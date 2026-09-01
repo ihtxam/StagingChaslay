@@ -103,6 +103,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/newsletter': ['MANAGE_ONLINE_SHOP'],
   '/merchant/online-shop': ['MANAGE_ONLINE_SHOP'],
   '/merchant/website': ['MANAGE_ONLINE_SHOP'],
+  '/merchant/chaslay-page-builder': ['MANAGE_ONLINE_SHOP'],
   '/merchant/floor-plan': ['MANAGE_TABLES'],
   '/merchant/tables': ['MANAGE_TABLES'],
   '/merchant/tables/settings': ['MANAGE_TABLES'],
