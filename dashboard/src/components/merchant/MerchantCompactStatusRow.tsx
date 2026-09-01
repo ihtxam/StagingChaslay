@@ -13,6 +13,7 @@ interface MerchantCompactStatusRowProps {
   onMenuClick?: () => void;
   showMenuButton?: boolean;
   registerDisplay?: { name: string; roleLabel: string };
+  showAcceptingMenu?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export default function MerchantCompactStatusRow({
   onMenuClick,
   showMenuButton = false,
   registerDisplay,
+  showAcceptingMenu = true,
 }: MerchantCompactStatusRowProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -160,7 +162,7 @@ export default function MerchantCompactStatusRow({
         return <BellSlot />;
       })() : null}
 
-      <AcceptingMenu />
+      {showAcceptingMenu ? <AcceptingMenu /> : null}
     </div>
   );
 }

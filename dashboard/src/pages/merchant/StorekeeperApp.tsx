@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, LogOut, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -17,6 +17,9 @@ import {
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   clearWebPosStaffSession,
+  hasPermission,
+  isStorekeeperOnlyStaff,
+  isStorekeeperRestrictedStaff,
   jwtHasPanelAccess,
   loadWebPosStaffSession,
   notifyWebPosStaffSessionChanged,
@@ -96,6 +99,7 @@ export default function StorekeeperApp() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const [pinStaff, setPinStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinOpen, setPinOpen] = useState(false);
   const [pinMode, setPinMode] = useState<'gate' | 'switch'>('gate');
@@ -130,13 +134,22 @@ export default function StorekeeperApp() {
   const staffAccessToken = pinStaff?.accessToken;
   const displayName = pinStaff?.name || user?.name;
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const effectivePerms = (pinStaff?.permissions ?? user?.permissions) as Permission[] | undefined;
+  const actingAsOwner = !pinStaff && jwtIsOwner;
   const managerPanelAccess = jwtHasPanelAccess(
     user?.permissions as Permission[] | undefined,
     jwtIsOwner,
     user?.role
   );
+  const canReturnToInventoryPanel =
+    !isStorekeeperOnlyStaff(effectivePerms, actingAsOwner) &&
+    !isStorekeeperRestrictedStaff(effectivePerms, actingAsOwner) &&
+    (actingAsOwner ||
+      hasPermission(effectivePerms, 'MANAGE_INVENTORY', false) ||
+      hasPermission(effectivePerms, 'ACCESS_PANEL', false));
   const clockedIn = !!pinStaff || managerPanelAccess;
-  const showBackToPanel = managerPanelAccess;
+  const showBackToPanel = canReturnToInventoryPanel;
+  const showLogout = !showBackToPanel && user?.role === 'staff';
 
   const returnToPanel = useCallback(() => {
     if (pinStaff) {
@@ -144,8 +157,14 @@ export default function StorekeeperApp() {
       notifyWebPosStaffSessionChanged();
       setPinStaff(null);
     }
-    navigate('/merchant/inventory');
-  }, [pinStaff, navigate]);
+    if (hasPermission(effectivePerms, 'MANAGE_INVENTORY', false) || actingAsOwner) {
+      navigate('/merchant/inventory');
+      return;
+    }
+    if (hasPermission(effectivePerms, 'ACCESS_PANEL', false)) {
+      navigate('/merchant');
+    }
+  }, [pinStaff, navigate, effectivePerms, actingAsOwner]);
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 
@@ -479,14 +498,14 @@ export default function StorekeeperApp() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-lg flex-col gap-4 p-4 pb-8">
+    <div className="storekeeper-app mx-auto flex min-h-[100dvh] max-w-lg flex-col gap-4 bg-[var(--bg)] p-4 pb-8 text-[var(--text)]">
       <header className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
           {showBackToPanel ? (
             <button
               type="button"
               onClick={() => returnToPanel()}
-              className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+              className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] hover:bg-[var(--bg-muted)]"
               aria-label={t('storekeeperBackToPanel')}
               title={t('storekeeperBackToPanel')}
             >
@@ -505,7 +524,7 @@ export default function StorekeeperApp() {
                   setPinMode('switch');
                   setPinOpen(true);
                 }}
-                className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-teal-800 hover:bg-teal-50"
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-teal-800 hover:bg-teal-500/10 dark:text-teal-200"
                 aria-label={t('webPosSwitchUser')}
                 title={t('webPosSwitchUser')}
               >
@@ -515,12 +534,26 @@ export default function StorekeeperApp() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {showLogout ? (
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-muted)]"
+              onClick={() => {
+                logout();
+                navigate('/login', { replace: true });
+              }}
+              aria-label={t('logout')}
+              title={t('logout')}
+            >
+              <LogOut size={20} />
+            </button>
+          ) : null}
           <button
             type="button"
             className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm ${
               newProductMode
-                ? 'border-teal-700 bg-teal-50 text-teal-800'
-                : 'border-stone-300 bg-white text-stone-700'
+                ? 'border-teal-600 bg-teal-500/15 text-teal-800 dark:text-teal-200'
+                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)]'
             }`}
             onClick={startNewProduct}
             aria-label={t('storekeeperNewProduct')}
@@ -540,11 +573,11 @@ export default function StorekeeperApp() {
       </header>
 
       {pendingLabel ? (
-        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
-          <p className="text-sm font-semibold text-teal-900">{t('storekeeperPrintLabelPrompt')}</p>
-          <p className="mt-1 text-xs text-teal-800">{t('storekeeperPrintLabelHint')}</p>
+        <div className="rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4 shadow-sm dark:border-teal-800/40 dark:bg-teal-950/30">
+          <p className="text-sm font-semibold text-teal-900 dark:text-teal-100">{t('storekeeperPrintLabelPrompt')}</p>
+          <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">{t('storekeeperPrintLabelHint')}</p>
           <p className="mt-2 text-sm font-medium">{pendingLabel.name}</p>
-          <p className="font-mono text-xs text-stone-600">{pendingLabel.barcode}</p>
+          <p className="font-mono text-xs text-[var(--text-muted)]">{pendingLabel.barcode}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -557,7 +590,7 @@ export default function StorekeeperApp() {
             </button>
             <button
               type="button"
-              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium"
+              className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text)]"
               onClick={() => setPendingLabel(null)}
             >
               {t('dismiss')}
@@ -566,14 +599,14 @@ export default function StorekeeperApp() {
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="space-y-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <form onSubmit={submit} className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-sm">
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
             {t('storekeeperBarcode')}
           </label>
           <div className="flex gap-2">
             <input
-              className="flex-1 rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onBlur={() => barcode.trim() && !newProductMode && void applyBarcode(barcode)}
@@ -584,7 +617,7 @@ export default function StorekeeperApp() {
             {!existingItem ? (
               <button
                 type="button"
-                className="flex items-center gap-1 rounded-lg border border-teal-600 bg-teal-50 px-3 text-sm font-semibold text-teal-800 disabled:opacity-60"
+                className="flex items-center gap-1 rounded-lg border border-teal-600 bg-teal-500/15 px-3 text-sm font-semibold text-teal-800 dark:text-teal-200 disabled:opacity-60"
                 disabled={generateBusy}
                 onClick={() => void generateBarcode()}
                 title={t('storekeeperGenerateBarcode')}
@@ -595,7 +628,7 @@ export default function StorekeeperApp() {
             ) : null}
             <button
               type="button"
-              className="rounded-lg border border-stone-300 px-3"
+              className="rounded-lg border border-[var(--border)] px-3"
               onClick={() => barcode.trim() && void applyBarcode(barcode)}
               aria-label={t('storekeeperLookup')}
             >
@@ -603,8 +636,8 @@ export default function StorekeeperApp() {
             </button>
           </div>
           {existingItem ? (
-            <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
-              <p className="text-xs text-teal-900">
+            <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-2 dark:border-teal-800/40 dark:bg-teal-950/30">
+              <p className="text-xs text-teal-900 dark:text-teal-100">
                 {fillI18n(t('storekeeperExistingItem'), {
                   stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
                 })}
@@ -619,9 +652,9 @@ export default function StorekeeperApp() {
               </p>
             </div>
           ) : menuProduct && menuProduct.stock != null && !lookupBusy ? (
-            <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
-              <p className="text-xs text-sky-900">{t('storekeeperPosStock')}</p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-sky-950">
+            <div className="mt-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 dark:border-sky-800/40 dark:bg-sky-950/30">
+              <p className="text-xs text-sky-900 dark:text-sky-100">{t('storekeeperPosStock')}</p>
+              <p className="mt-1 text-lg font-bold tabular-nums text-sky-950 dark:text-sky-100">
                 {formatStockQty(menuProduct.stock)}
                 <span className="ml-1 text-sm font-semibold">{t('storekeeperPosStockUnit')}</span>
               </p>
@@ -643,17 +676,17 @@ export default function StorekeeperApp() {
         </div>
 
         {(displayPhoto || suggestion?.imageUrl || menuProduct?.imageUrl) && (
-          <div className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white">
+          <div className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
               {displayPhoto ? (
                 <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-stone-400">
+                <div className="flex h-full w-full items-center justify-center text-[var(--text-muted)]">
                   <Package size={28} />
                 </div>
               )}
             </div>
-            <p className="text-xs text-stone-600">{t('storekeeperPhotoOnlineHint')}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t('storekeeperPhotoOnlineHint')}</p>
           </div>
         )}
 
@@ -662,7 +695,7 @@ export default function StorekeeperApp() {
             {t('storekeeperProductName')}
           </label>
           <input
-            className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('storekeeperProductName')}
@@ -676,7 +709,7 @@ export default function StorekeeperApp() {
               {t('storekeeperUnit')}
             </label>
             <select
-              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
             >
@@ -692,7 +725,7 @@ export default function StorekeeperApp() {
               {t('storekeeperCategory')}
             </label>
             <select
-              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
             >
@@ -715,7 +748,7 @@ export default function StorekeeperApp() {
               type="number"
               min="0"
               step="0.05"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
               value={salePrice}
               onChange={(e) => setSalePrice(e.target.value)}
               placeholder="0.00"
@@ -737,7 +770,7 @@ export default function StorekeeperApp() {
               type="number"
               min="0.0001"
               step="any"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               required
@@ -751,7 +784,7 @@ export default function StorekeeperApp() {
           </label>
           <input
             type="date"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
             value={expiryDate}
             onChange={(e) => setExpiryDate(e.target.value)}
           />
@@ -770,7 +803,7 @@ export default function StorekeeperApp() {
           <button
             type="button"
             disabled={printBusy || busy}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-3 text-sm font-semibold text-stone-800 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-3 text-sm font-semibold text-[var(--text)] disabled:opacity-60"
             onClick={() =>
               void printLabel({
                 id: 'draft',
@@ -787,11 +820,11 @@ export default function StorekeeperApp() {
       </form>
 
       {recent.length > 0 ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
           <h2 className="mb-2 text-sm font-bold">{t('storekeeperRecent')}</h2>
           <ul className="space-y-2 text-sm">
             {recent.map((r) => (
-              <li key={`${r.id}-${r.at}`} className="flex justify-between gap-2 border-b border-stone-100 pb-2 last:border-0">
+              <li key={`${r.id}-${r.at}`} className="flex justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0">
                 <span className="font-medium">{r.name}</span>
                 <span className="muted">
                   +{r.qty} {r.unit}
