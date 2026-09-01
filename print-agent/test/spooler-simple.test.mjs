@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.9.5";
+const VERSION = "1.9.6";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.9.5 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.9.6 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -30,13 +30,20 @@ test("print-agent version is 1.9.5 in package.json, server.js, and download mani
   assert.match(server, /bt-com-paced-spooler/);
   assert.match(server, /com-serial-write-fallback/);
   assert.match(server, /warm-print-worker/);
+  assert.match(server, /bt-cut-trailer/);
   assert.match(server, /printViaWorker/);
   assert.match(server, /enqueuePrint/);
   assert.match(server, /timeout: 180000/);
 });
 
+function extractPsFunction(src, name) {
+  const m = src.match(new RegExp(`function ${name}[\\s\\S]*?(?=\\r?\\nfunction )`));
+  return m ? m[0] : "";
+}
+
 test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-mode)", () => {
   const src = read("../win-raw-print.ps1");
+  const cutTrailer = extractPsFunction(src, "Get-BtCutTrailer");
   assert.equal(src.includes("win-com-raw-print"), false);
   assert.equal(src.includes("Invoke-ComDirectOrSpooler"), false);
   assert.equal(src.includes("Send-RawViaComPort"), false);
@@ -53,6 +60,10 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
   assert.match(src, /Get-BtCutTrailer/);
+  assert.match(cutTrailer, /0x1D, 0x56, 0x00/);
+  assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
+  assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
+  assert.match(src, /\$cutSuffix/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
   assert.equal(/ChunkSize\s*=\s*64/.test(src), false);
   assert.equal(/ChunkSize\s*=\s*128/.test(src), false);
@@ -63,6 +74,7 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
 
 test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   const src = read("../win-raw-print-worker.ps1");
+  const cutTrailer = extractPsFunction(src, "Get-BtCutTrailer");
   assert.equal(src.includes("win-com-raw-print"), false);
   assert.equal(src.includes("Invoke-ComDirectOrSpooler"), false);
   assert.equal(src.includes("System.IO.Ports.SerialPort"), false);
@@ -78,6 +90,10 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
   assert.match(src, /Get-BtCutTrailer/);
+  assert.match(cutTrailer, /0x1D, 0x56, 0x00/);
+  assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
+  assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
+  assert.match(src, /\$cutSuffix/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
 });
 

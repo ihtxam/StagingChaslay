@@ -21,7 +21,7 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.5";
+const VERSION = "1.9.6";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1215,6 +1215,7 @@ function startServer() {
         "bt-com-paced-spooler",
         "com-serial-write-fallback",
         "warm-print-worker",
+        "bt-cut-trailer",
       ],
     });
   });

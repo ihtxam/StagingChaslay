@@ -10,9 +10,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.9.5: self-contained spooler-only WritePrinter. No COM-direct writes.
+# v1.9.6: self-contained spooler-only WritePrinter. No COM-direct writes.
 # Bluetooth / virtual-COM ports are paced; FlushPrinter is skipped for all paced
 # writes (often reports success with 0 bytes) and WritePrinter uses smaller chunks.
+# One feed+cut trailer after drain (matches escposKitchenCut); advertises bt-cut-trailer.
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -156,6 +157,7 @@ function Split-CutSuffix {
     }
     $start = [Math]::Max(0, $Data.Length - 96)
     for ($i = $Data.Length - 1; $i -ge $start; $i--) {
+        # GS V cut only — do not strip ESC d feed (kitchen tickets end with a short feed).
         if ($Data[$i] -eq 0x1D -and ($i + 1) -lt $Data.Length -and $Data[$i + 1] -eq 0x56) {
             $body = New-Object byte[] $i
             if ($i -gt 0) { [Array]::Copy($Data, 0, $body, 0, $i) }
@@ -163,7 +165,7 @@ function Split-CutSuffix {
             [Array]::Copy($Data, $i, $trail, 0, $trail.Length)
             return ,@($body, $trail)
         }
-        if ($Data[$i] -eq 0x1B -and ($i + 1) -lt $Data.Length -and $Data[$i + 1] -eq 0x64) {
+        if ($Data[$i] -eq 0x1B -and ($i + 1) -lt $Data.Length -and $Data[$i + 1] -eq 0x6D) {
             $body = New-Object byte[] $i
             if ($i -gt 0) { [Array]::Copy($Data, 0, $body, 0, $i) }
             $trail = New-Object byte[] ($Data.Length - $i)
@@ -175,12 +177,11 @@ function Split-CutSuffix {
 }
 
 function Get-BtCutTrailer {
+  # Match dashboard escposKitchenCut() — one feed + one full cut (no stacked partial cuts).
     return [byte[]](
-        0x1B, 0x64, 0x0F,
-        0x1D, 0x56, 0x01,
+        0x1B, 0x64, 0x05,
         0x1D, 0x56, 0x00,
-        0x1B, 0x6D,
-        0x0A, 0x0A, 0x0A
+        0x0A, 0x0A
     )
 }
 
@@ -276,9 +277,11 @@ function Send-RawToPrinter {
         $writeDelay = if ($isComPort) { 120 } else { 100 }
     }
     $body = $Data
+    $cutSuffix = [byte[]]@()
     if ($paced) {
         $split = Split-CutSuffix -Data $Data
         $body = $split[0]
+        $cutSuffix = $split[1]
     }
     Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) body=$($body.Length) chunk=$writeChunk delayMs=$writeDelay paced=$paced com=$isComPort"
 
@@ -314,7 +317,8 @@ function Send-RawToPrinter {
                 if ($isComPort) { $drainMs += 200 }
                 Start-Sleep -Milliseconds $drainMs
                 $cutDelay = if ($isComPort) { 100 } else { 80 }
-                [void](Write-RawChunks -Handle $handle -Data (Get-BtCutTrailer) -Printer $Printer -ChunkSize 32 -DelayMs $cutDelay -ComSerialPort:$isComPort)
+                $cutBytes = if ($cutSuffix -and $cutSuffix.Length -gt 0) { $cutSuffix } else { Get-BtCutTrailer }
+                [void](Write-RawChunks -Handle $handle -Data $cutBytes -Printer $Printer -ChunkSize 32 -DelayMs $cutDelay -ComSerialPort:$isComPort)
                 Start-Sleep -Milliseconds $(if ($isComPort) { 800 } else { 600 })
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
