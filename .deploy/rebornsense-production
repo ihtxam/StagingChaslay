@@ -1,2 +1,2 @@
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
-# Last deploy request: 2026-09-01T16:44:00Z — mobile POS back-office fix + panel perf
+# Last deploy request: 2026-09-01T19:38:00Z — print-agent health request storm fix (PR #281)
