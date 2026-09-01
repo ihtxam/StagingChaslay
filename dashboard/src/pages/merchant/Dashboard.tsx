@@ -270,7 +270,7 @@ function MerchantShell() {
   );
   const hideChrome =
     (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
-      (isStorekeeperRoute && posAppMode && (!managerPanelAccess || storekeeperRestricted)) ||
+      isStorekeeperRoute ||
       (isKioskRoute && (!managerPanelAccess || kioskRestricted))) ||
     isPosEmbed;
 
@@ -353,8 +353,8 @@ function MerchantShell() {
   }, [user]);
 
   useEffect(() => {
-    if (isPosLikeRoute) setPosAppMode(true);
-  }, [isPosLikeRoute]);
+    if (isPosLikeRoute || isStorekeeperRoute) setPosAppMode(true);
+  }, [isPosLikeRoute, isStorekeeperRoute]);
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -819,7 +819,10 @@ function MerchantShell() {
           registerDisplay={registerDisplay}
           showStaffSwitch={hasStaffPins}
           quickAction={
-            !storekeeperRestricted && !kioskRestricted && showWebPosQuickAction
+            !isStorekeeperRoute &&
+            !storekeeperRestricted &&
+            !kioskRestricted &&
+            showWebPosQuickAction
               ? { label: t('sidebarPos'), path: '/merchant/pos' }
               : null
           }
@@ -851,6 +854,7 @@ function MerchantShell() {
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
             registerDisplay={registerDisplay}
+            showAcceptingMenu={!isStorekeeperRoute}
           />
         )}
 
@@ -859,7 +863,8 @@ function MerchantShell() {
 
         <main
           className={
-            (isPosLikeRoute || isOrderCenterRoute) && !isKioskRoute && posAppMode
+            ((isPosLikeRoute || isOrderCenterRoute || isStorekeeperRoute) && !isKioskRoute && posAppMode) ||
+            isStorekeeperRoute
               ? 'flex-1 overflow-hidden p-0 min-h-0'
               : 'panel-main flex-1 p-3 sm:p-4'
           }

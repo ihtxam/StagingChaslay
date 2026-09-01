@@ -56,7 +56,10 @@ export default function Header({
             <Menu className="w-5 h-5" />
           </button>
           <div className="min-w-0 flex-1 flex items-center justify-end">
-            <MerchantCompactStatusRow registerDisplay={registerDisplay} />
+            <MerchantCompactStatusRow
+              registerDisplay={registerDisplay}
+              showAcceptingMenu={showAcceptingMenu}
+            />
           </div>
         </div>
       </header>
