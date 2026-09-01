@@ -32,6 +32,7 @@ import {
   stopOrderAlertLoop,
 } from '@/lib/order-alert';
 import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
+import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import {
   extractZipFromAddress,
@@ -41,7 +42,7 @@ import {
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
-import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
+import { printOrderCenterOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import OrderCenterPrintOptions from '@/components/merchant/OrderCenterPrintOptions';
 import {
@@ -141,6 +142,7 @@ export default function OrderCenterApp() {
   const knownRef = useState<Set<string>>(() => new Set())[0];
   const [alertQueue, setAlertQueue] = useState<CenterOrder[]>([]);
   const [alertBusy, setAlertBusy] = useState(false);
+  const [acceptEtaOrder, setAcceptEtaOrder] = useState<CenterOrder | null>(null);
   const unactionedAlertRef = useState<Set<string>>(() => new Set())[0];
 
   useTillPrintHub({ enabled: true });
@@ -154,6 +156,16 @@ export default function OrderCenterApp() {
     window.addEventListener('pointerdown', unlock, { once: true });
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
+
+  useEffect(() => {
+    if (alertQueue.length > 0) {
+      startOrderAlertLoop(4500);
+    } else {
+      stopOrderAlertLoop();
+      if (!document.hidden) document.title = 'Reborn';
+    }
+    return () => stopOrderAlertLoop();
+  }, [alertQueue.length]);
 
   const markAlertDone = useCallback(
     (orderId: string) => {
@@ -239,7 +251,7 @@ export default function OrderCenterApp() {
       if (freshPending.length > 0) {
         for (const o of freshPending) {
           unactionedAlertRef.add(o.id);
-          void maybePrintOnlineOrderOnArrival(o, merchantSettings, { useOrderCenterPrefs: true });
+          void printOrderCenterOnArrival(o);
           const zip = extractZipFromAddress(o.shippingAddress);
           speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -258,7 +270,6 @@ export default function OrderCenterApp() {
           return [...prev, ...freshPending.filter((o) => !seen.has(o.id))];
         });
         playOrderAlertOnce();
-        startOrderAlertLoop(4500);
         if (document.hidden) {
           document.title = `🔔 ${t('webPosNewOrderAlert')} — Reborn`;
         }
@@ -272,7 +283,7 @@ export default function OrderCenterApp() {
     } finally {
       setLoading(false);
     }
-  }, [knownRef, merchantSettings, t, unactionedAlertRef, kioskLicensed]);
+  }, [knownRef, t, unactionedAlertRef, kioskLicensed]);
 
   const loadEod = useCallback(async () => {
     setEodLoading(true);
@@ -373,18 +384,12 @@ export default function OrderCenterApp() {
     }
   };
 
-  const acceptFromAlert = async (order: OnlineOrder, prepMinutes: number) => {
-    setAlertBusy(true);
-    try {
-      await runAction(order.id, 'accept', {
-        orderSource: order.orderSource,
-        fulfillmentChannel: order.fulfillmentChannel,
-        etaAdjustMinutes: prepMinutes,
-      });
-    } finally {
-      setAlertBusy(false);
-    }
-  };
+  const acknowledgeFromAlert = useCallback(
+    (order: OnlineOrder) => {
+      markAlertDone(order.id);
+    },
+    [markAlertDone]
+  );
 
   const rejectFromAlert = async (order: OnlineOrder) => {
     setAlertBusy(true);
@@ -517,13 +522,7 @@ export default function OrderCenterApp() {
               type="button"
               disabled={busyId === o.id}
               className="btn-primary inline-flex flex-1 min-w-[7rem] items-center justify-center gap-2 py-3"
-              onClick={() =>
-                void runAction(o.id, 'accept', {
-                  orderSource: o.orderSource,
-                  fulfillmentChannel: o.fulfillmentChannel,
-                  etaAdjustMinutes: 30,
-                })
-              }
+              onClick={() => setAcceptEtaOrder(o)}
             >
               <Check className="h-5 w-5" />
               {t('accept')}
@@ -752,12 +751,40 @@ export default function OrderCenterApp() {
         ) : null}
       </main>
 
-      <OrderAcceptWithEtaModal
+      <WebPosNewOrderAlertModal
         order={currentAlert as OnlineOrder | null}
         queueCount={alertQueue.length}
         busy={alertBusy || busyId === currentAlert?.id}
-        onAccept={(o, mins) => void acceptFromAlert(o, mins)}
+        onAcknowledge={acknowledgeFromAlert}
         onReject={(o) => void rejectFromAlert(o)}
+      />
+
+      <OrderAcceptWithEtaModal
+        order={acceptEtaOrder as OnlineOrder | null}
+        busy={alertBusy || (acceptEtaOrder ? busyId === acceptEtaOrder.id : false)}
+        onAccept={async (o, mins) => {
+          setAlertBusy(true);
+          try {
+            await runAction(o.id, 'accept', {
+              orderSource: o.orderSource,
+              fulfillmentChannel: o.fulfillmentChannel,
+              etaAdjustMinutes: mins,
+            });
+            setAcceptEtaOrder(null);
+          } finally {
+            setAlertBusy(false);
+          }
+        }}
+        onReject={async (o) => {
+          setAlertBusy(true);
+          try {
+            await runAction(o.id, 'reject');
+            setAcceptEtaOrder(null);
+          } finally {
+            setAlertBusy(false);
+          }
+        }}
+        onDismiss={() => setAcceptEtaOrder(null)}
       />
     </div>
   );

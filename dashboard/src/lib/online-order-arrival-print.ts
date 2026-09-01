@@ -12,12 +12,34 @@ type ArrivalOrder = {
   status?: string;
 };
 
+/** Order Center: always print selected tickets when a pending order first arrives. */
+export async function printOrderCenterOnArrival(order: ArrivalOrder): Promise<void> {
+  const orderId = String(order.id || '').trim();
+  if (!orderId || printedOnArrivalIds.has(orderId)) return;
+  if (!isAwaitingApproval(order.status)) return;
+
+  printedOnArrivalIds.add(orderId);
+
+  try {
+    const job = buildOrderCenterPrintJob(orderId, order.orderSource, order.fulfillmentChannel);
+    if (!job.printKitchen && !job.printReceipt && !job.printDeliveryReceipt) return;
+    await processAutoPrintOrderJob({ ...job, force: true });
+  } catch {
+    printedOnArrivalIds.delete(orderId);
+  }
+}
+
 /** Client-side print when an online order first arrives (before accept). */
 export async function maybePrintOnlineOrderOnArrival(
   order: ArrivalOrder,
   settings: Record<string, unknown>,
   opts?: { useOrderCenterPrefs?: boolean }
 ): Promise<void> {
+  if (opts?.useOrderCenterPrefs) {
+    await printOrderCenterOnArrival(order);
+    return;
+  }
+
   const orderId = String(order.id || '').trim();
   if (!orderId || printedOnArrivalIds.has(orderId)) return;
   if (!isAwaitingApproval(order.status)) return;
@@ -29,21 +51,16 @@ export async function maybePrintOnlineOrderOnArrival(
   printedOnArrivalIds.add(orderId);
 
   try {
-    const job = opts?.useOrderCenterPrefs
-      ? buildOrderCenterPrintJob(orderId, order.orderSource, order.fulfillmentChannel)
-      : (() => {
-          const delivery = String(order.fulfillmentChannel || '').toLowerCase() === 'delivery';
-          return {
-            kind: 'auto_print_order' as const,
-            orderId,
-            orderSource: order.orderSource || undefined,
-            printKitchen: true,
-            printDeliveryReceipt: delivery,
-            printReceipt: false,
-            printNotification: !delivery,
-          };
-        })();
-    if (!job.printKitchen && !job.printReceipt && !job.printDeliveryReceipt) return;
+    const delivery = String(order.fulfillmentChannel || '').toLowerCase() === 'delivery';
+    const job = {
+      kind: 'auto_print_order' as const,
+      orderId,
+      orderSource: order.orderSource || undefined,
+      printKitchen: true,
+      printDeliveryReceipt: delivery,
+      printReceipt: false,
+      printNotification: !delivery,
+    };
     await processAutoPrintOrderJob({ ...job, force: true });
   } catch {
     printedOnArrivalIds.delete(orderId);
