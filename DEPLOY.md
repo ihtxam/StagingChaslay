@@ -93,11 +93,11 @@ bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
 
 | Step | When user says | What to do | Result |
 |------|----------------|------------|--------|
-| 1 — **Test** | push to **test** / **chaslay** | Merge code to `rebornSense`, then run **Actions → Sync to StagingChaslay** (or push directly to [StagingChaslay](https://github.com/ihtxam/StagingChaslay) `main`) | `app.chaslay.com` updates |
+| 1 — **Staging** | merge to `main` / push to **test** / **chaslay** | Merge PR to `rebornSense` `main` (auto-syncs to StagingChaslay) or run `bash scripts/agent-deploy.sh staging` | `app.chaslay.com` updates |
 | 2 — **Verify** | — | QA on `app.chaslay.com` | — |
-| 3 — **Production** | push to **production** / **reborn** | Merge to `rebornSense` `main`, then run **Actions → Deploy to Rebornsense** | `app.rebornsense.com` updates |
+| 3 — **Production** | push to **production** / **reborn** | Run `bash scripts/agent-deploy.sh production` (touches `.deploy/rebornsense-production` and pushes `main`) | `app.rebornsense.com` updates |
 
-Pushing to `rebornSense` `main` alone does **not** deploy anywhere. Each environment has its own explicit workflow.
+Pushing to `rebornSense` `main` **auto-deploys staging** (via `sync-staging-chaslay.yml`). Production still requires an explicit deploy trigger (`.deploy/rebornsense-production` or `agent-deploy.sh production`).
 
 | Environment | Repo | Server | Path | How it deploys |
 |-------------|------|--------|------|----------------|
@@ -110,7 +110,36 @@ When asking an agent to deploy, always specify **test/chaslay** or **production/
 |-------------|----------|---------|---------------|-------|---------|
 | Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
 | Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
-| Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
+| Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Auto on push to `main` | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
+
+### Cloud Agent deploy (SSH + scripts)
+
+Cloud Agents can deploy directly to Hetzner when SSH keys are configured as **Cursor environment secrets** (not in git). The repo ships `.cursor/environment.json`, which runs `scripts/cloud-agent-setup-ssh.sh` on boot.
+
+| Cursor secret | Same value as | Purpose |
+|---------------|---------------|---------|
+| `STAGING_HETZNER_SSH_KEY` | StagingChaslay `HETZNER_SSH_KEY` | SSH to `116.202.26.15` (`staging-chaslay`) |
+| `PRODUCTION_HETZNER_SSH_KEY` | rebornSense `REBORN_HETZNER_SSH_KEY` | SSH to `91.98.41.165` (`production-reborn`) |
+
+Optional overrides: `STAGING_HETZNER_HOST`, `STAGING_HETZNER_USER`, `PRODUCTION_HETZNER_HOST`, `PRODUCTION_HETZNER_USER`.
+
+**Agent workflow after merging a fix to `main`:**
+
+```bash
+# 1) Staging (GitHub sync — default; waits for Actions + health check)
+bash scripts/agent-deploy.sh staging
+
+# Or fast path when SSH is configured (pull + deploy on server):
+bash scripts/agent-deploy.sh staging-ssh
+
+# 2) Production (only after user confirms staging QA)
+bash scripts/agent-deploy.sh production
+# Or: bash scripts/agent-deploy.sh production-ssh
+```
+
+`agent-deploy.sh both` runs staging then production in one command — use only when the user explicitly asks to deploy both.
+
+Test SSH from an agent: `ssh staging-chaslay hostname` should print the staging host name.
 
 ### Chaslay test server (StagingChaslay repo)
 
