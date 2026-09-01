@@ -13,6 +13,8 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
+import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
+import { printOrderCenterTickets } from '@/lib/order-center-print';
 
 type Props = {
   enabled: boolean;
@@ -39,6 +41,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [autoAccept, setAutoAccept] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
+  const [merchantSettings, setMerchantSettings] = useState<Record<string, unknown>>({});
   const knownIdsRef = useRef<Set<string> | null>(null);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const unactionedRef = useRef<Set<string>>(new Set());
@@ -71,6 +74,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       .get('/merchant/settings')
       .then((res) => {
         const s = res.data?.settings || res.data || {};
+        setMerchantSettings(s);
         setAutoAccept(readDeliveryAutoAccept(s));
       })
       .catch(() => {})
@@ -173,6 +177,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         if (forAlert.length > 0) {
           for (const o of forAlert) {
             unactionedRef.current.add(o.id);
+            void maybePrintOnlineOrderOnArrival(o, merchantSettings);
             const zip = extractZipFromAddress(o.shippingAddress);
             speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
             showBrowserNotification(
@@ -199,7 +204,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     } catch {
       /* ignore poll errors */
     }
-  }, [autoAccept, enabled, t]);
+  }, [autoAccept, enabled, merchantSettings, t]);
 
   useEffect(() => {
     if (!enabled || !settingsReady) {
@@ -238,6 +243,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       setBusy(true);
       try {
         await api.post(`/merchant/orders/${order.id}/action`, { action: 'accept' });
+        try {
+          await printOrderCenterTickets(order.id, order.orderSource);
+        } catch {
+          /* print optional */
+        }
         markActioned(order.id);
       } finally {
         setBusy(false);

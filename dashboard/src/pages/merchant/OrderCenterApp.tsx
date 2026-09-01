@@ -41,6 +41,8 @@ import {
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
+import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
+import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import {
   generateEodReportText,
   logoUrlToEscPos,
@@ -131,6 +133,7 @@ export default function OrderCenterApp() {
   const [eod, setEod] = useState<EodReport | null>(null);
   const [eodLoading, setEodLoading] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
+  const [merchantSettings, setMerchantSettings] = useState<Record<string, unknown>>({});
   const [shopName, setShopName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [kioskLicensed, setKioskLicensed] = useState(false);
@@ -198,6 +201,7 @@ export default function OrderCenterApp() {
       try {
         const res = await api.get('/merchant/settings');
         const s = res.data?.settings || {};
+        setMerchantSettings(s);
         setPrintSettings((s.posPrintSettings as PosPrintSettingsClient) || null);
         setShopName(String(s.name || user?.name || ''));
         setShopLogoUrl(s.shopLogoUrl || null);
@@ -234,6 +238,7 @@ export default function OrderCenterApp() {
       if (freshPending.length > 0) {
         for (const o of freshPending) {
           unactionedAlertRef.add(o.id);
+          void maybePrintOnlineOrderOnArrival(o, merchantSettings);
           const zip = extractZipFromAddress(o.shippingAddress);
           speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -266,7 +271,7 @@ export default function OrderCenterApp() {
     } finally {
       setLoading(false);
     }
-  }, [knownRef, t, unactionedAlertRef, kioskLicensed]);
+  }, [knownRef, merchantSettings, t, unactionedAlertRef, kioskLicensed]);
 
   const loadEod = useCallback(async () => {
     setEodLoading(true);
@@ -648,6 +653,9 @@ export default function OrderCenterApp() {
       </header>
 
       <main className="mx-auto w-full max-w-lg flex-1 space-y-3 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {tab === 'live' ? (
+          <OnlineOrderOpsBar showAcceptingMenu={false} className="!shadow-none" />
+        ) : null}
         {tab === 'live' ? (
           loading ? (
             <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
