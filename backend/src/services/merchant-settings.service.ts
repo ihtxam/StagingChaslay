@@ -29,17 +29,13 @@ import {
   normalizeDeliveryPlatformSettings,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
-import {
-  readJustEatAddonEnabled,
-  readUberEatsAddonEnabled,
-} from "@/lib/delivery-platform-addon";
+import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
+import { isSignageAddonEnabled } from "@/lib/signage-addon";
+import { isKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled } from "@/lib/ods-addon";
+import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
-import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
-import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
-import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
-import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
-import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
-import { isKioskAddonEnabled, readKioskAddonEnabled } from "@/lib/kiosk-addon";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -107,29 +103,17 @@ export class MerchantSettingsService {
       throw new Error("Merchant not found");
     }
 
-    const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
-      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
-    );
-    const signage = await readSignageAddon(merchantId).catch(() => ({
+    const inventoryOn = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
+    const signage = {
       enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
       screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
-    }));
-    const kdsOn = await readKdsAddonEnabled(merchantId).catch(() =>
-      isKdsAddonEnabled(merchant.kdsAddonEnabled)
-    );
-    const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
-      isOdsAddonEnabled(merchant.odsAddonEnabled)
-    );
-    const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
-      merchant.justEatAddonEnabled === true
-    );
-    const uberEatsOn = await readUberEatsAddonEnabled(merchantId).catch(() =>
-      merchant.uberEatsAddonEnabled === true
-    );
-    const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
-    const kioskOn = await readKioskAddonEnabled(merchantId).catch(() =>
-      isKioskAddonEnabled(merchant.kioskAddonEnabled)
-    );
+    };
+    const kdsOn = isKdsAddonEnabled(merchant.kdsAddonEnabled);
+    const odsOn = isOdsAddonEnabled(merchant.odsAddonEnabled);
+    const justEatOn = merchant.justEatAddonEnabled === true;
+    const uberEatsOn = merchant.uberEatsAddonEnabled === true;
+    const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
+    const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
 
     const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
     const shopHost =
@@ -648,13 +632,13 @@ export class MerchantSettingsService {
       const before = normalizeDeliveryPlatformSettings(current?.deliveryPlatformSettings);
       const after = normalizeDeliveryPlatformSettings(merged);
       if (after.justEat?.enabled && !before.justEat?.enabled) {
-        const licensed = await readJustEatAddonEnabled(merchantId).catch(() => false);
+        const licensed = current?.justEatAddonEnabled === true;
         if (!licensed) {
           throw new Error("Just Eat integration requires the Just Eat add-on");
         }
       }
       if (after.uberEats?.enabled && !before.uberEats?.enabled) {
-        const licensed = await readUberEatsAddonEnabled(merchantId).catch(() => false);
+        const licensed = current?.uberEatsAddonEnabled === true;
         if (!licensed) {
           throw new Error("Uber Eats integration requires the Uber Eats add-on");
         }

@@ -57,7 +57,13 @@ const emptyCreateForm = {
   loginHome: 'panel' as 'panel' | 'pos',
 };
 
-export default function StaffPage({ embedded = false }: { embedded?: boolean }) {
+export default function StaffPage({
+  embedded = false,
+  kioskLicensed: kioskLicensedProp,
+}: {
+  embedded?: boolean;
+  kioskLicensed?: boolean;
+}) {
   const { t } = useI18n();
   const { locations, load: loadLocations } = useLocationStore();
   const authUser = useAuthStore((s) => s.user);
@@ -74,7 +80,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [editForm, setEditForm] = useState<StaffEditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-  const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [kioskLicensed, setKioskLicensed] = useState(kioskLicensedProp ?? false);
 
   const [staffForm, setStaffForm] = useState(emptyCreateForm);
 
@@ -87,27 +93,42 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
     [roles, kioskLicensed]
   );
 
+  useEffect(() => {
+    if (kioskLicensedProp != null) setKioskLicensed(kioskLicensedProp);
+  }, [kioskLicensedProp]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rolesRes, staffRes, settingsRes] = await Promise.all([
+      const requests: Promise<unknown>[] = [
         api.get('/merchant/roles'),
         api.get('/merchant/staff'),
-        api.get('/merchant/settings').catch(() => ({ data: { settings: {} } })),
-      ]);
-      setRoles(rolesRes.data.roles || []);
-      setStaff(staffRes.data.staff || []);
-      const s = settingsRes.data?.settings || {};
-      setKioskLicensed(isKioskLicensed(s));
-      if (!staffForm.roleId && rolesRes.data.roles?.[0]?.id) {
-        setStaffForm((f) => ({ ...f, roleId: rolesRes.data.roles[0].id }));
+      ];
+      if (kioskLicensedProp == null) {
+        requests.push(api.get('/merchant/settings').catch(() => ({ data: { settings: {} } })));
       }
+      const [rolesRes, staffRes, settingsRes] = (await Promise.all(requests)) as [
+        { data: { roles?: RoleRow[] } },
+        { data: { staff?: StaffRow[] } },
+        { data: { settings?: Record<string, unknown> } } | undefined,
+      ];
+      const rolesList = rolesRes.data.roles || [];
+      setRoles(rolesList);
+      setStaff(staffRes.data.staff || []);
+      if (kioskLicensedProp == null && settingsRes) {
+        const s = settingsRes.data?.settings || {};
+        setKioskLicensed(isKioskLicensed(s));
+      }
+      setStaffForm((f) => {
+        if (f.roleId || !rolesList[0]?.id) return f;
+        return { ...f, roleId: rolesList[0].id };
+      });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('staffLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [staffForm.roleId, t]);
+  }, [kioskLicensedProp, t]);
 
   useEffect(() => {
     void load();

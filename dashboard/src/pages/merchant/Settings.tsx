@@ -43,6 +43,7 @@ import {
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
@@ -564,6 +565,9 @@ export default function Settings() {
   >([]);
   const [savingTerminal, setSavingTerminal] = useState(false);
   const vacationImageInputRef = useRef<HTMLInputElement>(null);
+  const receiptCatalogLoadedRef = useRef(false);
+  const paymentsDataLoadedRef = useRef(false);
+  const emailUsageLoadedRef = useRef(false);
   const [settingsQuery, setSettingsQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>(() => parseSettingsTabFromSearch(window.location.search));
@@ -1019,12 +1023,7 @@ export default function Settings() {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const [settingsRes, terminalsRes, categoriesRes, productsRes] = await Promise.all([
-          api.get('/merchant/settings'),
-          api.get('/terminals').catch(() => ({ data: { adyen: {}, terminals: [] } })),
-          api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
-          api.get('/merchant/products', { params: { limit: 5000 } }).catch(() => ({ data: { products: [] } })),
-        ]);
+        const settingsRes = await api.get('/merchant/settings');
         const s = settingsRes.data?.settings;
         if (!s) {
           throw new Error('Settings response missing data');
@@ -1034,40 +1033,8 @@ export default function Settings() {
           name: s.name || '',
           email: s.email || '',
         });
-        setProductCategories(
-          (categoriesRes.data?.categories || []).map((c: { id: string; name: string }) => ({
-            id: c.id,
-            name: c.name,
-          }))
-        );
-        setCatalogProducts(
-          (productsRes.data?.products || []).map(
-            (p: { id: string; name: string; categoryId?: string | null }) => ({
-              id: p.id,
-              name: p.name,
-              categoryId: p.categoryId ?? null,
-            })
-          )
-        );
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
         setCardFeePercent(String(s?.onlineCardFeePercent ?? '0'));
-        const a = terminalsRes.data.adyen || {};
-        setAdyen(a);
-        setMerchantAccount(a.merchantAccount || '');
-        setClientId(a.clientId || '');
-        setTerminals(terminalsRes.data.terminals || []);
-        try {
-          const usageRes = await api.get('/merchant/marketing/brevo-usage');
-          setBrevoUsage(usageRes.data.usage || null);
-        } catch {
-          setBrevoUsage(null);
-        }
-        try {
-          const platformUsageRes = await api.get('/merchant/marketing/platform-email-usage');
-          setPlatformEmailUsage(platformUsageRes.data.usage || null);
-        } catch {
-          setPlatformEmailUsage(null);
-        }
 
         const stored = localStorage.getItem('manupos_panel_lang');
         if (
@@ -1101,9 +1068,85 @@ export default function Settings() {
     toast.error(msg);
   }, [setLocale, t]);
 
+  const loadPaymentsData = useCallback(async () => {
+    if (paymentsDataLoadedRef.current) return;
+    try {
+      const terminalsRes = await api
+        .get('/terminals')
+        .catch(() => ({ data: { adyen: {}, terminals: [] } }));
+      const a = terminalsRes.data.adyen || {};
+      setAdyen(a);
+      setMerchantAccount(a.merchantAccount || '');
+      setClientId(a.clientId || '');
+      setTerminals(terminalsRes.data.terminals || []);
+      paymentsDataLoadedRef.current = true;
+    } catch {
+      /* payments tab can retry */
+    }
+  }, []);
+
+  const loadReceiptCatalog = useCallback(async () => {
+    if (receiptCatalogLoadedRef.current) return;
+    try {
+      const [categoriesRes, productsRes] = await Promise.all([
+        api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
+        api
+          .get('/merchant/products', { params: { limit: 5000 } })
+          .catch(() => ({ data: { products: [] } })),
+      ]);
+      setProductCategories(
+        (categoriesRes.data?.categories || []).map((c: { id: string; name: string }) => ({
+          id: c.id,
+          name: c.name,
+        }))
+      );
+      setCatalogProducts(
+        (productsRes.data?.products || []).map(
+          (p: { id: string; name: string; categoryId?: string | null }) => ({
+            id: p.id,
+            name: p.name,
+            categoryId: p.categoryId ?? null,
+          })
+        )
+      );
+      receiptCatalogLoadedRef.current = true;
+    } catch {
+      /* receipt tab can retry */
+    }
+  }, []);
+
+  const loadEmailUsage = useCallback(async () => {
+    if (emailUsageLoadedRef.current) return;
+    try {
+      const usageRes = await api.get('/merchant/marketing/brevo-usage');
+      setBrevoUsage(usageRes.data.usage || null);
+    } catch {
+      setBrevoUsage(null);
+    }
+    try {
+      const platformUsageRes = await api.get('/merchant/marketing/platform-email-usage');
+      setPlatformEmailUsage(platformUsageRes.data.usage || null);
+    } catch {
+      setPlatformEmailUsage(null);
+    }
+    emailUsageLoadedRef.current = true;
+  }, []);
+
   useEffect(() => {
     void loadSettings().finally(() => setLoading(false));
   }, [loadSettings]);
+
+  useEffect(() => {
+    if (tab === 'payments') void loadPaymentsData();
+  }, [tab, loadPaymentsData]);
+
+  useEffect(() => {
+    if (tab === 'receipt') void loadReceiptCatalog();
+  }, [tab, loadReceiptCatalog]);
+
+  useEffect(() => {
+    if (tab === 'email') void loadEmailUsage();
+  }, [tab, loadEmailUsage]);
 
   useEffect(() => {
     void Promise.all([fetchPrintBridgeManifest(), fetchPrintAgentManifest()]).then(
@@ -2065,7 +2108,7 @@ export default function Settings() {
           {tab === 'users' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHint')} />
-              <Staff embedded />
+              <Staff embedded kioskLicensed={isKioskLicensed(settings)} />
             </div>
           )}
 

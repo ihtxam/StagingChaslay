@@ -22,6 +22,13 @@ import {
   type StaffLoginHome,
 } from "@/lib/staff-login-home";
 
+/** Skip expensive role seeding/enforcement on every staff list (once per process per merchant). */
+const defaultRolesReady = new Set<string>();
+
+export function invalidateDefaultRolesCache(merchantId: string) {
+  defaultRolesReady.delete(merchantId);
+}
+
 export class StaffService {
   /** Staff row exists with a POS PIN but no email/password hash for /login. */
   static readonly PIN_ONLY_LOGIN_MESSAGE =
@@ -41,6 +48,11 @@ export class StaffService {
 
   static async ensureDefaultRoles(merchantId: string) {
     const db = getDb();
+    if (defaultRolesReady.has(merchantId)) {
+      return db.query.merchantRoles.findMany({
+        where: eq(schema.merchantRoles.merchantId, merchantId),
+      });
+    }
     const existing = await db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
@@ -75,6 +87,7 @@ export class StaffService {
     // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
+    defaultRolesReady.add(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
@@ -249,6 +262,7 @@ export class StaffService {
     roleId: string,
     updates: { name?: string; permissions?: Permission[] }
   ) {
+    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const role = await db.query.merchantRoles.findFirst({
       where: and(eq(schema.merchantRoles.id, roleId), eq(schema.merchantRoles.merchantId, merchantId)),
@@ -280,6 +294,7 @@ export class StaffService {
   }
 
   static async createRole(merchantId: string, name: string, permissions: Permission[]) {
+    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const trimmed = name.trim().slice(0, 100);
     if (!trimmed) throw new Error("Role name is required");
@@ -298,6 +313,7 @@ export class StaffService {
   }
 
   static async deleteRole(merchantId: string, roleId: string) {
+    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const role = await db.query.merchantRoles.findFirst({
       where: and(eq(schema.merchantRoles.id, roleId), eq(schema.merchantRoles.merchantId, merchantId)),
@@ -314,7 +330,6 @@ export class StaffService {
   }
 
   static async listStaff(merchantId: string) {
-    await this.ensureDefaultRoles(merchantId);
     const db = getDb();
     const staff = await db.query.merchantStaff.findMany({
       where: eq(schema.merchantStaff.merchantId, merchantId),
