@@ -214,6 +214,18 @@ Or run the bootstrap script (clone/repair + deploy): `bash scripts/setup-staging
 
 `scripts/deploy-hetzner.sh` also rewrites HTTPS `origin` to SSH automatically when possible.
 
+**One-time manual fix** (required once while the server still has an HTTPS remote and cannot pull the updated deploy script):
+
+```bash
+ssh root@116.202.26.15
+cd /root/StagingChaslay
+git remote set-url origin git@github.com:ihtxam/StagingChaslay.git
+git fetch origin main && git reset --hard origin/main
+bash scripts/deploy-hetzner.sh
+```
+
+Then re-run **Deploy to Hetzner** in StagingChaslay Actions (or push to `main`).
+
 ### Rebornsense production (`app.rebornsense.com`)
 
 `app.rebornsense.com` runs on a **separate** VPS:
