@@ -163,37 +163,62 @@ export interface ChaslayProduct {
   categoryId?: string | null;
 }
 
+export async function getCmsCatalog(): Promise<
+  ApiResponse<{ categories: ChaslayCategory[]; products: ChaslayProduct[] }>
+> {
+  try {
+    const res = await api.get('/merchant/cms/catalog');
+    const body = res.data as {
+      success?: boolean;
+      categories?: ChaslayCategory[];
+      products?: Array<{
+        id: string;
+        name: string;
+        categoryId?: string | null;
+        price?: number;
+        image?: string | null;
+      }>;
+      error?: string;
+    };
+    if (!body?.success) {
+      return { success: false, message: body?.error || 'Failed to load catalog' };
+    }
+    const products = (body.products ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      imageUrl: p.image ?? null,
+      categoryId: p.categoryId ?? null,
+    }));
+    return {
+      success: true,
+      data: {
+        categories: body.categories ?? [],
+        products,
+      },
+    };
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === 'object' && 'response' in err
+        ? String((err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Request failed')
+        : 'Request failed';
+    return { success: false, message };
+  }
+}
+
 export async function getCategories(): Promise<ApiResponse<ChaslayCategory[]>> {
-  const res = await unwrap<{ categories: ChaslayCategory[]; products?: ChaslayProduct[] }>(
-    api.get('/merchant/cms/catalog')
-  );
-  if (!res.success) return { success: false, message: res.message };
-  return { success: true, data: res.data?.categories ?? [] };
+  const res = await getCmsCatalog();
+  if (!res.success || !res.data) return { success: false, message: res.message };
+  return { success: true, data: res.data.categories };
 }
 
 export async function getProducts(_opts?: {
   per_page?: number;
   status?: number;
 }): Promise<ApiResponse<{ products: ChaslayProduct[] }>> {
-  const res = await unwrap<{
-    categories: ChaslayCategory[];
-    products: Array<{
-      id: string;
-      name: string;
-      categoryId?: string | null;
-      price?: number;
-      image?: string | null;
-    }>;
-  }>(api.get('/merchant/cms/catalog'));
-  if (!res.success) return { success: false, message: res.message };
-  const products = (res.data?.products ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    price: p.price,
-    imageUrl: p.image ?? null,
-    categoryId: p.categoryId ?? null,
-  }));
-  return { success: true, data: { products } };
+  const res = await getCmsCatalog();
+  if (!res.success || !res.data) return { success: false, message: res.message };
+  return { success: true, data: { products: res.data.products } };
 }
 
 export async function getBusinessInfo(): Promise<ApiResponse<{ selected_language?: { code: string; is_default: number }[] }>> {

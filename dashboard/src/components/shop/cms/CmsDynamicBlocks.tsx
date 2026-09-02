@@ -402,7 +402,11 @@ export async function fetchCmsMenuCatalog(
 ): Promise<{ categories: CmsMenuCategory[] } | null> {
   try {
     const res = await axios.get(`/api/shop/${encodeURIComponent(shopKey)}/menu`);
-    return { categories: res.data?.data?.categories || res.data?.categories || [] };
+    const raw = res.data?.data;
+    const categories = Array.isArray(raw)
+      ? raw
+      : res.data?.data?.categories || res.data?.categories || [];
+    return { categories };
   } catch {
     return null;
   }

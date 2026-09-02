@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { fetchCmsMenuCatalog } from '@/components/shop/cms/CmsDynamicBlocks';
-import { getProducts, getCategories } from '@/lib/chaslay-pagebuilder/api';
+import { getCmsCatalog } from '@/lib/chaslay-pagebuilder/api';
 import type { ChaslayMenuCategory, ChaslayMenuProduct } from './menu-types';
 import { useStorefront } from './StorefrontContext';
 
@@ -81,23 +81,16 @@ export const MenuDataProvider: React.FC<MenuDataProviderProps> = ({ children }) 
           return;
         }
 
-        const [categoriesRes, productsRes] = await Promise.all([
-          getCategories(),
-          getProducts({ per_page: 1000, status: 1 }),
-        ]);
-
-        if (categoriesRes.success && categoriesRes.data) {
+        const catalogRes = await getCmsCatalog();
+        if (catalogRes.success && catalogRes.data) {
           setCategories(
-            categoriesRes.data.map((c) => ({
+            catalogRes.data.categories.map((c) => ({
               id: String(c.id),
               name: c.name,
             }))
           );
-        }
-
-        if (productsRes.success && productsRes.data) {
           setProducts(
-            (productsRes.data.products || []).map((p) => ({
+            catalogRes.data.products.map((p) => ({
               id: String(p.id),
               product_name: p.name,
               product_description: null,
@@ -107,6 +100,8 @@ export const MenuDataProvider: React.FC<MenuDataProviderProps> = ({ children }) 
               category_id: p.categoryId ? String(p.categoryId) : null,
             }))
           );
+        } else if (!catalogRes.success) {
+          setError(catalogRes.message || 'Failed to fetch menu data');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch menu data');

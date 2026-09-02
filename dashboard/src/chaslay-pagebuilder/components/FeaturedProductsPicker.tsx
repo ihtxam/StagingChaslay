@@ -95,6 +95,10 @@ export const FeaturedProductsPicker: React.FC<FeaturedProductsPickerProps> = ({ 
         <div className="max-h-48 overflow-y-auto rounded-md border">
           {loading ? (
             <div className="text-xs text-muted-foreground p-3 text-center">Loading products…</div>
+          ) : products.length === 0 ? (
+            <div className="text-xs text-muted-foreground p-3 text-center">
+              No products available. Add products in the Products section.
+            </div>
           ) : available.length === 0 ? (
             <div className="text-xs text-muted-foreground p-3 text-center">
               {search ? 'No matching products' : 'All products added'}
