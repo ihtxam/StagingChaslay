@@ -632,6 +632,49 @@ function formatReceiptExtraLine(prefix: string, extra: string): string {
   return `${extraIndent(prefix)}- ${stripLeadingDash(extra)}`;
 }
 
+/** Visual column width per character for kitchen ESC/POS scale (3 = double width). */
+function kitchenCharWidth(scale: 1 | 2 | 3): number {
+  return scale === 3 ? 2 : 1;
+}
+
+/** Kitchen modifier bullet: text aligns with dish name; "-" sits slightly left. */
+function kitchenModifierDashPrefix(
+  qtyPrefix: string,
+  itemScale: 1 | 2 | 3,
+  modifierScale: 1 | 2 | 3
+): string {
+  const productCol = qtyPrefix.length * kitchenCharWidth(itemScale);
+  const modCharW = kitchenCharWidth(modifierScale);
+  const bulletCol = Math.max(0, productCol - 2 * modCharW);
+  const spaces = Math.max(0, Math.round(bulletCol / modCharW));
+  return `${' '.repeat(spaces)}- `;
+}
+
+/** Continuation rows for wrapped kitchen modifiers — align with modifier text. */
+function kitchenModifierTextPrefix(
+  qtyPrefix: string,
+  itemScale: 1 | 2 | 3,
+  modifierScale: 1 | 2 | 3
+): string {
+  const productCol = qtyPrefix.length * kitchenCharWidth(itemScale);
+  const modCharW = kitchenCharWidth(modifierScale);
+  const spaces = Math.max(0, Math.round(productCol / modCharW));
+  return ' '.repeat(spaces);
+}
+
+function formatKitchenExtraLine(
+  qtyPrefix: string,
+  extra: string,
+  itemScale: 1 | 2 | 3,
+  modifierScale: 1 | 2 | 3
+): string {
+  return `${kitchenModifierDashPrefix(qtyPrefix, itemScale, modifierScale)}${stripLeadingDash(extra)}`;
+}
+
+function kitchenScaleDown(scale: 1 | 2 | 3): 1 | 2 | 3 {
+  return scale === 3 ? 2 : scale === 2 ? 1 : 1;
+}
+
 function groupReceiptItemsByCourse<T extends { courseNumber?: number | null }>(
   items: T[]
 ): Array<{ course: number | null; items: T[] }> {
@@ -1354,6 +1397,8 @@ type KitchenLine = {
   text: string;
   /** Extra blank lines after this row (kitchen readability). */
   blankAfter?: number;
+  /** Cross-station footer: smaller + italic so other table items read as secondary. */
+  deemphasized?: boolean;
 };
 
 /** Columns available when GS ! enlarges text (scale 3 = double width). */
@@ -1398,7 +1443,9 @@ function formatKitchenItemLines(
   width: number,
   modifierWidth: number,
   cancelled: boolean,
-  forEscPos: boolean
+  forEscPos: boolean,
+  itemScale: 1 | 2 | 3,
+  modifierScale: 1 | 2 | 3
 ): KitchenLine[] {
   const qtyPrefix = formatQtyArticlePrefix(item);
   const { product, modifiers: modifierLines } = splitReceiptArticle(
@@ -1447,18 +1494,19 @@ function formatKitchenItemLines(
   }
 
   const pushDashed = (text: string, blankAfter = 0) => {
-    const line = formatReceiptExtraLine(qtyPrefix, text);
+    const dashPrefix = kitchenModifierDashPrefix(qtyPrefix, itemScale, modifierScale);
+    const line = formatKitchenExtraLine(qtyPrefix, text, itemScale, modifierScale);
     if (line.length <= width) {
       pushExtra(line, blankAfter);
       return;
     }
-    const dashPrefix = `${extraIndent(qtyPrefix)}- `;
     const wrapped = wrapKitchenWords(
       stripLeadingDash(text),
       Math.max(8, modifierWidth - dashPrefix.length)
     );
+    const contPrefix = kitchenModifierTextPrefix(qtyPrefix, itemScale, modifierScale);
     wrapped.forEach((w, i) => {
-      const row = i === 0 ? `${dashPrefix}${w}` : `${extraIndent(qtyPrefix)}  ${w}`;
+      const row = i === 0 ? `${dashPrefix}${w}` : `${contPrefix}${w}`;
       pushExtra(row, i === wrapped.length - 1 ? blankAfter : 0);
     });
   };
@@ -1480,7 +1528,7 @@ function formatKitchenItemLines(
 
   if (lineNote) {
     const noteText = forEscPos ? `*${lineNote}*` : `_${lineNote}_`;
-    const notePrefix = extraIndent(qtyPrefix);
+    const notePrefix = kitchenModifierTextPrefix(qtyPrefix, itemScale, modifierScale);
     for (const w of wrapKitchenWords(noteText, extraWidth)) {
       pushNote(`${notePrefix}${w}`, 1);
     }
@@ -1580,28 +1628,57 @@ function buildKitchenTicketLines(
       }
       for (const item of group.items) {
         lines.push(
-          ...formatKitchenItemLines(item, itemWidth, modifierWidth, cancelled, forEscPos)
+          ...formatKitchenItemLines(
+            item,
+            itemWidth,
+            modifierWidth,
+            cancelled,
+            forEscPos,
+            itemScale,
+            modifierScale
+          )
         );
       }
     }
   } else {
     for (const item of items) {
       lines.push(
-        ...formatKitchenItemLines(item, itemWidth, modifierWidth, cancelled, forEscPos)
+        ...formatKitchenItemLines(
+          item,
+          itemWidth,
+          modifierWidth,
+          cancelled,
+          forEscPos,
+          itemScale,
+          modifierScale
+        )
       );
     }
   }
 
   if (opts.otherStationItems?.length) {
+    const otherItemScale = kitchenScaleDown(itemScale);
+    const otherModifierScale = kitchenScaleDown(modifierScale);
+    const otherItemWidth = kitchenColsForScale(opts.paperWidthMm, otherItemScale);
+    const otherModifierWidth = kitchenColsForScale(opts.paperWidthMm, otherModifierScale);
     lines.push({ kind: 'normal', text: thin });
     lines.push({
       kind: 'center',
       text: (opts.otherStationLabel || '>>> OTHER STATION <<<').slice(0, footWidth),
+      deemphasized: true,
     });
     for (const item of opts.otherStationItems) {
-      lines.push(
-        ...formatKitchenItemLines(item, itemWidth, modifierWidth, false, forEscPos)
-      );
+      for (const row of formatKitchenItemLines(
+        item,
+        otherItemWidth,
+        otherModifierWidth,
+        false,
+        forEscPos,
+        otherItemScale,
+        otherModifierScale
+      )) {
+        lines.push({ ...row, deemphasized: true });
+      }
     }
   }
 
@@ -1621,10 +1698,11 @@ export function generateKitchenTicketText(opts: KitchenTicketOpts): string {
   return lines
     .map((l) => {
       const centerWidth = l.kind === 'course' ? itemWidth : width;
-      const text =
+      const body =
         l.kind === 'center' || l.kind === 'course'
           ? centerLine(l.text.trim(), centerWidth)
           : l.text;
+      const text = l.deemphasized ? `_${body}_` : body;
       return `${text}\n${'\n'.repeat(l.blankAfter || 0)}`;
     })
     .join('');
@@ -1647,6 +1725,11 @@ function escAlign(mode: 0 | 1 | 2): Uint8Array {
 /** ESC/POS underline (closest hardware strikethrough on most thermal printers). */
 function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
+}
+
+/** ESC/POS italic (Epson-compatible; ignored on some clone printers). */
+function escItalic(on: boolean): Uint8Array {
+  return new Uint8Array([0x1b, on ? 0x34 : 0x35]);
 }
 
 /**
@@ -1693,18 +1776,23 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     for (let i = 0; i < blankAfter; i++) parts.push(lf);
   };
   const resetSize = () => {
-    parts.push(escKitchenSize(1), escBold(false), escUnderline(false), escAlign(0));
+    parts.push(escKitchenSize(1), escBold(false), escUnderline(false), escItalic(false), escAlign(0));
   };
   const body = (text: string) =>
     escposCp850Encode(String(text || '').replace(/[\r\n]+/g, ' ').trimEnd());
 
   for (const line of lines) {
+    const lineHeaderScale = line.deemphasized ? kitchenScaleDown(headerScale) : headerScale;
+    const lineItemScale = line.deemphasized ? kitchenScaleDown(itemScale) : itemScale;
+    const lineModifierScale = line.deemphasized ? kitchenScaleDown(modifierScale) : modifierScale;
+    const italic = line.deemphasized === true;
     if (line.kind === 'center') {
       parts.push(
         escAlign(1),
-        escKitchenSize(headerScale),
-        escBold(bold || headerScale > 1),
+        escKitchenSize(lineHeaderScale),
+        escBold(bold || lineHeaderScale > 1),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1712,9 +1800,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'header') {
       parts.push(
         escAlign(0),
-        escKitchenSize(headerScale),
-        escBold(bold || headerScale > 1),
+        escKitchenSize(lineHeaderScale),
+        escBold(bold || lineHeaderScale > 1),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1722,9 +1811,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'course') {
       parts.push(
         escAlign(1),
-        escKitchenSize(itemScale),
-        escBold(bold || itemScale > 1),
+        escKitchenSize(lineItemScale),
+        escBold(bold || lineItemScale > 1),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1732,9 +1822,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'strike') {
       parts.push(
         escAlign(0),
-        escKitchenSize(itemScale),
+        escKitchenSize(lineItemScale),
         escBold(true),
         escUnderline(true),
+        escItalic(italic),
         body(line.text),
         escUnderline(false)
       );
@@ -1743,9 +1834,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'item') {
       parts.push(
         escAlign(0),
-        escKitchenSize(itemScale),
-        escBold(bold || itemScale > 1),
+        escKitchenSize(lineItemScale),
+        escBold(bold || lineItemScale > 1),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1753,9 +1845,10 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'extra') {
       parts.push(
         escAlign(0),
-        escKitchenSize(modifierScale),
-        escBold(bold && modifierScale > 1),
+        escKitchenSize(lineModifierScale),
+        escBold(bold && lineModifierScale > 1),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1766,6 +1859,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(1),
         escBold(false),
         escUnderline(true),
+        escItalic(italic),
         body(line.text),
         escUnderline(false)
       );
@@ -1777,6 +1871,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escKitchenSize(1),
         escBold(false),
         escUnderline(false),
+        escItalic(italic),
         body(line.text)
       );
       feedLine(line.blankAfter);
@@ -1788,6 +1883,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     escKitchenSize(1),
     escBold(false),
     escUnderline(false),
+    escItalic(false),
     KITCHEN_TICKET_CUT
   );
   return concatBytes(...parts);
