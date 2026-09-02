@@ -122,7 +122,7 @@ export class StaffService {
       return null;
     }
 
-    const name = String(displayName || "").trim().slice(0, 255) || "Manager";
+    const name = "Manager";
     try {
       return await this.createStaff(merchantId, {
         name,
@@ -137,6 +137,102 @@ export class StaffService {
       );
       return null;
     }
+  }
+
+  /**
+   * Ensure a Manager staff row exists and has the default POS PIN (0000) when unset.
+   * Repairs older merchants that had staff before auto-provisioning existed.
+   */
+  static async ensureManagerPosPin(merchantId: string) {
+    await this.ensureDefaultRoles(merchantId);
+    const db = getDb();
+    const managerRole = await db.query.merchantRoles.findFirst({
+      where: and(
+        eq(schema.merchantRoles.merchantId, merchantId),
+        sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
+      ),
+    });
+    if (!managerRole) return;
+
+    let staffRows = await db.query.merchantStaff.findMany({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+    });
+    const active = staffRows.filter((s) => s.isActive);
+    if (!active.length) {
+      await this.ensureDefaultManagerStaff(merchantId, "Manager");
+      return;
+    }
+
+    let managerStaff = active.find((s) => s.roleId === managerRole.id);
+    if (!managerStaff) {
+      try {
+        await this.createStaff(merchantId, {
+          name: "Manager",
+          roleId: managerRole.id,
+          pin: DEFAULT_MANAGER_PIN,
+          loginHome: "panel",
+        });
+        staffRows = await db.query.merchantStaff.findMany({
+          where: eq(schema.merchantStaff.merchantId, merchantId),
+        });
+        managerStaff = staffRows.find((s) => s.isActive && s.roleId === managerRole.id);
+      } catch {
+        /* staff limit — only repair if the shop has no PINs at all */
+        if (active.some((s) => s.pinHash)) return;
+        managerStaff = active.length === 1 ? active[0] : undefined;
+      }
+    }
+
+    if (!managerStaff) return;
+
+    const hasDefaultPin =
+      !!managerStaff.pinHash &&
+      (await AuthService.comparePassword(DEFAULT_MANAGER_PIN, managerStaff.pinHash));
+    if (hasDefaultPin) {
+      if (managerStaff.pinDisplay !== DEFAULT_MANAGER_PIN) {
+        await db
+          .update(schema.merchantStaff)
+          .set({ pinDisplay: DEFAULT_MANAGER_PIN, updatedAt: new Date() })
+          .where(eq(schema.merchantStaff.id, managerStaff.id));
+      }
+      return;
+    }
+
+    const shouldRepairPin =
+      !managerStaff.pinHash ||
+      managerStaff.pinDisplay === DEFAULT_MANAGER_PIN ||
+      !active.some((s) => s.pinHash);
+    if (!shouldRepairPin) return;
+
+    try {
+      await this.assignStaffPin(merchantId, managerStaff.id, DEFAULT_MANAGER_PIN);
+    } catch (error) {
+      console.warn(
+        `[staff] Default manager PIN repair failed for merchant ${merchantId}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  private static normalizePinInput(pin: unknown): string {
+    return String(pin ?? "")
+      .trim()
+      .replace(/\D/g, "");
+  }
+
+  private static async assignStaffPin(merchantId: string, staffId: string, pin: string) {
+    const db = getDb();
+    await this.assertPinUnique(merchantId, pin, staffId);
+    await db
+      .update(schema.merchantStaff)
+      .set({
+        pinHash: await AuthService.hashPassword(pin),
+        pinDisplay: pin,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId))
+      );
   }
 
   /** Re-seed the Storekeeper system role if it was deleted or stripped. */
@@ -382,13 +478,10 @@ export class StaffService {
       where: eq(schema.merchantStaff.merchantId, merchantId),
       columns: { id: true },
     });
-    if (existingStaff) return;
-
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { name: true },
-    });
-    await this.ensureDefaultManagerStaff(merchantId, merchant?.name || "Manager");
+    if (!existingStaff) {
+      await this.ensureDefaultManagerStaff(merchantId, "Manager");
+    }
+    await this.ensureManagerPosPin(merchantId);
   }
 
   static async listStaff(merchantId: string) {
@@ -673,7 +766,8 @@ export class StaffService {
 
   static async verifyPin(merchantId: string, pin: string) {
     const db = getDb();
-    const normalized = pin.trim();
+    await this.ensureManagerPosPin(merchantId);
+    const normalized = this.normalizePinInput(pin);
     if (!normalized) throw new Error("PIN is required");
     if (normalized.length < 4 || normalized.length > 8) {
       throw new Error("PIN must be 4-8 digits");
