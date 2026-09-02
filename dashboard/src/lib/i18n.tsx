@@ -1894,6 +1894,8 @@ const en: Dict = {
   webPosHoldFailed: 'Could not hold order',
   webPosOrderResumed: 'Order resumed',
   webPosKitchenPrintFailed: 'Kitchen print failed',
+  webPosKitchenPrintPartialFailed:
+    'Some kitchen tickets did not print — check the kitchen printer is online, then retry from the cart.',
   webPosNoKitchenPrinterConfigured:
     'No kitchen printer configured. Enable Kitchen on a printer in Settings (not Receipt only).',
   waiterTableOccupiedEmpty:
@@ -5612,6 +5614,8 @@ const fr: Dict = {
   webPosHoldFailed: 'Impossible de mettre en attente',
   webPosOrderResumed: 'Commande reprise',
   webPosKitchenPrintFailed: 'Échec impression cuisine',
+  webPosKitchenPrintPartialFailed:
+    'Certain bons cuisine n’ont pas été imprimés — vérifiez l’imprimante cuisine, puis réessayez depuis le panier.',
   webPosNoKitchenPrinterConfigured:
     'Aucune imprimante cuisine configurée. Activez Cuisine sur une imprimante dans Paramètres (pas Receipt seul).',
   waiterTableOccupiedEmpty:
@@ -9280,6 +9284,8 @@ const de: Dict = {
   webPosHoldFailed: 'Halten fehlgeschlagen',
   webPosOrderResumed: 'Bestellung fortgesetzt',
   webPosKitchenPrintFailed: 'Küchendruck fehlgeschlagen',
+  webPosKitchenPrintPartialFailed:
+    'Einige Küchenbons wurden nicht gedruckt — Küchendrucker prüfen und im Warenkorb erneut versuchen.',
   webPosNoKitchenPrinterConfigured:
     'Kein Küchendrucker konfiguriert. Aktivieren Sie Küche auf einem Drucker in Einstellungen (nicht nur Receipt).',
   waiterTableOccupiedEmpty:

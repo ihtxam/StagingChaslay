@@ -4,6 +4,7 @@ import {
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
+  kitchenPrintJobHasTarget,
   resolveKitchenPrintJobs,
   resolveKitchenPaperWidthMm,
   resolveReceiptLanguage,
@@ -78,8 +79,8 @@ export async function printWaiterKitchen(opts: {
   };
 
   let queuedAny = false;
-  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
-    (j) => (j.printerName || '').trim()
+  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) =>
+    kitchenPrintJobHasTarget(j)
   );
   const agentOnline = await isPrintAgentAvailable();
   const retryLocally = resolvePrintRetryLocally(agentOnline);
@@ -96,10 +97,11 @@ export async function printWaiterKitchen(opts: {
     let printedAny = false;
     for (const job of printJobs) {
       const configuredName = (job.printerName || '').trim();
-      const resolvedName = resolveLivePrinterName(configuredName, livePrinters, {
-        portName: job.portName,
-        matchHint: job.matchHint,
-      });
+      const resolvedName =
+        resolveLivePrinterName(configuredName, livePrinters, {
+          portName: job.portName,
+          matchHint: job.matchHint,
+        }) || configuredName;
       if (!resolvedName) continue;
       printedAny = true;
       const paperWidthMm = job.paperWidthMm;
