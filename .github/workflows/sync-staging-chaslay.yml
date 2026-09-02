@@ -58,8 +58,9 @@ jobs:
           rm -f .github/workflows/restart-rebornsense.yml
           rm -f .github/workflows/restore-rebornsense-now.yml
           rm -f .github/workflows/sync-staging-chaslay.yml
-          # Chaslay test deploy workflow (overlay kept in this repo)
-          cp .github/staging-overlay/deploy-hetzner.yml .github/workflows/deploy-hetzner.yml
+          # Do not copy deploy-hetzner.yml overlay — STAGING_CHASLAY_SYNC_TOKEN often lacks
+          # the workflow scope, which blocks the entire sync push. StagingChaslay already has
+          # deploy-hetzner.yml; git remote + deploy key handling lives in scripts/deploy-hetzner.sh.
 
       - name: Push to StagingChaslay
         if: steps.token.outputs.configured == 'true'
