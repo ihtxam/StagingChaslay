@@ -2529,6 +2529,7 @@ const en: Dict = {
     'When unchecked, this till will not auto-print kitchen tickets (local sends or jobs relayed from phones).',
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
+  webPosReloadCatalogShort: 'Reload',
   webPosPrintersRefreshed: 'Printers refreshed',
   webPosAgentOnline: 'Print agent online',
   webPosPrintRelayHint:
@@ -3226,6 +3227,9 @@ const en: Dict = {
   staffUserCreated: 'User created',
   staffUserCreateFailed: 'Failed to create user',
   staffRemoveConfirm: 'Remove this user?',
+  staffCannotRemoveLast:
+    'You must keep at least one user. New shops start with a Manager (PIN 0000) listed below.',
+  staffLastUser: 'Required',
   staffUserRemoved: 'User removed',
   staffUserRemoveFailed: 'Failed to remove user',
   staffEditUser: 'Edit {name}',
@@ -3244,7 +3248,7 @@ const en: Dict = {
   staffUserUpdateFailed: 'Failed to update user',
   staffOwnerTitle: 'Shop owner (panel login)',
   staffOwnerHint:
-    'This is the merchant owner account for the shop (email + password). It is not a staff PIN user, so it is not listed in the table below. Staff PINs and panel users are managed in that list.',
+    'The owner signs in with email and password. A default Manager user (PIN 0000) is created automatically and listed below for POS access — change the PIN in Edit when ready.',
   perm_USE_POS: 'Use Android POS',
   perm_USE_WEBPOS: 'Use Reborn',
   perm_PROCESS_PAYMENTS: 'Process payments',
@@ -6250,6 +6254,7 @@ const fr: Dict = {
     'Si décoché, cette caisse n\'imprime plus les tickets cuisine (envois locaux ou relais depuis les téléphones).',
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
+  webPosReloadCatalogShort: 'Recharger',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
   webPosAgentOnline: 'Agent d’impression en ligne',
   webPosPrintRelayHint:
@@ -6910,6 +6915,9 @@ const fr: Dict = {
   staffUserCreated: 'Utilisateur créé',
   staffUserCreateFailed: 'Échec de la création',
   staffRemoveConfirm: 'Supprimer cet utilisateur ?',
+  staffCannotRemoveLast:
+    'Vous devez garder au moins un utilisateur. Les nouvelles boutiques démarrent avec un Manager (PIN 0000) listé ci-dessous.',
+  staffLastUser: 'Requis',
   staffUserRemoved: 'Utilisateur supprimé',
   staffUserRemoveFailed: 'Échec de la suppression',
   staffEditUser: 'Modifier {name}',
@@ -6928,7 +6936,7 @@ const fr: Dict = {
   staffUserUpdateFailed: 'Échec de la mise à jour',
   staffOwnerTitle: 'Propriétaire (connexion panneau)',
   staffOwnerHint:
-    'Compte propriétaire de la boutique (email + mot de passe). Ce n’est pas un utilisateur PIN, donc il n’apparaît pas dans le tableau. Les PIN et accès panneau du personnel sont gérés dans la liste.',
+    'Le propriétaire se connecte avec email et mot de passe. Un Manager par défaut (PIN 0000) est créé automatiquement et listé ci-dessous pour le POS — modifiez le PIN dans Modifier quand vous voulez.',
   perm_USE_POS: 'Utiliser le POS Android',
   perm_USE_WEBPOS: 'Utiliser Reborn',
   perm_PROCESS_PAYMENTS: 'Encaisser les paiements',
@@ -9922,6 +9930,7 @@ const de: Dict = {
     'Wenn deaktiviert, druckt diese Kasse keine Küchentickets (lokal oder von Handys weitergeleitet).',
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
+  webPosReloadCatalogShort: 'Neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',
   webPosAgentOnline: 'Druckagent online',
   webPosPrintRelayHint:
@@ -10582,6 +10591,9 @@ const de: Dict = {
   staffUserCreated: 'Benutzer erstellt',
   staffUserCreateFailed: 'Benutzer konnte nicht erstellt werden',
   staffRemoveConfirm: 'Diesen Benutzer entfernen?',
+  staffCannotRemoveLast:
+    'Mindestens ein Benutzer muss bleiben. Neue Shops starten mit einem Manager (PIN 0000) in der Liste unten.',
+  staffLastUser: 'Erforderlich',
   staffUserRemoved: 'Benutzer entfernt',
   staffUserRemoveFailed: 'Benutzer konnte nicht entfernt werden',
   staffEditUser: '{name} bearbeiten',
@@ -10600,7 +10612,7 @@ const de: Dict = {
   staffUserUpdateFailed: 'Benutzer konnte nicht aktualisiert werden',
   staffOwnerTitle: 'Shop-Inhaber (Panel-Login)',
   staffOwnerHint:
-    'Das Händler-Inhaberkonto des Shops (E-Mail + Passwort). Kein PIN-Mitarbeiter, daher nicht in der Tabelle. PIN- und Panel-Benutzer werden in der Liste unten verwaltet.',
+    'Der Inhaber meldet sich mit E-Mail und Passwort an. Ein Standard-Manager (PIN 0000) wird automatisch erstellt und unten für den POS aufgeführt — PIN in Bearbeiten ändern, wenn bereit.',
   perm_USE_POS: 'Android-POS nutzen',
   perm_USE_WEBPOS: 'Reborn nutzen',
   perm_PROCESS_PAYMENTS: 'Zahlungen verarbeiten',

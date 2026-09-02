@@ -603,7 +603,6 @@ export function WebPosSettingsDropdown({
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
-  const syncNeedsAttention = !syncOnline || syncPendingCount > 0 || syncFailedCount > 0;
   const bumpTextSize = (dir: -1 | 1) => {
     if (!onTextSizeChange) return;
     const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
@@ -612,31 +611,31 @@ export function WebPosSettingsDropdown({
   };
 
   return (
-    <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
-      <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
-      <div className="space-y-1.5 border-b border-stone-100 pb-3">
+    <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
+      <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
+      <div className="space-y-1.5 border-b border-stone-100 pb-2">
         {canShowPanel && onShowPanel ? (
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
+            className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-4 text-sm font-semibold text-teal-900 hover:bg-teal-100"
             onClick={onShowPanel}
           >
-            <PanelLeft size={16} />
+            <PanelLeft size={18} />
             {panelButtonLabel || t('webPosBackOffice')}
           </button>
         ) : null}
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
             onClick={() => window.location.reload()}
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={14} />
             {t('webPosRefreshPage')}
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
             onClick={() => {
               if (!appMode) {
                 void toggleWebPosFullscreen({ forceEnterApp: true });
@@ -645,15 +644,15 @@ export function WebPosSettingsDropdown({
               void toggleWebPosFullscreen();
             }}
           >
-            {!appMode || !fullscreenActive ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+            {!appMode || !fullscreenActive ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
             {t('webPosEnterFullscreen')}
           </button>
         </div>
       </div>
 
       {onLanguageChange ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('language')}
           </p>
           <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t('language')}>
@@ -676,8 +675,8 @@ export function WebPosSettingsDropdown({
       ) : null}
 
       {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosOnlineChannels')}
           </p>
           {onShopEnabledChange ? (
@@ -724,10 +723,10 @@ export function WebPosSettingsDropdown({
       ) : null}
 
       {(onAppearanceChange || onTextSizeChange) && (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
           {onAppearanceChange ? (
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
                 {t('webPosAppearance')}
               </p>
               <div className="grid grid-cols-2 gap-1.5">
@@ -760,7 +759,7 @@ export function WebPosSettingsDropdown({
           ) : null}
           {onTextSizeChange ? (
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
                 {t('webPosTextSize')}
               </p>
               <div className="flex items-center gap-2">
@@ -790,8 +789,8 @@ export function WebPosSettingsDropdown({
       )}
 
       {shiftsEnabled ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosShiftMenu')}
           </p>
           {shiftOpen ? (
@@ -828,8 +827,8 @@ export function WebPosSettingsDropdown({
       ) : null}
 
       {showEodButton ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosEodReport')}
           </p>
           <button
@@ -844,8 +843,8 @@ export function WebPosSettingsDropdown({
       ) : null}
 
       {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
-        <div className="space-y-2 border-b border-stone-100 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosMyTerminal')}
           </p>
           <label className="block space-y-1 text-xs">
@@ -867,23 +866,20 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      <div className="space-y-2 border-b border-stone-100 pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-          {t('webPosProductsMenu')}
-        </p>
-        <button
-          type="button"
-          className="btn-secondary justify-start w-full text-xs"
-          onClick={onReloadCatalog}
-        >
-          <RefreshCw size={14} />
-          {t('webPosReloadCatalog')}
-        </button>
-        {onSyncNow ? (
-          <>
+      <div className="border-b border-stone-100 pb-2">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onReloadCatalog}
+          >
+            <RefreshCw size={14} />
+            <span className="truncate">{t('webPosReloadCatalogShort')}</span>
+          </button>
+          {onSyncNow ? (
             <button
               type="button"
-              className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+              className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-semibold ${
                 !syncOnline
                   ? 'border-amber-300 bg-amber-50 text-amber-900'
                   : syncFailedCount > 0
@@ -895,38 +891,35 @@ export function WebPosSettingsDropdown({
               onClick={onSyncNow}
               disabled={syncing}
             >
-              <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
-              {!syncOnline
-                ? t('webPosSyncOfflineShort')
-                : syncPendingCount > 0 || syncFailedCount > 0
-                  ? t('webPosSyncPendingShort').replace(
-                      '{n}',
-                      String(syncPendingCount + syncFailedCount)
-                    )
-                  : t('webPosSyncOkShort')}
+              <RefreshCw size={14} className={syncing ? 'animate-spin shrink-0' : 'shrink-0'} />
+              <span className="truncate">
+                {!syncOnline
+                  ? t('webPosSyncOfflineShort')
+                  : syncPendingCount > 0 || syncFailedCount > 0
+                    ? t('webPosSyncPendingShort').replace(
+                        '{n}',
+                        String(syncPendingCount + syncFailedCount)
+                      )
+                    : t('webPosSyncOkShort')}
+              </span>
             </button>
-            {syncNeedsAttention && syncOnline ? (
-              <p className="text-center text-[10px] text-stone-500">
-                {syncFailedCount > 0
-                  ? t('webPosSyncFailed').replace('{n}', String(syncFailedCount))
-                  : t('webPosSyncPending').replace('{n}', String(syncPendingCount))}
-              </p>
-            ) : null}
-          </>
-        ) : null}
+          ) : (
+            <span />
+          )}
+        </div>
       </div>
 
       {onSendLogs ? (
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs font-semibold text-teal-900 hover:bg-teal-100"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2 py-2 text-[11px] font-semibold text-teal-900 hover:bg-teal-100"
           onClick={onSendLogs}
         >
-          <FileText size={16} />
+          <FileText size={14} />
           {t('webPosSendLogs')}
         </button>
       ) : null}
-      <p className="border-t border-stone-100 pt-2 text-center text-[10px] text-stone-400">
+      <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>
       </div>
