@@ -9150,6 +9150,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             orders={notificationOrders}
             reservations={pendingReservationAlerts}
             showBookings={reservationsPosUiEnabled}
+            onClose={() => setNotificationsOpen(false)}
             onOpenOrder={(orderId) => {
               setNotificationsOpen(false);
               const isLocalPosOrder = localPosOrderIdsRef.current.has(orderId);

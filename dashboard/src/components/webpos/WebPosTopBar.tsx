@@ -432,18 +432,7 @@ export default function WebPosTopBar({
                 </span>
               ) : null}
             </button>
-            {notificationsOpen && notificationsPanel ? (
-              <>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('close')}
-                  className="fixed inset-0 z-[54] cursor-default border-0 bg-black/10 p-0"
-                  onClick={onCloseNotifications}
-                />
-                {notificationsPanel}
-              </>
-            ) : null}
+            {notificationsOpen && notificationsPanel ? notificationsPanel : null}
           </div>
 
           <button
