@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AcceptingMenu from '@/components/AcceptingMenu';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
+import MerchantOnboarding from '@/components/onboarding/MerchantOnboarding';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -161,6 +162,8 @@ export default function MerchantCompactStatusRow({
         const BellSlot = platformUi.Bell;
         return <BellSlot />;
       })() : null}
+
+      <MerchantOnboarding />
 
       {showAcceptingMenu ? <AcceptingMenu /> : null}
     </div>

@@ -808,7 +808,35 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/shop/:slug/pages/:pageSlug — published CMS page by slug
+ * GET /api/shop/:slug/site-pages — navigation list from active Chaslay builder layout
+ */
+router.get("/:slug/site-pages", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) {
+      return res.status(404).json({ error: "Shop not found or closed" });
+    }
+    if (!merchant.cmsHomepageEnabled) {
+      return res.json({ success: true, data: [] });
+    }
+    const pages = await ChaslayPagebuilderService.listActivePublishedPages(merchant.id);
+    res.json({
+      success: true,
+      data: pages.map((p) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.is_homepage ? "home" : p.slug,
+        isHomepage: p.is_homepage,
+        sortOrder: p.sort_order,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load site pages" });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/pages/:pageSlug — published CMS or Chaslay page by slug
  */
 router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
   try {
@@ -816,7 +844,47 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
     if (!merchant?.shopEnabled) {
       return res.status(404).json({ error: "Shop not found or closed" });
     }
-    if (req.params.pageSlug === "home") {
+    const pageSlug = req.params.pageSlug;
+
+    if (merchant.cmsHomepageEnabled) {
+      const chaslayPage = await ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
+      if (chaslayPage) {
+        return res.json({
+          success: true,
+          data: {
+            engine: "chaslay",
+            id: chaslayPage.id,
+            title: chaslayPage.title,
+            slug: chaslayPage.slug,
+            isHomepage: chaslayPage.is_homepage,
+            editorState: chaslayPage.editor_state,
+            seoTitle: chaslayPage.title,
+            seoDescription: merchant.description || "",
+            publishedAt: chaslayPage.updated_at,
+            merchant: {
+              id: merchant.id,
+              name: merchant.name,
+              slug: merchant.slug,
+              subdomain: merchant.subdomain,
+              customDomain: merchant.customDomain,
+              shopLogoUrl: merchant.shopLogoUrl,
+              shopBannerUrl: merchant.shopBannerUrl,
+              storeHours: merchant.storeHours || {},
+              address: merchant.address,
+              city: merchant.city,
+              phone: merchant.phone,
+              reservationsEnabled: !!merchant.reservationsEnabled,
+              acceptingOrders: merchant.acceptingOrders !== false,
+              acceptingReservations: merchant.acceptingReservations !== false,
+              vacation: vacationPublicPayload(merchant.vacationSettings),
+              language: merchant.shopLanguage || merchant.panelLanguage || "en",
+            },
+          },
+        });
+      }
+    }
+
+    if (pageSlug === "home") {
       const home = await CmsService.getPublishedHomepage(merchant.id);
       if (!home || !merchant.cmsHomepageEnabled) {
         return res.status(404).json({ error: "Page not found" });
@@ -824,6 +892,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
       return res.json({
         success: true,
         data: {
+          engine: "openpage",
           id: home.id,
           title: home.title,
           slug: home.slug,
@@ -836,11 +905,12 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
         },
       });
     }
-    const page = await CmsService.getPublishedBySlug(merchant.id, req.params.pageSlug);
+    const page = await CmsService.getPublishedBySlug(merchant.id, pageSlug);
     if (!page) return res.status(404).json({ error: "Page not found" });
     res.json({
       success: true,
       data: {
+        engine: "openpage",
         id: page.id,
         title: page.title,
         slug: page.slug,

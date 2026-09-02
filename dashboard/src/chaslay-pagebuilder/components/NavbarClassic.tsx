@@ -11,6 +11,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { useNavbarDisplay } from '../utils/use-navbar-display';
 
 interface MenuItem {
   label: string;
@@ -29,6 +30,7 @@ export interface NavbarClassicProps {
   buttonText?: string;
   buttonLink?: string;
   buttonColor?: string;
+  useSitePagesNav?: boolean;
 }
 
 const defaultProps: NavbarClassicProps = {
@@ -48,6 +50,7 @@ const defaultProps: NavbarClassicProps = {
   buttonText: 'Order Now',
   buttonLink: '/order',
   buttonColor: '#e94560',
+  useSitePagesNav: true,
 };
 
 export const NavbarClassic: React.FC<NavbarClassicProps> & {
@@ -60,6 +63,13 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
+  const { menuItems, t } = useNavbarDisplay(
+    mergedProps as Record<string, unknown>,
+    mergedProps.menuItems,
+    mergedProps.useSitePagesNav
+  );
+  const logoText = t('logoText') || mergedProps.logoText;
+  const buttonText = t('buttonText') || mergedProps.buttonText;
 
   return (
     <>
@@ -77,24 +87,24 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
-              <span style={{ fontSize: '24px', fontWeight: 700, color: mergedProps.textColor }}>{mergedProps.logoText}</span>
+              <span style={{ fontSize: '24px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>
             )}
           </div>
 
           {/* Desktop Menu + Button */}
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
             <div style={{ display: 'flex', gap: '24px' }}>
-              {mergedProps.menuItems?.map((item, i) => (
+              {menuItems?.map((item, i) => (
                 <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500 }}>
                   {item.label}
                 </a>
               ))}
             </div>
-            {mergedProps.showButton && (
+            {mergedProps.showButton && buttonText && (
               <a href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
-                {mergedProps.buttonText}
+                {buttonText}
               </a>
             )}
           </div>

@@ -32,12 +32,33 @@ export function useBuilderLanguage() {
   return useContext(BuilderLanguageContext);
 }
 
-export function BuilderLanguageProvider({ children }: { children: React.ReactNode }) {
+export function BuilderLanguageProvider({
+  children,
+  locale,
+  defaultLanguage: defaultLanguageProp,
+}: {
+  children: React.ReactNode;
+  locale?: string;
+  defaultLanguage?: string;
+}) {
   const [languages, setLanguages] = useState<LanguageConfig[]>(defaultLanguages);
-  const [defaultLanguage, setDefaultLanguage] = useState('en');
+  const [defaultLanguage, setDefaultLanguage] = useState(defaultLanguageProp || 'en');
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    if (locale) {
+      const codes = ['en', 'de', 'fr', 'it'];
+      const active = codes.includes(locale) ? codes : [locale, ...codes.filter((c) => c !== locale)];
+      setLanguages(
+        active.map((code) => ({
+          code,
+          is_default: code === (defaultLanguageProp || locale) ? 1 : 0,
+        }))
+      );
+      setDefaultLanguage(defaultLanguageProp || locale);
+      setIsLoaded(true);
+      return;
+    }
     getBusinessInfo().then((res) => {
       if (res.data) {
         const langs = (res.data as any).selected_language;
@@ -45,12 +66,16 @@ export function BuilderLanguageProvider({ children }: { children: React.ReactNod
           setLanguages(langs);
           const defaultLang = langs.find((l: LanguageConfig) => l.is_default === 1);
           setDefaultLanguage(defaultLang?.code || langs[0].code);
+        } else {
+          const panelLang = (res.data as any).panelLanguage || (res.data as any).shopLanguage;
+          if (panelLang && typeof panelLang === 'string') {
+            setDefaultLanguage(panelLang.slice(0, 2));
+          }
         }
-        // If no selected_language from API, keep the defaults (EN/DE/FR/IT)
       }
       setIsLoaded(true);
     }).catch(() => setIsLoaded(true));
-  }, []);
+  }, [locale, defaultLanguageProp]);
 
   return (
     <BuilderLanguageContext.Provider value={{ languages, defaultLanguage, isLoaded }}>

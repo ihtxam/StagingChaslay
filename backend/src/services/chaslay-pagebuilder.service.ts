@@ -433,4 +433,83 @@ export class ChaslayPagebuilderService {
     });
     if (!row) throw new Error("Homepage builder not found");
   }
+
+  /** Published pages from the merchant's active builder layout (empty when none active). */
+  static async listActivePublishedPages(merchantId: string) {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      const builder = await db.query.chaslayHomepageBuilders.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
+          eq(schema.chaslayHomepageBuilders.isActive, true)
+        ),
+        columns: { id: true, name: true, updatedAt: true },
+      });
+      if (!builder) return [];
+      const rows = await db.query.chaslayHomepageBuilderPages.findMany({
+        where: eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builder.id),
+        orderBy: [asc(schema.chaslayHomepageBuilderPages.sortOrder)],
+        columns: {
+          id: true,
+          title: true,
+          slug: true,
+          isHomepage: true,
+          sortOrder: true,
+          updatedAt: true,
+        },
+      });
+      return rows.map((p) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        is_homepage: p.isHomepage,
+        sort_order: p.sortOrder,
+        updated_at: p.updatedAt.toISOString(),
+        builder_id: builder.id,
+        builder_name: builder.name,
+        builder_updated_at: builder.updatedAt.toISOString(),
+      }));
+    });
+  }
+
+  /** Resolve one published page from the active builder by slug (`home` maps to homepage row). */
+  static async getActivePublishedPage(merchantId: string, pageSlug: string) {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      const builder = await db.query.chaslayHomepageBuilders.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
+          eq(schema.chaslayHomepageBuilders.isActive, true)
+        ),
+      });
+      if (!builder) return null;
+      const normalizedSlug = pageSlug === "home" ? null : pageSlug;
+      const page = normalizedSlug
+        ? await db.query.chaslayHomepageBuilderPages.findFirst({
+            where: and(
+              eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builder.id),
+              eq(schema.chaslayHomepageBuilderPages.slug, normalizedSlug)
+            ),
+          })
+        : await db.query.chaslayHomepageBuilderPages.findFirst({
+            where: and(
+              eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builder.id),
+              eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
+            ),
+          });
+      if (!page) return null;
+      const editor_state = normalizeEditorState(page.editorState);
+      if (!editor_state) return null;
+      return {
+        builder_id: builder.id,
+        builder_name: builder.name,
+        id: page.id,
+        title: page.title,
+        slug: page.isHomepage ? "home" : page.slug,
+        is_homepage: page.isHomepage,
+        editor_state,
+        updated_at: page.updatedAt.toISOString(),
+      };
+    });
+  }
 }

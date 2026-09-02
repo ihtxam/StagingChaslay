@@ -11,6 +11,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { useNavbarDisplay } from '../utils/use-navbar-display';
 
 interface MenuItem {
   label: string;
@@ -26,6 +27,7 @@ export interface NavbarCenteredProps {
   backgroundColor?: string;
   textColor?: string;
   accentColor?: string;
+  useSitePagesNav?: boolean;
 }
 
 const defaultProps: NavbarCenteredProps = {
@@ -42,6 +44,7 @@ const defaultProps: NavbarCenteredProps = {
   backgroundColor: '#ffffff',
   textColor: '#1a1a2e',
   accentColor: '#e94560',
+  useSitePagesNav: true,
 };
 
 export const NavbarCentered: React.FC<NavbarCenteredProps> & {
@@ -54,10 +57,16 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
+  const { menuItems, t } = useNavbarDisplay(
+    mergedProps as Record<string, unknown>,
+    mergedProps.menuItems,
+    mergedProps.useSitePagesNav
+  );
+  const logoText = t('logoText') || mergedProps.logoText;
 
-  const midPoint = Math.ceil((mergedProps.menuItems?.length || 0) / 2);
-  const leftMenu = mergedProps.menuItems?.slice(0, midPoint) || [];
-  const rightMenu = mergedProps.menuItems?.slice(midPoint) || [];
+  const midPoint = Math.ceil((menuItems?.length || 0) / 2);
+  const leftMenu = menuItems?.slice(0, midPoint) || [];
+  const rightMenu = menuItems?.slice(midPoint) || [];
 
   return (
     <>
@@ -84,10 +93,10 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           {/* Center Logo */}
           <div style={{ textAlign: 'center' }}>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <div>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: mergedProps.textColor, letterSpacing: '2px' }}>{mergedProps.logoText}</span>
+                <span style={{ fontSize: '28px', fontWeight: 700, color: mergedProps.textColor, letterSpacing: '2px' }}>{logoText}</span>
                 <div style={{ width: '40px', height: '2px', backgroundColor: mergedProps.accentColor, margin: '8px auto 0' }} />
               </div>
             )}

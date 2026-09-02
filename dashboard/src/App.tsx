@@ -37,6 +37,7 @@ import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
+const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 
 function LegacyReceiptRedirect() {
   const { saleId } = useParams();
@@ -332,6 +333,14 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/pages/:pageSlug"
+            element={
+              <ShopRoutes>
+                <ChaslayShopPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug"
             element={
               <ShopRoutes>
@@ -491,6 +500,14 @@ function App() {
                 }
               />
               <Route
+                path="/:merchantSlug/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/:merchantSlug"
                 element={
                   <ShopRoutes>
@@ -588,6 +605,14 @@ function App() {
                 }
               />
               <Route
+                path="/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/"
                 element={
                   <ShopRoutes>
@@ -681,6 +706,14 @@ function App() {
                 element={
                   <ShopRoutes>
                     <GiftCardViewPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
                   </ShopRoutes>
                 }
               />

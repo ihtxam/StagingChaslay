@@ -11,6 +11,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { useNavbarDisplay } from '../utils/use-navbar-display';
 
 interface MenuItem {
   label: string;
@@ -25,6 +26,7 @@ export interface NavbarMinimalProps {
   menuItems?: MenuItem[];
   backgroundColor?: string;
   textColor?: string;
+  useSitePagesNav?: boolean;
 }
 
 const defaultProps: NavbarMinimalProps = {
@@ -39,6 +41,7 @@ const defaultProps: NavbarMinimalProps = {
   ],
   backgroundColor: '#faf9f6',
   textColor: '#1a1a2e',
+  useSitePagesNav: true,
 };
 
 export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
@@ -51,6 +54,12 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
+  const { menuItems, t } = useNavbarDisplay(
+    mergedProps as Record<string, unknown>,
+    mergedProps.menuItems,
+    mergedProps.useSitePagesNav
+  );
+  const logoText = t('logoText') || mergedProps.logoText;
 
   return (
     <>
@@ -67,15 +76,15 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
-              <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{mergedProps.logoText}</span>
+              <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{logoText}</span>
             )}
           </div>
 
           {/* Desktop Menu */}
           <div className="navbar-minimal-menu" style={{ display: 'flex', gap: '40px' }}>
-            {mergedProps.menuItems?.map((item, i) => (
+            {menuItems?.map((item, i) => (
               <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '13px', fontWeight: 400, letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.7 }}>
                 {item.label}
               </a>

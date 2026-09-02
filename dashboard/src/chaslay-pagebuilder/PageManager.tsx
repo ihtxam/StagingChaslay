@@ -108,7 +108,7 @@ export const PageManager: React.FC = () => {
                 onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))}
                 placeholder="e.g., about-us"
               />
-              <p className="text-xs text-muted-foreground">This will be the URL path for the page</p>
+              <p className="text-xs text-muted-foreground">This will be the URL path for the page (e.g. /shop/your-store/pages/about-us)</p>
             </div>
           </div>
           <DialogFooter>

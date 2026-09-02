@@ -101,7 +101,7 @@ export default function ChaslayPageBuilderList() {
         <div>
           <h1 className="text-2xl font-bold">Website</h1>
           <p className="text-sm text-muted-foreground">
-            Design your shop homepage with drag-and-drop blocks. Save in the editor, then <strong>Set active</strong> to publish on your online shop (replaces the legacy OpenPage homepage).
+            Design your online shop with drag-and-drop blocks. <strong>Set active</strong> once per layout to publish it — new pages inside that layout go live when you save in the editor (no need to set active again).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -246,7 +246,7 @@ export default function ChaslayPageBuilderList() {
       {activatingHomepage && (
         <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg border p-6 w-full max-w-md space-y-4">
-            <p>Activate &ldquo;{activatingHomepage.name}&rdquo;? Other layouts will be deactivated.</p>
+            <p>Activate &ldquo;{activatingHomepage.name}&rdquo;? This publishes the whole layout (all pages in it). Other layouts will be deactivated.</p>
             <div className="flex justify-end gap-2">
               <button type="button" className="px-3 py-1.5 text-sm border rounded" onClick={() => setActivatingHomepage(null)}>
                 Cancel

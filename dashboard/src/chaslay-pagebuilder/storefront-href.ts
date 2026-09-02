@@ -10,7 +10,10 @@ export function resolveStorefrontHref(
   if (/^(https?:|mailto:|tel:|#)/i.test(raw)) return raw;
   if (basePath && (raw === basePath || raw.startsWith(`${basePath}/`))) return raw;
   if (raw.startsWith('/')) {
-    return raw === '/' ? basePath || '/' : `${basePath}${raw}`;
+    if (raw === '/') return basePath || '/';
+    if (raw.startsWith('/pages/')) return `${basePath}${raw}`;
+    return `${basePath}${raw}`;
   }
+  if (raw.startsWith('pages/')) return `${basePath}/${raw}`;
   return `${basePath}/${raw}`;
 }

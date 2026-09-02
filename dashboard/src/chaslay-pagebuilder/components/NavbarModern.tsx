@@ -11,6 +11,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { useNavbarDisplay } from '../utils/use-navbar-display';
 
 interface MenuItem {
   label: string;
@@ -29,6 +30,7 @@ export interface NavbarModernProps {
   buttonLink?: string;
   buttonColor?: string;
   buttonTextColor?: string;
+  useSitePagesNav?: boolean;
 }
 
 const defaultProps: NavbarModernProps = {
@@ -48,6 +50,7 @@ const defaultProps: NavbarModernProps = {
   buttonLink: '/reserve',
   buttonColor: '#ffffff',
   buttonTextColor: '#1a1a2e',
+  useSitePagesNav: true,
 };
 
 export const NavbarModern: React.FC<NavbarModernProps> & {
@@ -60,6 +63,13 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
+  const { menuItems, t } = useNavbarDisplay(
+    mergedProps as Record<string, unknown>,
+    mergedProps.menuItems,
+    mergedProps.useSitePagesNav
+  );
+  const logoText = t('logoText') || mergedProps.logoText;
+  const buttonText = t('buttonText') || mergedProps.buttonText;
 
   return (
     <>
@@ -76,15 +86,15 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
-              <span style={{ fontSize: '26px', fontWeight: 700, color: mergedProps.textColor, fontStyle: 'italic' }}>{mergedProps.logoText}</span>
+              <span style={{ fontSize: '26px', fontWeight: 700, color: mergedProps.textColor, fontStyle: 'italic' }}>{logoText}</span>
             )}
           </div>
 
           {/* Desktop Menu */}
           <div className="navbar-modern-menu" style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-            {mergedProps.menuItems?.map((item, i) => (
+            {menuItems?.map((item, i) => (
               <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500, opacity: 0.85 }}>
                 {item.label}
               </a>
@@ -92,9 +102,9 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           </div>
 
           {/* Desktop Button */}
-          {mergedProps.buttonText && (
+          {buttonText && (
             <a className="navbar-modern-button" href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
-              {mergedProps.buttonText}
+              {buttonText}
             </a>
           )}
 
