@@ -2642,6 +2642,7 @@ export type OfferType =
   | "fixed_off"
   | "bogo"
   | "pay_n_get_m"
+  | "nth_item_percent"
   | "combo_deal"
   | "package_deal";
 
@@ -2653,6 +2654,10 @@ export type OfferRules = {
   getDiscountPercent?: number;
   payQty?: number;
   receiveQty?: number;
+  /** Which unit in a repeat cycle gets the discount (default 2 = every 2nd item). */
+  nthItem?: number;
+  /** When true, BOGO / pay-N / nth-item deals apply per product, not across mixed SKUs. */
+  sameProductOnly?: boolean;
   minOrderAmount?: number;
   /** @deprecated use package_deal buy/get lists */
   comboProductIds?: string[];

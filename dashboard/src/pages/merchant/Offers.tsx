@@ -9,6 +9,7 @@ type OfferType =
   | 'fixed_off'
   | 'bogo'
   | 'pay_n_get_m'
+  | 'nth_item_percent'
   | 'package_deal'
   | 'combo_deal';
 
@@ -54,8 +55,53 @@ const TYPE_LABEL_KEYS: Record<string, string> = {
   package_deal: 'offerTypePackageDeal',
   bogo: 'offerTypeBogo',
   pay_n_get_m: 'offerTypePayNGetM',
+  nth_item_percent: 'offerTypeNthItemPercent',
   combo_deal: 'offerTypeComboDeal',
 };
+
+type OfferPreset = {
+  label: string;
+  name: string;
+  description: string;
+  offerType: OfferType;
+  rules: Record<string, unknown>;
+  badgeLabel: string;
+};
+
+const QUICK_PRESETS: OfferPreset[] = [
+  {
+    label: '30% off 2nd (same item)',
+    name: '30% off 2nd item',
+    description: 'Every second unit of the same product is 30% off.',
+    offerType: 'nth_item_percent',
+    rules: { nthItem: 2, percentOff: 30, sameProductOnly: true },
+    badgeLabel: '2nd -30%',
+  },
+  {
+    label: '50% off 2nd (same item)',
+    name: '50% off 2nd item',
+    description: 'Every second unit of the same product is half price.',
+    offerType: 'nth_item_percent',
+    rules: { nthItem: 2, percentOff: 50, sameProductOnly: true },
+    badgeLabel: '2nd -50%',
+  },
+  {
+    label: 'Buy 2 → 3rd free (same item)',
+    name: 'Buy 2 get 3rd free',
+    description: 'Buy two of the same item, get the third free.',
+    offerType: 'bogo',
+    rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
+    badgeLabel: '2+1',
+  },
+  {
+    label: 'Buy 4 → 5th free (same item)',
+    name: 'Buy 4 get 5th free',
+    description: 'Buy four of the same item, get the fifth free.',
+    offerType: 'bogo',
+    rules: { buyQty: 4, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
+    badgeLabel: '4+1',
+  },
+];
 
 const MAX_MIN_ORDER_DIGITS = 10;
 const MAX_PERCENT_OFF = 100;
@@ -112,6 +158,8 @@ const emptyForm = () => ({
   getDiscountPercent: '100',
   payQty: '3',
   receiveQty: '4',
+  nthItem: '2',
+  sameProductOnly: false,
   packagePrice: '25',
   buyProductIds: [] as string[],
   getProductIds: [] as string[],
@@ -190,6 +238,8 @@ export default function Offers() {
       getDiscountPercent: String(r.getDiscountPercent ?? '100'),
       payQty: String(r.payQty ?? '3'),
       receiveQty: String(r.receiveQty ?? '4'),
+      nthItem: String(r.nthItem ?? '2'),
+      sameProductOnly: !!r.sameProductOnly,
       packagePrice: String(r.packagePrice ?? '25'),
       buyProductIds: Array.isArray(r.buyProductIds) ? (r.buyProductIds as string[]) : [],
       getProductIds: Array.isArray(r.getProductIds) ? (r.getProductIds as string[]) : [],
@@ -215,7 +265,7 @@ export default function Offers() {
   const buildPayload = () => {
     const rules: Record<string, unknown> = {};
     if (form.minOrderAmount) rules.minOrderAmount = Number(form.minOrderAmount) || 0;
-    if (form.offerType === 'percent_category' || form.offerType === 'percent_order') {
+    if (form.offerType === 'percent_category' || form.offerType === 'percent_order' || form.offerType === 'nth_item_percent') {
       rules.percentOff = Number(form.percentOff) || 0;
     }
     if (form.offerType === 'fixed_off') rules.fixedOff = Number(form.fixedOff) || 0;
@@ -223,10 +273,17 @@ export default function Offers() {
       rules.buyQty = Number(form.buyQty) || 1;
       rules.getQty = Number(form.getQty) || 1;
       rules.getDiscountPercent = Number(form.getDiscountPercent) || 100;
+      if (form.sameProductOnly) rules.sameProductOnly = true;
     }
     if (form.offerType === 'pay_n_get_m') {
       rules.payQty = Number(form.payQty) || 3;
       rules.receiveQty = Number(form.receiveQty) || 4;
+      if (form.sameProductOnly) rules.sameProductOnly = true;
+    }
+    if (form.offerType === 'nth_item_percent') {
+      rules.nthItem = Number(form.nthItem) || 2;
+      rules.percentOff = Number(form.percentOff) || 0;
+      rules.sameProductOnly = true;
     }
     if (form.offerType === 'package_deal') {
       rules.buyQty = Number(form.buyQty) || 2;
@@ -243,7 +300,10 @@ export default function Offers() {
       channels: form.channels,
       categoryIds: form.offerType === 'package_deal' ? [] : form.categoryIds,
       productIds:
-        form.offerType === 'percent_category' || form.offerType === 'bogo' || form.offerType === 'pay_n_get_m'
+        form.offerType === 'percent_category' ||
+        form.offerType === 'bogo' ||
+        form.offerType === 'pay_n_get_m' ||
+        form.offerType === 'nth_item_percent'
           ? form.productIds
           : [],
       scheduleMode: form.scheduleMode,
@@ -266,7 +326,7 @@ export default function Offers() {
       toast.error(t('offerNameRequired'));
       return;
     }
-    if (form.offerType === 'percent_category' || form.offerType === 'percent_order') {
+    if (form.offerType === 'percent_category' || form.offerType === 'percent_order' || form.offerType === 'nth_item_percent') {
       const pct = Number(form.percentOff) || 0;
       if (pct < 1 || pct > MAX_PERCENT_OFF) {
         toast.error(t('offerPercentRange').replace('{max}', String(MAX_PERCENT_OFF)));
@@ -376,6 +436,27 @@ export default function Offers() {
     });
   };
 
+  const applyPreset = (preset: OfferPreset) => {
+    const r = preset.rules;
+    setEditingId(null);
+    setForm({
+      ...emptyForm(),
+      name: preset.name,
+      description: preset.description,
+      offerType: preset.offerType,
+      percentOff: String(r.percentOff ?? '30'),
+      buyQty: String(r.buyQty ?? '2'),
+      getQty: String(r.getQty ?? '1'),
+      getDiscountPercent: String(r.getDiscountPercent ?? '100'),
+      payQty: String(r.payQty ?? '3'),
+      receiveQty: String(r.receiveQty ?? '4'),
+      nthItem: String(r.nthItem ?? '2'),
+      sameProductOnly: !!r.sameProductOnly,
+      badgeLabel: preset.badgeLabel,
+      priority: '10',
+    });
+  };
+
   if (loading) return <div className="text-center py-12">Loading offers…</div>;
 
   return (
@@ -386,8 +467,9 @@ export default function Offers() {
             <h1 className="page-title mb-1">{t('offers')}</h1>
             <p className="page-sub">
               % off on a category or single products (applied live in the shop cart), package deals
-              (tap 2+1 on the shelf to pick paid + free), BOGO, 3+1. Set validity to today, 2 days,
-              or a full week. Featured offers appear on the shop shelf.
+              (tap 2+1 on the shelf to pick paid + free), BOGO, 3+1, and same-item quantity deals
+              (30%/50% off 2nd, buy 2 get 3rd free, buy 4 get 5th free). Set validity to today, 2
+              days, or a full week. Featured offers appear on the shop shelf.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -421,6 +503,25 @@ export default function Offers() {
             >
               Load demo scenarios
             </button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+          <p className="text-sm font-medium text-amber-950">Quick presets — same product quantity deals</p>
+          <p className="text-xs text-stone-600">
+            These apply automatically when customers add enough of the same item to their cart.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {QUICK_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="rounded-full px-3 py-1.5 text-xs border bg-white border-amber-300 hover:bg-amber-100"
+                onClick={() => applyPreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -551,6 +652,34 @@ export default function Offers() {
                 </label>
               </>
             )}
+            {form.offerType === 'nth_item_percent' && (
+              <>
+                <label className="text-sm block">
+                  <span className="muted block mb-1">Which item (e.g. 2 = every 2nd)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="2"
+                    value={form.nthItem}
+                    onChange={(e) => setForm({ ...form, nthItem: e.target.value })}
+                  />
+                </label>
+                <label className="text-sm block">
+                  <span className="muted block mb-1">{t('offerPercentOff')}</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="1"
+                    max={MAX_PERCENT_OFF}
+                    value={form.percentOff}
+                    onChange={(e) => {
+                      const n = Math.min(MAX_PERCENT_OFF, Math.max(0, Number(e.target.value) || 0));
+                      setForm({ ...form, percentOff: e.target.value === '' ? '' : String(n) });
+                    }}
+                  />
+                </label>
+              </>
+            )}
             {form.offerType === 'package_deal' && (
               <>
                 <label className="text-sm block">
@@ -622,9 +751,21 @@ export default function Offers() {
             </label>
           </div>
 
+          {(form.offerType === 'bogo' || form.offerType === 'pay_n_get_m') && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.sameProductOnly}
+                onChange={(e) => setForm({ ...form, sameProductOnly: e.target.checked })}
+              />
+              {t('offerSameProductOnly')}
+            </label>
+          )}
+
           {(form.offerType === 'percent_category' ||
             form.offerType === 'bogo' ||
-            form.offerType === 'pay_n_get_m') && (
+            form.offerType === 'pay_n_get_m' ||
+            form.offerType === 'nth_item_percent') && (
             <div className="space-y-3">
               <div>
                 <p className="text-xs muted mb-1">
