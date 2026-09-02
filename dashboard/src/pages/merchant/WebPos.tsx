@@ -723,6 +723,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const authUser = useAuthStore((s) => s.user);
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
+  const logout = useAuthStore((s) => s.logout);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -8682,6 +8683,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPinModalOpen(true);
   };
 
+  const handlePosLogout = useCallback(async () => {
+    setPinModalOpen(false);
+    try {
+      await revokePosSession();
+    } catch {
+      /* best effort */
+    }
+    clearPosSessionLocal();
+    clearWebPosStaffSession();
+    setWebposStaff(null);
+    notifyWebPosStaffSessionChanged();
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
+
   const dismissSetPinHint = () => {
     setSetPinHintDismissed(true);
     try {
@@ -9005,6 +9021,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   ? showPanelMenus
                   : undefined
               }
+              onLogout={() => void handlePosLogout()}
             />
           </>
         )}
@@ -10420,6 +10437,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}
+        onLogout={() => void handlePosLogout()}
       />
 
       <WebPosPaymentModal

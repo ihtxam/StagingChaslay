@@ -22,6 +22,7 @@ export default function WebPosPinModal({
   onClose,
   onSuccess,
   onLeave,
+  onLogout,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -38,6 +39,8 @@ export default function WebPosPinModal({
   }) => void;
   /** Owner/manager escape from PIN gate back to the merchant panel. */
   onLeave?: () => void;
+  /** Sign out of the merchant account (clears JWT + PIN session). */
+  onLogout?: () => void;
 }) {
   const { t } = useI18n();
   const [pin, setPin] = useState('');
@@ -227,14 +230,27 @@ export default function WebPosPinModal({
           ) : null}
 
           {keypad}
-          {onLeave ? (
-            <button
-              type="button"
-              className="mt-8 text-sm font-medium text-stone-400 underline underline-offset-2 hover:text-stone-200"
-              onClick={onLeave}
-            >
-              {t('webPosBackOffice')}
-            </button>
+          {onLeave || onLogout ? (
+            <div className="mt-8 flex flex-col items-center gap-3">
+              {onLeave ? (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-stone-400 underline underline-offset-2 hover:text-stone-200"
+                  onClick={onLeave}
+                >
+                  {t('webPosBackOffice')}
+                </button>
+              ) : null}
+              {onLogout ? (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-stone-500 underline underline-offset-2 hover:text-stone-300"
+                  onClick={onLogout}
+                >
+                  {t('logout')}
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -290,6 +306,16 @@ export default function WebPosPinModal({
         ) : null}
 
         {keypad}
+
+        {onLogout ? (
+          <button
+            type="button"
+            className="mt-4 w-full rounded-lg border border-[var(--webpos-border,var(--border))] py-2.5 text-sm font-semibold text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
+            onClick={onLogout}
+          >
+            {t('logout')}
+          </button>
+        ) : null}
       </div>
     </div>
   );
