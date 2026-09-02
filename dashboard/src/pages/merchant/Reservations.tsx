@@ -43,7 +43,7 @@ export default function Reservations() {
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
-  const [bookingsScope, setBookingsScope] = useState<'today' | 'future'>('today');
+  const [bookingsScope, setBookingsScope] = useState<'today' | 'future' | 'past'>('today');
   const [dateFilter, setDateFilter] = useState(ymdZurich());
   const [statusFilter, setStatusFilter] = useState('all');
   const [createOpen, setCreateOpen] = useState(false);
@@ -69,14 +69,18 @@ export default function Reservations() {
 
   const loadList = useCallback(async () => {
     const today = ymdZurich();
-    const from =
-      bookingsScope === 'today'
-        ? zurichDayStartFromYmd(today)
-        : zurichDayStartFromYmd(addDaysYmdZurich(1));
-    const to =
-      bookingsScope === 'today'
-        ? zurichDayEndFromYmd(today)
-        : zurichDayEndFromYmd(addDaysYmdZurich(maxDaysAhead));
+    let from: Date;
+    let to: Date;
+    if (bookingsScope === 'today') {
+      from = zurichDayStartFromYmd(today);
+      to = zurichDayEndFromYmd(today);
+    } else if (bookingsScope === 'future') {
+      from = zurichDayStartFromYmd(addDaysYmdZurich(1));
+      to = zurichDayEndFromYmd(addDaysYmdZurich(maxDaysAhead));
+    } else {
+      from = zurichDayStartFromYmd(addDaysYmdZurich(-90));
+      to = zurichDayEndFromYmd(addDaysYmdZurich(-1));
+    }
     const res = await api.get('/merchant/reservations', {
       params: {
         from: from.toISOString(),
@@ -217,6 +221,18 @@ export default function Reservations() {
     [reservations]
   );
 
+  const sortedReservations = useMemo(() => {
+    const rows = [...reservations];
+    if (bookingsScope === 'past') {
+      rows.sort((a, b) => new Date(b.reservedAt).getTime() - new Date(a.reservedAt).getTime());
+    } else {
+      rows.sort((a, b) => new Date(a.reservedAt).getTime() - new Date(b.reservedAt).getTime());
+    }
+    return rows;
+  }, [bookingsScope, reservations]);
+
+  const useTableLayout = bookingsScope === 'future' || bookingsScope === 'past';
+
   if (loading) {
     return <div className="p-4 text-sm muted">{t('loading')}</div>;
   }
@@ -265,6 +281,17 @@ export default function Reservations() {
               >
                 {t('reservationsFuture')}
               </button>
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-2 text-sm ${
+                  bookingsScope === 'past'
+                    ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg-elevated)]'
+                    : 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]'
+                }`}
+                onClick={() => setBookingsScope('past')}
+              >
+                {t('reservationsPast')}
+              </button>
             </div>
             <label className="text-sm">
               <span className="muted block mb-1">{t('status')}</span>
@@ -307,12 +334,16 @@ export default function Reservations() {
           />
 
           <div className="space-y-2">
-            {reservations.length === 0 && (
+            {sortedReservations.length === 0 && (
               <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
-                {bookingsScope === 'today' ? t('reservationsEmpty') : t('reservationsEmptyFuture')}
+                {bookingsScope === 'today'
+                  ? t('reservationsEmpty')
+                  : bookingsScope === 'future'
+                    ? t('reservationsEmptyFuture')
+                    : t('reservationsEmptyPast')}
               </p>
             )}
-            {bookingsScope === 'future' && reservations.length > 0 ? (
+            {useTableLayout && sortedReservations.length > 0 ? (
               <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--bg)]">
                 <table className="min-w-full text-sm">
                   <thead className="border-b border-[var(--border)] bg-[var(--bg-muted)] text-left text-xs uppercase tracking-wide muted">
@@ -327,7 +358,7 @@ export default function Reservations() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reservations.map((r) => {
+                    {sortedReservations.map((r) => {
                       const dt = new Date(r.reservedAt);
                       return (
                         <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
@@ -365,7 +396,7 @@ export default function Reservations() {
               </div>
             ) : null}
             {bookingsScope === 'today'
-              ? reservations.map((r) => (
+              ? sortedReservations.map((r) => (
               <div
                 key={r.id}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-4 py-3 space-y-2"
