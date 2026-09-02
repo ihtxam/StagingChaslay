@@ -5,6 +5,7 @@ import type { WebPosCategoryLayoutMode } from '@/lib/webpos-category-layout';
 type Props = {
   value: WebPosCategoryLayoutMode;
   onChange: (mode: WebPosCategoryLayoutMode) => void;
+  compact?: boolean;
 };
 
 const MODES: Array<{
@@ -16,12 +17,14 @@ const MODES: Array<{
   { id: 'rows-3', icon: Rows3, labelKey: 'webPosCategoryLayoutRows3' },
 ];
 
-export default function WebPosCategoryLayoutPicker({ value, onChange }: Props) {
+export default function WebPosCategoryLayoutPicker({ value, onChange, compact = false }: Props) {
   const { t } = useI18n();
   const selectedClass =
     'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white';
   const idleClass =
     'border-stone-300 bg-white text-stone-600 hover:bg-stone-50 webpos-toolbar-btn';
+  const btnSize = compact ? 'h-7 w-7 rounded-md' : 'h-8 w-8 rounded-lg';
+  const iconSize = compact ? 14 : 16;
 
   return (
     <div
@@ -37,11 +40,11 @@ export default function WebPosCategoryLayoutPicker({ value, onChange }: Props) {
           title={t(labelKey)}
           aria-label={t(labelKey)}
           onClick={() => onChange(id)}
-          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+          className={`inline-flex shrink-0 items-center justify-center border ${btnSize} ${
             value === id ? selectedClass : idleClass
           }`}
         >
-          <Icon size={16} aria-hidden />
+          <Icon size={iconSize} aria-hidden />
         </button>
       ))}
     </div>

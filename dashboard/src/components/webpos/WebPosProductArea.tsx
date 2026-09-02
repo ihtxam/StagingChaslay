@@ -12,7 +12,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import {
   actionButtonIconSize,
@@ -133,6 +133,8 @@ export default function WebPosProductArea({
 }: Props) {
   const { t } = useI18n();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
   const expressIcon = actionButtonIconSize(actionButtonSize);
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -144,91 +146,141 @@ export default function WebPosProductArea({
     ? categoryLayout
     : undefined;
 
+  const showCollapsibleFilters = isPhoneLayout;
+  const filtersVisible = !showCollapsibleFilters || filtersOpen;
+
+  const openFiltersBar = () => {
+    if (filterClickTimerRef.current) clearTimeout(filterClickTimerRef.current);
+    filterClickTimerRef.current = setTimeout(() => {
+      setFiltersOpen(true);
+      filterClickTimerRef.current = null;
+    }, 220);
+  };
+
+  const closeFiltersBar = () => {
+    if (filterClickTimerRef.current) {
+      clearTimeout(filterClickTimerRef.current);
+      filterClickTimerRef.current = null;
+    }
+    setFiltersOpen(false);
+    setMobileSearchOpen(false);
+  };
+
+  const onFilterGripClick = () => {
+    if (!showCollapsibleFilters) return;
+    openFiltersBar();
+  };
+
+  const onFilterGripDoubleClick = (e: React.MouseEvent) => {
+    if (!showCollapsibleFilters) return;
+    e.preventDefault();
+    closeFiltersBar();
+  };
+
+  const toolbarBtnClass = (active: boolean) =>
+    `inline-flex ${isPhoneLayout ? 'h-7 w-7 rounded-md' : 'h-8 w-8 rounded-lg'} shrink-0 items-center justify-center border webpos-toolbar-btn ${
+      active
+        ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+        : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+    }`;
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
-        <div className="mb-2 flex items-center justify-start gap-1">
-          {showSearch && isPhoneLayout && onSearchChange ? (
+        <div
+          className={`mb-2 flex items-center gap-1 ${
+            showCollapsibleFilters ? 'min-h-7' : 'justify-start'
+          }`}
+        >
+          {showCollapsibleFilters ? (
             <button
               type="button"
-              onClick={() => setMobileSearchOpen((open) => !open)}
-              title={t('webPosSearchProducts')}
-              aria-label={t('webPosSearchProducts')}
-              aria-expanded={mobileSearchOpen}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
-                mobileSearchOpen || search.trim()
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+              onClick={onFilterGripClick}
+              onDoubleClick={onFilterGripDoubleClick}
+              title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
+              aria-label={t('webPosFiltersToggle')}
+              aria-expanded={filtersOpen}
+              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border webpos-toolbar-btn ${
+                filtersOpen
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
+                  : 'border-stone-300 bg-white text-stone-500 hover:bg-stone-50'
               }`}
             >
-              {mobileSearchOpen ? <X size={16} aria-hidden /> : <Search size={16} aria-hidden />}
+              <span className="text-[11px] font-bold leading-none tracking-tighter" aria-hidden>
+                ::
+              </span>
             </button>
           ) : null}
-          {onToggleShowImages ? (
-            <button
-              type="button"
-              onClick={onToggleShowImages}
-              title={t('webPosGridShowImages')}
-              aria-label={t('webPosGridShowImages')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
-                showProductImages
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
-              }`}
-            >
-              <ImageIcon size={16} aria-hidden />
-            </button>
-          ) : null}
-          {onCycleTileSize ? (
-            <button
-              type="button"
-              onClick={onCycleTileSize}
-              title={t('webPosGridTileSize')}
-              aria-label={t('webPosGridTileSize')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
-                isPhoneLayout && mobileGridStep > 0
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
-              }`}
-            >
-              <LayoutGrid size={16} aria-hidden />
-            </button>
-          ) : null}
-          {isBelow9Inch && onCategoryLayoutChange ? (
-            <WebPosCategoryLayoutPicker
-              value={categoryLayout}
-              onChange={onCategoryLayoutChange}
-            />
-          ) : null}
-          {onToggleSortAlpha ? (
-            <button
-              type="button"
-              onClick={onToggleSortAlpha}
-              title={t('webPosGridSortAlpha')}
-              aria-label={t('webPosGridSortAlpha')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
-                productSort === 'alpha'
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
-              }`}
-            >
-              <ArrowDownAZ size={16} aria-hidden />
-            </button>
-          ) : null}
-          {onToggleSortBestseller ? (
-            <button
-              type="button"
-              onClick={onToggleSortBestseller}
-              title={t('webPosGridSortBestseller')}
-              aria-label={t('webPosGridSortBestseller')}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
-                productSort === 'bestseller'
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
-                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
-              }`}
-            >
-              <TrendingUp size={16} aria-hidden />
-            </button>
+          {filtersVisible ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain">
+              {showSearch && isPhoneLayout && onSearchChange ? (
+                <button
+                  type="button"
+                  onClick={() => setMobileSearchOpen((open) => !open)}
+                  title={t('webPosSearchProducts')}
+                  aria-label={t('webPosSearchProducts')}
+                  aria-expanded={mobileSearchOpen}
+                  className={toolbarBtnClass(mobileSearchOpen || !!search.trim())}
+                >
+                  {mobileSearchOpen ? (
+                    <X size={isPhoneLayout ? 14 : 16} aria-hidden />
+                  ) : (
+                    <Search size={isPhoneLayout ? 14 : 16} aria-hidden />
+                  )}
+                </button>
+              ) : null}
+              {onToggleShowImages ? (
+                <button
+                  type="button"
+                  onClick={onToggleShowImages}
+                  title={t('webPosGridShowImages')}
+                  aria-label={t('webPosGridShowImages')}
+                  className={toolbarBtnClass(showProductImages)}
+                >
+                  <ImageIcon size={isPhoneLayout ? 14 : 16} aria-hidden />
+                </button>
+              ) : null}
+              {onCycleTileSize ? (
+                <button
+                  type="button"
+                  onClick={onCycleTileSize}
+                  title={t('webPosGridTileSize')}
+                  aria-label={t('webPosGridTileSize')}
+                  className={toolbarBtnClass(isPhoneLayout && mobileGridStep > 0)}
+                >
+                  <LayoutGrid size={isPhoneLayout ? 14 : 16} aria-hidden />
+                </button>
+              ) : null}
+              {isBelow9Inch && onCategoryLayoutChange ? (
+                <WebPosCategoryLayoutPicker
+                  value={categoryLayout}
+                  onChange={onCategoryLayoutChange}
+                  compact
+                />
+              ) : null}
+              {onToggleSortAlpha ? (
+                <button
+                  type="button"
+                  onClick={onToggleSortAlpha}
+                  title={t('webPosGridSortAlpha')}
+                  aria-label={t('webPosGridSortAlpha')}
+                  className={toolbarBtnClass(productSort === 'alpha')}
+                >
+                  <ArrowDownAZ size={isPhoneLayout ? 14 : 16} aria-hidden />
+                </button>
+              ) : null}
+              {onToggleSortBestseller ? (
+                <button
+                  type="button"
+                  onClick={onToggleSortBestseller}
+                  title={t('webPosGridSortBestseller')}
+                  aria-label={t('webPosGridSortBestseller')}
+                  className={toolbarBtnClass(productSort === 'bestseller')}
+                >
+                  <TrendingUp size={isPhoneLayout ? 14 : 16} aria-hidden />
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
