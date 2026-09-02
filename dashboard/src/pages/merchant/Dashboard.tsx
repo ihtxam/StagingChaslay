@@ -79,6 +79,7 @@ import {
   isOrderCenterPanelPath,
   orderCenterHomePath,
   isOrderCenterHomeLocation,
+  isPosFloorPath,
   isKioskHomeLocation,
   isKioskPanelPath,
   isKioskSettingsTab,
@@ -443,6 +444,12 @@ function MerchantShell() {
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
+    if (
+      hasPermission(effective.permissions, 'USE_WEBPOS', false) &&
+      isPosFloorPath(location.pathname)
+    ) {
+      return;
+    }
     if (!posAppMode) setPosAppMode(true);
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     const home = pinRestrictedHomePath.replace(/\/$/, '');
@@ -622,7 +629,7 @@ function MerchantShell() {
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = effective.permissions;
-    if (!isOrderCenterRestrictedStaff(perms, false)) return;
+    if (!isOrderCenterOnlyStaff(perms, false)) return;
     if (isOrderCenterPanelPath(location.pathname)) return;
     navigate(orderCenterHomePath(), { replace: true });
   }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);

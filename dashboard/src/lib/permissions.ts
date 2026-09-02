@@ -449,10 +449,7 @@ export function isOrderCenterRestrictedStaff(
   permissions: Permission[] | undefined,
   isOwner = false
 ): boolean {
-  if (isOwner) return false;
-  if (!hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return false;
-  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
-  return true;
+  return isOrderCenterOnlyStaff(permissions, isOwner);
 }
 
 export function isOrderCenterPanelPath(pathname: string): boolean {
