@@ -1285,6 +1285,7 @@ export default function WebPosOrdersPanel({
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);
+  const detailOpen = !!(selectedHeld || selectedOrder);
 
   return (
     <div
@@ -1446,7 +1447,11 @@ export default function WebPosOrdersPanel({
             ) : null}
           </div>
         </div>
-        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div
+          className={`relative flex min-h-0 flex-1 flex-col lg:flex-row ${
+            detailOpen ? 'overflow-hidden lg:overflow-visible' : ''
+          }`}
+        >
           {isOnlineMode ? (
             <WebPosOnlineOrdersView
               orders={onlineOrders}
@@ -1465,11 +1470,9 @@ export default function WebPosOrdersPanel({
           ) : (
           <div
             className={
-              ordersView === 'grid'
-                ? 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
-                : selectedHeld || selectedOrder
-                  ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
-                  : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+              detailOpen
+                ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
+                : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
             }
           >
             {loading ? (
@@ -1859,8 +1862,8 @@ export default function WebPosOrdersPanel({
           {!isOnlineMode ? (
           <aside
             className={
-              selectedHeld || selectedOrder
-                ? 'absolute inset-0 z-10 flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+              detailOpen
+                ? 'fixed inset-0 z-[45] flex min-h-0 w-full flex-col bg-stone-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0'
                 : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
             }
           >
