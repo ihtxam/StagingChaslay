@@ -82,3 +82,60 @@ jobs:
             git push staging HEAD:main
           fi
           echo "Synced $(git rev-parse --short HEAD) to ihtxam/StagingChaslay main"
+
+  deploy:
+    needs: sync
+    if: needs.sync.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check SSH secrets
+        id: ssh
+        run: |
+          if [ -z "${{ secrets.HETZNER_SSH_KEY }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::HETZNER_SSH_KEY not set — skipping staging SSH deploy."
+            echo "Code is synced to StagingChaslay; run deploy manually on 116.202.26.15."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to staging server
+        if: steps.ssh.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
+          username: ${{ secrets.HETZNER_USER || 'root' }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
+            export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
+            export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"
+            staging_ssh="git@github.com-staging-chaslay:ihtxam/StagingChaslay.git"
+            staging_key="/root/.ssh/staging_chaslay_deploy"
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            if [[ -f "$staging_key" ]]; then
+              chmod 600 "$staging_key"
+              if ! grep -qE '^Host github.com-staging-chaslay$' /root/.ssh/config 2>/dev/null; then
+                {
+                  echo ''
+                  echo 'Host github.com-staging-chaslay'
+                  echo '  HostName github.com'
+                  echo '  User git'
+                  echo '  IdentityFile /root/.ssh/staging_chaslay_deploy'
+                  echo '  IdentitiesOnly yes'
+                } >>/root/.ssh/config
+                chmod 600 /root/.ssh/config
+              fi
+            fi
+            if [[ -d "$DEPLOY_PATH/.git" ]]; then
+              cd "$DEPLOY_PATH"
+              origin="$(git remote get-url origin 2>/dev/null || true)"
+              if [[ "$origin" != "$staging_ssh" ]]; then
+                echo "Setting origin to StagingChaslay SSH deploy key alias"
+                git remote set-url origin "$staging_ssh"
+              fi
+            fi
+            bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
