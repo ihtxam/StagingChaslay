@@ -142,6 +142,7 @@ router.delete("/staff/:staffId", requireStaffManage, async (req: Request, res: R
 router.post("/staff/verify-pin", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
+    await StaffService.ensureMerchantHasStaff(merchantId);
     const { pin } = req.body;
     const staff = await StaffService.verifyPin(merchantId, String(pin || ""));
     res.json({ success: true, staff });

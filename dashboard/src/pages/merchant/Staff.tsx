@@ -294,6 +294,10 @@ export default function StaffPage({
   };
 
   const removeStaff = async (id: string) => {
+    if (staff.length <= 1) {
+      toast.error(t('staffCannotRemoveLast'));
+      return;
+    }
     if (!confirm(t('staffRemoveConfirm'))) return;
     try {
       await api.delete(`/merchant/staff/${id}`);
@@ -573,13 +577,22 @@ export default function StaffPage({
                       >
                         {t('edit')}
                       </button>
-                      <button
-                        type="button"
-                        className="text-red-600 text-xs"
-                        onClick={() => void removeStaff(s.id)}
-                      >
-                        {t('remove')}
-                      </button>
+                      {staff.length > 1 ? (
+                        <button
+                          type="button"
+                          className="text-red-600 text-xs"
+                          onClick={() => void removeStaff(s.id)}
+                        >
+                          {t('remove')}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-xs text-[var(--text-muted)]"
+                          title={t('staffCannotRemoveLast')}
+                        >
+                          {t('staffLastUser')}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -605,13 +618,15 @@ export default function StaffPage({
                     >
                       {t('edit')}
                     </button>
-                    <button
-                      type="button"
-                      className="text-red-600 text-xs"
-                      onClick={() => void removeStaff(s.id)}
-                    >
-                      {t('remove')}
-                    </button>
+                    {staff.length > 1 ? (
+                      <button
+                        type="button"
+                        className="text-red-600 text-xs"
+                        onClick={() => void removeStaff(s.id)}
+                      >
+                        {t('remove')}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
