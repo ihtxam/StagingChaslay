@@ -12,7 +12,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useI18n } from '@/lib/i18n';
 import {
   actionButtonIconSize,
@@ -134,6 +134,7 @@ export default function WebPosProductArea({
   const { t } = useI18n();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
   const expressIcon = actionButtonIconSize(actionButtonSize);
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -155,6 +156,12 @@ export default function WebPosProductArea({
       return !open;
     });
   };
+
+  useEffect(() => {
+    if (!mobileSearchOpen) return;
+    const id = window.setTimeout(() => mobileSearchInputRef.current?.focus(), 50);
+    return () => window.clearTimeout(id);
+  }, [mobileSearchOpen]);
 
   const toolbarBtnClass = (active: boolean) =>
     `inline-flex ${isPhoneLayout ? 'h-7 w-7 rounded-md' : 'h-8 w-8 rounded-lg'} shrink-0 items-center justify-center border webpos-toolbar-btn ${
@@ -272,6 +279,7 @@ export default function WebPosProductArea({
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
             />
             <input
+              ref={mobileSearchInputRef}
               className="webpos-search-input h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2"
               placeholder={t('webPosSearchProducts')}
               value={search}
@@ -284,6 +292,7 @@ export default function WebPosProductArea({
               }}
               autoComplete="off"
               inputMode="search"
+              enterKeyHint="search"
             />
           </label>
         ) : null}

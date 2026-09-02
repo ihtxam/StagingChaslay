@@ -6,10 +6,34 @@ export const BARCODE_WEDGE_IDLE_MS = 350;
 export const BARCODE_WEDGE_BUFFER_CLEAR_MS = 500;
 export const BARCODE_WEDGE_MIN_LENGTH = 3;
 
+export const BARCODE_WEDGE_INPUT_CLASS = 'barcode-wedge-capture';
+
 const TERMINATOR_KEYS = new Set(['Enter', 'Tab']);
 
 function isTerminatorKey(key: string): boolean {
   return TERMINATOR_KEYS.has(key);
+}
+
+function isEditableField(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+  return (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  );
+}
+
+export function isBarcodeWedgeInput(el: Element | null): boolean {
+  return el instanceof HTMLInputElement && el.classList.contains(BARCODE_WEDGE_INPUT_CLASS);
+}
+
+/** Keep wedge focus from overriding product search and other visible POS inputs. */
+export function shouldYieldBarcodeFocus(
+  activeEl: Element | null,
+  wedgeInput: HTMLInputElement | null
+): boolean {
+  if (!activeEl || activeEl === wedgeInput) return false;
+  if (!isEditableField(activeEl)) return false;
+  return !isBarcodeWedgeInput(activeEl);
 }
 
 export type BarcodeWedgeOptions = {
@@ -119,6 +143,9 @@ export function useBarcodeWedge({
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (shouldYieldBarcodeFocus(e.target instanceof Element ? e.target : null, null)) {
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (isTerminatorKey(e.key)) {
