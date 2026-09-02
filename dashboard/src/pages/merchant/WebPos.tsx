@@ -12,7 +12,8 @@ import { APP_NAME } from '@/lib/brand';
 import {
   buildKitchenPrintJobs,
   buildKitchenCrossStationFooters,
-  kitchenJobsExcludingReceiptPrinters,
+  kitchenPrintJobHasTarget,
+  kitchenPrintJobKey,
   resolveKitchenPrintJobs,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
@@ -7256,23 +7257,39 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
       lineIds: opts?.lineIds,
     };
-    const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter(
-      (j) => (j.printerName || '').trim()
+    const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) =>
+      kitchenPrintJobHasTarget(j)
     );
     const crossFooters = buildKitchenCrossStationFooters(printJobs);
     const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {
       let printedAny = false;
+      let printFailed = false;
       for (const job of printJobs) {
+        const jobKey = kitchenPrintJobKey(job);
         const configuredName = (job.printerName || '').trim();
-        const resolvedName = resolveLivePrinterName(configuredName, printers, {
-          portName: job.portName,
-          matchHint: job.matchHint,
-        });
-        if (!resolvedName) continue;
+        const resolvedName =
+          resolveLivePrinterName(configuredName, printers, {
+            portName: job.portName,
+            matchHint: job.matchHint,
+          }) || configuredName;
+        if (!resolvedName) {
+          printFailed = true;
+          handleKitchenPrintFailure(
+            new Error(`Kitchen printer not resolved (${configuredName || job.portName || 'unknown'})`),
+            opts?.lineIds
+          );
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn(
+              '[kitchen-print] skipped job — printer not resolved',
+              JSON.stringify({ configured: configuredName, port: job.portName, items: job.items.length })
+            );
+          }
+          continue;
+        }
         printedAny = true;
         const paperWidthMm = job.paperWidthMm;
-        const otherItems = crossFooters.get(configuredName) || [];
+        const otherItems = crossFooters.get(jobKey) || [];
         const ticketOpts = {
           ...kitchenOpts,
           items: job.items,
@@ -7286,23 +7303,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           console.info(
             '[kitchen-print]',
             JSON.stringify({
-              configured: configuredName,
+              configured: configuredName || job.portName,
               resolved: resolvedName,
               bytes: escpos.length,
+              items: job.items.length,
             })
           );
         }
-        const mode = await printKitchenViaAgentOrQueue({
-          printerName: resolvedName,
-          dataBase64: uint8ToBase64(escpos),
-          text,
-          orderId: opts?.orderNumber || null,
-          retryLocally: printRetryLocally,
-          printers,
-          configuredName,
-          ...printMeta,
-        });
-        if (mode === 'queued') queuedAny = true;
+        try {
+          const mode = await printKitchenViaAgentOrQueue({
+            printerName: resolvedName,
+            dataBase64: uint8ToBase64(escpos),
+            text,
+            orderId: opts?.orderNumber || null,
+            retryLocally: printRetryLocally,
+            printers,
+            configuredName: configuredName || job.portName || undefined,
+            ...printMeta,
+          });
+          if (mode === 'queued') queuedAny = true;
+        } catch (e: unknown) {
+          printFailed = true;
+          handleKitchenPrintFailure(e, opts?.lineIds);
+        }
+      }
+      if (printFailed && printedAny) {
+        toast.error(t('webPosKitchenPrintPartialFailed'));
       }
       if (!printedAny) {
         toast.error(t('webPosNoKitchenPrinterConfigured'));

@@ -5,6 +5,7 @@ import {
   generateKitchenTicketEscPos,
   generateOrderNotificationTicketEscPos,
   generateReservationTicketEscPos,
+  kitchenPrintJobHasTarget,
   printersForRole,
   resolveKitchenPaperWidthMm,
   resolveKitchenPrintJobs,
@@ -137,9 +138,7 @@ async function printKitchenTickets(
 
   const printJobs = kitchenLocalOnly
     ? []
-    : resolveKitchenPrintJobs(receiptItems, printSettings).filter(
-        (j) => (j.printerName || '').trim() || (j.portName || '').trim()
-      );
+    : resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) => kitchenPrintJobHasTarget(j));
   const fallbackLocal =
     resolveLivePrinterName(
       localStorage.getItem('manupos_webpos_printer') || '',

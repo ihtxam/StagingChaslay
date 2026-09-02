@@ -355,6 +355,16 @@ export function migrateKitchenPrintRoutingToPrinters(
 
   const excluded = new Set([...(existingExcluded || []), ...byDest.none]);
 
+  if (kitchenIndices[0] !== undefined && byDest.kitchen1.length) {
+    const idx = kitchenIndices[0];
+    result[idx] = {
+      ...result[idx],
+      printKitchenTickets: true,
+      printAllProducts: false,
+      linkedCategoryIds: [...new Set([...(result[idx].linkedCategoryIds || []), ...byDest.kitchen1])],
+    };
+  }
+
   if (kitchenIndices[1] !== undefined && byDest.kitchen2.length) {
     const idx = kitchenIndices[1];
     result[idx] = {
@@ -377,7 +387,10 @@ export function migrateKitchenPrintRoutingToPrinters(
   }
 
   const migratedExplicitly =
-    byDest.kitchen2.length > 0 || byDest.receipt.length > 0 || byDest.none.length > 0;
+    byDest.kitchen1.length > 0 ||
+    byDest.kitchen2.length > 0 ||
+    byDest.receipt.length > 0 ||
+    byDest.none.length > 0;
 
   return {
     printers: result,

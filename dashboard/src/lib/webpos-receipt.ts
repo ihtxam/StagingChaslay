@@ -2608,35 +2608,75 @@ export function filterKitchenItems(
   ctx?: {
     otherKitchenPrinters?: NonNullable<PosPrintSettingsClient['printers']>;
     excludedCategoryIds?: Set<string>;
+    kitchenPrintRouting?: Record<string, KitchenPrintDestination>;
+    /** First kitchen-only printer for legacy kitchen1 routing. */
+    primaryKitchenPrinterId?: string | null;
   }
 ): KitchenTicketItem[] {
   const linkedCats = printer.linkedCategoryIds || [];
   const linkedProds = new Set(printer.linkedProductIds || []);
   const excluded = ctx?.excludedCategoryIds || new Set<string>();
+  const legacyRouting = ctx?.kitchenPrintRouting || {};
+
+  const matchesLegacyRouting = (item: KitchenTicketItem): boolean => {
+    if (!item.categoryId) return false;
+    const dest = legacyRouting[item.categoryId];
+    if (!dest || dest === 'none') return false;
+    if (dest === 'receipt') return !!printer.printReceipts;
+    if (dest === 'kitchen2') {
+      const kitchenOnly = (ctx?.otherKitchenPrinters || []).filter(
+        (p) => p.printKitchenTickets && !p.printReceipts
+      );
+      const second = kitchenOnly[1];
+      return !!second && second.id === printer.id;
+    }
+    // kitchen1 → primary dedicated kitchen printer, else first kitchen ticket printer
+    if (dest === 'kitchen1') {
+      if (ctx?.primaryKitchenPrinterId) return printer.id === ctx.primaryKitchenPrinterId;
+      return !!printer.printKitchenTickets && !printer.printReceipts;
+    }
+    return false;
+  };
 
   if (linkedCats.length > 0) {
     const catSet = new Set(linkedCats);
     return items.filter((i) => {
       if (i.productId && linkedProds.has(i.productId)) return true;
       if (i.categoryId && catSet.has(i.categoryId)) return true;
+      if (matchesLegacyRouting(i)) return true;
       return false;
     });
   }
 
   if (printer.printAllProducts === false) {
     if (linkedProds.size) {
-      return items.filter((i) => i.productId && linkedProds.has(i.productId));
+      return items.filter(
+        (i) =>
+          (i.productId && linkedProds.has(i.productId)) || matchesLegacyRouting(i)
+      );
     }
-    return [];
+    return items.filter((i) => matchesLegacyRouting(i));
   }
 
   const claimedByOthers = new Set<string>();
   for (const other of ctx?.otherKitchenPrinters || []) {
     if (other.id === printer.id) continue;
     for (const cid of other.linkedCategoryIds || []) claimedByOthers.add(cid);
+    for (const [catId, dest] of Object.entries(legacyRouting)) {
+      if (dest === 'none') continue;
+      if (dest === 'receipt' && other.printReceipts) claimedByOthers.add(catId);
+      if (dest === 'kitchen1' && other.id === ctx?.primaryKitchenPrinterId) claimedByOthers.add(catId);
+      if (dest === 'kitchen2') {
+        const kitchenOnly = (ctx?.otherKitchenPrinters || []).filter(
+          (p) => p.printKitchenTickets && !p.printReceipts
+        );
+        if (kitchenOnly[1]?.id === other.id) claimedByOthers.add(catId);
+      }
+    }
   }
 
   return items.filter((i) => {
+    if (matchesLegacyRouting(i)) return true;
     if (i.productId && linkedProds.has(i.productId)) return true;
     if (!i.categoryId) return true;
     if (excluded.has(i.categoryId)) return false;
@@ -2653,6 +2693,78 @@ export type KitchenPrintJob = {
   items: KitchenTicketItem[];
 };
 
+function enabledKitchenPrinterProfiles(
+  settings: PosPrintSettingsClient | null | undefined
+): NonNullable<PosPrintSettingsClient['printers']> {
+  return (settings?.printers || []).filter(
+    (p) => p.enabled !== false && p.printKitchenTickets && (p.name || p.portName)
+  );
+}
+
+/** Stable key for cross-station footers and print-job lookup. */
+export function kitchenPrintJobKey(job: Pick<KitchenPrintJob, 'printerName' | 'portName'>): string {
+  return (job.printerName || job.portName || '').trim();
+}
+
+/** Kitchen print job has a configured Windows name or COM port to resolve at print time. */
+export function kitchenPrintJobHasTarget(
+  job: Pick<KitchenPrintJob, 'printerName' | 'portName'>
+): boolean {
+  return !!(job.printerName || '').trim() || !!(job.portName || '').trim();
+}
+
+function primaryDedicatedKitchenPrinterId(
+  kitchenPrinters: NonNullable<PosPrintSettingsClient['printers']>
+): string | null {
+  const dedicated = kitchenPrinters.find((p) => !p.printReceipts);
+  return dedicated?.id || kitchenPrinters[0]?.id || null;
+}
+
+function appendUnroutedKitchenItems(
+  jobs: KitchenPrintJob[],
+  items: KitchenTicketItem[],
+  kitchenPrinters: NonNullable<PosPrintSettingsClient['printers']>,
+  settings: PosPrintSettingsClient | null | undefined
+): KitchenPrintJob[] {
+  const assigned = new Set<string>();
+  for (const job of jobs) {
+    for (const item of job.items) assigned.add(kitchenItemIdentity(item));
+  }
+  const unrouted = items.filter((item) => !assigned.has(kitchenItemIdentity(item)));
+  if (!unrouted.length) return jobs;
+
+  const catchAllProfile =
+    kitchenPrinters.find(
+      (p) =>
+        !p.printReceipts &&
+        !(p.linkedCategoryIds || []).length &&
+        p.printAllProducts !== false
+    ) ||
+    kitchenPrinters.find(
+      (p) => !(p.linkedCategoryIds || []).length && p.printAllProducts !== false
+    ) ||
+    kitchenPrinters.find((p) => !p.printReceipts) ||
+    kitchenPrinters[0];
+  if (!catchAllProfile) return jobs;
+
+  const key = (catchAllProfile.name || catchAllProfile.portName || '').trim();
+  const existing = jobs.find((j) => kitchenPrintJobKey(j) === key);
+  if (existing) {
+    existing.items = [...existing.items, ...unrouted];
+    return jobs;
+  }
+  return [
+    ...jobs,
+    {
+      printerName: catchAllProfile.name || catchAllProfile.portName || '',
+      portName: catchAllProfile.portName ?? null,
+      matchHint: catchAllProfile.matchHint ?? null,
+      paperWidthMm: resolveKitchenPaperWidthMm(settings, catchAllProfile.paperWidthMm),
+      items: unrouted,
+    },
+  ];
+}
+
 /**
  * Build per-printer kitchen print jobs from cart/order lines.
  * Each enabled kitchen printer receives lines whose categoryId is in linkedCategoryIds,
@@ -2665,9 +2777,16 @@ export function buildKitchenPrintJobs(
   if (!items.length) return [];
 
   const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
-  const allPrinters = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
-  const kitchenPrinters = allPrinters.filter((p) => p.printKitchenTickets);
+  const kitchenPrinters = enabledKitchenPrinterProfiles(settings);
   const excluded = new Set(settings?.kitchenExcludedCategoryIds || []);
+  const legacyRouting = settings?.kitchenPrintRouting || {};
+  const primaryKitchenId = primaryDedicatedKitchenPrinterId(kitchenPrinters);
+  const filterCtx = {
+    otherKitchenPrinters: kitchenPrinters,
+    excludedCategoryIds: excluded,
+    kitchenPrintRouting: legacyRouting,
+    primaryKitchenPrinterId: primaryKitchenId,
+  };
 
   if (!kitchenPrinters.length) {
     return [{ printerName: '', paperWidthMm: globalPaper, items }];
@@ -2675,13 +2794,10 @@ export function buildKitchenPrintJobs(
 
   const jobs: KitchenPrintJob[] = [];
   for (const kp of kitchenPrinters) {
-    const filtered = filterKitchenItems(items, kp, {
-      otherKitchenPrinters: kitchenPrinters,
-      excludedCategoryIds: excluded,
-    });
+    const filtered = filterKitchenItems(items, kp, filterCtx);
     if (!filtered.length) continue;
     jobs.push({
-      printerName: kp.name,
+      printerName: kp.name || kp.portName || '',
       portName: kp.portName ?? null,
       matchHint: kp.matchHint ?? null,
       paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
@@ -2693,7 +2809,7 @@ export function buildKitchenPrintJobs(
     return [{ printerName: '', paperWidthMm: globalPaper, items }];
   }
 
-  return jobs;
+  return appendUnroutedKitchenItems(jobs, items, kitchenPrinters, settings);
 }
 
 /** When multiple kitchen printers share one order, map printer name → items on other stations. */
@@ -2703,10 +2819,11 @@ export function buildKitchenCrossStationFooters(
   const map = new Map<string, KitchenTicketItem[]>();
   if (jobs.length < 2) return map;
   for (const job of jobs) {
-    const key = (job.printerName || '').trim();
+    const key = kitchenPrintJobKey(job);
+    if (!key) continue;
     const others: KitchenTicketItem[] = [];
     for (const other of jobs) {
-      if ((other.printerName || '').trim() === key) continue;
+      if (kitchenPrintJobKey(other) === key) continue;
       others.push(...other.items);
     }
     if (others.length) map.set(key, others);
