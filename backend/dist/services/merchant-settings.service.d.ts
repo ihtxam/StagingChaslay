@@ -46,6 +46,7 @@ export declare class MerchantSettingsService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxLocations: number;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
@@ -57,7 +58,10 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        deliveryPlatformsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
+        kioskAddonEnabled: boolean;
+        kioskEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -74,6 +78,7 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        categoryPricingEnabled: boolean;
         deliveryDriverPayMode: string;
         deliveryDriverHourlyRate: string;
         deliveryPerOrderFee: string;
@@ -104,12 +109,17 @@ export declare class MerchantSettingsService {
         emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
+        shopMenuUrl: string | null;
+        shopPanelPathUrl: string | null;
         shopSubdomainUrl: string | null;
         shopCustomDomainUrl: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKeyMasked: string | null;
         adyenApiKeySet: boolean;
         adyenClientId: string | null;
+        adyenHmacKeyMasked: string | null;
+        adyenHmacKeySet: boolean;
+        tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
@@ -204,6 +214,7 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes?: number;
         minPreOrderDelayMinutes?: number;
         deliveryMenuMarkup?: number;
+        categoryPricingEnabled?: boolean;
         deliveryDriverPayMode?: string;
         deliveryDriverHourlyRate?: number;
         deliveryPerOrderFee?: number;
@@ -215,6 +226,8 @@ export declare class MerchantSettingsService {
         adyenMerchantAccount?: string;
         adyenApiKey?: string;
         adyenClientId?: string;
+        adyenHmacKey?: string;
+        tapToPayEnabled?: boolean;
         adyenLiveEnvironment?: boolean;
         adyenLiveRegion?: string;
         adyenUseLegacyEndpoint?: boolean;
@@ -277,6 +290,7 @@ export declare class MerchantSettingsService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxLocations: number;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
@@ -288,7 +302,10 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        deliveryPlatformsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
+        kioskAddonEnabled: boolean;
+        kioskEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -305,6 +322,7 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        categoryPricingEnabled: boolean;
         deliveryDriverPayMode: string;
         deliveryDriverHourlyRate: string;
         deliveryPerOrderFee: string;
@@ -335,12 +353,17 @@ export declare class MerchantSettingsService {
         emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
+        shopMenuUrl: string | null;
+        shopPanelPathUrl: string | null;
         shopSubdomainUrl: string | null;
         shopCustomDomainUrl: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKeyMasked: string | null;
         adyenApiKeySet: boolean;
         adyenClientId: string | null;
+        adyenHmacKeyMasked: string | null;
+        adyenHmacKeySet: boolean;
+        tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
@@ -402,8 +425,8 @@ export declare class MerchantSettingsService {
         country: string;
         vatRate: string;
         merchantId: string;
-        taxId: string | null;
         isDefault: boolean;
+        taxId: string | null;
     }[]>;
     static createVATSetting(merchantId: string, country: string, vatRate: number, taxId?: string, isDefault?: boolean): Promise<{
         id: string;
@@ -411,8 +434,8 @@ export declare class MerchantSettingsService {
         country: string;
         vatRate: string;
         merchantId: string;
-        taxId: string | null;
         isDefault: boolean;
+        taxId: string | null;
     }>;
     static updateVATSetting(merchantId: string, vatSettingId: string, updates: {
         vatRate?: number;
@@ -470,6 +493,7 @@ export declare class MerchantSettingsService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxLocations: number;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
@@ -481,7 +505,10 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        deliveryPlatformsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
+        kioskAddonEnabled: boolean;
+        kioskEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -498,6 +525,7 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        categoryPricingEnabled: boolean;
         deliveryDriverPayMode: string;
         deliveryDriverHourlyRate: string;
         deliveryPerOrderFee: string;
@@ -528,12 +556,17 @@ export declare class MerchantSettingsService {
         emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
+        shopMenuUrl: string | null;
+        shopPanelPathUrl: string | null;
         shopSubdomainUrl: string | null;
         shopCustomDomainUrl: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKeyMasked: string | null;
         adyenApiKeySet: boolean;
         adyenClientId: string | null;
+        adyenHmacKeyMasked: string | null;
+        adyenHmacKeySet: boolean;
+        tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
@@ -629,6 +662,7 @@ export declare class MerchantSettingsService {
         shiftsEnabled: boolean;
         maxPosPosts: number;
         maxWaiterPosts: number;
+        maxLocations: number;
         inventoryAddonEnabled: boolean;
         inventoryEnabled: boolean;
         signageAddonEnabled: boolean;
@@ -640,7 +674,10 @@ export declare class MerchantSettingsService {
         odsEnabled: boolean;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
+        deliveryPlatformsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
+        kioskAddonEnabled: boolean;
+        kioskEnabled: boolean;
         inventoryWasteFactor: number;
         inventoryAutoReorderEmailEnabled: boolean;
         inventoryExpiryAlertDays: number;
@@ -657,6 +694,7 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number;
         deliveryMenuMarkup: string;
+        categoryPricingEnabled: boolean;
         deliveryDriverPayMode: string;
         deliveryDriverHourlyRate: string;
         deliveryPerOrderFee: string;
@@ -687,12 +725,17 @@ export declare class MerchantSettingsService {
         emailDeliveryMode: string;
         marketingSettings: schema.MarketingSettings;
         shopPathUrl: string | null;
+        shopMenuUrl: string | null;
+        shopPanelPathUrl: string | null;
         shopSubdomainUrl: string | null;
         shopCustomDomainUrl: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKeyMasked: string | null;
         adyenApiKeySet: boolean;
         adyenClientId: string | null;
+        adyenHmacKeyMasked: string | null;
+        adyenHmacKeySet: boolean;
+        tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
@@ -745,6 +788,8 @@ export declare class MerchantSettingsService {
     static resolveByShopHost(hostOrSlug: string): Promise<{
         id: string;
         name: string;
+        deliveryEnabled: boolean;
+        dineInEnabled: boolean;
         email: string;
         passwordHash: string;
         createdAt: Date;
@@ -771,8 +816,6 @@ export declare class MerchantSettingsService {
         acceptingReservations: boolean;
         cmsHomepageEnabled: boolean;
         pickupEnabled: boolean;
-        dineInEnabled: boolean;
-        deliveryEnabled: boolean;
         channelSelectMode: string;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -790,12 +833,15 @@ export declare class MerchantSettingsService {
         deliveryEtaMinutes: number | null;
         minPreOrderDelayMinutes: number | null;
         deliveryMenuMarkup: string | null;
+        categoryPricingEnabled: boolean;
         deliveryDriverPayMode: string;
         deliveryDriverHourlyRate: string | null;
         deliveryPerOrderFee: string | null;
         adyenMerchantAccount: string | null;
         adyenApiKey: string | null;
         adyenClientId: string | null;
+        adyenHmacKey: string | null;
+        tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
@@ -827,11 +873,14 @@ export declare class MerchantSettingsService {
         maxPosPosts: number;
         maxWaiterPosts: number;
         maxStaff: number;
+        maxLocations: number;
         inventoryAddonEnabled: boolean;
         signageAddonEnabled: boolean;
         signageScreenLimit: number;
         kdsAddonEnabled: boolean;
         odsAddonEnabled: boolean;
+        kioskAddonEnabled: boolean;
+        kioskSettings: import("../lib/kiosk-settings").KioskSettings | null;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
@@ -851,6 +900,7 @@ export declare class MerchantSettingsService {
         tableQrSettings: TableQrSettings | null;
         posCheckoutSettings: Record<string, unknown> | null;
         deliveryPlatformSettings: Record<string, unknown> | null;
+        authEpoch: number;
         subscriptionPlan: string | null;
         trialEndsAt: Date | null;
         subscriptionEndsAt: Date | null;

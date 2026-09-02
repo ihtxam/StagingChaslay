@@ -9,7 +9,7 @@ import ZoneMapEditor, {
   type LngLatTuple,
 } from '@/components/ZoneMapEditor';
 import { useI18n } from '@/lib/i18n';
-import { compressImageIfNeeded } from '@/lib/compress-image';
+import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 
 /** Reject empty / Null Island (0,0) so the map does not open in the ocean. */
 function parseStoreCoords(latRaw: unknown, lngRaw: unknown): LatLngTuple | null {
@@ -342,14 +342,14 @@ export default function OnlineShop() {
       <div className="card">
         <h1 className="text-2xl font-bold mb-1">{t('shop')}</h1>
         <p className="text-gray-600 mb-4">{t('onlineShopPageHint')}</p>
-        {settings.shopPathUrl && (
-          <p className="text-sm mb-4">
-            Public shop:{' '}
-            <a className="text-teal-700 underline" href={settings.shopPathUrl} target="_blank" rel="noreferrer">
-              {settings.shopPathUrl}
-            </a>
-          </p>
-        )}
+        <ShopPublicLinks
+          shopPathUrl={settings.shopPathUrl}
+          shopMenuUrl={settings.shopMenuUrl}
+          shopPanelPathUrl={settings.shopPanelPathUrl}
+          shopSubdomainUrl={settings.shopSubdomainUrl}
+          shopCustomDomainUrl={settings.shopCustomDomainUrl}
+          className="mb-4"
+        />
 
         <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-4 mb-4 space-y-3">
           <div>

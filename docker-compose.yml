@@ -86,6 +86,7 @@ services:
       args:
         VITE_API_URL: /api
         VITE_PUBLIC_DOMAIN: ${DOMAIN:-rebornsense.com}
+        VITE_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://app.rebornsense.com}
         VITE_PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
     restart: unless-stopped
     depends_on:

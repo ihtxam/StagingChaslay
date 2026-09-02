@@ -3,6 +3,8 @@ export declare const APP_NAME: string;
 export declare const BRAND_DOMAIN: string;
 export declare const APP_ORIGIN: string;
 export declare const PAY_ORIGIN: string;
+/** Public shop hub hostname (path shops at https://{host}/{slug}). */
+export declare function resolveShopPublicHost(): string;
 export declare const SHOP_HOST: string;
 export declare const FROM_EMAIL_DEFAULT: string;
 export declare const FROM_NAME_DEFAULT: string;

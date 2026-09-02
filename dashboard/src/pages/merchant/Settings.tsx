@@ -27,7 +27,7 @@ import {
   TabletSmartphone,
   Copy,
 } from 'lucide-react';
-import PosPostsSection from '@/components/settings/PosPostsSection';
+import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
@@ -162,6 +162,8 @@ interface SettingsData {
     expressCheckoutEnabled?: boolean;
   } | null;
   shopPathUrl?: string | null;
+  shopMenuUrl?: string | null;
+  shopPanelPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
   panelLanguage?: string | null;
   shopLanguage?: string | null;
@@ -2035,6 +2037,14 @@ export default function Settings() {
                     />
                   </Field>
                 </div>
+
+                <ShopPublicLinks
+                  shopPathUrl={settings.shopPathUrl}
+                  shopMenuUrl={settings.shopMenuUrl}
+                  shopPanelPathUrl={settings.shopPanelPathUrl}
+                  shopSubdomainUrl={settings.shopSubdomainUrl}
+                  shopCustomDomainUrl={settings.shopCustomDomainUrl}
+                />
 
                 <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/50 p-3 space-y-2">
                   <p className="text-sm font-medium">{t('shopHoursNavTitle')}</p>

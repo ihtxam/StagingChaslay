@@ -44,13 +44,14 @@ const pos_checkout_settings_1 = require("@/lib/pos-checkout-settings");
 const business_module_1 = require("@/lib/business-module");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings");
-const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
-const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const brand_1 = require("@/lib/brand");
 function maskSecret(value) {
     if (!value)
         return null;
@@ -96,16 +97,7 @@ function normalizeCartLayout(raw) {
 }
 class MerchantSettingsService {
     static async getMerchantSettings(merchantId) {
-        try {
-            return await this.buildMerchantSettings(merchantId);
-        }
-        catch (error) {
-            const patched = await (0, ensure_merchant_schema_1.patchMerchantSchemaFromError)(error);
-            if (patched) {
-                return await this.buildMerchantSettings(merchantId);
-            }
-            throw error;
-        }
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => this.buildMerchantSettings(merchantId));
     }
     static async buildMerchantSettings(merchantId) {
         // Schema patches run at API startup. Do not re-run CREATE/ALTER here —
@@ -117,20 +109,23 @@ class MerchantSettingsService {
         if (!merchant) {
             throw new Error("Merchant not found");
         }
-        const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchantId).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled));
-        const signage = await (0, signage_addon_1.readSignageAddon)(merchantId).catch(() => ({
+        const inventoryOn = (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled);
+        const signage = {
             enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
             screenLimit: Math.max(1, Number(merchant.signageScreenLimit) || 2),
-        }));
-        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
-        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
-        const justEatOn = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => merchant.justEatAddonEnabled === true);
-        const uberEatsOn = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => merchant.uberEatsAddonEnabled === true);
-        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
-        const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
-        const shopHost = process.env.SHOP_PUBLIC_HOST ||
-            (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
-        const apex = domain.replace(/^shop\./, "");
+        };
+        const kdsOn = (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled);
+        const odsOn = (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled);
+        const justEatOn = merchant.justEatAddonEnabled === true;
+        const uberEatsOn = merchant.uberEatsAddonEnabled === true;
+        const storekeeperOn = (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(merchant.storekeeperAddonEnabled);
+        const kioskOn = (0, kiosk_addon_1.isKioskAddonEnabled)(merchant.kioskAddonEnabled);
+        const shopHost = (0, brand_1.resolveShopPublicHost)();
+        const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
+        const shopRootUrl = merchant.slug ? `https://${shopHost}/${merchant.slug}` : null;
+        const shopPanelPathUrl = merchant.slug
+            ? `${brand_1.APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}`
+            : null;
         return {
             id: merchant.id,
             name: merchant.name,
@@ -169,6 +164,7 @@ class MerchantSettingsService {
             shiftsEnabled: !!merchant.shiftsEnabled,
             maxPosPosts: Math.max(0, Number(merchant.maxPosPosts ?? 0)),
             maxWaiterPosts: Math.max(0, Number(merchant.maxWaiterPosts ?? 0)),
+            maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
             inventoryAddonEnabled: inventoryOn,
             inventoryEnabled: inventoryOn,
             signageAddonEnabled: signage.enabled,
@@ -180,7 +176,10 @@ class MerchantSettingsService {
             odsEnabled: odsOn,
             justEatAddonEnabled: justEatOn,
             uberEatsAddonEnabled: uberEatsOn,
+            deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
             storekeeperAddonEnabled: storekeeperOn,
+            kioskAddonEnabled: kioskOn,
+            kioskEnabled: kioskOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
             inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
@@ -194,6 +193,7 @@ class MerchantSettingsService {
             deliveryEtaMinutes: merchant.deliveryEtaMinutes,
             minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
             deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+            categoryPricingEnabled: merchant.categoryPricingEnabled === true,
             deliveryDriverPayMode: merchant.deliveryDriverPayMode || "both",
             deliveryDriverHourlyRate: merchant.deliveryDriverHourlyRate ?? "0",
             deliveryPerOrderFee: merchant.deliveryPerOrderFee ?? "0",
@@ -205,13 +205,18 @@ class MerchantSettingsService {
                 ? "own"
                 : "platform",
             marketingSettings: marketing_service_1.MarketingService.normalizeMarketing(merchant.marketingSettings),
-            shopPathUrl: merchant.slug ? `https://${shopHost}/${merchant.slug}` : null,
+            shopPathUrl: shopRootUrl,
+            shopMenuUrl: shopRootUrl ? `${shopRootUrl}/menu` : null,
+            shopPanelPathUrl,
             shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
             shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
             adyenMerchantAccount: merchant.adyenMerchantAccount,
             adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
             adyenApiKeySet: !!merchant.adyenApiKey,
             adyenClientId: merchant.adyenClientId,
+            adyenHmacKeyMasked: maskSecret(merchant.adyenHmacKey),
+            adyenHmacKeySet: !!merchant.adyenHmacKey,
+            tapToPayEnabled: merchant.tapToPayEnabled === true,
             adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
             adyenLiveRegion: merchant.adyenLiveRegion || "EU",
             adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
@@ -376,6 +381,9 @@ class MerchantSettingsService {
                 throw new Error("deliveryMenuMarkup must be >= 0");
             patch.deliveryMenuMarkup = n.toFixed(2);
         }
+        if (updates.categoryPricingEnabled !== undefined) {
+            patch.categoryPricingEnabled = !!updates.categoryPricingEnabled;
+        }
         if (updates.deliveryDriverPayMode !== undefined) {
             const mode = String(updates.deliveryDriverPayMode);
             if (!["hourly", "per_order", "both"].includes(mode)) {
@@ -399,6 +407,8 @@ class MerchantSettingsService {
             patch.adyenMerchantAccount = updates.adyenMerchantAccount;
         if (updates.adyenClientId !== undefined)
             patch.adyenClientId = updates.adyenClientId;
+        if (updates.tapToPayEnabled !== undefined)
+            patch.tapToPayEnabled = !!updates.tapToPayEnabled;
         if (updates.adyenLiveEnvironment !== undefined)
             patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
         if (updates.adyenLiveRegion !== undefined) {
@@ -466,6 +476,9 @@ class MerchantSettingsService {
         // Only overwrite API key when a non-empty new value is provided (not the masked placeholder)
         if (updates.adyenApiKey && !updates.adyenApiKey.includes("••••")) {
             patch.adyenApiKey = updates.adyenApiKey;
+        }
+        if (updates.adyenHmacKey && !updates.adyenHmacKey.includes("••••")) {
+            patch.adyenHmacKey = updates.adyenHmacKey.trim();
         }
         if (updates.slug !== undefined) {
             patch.slug = normalizeSubdomain(updates.slug) || null;
@@ -562,6 +575,10 @@ class MerchantSettingsService {
                 checkout = { ...checkout, posMode: (0, business_module_1.posModeForModule)(locked) };
             }
             patch.posCheckoutSettings = checkout;
+            // Keep legacy webpos_express_enabled in sync with the single express-checkout toggle.
+            if (updates.webposExpressEnabled === undefined) {
+                patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
+            }
         }
         if (updates.deliveryPlatformSettings !== undefined) {
             const current = await db.query.merchants.findFirst({
@@ -572,13 +589,13 @@ class MerchantSettingsService {
             const before = (0, delivery_platform_settings_1.normalizeDeliveryPlatformSettings)(current?.deliveryPlatformSettings);
             const after = (0, delivery_platform_settings_1.normalizeDeliveryPlatformSettings)(merged);
             if (after.justEat?.enabled && !before.justEat?.enabled) {
-                const licensed = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => false);
+                const licensed = current?.justEatAddonEnabled === true;
                 if (!licensed) {
                     throw new Error("Just Eat integration requires the Just Eat add-on");
                 }
             }
             if (after.uberEats?.enabled && !before.uberEats?.enabled) {
-                const licensed = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => false);
+                const licensed = current?.uberEatsAddonEnabled === true;
                 if (!licensed) {
                     throw new Error("Uber Eats integration requires the Uber Eats add-on");
                 }

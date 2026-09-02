@@ -36,6 +36,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -115,11 +116,13 @@ export class MerchantSettingsService {
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
 
-    const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL?.replace(/^https?:\/\//, "") || "localhost";
-    const shopHost =
-      process.env.SHOP_PUBLIC_HOST ||
-      (domain.includes("rebornsense.com") ? "shop.rebornsense.com" : domain.startsWith("shop.") ? domain : `shop.${domain}`);
-    const apex = domain.replace(/^shop\./, "");
+    const shopHost = resolveShopPublicHost();
+    const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
+
+    const shopRootUrl = merchant.slug ? `https://${shopHost}/${merchant.slug}` : null;
+    const shopPanelPathUrl = merchant.slug
+      ? `${APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}`
+      : null;
 
     return {
       id: merchant.id,
@@ -204,7 +207,9 @@ export class MerchantSettingsService {
           ? "own"
           : "platform",
       marketingSettings: MarketingService.normalizeMarketing(merchant.marketingSettings),
-      shopPathUrl: merchant.slug ? `https://${shopHost}/${merchant.slug}` : null,
+      shopPathUrl: shopRootUrl,
+      shopMenuUrl: shopRootUrl ? `${shopRootUrl}/menu` : null,
+      shopPanelPathUrl,
       shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
       shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
       adyenMerchantAccount: merchant.adyenMerchantAccount,

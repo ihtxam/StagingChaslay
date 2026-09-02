@@ -305,6 +305,7 @@ function publicDomain() {
 
 function subdomainLabel() {
   const host = window.location.hostname.toLowerCase();
+  if (host.startsWith('shop.')) return 'shop';
   const main = publicDomain();
   if (host === main || !host.endsWith(`.${main}`)) return '';
   return host.slice(0, -(main.length + 1));

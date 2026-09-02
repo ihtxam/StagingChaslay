@@ -17,9 +17,22 @@ export const PAY_ORIGIN = (
   `https://pay.${BRAND_DOMAIN}`
 ).replace(/\/+$/, "");
 
-export const SHOP_HOST =
-  process.env.SHOP_PUBLIC_HOST ||
-  (BRAND_DOMAIN.startsWith("shop.") ? BRAND_DOMAIN : `shop.${BRAND_DOMAIN}`);
+/** Public shop hub hostname (path shops at https://{host}/{slug}). */
+export function resolveShopPublicHost(): string {
+  const explicit = process.env.SHOP_PUBLIC_HOST?.trim();
+  if (explicit) return explicit;
+
+  const domain = BRAND_DOMAIN.toLowerCase();
+  if (domain.includes("rebornsense.com")) return "shop.rebornsense.com";
+
+  const appHost = APP_ORIGIN.replace(/^https?:\/\//, "").toLowerCase();
+  if (appHost.startsWith("app.")) return `shop.${appHost}`;
+
+  if (domain.startsWith("shop.")) return domain;
+  return `shop.${domain}`;
+}
+
+export const SHOP_HOST = resolveShopPublicHost();
 
 export const FROM_EMAIL_DEFAULT = `noreply@${BRAND_DOMAIN.replace(/^app\./, "").replace(/^shop\./, "")}`;
 export const FROM_NAME_DEFAULT = APP_NAME;
@@ -28,6 +41,7 @@ export const LEGACY_HOST_ALIASES = [
   "https://app.chaslay.com",
   "https://api.chaslay.com",
   "https://shop.chaslay.com",
+  "https://shop.app.chaslay.com",
   "https://pay.chaslay.com",
   "https://status.chaslay.com",
   "https://admin.chaslay.com",
@@ -38,6 +52,7 @@ export const CURRENT_HOST_ALIASES = [
   `https://app.${BRAND_DOMAIN}`,
   `https://api.${BRAND_DOMAIN}`,
   `https://shop.${BRAND_DOMAIN}`,
+  `https://${SHOP_HOST}`,
   `https://pay.${BRAND_DOMAIN}`,
   `https://status.${BRAND_DOMAIN}`,
   `https://${BRAND_DOMAIN}`,

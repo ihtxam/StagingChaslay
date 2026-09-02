@@ -128,10 +128,11 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
+  // Shop hub: shop.{apex} or shop.app.{apex} (e.g. shop.chaslay.com, shop.app.chaslay.com)
+  if (host.startsWith('shop.')) return { host, kind: 'shop_hub' as const, label: 'shop' };
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
-  if (label === 'shop') return { host, kind: 'shop_hub' as const, label };
   if (label === 'status') return { host, kind: 'status' as const, label };
   if (RESERVED_SUBDOMAINS.has(label)) return { host, kind: 'reserved' as const, label };
   return { host, kind: 'merchant_subdomain' as const, label };
