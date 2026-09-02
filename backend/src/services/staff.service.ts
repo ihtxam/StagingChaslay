@@ -97,9 +97,9 @@ export class StaffService {
   }
 
   /**
-   * Provision the signing-up merchant's first Manager staff row (POS PIN + full panel role).
-   * Idempotent: skips when staff already exist or a Manager is present.
-   * PIN is bcrypt-hashed; merchants should change the default PIN during onboarding.
+   * Provision the merchant's first Manager staff row (POS PIN + full panel role).
+   * Idempotent: skips when any staff already exist.
+   * Default PIN is 0000 (stored for display in Users & roles).
    */
   static async ensureDefaultManagerStaff(merchantId: string, displayName: string) {
     const db = getDb();
@@ -375,8 +375,25 @@ export class StaffService {
     await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, roleId));
   }
 
+  /** Re-create the default manager when a merchant has zero staff (recovery after accidental deletes). */
+  static async ensureMerchantHasStaff(merchantId: string) {
+    const db = getDb();
+    const existingStaff = await db.query.merchantStaff.findFirst({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+      columns: { id: true },
+    });
+    if (existingStaff) return;
+
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { name: true },
+    });
+    await this.ensureDefaultManagerStaff(merchantId, merchant?.name || "Manager");
+  }
+
   static async listStaff(merchantId: string) {
     const db = getDb();
+    await this.ensureMerchantHasStaff(merchantId);
     const staff = await db.query.merchantStaff.findMany({
       where: eq(schema.merchantStaff.merchantId, merchantId),
       orderBy: asc(schema.merchantStaff.name),
@@ -635,6 +652,20 @@ export class StaffService {
 
   static async deleteStaff(merchantId: string, staffId: string) {
     const db = getDb();
+    const staff = await db.query.merchantStaff.findFirst({
+      where: and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId)),
+      columns: { id: true },
+    });
+    if (!staff) throw new Error("Staff member not found");
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(schema.merchantStaff)
+      .where(eq(schema.merchantStaff.merchantId, merchantId));
+    if ((total ?? 0) <= 1) {
+      throw new Error("Cannot remove the last user. At least one staff account must remain.");
+    }
+
     await db
       .delete(schema.merchantStaff)
       .where(and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId)));
