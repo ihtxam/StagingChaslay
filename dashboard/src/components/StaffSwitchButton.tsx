@@ -10,8 +10,10 @@ import {
   deliveryDriverHomePath,
   hasPermission,
   isDeliveryDriverOnlyStaff,
+  isOrderCenterOnlyStaff,
   isStorekeeperOnlyStaff,
   notifyWebPosStaffSessionChanged,
+  orderCenterHomePath,
   saveWebPosStaffSession,
   storekeeperHomePath,
   type Permission,
@@ -33,6 +35,7 @@ type Props = {
 function staffSwitchHomePath(permissions: Permission[]): string {
   if (isDeliveryDriverOnlyStaff(permissions, false)) return deliveryDriverHomePath();
   if (isStorekeeperOnlyStaff(permissions, false)) return storekeeperHomePath();
+  if (isOrderCenterOnlyStaff(permissions, false)) return orderCenterHomePath();
   if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
   return backOfficeHomePath(permissions, false);

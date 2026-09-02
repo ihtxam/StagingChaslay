@@ -132,7 +132,7 @@ export function useMerchantSetupProgress(): SetupSnapshot {
         title: 'Staff & Users',
         description: 'Invite team members and set up PIN access.',
         completedDescription: 'Staff added',
-        path: '/merchant/staff',
+        path: '/merchant/settings?tab=users',
       },
       {
         id: 'online_shop',

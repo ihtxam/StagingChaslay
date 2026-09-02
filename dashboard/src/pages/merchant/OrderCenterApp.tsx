@@ -9,6 +9,7 @@ import {
   Check,
   ChefHat,
   History,
+  LayoutDashboard,
   Loader2,
   LogOut,
   Printer,
@@ -45,6 +46,14 @@ import { printOrderCenterTickets } from '@/lib/order-center-print';
 import { printOrderCenterOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import OrderCenterPrintOptions from '@/components/merchant/OrderCenterPrintOptions';
+import StaffSwitchButton from '@/components/StaffSwitchButton';
+import {
+  hasPermission,
+  isOrderCenterOnlyStaff,
+  isStaffJwt,
+  type Permission,
+  type StaffRosterRow,
+} from '@/lib/permissions';
 import {
   generateEodReportText,
   logoUrlToEscPos,
@@ -144,6 +153,14 @@ export default function OrderCenterApp() {
   const [alertBusy, setAlertBusy] = useState(false);
   const [acceptEtaOrder, setAcceptEtaOrder] = useState<CenterOrder | null>(null);
   const unactionedAlertRef = useState<Set<string>>(() => new Set())[0];
+  const [hasStaffPins, setHasStaffPins] = useState(false);
+
+  const jwtIsOwner = user?.role !== 'staff';
+  const actingAsOwner = jwtIsOwner;
+  const effectivePerms = (user?.permissions || []) as Permission[];
+  const canReturnToPanel =
+    !isOrderCenterOnlyStaff(effectivePerms, actingAsOwner) &&
+    (actingAsOwner || hasPermission(effectivePerms, 'ACCESS_PANEL', false));
 
   useTillPrintHub({ enabled: true });
 
@@ -224,6 +241,21 @@ export default function OrderCenterApp() {
       }
     })();
   }, [user?.name]);
+
+  useEffect(() => {
+    if (!isStaffJwt(user)) return;
+    void (async () => {
+      try {
+        const staffRes = await api.get('/merchant/staff');
+        const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+        setHasStaffPins(
+          staffList.some((s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false)
+        );
+      } catch {
+        /* optional */
+      }
+    })();
+  }, [user]);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -603,7 +635,20 @@ export default function OrderCenterApp() {
               }
             />
             <OrderCenterPrintOptions />
+            <OnlineOrderOpsBar variant="dropdown" />
             <AcceptingMenu />
+            {canReturnToPanel ? (
+              <button
+                type="button"
+                className="btn-secondary p-2"
+                onClick={() => navigate('/merchant')}
+                aria-label={t('storekeeperBackToPanel')}
+                title={t('storekeeperBackToPanel')}
+              >
+                <LayoutDashboard className="h-5 w-5" />
+              </button>
+            ) : null}
+            {hasStaffPins ? <StaffSwitchButton /> : null}
             <button
               type="button"
               className="btn-secondary p-2"
@@ -662,9 +707,6 @@ export default function OrderCenterApp() {
       </header>
 
       <main className="mx-auto w-full max-w-lg flex-1 space-y-3 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {tab === 'live' ? (
-          <OnlineOrderOpsBar showAcceptingMenu={false} className="!shadow-none" />
-        ) : null}
         {tab === 'live' ? (
           loading ? (
             <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>

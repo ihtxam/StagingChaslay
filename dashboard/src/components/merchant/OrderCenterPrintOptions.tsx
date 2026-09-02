@@ -56,7 +56,7 @@ export default function OrderCenterPrintOptions({ className = '' }: Props) {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-30 mt-1 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-3 shadow-lg">
+        <div className="absolute right-0 z-50 mt-1 w-[min(20rem,calc(100vw-2rem))] isolate rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
           <p className="text-xs font-semibold">{t('orderCenterPrintOptionsTitle')}</p>
           <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{t('orderCenterPrintOptionsHint')}</p>
 
