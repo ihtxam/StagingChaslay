@@ -12,7 +12,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import {
   actionButtonIconSize,
@@ -134,7 +134,6 @@ export default function WebPosProductArea({
   const { t } = useI18n();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const filterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
   const expressIcon = actionButtonIconSize(actionButtonSize);
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -149,32 +148,12 @@ export default function WebPosProductArea({
   const showCollapsibleFilters = isPhoneLayout;
   const filtersVisible = !showCollapsibleFilters || filtersOpen;
 
-  const openFiltersBar = () => {
-    if (filterClickTimerRef.current) clearTimeout(filterClickTimerRef.current);
-    filterClickTimerRef.current = setTimeout(() => {
-      setFiltersOpen(true);
-      filterClickTimerRef.current = null;
-    }, 220);
-  };
-
-  const closeFiltersBar = () => {
-    if (filterClickTimerRef.current) {
-      clearTimeout(filterClickTimerRef.current);
-      filterClickTimerRef.current = null;
-    }
-    setFiltersOpen(false);
-    setMobileSearchOpen(false);
-  };
-
   const onFilterGripClick = () => {
     if (!showCollapsibleFilters) return;
-    openFiltersBar();
-  };
-
-  const onFilterGripDoubleClick = (e: React.MouseEvent) => {
-    if (!showCollapsibleFilters) return;
-    e.preventDefault();
-    closeFiltersBar();
+    setFiltersOpen((open) => {
+      if (open) setMobileSearchOpen(false);
+      return !open;
+    });
   };
 
   const toolbarBtnClass = (active: boolean) =>
@@ -196,7 +175,6 @@ export default function WebPosProductArea({
             <button
               type="button"
               onClick={onFilterGripClick}
-              onDoubleClick={onFilterGripDoubleClick}
               title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
               aria-label={t('webPosFiltersToggle')}
               aria-expanded={filtersOpen}
