@@ -845,8 +845,7 @@ if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
 else
   echo "  Admin:  https://app.chaslay.com/"
   echo "  API:    https://api.chaslay.com/health"
-  echo "  Shop:   https://shop.chaslay.com/  (legacy apex hub)"
-  echo "  Shop hub: https://shop.app.chaslay.com/{slug}  (requires DNS: shop.app.chaslay.com A 116.202.26.15)"
+  echo "  Shop hub: https://shop.chaslay.com/{slug}  (requires DNS: shop.chaslay.com A 116.202.26.15)"
   echo "  Pay:    https://pay.chaslay.com/receipt/"
   echo "  Status: https://status.chaslay.com/"
 fi

@@ -17,12 +17,25 @@ export const PAY_ORIGIN = (
   `https://pay.${BRAND_DOMAIN}`
 ).replace(/\/+$/, "");
 
+/** Apex domain without shop./app. prefix (e.g. chaslay.com, rebornsense.com). */
+function brandApexDomain(): string {
+  return BRAND_DOMAIN.toLowerCase().replace(/^shop\./, "").replace(/^app\./, "");
+}
+
 /** Public shop hub hostname (path shops at https://{host}/{slug}). */
 export function resolveShopPublicHost(): string {
   const explicit = process.env.SHOP_PUBLIC_HOST?.trim();
   if (explicit) return explicit;
 
   const domain = BRAND_DOMAIN.toLowerCase();
+  const apex = brandApexDomain();
+
+  // Chaslay staging/production: canonical shop hub is shop.chaslay.com (not shop.app.chaslay.com).
+  if (apex === "chaslay.com") {
+    if (domain.startsWith("shop.")) return domain;
+    return `shop.${apex}`;
+  }
+
   const appHost = APP_ORIGIN.replace(/^https?:\/\//, "").toLowerCase();
   if (appHost.startsWith("app.")) return `shop.${appHost}`;
 

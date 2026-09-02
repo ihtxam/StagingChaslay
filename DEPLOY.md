@@ -124,16 +124,16 @@ When asking an agent to deploy, always specify **test/chaslay** or **production/
 
 | Environment | Workflow | Trigger | Server secret | Stack | Domains |
 |-------------|----------|---------|---------------|-------|---------|
-| Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, `shop.app.chaslay.com`, … |
+| Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, `shop.chaslay.com`, … |
 | Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
 | Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Auto on push to `main` | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
 
 ### Chaslay staging DNS (shop hub)
 
-When `PUBLIC_APP_URL=https://app.chaslay.com`, customer shop URLs use **`https://shop.app.chaslay.com/{slug}`**. Add at your DNS provider:
+Customer shop URLs use **`https://shop.chaslay.com/{slug}`** (panel fallback: `https://app.chaslay.com/shop/{slug}`). Add at your DNS provider:
 
 ```
-shop.app.chaslay.com  A  116.202.26.15
+shop.chaslay.com  A  116.202.26.15
 ```
 
 See `deploy/env.chaslay.example` for the full env template.

@@ -94,19 +94,6 @@ shop.chaslay.com {
 	}
 }
 
-# Staging panel host uses shop.app.chaslay.com/{slug} (PUBLIC_APP_URL=app.chaslay.com)
-shop.app.chaslay.com {
-	encode gzip zstd
-
-	handle /api/* {
-		reverse_proxy api:3000
-	}
-
-	handle {
-		reverse_proxy dashboard:80
-	}
-}
-
 pay.chaslay.com {
 	encode gzip zstd
 
@@ -177,7 +164,7 @@ status.chaslay.com {
 	}
 }
 
-# Custom domains: CNAME Host → shop.app.chaslay.com (Host header = merchant domain)
+# Custom domains: CNAME Host → shop.chaslay.com (Host header = merchant domain)
 https:// {
 	tls {
 		on_demand
