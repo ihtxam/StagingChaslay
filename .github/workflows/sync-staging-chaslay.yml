@@ -102,11 +102,14 @@ jobs:
       - name: Deploy to staging server
         if: steps.ssh.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          STAGING_CHASLAY_DEPLOY_KEY: ${{ secrets.STAGING_CHASLAY_DEPLOY_KEY }}
         with:
           host: ${{ secrets.HETZNER_HOST || '116.202.26.15' }}
           username: ${{ secrets.HETZNER_USER || 'root' }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          envs: STAGING_CHASLAY_DEPLOY_KEY
           script_stop: true
           script: |
             export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
@@ -116,6 +119,11 @@ jobs:
             staging_key="/root/.ssh/staging_chaslay_deploy"
             mkdir -p /root/.ssh
             chmod 700 /root/.ssh
+            if [[ -n "${STAGING_CHASLAY_DEPLOY_KEY:-}" ]]; then
+              printf '%s\n' "$STAGING_CHASLAY_DEPLOY_KEY" >"$staging_key"
+              chmod 600 "$staging_key"
+              echo "Wrote StagingChaslay deploy key from STAGING_CHASLAY_DEPLOY_KEY secret"
+            fi
             if [[ -f "$staging_key" ]]; then
               chmod 600 "$staging_key"
               if ! grep -qE '^Host github.com-staging-chaslay$' /root/.ssh/config 2>/dev/null; then
@@ -129,13 +137,18 @@ jobs:
                 } >>/root/.ssh/config
                 chmod 600 /root/.ssh/config
               fi
-            fi
-            if [[ -d "$DEPLOY_PATH/.git" ]]; then
-              cd "$DEPLOY_PATH"
-              origin="$(git remote get-url origin 2>/dev/null || true)"
-              if [[ "$origin" != "$staging_ssh" ]]; then
-                echo "Setting origin to StagingChaslay SSH deploy key alias"
-                git remote set-url origin "$staging_ssh"
+              if [[ -d "$DEPLOY_PATH/.git" ]]; then
+                cd "$DEPLOY_PATH"
+                origin="$(git remote get-url origin 2>/dev/null || true)"
+                if [[ "$origin" != "$staging_ssh" ]]; then
+                  echo "Setting origin to StagingChaslay SSH deploy key alias"
+                  git remote set-url origin "$staging_ssh"
+                fi
               fi
+            else
+              echo "WARNING: $staging_key missing and STAGING_CHASLAY_DEPLOY_KEY not set."
+              echo "Generate on server: ssh-keygen -t ed25519 -f $staging_key -N ''"
+              echo "Add ${staging_key}.pub to https://github.com/ihtxam/StagingChaslay/settings/keys"
+              echo "Or add private key as rebornSense secret STAGING_CHASLAY_DEPLOY_KEY"
             fi
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"

@@ -369,6 +369,12 @@ EOF
 
 ensure_staging_chaslay_git_remote() {
   ensure_staging_chaslay_ssh
+  if [[ ! -f "$STAGING_DEPLOY_KEY" ]]; then
+    echo "WARNING: StagingChaslay deploy key missing — keeping existing git remote."
+    echo "  Add STAGING_CHASLAY_DEPLOY_KEY to rebornSense secrets, or run:"
+    echo "  bash $REPO_DIR/scripts/setup-staging-chaslay-server.sh"
+    return 0
+  fi
   local remote_url
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
   if [[ "$remote_url" != "$STAGING_REPO_SSH" ]]; then
