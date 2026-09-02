@@ -31,12 +31,29 @@ jobs:
             export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
             export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"
+            staging_ssh="git@github.com-staging-chaslay:ihtxam/StagingChaslay.git"
+            staging_key="/root/.ssh/staging_chaslay_deploy"
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            if [[ -f "$staging_key" ]]; then
+              chmod 600 "$staging_key"
+              if ! grep -qE '^Host github.com-staging-chaslay$' /root/.ssh/config 2>/dev/null; then
+                {
+                  echo ''
+                  echo 'Host github.com-staging-chaslay'
+                  echo '  HostName github.com'
+                  echo '  User git'
+                  echo '  IdentityFile /root/.ssh/staging_chaslay_deploy'
+                  echo '  IdentitiesOnly yes'
+                } >>/root/.ssh/config
+                chmod 600 /root/.ssh/config
+              fi
+            fi
             if [[ -d "$DEPLOY_PATH/.git" ]]; then
               cd "$DEPLOY_PATH"
               origin="$(git remote get-url origin 2>/dev/null || true)"
-              staging_ssh="git@github.com-staging-chaslay:ihtxam/StagingChaslay.git"
-              if [[ "$origin" == https://* ]] || [[ "$origin" == git@github.com:ihtxam/StagingChaslay* ]]; then
-                echo "Rewriting origin for StagingChaslay SSH deploy key alias"
+              if [[ "$origin" != "$staging_ssh" ]]; then
+                echo "Setting origin to StagingChaslay SSH deploy key alias (never plain git@github.com)"
                 git remote set-url origin "$staging_ssh"
               fi
             fi

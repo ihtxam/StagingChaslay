@@ -328,6 +328,19 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
 fi
 
 # Private repos must use SSH deploy keys — HTTPS remotes fail git fetch in CI/SSH deploy.
+is_staging_chaslay_deploy() {
+  [[ "$DEPLOY_STACK" == "rebornsense" ]] && return 1
+  [[ "$REPO_DIR" == "$STAGING_DEPLOY_PATH" ]] && return 0
+  [[ "${DEPLOY_PATH:-}" == "$STAGING_DEPLOY_PATH" ]] && return 0
+  local remote_url repo_name
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+  [[ -z "$remote_url" ]] && return 1
+  [[ "$remote_url" == *StagingChaslay* ]] && return 0
+  repo_name="$(printf '%s' "$remote_url" | sed -E 's#.*[:/]([^/]+)(\.git)?$#\1#')"
+  [[ "$repo_name" == "StagingChaslay" ]] && return 0
+  return 1
+}
+
 ensure_staging_chaslay_ssh() {
   [[ "$DEPLOY_STACK" == "rebornsense" ]] && return 0
   mkdir -p /root/.ssh
@@ -354,22 +367,37 @@ EOF
   fi
 }
 
+ensure_staging_chaslay_git_remote() {
+  ensure_staging_chaslay_ssh
+  local remote_url
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+  if [[ "$remote_url" != "$STAGING_REPO_SSH" ]]; then
+    echo "Setting origin for StagingChaslay SSH alias (never plain git@github.com): $STAGING_REPO_SSH"
+    git remote set-url origin "$STAGING_REPO_SSH"
+  fi
+}
+
 ensure_git_ssh_remote() {
-  local remote_url repo_ssh repo_name
+  local remote_url repo_ssh repo
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
   if [[ -z "$remote_url" ]]; then
     return 0
   fi
-  repo_name="$(printf '%s' "$remote_url" | sed -E 's#.*[:/]([^/]+)(\.git)?$#\1#')"
-  if [[ "$repo_name" == "StagingChaslay" || "$REPO_DIR" == "$STAGING_DEPLOY_PATH" ]]; then
-    ensure_staging_chaslay_ssh
-    if [[ "$remote_url" != "$STAGING_REPO_SSH" ]]; then
-      echo "Rewriting origin for StagingChaslay SSH alias: $STAGING_REPO_SSH"
-      git remote set-url origin "$STAGING_REPO_SSH"
-    fi
+  if is_staging_chaslay_deploy; then
+    ensure_staging_chaslay_git_remote
     return 0
   fi
   if [[ "$remote_url" == git@* ]]; then
+    return 0
+  fi
+  owner="$(printf '%s' "$remote_url" | sed -E \
+    -e 's#^https://github.com/([^/]+)/.*#\1#' \
+    -e 's#^https://x-access-token:[^@]+@github.com/([^/]+)/.*#\1#')"
+  repo="$(printf '%s' "$remote_url" | sed -E \
+    -e 's#^https://github.com/[^/]+/([^/.]+)(\.git)?$#\1#' \
+    -e 's#^https://x-access-token:[^@]+@github.com/[^/]+/([^/.]+)(\.git)?$#\1#')"
+  if [[ "$repo" == "StagingChaslay" ]]; then
+    ensure_staging_chaslay_git_remote
     return 0
   fi
   repo_ssh="$(printf '%s' "$remote_url" | sed -E \
