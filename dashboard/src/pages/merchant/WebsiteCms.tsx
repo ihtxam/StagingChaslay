@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { SHOP_HOST } from '@/lib/brand';
 import OpenPageEmbed, { type CmsCatalogPayload } from '@/components/OpenPageEmbed';
 import {
   emptyOpenPageBlocks,
@@ -520,7 +521,7 @@ export default function WebsiteCms() {
             </tr>
             <tr>
               <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">Points to</th>
-              <td className="px-2 py-1.5 font-mono">shop.rebornsense.com</td>
+              <td className="px-2 py-1.5 font-mono">{SHOP_HOST}</td>
             </tr>
           </tbody>
         </table>

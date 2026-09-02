@@ -4,6 +4,7 @@ import { getDb, schema } from "./index";
 import { AuthService } from "../services/auth.service";
 import { generateSyncApiKey } from "../services/chaslay-compat.service";
 import { SubscriptionPlansService } from "../services/subscription-plans.service";
+import { resolveShopPublicHost } from "../lib/brand";
 
 dotenv.config();
 
@@ -151,7 +152,7 @@ async function seedDemoShop() {
       .returning();
     merchant = inserted[0]!;
     console.log(`Seeded demo merchant: ${merchant.email} (slug=${slug})`);
-    console.log(`  Shop: https://shop.rebornsense.com/${slug} or /shop/${slug}`);
+    console.log(`  Shop: https://${resolveShopPublicHost()}/${slug} or /shop/${slug}`);
     console.log(`  Sync API key: ${merchant.syncApiKey}`);
   } else {
     await db

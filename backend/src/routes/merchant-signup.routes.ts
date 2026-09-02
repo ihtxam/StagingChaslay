@@ -4,6 +4,7 @@ import { merchants, licenses, merchantSettings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { resolveShopPublicHost } from '@/lib/brand';
 
 const router = Router();
 
@@ -305,7 +306,9 @@ router.get('/shop-url/:merchantId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Merchant not found' });
     }
 
-    const shopUrl = `https://order.${process.env.DOMAIN || 'yourdomain.com'}/${merchant.slug}`;
+    const shopUrl = merchant.slug
+      ? `https://${resolveShopPublicHost()}/${merchant.slug}`
+      : `https://${resolveShopPublicHost()}`;
 
     res.json({
       success: true,

@@ -23,8 +23,6 @@ export function resolveShopPublicHost(): string {
   if (explicit) return explicit;
 
   const domain = BRAND_DOMAIN.toLowerCase();
-  if (domain.includes("rebornsense.com")) return "shop.rebornsense.com";
-
   const appHost = APP_ORIGIN.replace(/^https?:\/\//, "").toLowerCase();
   if (appHost.startsWith("app.")) return `shop.${appHost}`;
 

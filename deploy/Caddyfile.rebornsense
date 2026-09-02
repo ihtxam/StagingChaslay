@@ -78,6 +78,19 @@ shop.rebornsense.com {
 	}
 }
 
+# Production panel host uses shop.app.rebornsense.com/{slug} (PUBLIC_APP_URL=app.rebornsense.com)
+shop.app.rebornsense.com {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
 pay.rebornsense.com {
 	encode gzip zstd
 
@@ -131,7 +144,7 @@ status.rebornsense.com {
 	}
 }
 
-# Custom merchant domains (CNAME → shop.rebornsense.com)
+# Custom merchant domains (CNAME → shop host, e.g. shop.app.rebornsense.com)
 https:// {
 	tls {
 		on_demand

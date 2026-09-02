@@ -7,6 +7,7 @@ import {
   type MerchantSmtpSettings,
 } from "@/db";
 import { EmailService } from "@/services/email.service";
+import { resolveShopPublicHost } from "@/lib/brand";
 
 const DEFAULT_REORDER_DAYS = 5;
 
@@ -101,22 +102,12 @@ function shopUrlForMerchant(merchant: {
   subdomain?: string | null;
   customDomain?: string | null;
 }) {
-  const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL || "https://rebornsense.com";
-  const base = domain.replace(/\/$/, "").startsWith("http")
-    ? domain.replace(/\/$/, "")
-    : `https://${domain.replace(/\/$/, "")}`;
+  const shopHost = resolveShopPublicHost();
+  const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
   if (merchant.customDomain) return `https://${merchant.customDomain.replace(/^https?:\/\//, "")}`;
-  if (merchant.subdomain) {
-    try {
-      const host = new URL(base).host;
-      const apex = host.replace(/^www\./, "").replace(/^shop\./, "").replace(/^app\./, "");
-      return `https://${merchant.subdomain}.${apex}`;
-    } catch {
-      /* fall through */
-    }
-  }
-  if (merchant.slug) return `${base}/${merchant.slug}`;
-  return base;
+  if (merchant.subdomain) return `https://${merchant.subdomain}.${apex}`;
+  if (merchant.slug) return `https://${shopHost}/${merchant.slug}`;
+  return `https://${shopHost}`;
 }
 
 function htmlWrap(body: string) {

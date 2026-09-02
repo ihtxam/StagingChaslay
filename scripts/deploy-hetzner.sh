@@ -838,14 +838,15 @@ echo "=== Deploy complete ==="
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
   echo "  Admin:  https://app.rebornsense.com/"
   echo "  API:    https://api.rebornsense.com/health"
-  echo "  Shop:   https://shop.rebornsense.com/"
+  echo "  Shop hub: https://shop.app.rebornsense.com/{slug}  (requires DNS A/CNAME for shop.app.rebornsense.com)"
+  echo "  Shop:   https://shop.rebornsense.com/  (legacy apex hub)"
   echo "  Pay:    https://pay.rebornsense.com/receipt/"
   echo "  Status: https://status.rebornsense.com/"
 else
   echo "  Admin:  https://app.chaslay.com/"
   echo "  API:    https://api.chaslay.com/health"
   echo "  Shop:   https://shop.chaslay.com/  (legacy apex hub)"
-  echo "  Shop hub: https://shop.app.chaslay.com/{slug}  (requires DNS A/CNAME for shop.app.chaslay.com)"
+  echo "  Shop hub: https://shop.app.chaslay.com/{slug}  (requires DNS: shop.app.chaslay.com A 116.202.26.15)"
   echo "  Pay:    https://pay.chaslay.com/receipt/"
   echo "  Status: https://status.chaslay.com/"
 fi

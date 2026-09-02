@@ -7,6 +7,7 @@ import {
   generateEcardCode,
   normalizeScannedPayload,
 } from "@/lib/gift-card-code";
+import { resolveShopPublicHost } from "@/lib/brand";
 import {
   normalizeGiftCardSettings,
   validateGiftAmount,
@@ -917,8 +918,8 @@ export class GiftCardService {
     const redeemUrl = buildGiftCardRedeemUrl(code);
     const shopSlug = merchant?.slug;
     const shopGiftUrl =
-      shopSlug && process.env.DOMAIN
-        ? `https://shop.${process.env.DOMAIN.replace(/^https?:\/\//, '')}/${shopSlug}/gift/${encodeURIComponent(code)}`
+      shopSlug
+        ? `https://${resolveShopPublicHost()}/${shopSlug}/gift/${encodeURIComponent(code)}`
         : redeemUrl;
     const holder = opts.holderName?.trim();
 

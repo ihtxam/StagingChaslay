@@ -79,6 +79,7 @@ import {
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
+import { SHOP_HOST } from '@/lib/brand';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
   settingsDash,
@@ -1995,7 +1996,7 @@ export default function Settings() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field
                     label={t('shopSlug')}
-                    hint={settings.shopPathUrl || t('shopSlugHint')}
+                    hint={settings.shopPathUrl || t('shopSlugHint', { shopHost: SHOP_HOST })}
                   >
                     <input
                       className="input"
@@ -2024,7 +2025,7 @@ export default function Settings() {
                           <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
                             {t('cmsDnsPointsTo')}
                           </th>
-                          <td className="px-2 py-1.5 font-mono">shop.rebornsense.com</td>
+                          <td className="px-2 py-1.5 font-mono">{SHOP_HOST}</td>
                         </tr>
                       </tbody>
                     </table>

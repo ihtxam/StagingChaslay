@@ -12,21 +12,37 @@ export const APP_ADMIN_LABEL = 'Reborn Admin';
 export const APP_TAGLINE = 'Restaurant POS & online ordering';
 
 /** Apex marketing domain. */
-export const BRAND_DOMAIN = 'rebornsense.com';
+export const BRAND_DOMAIN = (
+  import.meta.env.VITE_PUBLIC_DOMAIN || 'rebornsense.com'
+).toLowerCase();
 
 /** Merchant panel + login + same-origin API (`/api`, `/v1`). */
-export const APP_HOST = `app.${BRAND_DOMAIN}`;
-export const APP_ORIGIN = `https://${APP_HOST}`;
+export const APP_ORIGIN = (
+  import.meta.env.VITE_PUBLIC_APP_URL || `https://app.${BRAND_DOMAIN}`
+).replace(/\/+$/, '');
+export const APP_HOST = APP_ORIGIN.replace(/^https?:\/\//, '');
 
 /** Android / POS API alias (same backend as APP_ORIGIN). */
 export const API_HOST = APP_HOST;
 export const API_ORIGIN = APP_ORIGIN;
 
-export const SHOP_HOST = `shop.${BRAND_DOMAIN}`;
+/** Public shop hub hostname (path shops at https://{host}/{slug}). */
+export function resolveShopPublicHost(): string {
+  const appHost = APP_ORIGIN.replace(/^https?:\/\//, '').toLowerCase();
+  if (appHost.startsWith('app.')) return `shop.${appHost}`;
+
+  const domain = BRAND_DOMAIN;
+  if (domain.startsWith('shop.')) return domain;
+  return `shop.${domain}`;
+}
+
+export const SHOP_HOST = resolveShopPublicHost();
 export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
 
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
-export const PAY_ORIGIN = `https://${PAY_HOST}`;
+export const PAY_ORIGIN = (
+  import.meta.env.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`
+).replace(/\/+$/, '');
 
 export const STATUS_HOST = `status.${BRAND_DOMAIN}`;
 export const STATUS_ORIGIN = `https://${STATUS_HOST}`;

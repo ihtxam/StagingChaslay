@@ -7,7 +7,8 @@ Product name: **Reborn**. Login and API: **https://app.rebornsense.com** (same `
 | `app.rebornsense.com` | Login, merchant panel, Web POS, Android `/v1` + `/api` |
 | `api.rebornsense.com` | Optional API alias (same backend) |
 | `pay.rebornsense.com` | Digital receipt pages (`/receipt/{id}`) |
-| `shop.rebornsense.com/{slug}` | Customer online shop |
+| `shop.app.rebornsense.com/{slug}` | Customer online shop (canonical when `PUBLIC_APP_URL=app.rebornsense.com`) |
+| `shop.rebornsense.com/{slug}` | Legacy shop hub (redirects still work) |
 | `status.rebornsense.com` | Public system status |
 | `rebornsense.com` | Redirects to `app.rebornsense.com` |
 
@@ -35,7 +36,8 @@ Point these **A records** to the new server IP:
 - `app.rebornsense.com`
 - `api.rebornsense.com` (optional)
 - `pay.rebornsense.com`
-- `shop.rebornsense.com`
+- `shop.app.rebornsense.com` (canonical shop hub)
+- `shop.rebornsense.com` (legacy)
 - `status.rebornsense.com`
 - `rebornsense.com` / `www.rebornsense.com`
 - `*.rebornsense.com` (shop subdomains)
@@ -122,9 +124,19 @@ When asking an agent to deploy, always specify **test/chaslay** or **production/
 
 | Environment | Workflow | Trigger | Server secret | Stack | Domains |
 |-------------|----------|---------|---------------|-------|---------|
-| Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, … |
+| Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, `shop.app.chaslay.com`, … |
 | Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
 | Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Auto on push to `main` | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
+
+### Chaslay staging DNS (shop hub)
+
+When `PUBLIC_APP_URL=https://app.chaslay.com`, customer shop URLs use **`https://shop.app.chaslay.com/{slug}`**. Add at your DNS provider:
+
+```
+shop.app.chaslay.com  A  116.202.26.15
+```
+
+See `deploy/env.chaslay.example` for the full env template.
 
 ### Cloud Agent deploy (SSH + scripts)
 
@@ -521,7 +533,7 @@ See `backend/sql/ensure-shifts.sql`.
 | `LICENSE_SECRET` | Min 32 chars |
 | `SUPERADMIN_PASSWORD` | Set once in `/root/chaslay-secrets/backend.env`; stored in Postgres and survives redeploys |
 
-`Caddyfile` is already set for `app.rebornsense.com`, `shop.rebornsense.com`, `app.rebornsense.com`.
+`Caddyfile` is already set for `app.rebornsense.com`, `shop.app.rebornsense.com`, `shop.rebornsense.com`.
 
 **Print agent EXE:** `backend/public/downloads/*.exe` is gitignored. Deploy cross-compiles it with `pkg` (Docker `node:20-bookworm`) into that folder and Caddy proxies `/downloads/*` on `app.rebornsense.com` to the API (so the SPA never returns HTML as a fake `.exe`). Verify after deploy:
 
@@ -591,9 +603,9 @@ docker compose exec api npm run create-tenant -- --slug=acme-burger --name="Acme
 This prints:
 
 - **POS API key** ? put in Android `SYNC_API_KEY`
-- **Shop URL** ? `https://shop.rebornsense.com/acme-burger`
+- **Shop URL** ? `https://shop.app.rebornsense.com/acme-burger`
 
-Demo tenant (after seed): https://shop.rebornsense.com/demo
+Demo tenant (after seed): https://shop.app.rebornsense.com/demo
 
 ---
 
@@ -630,7 +642,7 @@ Send the printed code to the merchant.
 
 - Public menu: `GET /v1/shop/{clientName}/menu`
 - Place order: `POST /v1/shop/{clientName}/orders`
-- Storefront page: `https://shop.rebornsense.com/{clientName}`
+- Storefront page: `https://shop.app.rebornsense.com/{clientName}`
 
 Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_KEY` is set.
 
@@ -658,7 +670,7 @@ Orders appear in POS **Ongoing Orders** when the tablet is online and `SYNC_API_
 
 ## Custom domain (merchant shop)
 
-Shop **slug** is enough: `https://shop.rebornsense.com/{slug}` (also `/shop/{slug}` on admin).
+Shop **slug** is enough: `https://shop.app.rebornsense.com/{slug}` (also `/shop/{slug}` on admin).
 
 Shop **subdomain** (`https://{sub}.rebornsense.com`) is optional — it is **not** required for custom domains.
 
@@ -670,7 +682,7 @@ Create a **CNAME** at your DNS provider:
 |-------|--------|
 | **Type** | `CNAME` |
 | **Host / Name** | `www` (or `order`, `shop`, … — the hostname customers will use) |
-| **Target / Value / Points to** | `shop.rebornsense.com` |
+| **Target / Value / Points to** | `shop.app.rebornsense.com` |
 
 Then in Merchant → Settings (or Website CMS), enter the full hostname, e.g. `www.mycafe.ch`.
 

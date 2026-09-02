@@ -177,7 +177,7 @@ status.chaslay.com {
 	}
 }
 
-# Custom domains: CNAME Host → shop.chaslay.com (Host header = merchant domain)
+# Custom domains: CNAME Host → shop.app.chaslay.com (Host header = merchant domain)
 https:// {
 	tls {
 		on_demand

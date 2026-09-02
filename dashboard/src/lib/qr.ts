@@ -3,6 +3,7 @@
  */
 
 import { publicApi } from '@/lib/api';
+import { SHOP_ORIGIN } from '@/lib/brand';
 
 /** EC-XXXXXXXX redeem codes (6–12 hex digits after prefix). */
 const ECARD_BODY_RE = /EC[-' ]?([0-9A-F]{6,12})/i;
@@ -524,7 +525,7 @@ export function buildTableShopUrl(
   const table = encodeURIComponent(tableId);
   const base = String(
     origin ||
-      (typeof window !== 'undefined' ? window.location.origin : 'https://shop.rebornsense.com')
+      (typeof window !== 'undefined' ? window.location.origin : SHOP_ORIGIN)
   ).replace(/\/$/, '');
   let url: string;
   if (/\/shop$/i.test(base) || /app\.(rebornsense|chaslay)\.com$/i.test(base)) {

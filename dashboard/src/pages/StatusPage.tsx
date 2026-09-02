@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { APP_NAME } from '@/lib/brand';
+import { APP_NAME, APP_HOST, PAY_HOST, SHOP_HOST } from '@/lib/brand';
 
 type ComponentStatus = {
   status: 'ok' | 'error';
@@ -13,11 +13,11 @@ type StatusPayload = {
 };
 
 const SERVICES = [
-  { key: 'api', label: 'API', hint: 'app.rebornsense.com (/api, /v1)' },
+  { key: 'api', label: 'API', hint: `${APP_HOST} (/api, /v1)` },
   { key: 'database', label: 'Database', hint: 'PostgreSQL' },
-  { key: 'dashboard', label: 'Admin panel', hint: 'app.rebornsense.com' },
-  { key: 'shop', label: 'Online shop', hint: 'shop.rebornsense.com' },
-  { key: 'pay', label: 'Digital receipts', hint: 'pay.rebornsense.com' },
+  { key: 'dashboard', label: 'Admin panel', hint: APP_HOST },
+  { key: 'shop', label: 'Online shop', hint: SHOP_HOST },
+  { key: 'pay', label: 'Digital receipts', hint: PAY_HOST },
 ] as const;
 
 function statusLabel(status: 'ok' | 'error' | 'loading') {
