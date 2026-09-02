@@ -15,7 +15,6 @@ import {
   Sun,
   UserCircle2,
   Vault,
-  X,
   ArrowDownUp,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -284,28 +283,6 @@ export default function WebPosTopBar({
 }: Props) {
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-
-  const closeMobileSearch = () => {
-    setMobileSearchOpen(false);
-    if (search) onSearchChange('');
-  };
-
-  const toggleMobileSearch = () => {
-    if (mobileSearchOpen) {
-      closeMobileSearch();
-      return;
-    }
-    if (settingsOpen) onCloseSettings();
-    setMobileSearchOpen(true);
-  };
-
-  useEffect(() => {
-    if (!showSearch) {
-      setMobileSearchOpen(false);
-      onSearchChange('');
-    }
-  }, [showSearch, onSearchChange]);
 
   const bellBadgeCount = notificationCount ?? onlinePendingCount;
   const bellRing = orderAlertRing || reservationAlertRing;
@@ -373,36 +350,25 @@ export default function WebPosTopBar({
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           {showSearch ? (
-            <>
-              <label className="relative hidden sm:block">
-                <Search
-                  size={15}
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
-                />
-                <input
-                  className="webpos-search-input h-9 min-w-0 w-48 max-w-[min(100%,18rem)] flex-1 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 lg:w-60 xl:w-72"
-                  placeholder={t('webPosSearchProducts')}
-                  value={search}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      onSearchSubmit?.();
-                    }
-                  }}
-                  autoComplete="off"
-                />
-              </label>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 sm:hidden"
-                aria-label={t('webPosSearchProducts')}
-                aria-expanded={mobileSearchOpen}
-                onClick={toggleMobileSearch}
-              >
-                {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
-              </button>
-            </>
+            <label className="relative hidden sm:block">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+              />
+              <input
+                className="webpos-search-input h-9 min-w-0 w-48 max-w-[min(100%,18rem)] flex-1 rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2 lg:w-60 xl:w-72"
+                placeholder={t('webPosSearchProducts')}
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onSearchSubmit?.();
+                  }
+                }}
+                autoComplete="off"
+              />
+            </label>
           ) : null}
 
           {/* Notifications bell — badge for online orders + pending bookings */}
@@ -441,7 +407,6 @@ export default function WebPosTopBar({
             aria-label={staffName || t('webPosSwitchUser')}
             title={staffName || t('webPosSwitchUser')}
             onClick={() => {
-              closeMobileSearch();
               if (settingsOpen) onCloseSettings();
               onSwitchUser();
             }}
@@ -450,22 +415,6 @@ export default function WebPosTopBar({
             <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
             <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
           </button>
-
-          {canShowPanel && onShowPanel ? (
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100 lg:hidden"
-              onClick={() => {
-                closeMobileSearch();
-                if (settingsOpen) onCloseSettings();
-                onShowPanel();
-              }}
-              title={t('webPosBackOffice')}
-              aria-label={t('webPosBackOffice')}
-            >
-              <PanelLeft size={18} />
-            </button>
-          ) : null}
 
           {canDrawer ? (
             <button
@@ -486,7 +435,6 @@ export default function WebPosTopBar({
               aria-expanded={settingsOpen}
               aria-label={t('webPosMoreShort')}
               onClick={() => {
-                closeMobileSearch();
                 onToggleSettings();
               }}
             >
@@ -507,31 +455,6 @@ export default function WebPosTopBar({
           </div>
         </div>
       </div>
-
-      {showSearch && mobileSearchOpen ? (
-        <div className="border-t border-stone-100 px-2 py-2 sm:hidden">
-          <label className="relative block">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
-            />
-            <input
-              className="webpos-search-input h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2"
-              placeholder={t('webPosSearchProducts')}
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  onSearchSubmit?.();
-                }
-              }}
-              autoComplete="off"
-              inputMode="search"
-            />
-          </label>
-        </div>
-      ) : null}
 
       {merchantName ? (
         <p className="webpos-merchant-subline truncate px-2 pb-1 text-[10px] text-stone-400 sm:px-4">

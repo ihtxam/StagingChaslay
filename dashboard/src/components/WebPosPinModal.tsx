@@ -21,6 +21,7 @@ export default function WebPosPinModal({
   mode = 'switch',
   onClose,
   onSuccess,
+  onLeave,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -35,6 +36,8 @@ export default function WebPosPinModal({
     accessToken?: string;
     preferredTerminalId?: string | null;
   }) => void;
+  /** Owner/manager escape from PIN gate back to the merchant panel. */
+  onLeave?: () => void;
 }) {
   const { t } = useI18n();
   const [pin, setPin] = useState('');
@@ -224,6 +227,15 @@ export default function WebPosPinModal({
           ) : null}
 
           {keypad}
+          {onLeave ? (
+            <button
+              type="button"
+              className="mt-8 text-sm font-medium text-stone-400 underline underline-offset-2 hover:text-stone-200"
+              onClick={onLeave}
+            >
+              {t('webPosBackOffice')}
+            </button>
+          ) : null}
         </div>
       </div>
     );
