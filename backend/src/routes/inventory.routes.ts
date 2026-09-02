@@ -191,6 +191,17 @@ router.get("/low-stock", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/expiring-soon", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const data = await InventoryService.listExpiringSoon(merchantId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Failed to load expiring stock");
+  }
+});
+
 router.get("/usage", denyInventoryRecipes, async (req: Request, res: Response) => {
   try {
     const days = Number(req.query.days) || 30;

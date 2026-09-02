@@ -31,12 +31,21 @@ export default function InventoryExpiryAlerts() {
   const [leadDays, setLeadDays] = useState(30);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   const prevCountRef = useRef(0);
+  const disabledRef = useRef(false);
 
   const fingerprint = useMemo(() => lotFingerprint(lots), [lots]);
 
   const load = useCallback(async () => {
+    if (disabledRef.current) return;
     try {
-      const res = await api.get('/merchant/inventory/expiring-soon');
+      const res = await api.get('/merchant/inventory/expiring-soon', {
+        validateStatus: (status) => status < 500,
+      });
+      if (res.status === 404 || res.status === 403) {
+        disabledRef.current = true;
+        return;
+      }
+      if (res.status !== 200) return;
       const next = (res.data.lots || []) as ExpiringLot[];
       setLeadDays(Number(res.data.leadDays) || 30);
       setLots(next);

@@ -1,3 +1,5 @@
+import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
+
 /**
  * Reborn Windows Print Agent (localhost).
  * Electron desktop also exposes window.manuposDesktop (legacy API name).
@@ -763,20 +765,74 @@ export async function isPrintAgentAvailable(): Promise<boolean> {
   return health.ok;
 }
 
+const CLOUD_RELAY_PAIR_COOLDOWN_MS = 60_000;
+const CLOUD_RELAY_MAX_BACKOFF_MS = 5 * 60_000;
+
+let cloudRelayPairState: {
+  token: string;
+  apiBase: string;
+  ok: boolean;
+  failCount: number;
+  nextAttemptAt: number;
+} | null = null;
+
+/** Clear cached pair state when auth changes (logout / new login). */
+export function resetPrintAgentCloudRelayPairing(): void {
+  cloudRelayPairState = null;
+}
+
 /** Push API base + JWT so the Print Agent can drain till jobs while the browser is minimized. */
 export async function pairPrintAgentCloudRelay(): Promise<boolean> {
   if (typeof window === 'undefined' || window.manuposDesktop) return false;
-  const token = localStorage.getItem('token');
+  const token = String(localStorage.getItem('token') || '').trim();
   if (!token) return false;
-  const env = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL) || '';
-  const apiBase = (env || `${window.location.origin}/api`).replace(/\/$/, '');
+  const apiBase = resolveAbsoluteApiBaseUrl();
+  if (!/^https?:\/\//i.test(apiBase)) return false;
+
+  const now = Date.now();
+  if (
+    cloudRelayPairState &&
+    cloudRelayPairState.token === token &&
+    cloudRelayPairState.apiBase === apiBase &&
+    cloudRelayPairState.ok
+  ) {
+    return true;
+  }
+  if (
+    cloudRelayPairState &&
+    cloudRelayPairState.token === token &&
+    cloudRelayPairState.apiBase === apiBase &&
+    !cloudRelayPairState.ok &&
+    now < cloudRelayPairState.nextAttemptAt
+  ) {
+    return false;
+  }
+
   try {
-    const data = await agentFetch('/cloud-relay', {
+    const res = await fetch(`${PRINT_AGENT_URL}/cloud-relay`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiBase, token }),
     });
-    return !!data?.ok;
+    if (!res.ok) {
+      const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+      const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+      cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
+      return false;
+    }
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    if (!data?.ok) {
+      const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+      const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+      cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
+      return false;
+    }
+    cloudRelayPairState = { token, apiBase, ok: true, failCount: 0, nextAttemptAt: 0 };
+    return true;
   } catch {
+    const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+    const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+    cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
     return false;
   }
 }

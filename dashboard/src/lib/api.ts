@@ -18,6 +18,17 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+/** Absolute API base for native companions (Print Agent cloud-relay requires http(s) URL). */
+export function resolveAbsoluteApiBaseUrl(): string {
+  const base = resolveApiBaseUrl();
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/$/, '');
+  if (typeof window !== 'undefined') {
+    const path = base.startsWith('/') ? base : `/${base}`;
+    return `${window.location.origin}${path}`.replace(/\/$/, '');
+  }
+  return base.replace(/\/$/, '');
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
