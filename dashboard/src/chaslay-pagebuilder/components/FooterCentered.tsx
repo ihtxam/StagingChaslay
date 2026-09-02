@@ -5,11 +5,9 @@ import React from 'react';
 import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
-import { Button } from '@/chaslay-pagebuilder/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
-import { normalizeLink } from '../utils/normalizeLink';
 import { TranslatableInput } from './TranslatableInput';
+import { MenuItemsEditor } from './MenuItemsEditor';
 import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
@@ -99,15 +97,6 @@ const FooterCenteredSettings: React.FC = () => {
     textColor: node.data.props.textColor,
   }));
 
-  const addMenuItem = () => setProp((p: FooterCenteredProps) => { p.menuItems = [...(p.menuItems || []), { label: 'New', link: '/' }]; });
-  const removeMenuItem = (i: number) => setProp((p: FooterCenteredProps) => { p.menuItems = p.menuItems?.filter((_, idx) => idx !== i); });
-  const updateMenuItem = (i: number, field: 'label' | 'link', value: string) => {
-    if (field === 'link') {
-      value = normalizeLink(value);
-    }
-    setProp((p: FooterCenteredProps) => { if (p.menuItems?.[i]) p.menuItems[i][field] = value; });
-  };
-
   return (
     <div className="space-y-4">
       <TranslatableInput
@@ -141,21 +130,12 @@ const FooterCenteredSettings: React.FC = () => {
         </div>
       </div>
 
-      <div className="border-t pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <Label>Menu Links</Label>
-          <Button variant="outline" size="sm" onClick={addMenuItem}><Plus className="w-4 h-4" /></Button>
-        </div>
-        <div className="space-y-2">
-          {props.menuItems?.map((item: MenuItem, i: number) => (
-            <div key={i} className="flex gap-2">
-              <Input value={item.label} onChange={(e) => updateMenuItem(i, 'label', e.target.value)} className="h-8" placeholder="Label" />
-              <Input value={item.link} onChange={(e) => updateMenuItem(i, 'link', e.target.value)} className="h-8" placeholder="Link" />
-              <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="h-8 w-8 p-0 text-destructive"><Trash2 className="w-4 h-4" /></Button>
-            </div>
-          ))}
-        </div>
-      </div>
+      <MenuItemsEditor
+        label="Menu Links"
+        menuItems={props.menuItems}
+        setProp={setProp}
+        translatableLabels={false}
+      />
     </div>
   );
 };

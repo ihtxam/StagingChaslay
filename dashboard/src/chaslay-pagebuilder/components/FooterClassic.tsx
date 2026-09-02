@@ -6,9 +6,9 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { FooterColumnsEditor } from './FooterColumnsEditor';
 import { useStorefront } from '../StorefrontContext';
 
 interface LinkItem {
@@ -180,6 +180,8 @@ const FooterClassicSettings: React.FC = () => {
           <Input type="color" value={props.textColor} onChange={(e) => setProp((p: FooterClassicProps) => (p.textColor = e.target.value))} className="h-10 w-full" />
         </div>
       </div>
+
+      <FooterColumnsEditor columns={props.columns} setProp={setProp} />
     </div>
   );
 };

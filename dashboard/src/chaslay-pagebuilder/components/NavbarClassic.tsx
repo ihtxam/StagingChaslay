@@ -6,9 +6,9 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
-import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { TranslatableInput } from './TranslatableInput';
+import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
@@ -142,17 +142,9 @@ const NavbarClassicSettings: React.FC = () => {
     buttonText: node.data.props.buttonText,
     buttonLink: node.data.props.buttonLink,
     buttonColor: node.data.props.buttonColor,
+    useSitePagesNav: node.data.props.useSitePagesNav ?? defaultProps.useSitePagesNav,
     nodeProps: node.data.props,
   }));
-
-  const addMenuItem = () => setProp((p: NavbarClassicProps) => { p.menuItems = [...(p.menuItems || []), { label: 'New', link: '/' }]; });
-  const removeMenuItem = (i: number) => setProp((p: NavbarClassicProps) => { p.menuItems = p.menuItems?.filter((_, idx) => idx !== i); });
-  const updateMenuItem = (i: number, field: 'label' | 'link', value: string) => {
-    if (field === 'link') {
-      value = normalizeLink(value);
-    }
-    setProp((p: NavbarClassicProps) => { if (p.menuItems?.[i]) p.menuItems[i][field] = value; });
-  };
 
   return (
     <div className="space-y-4">
@@ -188,32 +180,13 @@ const NavbarClassicSettings: React.FC = () => {
         <Input type="color" value={props.textColor} onChange={(e) => setProp((p: NavbarClassicProps) => (p.textColor = e.target.value))} className="h-10 w-full" />
       </div>
 
-      <div className="border-t pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <Label>Menu Items</Label>
-          <Button variant="outline" size="sm" onClick={addMenuItem}><Plus className="w-4 h-4" /></Button>
-        </div>
-        <div className="space-y-2">
-          {props.menuItems?.map((item: MenuItem, i: number) => (
-            <div key={i} className="border rounded-md p-2 space-y-2 bg-muted/30">
-              <TranslatableArrayInput
-                propKey="label"
-                arrayPropKey="menuItems"
-                index={i}
-                nodeProps={props.nodeProps}
-                setProp={setProp}
-                value={item.label}
-                onChange={(v) => updateMenuItem(i, 'label', v)}
-                placeholder="Label"
-              />
-              <div className="flex gap-2 items-center">
-                <Input value={item.link} onChange={(e) => updateMenuItem(i, 'link', e.target.value)} className="h-8 flex-1" placeholder="Link" />
-                <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="h-8 w-8 p-0 text-destructive"><Trash2 className="w-4 h-4" /></Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <MenuItemsEditor
+        menuItems={props.menuItems}
+        setProp={setProp}
+        nodeProps={props.nodeProps}
+        useSitePagesNav={props.useSitePagesNav}
+        showSitePagesNavToggle
+      />
 
       <div className="border-t pt-4">
         <div className="flex items-center justify-between mb-2">
