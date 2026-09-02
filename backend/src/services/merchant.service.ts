@@ -465,6 +465,9 @@ export class MerchantService {
         invite = await MerchantInviteService.sendInviteEmail(created.id);
       }
 
+      const { StaffService } = await import("./staff.service");
+      await StaffService.ensureDefaultManagerStaff(created.id, _contactName || businessName);
+
       const refreshed = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, created.id),
       });

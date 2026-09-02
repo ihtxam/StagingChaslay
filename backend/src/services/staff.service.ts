@@ -25,6 +25,9 @@ import {
 /** Skip expensive role seeding/enforcement on every staff list (once per process per merchant). */
 const defaultRolesReady = new Set<string>();
 
+/** Default POS PIN for the first manager provisioned on new merchant signup. Change in Users & roles. */
+export const DEFAULT_MANAGER_PIN = "0000";
+
 export function invalidateDefaultRolesCache(merchantId: string) {
   defaultRolesReady.delete(merchantId);
 }
@@ -91,6 +94,49 @@ export class StaffService {
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
+  }
+
+  /**
+   * Provision the signing-up merchant's first Manager staff row (POS PIN + full panel role).
+   * Idempotent: skips when staff already exist or a Manager is present.
+   * PIN is bcrypt-hashed; merchants should change the default PIN during onboarding.
+   */
+  static async ensureDefaultManagerStaff(merchantId: string, displayName: string) {
+    const db = getDb();
+    await this.ensureDefaultRoles(merchantId);
+
+    const existingStaff = await db.query.merchantStaff.findFirst({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+      columns: { id: true },
+    });
+    if (existingStaff) return null;
+
+    const managerRole = await db.query.merchantRoles.findFirst({
+      where: and(
+        eq(schema.merchantRoles.merchantId, merchantId),
+        sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
+      ),
+    });
+    if (!managerRole) {
+      console.warn(`[staff] Manager role missing for merchant ${merchantId}`);
+      return null;
+    }
+
+    const name = String(displayName || "").trim().slice(0, 255) || "Manager";
+    try {
+      return await this.createStaff(merchantId, {
+        name,
+        roleId: managerRole.id,
+        pin: DEFAULT_MANAGER_PIN,
+        loginHome: "panel",
+      });
+    } catch (error) {
+      console.warn(
+        `[staff] Default manager provisioning failed for merchant ${merchantId}:`,
+        error instanceof Error ? error.message : error
+      );
+      return null;
+    }
   }
 
   /** Re-seed the Storekeeper system role if it was deleted or stripped. */

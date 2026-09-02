@@ -151,6 +151,9 @@ export class AuthService {
           .where(eq(schema.merchants.id, merchant[0].id));
       }
 
+      const { StaffService } = await import("@/services/staff.service");
+      await StaffService.ensureDefaultManagerStaff(merchant[0].id, name || businessName);
+
       return {
         id: merchant[0].id,
         email: merchant[0].email,
