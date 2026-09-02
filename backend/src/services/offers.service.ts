@@ -91,6 +91,13 @@ function defaultBadge(type: string, rules: OfferRules): string {
     const recv = rules.receiveQty || pay + 1;
     return `${pay}+${recv - pay}`;
   }
+  if (type === "nth_item_percent") {
+    const nth = rules.nthItem || 2;
+    const pct = rules.percentOff || 0;
+    const ord =
+      nth === 2 ? "2nd" : nth === 3 ? "3rd" : nth === 5 ? "5th" : `#${nth}`;
+    return pct > 0 ? `${pct}% off ${ord}` : `${ord} off`;
+  }
   if (type === "package_deal") {
     const buy = rules.buyQty || 2;
     const get = rules.getQty || 1;
@@ -282,6 +289,72 @@ export class OffersService {
     return true;
   }
 
+  /** Expand eligible cart lines into unit prices, optionally grouped per product. */
+  private static unitPoolsByProduct(
+    eligible: CartLineForOffer[],
+    sameProductOnly: boolean
+  ): number[][] {
+    if (!sameProductOnly) {
+      const units: number[] = [];
+      for (const l of eligible) {
+        for (let i = 0; i < l.quantity; i++) units.push(l.unitPrice);
+      }
+      return units.length ? [units] : [];
+    }
+    const byProduct = new Map<string, number[]>();
+    for (const l of eligible) {
+      const list = byProduct.get(l.productId) || [];
+      for (let i = 0; i < l.quantity; i++) list.push(l.unitPrice);
+      byProduct.set(l.productId, list);
+    }
+    return [...byProduct.values()].filter((u) => u.length > 0);
+  }
+
+  private static computeBogoDiscount(rules: OfferRules, pools: number[][]): number {
+    const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
+    const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
+    const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
+    const group = buy + get;
+    let discount = 0;
+    for (const raw of pools) {
+      const units = [...raw].sort((a, b) => a - b);
+      const freeSlots = Math.floor(units.length / group) * get;
+      for (let i = 0; i < freeSlots; i++) {
+        discount += (units[i] * getPct) / 100;
+      }
+    }
+    return discount;
+  }
+
+  private static computePayNGetMDiscount(rules: OfferRules, pools: number[][]): number {
+    const pay = Math.max(1, Math.floor(Number(rules.payQty) || 3));
+    const recv = Math.max(pay + 1, Math.floor(Number(rules.receiveQty) || pay + 1));
+    const freePerSet = recv - pay;
+    let discount = 0;
+    for (const raw of pools) {
+      const units = [...raw].sort((a, b) => a - b);
+      const sets = Math.floor(units.length / recv);
+      for (let s = 0; s < sets; s++) {
+        for (let f = 0; f < freePerSet; f++) {
+          discount += units[s * recv + f] || 0;
+        }
+      }
+    }
+    return discount;
+  }
+
+  private static computeNthItemPercentDiscount(rules: OfferRules, pools: number[][]): number {
+    const nth = Math.max(2, Math.floor(Number(rules.nthItem) || 2));
+    const pct = Math.min(100, Math.max(0, Number(rules.percentOff) || 0));
+    let discount = 0;
+    for (const units of pools) {
+      for (let i = nth; i <= units.length; i += nth) {
+        discount += (units[i - 1] * pct) / 100;
+      }
+    }
+    return discount;
+  }
+
   static computeOfferDiscount(
     offer: typeof schema.offers.$inferSelect,
     lines: CartLineForOffer[]
@@ -313,41 +386,20 @@ export class OffersService {
     }
 
     if (type === "bogo") {
-      const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
-      const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
-      const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
-      // Expand to unit prices sorted ascending (cheapest free)
-      const units: number[] = [];
-      for (const l of eligible) {
-        for (let i = 0; i < l.quantity; i++) units.push(l.unitPrice);
-      }
-      units.sort((a, b) => a - b);
-      const group = buy + get;
-      const freeSlots = Math.floor(units.length / group) * get;
-      let discount = 0;
-      for (let i = 0; i < freeSlots; i++) {
-        discount += (units[i] * getPct) / 100;
-      }
-      return roundMoney2(discount);
+      const sameProductOnly = !!rules.sameProductOnly;
+      const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
+      return roundMoney2(this.computeBogoDiscount(rules, pools));
     }
 
     if (type === "pay_n_get_m") {
-      const pay = Math.max(1, Math.floor(Number(rules.payQty) || 3));
-      const recv = Math.max(pay + 1, Math.floor(Number(rules.receiveQty) || pay + 1));
-      const freePerSet = recv - pay;
-      const units: number[] = [];
-      for (const l of eligible) {
-        for (let i = 0; i < l.quantity; i++) units.push(l.unitPrice);
-      }
-      units.sort((a, b) => a - b);
-      const sets = Math.floor(units.length / recv);
-      let discount = 0;
-      for (let s = 0; s < sets; s++) {
-        for (let f = 0; f < freePerSet; f++) {
-          discount += units[s * recv + f] || 0;
-        }
-      }
-      return roundMoney2(discount);
+      const sameProductOnly = !!rules.sameProductOnly;
+      const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
+      return roundMoney2(this.computePayNGetMDiscount(rules, pools));
+    }
+
+    if (type === "nth_item_percent") {
+      const pools = this.unitPoolsByProduct(eligible, true);
+      return roundMoney2(this.computeNthItemPercentDiscount(rules, pools));
     }
 
     if (type === "combo_deal") {
@@ -553,11 +605,35 @@ export class OffersService {
       },
       {
         name: "Buy 2 get 1 free",
-        description: "Buy two, get one free.",
+        description: "Buy two of the same item, get the third free.",
         offerType: "bogo" as const,
-        rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100 },
+        rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
         badgeLabel: "2+1",
         priority: 15,
+      },
+      {
+        name: "Buy 4 get 5th free",
+        description: "Buy four of the same item, get the fifth free.",
+        offerType: "bogo" as const,
+        rules: { buyQty: 4, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
+        badgeLabel: "4+1",
+        priority: 14,
+      },
+      {
+        name: "30% off 2nd item",
+        description: "Every second unit of the same product is 30% off.",
+        offerType: "nth_item_percent" as const,
+        rules: { nthItem: 2, percentOff: 30, sameProductOnly: true },
+        badgeLabel: "2nd -30%",
+        priority: 12,
+      },
+      {
+        name: "50% off 2nd item",
+        description: "Every second unit of the same product is half price.",
+        offerType: "nth_item_percent" as const,
+        rules: { nthItem: 2, percentOff: 50, sameProductOnly: true },
+        badgeLabel: "2nd -50%",
+        priority: 11,
       },
       {
         name: "Dine-in 3+1",

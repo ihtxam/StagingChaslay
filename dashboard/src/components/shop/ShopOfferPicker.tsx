@@ -61,6 +61,12 @@ function badgeFor(offer: ShopOfferForPicker): string {
     const recv = Number(rules.receiveQty) || pay + 1;
     return `${pay}+${recv - pay}`;
   }
+  if (offer.offerType === 'nth_item_percent') {
+    const nth = Number(rules.nthItem) || 2;
+    const pct = Number(rules.percentOff) || 0;
+    const ord = nth === 2 ? '2nd' : nth === 3 ? '3rd' : nth === 5 ? '5th' : `#${nth}`;
+    return pct > 0 ? `${pct}% off ${ord}` : `${ord} off`;
+  }
   return `${buy}+${get}`;
 }
 
