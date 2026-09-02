@@ -7,18 +7,22 @@
 #
 # Environment overrides:
 #   DEPLOY_PATH=/root/StagingChaslay
-#   REPO_URL=git@github.com:ihtxam/StagingChaslay.git
+#   REPO_URL=git@github.com-staging-chaslay:ihtxam/StagingChaslay.git
 #   DEPLOY_KEY=/root/.ssh/staging_chaslay_deploy
+#   STAGING_GITHUB_SSH_HOST=github.com-staging-chaslay
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-git@github.com:ihtxam/StagingChaslay.git}"
 DEPLOY_PATH="${DEPLOY_PATH:-/root/StagingChaslay}"
 DEPLOY_KEY="${DEPLOY_KEY:-/root/.ssh/staging_chaslay_deploy}"
+STAGING_GITHUB_SSH_HOST="${STAGING_GITHUB_SSH_HOST:-github.com-staging-chaslay}"
+REPO_URL="${REPO_URL:-git@${STAGING_GITHUB_SSH_HOST}:ihtxam/StagingChaslay.git}"
 export DEPLOY_STACK=chaslay
+export DEPLOY_PATH
 
 echo "=== StagingChaslay server bootstrap @ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
 echo "  DEPLOY_PATH=$DEPLOY_PATH"
 echo "  REPO_URL=$REPO_URL"
+echo "  DEPLOY_KEY=$DEPLOY_KEY"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "ERROR: run as root (ssh root@116.202.26.15)"
@@ -34,32 +38,40 @@ chmod 700 /root/.ssh
 
 if [[ ! -f "$DEPLOY_KEY" ]]; then
   echo ""
-  echo "ERROR: GitHub deploy key not found at $DEPLOY_KEY"
+  echo "=== Generating GitHub deploy key ==="
+  ssh-keygen -t ed25519 -f "$DEPLOY_KEY" -N '' -C 'staging-chaslay-vps-deploy'
   echo ""
-  echo "  ssh-keygen -t ed25519 -f $DEPLOY_KEY -N '' -C 'staging-chaslay-vps-deploy'"
-  echo "  cat ${DEPLOY_KEY}.pub"
+  echo "=== ADD THIS PUBLIC KEY TO GITHUB (Deploy keys, read-only) ==="
+  echo "  https://github.com/ihtxam/StagingChaslay/settings/keys"
   echo ""
-  echo "Add the public key to https://github.com/ihtxam/StagingChaslay/settings/keys"
-  exit 1
+  cat "${DEPLOY_KEY}.pub"
+  echo ""
+  echo "After adding the key on GitHub, re-run this script."
+  exit 0
 fi
 
 chmod 600 "$DEPLOY_KEY"
 SSH_CONFIG=/root/.ssh/config
-if ! grep -qE '^Host github\.com$' "$SSH_CONFIG" 2>/dev/null; then
+if ! grep -qE "^Host ${STAGING_GITHUB_SSH_HOST}$" "$SSH_CONFIG" 2>/dev/null; then
   cat >>"$SSH_CONFIG" <<EOF
 
-Host github.com
+Host ${STAGING_GITHUB_SSH_HOST}
   HostName github.com
   User git
-  IdentityFile $DEPLOY_KEY
+  IdentityFile ${DEPLOY_KEY}
   IdentitiesOnly yes
 EOF
   chmod 600 "$SSH_CONFIG"
 fi
 
-echo "=== Test GitHub SSH ==="
-if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T git@github.com 2>&1 | grep -qi 'successfully authenticated'; then
+echo "=== Test GitHub SSH (${STAGING_GITHUB_SSH_HOST}) ==="
+if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T "git@${STAGING_GITHUB_SSH_HOST}" 2>&1 | grep -qi 'successfully authenticated'; then
   echo "ERROR: Cannot authenticate to GitHub with $DEPLOY_KEY"
+  echo ""
+  echo "If you just generated the key, add the public key to GitHub:"
+  echo "  https://github.com/ihtxam/StagingChaslay/settings/keys"
+  echo ""
+  cat "${DEPLOY_KEY}.pub"
   exit 1
 fi
 

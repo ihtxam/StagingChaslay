@@ -3,13 +3,37 @@
 set -euo pipefail
 
 DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
-if [[ -n "${DEPLOY_PATH:-}" ]]; then
-  REPO_DIR="$DEPLOY_PATH"
-elif [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
-  REPO_DIR="/root/rebornSense"
-else
-  REPO_DIR="${HOME}/FoodTruckPOS"
-fi
+STAGING_DEPLOY_PATH="/root/StagingChaslay"
+STAGING_DEPLOY_KEY="${STAGING_DEPLOY_KEY:-/root/.ssh/staging_chaslay_deploy}"
+STAGING_GITHUB_SSH_HOST="${STAGING_GITHUB_SSH_HOST:-github.com-staging-chaslay}"
+STAGING_REPO_SSH="git@${STAGING_GITHUB_SSH_HOST}:ihtxam/StagingChaslay.git"
+
+resolve_repo_dir() {
+  if [[ -n "${DEPLOY_PATH:-}" ]]; then
+    REPO_DIR="$DEPLOY_PATH"
+    return 0
+  fi
+  if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+    REPO_DIR="/root/rebornSense"
+    return 0
+  fi
+  # Chaslay staging (116.202.26.15): StagingChaslay repo at /root/StagingChaslay
+  local secrets="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}/.env.production"
+  if [[ -d "$STAGING_DEPLOY_PATH/.git" ]]; then
+    REPO_DIR="$STAGING_DEPLOY_PATH"
+  elif [[ -f "$secrets" ]] && grep -qE '^DOMAIN=chaslay\.com' "$secrets"; then
+    REPO_DIR="$STAGING_DEPLOY_PATH"
+  elif [[ -d "$STAGING_DEPLOY_PATH" ]]; then
+    REPO_DIR="$STAGING_DEPLOY_PATH"
+  elif [[ -d /root/FoodTruckPOS/.git ]]; then
+  # Legacy FoodTruckPOS clone (pre-StagingChaslay split)
+    REPO_DIR="/root/FoodTruckPOS"
+  else
+    REPO_DIR="$STAGING_DEPLOY_PATH"
+  fi
+}
+
+resolve_repo_dir
 SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
 
 # CADDYFILE must be exported before ANY docker compose command (compose defaults to chaslay).
@@ -37,8 +61,9 @@ if [[ ! -d "$REPO_DIR" ]]; then
     echo "  # or re-init /root/FoodTruckPOS:"
     echo "  LEGACY_PATH=/root/FoodTruckPOS bash /root/rebornSense/scripts/setup-rebornsense-server.sh"
   else
-    echo "Bootstrap Chaslay:"
-    echo "  bash scripts/setup-hetzner-server.sh"
+    echo "Bootstrap Chaslay staging (116.202.26.15):"
+    echo "  bash scripts/setup-staging-chaslay-server.sh"
+    echo "  # or: DEPLOY_PATH=$STAGING_DEPLOY_PATH bash scripts/setup-staging-chaslay-server.sh"
   fi
   exit 1
 fi
@@ -294,17 +319,54 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
     echo ""
     echo "GitHub is private — use SSH deploy key /root/.ssh/rebornsense_deploy (see DEPLOY.md)."
   else
-    echo "  bash scripts/setup-hetzner-server.sh"
-    echo "  # or: git clone https://github.com/ihtxam/FoodTruckPOS.git $REPO_DIR"
+    echo "  bash scripts/setup-staging-chaslay-server.sh"
+    echo "  # or manual:"
+    echo "  git clone $STAGING_REPO_SSH $REPO_DIR"
+    echo "  # GitHub deploy key: $STAGING_DEPLOY_KEY (see DEPLOY.md)"
   fi
   exit 1
 fi
 
 # Private repos must use SSH deploy keys — HTTPS remotes fail git fetch in CI/SSH deploy.
+ensure_staging_chaslay_ssh() {
+  [[ "$DEPLOY_STACK" == "rebornsense" ]] && return 0
+  mkdir -p /root/.ssh
+  chmod 700 /root/.ssh
+  if [[ ! -f "$STAGING_DEPLOY_KEY" ]]; then
+    echo "WARNING: StagingChaslay deploy key missing at $STAGING_DEPLOY_KEY"
+    echo "  ssh-keygen -t ed25519 -f $STAGING_DEPLOY_KEY -N '' -C 'staging-chaslay-vps-deploy'"
+    echo "  Add ${STAGING_DEPLOY_KEY}.pub to https://github.com/ihtxam/StagingChaslay/settings/keys"
+    return 0
+  fi
+  chmod 600 "$STAGING_DEPLOY_KEY"
+  local ssh_config=/root/.ssh/config
+  if ! grep -qE "^Host ${STAGING_GITHUB_SSH_HOST}$" "$ssh_config" 2>/dev/null; then
+    cat >>"$ssh_config" <<EOF
+
+Host ${STAGING_GITHUB_SSH_HOST}
+  HostName github.com
+  User git
+  IdentityFile ${STAGING_DEPLOY_KEY}
+  IdentitiesOnly yes
+EOF
+    chmod 600 "$ssh_config"
+    echo "Added SSH config Host ${STAGING_GITHUB_SSH_HOST} -> $STAGING_DEPLOY_KEY"
+  fi
+}
+
 ensure_git_ssh_remote() {
-  local remote_url repo_ssh
+  local remote_url repo_ssh repo_name
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
   if [[ -z "$remote_url" ]]; then
+    return 0
+  fi
+  repo_name="$(printf '%s' "$remote_url" | sed -E 's#.*[:/]([^/]+)(\.git)?$#\1#')"
+  if [[ "$repo_name" == "StagingChaslay" || "$REPO_DIR" == "$STAGING_DEPLOY_PATH" ]]; then
+    ensure_staging_chaslay_ssh
+    if [[ "$remote_url" != "$STAGING_REPO_SSH" ]]; then
+      echo "Rewriting origin for StagingChaslay SSH alias: $STAGING_REPO_SSH"
+      git remote set-url origin "$STAGING_REPO_SSH"
+    fi
     return 0
   fi
   if [[ "$remote_url" == git@* ]]; then
@@ -584,6 +646,7 @@ stop_conflicting_http_stacks() {
   local legacy_dirs=(
     /root/FoodTruckPOS
     /root/FoodTruckPOS/backend
+    /root/StagingChaslay
     /root/chaslay
     /root/Chaslay
     /root/rebornSense

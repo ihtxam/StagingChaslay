@@ -48,42 +48,21 @@ Point these **A records** to the new server IP:
 
 ```bash
 ssh root@116.202.26.15
-git clone https://github.com/ihtxam/FoodTruckPOS.git
-cd FoodTruckPOS
-cp backend/.env.example backend/.env
-cp backend/receipts.env.example backend/receipts.env
-nano backend/.env
-nano backend/receipts.env
-bash scripts/deploy-hetzner.sh
+git clone git@github.com-staging-chaslay:ihtxam/StagingChaslay.git /root/StagingChaslay
+cd /root/StagingChaslay
+bash scripts/setup-staging-chaslay-server.sh
 ```
 
-### WinSCP ? where files live on the server
-
-After `git clone`, everything is under **`/root/FoodTruckPOS/`**:
+After `git clone`, everything is under **`/root/StagingChaslay/`** (staging server `116.202.26.15`):
 
 | What | Path on server |
 |------|----------------|
-| Main API secrets | `/root/chaslay-secrets/backend.env` (symlinked from `backend/.env`) |
-| Receipts + SMTP | `/root/chaslay-secrets/receipts.env` |
-| Receipts code | `/root/FoodTruckPOS/backend/receipts/` |
-| Docker stack | `/root/FoodTruckPOS/backend/docker-compose.yml` |
-| Deploy script | `/root/FoodTruckPOS/scripts/deploy-hetzner.sh` |
+| Production secrets | `/root/chaslay-secrets/.env.production` |
+| Docker stack | `/root/StagingChaslay/docker-compose.yml` |
+| Deploy script | `/root/StagingChaslay/scripts/deploy-hetzner.sh` |
+| Bootstrap / repair | `/root/StagingChaslay/scripts/setup-staging-chaslay-server.sh` |
 
-There is **no** separate `server/` folder anymore ? receipts live inside `backend/`.
-
-If you only uploaded `backend/` before, run on the server (SSH):
-
-```bash
-cd /root/FoodTruckPOS && git pull
-```
-
-Or re-clone: `git clone https://github.com/ihtxam/FoodTruckPOS.git`
-
-Then create `backend/receipts.env` from `backend/receipts.env.example` and run:
-
-```bash
-bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh
-```
+Legacy **`/root/FoodTruckPOS`** is the old path — do not use for staging deploys.
 
 **Do not commit `.env` files to GitHub** ? they contain passwords. Keep secrets on the server only, or use [GitHub Actions secrets](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions) for deploy keys (not app config).
 
@@ -189,37 +168,57 @@ If **Deploy to Hetzner** fails with `fatal: could not read Username for 'https:/
 **On `116.202.26.15` as root:**
 
 ```bash
-# Deploy key (add .pub to StagingChaslay → Settings → Deploy keys)
-ssh-keygen -t ed25519 -f /root/.ssh/staging_chaslay_deploy -N '' -C 'staging-chaslay-vps'
+# 1) Generate deploy key (skip if /root/.ssh/staging_chaslay_deploy already exists)
+ssh-keygen -t ed25519 -f /root/.ssh/staging_chaslay_deploy -N '' -C 'staging-chaslay-vps-deploy'
+cat /root/.ssh/staging_chaslay_deploy.pub
+# Add output at: https://github.com/ihtxam/StagingChaslay/settings/keys (read-only deploy key)
 
+# 2) SSH config — dedicated host alias (avoids clashing with other GitHub keys on same server)
 mkdir -p /root/.ssh && chmod 700 /root/.ssh
-grep -q 'staging_chaslay_deploy' /root/.ssh/config 2>/dev/null || cat >> /root/.ssh/config <<'EOF'
+grep -q '^Host github.com-staging-chaslay$' /root/.ssh/config 2>/dev/null || cat >> /root/.ssh/config <<'EOF'
 
-Host github.com
+Host github.com-staging-chaslay
   HostName github.com
   User git
   IdentityFile /root/.ssh/staging_chaslay_deploy
   IdentitiesOnly yes
 EOF
-chmod 600 /root/.ssh/config
-ssh -T git@github.com   # expect: Hi ihtxam/StagingChaslay!
+chmod 600 /root/.ssh/config /root/.ssh/staging_chaslay_deploy
+ssh -T git@github.com-staging-chaslay   # expect: Hi ihtxam/StagingChaslay!
 
-cd /root/StagingChaslay
-git remote set-url origin git@github.com:ihtxam/StagingChaslay.git
-git fetch origin main
-bash scripts/deploy-hetzner.sh
+# 3) Clone or repair repo at /root/StagingChaslay (NOT /root/FoodTruckPOS)
+export DEPLOY_PATH=/root/StagingChaslay
+if [[ ! -d /root/StagingChaslay/.git ]]; then
+  git clone git@github.com-staging-chaslay:ihtxam/StagingChaslay.git /root/StagingChaslay
+else
+  cd /root/StagingChaslay
+  git remote set-url origin git@github.com-staging-chaslay:ihtxam/StagingChaslay.git
+  git fetch origin main && git reset --hard origin/main
+fi
+
+# 4) Deploy
+export DEPLOY_STACK=chaslay DEPLOY_PATH=/root/StagingChaslay
+bash /root/StagingChaslay/scripts/deploy-hetzner.sh
 ```
 
-Or run the bootstrap script (clone/repair + deploy): `bash scripts/setup-staging-chaslay-server.sh`
+Or run the bootstrap script (generates key, prints pubkey, clone/repair + deploy):
 
-`scripts/deploy-hetzner.sh` also rewrites HTTPS `origin` to SSH automatically when possible.
+```bash
+bash /root/StagingChaslay/scripts/setup-staging-chaslay-server.sh
+```
+
+`scripts/deploy-hetzner.sh` defaults to `/root/StagingChaslay` for the Chaslay stack and rewrites HTTPS `origin` to the SSH alias automatically when possible.
 
 **One-time manual fix** (required once while the server still has an HTTPS remote and cannot pull the updated deploy script):
 
 ```bash
 ssh root@116.202.26.15
+
+# If deploy script still points at /root/FoodTruckPOS, set path explicitly:
+export DEPLOY_STACK=chaslay DEPLOY_PATH=/root/StagingChaslay
+
 cd /root/StagingChaslay
-git remote set-url origin git@github.com:ihtxam/StagingChaslay.git
+git remote set-url origin git@github.com-staging-chaslay:ihtxam/StagingChaslay.git
 git fetch origin main && git reset --hard origin/main
 bash scripts/deploy-hetzner.sh
 ```
@@ -508,7 +507,7 @@ docker compose --env-file .env.production up -d caddy
 Manual deploy anytime:
 
 ```bash
-ssh root@116.202.26.15 'bash /root/FoodTruckPOS/scripts/deploy-hetzner.sh'
+ssh root@116.202.26.15 'export DEPLOY_STACK=chaslay DEPLOY_PATH=/root/StagingChaslay && bash /root/StagingChaslay/scripts/deploy-hetzner.sh'
 ```
 
 ---
