@@ -168,27 +168,13 @@ export default function WebPosProductArea({
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
         <div
           className={`mb-2 flex items-center gap-1 ${
-            showCollapsibleFilters ? 'min-h-7' : 'justify-start'
+            showCollapsibleFilters
+              ? filtersOpen
+                ? 'min-h-7'
+                : 'min-h-7 justify-end'
+              : 'justify-start'
           }`}
         >
-          {showCollapsibleFilters ? (
-            <button
-              type="button"
-              onClick={onFilterGripClick}
-              title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
-              aria-label={t('webPosFiltersToggle')}
-              aria-expanded={filtersOpen}
-              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border webpos-toolbar-btn ${
-                filtersOpen
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
-                  : 'border-stone-300 bg-white text-stone-500 hover:bg-stone-50'
-              }`}
-            >
-              <span className="text-[11px] font-bold leading-none tracking-tighter" aria-hidden>
-                ::
-              </span>
-            </button>
-          ) : null}
           {filtersVisible ? (
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain">
               {showSearch && isPhoneLayout && onSearchChange ? (
@@ -259,6 +245,24 @@ export default function WebPosProductArea({
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {showCollapsibleFilters ? (
+            <button
+              type="button"
+              onClick={onFilterGripClick}
+              title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
+              aria-label={t('webPosFiltersToggle')}
+              aria-expanded={filtersOpen}
+              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border webpos-toolbar-btn ${
+                filtersOpen
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
+                  : 'border-stone-300 bg-white text-stone-500 hover:bg-stone-50'
+              }`}
+            >
+              <span className="text-[11px] font-bold leading-none tracking-tighter" aria-hidden>
+                ::
+              </span>
+            </button>
           ) : null}
         </div>
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
