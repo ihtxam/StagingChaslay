@@ -88,6 +88,7 @@ import {
   isWaiterPanelPath,
   waiterRestrictedHomePath,
   isFloorWaiterStaff,
+  isRegisterFirstStaff,
   storekeeperHomePath,
   isOrdersPanelPath,
   isReportsPanelPath,
@@ -686,13 +687,14 @@ function MerchantShell() {
     navigate(waiterRestrictedHomePath(perms), { replace: true });
   }, [jwtOwnerBypass, user?.role, effective.permissions, location.pathname, navigate]);
 
-  // Floor waiters (and POS-destination staff) cannot browse the manager panel — unless they have panel access.
+  // Floor waiters and register-first staff (cashiers) cannot browse the manager panel.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
     const perms = user?.permissions as Permission[] | undefined;
-    if (canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
+    const registerFirst = isRegisterFirstStaff(perms, false);
+    if (!registerFirst && canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
     const floorOnly = isFloorWaiterStaff(perms, false);
-    const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos';
+    const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos' || registerFirst;
     if (!floorOnly && !posDest) return;
     if (isPosLikeRoute) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';

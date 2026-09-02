@@ -5,6 +5,7 @@ import {
   hasFullPanelAccess,
   hasPermission,
   isDeliveryDriverOnlyStaff,
+  isRegisterFirstStaff,
   isStorekeeperOnlyStaff,
   isKioskOnlyStaff,
   isOrderCenterOnlyStaff,
@@ -27,6 +28,10 @@ export function homePathForUser(
 
   const perms = user.permissions as Permission[] | undefined;
   const loginHome = normalizeStaffLoginHome(user.loginHome);
+
+  if (user.role === 'staff' && isRegisterFirstStaff(perms, user.isOwner === true)) {
+    return hasPermission(perms, 'MANAGE_TABLES', false) ? '/merchant/waiter' : '/merchant/pos';
+  }
 
   if (loginHome === 'panel') {
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
