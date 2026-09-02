@@ -10,6 +10,15 @@ type Opts = {
 
 const POLL_MS_AGENT_OK = 2500;
 const POLL_MS_AGENT_OFFLINE = 8000;
+const CLOUD_RELAY_PAIR_INTERVAL_MS = 30_000;
+
+function hasMerchantAuthToken(): boolean {
+  try {
+    return !!String(localStorage.getItem('token') || '').trim();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Drain server print jobs on this PC (Print Agent) and keep the agent paired
@@ -20,13 +29,13 @@ export function useTillPrintHub({ enabled, onRemoteKitchen, onReservation }: Opt
     if (!enabled) return;
     let cancelled = false;
     const pair = async () => {
-      if (cancelled) return;
+      if (cancelled || !hasMerchantAuthToken()) return;
       if (await isPrintAgentAvailable()) {
         await pairPrintAgentCloudRelay();
       }
     };
     void pair();
-    const id = window.setInterval(() => void pair(), 30000);
+    const id = window.setInterval(() => void pair(), CLOUD_RELAY_PAIR_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -60,7 +69,7 @@ export function useTillPrintHub({ enabled, onRemoteKitchen, onReservation }: Opt
       inFlight = true;
       let nextMs = POLL_MS_AGENT_OFFLINE;
       try {
-        if (!(await isPrintAgentAvailable())) {
+        if (!hasMerchantAuthToken() || !(await isPrintAgentAvailable())) {
           return;
         }
         const result = await processPendingEscPosPrintJobs();

@@ -2480,7 +2480,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const tick = async () => {
       if (cancelled) return;
       try {
-        await pairPrintAgentCloudRelay();
         const result = await processPendingEscPosPrintJobs();
         if (result.remoteKitchenDone > 0) {
           ringWaiterTillBell(`remote-print-${Date.now()}`);
@@ -2500,6 +2499,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (timer != null) window.clearTimeout(timer);
     };
   }, [agentOk, ringWaiterTillBell, ringReservationTillBell]);
+
+  /** Pair Print Agent for background cloud relay (not on every print-job poll tick). */
+  useEffect(() => {
+    if (!agentOk) return;
+    let cancelled = false;
+    const pair = async () => {
+      if (cancelled) return;
+      await pairPrintAgentCloudRelay();
+    };
+    void pair();
+    const id = window.setInterval(() => void pair(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [agentOk]);
 
   /** Main till bell: new waiter/mobile kitchen sends registered via held orders. */
   useEffect(() => {

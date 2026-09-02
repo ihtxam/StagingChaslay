@@ -3,6 +3,7 @@ import type { Permission } from '@/lib/permissions';
 import { clearWebPosStaffSession } from '@/lib/permissions';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import api from '@/lib/api';
+import { resetPrintAgentCloudRelayPairing } from '@/lib/print-agent';
 
 export interface User {
   id: string;
@@ -154,6 +155,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     clearWebPosStaffSession();
+    resetPrintAgentCloudRelayPairing();
     set({ user: null, token: null, impersonating: false });
   },
   hydrate: () => {
