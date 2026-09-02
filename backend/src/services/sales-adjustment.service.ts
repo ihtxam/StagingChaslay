@@ -252,8 +252,12 @@ function scaleOrderAmounts(
   };
 }
 
-function scalePaymentBreakdown(order: OrderRow, newTotal: number): unknown {
-  const oldTotal = Number(order.total) || 0;
+function scalePaymentBreakdown(
+  order: OrderRow,
+  newTotal: number,
+  previousTotal: number
+): unknown {
+  const oldTotal = roundMoney2(previousTotal);
   if (oldTotal <= 0) return order.paymentBreakdown;
   const ratio = Math.max(0, Math.min(1, newTotal / oldTotal));
   const tenders = parsePaymentBreakdown(
@@ -370,6 +374,7 @@ export class SalesAdjustmentService {
     let ordersAdjusted = 0;
     let itemsAdjusted = 0;
     const adjustedOrderIds = new Set<string>();
+    const originalOrderTotals = new Map<string, number>();
 
     type Candidate = {
       order: OrderRow;
@@ -440,6 +445,7 @@ export class SalesAdjustmentService {
 
       if (!adjustedOrderIds.has(pick.order.id)) {
         adjustedOrderIds.add(pick.order.id);
+        originalOrderTotals.set(pick.order.id, Number(pick.order.total) || 0);
         ordersAdjusted += 1;
       }
       itemsAdjusted += 1;
@@ -451,7 +457,12 @@ export class SalesAdjustmentService {
     for (const orderId of adjustedOrderIds) {
       const order = orders.find((o) => o.id === orderId);
       if (!order) continue;
-      const paymentBreakdown = scalePaymentBreakdown(order, Number(order.total)) as Array<{
+      const previousTotal = originalOrderTotals.get(orderId) ?? (Number(order.total) || 0);
+      const paymentBreakdown = scalePaymentBreakdown(
+        order,
+        Number(order.total),
+        previousTotal
+      ) as Array<{
         method: string;
         amount: number;
       }>;
@@ -474,8 +485,13 @@ export class SalesAdjustmentService {
     const reductionApplied = roundMoney2(beforeCashTotal - afterCashTotal);
 
     if (reductionApplied <= 0.01 && preview.reductionNeeded > 0.01) {
+      if (ordersAdjusted === 0) {
+        throw new Error(
+          "No cash order lines could be reduced — eligible lines may have zero value (e.g. fully discounted). Try a different period."
+        );
+      }
       throw new Error(
-        "Adjustment did not change cash totals — reload reports and try again, or pick a shorter period with more cash-only orders."
+        "Adjustment did not change reported cash totals. Reload and try again; if it persists, contact support."
       );
     }
     if (reductionApplied + 0.02 < preview.reductionNeeded * 0.25) {
