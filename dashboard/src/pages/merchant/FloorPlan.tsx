@@ -160,6 +160,7 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
+  const [planEditName, setPlanEditName] = useState('');
   const [covers, setCovers] = useState<{ coversServed: number; dineInOrders: number; averagePartySize: number } | null>(null);
   const [merchantSlug, setMerchantSlug] = useState('');
   const [drag, setDrag] = useState<{
@@ -229,6 +230,10 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    setPlanEditName(activePlan?.name || '');
+  }, [activePlan?.id, activePlan?.name]);
+
   const selectPlan = (planId: string) => {
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
@@ -251,6 +256,41 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
       toast.success('Floor plan created');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to create floor plan');
+    }
+  };
+
+  const renamePlan = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!activePlanId || !activePlan) return;
+    const name = planEditName.trim();
+    if (!name || name === activePlan.name) return;
+    try {
+      const res = await api.patch(`/merchant/floor-plans/${activePlanId}`, { name });
+      const plan = res.data.plan as FloorPlanData;
+      setPlans((prev) => prev.map((p) => (p.id === plan.id ? plan : p)));
+      toast.success(t('floorPlanRenamed'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('floorPlanRenameFailed'));
+    }
+  };
+
+  const deletePlan = async () => {
+    if (!activePlanId || !activePlan) return;
+    if (!window.confirm(t('confirmDeleteFloorPlan').replace('{name}', activePlan.name))) return;
+    try {
+      await api.delete(`/merchant/floor-plans/${activePlanId}`);
+      const remaining = plans.filter((p) => p.id !== activePlanId);
+      setPlans(remaining);
+      if (remaining.length) {
+        selectPlan(remaining[0].id);
+      } else {
+        setActivePlanId(null);
+        setTables([]);
+        setElements([]);
+      }
+      toast.success(t('floorPlanDeleted'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('floorPlanDeleteFailed'));
     }
   };
 
@@ -277,10 +317,28 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
     setTables((prev) => prev.map((t) => (t.localId === selectedId ? { ...t, ...patch } : t)));
   };
 
-  const removeSelected = () => {
-    if (!selectedId) return;
-    setTables((prev) => prev.filter((t) => t.localId !== selectedId));
-    setSelectedId(null);
+  const removeSelected = async () => {
+    if (!selectedId || !selected) return;
+    if (!window.confirm(t('confirmDeleteTable'))) return;
+    try {
+      if (selected.id) {
+        await api.delete(`/merchant/floor-plans/tables/${selected.id}`);
+      }
+      setTables((prev) => prev.filter((t) => t.localId !== selectedId));
+      setSelectedId(null);
+      if (selected.id) {
+        setPlans((prev) =>
+          prev.map((p) =>
+            p.id === activePlanId
+              ? { ...p, tables: (p.tables || []).filter((t) => t.id !== selected.id) }
+              : p
+          )
+        );
+      }
+      toast.success(t('tableDeleted'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('tableDeleteFailed'));
+    }
   };
 
   const addElement = (elementType: ElementType) => {
@@ -311,6 +369,7 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
     try {
       const res = await api.put(`/merchant/floor-plans/${activePlanId}/tables`, {
         tables: tables.map((t, idx) => ({
+          id: t.id,
           label: t.label,
           capacity: t.capacity,
           shape: t.shape,
@@ -552,6 +611,32 @@ export default function FloorPlan({ embedded = false, hideQr = false }: { embedd
               </button>
             ))}
           </div>
+          {activePlan ? (
+            <form onSubmit={renamePlan} className="space-y-2 border-t border-slate-200 pt-3">
+              <label className="block text-xs font-medium text-slate-600">{t('floorPlanRename')}</label>
+              <input
+                className="input w-full text-sm"
+                value={planEditName}
+                onChange={(e) => setPlanEditName(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={!planEditName.trim() || planEditName.trim() === activePlan.name}
+                  className="btn-secondary flex-1 text-xs"
+                >
+                  {t('save')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deletePlan()}
+                  className="btn-secondary flex-1 text-xs text-red-600"
+                >
+                  {t('delete')}
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
 
         {/* Designer: details bar on top, canvas fills remaining space */}

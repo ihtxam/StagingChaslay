@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { Layers, Plus, Users } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Layers, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -19,6 +19,7 @@ export default function TableSettings() {
   const [batchCapacity, setBatchCapacity] = useState(4);
   const [batchSectionId, setBatchSectionId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sectionEditName, setSectionEditName] = useState('');
 
   const activeSection =
     activeSectionId === 'all'
@@ -39,6 +40,47 @@ export default function TableSettings() {
 
   const targetSectionId =
     activeSectionId === 'all' ? sections[0]?.id : activeSectionId;
+
+  useEffect(() => {
+    if (activeSectionId === 'all') {
+      setSectionEditName('');
+      return;
+    }
+    setSectionEditName(activeSection?.name || '');
+  }, [activeSectionId, activeSection?.name]);
+
+  const renameSection = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (activeSectionId === 'all' || !activeSection) return;
+    const name = sectionEditName.trim();
+    if (!name || name === activeSection.name) return;
+    setBusy(true);
+    try {
+      await api.patch(`/merchant/floor-plans/${activeSection.id}`, { name });
+      toast.success(t('tableSectionRenamed'));
+      await reload();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('tableSectionRenameFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteSection = async () => {
+    if (activeSectionId === 'all' || !activeSection) return;
+    if (!window.confirm(t('confirmDeleteSection').replace('{name}', activeSection.name))) return;
+    setBusy(true);
+    try {
+      await api.delete(`/merchant/floor-plans/${activeSection.id}`);
+      toast.success(t('tableSectionDeleted'));
+      setActiveSectionId('all');
+      await reload();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('tableSectionDeleteFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const createSection = async (e: FormEvent) => {
     e.preventDefault();
@@ -194,6 +236,42 @@ export default function TableSettings() {
           </div>
         </div>
 
+        {activeSectionId !== 'all' && activeSection ? (
+          <form
+            onSubmit={renameSection}
+            className="card flex flex-wrap items-end gap-2 border-dashed"
+          >
+            <div className="min-w-[10rem] flex-1">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                {t('tableSectionRename')}
+              </label>
+              <input
+                className="input"
+                value={sectionEditName}
+                onChange={(e) => setSectionEditName(e.target.value)}
+                placeholder={t('tableSectionNew')}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={busy || !sectionEditName.trim() || sectionEditName.trim() === activeSection.name}
+              className="btn-secondary inline-flex items-center gap-1"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {t('save')}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void deleteSection()}
+              className="btn-secondary inline-flex items-center gap-1 text-red-600"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('tableSectionDelete')}
+            </button>
+          </form>
+        ) : null}
+
         <form onSubmit={addTable} className="card flex flex-wrap items-end gap-3">
           <div className="min-w-[8rem] flex-1">
             <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t('tableLabel')}</label>
@@ -246,7 +324,9 @@ export default function TableSettings() {
                 <button
                   type="button"
                   onClick={() => void deleteTable(table.id)}
-                  className="absolute right-2 top-2 hidden rounded p-1 text-xs text-red-400 hover:bg-red-500/10 group-hover:block"
+                  className="absolute right-2 top-2 rounded p-1 text-xs text-red-500 hover:bg-red-500/10"
+                  title={t('delete')}
+                  aria-label={t('delete')}
                 >
                   {t('delete')}
                 </button>
