@@ -31,4 +31,13 @@ jobs:
             export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
             export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"
+            # Fix HTTPS origin before deploy (private repo needs SSH deploy key on server).
+            if [[ -d "$DEPLOY_PATH/.git" ]]; then
+              cd "$DEPLOY_PATH"
+              origin="$(git remote get-url origin 2>/dev/null || true)"
+              if [[ "$origin" == https://* ]]; then
+                echo "Rewriting origin HTTPS -> SSH for StagingChaslay"
+                git remote set-url origin git@github.com:ihtxam/StagingChaslay.git
+              fi
+            fi
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
