@@ -182,6 +182,38 @@ Configure secrets in **StagingChaslay** → Settings → Secrets and variables �
 
 Every `git push` to `main` in **StagingChaslay** deploys to the test server.
 
+#### Staging deploy: `git fetch` HTTPS auth error
+
+If **Deploy to Hetzner** fails with `fatal: could not read Username for 'https://github.com'` or similar, the server clone used an HTTPS remote. Private repos need SSH + deploy key.
+
+**On `116.202.26.15` as root:**
+
+```bash
+# Deploy key (add .pub to StagingChaslay → Settings → Deploy keys)
+ssh-keygen -t ed25519 -f /root/.ssh/staging_chaslay_deploy -N '' -C 'staging-chaslay-vps'
+
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
+grep -q 'staging_chaslay_deploy' /root/.ssh/config 2>/dev/null || cat >> /root/.ssh/config <<'EOF'
+
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/staging_chaslay_deploy
+  IdentitiesOnly yes
+EOF
+chmod 600 /root/.ssh/config
+ssh -T git@github.com   # expect: Hi ihtxam/StagingChaslay!
+
+cd /root/StagingChaslay
+git remote set-url origin git@github.com:ihtxam/StagingChaslay.git
+git fetch origin main
+bash scripts/deploy-hetzner.sh
+```
+
+Or run the bootstrap script (clone/repair + deploy): `bash scripts/setup-staging-chaslay-server.sh`
+
+`scripts/deploy-hetzner.sh` also rewrites HTTPS `origin` to SSH automatically when possible.
+
 ### Rebornsense production (`app.rebornsense.com`)
 
 `app.rebornsense.com` runs on a **separate** VPS:

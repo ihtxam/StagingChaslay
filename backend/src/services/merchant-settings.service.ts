@@ -37,6 +37,7 @@ import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
+import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -124,6 +125,33 @@ export class MerchantSettingsService {
       ? `${APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}`
       : null;
 
+    const maxPosPosts = Math.max(0, Number((merchant as { maxPosPosts?: number }).maxPosPosts ?? 0));
+    let editionFeatures: Awaited<
+      ReturnType<(typeof import("./edition-entitlements.service"))["EditionEntitlementsService"]["getFeatures"]>
+    > = null;
+    try {
+      const { EditionEntitlementsService } = await import("./edition-entitlements.service");
+      const feats = await EditionEntitlementsService.getFeatures(merchantId);
+      if (feats != null) {
+        const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
+        const extra: typeof feats = [];
+        if (inventoryOn) extra.push("inventory");
+        if (signage.enabled) extra.push("digital_signage");
+        editionFeatures = [...withoutPaid, ...extra];
+      }
+    } catch {
+      editionFeatures = null;
+    }
+
+    const orderCenterEnabled = true;
+    const productFlags = resolveMerchantProductFlags({
+      shopEnabled: merchant.shopEnabled,
+      editionFeatures,
+      maxPosPosts,
+      orderCenterEnabled,
+      deliveryEnabled: merchant.deliveryEnabled,
+    });
+
     return {
       id: merchant.id,
       name: merchant.name,
@@ -160,7 +188,7 @@ export class MerchantSettingsService {
       paxOrderingEnabled: merchant.paxOrderingEnabled,
       coursesEnabled: !!merchant.coursesEnabled,
       shiftsEnabled: !!merchant.shiftsEnabled,
-      maxPosPosts: Math.max(0, Number((merchant as { maxPosPosts?: number }).maxPosPosts ?? 0)),
+      maxPosPosts,
       maxWaiterPosts: Math.max(
         0,
         Number((merchant as { maxWaiterPosts?: number }).maxWaiterPosts ?? 0)
@@ -252,20 +280,9 @@ export class MerchantSettingsService {
        * Inventory is a paid merchant addon — never grant it via edition JSON.
        * Inject only when the merchant column is true (for any leftover edition checks).
        */
-      editionFeatures: await (async () => {
-        try {
-          const { EditionEntitlementsService } = await import("./edition-entitlements.service");
-          const feats = await EditionEntitlementsService.getFeatures(merchantId);
-          if (feats == null) return null;
-          const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
-          const extra: typeof feats = [];
-          if (inventoryOn) extra.push("inventory");
-          if (signage.enabled) extra.push("digital_signage");
-          return [...withoutPaid, ...extra];
-        } catch {
-          return null;
-        }
-      })(),
+      editionFeatures,
+      orderCenterEnabled,
+      ...productFlags,
     };
   }
 

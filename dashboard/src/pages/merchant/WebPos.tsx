@@ -364,6 +364,7 @@ import {
 import WebPosTablesView from '@/components/webpos/WebPosTablesView';
 import WebPosBookingsView from '@/components/webpos/WebPosBookingsView';
 import WebPosDeliveryHub from '@/components/webpos/WebPosDeliveryHub';
+// Delivery hub stays available for POS merchants; shop-only may use it on TV or Sunmi PDA (see merchant-product-flags).
 import WebPosKitchenMessageModal from '@/components/webpos/WebPosKitchenMessageModal';
 import WebPosOrderNoteModal from '@/components/webpos/WebPosOrderNoteModal';
 import WebPosSetTableModal from '@/components/webpos/WebPosSetTableModal';

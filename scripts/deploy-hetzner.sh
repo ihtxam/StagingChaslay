@@ -300,6 +300,31 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
   exit 1
 fi
 
+# Private repos must use SSH deploy keys — HTTPS remotes fail git fetch in CI/SSH deploy.
+ensure_git_ssh_remote() {
+  local remote_url repo_ssh
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+  if [[ -z "$remote_url" ]]; then
+    return 0
+  fi
+  if [[ "$remote_url" == git@* ]]; then
+    return 0
+  fi
+  repo_ssh="$(printf '%s' "$remote_url" | sed -E \
+    -e 's#^https://github.com/([^/]+)/([^/.]+)(\.git)?$#git@github.com:\1/\2.git#' \
+    -e 's#^https://x-access-token:[^@]+@github.com/([^/]+)/([^/.]+)(\.git)?$#git@github.com:\1/\2.git#')"
+  if [[ "$repo_ssh" == git@github.com:* ]]; then
+    echo "Rewriting origin from HTTPS to SSH: $repo_ssh"
+    git remote set-url origin "$repo_ssh"
+  else
+    echo "WARNING: origin uses HTTPS ($remote_url) — git fetch may fail without a PAT."
+    echo "  Fix on server: git remote set-url origin git@github.com:ORG/REPO.git"
+    echo "  See DEPLOY.md (deploy key + ~/.ssh/config)."
+  fi
+}
+
+ensure_git_ssh_remote
+
 # Concurrent deploys can race on refs/remotes/origin/main (cannot lock ref).
 git_fetch_main_with_retry() {
   local attempt max_attempts=3 sleep_secs=2

@@ -108,6 +108,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { showOrderCenterForMerchant } from '@/lib/merchant-product-flags';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -194,6 +195,9 @@ function MerchantShell() {
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
+  const [shopEnabled, setShopEnabled] = useState(false);
+  const [maxPosPosts, setMaxPosPosts] = useState(0);
+  const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -319,6 +323,11 @@ function MerchantShell() {
       name?: string | null;
       editionFeatures?: EditionFeatureKey[] | null;
       businessCategory?: string | null;
+      shopEnabled?: boolean;
+      maxPosPosts?: number | null;
+      orderCenterEnabled?: boolean;
+      hasPos?: boolean;
+      showOrderCenter?: boolean;
       inventoryAddonEnabled?: boolean;
       inventoryEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
@@ -331,6 +340,9 @@ function MerchantShell() {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
       setBusinessModule(normalizeBusinessModule(settings?.businessCategory));
+      setShopEnabled(!!settings?.shopEnabled);
+      setMaxPosPosts(Math.max(0, Number(settings?.maxPosPosts) || 0));
+      setOrderCenterEnabled(settings?.orderCenterEnabled !== false);
       setInventoryLicensed(isInventoryLicensed(settings) || isInventoryLicensed(user));
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
@@ -462,10 +474,35 @@ function MerchantShell() {
     [setLocale]
   );
 
+  const showOrderCenter = useMemo(
+    () =>
+      showOrderCenterForMerchant({
+        shopEnabled,
+        editionFeatures,
+        maxPosPosts,
+        orderCenterEnabled,
+      }),
+    [shopEnabled, editionFeatures, maxPosPosts, orderCenterEnabled]
+  );
+
   const allow = useCallback(
-    (path: string) =>
-      canAccessRoute(path, effective.permissions, effective.isOwner, editionFeatures, businessModule),
-    [effective.permissions, effective.isOwner, editionFeatures, businessModule]
+    (path: string) => {
+      const normalized = path.split('?')[0].replace(/\/$/, '') || '/merchant';
+      if (
+        (normalized === '/merchant/order-center' || normalized === '/merchant/order-hub') &&
+        !showOrderCenter
+      ) {
+        return false;
+      }
+      return canAccessRoute(
+        path,
+        effective.permissions,
+        effective.isOwner,
+        editionFeatures,
+        businessModule
+      );
+    },
+    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter]
   );
 
   /** Inventory is a paid merchant addon — never gate it on edition feature lists. */

@@ -1522,12 +1522,17 @@ router.get("/me", async (req: Request, res: Response) => {
         id: settings.id,
         email: settings.email,
         name: settings.name,
+        shopEnabled: settings.shopEnabled,
         inventoryAddonEnabled: inventoryOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: settings.signageAddonEnabled === true,
         signageEnabled: settings.signageAddonEnabled === true,
         signageScreenLimit: settings.signageScreenLimit ?? 2,
         editionFeatures: settings.editionFeatures,
+        hasPos: settings.hasPos,
+        showOrderCenter: settings.showOrderCenter,
+        showDeliveryHub: settings.showDeliveryHub,
+        orderCenterEnabled: settings.orderCenterEnabled,
       },
     });
   } catch (error) {
