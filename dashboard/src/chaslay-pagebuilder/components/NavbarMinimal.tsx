@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
   label: string;
@@ -49,6 +50,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   return (
     <>
@@ -74,7 +76,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
           {/* Desktop Menu */}
           <div className="navbar-minimal-menu" style={{ display: 'flex', gap: '40px' }}>
             {mergedProps.menuItems?.map((item, i) => (
-              <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '13px', fontWeight: 400, letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.7 }}>
+              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '13px', fontWeight: 400, letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.7 }}>
                 {item.label}
               </a>
             ))}

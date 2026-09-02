@@ -13,9 +13,13 @@ import {
 } from '@/lib/chaslay-pagebuilder/api';
 import { TemplateGallery } from '@/chaslay-pagebuilder/TemplateGallery';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
+import { useAuthStore } from '@/store/auth';
+import { shopBasePath } from '@/lib/shop-cart';
 
 export default function ChaslayPageBuilderList() {
   const navigate = useNavigate();
+  const merchantSlug = useAuthStore((s) => s.user?.slug || s.user?.subdomain || '');
+  const shopPreviewPath = merchantSlug ? shopBasePath(merchantSlug) || `/shop/${merchantSlug}` : '';
   const [isLoading, setIsLoading] = useState(true);
   const [homepages, setHomepages] = useState<HomepageBuilderListItem[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -97,10 +101,21 @@ export default function ChaslayPageBuilderList() {
         <div>
           <h1 className="text-2xl font-bold">Website</h1>
           <p className="text-sm text-muted-foreground">
-            Design your shop homepage with drag-and-drop blocks. Activate a layout to publish it on your online shop.
+            Design your shop homepage with drag-and-drop blocks. Save in the editor, then <strong>Set active</strong> to publish on your online shop (replaces the legacy OpenPage homepage).
           </p>
         </div>
-        <button
+        <div className="flex flex-wrap items-center gap-2">
+          {shopPreviewPath ? (
+            <a
+              href={shopPreviewPath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm"
+            >
+              View shop
+            </a>
+          ) : null}
+          <button
           type="button"
           onClick={() => setIsCreateDialogOpen(true)}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
@@ -108,6 +123,7 @@ export default function ChaslayPageBuilderList() {
           <Plus className="h-4 w-4" />
           New homepage
         </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -242,7 +258,12 @@ export default function ChaslayPageBuilderList() {
                   const res = await activateHomepageBuilder(activatingHomepage.id);
                   if (res.success) {
                     setHomepages((prev) => prev.map((h) => ({ ...h, is_active: h.id === activatingHomepage.id })));
-                    toast.success('Activated');
+                    toast.success('Homepage published on your shop');
+                    if (shopPreviewPath) {
+                      window.open(shopPreviewPath, '_blank', 'noopener,noreferrer');
+                    }
+                  } else {
+                    toast.error(res.message || 'Failed to activate');
                   }
                   setActivatingHomepage(null);
                 }}

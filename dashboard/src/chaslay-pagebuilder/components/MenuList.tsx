@@ -10,6 +10,7 @@ import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 export interface MenuListProps {
   title?: string;
@@ -44,6 +45,7 @@ export const MenuList: React.FC<MenuListProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { categories, products, loading } = useMenuData();
+  const { shopHref } = useStorefront();
 
   // Format price helper
   const formatPrice = (product: any) => {
@@ -128,7 +130,7 @@ export const MenuList: React.FC<MenuListProps> & {
 
         {mergedProps.buttonText && (
           <div style={{ textAlign: 'center', marginTop: '48px' }}>
-            <a href={mergedProps.buttonLink} style={{ display: 'inline-block', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '16px 40px', borderRadius: '4px', textDecoration: 'none', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '16px 40px', borderRadius: '4px', textDecoration: 'none', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
               {mergedProps.buttonText}
             </a>
           </div>

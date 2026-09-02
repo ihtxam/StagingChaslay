@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
   label: string;
@@ -52,6 +53,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   const midPoint = Math.ceil((mergedProps.menuItems?.length || 0) / 2);
   const leftMenu = mergedProps.menuItems?.slice(0, midPoint) || [];
@@ -73,7 +75,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           {/* Left Menu */}
           <div className="navbar-centered-left" style={{ display: 'flex', gap: '32px' }}>
             {leftMenu.map((item, i) => (
-              <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
                 {item.label}
               </a>
             ))}
@@ -94,7 +96,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           {/* Right Menu */}
           <div className="navbar-centered-right" style={{ display: 'flex', gap: '32px' }}>
             {rightMenu.map((item, i) => (
-              <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
                 {item.label}
               </a>
             ))}

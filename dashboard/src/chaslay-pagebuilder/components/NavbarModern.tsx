@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
   label: string;
@@ -58,6 +59,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   return (
     <>
@@ -83,7 +85,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           {/* Desktop Menu */}
           <div className="navbar-modern-menu" style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
             {mergedProps.menuItems?.map((item, i) => (
-              <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500, opacity: 0.85 }}>
+              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500, opacity: 0.85 }}>
                 {item.label}
               </a>
             ))}
@@ -91,7 +93,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 
           {/* Desktop Button */}
           {mergedProps.buttonText && (
-            <a className="navbar-modern-button" href={mergedProps.buttonLink} style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+            <a className="navbar-modern-button" href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
               {mergedProps.buttonText}
             </a>
           )}

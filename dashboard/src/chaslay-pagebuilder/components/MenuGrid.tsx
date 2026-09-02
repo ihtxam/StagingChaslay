@@ -10,6 +10,7 @@ import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 export interface MenuGridProps {
   title?: string;
@@ -46,6 +47,7 @@ export const MenuGrid: React.FC<MenuGridProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { products, loading } = useMenuData();
+  const { shopHref } = useStorefront();
 
   // If featured products are picked, honor that order; otherwise default newest-first slice.
   const featuredIds = mergedProps.featuredProductIds ?? [];
@@ -121,7 +123,7 @@ export const MenuGrid: React.FC<MenuGridProps> & {
 
         {mergedProps.buttonText && (
           <div style={{ textAlign: 'center', marginTop: '48px' }}>
-            <a href={mergedProps.buttonLink} style={{ display: 'inline-block', backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontSize: '16px', fontWeight: 600, transition: 'opacity 0.2s' }}>
+            <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontSize: '16px', fontWeight: 600, transition: 'opacity 0.2s' }}>
               {mergedProps.buttonText}
             </a>
           </div>

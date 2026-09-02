@@ -9,6 +9,7 @@ import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 export interface MenuMinimalProps {
   title?: string;
@@ -39,6 +40,7 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { products, loading } = useMenuData();
+  const { shopHref } = useStorefront();
 
   // Featured-first ordering when picker is non-empty.
   const featuredIds = mergedProps.featuredProductIds ?? [];
@@ -93,7 +95,7 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
 
         {mergedProps.buttonText && (
           <div style={{ marginTop: '48px' }}>
-            <a href={mergedProps.buttonLink} style={{ color: mergedProps.accentColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '2px', textTransform: 'uppercase', borderBottom: `1px solid ${mergedProps.accentColor}`, paddingBottom: '4px' }}>
+            <a href={shopHref(mergedProps.buttonLink)} style={{ color: mergedProps.accentColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '2px', textTransform: 'uppercase', borderBottom: `1px solid ${mergedProps.accentColor}`, paddingBottom: '4px' }}>
               {mergedProps.buttonText}
             </a>
           </div>

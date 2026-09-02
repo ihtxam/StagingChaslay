@@ -14,6 +14,7 @@ import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { useStorefront } from '../StorefrontContext';
 
 const defaultProps: MenuSectionProps = {
   title: 'Our Menu',
@@ -53,6 +54,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
     enabled: state.options.enabled,
   }));
   const { categories, products, loading } = useMenuData();
+  const { shopHref } = useStorefront();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -234,7 +236,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
               {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
                 <div style={{ textAlign: 'center', marginTop: '40px' }}>
                   <a
-                    href={mergedProps.viewMenuLink || '/menu'}
+                    href={shopHref(mergedProps.viewMenuLink || '/menu')}
                     style={{
                       display: 'inline-block',
                       padding: '14px 36px',
@@ -304,7 +306,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
           {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
             <div style={{ textAlign: 'center', marginTop: '32px' }}>
               <a
-                href={mergedProps.viewMenuLink || '/menu'}
+                href={shopHref(mergedProps.viewMenuLink || '/menu')}
                 style={{
                   display: 'inline-block',
                   padding: '14px 32px',

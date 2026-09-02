@@ -38,6 +38,35 @@ function editorStateForUpdate(state?: string): string | undefined {
 }
 
 export class ChaslayPagebuilderService {
+  /** Prefer the homepage row in chaslay_homepage_builder_pages; fall back to builder.editor_state. */
+  private static async resolvePublishedEditorState(
+    builderId: number,
+    fallback: string | null
+  ): Promise<string | null> {
+    const db = getDb();
+    const homepagePage = await db.query.chaslayHomepageBuilderPages.findFirst({
+      where: and(
+        eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
+        eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
+      ),
+      columns: { editorState: true },
+    });
+    const fromPage = normalizeEditorState(homepagePage?.editorState);
+    if (fromPage) return fromPage;
+    return normalizeEditorState(fallback);
+  }
+
+  /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
+  private static async syncHomepagePageToBuilder(builderId: number, editorState: string | null) {
+    const normalized = normalizeEditorState(editorState);
+    if (!normalized) return;
+    const db = getDb();
+    await db
+      .update(schema.chaslayHomepageBuilders)
+      .set({ editorState: normalized, updatedAt: new Date() })
+      .where(eq(schema.chaslayHomepageBuilders.id, builderId));
+  }
+
   static async list(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
@@ -93,10 +122,11 @@ export class ChaslayPagebuilderService {
         ),
       });
       if (!row) return null;
+      const editor_state = await this.resolvePublishedEditorState(row.id, row.editorState);
       return {
         id: row.id,
         name: row.name,
-        editor_state: row.editorState,
+        editor_state,
         is_active: row.isActive,
         created_at: row.createdAt.toISOString(),
         updated_at: row.updatedAt.toISOString(),
@@ -189,6 +219,10 @@ export class ChaslayPagebuilderService {
         .set({ isActive: true, updatedAt: new Date() })
         .where(eq(schema.chaslayHomepageBuilders.id, id))
         .returning();
+      const publishedState = await this.resolvePublishedEditorState(row.id, row.editorState);
+      if (publishedState && publishedState !== row.editorState) {
+        await this.syncHomepagePageToBuilder(row.id, publishedState);
+      }
       await db
         .update(schema.merchants)
         .set({ cmsHomepageEnabled: true, updatedAt: new Date() })
@@ -352,6 +386,9 @@ export class ChaslayPagebuilderService {
         .set(patch)
         .where(eq(schema.chaslayHomepageBuilderPages.id, pageId))
         .returning();
+      if (row.isHomepage && (input.editor_state !== undefined || input.is_homepage === true)) {
+        await this.syncHomepagePageToBuilder(builderId, row.editorState);
+      }
       return {
         id: row.id,
         homepage_builder_id: row.homepageBuilderId,

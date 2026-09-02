@@ -59,8 +59,11 @@ export default function ChaslayPageBuilderEditor() {
         const pageId = currentPageIdRef.current;
         if (pageId) {
           const response = await updateHomepageBuilderPage(builderId, pageId, { editor_state: state });
-          if (response.success) toast.success('Page saved');
-          else throw new Error(response.message || 'Failed to save');
+          if (response.success) {
+            // Keep builder row in sync — public shop reads active builder state.
+            await updateHomepageBuilder(builderId, { editor_state: state }).catch(() => undefined);
+            toast.success('Page saved');
+          } else throw new Error(response.message || 'Failed to save');
         } else {
           const response = await updateHomepageBuilder(builderId, { editor_state: state });
           if (response.success) toast.success('Homepage saved');

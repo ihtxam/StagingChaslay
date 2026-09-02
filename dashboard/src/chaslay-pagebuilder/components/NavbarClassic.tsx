@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
   label: string;
@@ -58,6 +59,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   return (
     <>
@@ -85,13 +87,13 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
             <div style={{ display: 'flex', gap: '24px' }}>
               {mergedProps.menuItems?.map((item, i) => (
-                <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500 }}>
+                <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500 }}>
                   {item.label}
                 </a>
               ))}
             </div>
             {mergedProps.showButton && (
-              <a href={mergedProps.buttonLink} style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+              <a href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                 {mergedProps.buttonText}
               </a>
             )}

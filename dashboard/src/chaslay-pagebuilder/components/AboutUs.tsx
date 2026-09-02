@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
 
 const defaultProps: AboutUsProps = {
   title: 'About Us',
@@ -36,6 +37,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
   const isImageLeft = mergedProps.imagePosition === 'left';
   const isElegant = mergedProps.variant === 'elegant';
   const accent = mergedProps.accentColor || '#dd5903';
@@ -109,7 +111,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
             {mergedProps.buttonText && (
               <div style={{ marginTop: '28px' }}>
                 <a
-                  href={mergedProps.buttonLink || '#'}
+                  href={shopHref(mergedProps.buttonLink || '#')}
                   style={{
                     display: 'inline-block',
                     padding: '14px 36px',
@@ -149,7 +151,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
           {mergedProps.title && <h2 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '24px' }}>{mergedProps.title}</h2>}
           <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.85 }}>{mergedProps.content}</p>
           {mergedProps.buttonText && (
-            <a href={mergedProps.buttonLink || '#'} style={{ display: 'inline-block', marginTop: '24px', padding: '12px 32px', backgroundColor: mergedProps.buttonColor || '#e94560', color: '#fff', textDecoration: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <a href={shopHref(mergedProps.buttonLink || '#')} style={{ display: 'inline-block', marginTop: '24px', padding: '12px 32px', backgroundColor: mergedProps.buttonColor || '#e94560', color: '#fff', textDecoration: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
               {mergedProps.buttonText}
             </a>
           )}

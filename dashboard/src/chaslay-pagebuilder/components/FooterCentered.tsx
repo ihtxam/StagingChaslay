@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { normalizeLink } from '../utils/normalizeLink';
 import { TranslatableInput } from './TranslatableInput';
+import { useStorefront } from '../StorefrontContext';
 
 interface MenuItem {
   label: string;
@@ -48,6 +49,7 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   return (
     <footer
@@ -73,7 +75,7 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
         {/* Menu Links */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', marginBottom: '24px', flexWrap: 'wrap' }}>
           {mergedProps.menuItems?.map((item, i) => (
-            <a key={i} href={item.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
+            <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
               {item.label}
             </a>
           ))}

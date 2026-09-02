@@ -9,6 +9,7 @@ import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useStorefront } from '../StorefrontContext';
 
 interface LinkItem {
   label: string;
@@ -66,6 +67,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
+  const { shopHref } = useStorefront();
 
   return (
     <>
@@ -96,7 +98,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
               <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{column.title}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {column.links.map((link, j) => (
-                  <a key={j} href={link.link} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
+                  <a key={j} href={shopHref(link.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
                     {link.label}
                   </a>
                 ))}
