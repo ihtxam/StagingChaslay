@@ -2529,6 +2529,7 @@ const en: Dict = {
     'When unchecked, this till will not auto-print kitchen tickets (local sends or jobs relayed from phones).',
   webPosRefreshPrinters: 'Refresh printers',
   webPosReloadCatalog: 'Reload catalog',
+  webPosReloadCatalogShort: 'Reload',
   webPosPrintersRefreshed: 'Printers refreshed',
   webPosAgentOnline: 'Print agent online',
   webPosPrintRelayHint:
@@ -6253,6 +6254,7 @@ const fr: Dict = {
     'Si décoché, cette caisse n\'imprime plus les tickets cuisine (envois locaux ou relais depuis les téléphones).',
   webPosRefreshPrinters: 'Actualiser les imprimantes',
   webPosReloadCatalog: 'Recharger le catalogue',
+  webPosReloadCatalogShort: 'Recharger',
   webPosPrintersRefreshed: 'Imprimantes actualisées',
   webPosAgentOnline: 'Agent d’impression en ligne',
   webPosPrintRelayHint:
@@ -9928,6 +9930,7 @@ const de: Dict = {
     'Wenn deaktiviert, druckt diese Kasse keine Küchentickets (lokal oder von Handys weitergeleitet).',
   webPosRefreshPrinters: 'Drucker aktualisieren',
   webPosReloadCatalog: 'Katalog neu laden',
+  webPosReloadCatalogShort: 'Neu laden',
   webPosPrintersRefreshed: 'Drucker aktualisiert',
   webPosAgentOnline: 'Druckagent online',
   webPosPrintRelayHint:
