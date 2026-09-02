@@ -31,6 +31,25 @@ function Device-Key([string]$Text) {
   return ($Text.ToLowerInvariant() -replace '[^a-z0-9]', '')
 }
 
+function Test-IsGenericBluetoothSerial($Device) {
+  $blob = ("$($Device.name) $($Device.caption) $($Device.manufacturer) $($Device.pnpDeviceId)").ToLowerInvariant()
+  $pnp = [string]$Device.pnpDeviceId
+  if ($blob -match 'standard.*serial.*bluetooth|seriell.*bluetooth|serial\s+over\s+bluetooth|standardmäßige\s+seriell') { return $true }
+  if ($blob -match 'microsoft' -and $blob -match 'bluetooth|bth|seriell|serial') { return $true }
+  if ($pnp -match 'bthenum|rfcomm|bluetoothserial|bt_spp|bthmodem') { return $true }
+  return $false
+}
+
+function Test-IsLikelyScale($Device) {
+  $blob = ("$($Device.name) $($Device.caption) $($Device.manufacturer) $($Device.pnpDeviceId) $($Device.port)").ToLowerInvariant()
+  $pnp = [string]$Device.pnpDeviceId
+  if (Test-IsGenericBluetoothSerial $Device) { return $false }
+  if ($blob -match 'aclas') { return $true }
+  if ($blob -match 'ch340|ch341|ch30|usb[-\s]?serial') { return $true }
+  if ($pnp -match 'vid_1a86') { return $true }
+  return $false
+}
+
 function Get-SerialDevices {
   $byCom = @{}
 
@@ -120,7 +139,7 @@ function Resolve-SerialPort([string]$WantPort, [string]$WantHint, [string]$WantP
 }
 
 if ($ListPorts -or ([string]::IsNullOrWhiteSpace($PortName) -and [string]::IsNullOrWhiteSpace($Hint) -and [string]::IsNullOrWhiteSpace($PnpDeviceId))) {
-  $devices = Get-SerialDevices
+  $devices = @(Get-SerialDevices | Where-Object { Test-IsLikelyScale $_ })
   Write-Json @{
     ok = $true
     ports = @($devices | ForEach-Object { $_.port })
