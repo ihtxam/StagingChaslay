@@ -761,8 +761,10 @@ export class OrderService {
         } else if (status !== "ready" && status !== "preparing") {
           throw new Error("Order must be ready to complete");
         }
-        // Cash / pay-later: require payment collection first (unless already paid)
-        if (!paymentDone && isCash) {
+        // Cash / pay-later at POS: require payment collection first (unless already paid).
+        // Online shop / delivery-platform orders may be pay-on-delivery or card-paid via
+        // Stripe — fulfillment completion must not block on payment collection.
+        if (!paymentDone && isCash && !usesExternalKitchenLifecycle(order)) {
           throw new Error("Collect payment before completing this order");
         }
         return set({ status: "completed", completedAt: new Date() });

@@ -38,6 +38,12 @@ function mapShopCatalog(data: {
       description?: string;
       image?: string;
       categoryId?: string | null;
+      productType?: string;
+      allowExtras?: boolean;
+      extras?: Array<{ id: string; name: string; price: number }>;
+      modifierGroups?: Array<{ options?: unknown[] }>;
+      comboSlots?: unknown[];
+      specifications?: Array<{ id: string; name: string; price: number }>;
     }>;
   }>;
 }) {
@@ -53,9 +59,15 @@ function mapShopCatalog(data: {
         product_name: item.name,
         product_description: item.description ?? null,
         product_image: item.image ?? null,
-        price: item.price,
+        price: Number(item.price) || 0,
         image: item.image ?? null,
         category_id: item.categoryId ? String(item.categoryId) : String(cat.id),
+        productType: item.productType,
+        allowExtras: item.allowExtras,
+        extras: item.extras,
+        modifierGroups: item.modifierGroups,
+        comboSlots: item.comboSlots,
+        specifications: item.specifications,
       });
     }
   }

@@ -11,6 +11,8 @@ import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { formatMenuProductPrice } from '../menu-product-utils';
+import { useStorefrontCart } from '../useStorefrontCart';
 
 export interface MenuGridProps {
   title?: string;
@@ -47,7 +49,8 @@ export const MenuGrid: React.FC<MenuGridProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { products, loading } = useMenuData();
-  const { shopHref } = useStorefront();
+  const { shopHref, isStorefront } = useStorefront();
+  const { addProduct } = useStorefrontCart();
 
   // If featured products are picked, honor that order; otherwise default newest-first slice.
   const featuredIds = mergedProps.featuredProductIds ?? [];
@@ -58,11 +61,7 @@ export const MenuGrid: React.FC<MenuGridProps> & {
     : products;
   const displayProducts = orderedProducts.slice(0, 6);
 
-  // Format price helper
-  const formatPrice = (product: { price?: number; details?: Array<{ price?: number }> }) => {
-    const price = product.price ?? product.details?.[0]?.price ?? 0;
-    return `CHF ${Number(price).toFixed(2)}`;
-  };
+  const formatPrice = (product: (typeof products)[number]) => formatMenuProductPrice(product);
 
   return (
     <section
@@ -111,6 +110,25 @@ export const MenuGrid: React.FC<MenuGridProps> & {
                     <span style={{ fontSize: '18px', fontWeight: 700, color: mergedProps.accentColor }}>{formatPrice(product)}</span>
                   </div>
                   <p style={{ fontSize: '14px', opacity: 0.7 }}>{product.product_description?.substring(0, 60) || ''}{product.product_description && product.product_description.length > 60 ? '...' : ''}</p>
+                  {isStorefront ? (
+                    <button
+                      type="button"
+                      onClick={() => addProduct(product)}
+                      style={{
+                        marginTop: '12px',
+                        backgroundColor: mergedProps.accentColor,
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 14px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Add to cart
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}

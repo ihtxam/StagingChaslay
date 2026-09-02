@@ -41,6 +41,8 @@ const money_1 = require("@/lib/money");
 const tax_discount_1 = require("@/lib/tax-discount");
 const order_item_name_1 = require("@/lib/order-item-name");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const online_order_scope_1 = require("@/lib/online-order-scope");
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
 async function releaseHeldAfterPosPayment(merchantId, order) {
@@ -229,7 +231,7 @@ class OrderService {
     /**
      * Create order
      */
-    static async createOrder(merchantId, items, customerId, orderType = "pos", paymentMethod, discountAmount = 0, notes) {
+    static async createOrder(merchantId, items, customerId, orderType = "pos", paymentMethod, discountAmount = 0, notes, locationId) {
         const db = (0, db_1.getDb)();
         try {
             const merchant = await db.query.merchants.findFirst({
@@ -263,10 +265,13 @@ class OrderService {
             const total = (0, money_1.roundTo005)(subtotal + taxAmount - discountAmount);
             // Create order
             const orderNumber = `ORD-${Date.now()}-${(0, uuid_1.v4)().substring(0, 8).toUpperCase()}`;
+            const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+            const resolvedLocationId = await LocationsService.resolveLocationId(merchantId, locationId);
             const order = await db
                 .insert(db_1.schema.orders)
                 .values({
                 merchantId,
+                locationId: resolvedLocationId,
                 orderNumber,
                 customerId,
                 orderType,
@@ -313,13 +318,25 @@ class OrderService {
     /**
      * Get all orders for merchant
      */
-    static async getOrders(merchantId, page = 1, limit = 20, status, startDate, endDate) {
-        const db = (0, db_1.getDb)();
-        try {
+    static async getOrders(merchantId, page = 1, limit = 20, status, startDate, endDate, scope) {
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
             const offset = (page - 1) * limit;
-            let whereConditions = [(0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)];
+            const whereConditions = [(0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)];
+            if (scope === "online") {
+                whereConditions.push((0, online_order_scope_1.onlineOrderScopeCondition)());
+            }
             if (status) {
-                whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.status, status));
+                const statuses = status
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                if (statuses.length === 1) {
+                    whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.status, statuses[0]));
+                }
+                else if (statuses.length > 1) {
+                    whereConditions.push((0, drizzle_orm_1.inArray)(db_1.schema.orders.status, statuses));
+                }
             }
             if (startDate && endDate) {
                 whereConditions.push((0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, startDate));
@@ -340,11 +357,38 @@ class OrderService {
                 orderBy: (0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt),
             });
             return orders.map((order) => withResolvedItemNames(order));
-        }
-        catch (error) {
-            console.error("Error getting orders:", error);
-            throw error;
-        }
+        });
+    }
+    /** Active online / QR / kiosk orders for Order Hub and Web POS polling. */
+    static async getIncomingOrders(merchantId, opts = {}) {
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), 300);
+            const statusList = opts.statuses
+                ? opts.statuses
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : [...online_order_scope_1.INCOMING_ONLINE_ORDER_STATUSES];
+            const whereConditions = [(0, online_order_scope_1.incomingOnlineOrdersWhere)(merchantId, statusList)];
+            if (opts.since) {
+                whereConditions.push((0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, opts.since));
+            }
+            const orders = await db.query.orders.findMany({
+                where: (0, drizzle_orm_1.and)(...whereConditions),
+                with: {
+                    items: {
+                        with: {
+                            product: true,
+                        },
+                    },
+                    customer: true,
+                },
+                limit,
+                orderBy: (0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt),
+            });
+            return orders.map((order) => withResolvedItemNames(order));
+        });
     }
     /**
      * Get order by ID
@@ -455,9 +499,19 @@ class OrderService {
             case "accept": {
                 if (!awaitingApproval)
                     throw new Error("Order is not awaiting approval");
-                const estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
+                let estimatedReadyAt;
+                if (opts?.estimatedReadyAt) {
+                    estimatedReadyAt = new Date(opts.estimatedReadyAt);
+                }
+                else if (opts?.etaAdjustMinutes != null && Number(opts.etaAdjustMinutes) > 0) {
+                    const base = order.scheduledFor ? new Date(order.scheduledFor) : new Date();
+                    estimatedReadyAt = new Date(base.getTime() + Number(opts.etaAdjustMinutes) * 60 * 1000);
+                }
+                else {
+                    estimatedReadyAt = computeEstimatedReadyAt(order, merchant || {});
+                }
                 const accepted = await set({
-                    status: "accepted",
+                    status: "preparing",
                     estimatedReadyAt,
                 });
                 if (order.orderSource === "justeat" || order.orderSource === "ubereats") {
@@ -468,7 +522,9 @@ class OrderService {
                     const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
                     const source = order.orderSource === "justeat" || order.orderSource === "ubereats"
                         ? order.orderSource
-                        : "online_shop";
+                        : order.orderSource === "kiosk"
+                            ? "kiosk"
+                            : "online_shop";
                     await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
                         printKitchen: true,
                         printDeliveryReceipt: false,
@@ -487,11 +543,13 @@ class OrderService {
                     printKitchen: false,
                     orderSource: order.orderSource === "justeat" || order.orderSource === "ubereats"
                         ? order.orderSource
-                        : "online_shop",
+                        : order.orderSource === "kiosk"
+                            ? "kiosk"
+                            : "online_shop",
                 }))
                     .catch(() => { });
-                void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", order);
-                return set({ status: "preparing" });
+                void sendGuestShopOrderEmail(merchantId, orderId, "confirmed", accepted || order);
+                return accepted;
             }
             case "start_preparing": {
                 if (status !== "accepted" && !awaitingApproval) {
@@ -579,8 +637,10 @@ class OrderService {
                 else if (status !== "ready" && status !== "preparing") {
                     throw new Error("Order must be ready to complete");
                 }
-                // Cash / pay-later: require payment collection first (unless already paid)
-                if (!paymentDone && isCash) {
+                // Cash / pay-later at POS: require payment collection first (unless already paid).
+                // Online shop / delivery-platform orders may be pay-on-delivery or card-paid via
+                // Stripe — fulfillment completion must not block on payment collection.
+                if (!paymentDone && isCash && !usesExternalKitchenLifecycle(order)) {
                     throw new Error("Collect payment before completing this order");
                 }
                 return set({ status: "completed", completedAt: new Date() });

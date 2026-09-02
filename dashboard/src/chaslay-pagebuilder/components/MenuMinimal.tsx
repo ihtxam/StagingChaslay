@@ -10,6 +10,7 @@ import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { formatMenuProductPrice } from '../menu-product-utils';
 
 export interface MenuMinimalProps {
   title?: string;
@@ -51,11 +52,7 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
     : products;
   const displayProducts = orderedProducts.slice(0, 6);
 
-  // Format price helper
-  const formatPrice = (product: any) => {
-    const price = product.details?.[0]?.price || 0;
-    return `CHF ${Number(price).toFixed(2)}`;
-  };
+  const formatPrice = (product: (typeof products)[number]) => formatMenuProductPrice(product);
 
   return (
     <section

@@ -11,6 +11,7 @@ import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { formatMenuProductPrice } from '../menu-product-utils';
 
 export interface MenuListProps {
   title?: string;
@@ -47,11 +48,7 @@ export const MenuList: React.FC<MenuListProps> & {
   const { categories, products, loading } = useMenuData();
   const { shopHref } = useStorefront();
 
-  // Format price helper
-  const formatPrice = (product: any) => {
-    const price = product.details?.[0]?.price || 0;
-    return `CHF ${Number(price).toFixed(2)}`;
-  };
+  const formatPrice = (product: (typeof products)[number]) => formatMenuProductPrice(product);
 
   // When featured picker is non-empty, group those products by their category
   // and preserve the picker order within each group. Otherwise default behavior:

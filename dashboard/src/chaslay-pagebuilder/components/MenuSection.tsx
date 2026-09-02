@@ -15,6 +15,8 @@ import { TranslatableInput } from './TranslatableInput';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { useStorefront } from '../StorefrontContext';
+import { formatMenuProductPrice } from '../menu-product-utils';
+import { useStorefrontCart } from '../useStorefrontCart';
 
 const defaultProps: MenuSectionProps = {
   title: 'Our Menu',
@@ -54,7 +56,8 @@ export const MenuSection: React.FC<MenuSectionProps> & {
     enabled: state.options.enabled,
   }));
   const { categories, products, loading } = useMenuData();
-  const { shopHref } = useStorefront();
+  const { shopHref, isStorefront } = useStorefront();
+  const { addProduct } = useStorefrontCart();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -119,9 +122,13 @@ export const MenuSection: React.FC<MenuSectionProps> & {
     }
   };
 
-  const formatPrice = (product: any) => {
-    const price = product.details?.[0]?.price || 0;
-    return `CHF ${Number(price).toFixed(2)}`;
+  const formatPrice = (product: (typeof products)[number]) => formatMenuProductPrice(product);
+
+  const handleAddProduct = (product: (typeof products)[number], event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!isStorefront) return;
+    addProduct(product);
   };
 
   const isGrid = mergedProps.layout === 'grid';
@@ -291,7 +298,18 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                     <p style={{ fontSize: '13px', color: mergedProps.textColor, opacity: 0.6, marginBottom: '12px', height: '36px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{product.product_description || ''}</p>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '18px', fontWeight: 700, color: mergedProps.accentColor }}>{formatPrice(product)}</span>
-                      <button style={{ backgroundColor: mergedProps.accentColor, color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '20px', fontWeight: 'bold' }}>+</button>
+                      {isStorefront ? (
+                        <button
+                          type="button"
+                          aria-label="Add to cart"
+                          onClick={(event) => handleAddProduct(product, event)}
+                          style={{ backgroundColor: mergedProps.accentColor, color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '20px', fontWeight: 'bold' }}
+                        >
+                          +
+                        </button>
+                      ) : (
+                        <button style={{ backgroundColor: mergedProps.accentColor, color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '20px', fontWeight: 'bold' }}>+</button>
+                      )}
                     </div>
                   </div>
                 </div>
