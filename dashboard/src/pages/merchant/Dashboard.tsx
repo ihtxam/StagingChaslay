@@ -108,7 +108,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
-import { showOrderCenterForMerchant } from '@/lib/merchant-product-flags';
+import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -485,6 +485,16 @@ function MerchantShell() {
     [shopEnabled, editionFeatures, maxPosPosts, orderCenterEnabled]
   );
 
+  const hasPos = useMemo(
+    () =>
+      merchantHasPos({
+        shopEnabled,
+        editionFeatures,
+        maxPosPosts,
+      }),
+    [shopEnabled, editionFeatures, maxPosPosts]
+  );
+
   const allow = useCallback(
     (path: string) => {
       const normalized = path.split('?')[0].replace(/\/$/, '') || '/merchant';
@@ -492,6 +502,9 @@ function MerchantShell() {
         (normalized === '/merchant/order-center' || normalized === '/merchant/order-hub') &&
         !showOrderCenter
       ) {
+        return false;
+      }
+      if (normalized === '/merchant/pos' && !hasPos) {
         return false;
       }
       return canAccessRoute(
@@ -502,7 +515,7 @@ function MerchantShell() {
         businessModule
       );
     },
-    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter]
+    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter, hasPos]
   );
 
   /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
@@ -681,8 +694,10 @@ function MerchantShell() {
   }, [jwtOwnerBypass, user?.role, user?.loginHome, user?.permissions, isPosLikeRoute, location.pathname, navigate]);
 
   const showWebPosQuickAction = useMemo(
-    () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
-    [jwtIsOwner, user?.permissions]
+    () =>
+      hasPos &&
+      canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
+    [hasPos, jwtIsOwner, user?.permissions]
   );
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');

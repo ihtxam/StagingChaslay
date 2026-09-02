@@ -12,6 +12,10 @@ import {
   normalizeBusinessModule,
   type BusinessModule,
 } from "@/lib/business-module";
+import {
+  MERCHANT_PRODUCT_SURFACES,
+  PRODUCT_SURFACE_PRESETS,
+} from "@/lib/merchant-product-surface";
 
 export type EditionRow = typeof schema.editions.$inferSelect;
 
@@ -78,6 +82,45 @@ export class EditionService {
     ]);
   }
 
+  /** Platform editions for shop-only / website / full POS packages. */
+  static async ensureProductSurfaceEditions() {
+    await this.ensureDefaults();
+    const db = getDb();
+    for (const surface of MERCHANT_PRODUCT_SURFACES) {
+      const preset = PRODUCT_SURFACE_PRESETS[surface];
+      const existing = await db.query.editions.findFirst({
+        where: and(
+          eq(schema.editions.ownerType, "platform"),
+          isNull(schema.editions.ownerId),
+          eq(schema.editions.name, preset.editionName)
+        ),
+      });
+      if (existing) continue;
+      await db.insert(schema.editions).values({
+        ownerType: "platform",
+        ownerId: null,
+        name: preset.editionName,
+        note: preset.description,
+        businessCategory: "both",
+        features: [...preset.features],
+        isActive: true,
+      });
+    }
+  }
+
+  static async getPlatformEditionByName(name: string) {
+    await this.ensureProductSurfaceEditions();
+    const db = getDb();
+    const row = await db.query.editions.findFirst({
+      where: and(
+        eq(schema.editions.ownerType, "platform"),
+        isNull(schema.editions.ownerId),
+        eq(schema.editions.name, name)
+      ),
+    });
+    return row ? serialize(row) : null;
+  }
+
   static async list(opts?: {
     ownerType?: "platform" | "reseller";
     ownerId?: string | null;
@@ -86,6 +129,7 @@ export class EditionService {
     forResellerId?: string;
   }) {
     await this.ensureDefaults();
+    await this.ensureProductSurfaceEditions();
     const db = getDb();
     const clauses = [];
     if (opts?.forResellerId) {
