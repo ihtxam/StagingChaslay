@@ -11,6 +11,7 @@ import {
   businessModuleMerchantPatch,
   normalizeBusinessModule,
 } from "@/lib/business-module";
+import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
 
 export interface JWTPayload {
   id: string;
@@ -312,6 +313,7 @@ export class AuthService {
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+        loginHome: normalizeStaffLoginHome(staff.loginHome),
       },
       isOwner: false,
     };

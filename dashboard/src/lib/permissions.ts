@@ -215,6 +215,7 @@ export function backOfficeHomePath(
   if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
   if (isOrderCenterOnlyStaff(permissions, isOwner)) return orderCenterHomePath();
   if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
 }
@@ -485,6 +486,23 @@ export function jwtHasPanelAccess(
     hasPermission(jwtPermissions, 'MANAGE_PRODUCTS', false) ||
     hasPermission(jwtPermissions, 'VIEW_ORDER_HISTORY', false) ||
     canOpenReportsPanel(jwtPermissions, false)
+  );
+}
+
+/** Cashier / register staff — WebPOS first, not merchant dashboard or order center. */
+export function isRegisterFirstStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  const hasPos =
+    hasPermission(permissions, 'USE_WEBPOS', false) ||
+    hasPermission(permissions, 'MANAGE_TABLES', false);
+  if (!hasPos) return false;
+  return (
+    !hasPermission(permissions, 'ACCESS_PANEL', false) &&
+    !hasPermission(permissions, 'MANAGE_PRODUCTS', false) &&
+    !hasPermission(permissions, 'MANAGE_INVENTORY', false)
   );
 }
 

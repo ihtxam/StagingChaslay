@@ -6,6 +6,7 @@ import {
   getEffectivePanelAccess,
   isOrderCenterOnlyStaff,
   isOrderCenterRestrictedStaff,
+  isRegisterFirstStaff,
   type Permission,
   type WebPosStaffSession,
 } from './permissions';
@@ -128,6 +129,7 @@ const managerPin: WebPosStaffSession = {
 {
   assert.equal(isOrderCenterOnlyStaff(CASHIER_PERMS, false), false);
   assert.equal(isOrderCenterRestrictedStaff(CASHIER_PERMS, false), false);
+  assert.equal(isRegisterFirstStaff(CASHIER_PERMS, false), true);
 }
 
 // Order center operator template — no POS, order history only

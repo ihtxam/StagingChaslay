@@ -90,6 +90,8 @@ export class StaffService {
     // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
+    await this.ensureCashierRolePermissions(merchantId);
+    await this.syncCashierLoginHome(merchantId);
     defaultRolesReady.add(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
@@ -268,6 +270,55 @@ export class StaffService {
         .set({ loginHome: "pos", updatedAt: new Date() })
         .where(eq(schema.merchantStaff.id, member.id));
     }
+  }
+
+  /** Cashiers and other register-first staff should land on WebPOS after email login. */
+  static async syncCashierLoginHome(merchantId: string) {
+    const db = getDb();
+    const staffRows = await db.query.merchantStaff.findMany({
+      where: eq(schema.merchantStaff.merchantId, merchantId),
+    });
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const roleById = new Map(roles.map((r) => [r.id, r]));
+    for (const member of staffRows) {
+      const role = roleById.get(member.roleId);
+      if (!role) continue;
+      const perms = applyRolePermissionPolicy(role.name, parsePermissions(role.permissions));
+      const isCashierRole = role.name.trim().toLowerCase() === "cashier";
+      const hasPos = perms.includes("USE_WEBPOS") || perms.includes("MANAGE_TABLES");
+      const hasBackend =
+        perms.includes("ACCESS_PANEL") ||
+        perms.includes("MANAGE_PRODUCTS") ||
+        perms.includes("MANAGE_INVENTORY");
+      if (!isCashierRole && !(hasPos && !hasBackend)) continue;
+      if (normalizeStaffLoginHome(member.loginHome) === "pos") continue;
+      await db
+        .update(schema.merchantStaff)
+        .set({ loginHome: "pos", updatedAt: new Date() })
+        .where(eq(schema.merchantStaff.id, member.id));
+    }
+  }
+
+  /** Restore Cashier system role permissions (USE_WEBPOS, etc.) if stripped in older installs. */
+  static async ensureCashierRolePermissions(merchantId: string) {
+    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "cashier");
+    if (!template) return;
+    const db = getDb();
+    const role = await db.query.merchantRoles.findFirst({
+      where: and(
+        eq(schema.merchantRoles.merchantId, merchantId),
+        sql`lower(trim(${schema.merchantRoles.name})) = 'cashier'`
+      ),
+    });
+    if (!role) return;
+    const expected = encodePermissions(template.permissions);
+    if (role.permissions === expected) return;
+    await db
+      .update(schema.merchantRoles)
+      .set({ permissions: expected, updatedAt: new Date() })
+      .where(eq(schema.merchantRoles.id, role.id));
   }
 
   /**
