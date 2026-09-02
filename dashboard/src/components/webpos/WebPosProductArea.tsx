@@ -7,10 +7,12 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   MonitorSmartphone,
+  Search,
   TrendingUp,
   Wallet,
+  X,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import {
   actionButtonIconSize,
@@ -77,6 +79,10 @@ type Props = {
   /** Click empty grid area (not a product tile) — e.g. deselect cart line. */
   onBackgroundClick?: () => void;
   actionButtonSize?: WebPosActionButtonSize;
+  search?: string;
+  onSearchChange?: (q: string) => void;
+  onSearchSubmit?: () => void;
+  showSearch?: boolean;
 };
 
 const TILE_GRID: Record<ProductGridTileSize, string> = {
@@ -120,8 +126,13 @@ export default function WebPosProductArea({
   onCustomAmount,
   onBackgroundClick,
   actionButtonSize: actionButtonSizeProp,
+  search = '',
+  onSearchChange,
+  onSearchSubmit,
+  showSearch = false,
 }: Props) {
   const { t } = useI18n();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const actionButtonSize = normalizeActionButtonSize(actionButtonSizeProp);
   const expressIcon = actionButtonIconSize(actionButtonSize);
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
@@ -136,7 +147,23 @@ export default function WebPosProductArea({
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
-        <div className="mb-2 flex items-center justify-end gap-1">
+        <div className="mb-2 flex items-center justify-start gap-1">
+          {showSearch && isPhoneLayout && onSearchChange ? (
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen((open) => !open)}
+              title={t('webPosSearchProducts')}
+              aria-label={t('webPosSearchProducts')}
+              aria-expanded={mobileSearchOpen}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border webpos-toolbar-btn ${
+                mobileSearchOpen || search.trim()
+                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent)] text-white'
+                  : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              {mobileSearchOpen ? <X size={16} aria-hidden /> : <Search size={16} aria-hidden />}
+            </button>
+          ) : null}
           {onToggleShowImages ? (
             <button
               type="button"
@@ -204,6 +231,28 @@ export default function WebPosProductArea({
             </button>
           ) : null}
         </div>
+        {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
+          <label className="relative mb-2 block sm:hidden">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+            />
+            <input
+              className="webpos-search-input h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-8 pr-2"
+              placeholder={t('webPosSearchProducts')}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSearchSubmit?.();
+                }
+              }}
+              autoComplete="off"
+              inputMode="search"
+            />
+          </label>
+        ) : null}
         <div
           className="webpos-cat-scroll flex flex-wrap gap-1.5"
           data-cat-layout={categoryLayoutMode}

@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict';
 import {
   getEffectivePanelAccess,
+  isOrderCenterOnlyStaff,
+  isOrderCenterRestrictedStaff,
   type Permission,
   type WebPosStaffSession,
 } from './permissions';
@@ -120,6 +122,19 @@ const managerPin: WebPosStaffSession = {
   });
   assert.equal(access.isOwner, true);
   assert.equal(access.canOpenPanel, true);
+}
+
+// Cashier with register access is not order-center-only (must stay on WebPOS)
+{
+  assert.equal(isOrderCenterOnlyStaff(CASHIER_PERMS, false), false);
+  assert.equal(isOrderCenterRestrictedStaff(CASHIER_PERMS, false), false);
+}
+
+// Order center operator template — no POS, order history only
+{
+  const orderCenterPerms: Permission[] = ['VIEW_ORDER_HISTORY', 'END_OF_DAY'];
+  assert.equal(isOrderCenterOnlyStaff(orderCenterPerms, false), true);
+  assert.equal(isOrderCenterRestrictedStaff(orderCenterPerms, false), true);
 }
 
 console.log('permissions.panel-access: all assertions passed');

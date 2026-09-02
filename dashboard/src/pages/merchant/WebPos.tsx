@@ -723,6 +723,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const authUser = useAuthStore((s) => s.user);
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
+  const logout = useAuthStore((s) => s.logout);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -733,6 +734,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const bootActive = bootCart?.active || null;
 
   const [loading, setLoading] = useState(true);
+  const catalogBootedRef = useRef(false);
   const [entitlement, setEntitlement] = useState<WebPosEntitlement | null>(null);
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1162,20 +1164,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           .filter((s) => s.isActive !== false)
           .map((s) => ({ id: s.id, name: s.name }))
       );
-      const session = resolveWebPosStaffSession({
-        staffList,
-        authStaffId: authUser?.staffId,
-        authRole: authUser?.role,
-        authPermissions: authUser?.permissions,
+      let resolvedSession: WebPosStaffSession | null = null;
+      setWebposStaff((current) => {
+        const session = resolveWebPosStaffSession({
+          staffList,
+          authStaffId: authUser?.staffId,
+          authRole: authUser?.role,
+          authPermissions: authUser?.permissions,
+          existing: current,
+        });
+        resolvedSession = session;
+        return session;
       });
-      setWebposStaff(session);
-      if (session) {
+      if (resolvedSession) {
         notifyWebPosStaffSessionChanged();
       }
       const shouldOpenPinGate =
         opts?.openPinGate !== false &&
         hasPins &&
-        !session &&
+        !resolvedSession &&
         authUser?.role !== 'staff';
       if (shouldOpenPinGate) {
         setPinModalMode('gate');
@@ -2170,7 +2177,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!catalogBootedRef.current) setLoading(true);
     let cacheReady = false;
     const offlineBoot = !isBrowserOnline();
 
@@ -2285,7 +2292,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
       if (!staffFailed) {
         setStaffRoster(staffList);
-        applyStaffRoster(staffList, { openPinGate: true });
+        applyStaffRoster(staffList, { openPinGate: !loadWebPosStaffSession() });
       }
       if (catalogError) {
         toast.error(
@@ -2393,6 +2400,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     } finally {
       setLoading(false);
+      catalogBootedRef.current = true;
     }
   }, [applyCachedOfflineSnapshot, applyStaffRoster, refreshAgent, refreshCurrentShift, t]);
 
@@ -8619,7 +8627,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     setPosAuthAlert(null);
     clearPosSessionLocal();
-    clearWebPosStaffSession();
+    setWebposStaff(session);
+    saveWebPosStaffSession(session);
+    notifyWebPosStaffSessionChanged();
     const reg = await registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
@@ -8631,6 +8641,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         reg.error || ''
       );
       if (!schemaLag) {
+        clearWebPosStaffSession();
+        setWebposStaff(null);
         setPosAuthAlert({
           title: t('webPosPinErrorTitle'),
           message: reg.error || t('webPosSessionRegisterFailed'),
@@ -8642,9 +8654,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       console.warn('[webpos] session register skipped (schema):', reg.error);
     }
-    setWebposStaff(session);
-    saveWebPosStaffSession(session);
-    notifyWebPosStaffSessionChanged();
     if (reg.ok && reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
     }
@@ -8673,6 +8682,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPinModalMode('switch');
     setPinModalOpen(true);
   };
+
+  const handlePosLogout = useCallback(async () => {
+    setPinModalOpen(false);
+    try {
+      await revokePosSession();
+    } catch {
+      /* best effort */
+    }
+    clearPosSessionLocal();
+    clearWebPosStaffSession();
+    setWebposStaff(null);
+    notifyWebPosStaffSessionChanged();
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const dismissSetPinHint = () => {
     setSetPinHintDismissed(true);
@@ -8988,6 +9012,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 /* gate cannot be dismissed without PIN */
               }}
               onSuccess={onStaffPinSuccess}
+              onLeave={
+                canJwtReturnToPanel(
+                  authUser?.permissions as Permission[] | undefined,
+                  jwtIsOwner,
+                  authUser?.role
+                )
+                  ? showPanelMenus
+                  : undefined
+              }
+              onLogout={() => void handlePosLogout()}
             />
           </>
         )}
@@ -9121,7 +9155,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setSearch('');
           }
         }}
-        showSearch={posView === 'register'}
+        showSearch={posView === 'register' && !isPhoneViewport}
         onlinePendingCount={onlinePendingCount}
         notificationCount={notificationCount}
         orderAlertRing={orderAlertRing}
@@ -9150,6 +9184,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             orders={notificationOrders}
             reservations={pendingReservationAlerts}
             showBookings={reservationsPosUiEnabled}
+            onClose={() => setNotificationsOpen(false)}
             onOpenOrder={(orderId) => {
               setNotificationsOpen(false);
               const isLocalPosOrder = localPosOrderIdsRef.current.has(orderId);
@@ -9860,6 +9895,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }
                 onCustomAmount={openCustomAmountModal}
                 onBackgroundClick={() => handleSelectLine(null)}
+                showSearch={posView === 'register' && isPhoneViewport}
+                search={search}
+                onSearchChange={setSearch}
+                onSearchSubmit={() => {
+                  const product = findProductByScanCode(search);
+                  if (product) {
+                    onProductClick(product);
+                    setSearch('');
+                  }
+                }}
                 actionButtonSize={checkoutSettings.actionButtonSize}
               />
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
@@ -10392,6 +10437,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}
+        onLogout={() => void handlePosLogout()}
       />
 
       <WebPosPaymentModal
