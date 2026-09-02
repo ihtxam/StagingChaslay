@@ -19,6 +19,7 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     kitchenTicketFooter: "",
     kitchenItemTextScale: 1,
     kitchenHeaderTextScale: 1,
+    kitchenModifierTextScale: 1,
     kitchenBoldText: false,
     receiptShowVatTable: true,
     receiptShowStaffLine: true,
@@ -31,10 +32,13 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    autoPrintReservations: true,
+    autoPrintOnlineOrdersOnArrival: false,
     waiterTillBellEnabled: true,
     kitchenPrintRetryEnabled: true,
     kitchenPrintRetryAttempts: 5,
     kitchenPrintRetryIntervalSec: 5,
+    bluetoothPrinterSlowMode: false,
     scaleComPort: null,
     scaleDeviceName: null,
     scaleDeviceId: null,
@@ -123,9 +127,15 @@ function normalizePosPrintSettings(raw) {
     const labelHeightMm = (rawH === 25 || rawH === 30 || rawH === 40 ? rawH : 20);
     const itemScale = Number(src.kitchenItemTextScale);
     const headerScale = Number(src.kitchenHeaderTextScale);
+    const modifierScale = Number(src.kitchenModifierTextScale);
     let kitchenItemTextScale = (itemScale === 1 || itemScale === 2 || itemScale === 3 ? itemScale : 1);
     let kitchenHeaderTextScale = (headerScale === 1 || headerScale === 2 || headerScale === 3
         ? headerScale
+        : 1);
+    let kitchenModifierTextScale = (modifierScale === 1 ||
+        modifierScale === 2 ||
+        modifierScale === 3
+        ? modifierScale
         : 1);
     let kitchenBoldText = src.kitchenBoldText === true;
     // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
@@ -141,6 +151,7 @@ function normalizePosPrintSettings(raw) {
         kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
         kitchenItemTextScale,
         kitchenHeaderTextScale,
+        kitchenModifierTextScale,
         kitchenBoldText,
         receiptShowVatTable: src.receiptShowVatTable !== false,
         receiptShowStaffLine: src.receiptShowStaffLine !== false,
@@ -155,10 +166,13 @@ function normalizePosPrintSettings(raw) {
         receiptLogoWidthPx: clampInt(src.receiptLogoWidthPx, 48, 200, exports.DEFAULT_POS_PRINT_SETTINGS.receiptLogoWidthPx),
         autoPrintReceipt: src.autoPrintReceipt !== false,
         autoPrintKitchen: src.autoPrintKitchen !== false,
+        autoPrintReservations: src.autoPrintReservations !== false,
+        autoPrintOnlineOrdersOnArrival: src.autoPrintOnlineOrdersOnArrival === true,
         waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
         kitchenPrintRetryEnabled: src.kitchenPrintRetryEnabled !== false,
         kitchenPrintRetryAttempts: clampInt(src.kitchenPrintRetryAttempts, 1, 20, 5),
         kitchenPrintRetryIntervalSec: clampInt(src.kitchenPrintRetryIntervalSec, 2, 60, 5),
+        bluetoothPrinterSlowMode: src.bluetoothPrinterSlowMode === true,
         scaleComPort: src.scaleComPort === null || src.scaleComPort === undefined
             ? null
             : String(src.scaleComPort).trim().slice(0, 80) || null,

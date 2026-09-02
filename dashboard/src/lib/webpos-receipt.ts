@@ -238,6 +238,7 @@ export type PosPrintSettingsClient = {
   kitchenTicketFooter?: string;
   kitchenItemTextScale?: 1 | 2 | 3;
   kitchenHeaderTextScale?: 1 | 2 | 3;
+  kitchenModifierTextScale?: 1 | 2 | 3;
   kitchenBoldText?: boolean;
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
@@ -1274,6 +1275,7 @@ export type KitchenTicketOpts = {
   orderSource?: KitchenOrderSource | string | null;
   itemTextScale?: 1 | 2 | 3;
   headerTextScale?: 1 | 2 | 3;
+  modifierTextScale?: 1 | 2 | 3;
   boldText?: boolean;
   /** Print COURSE N headers when items have courseNumber and multiple services are active */
   groupByCourse?: boolean;
@@ -1347,7 +1349,7 @@ function formatKitchenChannelWhenLines(
 }
 
 type KitchenLine = {
-  kind: 'center' | 'header' | 'item' | 'extra' | 'note' | 'normal' | 'strike';
+  kind: 'center' | 'header' | 'item' | 'extra' | 'note' | 'normal' | 'strike' | 'course';
   /** Line body without trailing newlines (ESC/POS adds LF bytes explicitly). */
   text: string;
   /** Extra blank lines after this row (kitchen readability). */
@@ -1394,6 +1396,7 @@ function wrapKitchenWords(text: string, width: number): string[] {
 function formatKitchenItemLines(
   item: KitchenTicketItem,
   width: number,
+  modifierWidth: number,
   cancelled: boolean,
   forEscPos: boolean
 ): KitchenLine[] {
@@ -1404,7 +1407,7 @@ function formatKitchenItemLines(
   );
   const comboLines = (item.comboLines || []).filter((c) => c.productName?.trim());
   const lineNote = String(item.lineNote || '').trim();
-  const extraWidth = Math.max(8, width - qtyPrefix.length);
+  const extraWidth = Math.max(8, modifierWidth - qtyPrefix.length);
   const qty = qtyPrefix.trimEnd();
   const primary = `${qtyPrefix}${product}`.trim();
   const wrappedPrimary = wrapKitchenWords(primary, width);
@@ -1450,7 +1453,10 @@ function formatKitchenItemLines(
       return;
     }
     const dashPrefix = `${extraIndent(qtyPrefix)}- `;
-    const wrapped = wrapKitchenWords(stripLeadingDash(text), Math.max(8, width - dashPrefix.length));
+    const wrapped = wrapKitchenWords(
+      stripLeadingDash(text),
+      Math.max(8, modifierWidth - dashPrefix.length)
+    );
     wrapped.forEach((w, i) => {
       const row = i === 0 ? `${dashPrefix}${w}` : `${extraIndent(qtyPrefix)}  ${w}`;
       pushExtra(row, i === wrapped.length - 1 ? blankAfter : 0);
@@ -1499,8 +1505,10 @@ function buildKitchenTicketLines(
 } {
   const headerScale = kitchenTextScaleOrDefault(opts.headerTextScale);
   const itemScale = kitchenTextScaleOrDefault(opts.itemTextScale);
+  const modifierScale = kitchenTextScaleOrDefault(opts.modifierTextScale ?? opts.itemTextScale);
   const headerWidth = kitchenColsForScale(opts.paperWidthMm, headerScale);
   const itemWidth = kitchenColsForScale(opts.paperWidthMm, itemScale);
+  const modifierWidth = kitchenColsForScale(opts.paperWidthMm, modifierScale);
   const footWidth = lineWidthForPaper(opts.paperWidthMm ?? 80);
   const L = receiptLabels(opts.language);
   const thin = '-'.repeat(footWidth);
@@ -1565,18 +1573,22 @@ function buildKitchenTicketLines(
     for (const group of groupReceiptItemsByCourse(items)) {
       if (group.course != null) {
         lines.push({
-          kind: 'center',
+          kind: 'course',
           text: formatCourseBanner(group.course, L.courseLabel),
           blankAfter: 0,
         });
       }
       for (const item of group.items) {
-        lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
+        lines.push(
+          ...formatKitchenItemLines(item, itemWidth, modifierWidth, cancelled, forEscPos)
+        );
       }
     }
   } else {
     for (const item of items) {
-      lines.push(...formatKitchenItemLines(item, itemWidth, cancelled, forEscPos));
+      lines.push(
+        ...formatKitchenItemLines(item, itemWidth, modifierWidth, cancelled, forEscPos)
+      );
     }
   }
 
@@ -1587,7 +1599,9 @@ function buildKitchenTicketLines(
       text: (opts.otherStationLabel || '>>> OTHER STATION <<<').slice(0, footWidth),
     });
     for (const item of opts.otherStationItems) {
-      lines.push(...formatKitchenItemLines(item, itemWidth, false, forEscPos));
+      lines.push(
+        ...formatKitchenItemLines(item, itemWidth, modifierWidth, false, forEscPos)
+      );
     }
   }
 
@@ -1601,10 +1615,16 @@ function buildKitchenTicketLines(
 
 /** Plain-text kitchen ticket (fallback / preview). */
 export function generateKitchenTicketText(opts: KitchenTicketOpts): string {
+  const itemScale = kitchenTextScaleOrDefault(opts.itemTextScale);
+  const itemWidth = kitchenColsForScale(opts.paperWidthMm, itemScale);
   const { width, lines } = buildKitchenTicketLines(opts, false);
   return lines
     .map((l) => {
-      const text = l.kind === 'center' ? centerLine(l.text.trim(), width) : l.text;
+      const centerWidth = l.kind === 'course' ? itemWidth : width;
+      const text =
+        l.kind === 'center' || l.kind === 'course'
+          ? centerLine(l.text.trim(), centerWidth)
+          : l.text;
       return `${text}\n${'\n'.repeat(l.blankAfter || 0)}`;
     })
     .join('');
@@ -1664,6 +1684,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
   const { lines } = buildKitchenTicketLines(opts, true);
   const headerScale = kitchenTextScaleOrDefault(opts.headerTextScale);
   const itemScale = kitchenTextScaleOrDefault(opts.itemTextScale);
+  const modifierScale = kitchenTextScaleOrDefault(opts.modifierTextScale ?? opts.itemTextScale);
   const bold = opts.boldText === true;
   const parts: Uint8Array[] = [new Uint8Array([0x1b, 0x40]), ESC_CODEPAGE_CP850];
   const lf = new Uint8Array([0x0a]);
@@ -1698,6 +1719,16 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
       );
       feedLine(line.blankAfter);
       resetSize();
+    } else if (line.kind === 'course') {
+      parts.push(
+        escAlign(1),
+        escKitchenSize(itemScale),
+        escBold(bold || itemScale > 1),
+        escUnderline(false),
+        body(line.text)
+      );
+      feedLine(line.blankAfter);
+      resetSize();
     } else if (line.kind === 'strike') {
       parts.push(
         escAlign(0),
@@ -1722,8 +1753,8 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
     } else if (line.kind === 'extra') {
       parts.push(
         escAlign(0),
-        escKitchenSize(1),
-        escBold(false),
+        escKitchenSize(modifierScale),
+        escBold(bold && modifierScale > 1),
         escUnderline(false),
         body(line.text)
       );
@@ -2705,38 +2736,62 @@ export function kitchenJobsExcludingReceiptPrinters(
   });
 }
 
-/** Prefer dedicated kitchen printers; never route to receipt printer when a kitchen-only printer exists. */
+function kitchenItemIdentity(item: KitchenTicketItem): string {
+  return [
+    item.productId || '',
+    item.categoryId || '',
+    item.name,
+    String(item.courseNumber ?? ''),
+    String(item.quantity),
+    String(item.lineTotal),
+  ].join('\0');
+}
+
+/**
+ * Prefer dedicated kitchen printers, but still route items that only match a
+ * kitchen+receipt printer (e.g. bar/drinks station) when no dedicated printer
+ * claims them.
+ */
 export function resolveKitchenPrintJobs(
   items: KitchenTicketItem[],
   settings: PosPrintSettingsClient | null | undefined
 ): KitchenPrintJob[] {
-  const dedicated = kitchenJobsExcludingReceiptPrinters(items, settings);
-  if (dedicated.length) return dedicated;
+  const allJobs = buildKitchenPrintJobs(items, settings);
+  if (!allJobs.length) return allJobs;
 
-  const allPrinters = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
-  const kitchenOnly = allPrinters.filter((p) => p.printKitchenTickets && !p.printReceipts);
-  if (kitchenOnly.length) {
-    const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
-    const excluded = new Set(settings?.kitchenExcludedCategoryIds || []);
-    for (const kp of kitchenOnly) {
-      const filtered = filterKitchenItems(items, kp, {
-        otherKitchenPrinters: kitchenOnly,
-        excludedCategoryIds: excluded,
-      });
-      if (!filtered.length) continue;
-      return [
-        {
-          printerName: kp.name,
-          portName: kp.portName ?? null,
-          matchHint: kp.matchHint ?? null,
-          paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
-          items: filtered,
-        },
-      ];
+  const receiptNames = new Set(
+    (settings?.printers || [])
+      .filter((p) => p.enabled !== false && p.printReceipts && p.name)
+      .map((p) => String(p.name).trim())
+      .filter(Boolean)
+  );
+
+  const dedicatedJobs = allJobs.filter((j) => {
+    const name = (j.printerName || '').trim();
+    return name && !receiptNames.has(name);
+  });
+
+  if (!dedicatedJobs.length) return allJobs;
+
+  const coveredByDedicated = new Set<string>();
+  for (const job of dedicatedJobs) {
+    for (const item of job.items) {
+      coveredByDedicated.add(kitchenItemIdentity(item));
     }
   }
 
-  return buildKitchenPrintJobs(items, settings);
+  const result: KitchenPrintJob[] = [...dedicatedJobs];
+  for (const job of allJobs) {
+    const name = (job.printerName || '').trim();
+    if (!name || !receiptNames.has(name)) continue;
+    const orphanItems = job.items.filter(
+      (item) => !coveredByDedicated.has(kitchenItemIdentity(item))
+    );
+    if (!orphanItems.length) continue;
+    result.push({ ...job, items: orphanItems });
+  }
+
+  return result;
 }
 
 export function resolveReceiptLanguage(

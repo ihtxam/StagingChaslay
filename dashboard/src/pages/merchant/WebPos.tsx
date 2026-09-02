@@ -7193,6 +7193,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderSource: 'WEBPOS' as const,
       itemTextScale: printSettings?.kitchenItemTextScale ?? 1,
       headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
+      modifierTextScale: printSettings?.kitchenModifierTextScale ?? 1,
       boldText: printSettings?.kitchenBoldText === true,
       groupByCourse: coursesEnabled && !opts?.cancelled,
       maxCourse: courseCount,

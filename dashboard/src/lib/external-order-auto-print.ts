@@ -119,6 +119,7 @@ async function printKitchenTickets(
     language: lang,
     itemTextScale: printSettings?.kitchenItemTextScale ?? 1,
     headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
+    modifierTextScale: printSettings?.kitchenModifierTextScale ?? 1,
     boldText: printSettings?.kitchenBoldText === true,
   };
 

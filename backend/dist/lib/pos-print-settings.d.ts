@@ -30,6 +30,8 @@ export type PosPrintSettings = {
     kitchenItemTextScale?: 1 | 2 | 3;
     /** Kitchen header text scale: 1=normal (plain), 2=double height, 3=double width+height */
     kitchenHeaderTextScale?: 1 | 2 | 3;
+    /** Kitchen modifier/extra text scale under dish lines */
+    kitchenModifierTextScale?: 1 | 2 | 3;
     /** Bold kitchen item/header text (default false for plain tickets) */
     kitchenBoldText?: boolean;
     receiptShowVatTable?: boolean;
@@ -49,6 +51,13 @@ export type PosPrintSettings = {
     receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    /** Print a reservation ticket on the till (auto-accept: on arrival; manual: after accept). */
+    autoPrintReservations?: boolean;
+    /**
+     * When true, kitchen-print online shop orders as soon as they arrive (even if pending approval).
+     * When false (default), kitchen tickets print on accept / auto-accept.
+     */
+    autoPrintOnlineOrdersOnArrival?: boolean;
     /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
     waiterTillBellEnabled?: boolean;
     /** Auto-retry failed kitchen prints before showing an error (WebPOS local queue). */
@@ -57,6 +66,8 @@ export type PosPrintSettings = {
     kitchenPrintRetryAttempts?: number;
     /** Seconds between kitchen print retries (default 5). */
     kitchenPrintRetryIntervalSec?: number;
+    /** Unused since Print Agent 1.8.9 (spooler-only WritePrinter). Kept so saved merchant JSON still parses. */
+    bluetoothPrinterSlowMode?: boolean;
     /** Last-known WebPOS / Print Agent COM port (e.g. COM3). May change after USB replug. */
     scaleComPort?: string | null;
     /** Friendly USB/Bluetooth name (e.g. USB-SERIAL CH340) used to find the new COM port. */

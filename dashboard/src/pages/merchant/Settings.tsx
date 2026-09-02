@@ -237,6 +237,7 @@ interface SettingsData {
     kitchenTicketFooter?: string;
     kitchenItemTextScale?: 1 | 2 | 3;
     kitchenHeaderTextScale?: 1 | 2 | 3;
+    kitchenModifierTextScale?: 1 | 2 | 3;
     kitchenBoldText?: boolean;
     receiptShowVatTable?: boolean;
     receiptShowStaffLine?: boolean;
@@ -1478,6 +1479,10 @@ export default function Settings() {
         kitchenHeaderTextScale:
           ps.kitchenHeaderTextScale === 2 || ps.kitchenHeaderTextScale === 3
             ? ps.kitchenHeaderTextScale
+            : 1,
+        kitchenModifierTextScale:
+          ps.kitchenModifierTextScale === 2 || ps.kitchenModifierTextScale === 3
+            ? ps.kitchenModifierTextScale
             : 1,
         kitchenBoldText: ps.kitchenBoldText === true,
         receiptShowVatTable: ps.receiptShowVatTable !== false,
@@ -4123,6 +4128,25 @@ export default function Settings() {
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
                           kitchenHeaderTextScale: Number(e.target.value) as 1 | 2 | 3,
+                        },
+                      })
+                    }
+                  >
+                    <option value={1}>{t('kitchenScaleNormal')}</option>
+                    <option value={2}>{t('kitchenScaleLarge')}</option>
+                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                  </select>
+                </Field>
+                <Field label={t('kitchenModifierTextScale')} hint={t('kitchenTextScaleHint')}>
+                  <select
+                    className="input"
+                    value={settings.posPrintSettings?.kitchenModifierTextScale ?? 1}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          kitchenModifierTextScale: Number(e.target.value) as 1 | 2 | 3,
                         },
                       })
                     }

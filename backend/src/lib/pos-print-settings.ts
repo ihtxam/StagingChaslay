@@ -39,6 +39,8 @@ export type PosPrintSettings = {
   kitchenItemTextScale?: 1 | 2 | 3;
   /** Kitchen header text scale: 1=normal (plain), 2=double height, 3=double width+height */
   kitchenHeaderTextScale?: 1 | 2 | 3;
+  /** Kitchen modifier/extra text scale under dish lines */
+  kitchenModifierTextScale?: 1 | 2 | 3;
   /** Bold kitchen item/header text (default false for plain tickets) */
   kitchenBoldText?: boolean;
   receiptShowVatTable?: boolean;
@@ -115,6 +117,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   kitchenTicketFooter: "",
   kitchenItemTextScale: 1,
   kitchenHeaderTextScale: 1,
+  kitchenModifierTextScale: 1,
   kitchenBoldText: false,
   receiptShowVatTable: true,
   receiptShowStaffLine: true,
@@ -231,12 +234,18 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
 
   const itemScale = Number(src.kitchenItemTextScale);
   const headerScale = Number(src.kitchenHeaderTextScale);
+  const modifierScale = Number(src.kitchenModifierTextScale);
   let kitchenItemTextScale = (itemScale === 1 || itemScale === 2 || itemScale === 3 ? itemScale : 1) as
     | 1
     | 2
     | 3;
   let kitchenHeaderTextScale = (headerScale === 1 || headerScale === 2 || headerScale === 3
     ? headerScale
+    : 1) as 1 | 2 | 3;
+  let kitchenModifierTextScale = (modifierScale === 1 ||
+  modifierScale === 2 ||
+  modifierScale === 3
+    ? modifierScale
     : 1) as 1 | 2 | 3;
   let kitchenBoldText = src.kitchenBoldText === true;
 
@@ -254,6 +263,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
     kitchenItemTextScale,
     kitchenHeaderTextScale,
+    kitchenModifierTextScale,
     kitchenBoldText,
     receiptShowVatTable: src.receiptShowVatTable !== false,
     receiptShowStaffLine: src.receiptShowStaffLine !== false,
