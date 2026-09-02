@@ -10,6 +10,7 @@ import { SubscriptionAddonsService } from "@/services/subscription-addons.servic
 import { PlatformResellerService } from "@/services/platform-reseller.service";
 import { PlatformSettingsService } from "@/services/platform-settings.service";
 import { EditionService } from "@/services/edition.service";
+import { MerchantProductSurfaceService } from "@/services/merchant-product-surface.service";
 import { ResellerService } from "@/services/reseller.service";
 import { EDITION_FEATURE_GROUPS, ALL_EDITION_FEATURES } from "@/lib/edition-features";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
@@ -560,6 +561,38 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error updating merchant:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update merchant" });
+  }
+});
+
+/**
+ * PUT /api/superadmin/merchants/:merchantId/product-surface
+ * Apply shop-only | website | shop+website | full POS package.
+ */
+router.put("/merchants/:merchantId/product-surface", async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const surface = String(req.body?.surface || "");
+    const result = await MerchantProductSurfaceService.apply(merchantId, surface as any);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error applying product surface:", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to apply package" });
+  }
+});
+
+/**
+ * PUT /api/superadmin/merchants/:merchantId/pos-enabled
+ * Toggle POS till on/off (shop-only ↔ full POS).
+ */
+router.put("/merchants/:merchantId/pos-enabled", async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const enabled = !!req.body?.enabled;
+    const result = await MerchantProductSurfaceService.setPosEnabled(merchantId, enabled);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error toggling POS:", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to toggle POS" });
   }
 });
 

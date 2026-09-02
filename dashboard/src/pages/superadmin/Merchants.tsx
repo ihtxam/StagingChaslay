@@ -5,6 +5,11 @@ import toast from 'react-hot-toast';
 import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useI18n } from '@/lib/i18n';
+import {
+  MERCHANT_PRODUCT_SURFACES,
+  PRODUCT_SURFACE_PRESETS,
+  type MerchantProductSurface,
+} from '@/lib/merchant-product-surface';
 
 interface SubscriptionPlanOption {
   id: string;
@@ -111,6 +116,7 @@ const emptyForm = {
   deliveryPlatformsAddonEnabled: false,
   storekeeperAddonEnabled: false,
   kioskAddonEnabled: false,
+  productSurface: 'full_pos' as MerchantProductSurface,
 };
 
 export default function Merchants() {
@@ -160,6 +166,21 @@ export default function Merchants() {
     []
   );
   const [resellers, setResellers] = useState<Array<{ id: string; name: string }>>([]);
+  const [detailSurface, setDetailSurface] = useState<MerchantProductSurface>('full_pos');
+  const [applyingSurface, setApplyingSurface] = useState(false);
+  const [togglingPos, setTogglingPos] = useState(false);
+
+  const applyProductSurfaceToForm = (surface: MerchantProductSurface) => {
+    const preset = PRODUCT_SURFACE_PRESETS[surface];
+    const edition = editions.find((e) => e.name === preset.editionName);
+    setForm((f) => ({
+      ...f,
+      productSurface: surface,
+      shopEnabled: preset.shopEnabled,
+      maxPosPosts: preset.maxPosPosts,
+      editionId: edition?.id || f.editionId,
+    }));
+  };
 
   useEffect(() => {
     fetchMerchants();
@@ -229,6 +250,11 @@ export default function Merchants() {
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
       });
+      const maxPos = Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0);
+      const cms = !!res.data.merchant?.cmsHomepageEnabled;
+      setDetailSurface(
+        maxPos > 0 ? 'full_pos' : cms ? 'shop_website' : 'shop_only'
+      );
     } catch {
       toast.error('Failed to load merchant details');
     }
@@ -399,6 +425,38 @@ export default function Merchants() {
     }
   };
 
+  const handleApplyProductSurface = async () => {
+    if (!showDetail) return;
+    setApplyingSurface(true);
+    try {
+      await api.put(`/superadmin/merchants/${showDetail.id}/product-surface`, {
+        surface: detailSurface,
+      });
+      toast.success('Product package updated');
+      await openDetail(showDetail);
+      fetchMerchants();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update package');
+    } finally {
+      setApplyingSurface(false);
+    }
+  };
+
+  const handleTogglePos = async (enabled: boolean) => {
+    if (!showDetail) return;
+    setTogglingPos(true);
+    try {
+      await api.put(`/superadmin/merchants/${showDetail.id}/pos-enabled`, { enabled });
+      toast.success(enabled ? 'POS enabled' : 'POS disabled — Order Center for online orders');
+      await openDetail(showDetail);
+      fetchMerchants();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to toggle POS');
+    } finally {
+      setTogglingPos(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.businessName || !form.email || !form.password) {
@@ -407,8 +465,8 @@ export default function Merchants() {
     }
     setSaving(true);
     try {
-      if (!form.editionId) {
-        toast.error('Select a POS version');
+      if (!form.editionId && !form.productSurface) {
+        toast.error('Select a product package or POS version');
         setSaving(false);
         return;
       }
@@ -441,6 +499,12 @@ export default function Merchants() {
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
         kioskAddonEnabled: !!form.kioskAddonEnabled,
       });
+      const merchantId = res.data.merchant?.id as string | undefined;
+      if (merchantId && form.productSurface) {
+        await api.put(`/superadmin/merchants/${merchantId}/product-surface`, {
+          surface: form.productSurface,
+        });
+      }
       const issued = res.data.merchant?.issuedLicenses || [];
       setIssuedKeys(issued);
       toast.success('Merchant created');
@@ -887,6 +951,25 @@ export default function Merchants() {
                   </select>
                 </label>
                 <label className="block">
+                  <span className="text-sm font-medium">Product package</span>
+                  <select
+                    className="input mt-1"
+                    value={form.productSurface}
+                    onChange={(e) =>
+                      applyProductSurfaceToForm(e.target.value as MerchantProductSurface)
+                    }
+                  >
+                    {MERCHANT_PRODUCT_SURFACES.map((key) => (
+                      <option key={key} value={key}>
+                        {PRODUCT_SURFACE_PRESETS[key].label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {PRODUCT_SURFACE_PRESETS[form.productSurface].description}
+                  </p>
+                </label>
+                <label className="block">
                   <span className="text-sm font-medium">POS version *</span>
                   <select
                     className="input mt-1"
@@ -1302,6 +1385,47 @@ export default function Merchants() {
                 </div>
               )}
               <div className="pt-3 border-t space-y-3">
+                <div>
+                  <p className="font-semibold mb-2">Product package</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Shop only → Order Center. Full POS → WebPOS + online shop. Change anytime.
+                  </p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <label className="block text-xs flex-1 min-w-[12rem]">
+                      Package
+                      <select
+                        className="input mt-1"
+                        value={detailSurface}
+                        onChange={(e) =>
+                          setDetailSurface(e.target.value as MerchantProductSurface)
+                        }
+                      >
+                        {MERCHANT_PRODUCT_SURFACES.map((key) => (
+                          <option key={key} value={key}>
+                            {PRODUCT_SURFACE_PRESETS[key].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-primary text-sm"
+                      disabled={applyingSurface}
+                      onClick={() => void handleApplyProductSurface()}
+                    >
+                      {applyingSurface ? '…' : 'Apply package'}
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      checked={posLimits.maxPosPosts > 0}
+                      disabled={togglingPos}
+                      onChange={(e) => void handleTogglePos(e.target.checked)}
+                    />
+                    POS till enabled (WebPOS) — off = shop-only / Order Center
+                  </label>
+                </div>
                 <div>
                   <p className="font-semibold mb-2">POS station limits</p>
                   <p className="text-xs text-gray-500 mb-2">
