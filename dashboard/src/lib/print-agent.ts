@@ -987,6 +987,56 @@ function scoreDeviceName(want: string, have: string): number {
   return 0;
 }
 
+function scaleDeviceTextBlob(device: ScaleDevice): string {
+  return [
+    device.name,
+    device.caption,
+    device.manufacturer,
+    device.pnpDeviceId,
+    device.port,
+    device.usbAddress,
+    device.connectionType,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Generic Windows Bluetooth serial ports (not Aclas scales). */
+export function isGenericBluetoothSerialDevice(device: ScaleDevice): boolean {
+  const blob = scaleDeviceTextBlob(device).toLowerCase();
+  const pnp = String(device.pnpDeviceId || '').toLowerCase();
+  if (
+    /standard.*serial.*bluetooth|seriell.*bluetooth|serial\s+over\s+bluetooth|standardmäßige\s+seriell/i.test(
+      blob
+    )
+  ) {
+    return true;
+  }
+  if (/microsoft/.test(blob) && /bluetooth|bth|seriell|serial/.test(blob)) {
+    return true;
+  }
+  if (/bthenum|rfcomm|bluetoothserial|bt_spp|bthmodem/i.test(pnp)) {
+    return true;
+  }
+  return false;
+}
+
+/** True when a serial/USB device looks like an Aclas scale (CH340 USB-serial, brand name, Bridge usb: address). */
+export function isLikelyScaleDevice(device: ScaleDevice): boolean {
+  if (isUsbScaleAddress(device.port) || isUsbScaleAddress(device.usbAddress)) {
+    return true;
+  }
+  if (isGenericBluetoothSerialDevice(device)) {
+    return false;
+  }
+  const blob = scaleDeviceTextBlob(device).toLowerCase();
+  const pnp = String(device.pnpDeviceId || '').toLowerCase();
+  if (/aclas/i.test(blob)) return true;
+  if (/ch340|ch341|ch30|usb[-\s]?serial/i.test(blob)) return true;
+  if (/vid_1a86/i.test(pnp)) return true;
+  return false;
+}
+
 /** Windows COM ports from Print Agent (Aclas USB-serial → COMx). */
 export async function listScalePorts(): Promise<string[]> {
   const { ports } = await listScaleDevices();
@@ -997,24 +1047,28 @@ export async function listScaleDevices(): Promise<{ ports: string[]; devices: Sc
   try {
     const data = await agentFetch('/scale/ports');
     const devices: ScaleDevice[] = Array.isArray(data?.devices)
-      ? data.devices.map((d: any) => {
-          const port = String(d.port || d.usbAddress || d.name || '');
-          const usbAddress = d.usbAddress ? String(d.usbAddress) : isUsbScaleAddress(port) ? port : undefined;
-          return {
-            port: isUsbScaleAddress(port) ? port : formatScalePortLabel(port),
-            caption: d.caption ? String(d.caption) : undefined,
-            manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
-            pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
-            name: d.name ? String(d.name) : undefined,
-            usbAddress,
-            connectionType: d.connectionType ? String(d.connectionType) : undefined,
-            hasPermission: d.hasPermission === true,
-          };
-        })
+      ? data.devices
+          .map((d: any) => {
+            const port = String(d.port || d.usbAddress || d.name || '');
+            const usbAddress = d.usbAddress
+              ? String(d.usbAddress)
+              : isUsbScaleAddress(port)
+                ? port
+                : undefined;
+            return {
+              port: isUsbScaleAddress(port) ? port : formatScalePortLabel(port),
+              caption: d.caption ? String(d.caption) : undefined,
+              manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
+              pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
+              name: d.name ? String(d.name) : undefined,
+              usbAddress,
+              connectionType: d.connectionType ? String(d.connectionType) : undefined,
+              hasPermission: d.hasPermission === true,
+            };
+          })
+          .filter(isLikelyScaleDevice)
       : [];
-    const ports = Array.isArray(data?.ports)
-      ? data.ports.map((p: unknown) => formatScalePortLabel(String(p)))
-      : devices.map((d) => d.port).filter(Boolean);
+    const ports = devices.map((d) => d.port).filter(Boolean);
     return { ports, devices };
   } catch (e: any) {
     const msg = String(e?.message || '');
