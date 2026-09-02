@@ -129,6 +129,7 @@ export async function fetchPrintAgentManifest(): Promise<DownloadManifest> {
 export type PrintCompanionKind = 'windows-agent' | 'android-bridge';
 
 export type PrintCompanionInstallStatus =
+  | { state: 'checking' }
   | { state: 'not_installed' }
   | { state: 'not_responding' }
   | { state: 'update_available'; installed: string; latest: string }
@@ -138,13 +139,14 @@ export function resolvePrintCompanionInstallStatus(
   kind: PrintCompanionKind,
   installedVersion: string | null | undefined,
   serverVersion: string | null | undefined,
-  options?: { onAndroid?: boolean; agentChecked?: boolean }
+  options?: { onAndroid?: boolean; agentChecked?: boolean; agentOk?: boolean }
 ): PrintCompanionInstallStatus {
   const installed = String(installedVersion || '').trim();
   if (!installed) {
-    if (kind === 'android-bridge' && options?.onAndroid && options?.agentChecked) {
-      return { state: 'not_responding' };
-    }
+    if (!options?.agentChecked) return { state: 'checking' };
+    if (options.agentOk) return { state: 'up_to_date', installed: '?' };
+    if (kind === 'android-bridge' && options.onAndroid) return { state: 'not_responding' };
+    if (kind === 'windows-agent') return { state: 'not_responding' };
     return { state: 'not_installed' };
   }
 

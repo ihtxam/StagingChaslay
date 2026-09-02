@@ -182,8 +182,8 @@ export function isLocalPrintStation(agentOnline: boolean): boolean {
   if (isAndroidWebPosTill()) return true;
   if (isAndroidTabletDevice()) return true;
   const ua = navigator.userAgent || '';
+  // Phones queue to the main till; desktop/tablet tills may run a local agent regardless of window size.
   if (/Mobile|Android|iPhone|iPod/i.test(ua) && !/iPad|Tablet/i.test(ua)) return false;
-  if (window.matchMedia && !window.matchMedia('(min-width: 1024px)').matches) return false;
   return true;
 }
 

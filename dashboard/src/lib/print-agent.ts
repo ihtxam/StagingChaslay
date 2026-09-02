@@ -757,7 +757,9 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
 }
 
 export async function isPrintAgentAvailable(): Promise<boolean> {
-  const health = await getPrintAgentHealth(isAndroidTabletDevice() ? 2 : 0);
+  const health = isAndroidTabletDevice()
+    ? await getPrintAgentHealth(2)
+    : await probePrintAgentHealth(3);
   return health.ok;
 }
 

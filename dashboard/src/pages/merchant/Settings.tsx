@@ -61,6 +61,7 @@ import {
   listAgentPrinters,
   listScaleDevices,
   printViaAgent,
+  probePrintAgentHealth,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
@@ -1164,7 +1165,9 @@ export default function Settings() {
   const refreshPrintAgentPrinters = useCallback(async () => {
     setRefreshingPrinters(true);
     try {
-      const health = await getPrintAgentHealth(isAndroidDevice() ? 2 : 0);
+      const health = isAndroidDevice()
+        ? await getPrintAgentHealth(2)
+        : await probePrintAgentHealth(5);
       setPrintAgentOk(health.ok);
       setPrintAgentHealthChecked(true);
       const serverVersion = isAndroidDevice()
@@ -1197,6 +1200,7 @@ export default function Settings() {
       });
     } catch {
       setPrintAgentOk(false);
+      setPrintAgentHealthChecked(true);
       setPrintAgentOutdated(false);
       setInstalledPrintCompanionVersion(null);
       setAgentPrinters([]);
@@ -4382,6 +4386,8 @@ export default function Settings() {
                         installedVersion={installedPrintCompanionVersion}
                         serverVersion={printAgentManifest?.version}
                         downloadUrl={printAgentDownloadUrl()}
+                        agentChecked={printAgentHealthChecked}
+                        agentOk={printAgentOk}
                       />
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' &&
@@ -4395,6 +4401,7 @@ export default function Settings() {
                         downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
                         onAndroid={isAndroidDevice()}
                         agentChecked={printAgentHealthChecked}
+                        agentOk={printAgentOk}
                       />
                     ) : null}
                   </div>

@@ -1714,6 +1714,10 @@ const en: Dict = {
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'No Print Agent detected on this device.',
+  printAgentChecking: 'Checking for Print Agent…',
+  printAgentNotResponding:
+    'Print Agent is not responding — make sure it is running on this PC (port 9101), then click Refresh printers.',
+  printAgentConnectedUnknown: 'Print Agent is running (version unknown).',
   printBridgeNotInstalled: 'Bridge Reborn not installed on this device.',
   printBridgeNotResponding:
     'Bridge Reborn is not responding — open the Bridge app on this tablet, then tap Refresh printers.',
@@ -5416,6 +5420,10 @@ const fr: Dict = {
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Aucun Print Agent détecté sur cet appareil.',
+  printAgentChecking: 'Recherche du Print Agent…',
+  printAgentNotResponding:
+    'Le Print Agent ne répond pas — assurez-vous qu’il est lancé sur ce PC (port 9101), puis cliquez sur Actualiser les imprimantes.',
+  printAgentConnectedUnknown: 'Print Agent en cours d’exécution (version inconnue).',
   printBridgeNotInstalled: 'Bridge Reborn non installé sur cet appareil.',
   printBridgeNotResponding:
     'Bridge Reborn ne répond pas — ouvrez l’app Bridge sur cette tablette, puis Actualiser les imprimantes.',
@@ -9069,6 +9077,10 @@ const de: Dict = {
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Kein Print Agent auf diesem Gerät erkannt.',
+  printAgentChecking: 'Print Agent wird gesucht…',
+  printAgentNotResponding:
+    'Print Agent antwortet nicht — stellen Sie sicher, dass er auf diesem PC läuft (Port 9101), und klicken Sie auf Drucker aktualisieren.',
+  printAgentConnectedUnknown: 'Print Agent läuft (Version unbekannt).',
   printBridgeNotInstalled: 'Bridge Reborn ist auf diesem Gerät nicht installiert.',
   printBridgeNotResponding:
     'Bridge Reborn antwortet nicht — öffnen Sie die Bridge-App auf diesem Tablet und tippen Sie auf Drucker aktualisieren.',

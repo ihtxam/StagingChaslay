@@ -15,6 +15,7 @@ type Props = {
   className?: string;
   onAndroid?: boolean;
   agentChecked?: boolean;
+  agentOk?: boolean;
   versionMismatch?: boolean;
   declaredVersion?: string | null;
 };
@@ -27,6 +28,8 @@ function statusClassName(status: PrintCompanionInstallStatus): string {
       return 'text-emerald-700 dark:text-emerald-300';
     case 'not_responding':
       return 'text-amber-800 dark:text-amber-200';
+    case 'checking':
+      return 'text-[var(--text-muted)]';
     default:
       return 'text-[var(--text-muted)]';
   }
@@ -40,6 +43,7 @@ export default function PrintCompanionVersionStatus({
   className = '',
   onAndroid = false,
   agentChecked = false,
+  agentOk = false,
   versionMismatch = false,
   declaredVersion,
 }: Props) {
@@ -47,14 +51,19 @@ export default function PrintCompanionVersionStatus({
   const status = resolvePrintCompanionInstallStatus(kind, installedVersion, serverVersion, {
     onAndroid,
     agentChecked,
+    agentOk,
   });
   const label =
     kind === 'windows-agent' ? t('printAgentVersionStatusLabel') : t('printBridgeVersionStatusLabel');
 
   let message: string;
   switch (status.state) {
+    case 'checking':
+      message = t('printAgentChecking');
+      break;
     case 'not_responding':
-      message = t('printBridgeNotResponding');
+      message =
+        kind === 'windows-agent' ? t('printAgentNotResponding') : t('printBridgeNotResponding');
       break;
     case 'not_installed':
       message =
@@ -69,7 +78,10 @@ export default function PrintCompanionVersionStatus({
       });
       break;
     case 'up_to_date':
-      message = t('printCompanionUpToDate', { version: status.installed });
+      message =
+        status.installed === '?'
+          ? t('printAgentConnectedUnknown')
+          : t('printCompanionUpToDate', { version: status.installed });
       break;
   }
 
