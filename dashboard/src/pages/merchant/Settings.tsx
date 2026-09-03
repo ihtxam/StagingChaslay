@@ -702,9 +702,7 @@ export default function Settings() {
   const normalizedQuery = settingsQuery.trim().toLowerCase();
 
   const searchIndex = useMemo<SettingsSearchEntry[]>(
-    () => {
-      if (!normalizedQuery) return [];
-      return [
+    () => [
       {
         id: 'pos-mode',
         tab: 'pos',
@@ -973,17 +971,19 @@ export default function Settings() {
         tab: 'language',
         keywords: ['language', 'langue', 'sprache', t('language')],
       },
-    ];
-    },
-    [normalizedQuery, t]
+    ],
+    [t]
+  );
+
+  const keywordMatchesQuery = useCallback(
+    (keyword: string) => String(keyword ?? '').toLowerCase().includes(normalizedQuery),
+    [normalizedQuery]
   );
 
   const matchedSearch = useMemo(() => {
     if (!normalizedQuery) return [] as SettingsSearchEntry[];
-    return searchIndex.filter((entry) =>
-      entry.keywords.some((kw) => kw.toLowerCase().includes(normalizedQuery))
-    );
-  }, [normalizedQuery, searchIndex]);
+    return searchIndex.filter((entry) => entry.keywords.some(keywordMatchesQuery));
+  }, [normalizedQuery, searchIndex, keywordMatchesQuery]);
 
   const matchedIds = useMemo(() => new Set(matchedSearch.map((m) => m.id)), [matchedSearch]);
   const matchedTabs = useMemo(() => new Set(matchedSearch.map((m) => m.tab)), [matchedSearch]);
@@ -993,23 +993,25 @@ export default function Settings() {
       setHighlightId(null);
       return;
     }
-    const matches = searchIndex.filter((entry) =>
-      entry.keywords.some((kw) => kw.toLowerCase().includes(normalizedQuery))
-    );
-    if (matches.length === 0) {
+    if (matchedSearch.length === 0) {
       setHighlightId(null);
       return;
     }
-    const best = matches[0];
+    const visibleTabIds = new Set(visibleTabs.map((item) => item.id));
+    const best =
+      matchedSearch.find((entry) => visibleTabIds.has(entry.tab) && canOpenSettingsTab(entry.tab)) ??
+      matchedSearch[0];
+    if (!visibleTabIds.has(best.tab) || !canOpenSettingsTab(best.tab)) {
+      setHighlightId(null);
+      return;
+    }
     selectTab(best.tab);
     setHighlightId(best.id);
     const timer = window.setTimeout(() => {
       document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
     return () => window.clearTimeout(timer);
-    // Jump only when the query text changes — not on every match-list identity change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedQuery]);
+  }, [normalizedQuery, matchedSearch, visibleTabs, canOpenSettingsTab, selectTab]);
 
   const isSectionVisible = (id: string) => !normalizedQuery || matchedIds.has(id);
   const isSectionHighlight = (id: string) => highlightId === id;
@@ -1767,6 +1769,11 @@ export default function Settings() {
           </aside>
 
           <div className="min-w-0 flex-1 p-4 sm:p-5 pb-24 sm:pb-5">
+          {normalizedQuery && matchedSearch.length === 0 ? (
+            <div className="mb-4 rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+              {t('settingsSearchNoMatches')}
+            </div>
+          ) : null}
           {tab === 'business' && (
             <SettingsBusinessTab
               settings={settings}
@@ -4397,8 +4404,7 @@ export default function Settings() {
                           className="btn-primary inline-flex"
                           onClick={() =>
                             openPrintBridgeApkInstall(
-                              printBridgeManifest?.downloadUrl ||
-                                '/downloads/reborn-print-bridge-0.3.9.apk'
+                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
                             )
                           }
                         >

@@ -91,8 +91,18 @@ router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
   sendPrintBridgeApk(res);
 });
 
-/** Exact versioned names — Express param routes break on dots in 0.3.9. */
-router.get("/reborn-print-bridge-0.3.9.apk", (_req: Request, res: Response) => {
+/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
+router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) => {
+  const desc = describePrintBridgeApk();
+  const requested = String(req.params.version || "").trim();
+  if (desc.version && requested && requested !== desc.version && requested !== "latest") {
+    return res
+      .status(404)
+      .type("text/plain")
+      .send(
+        `This server has Bridge v${desc.version}, not v${requested}. Download /downloads/reborn-print-bridge-${desc.version}.apk`
+      );
+  }
   sendPrintBridgeApk(res);
 });
 
