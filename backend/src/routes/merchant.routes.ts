@@ -2482,10 +2482,19 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const { resolveReportRange, type ReportPreset } = await import("@/services/pos-reports.service");
+    const preset = req.query.preset ? (String(req.query.preset) as ReportPreset) : undefined;
+    let from = req.query.from ? String(req.query.from) : undefined;
+    let to = req.query.to ? String(req.query.to) : undefined;
+    if (preset) {
+      const range = resolveReportRange(preset, from, to);
+      from = range.from;
+      to = range.to;
+    }
     const orders = await PosOrdersService.listPosOrders(merchantId, {
       status: req.query.status ? String(req.query.status) : undefined,
-      from: req.query.from ? String(req.query.from) : undefined,
-      to: req.query.to ? String(req.query.to) : undefined,
+      from,
+      to,
       limit: req.query.limit ? Number(req.query.limit) : 50,
       q: req.query.q ? String(req.query.q) : undefined,
     });

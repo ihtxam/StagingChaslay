@@ -30,7 +30,6 @@ import {
   orderListPrimaryLabel,
   orderStatusBadgeClass,
   resolveOrderCustomerDisplay,
-  todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
 import { collectPaymentAction } from '@/lib/order-to-cart';
@@ -50,6 +49,8 @@ import {
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
+import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
+import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import { useAuthStore } from '@/store/auth';
 import { hasPermission, type Permission } from '@/lib/permissions';
 
@@ -405,8 +406,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  const [dateFrom, setDateFrom] = useState(todayIso);
-  const [dateTo, setDateTo] = useState(todayIso);
+  const [datePreset, setDatePreset] = useState<ReportPreset>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const { from: dateFrom, to: dateTo } = useMemo(
+    () => resolveReportPresetRange(datePreset, customFrom, customTo),
+    [datePreset, customFrom, customTo]
+  );
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
@@ -796,8 +802,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   };
 
   const clearFilters = () => {
-    setDateFrom(todayIso());
-    setDateTo(todayIso());
+    setDatePreset('today');
+    setCustomFrom('');
+    setCustomTo('');
     setStatusFilter('all');
     setPaymentFilter('all');
     setChannelFilter('all');
@@ -817,7 +824,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     staffFilter !== 'all' ||
     invoicePayFilter !== 'all' ||
     search.trim() !== '' ||
-    (!showingInvoices && (dateFrom !== todayIso() || dateTo !== todayIso()));
+    (!showingInvoices && datePreset !== 'today');
 
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
@@ -840,26 +847,20 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         </button>
       </div>
 
+      {!showingInvoices ? (
+        <ReportDatePresetFilter
+          preset={datePreset}
+          onPresetChange={setDatePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFromChange={setCustomFrom}
+          onCustomToChange={setCustomTo}
+          onApplyCustom={() => void load()}
+        />
+      ) : null}
+
       <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-2.5 sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
-          {showingInvoices ? null : (
-            <>
-              <input
-                type="date"
-                className={`${compactControl} w-[8.5rem] shrink-0`}
-                value={dateFrom}
-                aria-label={t('ordersFilterFrom')}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className={`${compactControl} w-[8.5rem] shrink-0`}
-                value={dateTo}
-                aria-label={t('ordersFilterTo')}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </>
-          )}
           {canSalesAdjust ? (
             <SecretSearchTapButton
               onUnlock={() => setSalesAdjOpen(true)}
