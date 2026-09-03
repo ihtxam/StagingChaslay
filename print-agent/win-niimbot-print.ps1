@@ -105,6 +105,7 @@ function Get-PacketDelayMs {
     $type = [int]$Packet[2]
     switch ($type) {
         0x85 { return $LineDelayMs }
+        0xA3 { return 150 }
         { $_ -in 0xE3, 0xF3 } { return $EndDelayMs }
         default { return $SetupDelayMs }
     }
@@ -148,8 +149,8 @@ try {
             throw "StartPagePrinter failed for '$PrinterName' (Win32=$err)."
         }
 
-        # Wake byte — some K3 units ignore the first framed packet until nudged.
-        Write-OnePacket -Handle $handle -Data ([byte[]](0x54)) -Printer $PrinterName
+        # Wake bytes — official NIIMBOT.exe sends 0x54 0x01 before framed packets.
+        Write-OnePacket -Handle $handle -Data ([byte[]](0x54, 0x01)) -Printer $PrinterName
         Start-Sleep -Milliseconds 120
 
         foreach ($pkt in $packets) {

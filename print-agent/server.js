@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.0";
+const VERSION = "1.10.1";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -275,10 +275,11 @@ async function discoverNiimbotComPorts() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $ports = @()
+$niimbotVid = '3513|0483|1a86|28e9|154f|1203'
 try {
   Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
     $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b') {
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b' -or $blob -match $niimbotVid) {
       $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
     }
   }
@@ -286,7 +287,7 @@ try {
 try {
   Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
     $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b') {
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b' -or $blob -match $niimbotVid) {
       if ($_.FriendlyName -match '(COM\\d+)') {
         $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
       }
@@ -1336,6 +1337,8 @@ function startServer() {
         "bt-com-paced-spooler",
         "com-serial-write-fallback",
         "niimbot-label",
+        "niimbot-diagnostics",
+        "niimbot-test-pattern",
         "bt-cut-trailer",
       ],
     });
@@ -1407,16 +1410,21 @@ function startServer() {
   app.post("/print/niimbot-label", async (req, res) => {
     try {
       const body = req.body || {};
-      const bitmapBase64 = String(body.bitmapBase64 || "").trim();
       const widthPx = Number(body.widthPx);
       const heightPx = Number(body.heightPx);
-      if (!bitmapBase64 || !widthPx || !heightPx) {
-        res.status(400).json({ ok: false, error: "bitmapBase64, widthPx, and heightPx are required" });
+      const testPattern = body.testPattern === true;
+      const bitmapBase64 = String(body.bitmapBase64 || "").trim();
+      if (!widthPx || !heightPx) {
+        res.status(400).json({ ok: false, error: "widthPx and heightPx are required" });
+        return;
+      }
+      if (!testPattern && !bitmapBase64) {
+        res.status(400).json({ ok: false, error: "bitmapBase64 is required (or set testPattern=true)" });
         return;
       }
       const printerName = String(body.printerName || "").trim();
       const portName = String(body.portName || "").trim();
-      const usedPrinter = await enqueuePrint(() =>
+      const result = await enqueuePrint(() =>
         printNiimbotLabel({
           printerName,
           portName: portName || printerName,
@@ -1424,16 +1432,45 @@ function startServer() {
           widthPx,
           heightPx,
           density: body.density,
+          profile: body.profile,
+          testPattern,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printWindowsPacketsFn: printNiimbotWindows,
         })
       );
-      res.json({ ok: true, printer: usedPrinter });
+      const diag = result && typeof result === "object" ? result : { printer: result };
+      console.log(
+        `[print-agent] niimbot ok path=${diag.path || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"}`
+      );
+      res.json({ ok: true, ...diag });
     } catch (error) {
       const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
       console.error("[print-agent] niimbot label failed:", payload.error);
       res.status(500).json(payload);
+    }
+  });
+
+  /** GET /print/niimbot-label/diagnostics — list Niimbot COM ports and protocol hint. */
+  app.get("/print/niimbot-label/diagnostics", async (req, res) => {
+    try {
+      const printerName = String(req.query.printerName || "").trim();
+      const portName = String(req.query.portName || "").trim();
+      const { detectNiimbotProfile } = require("./niimbot-client");
+      const comPorts = await discoverNiimbotComPorts();
+      const resolvedCom = await resolveNiimbotComPort(printerName, portName);
+      const usbPort = await resolveNiimbotWindowsUsbPort(printerName, portName);
+      res.json({
+        ok: true,
+        version: VERSION,
+        profile: detectNiimbotProfile(printerName, portName, req.query.profile),
+        comPorts,
+        resolvedComPort: resolvedCom,
+        windowsUsbPort: usbPort,
+        preferredPath: resolvedCom ? "com" : usbPort ? `usb:${usbPort}` : "spooler",
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message || "diagnostics failed" });
     }
   });
 

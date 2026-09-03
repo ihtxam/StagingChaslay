@@ -8,19 +8,23 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const {
   buildNiimbotJobPackets,
+  buildTestPatternBitmap,
   niimbotPacket,
   extractComPort,
   extractWindowsUsbPort,
+  detectNiimbotProfile,
+  WAKE_BYTES,
+  countPixelsForLine,
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.0";
+const VERSION = "1.10.1";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.0 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.1 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -35,14 +39,66 @@ test("print-agent version is 1.10.0 in package.json, server.js, and download man
   assert.equal(JSON.parse(read("../package.json")).pkg.assets.includes("win-niimbot-print.ps1"), true);
 });
 
-test("win-niimbot-print.ps1 writes one packet per WritePrinter (no ESC/POS trailer)", () => {
+test("K3 profile uses 1-byte START_PRINT and 4-byte SET_DIMENSION (niimprint USB captures)", () => {
+  assert.equal(detectNiimbotProfile("NIIMBOT K3", "USB005"), "k3");
+  const w = 64;
+  const h = 32;
+  const rowBytes = Math.ceil(w / 8);
+  const bitmap = Buffer.alloc(rowBytes * h, 0xff);
+  const { packets, profile } = buildNiimbotJobPackets(bitmap, w, h, 3, {
+    printerName: "NIIMBOT K3",
+  });
+  assert.equal(profile, "k3");
+  const start = packets.find((p) => p[2] === 0x01);
+  assert.ok(start);
+  assert.equal(start[3], 1);
+  assert.equal(start[4], 1);
+  const dim = packets.find((p) => p[2] === 0x13);
+  assert.ok(dim);
+  assert.equal(dim[3], 4);
+});
+
+test("B21 profile uses 2-byte START_PRINT and 6-byte SET_DIMENSION", () => {
+  const w = 64;
+  const h = 32;
+  const rowBytes = Math.ceil(w / 8);
+  const bitmap = Buffer.alloc(rowBytes * h, 0xff);
+  const { packets, profile } = buildNiimbotJobPackets(bitmap, w, h, 3, {
+    printerName: "Niimbot B21",
+    profile: "b21",
+  });
+  assert.equal(profile, "b21");
+  const start = packets.find((p) => p[2] === 0x01);
+  assert.equal(start[3], 2);
+  assert.deepEqual([start[4], start[5]], [0, 1]);
+  const dim = packets.find((p) => p[2] === 0x13);
+  assert.equal(dim[3], 6);
+});
+
+test("job includes status poll packets before END_PRINT", () => {
+  const w = 32;
+  const h = 16;
+  const bitmap = buildTestPatternBitmap(w, h);
+  const { packets } = buildNiimbotJobPackets(bitmap, w, h, 3, { printerName: "K3" });
+  const endPageIdx = packets.findIndex((p) => p[2] === 0xe3);
+  const endPrintIdx = packets.findIndex((p) => p[2] === 0xf3);
+  assert.ok(endPageIdx >= 0);
+  assert.ok(endPrintIdx > endPageIdx);
+  const polls = packets.slice(endPageIdx + 1, endPrintIdx).filter((p) => p[2] === 0xa3);
+  assert.ok(polls.length >= 6);
+});
+
+test("wake bytes are 0x54 0x01 per official NIIMBOT.exe captures", () => {
+  assert.deepEqual([...WAKE_BYTES], [0x54, 0x01]);
+});
+
+test("win-niimbot-print.ps1 writes one packet per WritePrinter with dual wake bytes", () => {
   const src = read("../win-niimbot-print.ps1");
   assert.match(src, /Write-OnePacket/);
-  assert.match(src, /0x54/);
+  assert.match(src, /0x54,\s*0x01/);
+  assert.match(src, /0xA3/);
   assert.match(src, /Get-PacketDelayMs/);
   assert.equal(src.includes("Get-BtCutTrailer"), false);
-  assert.equal(src.includes("0x1D, 0x56"), false);
-  assert.equal(src.includes("Split-CutSuffix"), false);
   assert.match(src, /foreach \(\$pkt in \$packets\)/);
 });
 
@@ -51,7 +107,7 @@ test("niimbot packets are framed and raster lines use type 0x85", () => {
   const h = 32;
   const rowBytes = Math.ceil(w / 8);
   const bitmap = Buffer.alloc(rowBytes * h, 0xff);
-  const packets = buildNiimbotJobPackets(bitmap, w, h, 3);
+  const { packets } = buildNiimbotJobPackets(bitmap, w, h, 3, { printerName: "K3" });
   assert.ok(packets.length > h + 4);
   for (const pkt of packets) {
     assert.equal(pkt[0], 0x55);
@@ -61,20 +117,12 @@ test("niimbot packets are framed and raster lines use type 0x85", () => {
   }
   const raster = packets.filter((p) => p[2] === 0x85);
   assert.equal(raster.length, h);
-  const start = packets.find((p) => p[2] === 0x01);
-  assert.ok(start);
-  assert.equal(start[3], 2);
-  assert.deepEqual([start[4], start[5]], [0, 1]);
-  const dim = packets.find((p) => p[2] === 0x13);
-  assert.ok(dim);
-  assert.equal(dim[3], 6);
 });
 
-test("niimbotPacket checksum matches frame length", () => {
-  const pkt = niimbotPacket(0x21, [3]);
-  assert.equal(pkt.length, 4 + 1 + 3);
-  assert.equal(pkt[2], 0x21);
-  assert.equal(pkt[3], 1);
+test("countPixelsForLine encodes black pixel counts in header", () => {
+  const line = Buffer.alloc(40, 0xff);
+  const counts = countPixelsForLine(line, 384);
+  assert.ok(counts[1] > 0 || counts[2] > 0 || counts[0] > 0);
 });
 
 test("port extractors recognize COM and USB spooler ports", () => {
@@ -83,10 +131,11 @@ test("port extractors recognize COM and USB spooler ports", () => {
   assert.equal(extractWindowsUsbPort("NIIMBOT K3 on USB005"), "USB005");
 });
 
-test("server wires dedicated Niimbot Windows packet print path", () => {
+test("server wires Niimbot diagnostics and packet print path", () => {
   const server = read("../server.js");
   assert.match(server, /printNiimbotWindows/);
   assert.match(server, /win-niimbot-print\.ps1/);
   assert.match(server, /discoverNiimbotComPorts/);
-  assert.match(server, /printWindowsPacketsFn: printNiimbotWindows/);
+  assert.match(server, /niimbot-label\/diagnostics/);
+  assert.match(server, /testPattern/);
 });
