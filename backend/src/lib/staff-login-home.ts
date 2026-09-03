@@ -12,6 +12,15 @@ function hasRegisterAccess(permissions: string[]): boolean {
   );
 }
 
+/** Mobile / floor apps that use loginHome "pos" without WebPOS or waiter access. */
+function hasPosAppAccess(permissions: string[]): boolean {
+  return (
+    hasRegisterAccess(permissions) ||
+    permissions.includes("STOREKEEPER_INTAKE") ||
+    permissions.includes("DELIVERY_ORDERS")
+  );
+}
+
 /** Full merchant backend — not order history on a register role. */
 function hasBackendPanelPermissions(permissions: string[]): boolean {
   return (
@@ -47,7 +56,7 @@ export function assertLoginHomeAllowed(
   _canAccessPanel: boolean
 ): void {
   if (loginHome === "auto") return;
-  const hasPos = hasRegisterAccess(permissions);
+  const hasPosApp = hasPosAppAccess(permissions);
   const hasPanel =
     hasBackendPanelPermissions(permissions) ||
     hasOrderCenterPanelAccess(permissions) ||
@@ -57,7 +66,7 @@ export function assertLoginHomeAllowed(
   if (loginHome === "panel" && !hasPanel) {
     throw new Error("Panel login requires backend access permissions on the role");
   }
-  if (loginHome === "pos" && !hasPos) {
+  if (loginHome === "pos" && !hasPosApp) {
     throw new Error("POS login requires register or waiter permissions on the role");
   }
 }

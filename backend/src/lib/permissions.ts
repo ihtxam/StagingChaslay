@@ -178,6 +178,13 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     sortOrder: 57,
     permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
   },
+  {
+    /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
+    name: "Storekeeper",
+    isSystem: true,
+    sortOrder: 55,
+    permissions: ["STOREKEEPER_INTAKE"],
+  },
 ];
 
 /**

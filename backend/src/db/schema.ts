@@ -152,6 +152,10 @@ export const merchants = pgTable(
     dineInEnabled: boolean("dine_in_enabled").default(true).notNull(),
     deliveryEnabled: boolean("delivery_enabled").default(true).notNull(),
     /**
+     * Delivery area pricing: zones (map polygons) or zipcode (PLZ list / ranges).
+     */
+    deliveryMode: varchar("delivery_mode", { length: 20 }).default("zones").notNull(),
+    /**
      * Where customers choose pickup / delivery / dine-in:
      * checkout | popup_start | menu
      */
@@ -2361,6 +2365,30 @@ export const rfidReaders = pgTable(
 
 export type DeliveryPolygon = Array<[number, number]>; // [lng, lat] ring (closed or open)
 
+export const deliveryZipRules = pgTable(
+  "delivery_zip_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    zipCode: varchar("zip_code", { length: 20 }),
+    zipFrom: varchar("zip_from", { length: 20 }),
+    zipTo: varchar("zip_to", { length: 20 }),
+    minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+    deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0").notNull(),
+    estimatedMinutes: integer("estimated_minutes").default(45),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("delivery_zip_rules_merchant_id_idx").on(table.merchantId),
+  })
+);
+
 export const deliveryZones = pgTable(
   "delivery_zones",
   {
@@ -3000,6 +3028,7 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   dailyReports: many(dailyReports),
   rfidReaders: many(rfidReaders),
   deliveryZones: many(deliveryZones),
+  deliveryZipRules: many(deliveryZipRules),
   modifierGroups: many(modifierGroups),
   floorPlans: many(floorPlans),
   diningTables: many(diningTables),
@@ -3250,6 +3279,10 @@ export const rfidReadersRelations = relations(rfidReaders, ({ one }) => ({
 
 export const deliveryZonesRelations = relations(deliveryZones, ({ one }) => ({
   merchant: one(merchants, { fields: [deliveryZones.merchantId], references: [merchants.id] }),
+}));
+
+export const deliveryZipRulesRelations = relations(deliveryZipRules, ({ one }) => ({
+  merchant: one(merchants, { fields: [deliveryZipRules.merchantId], references: [merchants.id] }),
 }));
 
 export const paymentTerminalsRelations = relations(paymentTerminals, ({ one }) => ({

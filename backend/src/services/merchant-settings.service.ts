@@ -7,6 +7,8 @@ import type {
 } from "@/db/schema";
 import { eq, and, or, ne } from "drizzle-orm";
 import { normalizeCustomDomain } from "@/lib/domain";
+import { normalizeDeliveryMode } from "@/lib/delivery-match";
+import { filterMerchantShopUrl } from "@/lib/shop-public-urls";
 import { normalizeVacationSettings } from "@/lib/vacation";
 import { MarketingService } from "@/services/marketing.service";
 import {
@@ -120,10 +122,12 @@ export class MerchantSettingsService {
     const shopHost = resolveShopPublicHost();
     const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
 
-    const shopRootUrl = merchant.slug ? `https://${shopHost}/${merchant.slug}` : null;
-    const shopPanelPathUrl = merchant.slug
-      ? `${APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}`
-      : null;
+    const shopRootUrl = filterMerchantShopUrl(
+      merchant.slug ? `https://${shopHost}/${merchant.slug}` : null
+    );
+    const shopPanelPathUrl = filterMerchantShopUrl(
+      merchant.slug ? `${APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}` : null
+    );
 
     const maxPosPosts = Math.max(0, Number((merchant as { maxPosPosts?: number }).maxPosPosts ?? 0));
     let editionFeatures: Awaited<
@@ -179,6 +183,7 @@ export class MerchantSettingsService {
       pickupEnabled: merchant.pickupEnabled,
       dineInEnabled: merchant.dineInEnabled,
       deliveryEnabled: merchant.deliveryEnabled,
+      deliveryMode: normalizeDeliveryMode(merchant.deliveryMode),
       channelSelectMode: normalizeChannelSelectMode(merchant.channelSelectMode),
       menuShowProductImages: merchant.menuShowProductImages !== false,
       menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
@@ -236,10 +241,14 @@ export class MerchantSettingsService {
           : "platform",
       marketingSettings: MarketingService.normalizeMarketing(merchant.marketingSettings),
       shopPathUrl: shopRootUrl,
-      shopMenuUrl: shopRootUrl ? `${shopRootUrl}/menu` : null,
+      shopMenuUrl: shopRootUrl ? filterMerchantShopUrl(`${shopRootUrl}/menu`) : null,
       shopPanelPathUrl,
-      shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
-      shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
+      shopSubdomainUrl: filterMerchantShopUrl(
+        merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null
+      ),
+      shopCustomDomainUrl: filterMerchantShopUrl(
+        merchant.customDomain ? `https://${merchant.customDomain}` : null
+      ),
       adyenMerchantAccount: merchant.adyenMerchantAccount,
       adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
       adyenApiKeySet: !!merchant.adyenApiKey,
@@ -313,6 +322,7 @@ export class MerchantSettingsService {
       pickupEnabled?: boolean;
       dineInEnabled?: boolean;
       deliveryEnabled?: boolean;
+      deliveryMode?: string;
       channelSelectMode?: ChannelSelectMode | string;
       menuShowProductImages?: boolean;
       menuShowCategoryBanners?: boolean;
@@ -413,6 +423,9 @@ export class MerchantSettingsService {
     if (updates.pickupEnabled !== undefined) patch.pickupEnabled = !!updates.pickupEnabled;
     if (updates.dineInEnabled !== undefined) patch.dineInEnabled = !!updates.dineInEnabled;
     if (updates.deliveryEnabled !== undefined) patch.deliveryEnabled = !!updates.deliveryEnabled;
+    if (updates.deliveryMode !== undefined) {
+      patch.deliveryMode = normalizeDeliveryMode(updates.deliveryMode);
+    }
     if (updates.channelSelectMode !== undefined) {
       patch.channelSelectMode = normalizeChannelSelectMode(updates.channelSelectMode);
     }

@@ -81,6 +81,7 @@ import {
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { SHOP_HOST } from '@/lib/brand';
+import { filterMerchantShopUrl } from '@/lib/shop-public-urls';
 import { compressImageIfNeeded } from '@/lib/compress-image';
 import {
   settingsDash,
@@ -1884,7 +1885,7 @@ export default function Settings() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field
                     label={t('shopSlug')}
-                    hint={settings.shopPathUrl || t('shopSlugHint', { shopHost: SHOP_HOST })}
+                    hint={filterMerchantShopUrl(settings.shopPathUrl) || t('shopSlugHint', { shopHost: SHOP_HOST })}
                   >
                     <input
                       className="input"
