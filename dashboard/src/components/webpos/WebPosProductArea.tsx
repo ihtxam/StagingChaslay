@@ -142,24 +142,24 @@ export default function WebPosProductArea({
   const gridClass = TILE_GRID[tileSize] || TILE_GRID.md;
   const categoryColumns: 2 | 3 =
     isPhoneLayout && mobileGridStep >= 1 ? 3 : isPhoneLayout ? 2 : 3;
-  const categoryLayoutMode: WebPosCategoryLayoutMode | undefined = isBelow9Inch
-    ? categoryLayout
-    : undefined;
-
-  const showCollapsibleFilters = isPhoneLayout;
-  const filtersVisible = !showCollapsibleFilters || filtersOpen;
   const hasFilterButtons = !!(
     (showSearch && isPhoneLayout && onSearchChange) ||
     onToggleShowImages ||
     onCycleTileSize ||
-    (isBelow9Inch && onCategoryLayoutChange) ||
+    onCategoryLayoutChange ||
     onToggleSortAlpha ||
     onToggleSortBestseller
   );
-  const desktopFiltersBesideChips = !showCollapsibleFilters && hasFilterButtons;
+  const categoryLayoutMode: WebPosCategoryLayoutMode | undefined = isPhoneLayout
+    ? isBelow9Inch
+      ? categoryLayout
+      : undefined
+    : categoryLayout;
+
+  const showCollapsibleFilters = hasFilterButtons;
+  const filtersVisible = filtersOpen;
 
   const onFilterGripClick = () => {
-    if (!showCollapsibleFilters) return;
     setFiltersOpen((open) => {
       if (open) setMobileSearchOpen(false);
       return !open;
@@ -179,121 +179,109 @@ export default function WebPosProductArea({
         : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
     }`;
 
-  return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
-      <div
-        className={`shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2 ${
-          desktopFiltersBesideChips ? 'flex items-start gap-2' : ''
+  const gripBtnClass = isPhoneLayout
+    ? 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border webpos-toolbar-btn'
+    : 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border webpos-toolbar-btn';
+
+  const filterGripButton =
+    showCollapsibleFilters ? (
+      <button
+        type="button"
+        onClick={onFilterGripClick}
+        title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
+        aria-label={t('webPosFiltersToggle')}
+        aria-expanded={filtersOpen}
+        className={`${gripBtnClass} ${
+          filtersOpen
+            ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
+            : 'border-stone-300 bg-white text-stone-500 hover:bg-stone-50'
         }`}
       >
-        {showCollapsibleFilters || hasFilterButtons ? (
-        <div
-          className={
-            showCollapsibleFilters
-              ? `mb-2 flex items-center gap-1 ${
-                  filtersOpen ? 'min-h-7' : 'min-h-7 justify-end'
-                }`
-              : 'order-2 ml-auto flex shrink-0 items-center justify-end gap-1'
-          }
-          data-webpos-filter-toolbar={showCollapsibleFilters ? 'phone' : 'desktop'}
+        <span className="text-[11px] font-bold leading-none tracking-tighter" aria-hidden>
+          ::
+        </span>
+      </button>
+    ) : null;
+
+  const filterButtonRow = filtersVisible ? (
+    <div
+      className={`flex items-center gap-1 ${
+        isPhoneLayout ? 'min-w-0 overflow-x-auto overscroll-x-contain' : ''
+      }`}
+    >
+      {showSearch && isPhoneLayout && onSearchChange ? (
+        <button
+          type="button"
+          onClick={() => setMobileSearchOpen((open) => !open)}
+          title={t('webPosSearchProducts')}
+          aria-label={t('webPosSearchProducts')}
+          aria-expanded={mobileSearchOpen}
+          className={toolbarBtnClass(mobileSearchOpen || !!search.trim())}
         >
-          {filtersVisible ? (
-            <div
-              className={`flex items-center gap-1 ${
-                showCollapsibleFilters
-                  ? 'min-w-0 flex-1 overflow-x-auto overscroll-x-contain'
-                  : ''
-              }`}
-            >
-              {showSearch && isPhoneLayout && onSearchChange ? (
-                <button
-                  type="button"
-                  onClick={() => setMobileSearchOpen((open) => !open)}
-                  title={t('webPosSearchProducts')}
-                  aria-label={t('webPosSearchProducts')}
-                  aria-expanded={mobileSearchOpen}
-                  className={toolbarBtnClass(mobileSearchOpen || !!search.trim())}
-                >
-                  {mobileSearchOpen ? (
-                    <X size={isPhoneLayout ? 14 : 16} aria-hidden />
-                  ) : (
-                    <Search size={isPhoneLayout ? 14 : 16} aria-hidden />
-                  )}
-                </button>
-              ) : null}
-              {onToggleShowImages ? (
-                <button
-                  type="button"
-                  onClick={onToggleShowImages}
-                  title={t('webPosGridShowImages')}
-                  aria-label={t('webPosGridShowImages')}
-                  className={toolbarBtnClass(showProductImages)}
-                >
-                  <ImageIcon size={isPhoneLayout ? 14 : 16} aria-hidden />
-                </button>
-              ) : null}
-              {onCycleTileSize ? (
-                <button
-                  type="button"
-                  onClick={onCycleTileSize}
-                  title={t('webPosGridTileSize')}
-                  aria-label={t('webPosGridTileSize')}
-                  className={toolbarBtnClass(isPhoneLayout && mobileGridStep > 0)}
-                >
-                  <LayoutGrid size={isPhoneLayout ? 14 : 16} aria-hidden />
-                </button>
-              ) : null}
-              {isBelow9Inch && onCategoryLayoutChange ? (
-                <WebPosCategoryLayoutPicker
-                  value={categoryLayout}
-                  onChange={onCategoryLayoutChange}
-                  compact
-                />
-              ) : null}
-              {onToggleSortAlpha ? (
-                <button
-                  type="button"
-                  onClick={onToggleSortAlpha}
-                  title={t('webPosGridSortAlpha')}
-                  aria-label={t('webPosGridSortAlpha')}
-                  className={toolbarBtnClass(productSort === 'alpha')}
-                >
-                  <ArrowDownAZ size={isPhoneLayout ? 14 : 16} aria-hidden />
-                </button>
-              ) : null}
-              {onToggleSortBestseller ? (
-                <button
-                  type="button"
-                  onClick={onToggleSortBestseller}
-                  title={t('webPosGridSortBestseller')}
-                  aria-label={t('webPosGridSortBestseller')}
-                  className={toolbarBtnClass(productSort === 'bestseller')}
-                >
-                  <TrendingUp size={isPhoneLayout ? 14 : 16} aria-hidden />
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {showCollapsibleFilters ? (
-            <button
-              type="button"
-              onClick={onFilterGripClick}
-              title={filtersOpen ? t('webPosFiltersCloseHint') : t('webPosFiltersOpenHint')}
-              aria-label={t('webPosFiltersToggle')}
-              aria-expanded={filtersOpen}
-              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border webpos-toolbar-btn ${
-                filtersOpen
-                  ? 'border-[var(--webpos-accent)] bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)]'
-                  : 'border-stone-300 bg-white text-stone-500 hover:bg-stone-50'
-              }`}
-            >
-              <span className="text-[11px] font-bold leading-none tracking-tighter" aria-hidden>
-                ::
-              </span>
-            </button>
-          ) : null}
-        </div>
-        ) : null}
+          {mobileSearchOpen ? (
+            <X size={isPhoneLayout ? 14 : 16} aria-hidden />
+          ) : (
+            <Search size={isPhoneLayout ? 14 : 16} aria-hidden />
+          )}
+        </button>
+      ) : null}
+      {onToggleShowImages ? (
+        <button
+          type="button"
+          onClick={onToggleShowImages}
+          title={t('webPosGridShowImages')}
+          aria-label={t('webPosGridShowImages')}
+          className={toolbarBtnClass(showProductImages)}
+        >
+          <ImageIcon size={isPhoneLayout ? 14 : 16} aria-hidden />
+        </button>
+      ) : null}
+      {onCycleTileSize ? (
+        <button
+          type="button"
+          onClick={onCycleTileSize}
+          title={t('webPosGridTileSize')}
+          aria-label={t('webPosGridTileSize')}
+          className={toolbarBtnClass(isPhoneLayout && mobileGridStep > 0)}
+        >
+          <LayoutGrid size={isPhoneLayout ? 14 : 16} aria-hidden />
+        </button>
+      ) : null}
+      {onCategoryLayoutChange ? (
+        <WebPosCategoryLayoutPicker
+          value={categoryLayout}
+          onChange={onCategoryLayoutChange}
+          compact={isPhoneLayout}
+        />
+      ) : null}
+      {onToggleSortAlpha ? (
+        <button
+          type="button"
+          onClick={onToggleSortAlpha}
+          title={t('webPosGridSortAlpha')}
+          aria-label={t('webPosGridSortAlpha')}
+          className={toolbarBtnClass(productSort === 'alpha')}
+        >
+          <ArrowDownAZ size={isPhoneLayout ? 14 : 16} aria-hidden />
+        </button>
+      ) : null}
+      {onToggleSortBestseller ? (
+        <button
+          type="button"
+          onClick={onToggleSortBestseller}
+          title={t('webPosGridSortBestseller')}
+          aria-label={t('webPosGridSortBestseller')}
+          className={toolbarBtnClass(productSort === 'bestseller')}
+        >
+          <TrendingUp size={isPhoneLayout ? 14 : 16} aria-hidden />
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
+  return (
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
+      <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
           <label className="relative mb-2 block sm:hidden">
             <Search
@@ -318,13 +306,29 @@ export default function WebPosProductArea({
             />
           </label>
         ) : null}
-        <div
-          className={`webpos-cat-scroll flex flex-wrap gap-1.5 ${
-            desktopFiltersBesideChips ? 'order-1 min-w-0 flex-1' : ''
-          }`}
-          data-cat-layout={categoryLayoutMode}
-          data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
-        >
+
+        {isPhoneLayout && filtersVisible && hasFilterButtons ? (
+          <div
+            className="mb-1.5 flex min-h-7 items-center gap-1 overflow-x-auto overscroll-x-contain"
+            data-webpos-filter-toolbar="phone-expanded"
+          >
+            {filterButtonRow}
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 items-start gap-1.5">
+          {isPhoneLayout && hasFilterButtons ? (
+            <div className="shrink-0 self-start pt-0.5" data-webpos-filter-toolbar="phone-grip">
+              {filterGripButton}
+            </div>
+          ) : null}
+
+          <div
+            className="webpos-cat-scroll min-w-0 flex-1 flex-wrap gap-1.5"
+            data-cat-layout={categoryLayoutMode}
+            data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
+            data-cat-desktop-wrap={!isPhoneLayout && categoryLayoutMode ? '1' : undefined}
+          >
           <button
             type="button"
             onClick={() => onCategoryChange('all')}
@@ -369,6 +373,17 @@ export default function WebPosProductArea({
               </button>
             );
           })}
+          </div>
+
+          {!isPhoneLayout && hasFilterButtons ? (
+            <div
+              className="flex shrink-0 items-center gap-1 self-start"
+              data-webpos-filter-toolbar="desktop"
+            >
+              {filtersVisible ? filterButtonRow : null}
+              {filterGripButton}
+            </div>
+          ) : null}
         </div>
       </div>
 
