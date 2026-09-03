@@ -26,6 +26,7 @@ const MANAGER_PERMS: Permission[] = [
 ];
 
 const ORDER_CENTER_PERMS: Permission[] = ['VIEW_ORDER_HISTORY', 'END_OF_DAY'];
+const STOREKEEPER_PERMS: Permission[] = ['STOREKEEPER_INTAKE'];
 
 // Cashier template → POS login home (not panel because of order history)
 {
@@ -43,6 +44,17 @@ const ORDER_CENTER_PERMS: Permission[] = ['VIEW_ORDER_HISTORY', 'END_OF_DAY'];
 {
   assert.equal(loginHomeFromPermissions(ORDER_CENTER_PERMS, true), 'panel');
   assert.equal(isRegisterFirstStaff(ORDER_CENTER_PERMS, false), false);
+}
+
+// Storekeeper with loginHome=pos → storekeeper app (not WebPOS)
+{
+  const path = homePathForUser({
+    role: 'staff',
+    permissions: STOREKEEPER_PERMS,
+    isOwner: false,
+    loginHome: 'pos',
+  });
+  assert.equal(path, '/merchant/storekeeper');
 }
 
 // Email login routes cashier to WebPOS regardless of stored loginHome=panel
