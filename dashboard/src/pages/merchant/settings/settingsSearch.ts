@@ -1,4 +1,4 @@
-/** Live-bundle grep marker: stay-on-tab-v4 */
+/** Live-bundle grep marker: search-click-v5 */
 export type SettingsTabId =
   | 'business'
   | 'taxes'
@@ -112,11 +112,67 @@ export function pickSettingsSearchMatch(
   return matches.find((entry) => entry.tab === currentTab) ?? matches[0];
 }
 
+export type SettingsSearchResultClickPlan = {
+  tab: SettingsTabId;
+  highlightId: string;
+  shouldSwitchTab: boolean;
+};
+
+/**
+ * Result-row click: go to THAT row's tab. Never invent tab=pos.
+ * Same-tab clicks must not remount (caller skips selectTab).
+ */
+export function planSettingsSearchResultClick(
+  entry: SettingsSearchEntry | null | undefined,
+  currentTab: SettingsTabId
+): SettingsSearchResultClickPlan | null {
+  if (!entry?.id || !entry.tab) return null;
+  return {
+    tab: entry.tab,
+    highlightId: entry.id,
+    shouldSwitchTab: entry.tab !== currentTab,
+  };
+}
+
+export function isSettingsSearchQueryActive(query?: string | null): boolean {
+  return String(query ?? '').trim().length > 0;
+}
+
+/**
+ * Retail merchants used to bounce tables → POS. That steal must not run while
+ * search is open (clicking a non-POS hit then getting forced onto ?tab=pos).
+ */
+export function nextTabForHiddenRetailSettings(
+  tab: SettingsTabId,
+  ctx: {
+    showTablesSettings: boolean;
+    isRetailMerchant: boolean;
+    query?: string | null;
+  }
+): SettingsTabId | null {
+  if (isSettingsSearchQueryActive(ctx.query)) return null;
+  if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
+  if (tab === 'reservations' && ctx.isRetailMerchant) return 'business';
+  return null;
+}
+
+export function scrollToSettingsSearchSection(id: string | undefined | null): void {
+  try {
+    if (!id || typeof document === 'undefined') return;
+    const el = document.getElementById(id);
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch {
+    /* missing #id must never blank Settings */
+  }
+}
+
 /**
  * Grep marker for the live staging bundle. Must stay a real string so
  * `curl https://app.chaslay.com/assets/index-*.js` can prove this build is served.
  */
-export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'stay-on-tab-v4';
+export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'search-click-v5';
+export const SETTINGS_SEARCH_CLICK_MARK = 'search-click-v5';
 
 export type SettingsSearchView = 'idle' | 'results' | 'empty';
 
@@ -131,9 +187,8 @@ export function settingsSearchView(query: string, matchCount: number): SettingsS
 
 /**
  * Never change tabs while the merchant is typing. Jumping to the best-match tab
- * (e.g. "kitchen" on POS → "kitchen printer" on Receipts) unmounted the current
- * panel; if that destination threw, the search error boundary blanked the page.
- * Results list clicks still call selectTab.
+ * unmounted the current panel. Result clicks use planSettingsSearchResultClick
+ * (that row's tab) and skip selectTab when already on it.
  */
 export function resolveSettingsContentTab(
   currentTab: SettingsTabId,

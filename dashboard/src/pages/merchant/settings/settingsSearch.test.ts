@@ -6,9 +6,13 @@ import {
   formatSettingsSearchSectionLabel,
   hasSettingsSearchMatchesOnTab,
   matchSettingsSearch,
+  nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
+  planSettingsSearchResultClick,
   resolveSettingsContentTab,
+  scrollToSettingsSearchSection,
+  SETTINGS_SEARCH_CLICK_MARK,
   SETTINGS_SEARCH_STAY_ON_TAB_MARK,
   settingsSearchView,
   shouldDimSettingsSectionDuringSearch,
@@ -137,7 +141,8 @@ test('settingsSearchView never idles on a non-empty query (failsafe)', () => {
   assert.equal(settingsSearchView('kitchen printer', 1), 'results');
   assert.equal(settingsSearchView('zzzz nohit', 0), 'empty');
   assert.equal(settingsSearchView('a b', 0), 'empty');
-  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'stay-on-tab-v4');
+  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'search-click-v5');
+  assert.equal(SETTINGS_SEARCH_CLICK_MARK, 'search-click-v5');
 });
 
 test('resolveSettingsContentTab never leaves the current tab while typing', () => {
@@ -190,4 +195,65 @@ test('pos tab with only off-tab matches still shows POS (no auto-jump)', () => {
   assert.equal(contentTab, 'pos');
   assert.equal(hasSettingsSearchMatchesOnTab(matches, 'pos'), false);
   assert.equal(settingsSearchView(query, matches.length), 'results');
+});
+
+test('pickSettingsSearchMatch does not invent tab=pos for receipt/payments hits', () => {
+  const receipt = { id: 'receipt-print', tab: 'receipt' as const, keywords: ['printer'] };
+  const payments = { id: 'payments-adyen', tab: 'payments' as const, keywords: ['adyen'] };
+  assert.equal(pickSettingsSearchMatch([receipt, payments], 'pos')?.tab, 'receipt');
+  assert.equal(pickSettingsSearchMatch([payments], 'pos')?.tab, 'payments');
+});
+
+test('planSettingsSearchResultClick uses the clicked row tab, never forces pos', () => {
+  const receipt = { id: 'receipt-print', tab: 'receipt' as const, keywords: ['printer'] };
+  const payments = { id: 'payments-adyen', tab: 'payments' as const, keywords: ['adyen'] };
+  const posCheckout = { id: 'pos-checkout', tab: 'pos' as const, keywords: ['express'] };
+  assert.deepEqual(planSettingsSearchResultClick(receipt, 'pos'), {
+    tab: 'receipt',
+    highlightId: 'receipt-print',
+    shouldSwitchTab: true,
+  });
+  assert.deepEqual(planSettingsSearchResultClick(payments, 'pos'), {
+    tab: 'payments',
+    highlightId: 'payments-adyen',
+    shouldSwitchTab: true,
+  });
+  assert.deepEqual(planSettingsSearchResultClick(posCheckout, 'pos'), {
+    tab: 'pos',
+    highlightId: 'pos-checkout',
+    shouldSwitchTab: false,
+  });
+  assert.equal(planSettingsSearchResultClick(null, 'pos'), null);
+});
+
+test('retail tables→pos redirect is skipped when search query is set', () => {
+  assert.equal(
+    nextTabForHiddenRetailSettings('tables', {
+      showTablesSettings: false,
+      isRetailMerchant: true,
+      query: '',
+    }),
+    'pos'
+  );
+  assert.equal(
+    nextTabForHiddenRetailSettings('tables', {
+      showTablesSettings: false,
+      isRetailMerchant: true,
+      query: 'printer',
+    }),
+    null
+  );
+  assert.equal(
+    nextTabForHiddenRetailSettings('reservations', {
+      showTablesSettings: true,
+      isRetailMerchant: true,
+      query: 'adyen',
+    }),
+    null
+  );
+});
+
+test('scrollToSettingsSearchSection never throws on missing section', () => {
+  assert.doesNotThrow(() => scrollToSettingsSearchSection('missing-section'));
+  assert.doesNotThrow(() => scrollToSettingsSearchSection(null));
 });
