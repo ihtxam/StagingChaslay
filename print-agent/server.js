@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.1";
+const VERSION = "1.10.2";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -275,11 +275,11 @@ async function discoverNiimbotComPorts() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $ports = @()
-$niimbotVid = '3513|0483|1a86|28e9|154f|1203'
+# Name tokens only — VID 1a86 (CH340) is also used by Aclas scales and must not match.
 try {
   Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
     $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b' -or $blob -match $niimbotVid) {
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
       $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
     }
   }
@@ -287,7 +287,7 @@ try {
 try {
   Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
     $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b' -or $blob -match $niimbotVid) {
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
       if ($_.FriendlyName -match '(COM\\d+)') {
         $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
       }
@@ -822,13 +822,43 @@ function isShellDump(text) {
   );
 }
 
+/** Pull a specific Niimbot / Win32 / COM reason out of a PowerShell dump. */
+function extractUsefulPrintLine(raw) {
+  const text = String(raw || "");
+  const patterns = [
+    /win-niimbot-print\.ps1 not found[^\n]*/i,
+    /WritePrinter short write for '[^']+'[^\n]*/i,
+    /WritePrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /OpenPrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /StartDocPrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /StartPagePrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /Printer '[^']+' not found or disconnected/i,
+    /Niimbot COM[^\n]*/i,
+    /Niimbot [^\n]*/i,
+    /Access to the port '[^']+'[^\n]*/i,
+    /The port '[^']+' does not exist[^\n]*/i,
+    /No Niimbot packets[^\n]*/i,
+    /Niimbot Windows print requires[^\n]*/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m && m[0]) return m[0].replace(/^.*Exception:\s*/i, "").trim().slice(0, 220);
+  }
+  return "";
+}
+
 /** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. Never throws. */
 function sanitizePrintAgentError(error, printerName, fallback) {
   const safeFallback = fallback || "Print failed";
   try {
+    if (error && (error.killed || error.code === "ETIMEDOUT")) {
+      const label = printerName ? String(printerName).trim() : "";
+      return label ? `Print timed out for '${label}'` : "Print timed out";
+    }
     const raw = [error && error.stderr, error && error.message, error && error.stdout]
       .filter(Boolean)
       .join("\n");
+    const useful = extractUsefulPrintLine(raw);
     const win32 =
       raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
       raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
@@ -844,7 +874,7 @@ function sanitizePrintAgentError(error, printerName, fallback) {
       code === 1801 ||
       code === 1905 ||
       code === 1906 ||
-      /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|OpenPrinter failed|StartDocPrinter failed|\bGLPrinter\b/i.test(
+      /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|\bGLPrinter\b/i.test(
         raw
       )
     ) {
@@ -852,13 +882,14 @@ function sanitizePrintAgentError(error, printerName, fallback) {
         ? `Printer '${name}' not found or disconnected`
         : "Printer not found or disconnected";
     }
+    if (useful) return useful;
     const cleanLine = raw
       .split(/\r?\n/)
       .map((l) => String(l).trim())
       .find(
         (l) =>
           l &&
-          /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer/i.test(
+          /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer|Niimbot /i.test(
             l
           ) &&
           !isShellDump(l)
@@ -1009,6 +1040,7 @@ async function resolvePrinterName(requested) {
 async function resolveNiimbotComPort(printerName, portName) {
   const direct = extractComPort(portName, printerName);
   if (direct) return direct;
+  if (extractWindowsUsbPort(portName, printerName)) return null;
   const resolved = printerName ? await resolvePrinterName(printerName) : "";
   const printers = await listPrinters();
   const match =
@@ -1017,6 +1049,7 @@ async function resolveNiimbotComPort(printerName, portName) {
     printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
   const fromPrinter = extractComPort(match?.portName, match?.name);
   if (fromPrinter) return fromPrinter;
+  if (extractWindowsUsbPort(match?.portName, match?.name)) return null;
 
   const discovered = await discoverNiimbotComPorts();
   if (!discovered.length) return null;

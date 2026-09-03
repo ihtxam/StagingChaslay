@@ -236,6 +236,28 @@ function describeJob(bitmap, packets, profile, path) {
   };
 }
 
+function describeSerialFailure(comPort, error) {
+  const raw = [error && error.stderr, error && error.message]
+    .filter(Boolean)
+    .join("\n");
+  const label = String(comPort || "COM").toUpperCase();
+  if (error && (error.killed || error.code === "ETIMEDOUT")) {
+    return `Niimbot ${label} timed out`;
+  }
+  if (/access is denied|UnauthorizedAccess/i.test(raw)) {
+    return `Niimbot ${label} is in use or access denied (close NIIMBOT.exe)`;
+  }
+  if (/does not exist|FileNotFoundException|cannot find the (file|port)/i.test(raw)) {
+    return `Niimbot ${label} was not found`;
+  }
+  const useful =
+    raw.match(/Niimbot[^\n]*/i) ||
+    raw.match(/Access to the port '[^']+'[^\n]*/i) ||
+    raw.match(/The port '[^']+'[^\n]*/i);
+  if (useful) return useful[0].slice(0, 180);
+  return `Niimbot ${label} serial write failed`;
+}
+
 async function printNiimbotJobSerial(comPort, job) {
   const port = normalizeComPort(comPort);
   const { packets } = job;
@@ -276,16 +298,40 @@ ${payloadB64}
   $port.Dispose()
 }
 `;
-  await execFileAsync(
-    "powershell.exe",
-    ["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps],
-    { windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }
-  );
+  try {
+    await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }
+    );
+  } catch (error) {
+    throw new Error(describeSerialFailure(comPort, error));
+  }
+}
+
+/**
+ * USBPRINT (USB005) K3 must not be hijacked by a guessed COM port.
+ * CH340 scales share VID 1a86; only use COM when the printer/port actually names COMx.
+ */
+function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUsb }) {
+  const explicitCom = extractComPort(portName, printerName);
+  const usb =
+    extractWindowsUsbPort(portName, printerName) ||
+    (resolvedUsb ? String(resolvedUsb).trim() : "") ||
+    "";
+  const com = explicitCom || (resolvedCom ? String(resolvedCom).trim() : "") || "";
+  if (usb && !explicitCom) {
+    return { mode: "windows", comPort: null, usbPort: usb };
+  }
+  if (com) {
+    return { mode: "com", comPort: com, usbPort: usb || null };
+  }
+  return { mode: "windows", comPort: null, usbPort: usb || null };
 }
 
 async function printNiimbotViaWindowsPrinter({ printerName, packets, printWindowsPacketsFn }) {
   if (typeof printWindowsPacketsFn !== "function") {
-    throw new Error("Niimbot Windows print requires Print Agent 1.10.1+.");
+    throw new Error("Niimbot Windows print requires Print Agent 1.10.2+.");
   }
   await printWindowsPacketsFn({
     printerName,
@@ -326,21 +372,38 @@ async function printNiimbotLabel(opts) {
     profile,
   });
 
-  // Always prefer COM serial when discoverable — USB005 WritePrinter is fallback only.
-  let comPort = extractComPort(portName, printerName);
-  if (!comPort && typeof resolveComPortFn === "function") {
-    comPort = await resolveComPortFn(printerName, portName);
+  let resolvedCom = extractComPort(portName, printerName);
+  if (!resolvedCom && typeof resolveComPortFn === "function") {
+    resolvedCom = await resolveComPortFn(printerName, portName);
   }
-
-  if (comPort) {
-    console.log(
-      `[print-agent] Niimbot label via COM ${comPort} profile=${job.profile} packets=${job.packets.length}`
-    );
-    await printNiimbotJobSerial(comPort, job);
-    return { printer: comPort, ...describeJob(bitmap, job.packets, job.profile, "com") };
+  let resolvedUsb = extractWindowsUsbPort(portName, printerName);
+  if (!resolvedUsb && typeof resolveWindowsUsbPortFn === "function") {
+    resolvedUsb = await resolveWindowsUsbPortFn(printerName, portName);
   }
-
+  const transport = chooseNiimbotTransport({
+    portName,
+    printerName,
+    resolvedCom,
+    resolvedUsb,
+  });
   const name = String(printerName || "").trim();
+
+  if (transport.mode === "com" && transport.comPort) {
+    try {
+      console.log(
+        `[print-agent] Niimbot label via COM ${transport.comPort} profile=${job.profile} packets=${job.packets.length}`
+      );
+      await printNiimbotJobSerial(transport.comPort, job);
+      return { printer: transport.comPort, ...describeJob(bitmap, job.packets, job.profile, "com") };
+    } catch (comErr) {
+      if (!name || typeof printWindowsPacketsFn !== "function") throw comErr;
+      console.warn(
+        `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows:`,
+        comErr && comErr.message
+      );
+    }
+  }
+
   if (!name) {
     throw new Error(
       "No Niimbot label printer configured. Enable Labels on a printer profile in Settings → Receipts & printers."
@@ -349,15 +412,11 @@ async function printNiimbotLabel(opts) {
 
   if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.1+ and select NIIMBOT K3 in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.2+ and select NIIMBOT K3 in Settings → Receipts & printers."
     );
   }
 
-  let usbPort = extractWindowsUsbPort(portName);
-  if (!usbPort && typeof resolveWindowsUsbPortFn === "function") {
-    usbPort = await resolveWindowsUsbPortFn(printerName, portName);
-  }
-
+  const usbPort = transport.usbPort;
   const pathLabel = usbPort ? `usb:${usbPort}` : "spooler";
   console.log(
     `[print-agent] Niimbot label via Windows ${pathLabel} -> '${name}' profile=${job.profile} packets=${job.packets.length}`
@@ -384,7 +443,9 @@ module.exports = {
   },
   extractComPort,
   extractWindowsUsbPort,
+  chooseNiimbotTransport,
   packetDelayMs,
   describeJob,
+  describeSerialFailure,
   printNiimbotLabel,
 };

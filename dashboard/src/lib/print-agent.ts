@@ -434,6 +434,9 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
+/** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.2';
+
 const BT_COM_PRINTER_RE =
   /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
 
@@ -589,6 +592,10 @@ export function isPrintAgentVersionOutdated(
   return compareAgentVersion(installed, MIN_PRINT_AGENT_VERSION) < 0;
 }
 
+function isGenericPrintFailedToast(msg: string): boolean {
+  return /^print failed( for '[^']+')?\.?$/i.test(String(msg || '').trim());
+}
+
 /** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
@@ -602,6 +609,42 @@ export function friendlyPrintAgentError(raw: unknown, printerName?: string): str
     return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
   }
   return msg.length > 220 ? 'Print failed' : msg;
+}
+
+/** Toast for Niimbot label jobs — keep the agent's real reason, plus version when generic. */
+export function formatNiimbotLabelError(opts: {
+  agentMessage?: string;
+  printerName?: string;
+  httpStatus?: number;
+  health?: PrintAgentHealth | null;
+}): string {
+  const name = String(opts.printerName || '').trim() || 'Niimbot';
+  const ver = String(opts.health?.version || '').trim();
+  const features = opts.health?.features || [];
+  const hasNiimbot = features.includes('niimbot-label');
+  const missingRoute =
+    opts.httpStatus === 404 ||
+    opts.httpStatus === 405 ||
+    (opts.health?.ok === true && ver && !hasNiimbot);
+
+  if (missingRoute) {
+    return `Label print failed: Print Agent ${ver || 'on this till'} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings → Receipts & printers.`;
+  }
+
+  const raw = String(opts.agentMessage || '').trim();
+  if (raw && !isGenericPrintFailedToast(raw) && !isNoisyPrintAgentDump(raw) && raw.length <= 280) {
+    return raw;
+  }
+  const friendly = raw ? friendlyPrintAgentError(raw, name) : '';
+  if (friendly && !isGenericPrintFailedToast(friendly)) return friendly;
+
+  const stale =
+    ver && !isBridgeVersion(ver) && compareAgentVersion(ver, MIN_NIIMBOT_AGENT_VERSION) < 0;
+  if (stale) {
+    return `Label print failed for '${name}'. Print Agent v${ver} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings.`;
+  }
+  const verBit = ver ? ` Agent v${ver}.` : '';
+  return `Label print failed for '${name}'.${verBit} Check http://127.0.0.1:9101/health (need v${MIN_NIIMBOT_AGENT_VERSION}+), printer is on, labels loaded, and NIIMBOT.exe is closed.`;
 }
 
 async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
@@ -936,11 +979,14 @@ export async function printNiimbotLabelViaAgent(opts: {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      const health = await getPrintAgentHealth(0).catch(() => null);
       throw new Error(
-        friendlyPrintAgentError(
-          collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
-          name
-        )
+        formatNiimbotLabelError({
+          agentMessage: collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+          printerName: name,
+          httpStatus: res.status,
+          health,
+        })
       );
     }
     const data = await res.json();
@@ -948,7 +994,7 @@ export async function printNiimbotLabelViaAgent(opts: {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
-        'Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v1.10.1+).'
+        `Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v${MIN_NIIMBOT_AGENT_VERSION}+).`
       );
     }
     throw error;
