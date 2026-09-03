@@ -904,6 +904,36 @@ export async function printViaAgent(opts: {
   return { ok: true, printer: data?.printer };
 }
 
+export async function printNiimbotLabelViaAgent(opts: {
+  printerName?: string | null;
+  portName?: string | null;
+  bitmapBase64: string;
+  widthPx: number;
+  heightPx: number;
+  density?: number;
+}): Promise<PrintViaAgentResult> {
+  const name = opts.printerName?.trim() || '';
+  if (name && isUnsuitableRawPrinter(name)) {
+    throw new Error(unsuitableRawPrinterMessage(name));
+  }
+  const data = await agentFetch(
+    '/print/niimbot-label',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        printerName: opts.printerName || undefined,
+        portName: opts.portName || undefined,
+        bitmapBase64: opts.bitmapBase64,
+        widthPx: opts.widthPx,
+        heightPx: opts.heightPx,
+        density: opts.density,
+      }),
+    },
+    name
+  );
+  return { ok: true, printer: data?.printer };
+}
+
 /** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */
 const DRAWER_KICK_BASE64 = 'G0AbcAAZ+g==';
 
