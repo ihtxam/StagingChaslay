@@ -148,6 +148,15 @@ export default function WebPosProductArea({
 
   const showCollapsibleFilters = isPhoneLayout;
   const filtersVisible = !showCollapsibleFilters || filtersOpen;
+  const hasFilterButtons = !!(
+    (showSearch && isPhoneLayout && onSearchChange) ||
+    onToggleShowImages ||
+    onCycleTileSize ||
+    (isBelow9Inch && onCategoryLayoutChange) ||
+    onToggleSortAlpha ||
+    onToggleSortBestseller
+  );
+  const desktopFiltersBesideChips = !showCollapsibleFilters && hasFilterButtons;
 
   const onFilterGripClick = () => {
     if (!showCollapsibleFilters) return;
@@ -172,18 +181,30 @@ export default function WebPosProductArea({
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
-      <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
+      <div
+        className={`shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2 ${
+          desktopFiltersBesideChips ? 'flex items-start gap-2' : ''
+        }`}
+      >
+        {showCollapsibleFilters || hasFilterButtons ? (
         <div
-          className={`mb-2 flex items-center gap-1 ${
+          className={
             showCollapsibleFilters
-              ? filtersOpen
-                ? 'min-h-7'
-                : 'min-h-7 justify-end'
-              : 'justify-start'
-          }`}
+              ? `mb-2 flex items-center gap-1 ${
+                  filtersOpen ? 'min-h-7' : 'min-h-7 justify-end'
+                }`
+              : 'order-2 ml-auto flex shrink-0 items-center justify-end gap-1'
+          }
+          data-webpos-filter-toolbar={showCollapsibleFilters ? 'phone' : 'desktop'}
         >
           {filtersVisible ? (
-            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain">
+            <div
+              className={`flex items-center gap-1 ${
+                showCollapsibleFilters
+                  ? 'min-w-0 flex-1 overflow-x-auto overscroll-x-contain'
+                  : ''
+              }`}
+            >
               {showSearch && isPhoneLayout && onSearchChange ? (
                 <button
                   type="button"
@@ -272,6 +293,7 @@ export default function WebPosProductArea({
             </button>
           ) : null}
         </div>
+        ) : null}
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
           <label className="relative mb-2 block sm:hidden">
             <Search
@@ -297,7 +319,9 @@ export default function WebPosProductArea({
           </label>
         ) : null}
         <div
-          className="webpos-cat-scroll flex flex-wrap gap-1.5"
+          className={`webpos-cat-scroll flex flex-wrap gap-1.5 ${
+            desktopFiltersBesideChips ? 'order-1 min-w-0 flex-1' : ''
+          }`}
           data-cat-layout={categoryLayoutMode}
           data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
         >
