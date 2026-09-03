@@ -141,8 +141,8 @@ test('settingsSearchView never idles on a non-empty query (failsafe)', () => {
   assert.equal(settingsSearchView('kitchen printer', 1), 'results');
   assert.equal(settingsSearchView('zzzz nohit', 0), 'empty');
   assert.equal(settingsSearchView('a b', 0), 'empty');
-  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'search-click-v5');
-  assert.equal(SETTINGS_SEARCH_CLICK_MARK, 'search-click-v5');
+  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'search-click-v6');
+  assert.equal(SETTINGS_SEARCH_CLICK_MARK, 'search-click-v6');
 });
 
 test('resolveSettingsContentTab never leaves the current tab while typing', () => {
@@ -256,4 +256,68 @@ test('retail tables→pos redirect is skipped when search query is set', () => {
 test('scrollToSettingsSearchSection never throws on missing section', () => {
   assert.doesNotThrow(() => scrollToSettingsSearchSection('missing-section'));
   assert.doesNotThrow(() => scrollToSettingsSearchSection(null));
+  assert.equal(scrollToSettingsSearchSection('missing-section'), false);
+  assert.equal(scrollToSettingsSearchSection(null), false);
+});
+
+test('query ta matches POS rows that used to blank plus taxes/payments', () => {
+  const tLive = (key: string) => {
+    if (key === 'posPostsTitle') return 'POS stations';
+    if (key === 'signageNav') return 'Digital Signage';
+    return key;
+  };
+  const matches = matchSettingsSearch(buildSettingsSearchIndex(tLive), 'ta');
+  const ids = matches.map((entry) => entry.id);
+  assert.ok(ids.includes('pos-mode'));
+  assert.ok(ids.includes('pos-posts'));
+  assert.ok(ids.includes('storekeeper-addon'));
+  assert.ok(ids.includes('signage-addon'));
+  assert.ok(ids.includes('taxes-rates'));
+  assert.ok(ids.includes('payments-adyen') || ids.includes('payments-tap-to-pay'));
+});
+
+test('planSettingsSearchResultClick for POS rows targets pos without forcing remount when already there', () => {
+  const posMode = { id: 'pos-mode', tab: 'pos' as const, keywords: ['ta'] };
+  const taxes = { id: 'taxes-rates', tab: 'taxes' as const, keywords: ['ta'] };
+  assert.deepEqual(planSettingsSearchResultClick(posMode, 'business'), {
+    tab: 'pos',
+    highlightId: 'pos-mode',
+    shouldSwitchTab: true,
+  });
+  assert.deepEqual(planSettingsSearchResultClick(posMode, 'pos'), {
+    tab: 'pos',
+    highlightId: 'pos-mode',
+    shouldSwitchTab: false,
+  });
+  assert.equal(planSettingsSearchResultClick(taxes, 'business')?.tab, 'taxes');
+});
+
+test('scrollToSettingsSearchSection scrolls overflow auto, not overflow hidden', () => {
+  if (typeof document === 'undefined') return;
+  const hidden = document.createElement('div');
+  hidden.style.cssText = 'overflow:hidden;height:80px;width:200px;';
+  const scroller = document.createElement('div');
+  scroller.style.cssText = 'overflow-y:auto;height:100px;width:200px;';
+  Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 400 });
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 100 });
+  scroller.scrollTop = 0;
+  let scrolled = false;
+  scroller.scrollTo = ((opts: { top?: number }) => {
+    scrolled = true;
+    scroller.scrollTop = Number(opts?.top) || 0;
+  }) as typeof scroller.scrollTo;
+  hidden.scrollTo = (() => {
+    throw new Error('must not scroll overflow:hidden');
+  }) as typeof hidden.scrollTo;
+  const target = document.createElement('div');
+  target.id = 'pos-mode';
+  scroller.appendChild(hidden);
+  hidden.appendChild(target);
+  document.body.appendChild(scroller);
+  try {
+    assert.equal(scrollToSettingsSearchSection('pos-mode'), true);
+    assert.equal(scrolled, true);
+  } finally {
+    scroller.remove();
+  }
 });

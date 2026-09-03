@@ -36,7 +36,7 @@ function SessionList({
   kickingId: string | null;
   t: (k: string) => string;
 }) {
-  if (!rows.length) {
+  if (!Array.isArray(rows) || !rows.length) {
     return <p className="text-sm muted">{t('posPostsNone')}</p>;
   }
   return (
@@ -89,8 +89,9 @@ export default function PosPostsSection({
     setLoading(true);
     try {
       const data = await fetchActivePosSessions();
-      setMain(data.sessions.main || []);
-      setWaiter(data.sessions.waiter || []);
+      const sessions = data?.sessions && typeof data.sessions === 'object' ? data.sessions : {};
+      setMain(Array.isArray(sessions.main) ? sessions.main : []);
+      setWaiter(Array.isArray(sessions.waiter) ? sessions.waiter : []);
     } catch (e: any) {
       const msg = String(e.response?.data?.error || e.message || '');
       const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(msg);

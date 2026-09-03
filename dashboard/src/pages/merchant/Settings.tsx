@@ -93,6 +93,7 @@ import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
+import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import {
   SETTINGS_SEARCH_CLICK_MARK,
   buildSettingsSearchIndex,
@@ -103,6 +104,7 @@ import {
   nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
   planSettingsSearchResultClick,
+  scheduleScrollToSettingsSearchSection,
   scrollToSettingsSearchSection,
   settingsSearchView,
   type SettingsTabId,
@@ -422,18 +424,24 @@ function Section({
   icon?: LucideIcon;
   accent?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className={`transition-opacity ${dimmed ? 'pointer-events-none opacity-40' : ''}`}>
-      <SettingsReportCard
-        id={id}
-        icon={Icon}
-        accent={accent}
-        title={title}
-        description={description}
-        highlight={highlight}
+      <SettingsSearchErrorBoundary
+        resetKey={id || title}
+        fallbackText={t('settingsPosSectionFailed')}
       >
-        {children}
-      </SettingsReportCard>
+        <SettingsReportCard
+          id={id}
+          icon={Icon}
+          accent={accent}
+          title={title}
+          description={description}
+          highlight={highlight}
+        >
+          {children}
+        </SettingsReportCard>
+      </SettingsSearchErrorBoundary>
     </div>
   );
 }
@@ -1524,17 +1532,29 @@ export default function Settings() {
                       highlightId === entry.id ? 'bg-[var(--bg-muted)] ring-1 ring-[var(--ring)]' : ''
                     }`}
                     onClick={() => {
-                      const plan = planSettingsSearchResultClick(entry, tab as SettingsTabId);
-                      if (!plan) return;
-                      pinnedSearchHighlightRef.current = plan.highlightId;
-                      setHighlightId(plan.highlightId);
-                      if (plan.shouldSwitchTab) {
-                        selectTab(plan.tab);
+                      try {
+                        const plan = planSettingsSearchResultClick(entry, tab as SettingsTabId);
+                        if (!plan) return;
+                        if (
+                          !isSearchSectionRendered(entry.id) ||
+                          !visibleTabIds.has(plan.tab) ||
+                          !canOpenSettingsTab(plan.tab)
+                        ) {
+                          toast.error(t('settingsSearchSectionUnavailable'));
+                          return;
+                        }
+                        pinnedSearchHighlightRef.current = plan.highlightId;
+                        setHighlightId(plan.highlightId);
+                        if (plan.shouldSwitchTab) {
+                          selectTab(plan.tab);
+                        }
+                        scheduleScrollToSettingsSearchSection(plan.highlightId, () => {
+                          toast.error(t('settingsSearchSectionUnavailable'));
+                        });
+                      } catch (err) {
+                        console.error('[settings-search]', err);
+                        toast.error(t('settingsSearchOpenFailed'));
                       }
-                      window.setTimeout(
-                        () => scrollToSettingsSearchSection(plan.highlightId),
-                        plan.shouldSwitchTab ? 220 : 40
-                      );
                     }}
                   >
                     <span className="font-medium text-[var(--text)]">{sectionLabel}</span>
@@ -1556,7 +1576,7 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 overflow-hidden">
+      <div className="card !p-0 overflow-x-hidden overflow-y-visible">
         <div className="flex flex-col lg:flex-row min-h-[60vh]">
           <aside className="shrink-0 border-b border-[var(--border)] lg:w-56 lg:border-b-0 lg:border-r">
             <nav
@@ -1628,7 +1648,7 @@ export default function Settings() {
                   </button>
                 }
               />
-              <Section icon={Percent} accent={settingsDash.warning} title={t('taxRates')} description={t('taxRatesHint')}>
+              <Section id="taxes-rates" icon={Percent} accent={settingsDash.warning} title={t('taxRates')} description={t('taxRatesHint')} highlight={isSectionHighlight('taxes-rates')}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label={`${t('defaultVatRate')} (%)`}>
                     <input
@@ -1994,7 +2014,7 @@ export default function Settings() {
           )}
 
           {tab === 'pos' && (
-            <form onSubmit={onSave} className="space-y-5">
+            <form onSubmit={onSave} className="space-y-5" data-settings-pos-panel={SETTINGS_SEARCH_CLICK_MARK}>
               <SettingsPageHeader
                 title={t('settingsPos')}
                 subtitle={t('posLayoutSettingsHint')}
@@ -2577,9 +2597,9 @@ export default function Settings() {
                 <Field label={t('quickCashDenominations')} hint={t('quickCashDenominationsHint')}>
                   <input
                     className="input"
-                    value={(settings.posCheckoutSettings?.quickCashDenominations || [10, 20, 50, 100]).join(
-                      ', '
-                    )}
+                    value={normalizePosCheckoutSettings(
+                      settings.posCheckoutSettings
+                    ).quickCashDenominations.join(', ')}
                     onChange={(e) => {
                       const dens = e.target.value
                         .split(/[,;\s]+/)

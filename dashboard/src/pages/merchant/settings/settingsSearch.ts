@@ -1,4 +1,4 @@
-/** Live-bundle grep marker: search-click-v5 */
+/** Live-bundle grep marker: search-click-v6 */
 export type SettingsTabId =
   | 'business'
   | 'taxes'
@@ -156,23 +156,83 @@ export function nextTabForHiddenRetailSettings(
   return null;
 }
 
-export function scrollToSettingsSearchSection(id: string | undefined | null): void {
+function overflowYOf(el: Element): string {
   try {
-    if (!id || typeof document === 'undefined') return;
-    const el = document.getElementById(id);
-    if (!el || typeof el.scrollIntoView !== 'function') return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return (window.getComputedStyle(el).overflowY || '').toLowerCase();
   } catch {
-    /* missing #id must never blank Settings */
+    return '';
   }
+}
+
+function isSafeScrollport(el: HTMLElement): boolean {
+  const oy = overflowYOf(el);
+  if (oy !== 'auto' && oy !== 'scroll') return false;
+  return el.scrollHeight > el.clientHeight + 2;
+}
+
+/**
+ * Scroll a mounted #id into view without Element.scrollIntoView.
+ * scrollIntoView walks overflow:hidden ancestors (panel-shell, settings card,
+ * report cards) and sets their scrollTop — that clips the POS tab to empty.
+ * Taxes/Payments looked fine because taxes-rates had no DOM id (no scroll)
+ * and payments sections sit near the top of a short panel.
+ */
+export function scrollToSettingsSearchSection(id: string | undefined | null): boolean {
+  try {
+    if (!id || typeof document === 'undefined') return false;
+    const el = document.getElementById(id);
+    if (!el) return false;
+    let parent = el.parentElement;
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+      if (isSafeScrollport(parent)) {
+        const parentRect = parent.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const nextTop = parent.scrollTop + (rect.top - parentRect.top) - 16;
+        if (typeof parent.scrollTo === 'function') {
+          parent.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+        } else {
+          parent.scrollTop = Math.max(0, nextTop);
+        }
+        return true;
+      }
+      parent = parent.parentElement;
+    }
+    const rect = el.getBoundingClientRect();
+    const top = (window.scrollY || document.documentElement.scrollTop || 0) + rect.top - 16;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function scheduleScrollToSettingsSearchSection(
+  id: string | undefined | null,
+  onMiss?: () => void
+): void {
+  if (!id || typeof window === 'undefined') return;
+  const maxAttempts = 8;
+  const tick = (left: number) => {
+    if (scrollToSettingsSearchSection(id)) return;
+    if (left <= 1) {
+      try {
+        onMiss?.();
+      } catch {
+        /* toast must not throw into Settings */
+      }
+      return;
+    }
+    window.setTimeout(() => tick(left - 1), 70);
+  };
+  window.setTimeout(() => tick(maxAttempts), 40);
 }
 
 /**
  * Grep marker for the live staging bundle. Must stay a real string so
  * `curl https://app.chaslay.com/assets/index-*.js` can prove this build is served.
  */
-export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'search-click-v5';
-export const SETTINGS_SEARCH_CLICK_MARK = 'search-click-v5';
+export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'search-click-v6';
+export const SETTINGS_SEARCH_CLICK_MARK = 'search-click-v6';
 
 export type SettingsSearchView = 'idle' | 'results' | 'empty';
 
