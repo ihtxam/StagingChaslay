@@ -13,5 +13,6 @@ class PrintBridgeApplication : Application() {
         // Start the foreground service after install/update so WebPOS can reach localhost:9101
         // without opening MainActivity first.
         PrintBridgeLauncher.start(this)
+        BridgeServiceWatchdog.start(this)
     }
 }

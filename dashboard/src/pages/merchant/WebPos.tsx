@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw, Truck } from 'lucide-react';
-import api from '@/lib/api';
+import api, { resolveApiOriginForBridge } from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
@@ -93,7 +93,7 @@ import {
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import { probeDeviceBridgeHealth, runDeviceBridgeTapToPay } from '@/lib/device-bridge';
+import { probeDeviceBridgeHealth, runDeviceBridgeTapToPay, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
 import {
   isLocalPrintStation,
   printKitchenViaAgentOrQueue,
@@ -179,6 +179,10 @@ import WebPosTopBar, {
 } from '@/components/webpos/WebPosTopBar';
 import WebPosLogsModal from '@/components/webpos/WebPosLogsModal';
 import WebPosOnboardingTour, { readWebPosOnboardingDone } from '@/components/webpos/WebPosOnboardingTour';
+import WebPosTapToPaySetupModal, {
+  markWebPosTapToPaySetupDone,
+  readWebPosTapToPaySetupDone,
+} from '@/components/webpos/WebPosTapToPaySetupModal';
 import WebPosBridgeSetupModal from '@/components/webpos/WebPosBridgeSetupModal';
 import {
   initWebPosLogging,
@@ -994,6 +998,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [logsOpen, setLogsOpen] = useState(false);
   const [logsAutoSend, setLogsAutoSend] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [tapToPaySetupOpen, setTapToPaySetupOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSeedMethod, setCheckoutSeedMethod] = useState<
     PosPaymentMethod | 'express'
@@ -1944,6 +1949,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const bridge = await (isAndroidWebPosTill() ? probeDeviceBridgeHealth(5) : probeDeviceBridgeHealth(1));
       setDeviceTapToPayReady(bridge.ok && bridge.tapToPayReady === true);
       setDeviceTapToPayMessage(bridge.tapToPayMessage || null);
+      if (bridge.ok && isAndroidWebPosTill()) {
+        void syncBridgeWebPosOrigin();
+      }
     } catch {
       setDeviceTapToPayReady(false);
       setDeviceTapToPayMessage(null);
@@ -2425,6 +2433,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (pinGateRequired) return;
+    if (!isAndroidWebPosTill()) return;
+    if (!paymentConfig?.adyenConfigured || paymentConfig.tapToPayEnabled === false) return;
+    if (readWebPosTapToPaySetupDone()) return;
+    if (deviceTapToPayReady) {
+      markWebPosTapToPaySetupDone();
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tapToPaySetup') === '1' || params.get('tap_to_pay_setup') === '1') {
+      setTapToPaySetupOpen(true);
+      return;
+    }
+    if (!agentOk || !bridgeProbeComplete) return;
+    setTapToPaySetupOpen(true);
+  }, [
+    pinGateRequired,
+    paymentConfig?.adyenConfigured,
+    paymentConfig?.tapToPayEnabled,
+    deviceTapToPayReady,
+    agentOk,
+    bridgeProbeComplete,
+  ]);
 
   useEffect(() => {
     initWebPosLogging({
@@ -8372,8 +8405,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       toast.error(t('webPosTapToPaySignIn'));
       return;
     }
-    const apiBase =
-      (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+    const apiBase = resolveApiOriginForBridge();
     const clientId = `webpos-ttp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const abort = new AbortController();
     paymentAbortRef.current = abort;
@@ -10638,6 +10670,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           onClose={() => setOnboardingOpen(false)}
         />
       ) : null}
+
+      <WebPosTapToPaySetupModal
+        open={tapToPaySetupOpen}
+        adyenReady={paymentConfig?.adyenConfigured === true}
+        tapToPayEnabled={paymentConfig?.tapToPayEnabled !== false}
+        onClose={() => setTapToPaySetupOpen(false)}
+        onActivated={() => void refreshAgent()}
+      />
 
       <WebPosCustomerPicker
         open={customerOpen}

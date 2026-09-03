@@ -13,7 +13,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.R
-import com.rebornsense.printbridge.device.DeviceProfiler
+import com.rebornsense.printbridge.setup.OemSetupPreferences
 
 class SetupWizardActivity : AppCompatActivity() {
     private lateinit var steps: List<OemSetupStep>
@@ -172,8 +172,10 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.OPEN_BACKGROUND -> OemSettingsNavigator.openBackgroundActivitySettings(this)
             OemSetupAction.START_BRIDGE -> startBridgeAndPoll()
             OemSetupAction.INSTRUCTION_ONLY -> {
-                if (step.id == "tap_to_pay" || step.id == "done") {
-                    openWebPosSettings()
+                if (step.id == "tap_to_pay") {
+                    openWebPosTapToPaySetup()
+                } else if (step.id == "done") {
+                    openWebPos()
                 } else {
                     onNextAction()
                 }
@@ -187,7 +189,7 @@ class SetupWizardActivity : AppCompatActivity() {
             if (step.id == "done") {
                 openWebPos()
             } else {
-                openWebPosSettings()
+                openWebPosTapToPaySetup()
             }
             if (step.id == "done") {
                 finishWizard()
@@ -245,31 +247,44 @@ class SetupWizardActivity : AppCompatActivity() {
     }
 
     private fun openWebPos() {
+        val webPosUrl = resolveWebPosUrl()
         val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
             ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
         if (launch != null) {
+            launch.data = Uri.parse(webPosUrl)
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(launch)
             return
         }
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.rebornsense.com")).apply {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webPosUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }
 
-    private fun openWebPosSettings() {
-        val settingsUrl = "https://app.rebornsense.com/merchant/settings?tab=payments"
+    private fun openWebPosTapToPaySetup() {
+        openWebPosWithQuery("tapToPaySetup=1")
+    }
+
+    private fun openWebPosWithQuery(query: String) {
+        val base = resolveWebPosUrl()
+        val url = if (base.contains("?")) "$base&$query" else "$base?$query"
         val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
             ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
         if (launch != null) {
-            launch.data = Uri.parse(settingsUrl)
+            launch.data = Uri.parse(url)
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(launch)
             return
         }
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(settingsUrl)).apply {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
+    }
+
+    private fun resolveWebPosUrl(): String {
+        val stored = OemSetupPreferences.getWebPosOrigin(this)
+        val host = stored?.trimEnd('/') ?: "https://app.chaslay.com"
+        return "$host/merchant/pos"
     }
 
     private fun markCurrentStepDone() {

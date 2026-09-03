@@ -1724,7 +1724,7 @@ const en: Dict = {
   printBridgeDownloadHint:
     'Install Bridge Reborn once on your Android tablet (Sunmi D3 Mini, D2s Plus, Feitian F310A, or other). Run WebPOS in Chrome — Bridge Reborn handles printing and NFC tap-to-pay in the background via built-in, USB, Bluetooth, or Wi‑Fi printers. No second PC required.',
   printBridgeInstallSteps:
-    '1) Android Settings → Apps → Bridge Reborn → Uninstall. 2) Files / Downloads → delete every reborn-print-bridge*.apk. 3) Come back here and tap Install — Chrome must save a NEW file named reborn-print-bridge-0.3.9.apk. 4) Open that new file, then open the Bridge app. The green header must say v0.3.9. If it still says 0.2.3 you installed an old file from Downloads.',
+    '1) Android Settings → Apps → Bridge Reborn → Uninstall. 2) Files / Downloads → delete every reborn-print-bridge*.apk. 3) Come back here and tap Install — Chrome must save a NEW file named reborn-print-bridge-0.4.0.apk. 4) Open that new file, then open the Bridge app. The green header must say v0.4.0. If it still says 0.3.9 you installed an old file from Downloads.',
   printAgentInstallSteps:
     'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
   printAgentVersionStatusLabel: 'Print Agent',
@@ -3319,14 +3319,23 @@ const en: Dict = {
   tapToPayCheckNative: 'Chaslay POS app signed in online (native NFC)',
   tapToPayDeviceSetupTitle: 'Activate Tap to Pay on this tablet',
   tapToPayDeviceSetupHint:
-    'One-time setup registers this device with Adyen (same as swisspayoutpartner). Required before the first NFC card payment in WebPOS.',
+    'One-time setup registers this tablet with Adyen. On Android tablets, open WebPOS — the in-app guide activates Tap to Pay in one tap (no backend panel).',
   tapToPayDeviceActivate: 'Activate Tap to Pay on this device',
   tapToPayDeviceActivated: 'Tap to Pay activated on this tablet.',
   tapToPayDeviceActivateFailed: 'Tap to Pay activation failed.',
   tapToPayDeviceRegistered: 'This tablet is registered for Tap to Pay.',
   tapToPayDeviceNotRegistered: 'This tablet is not registered yet.',
   tapToPayDeviceBridgeOffline: 'Bridge Reborn is not running — open the Bridge app on this tablet first.',
-  tapToPayDeviceOpenBridge: 'Open Bridge Reborn from the app drawer, complete the setup wizard, then return here.',
+  tapToPayDeviceOpenBridge: 'Bridge Reborn must run in the background. Open WebPOS — it connects automatically when Bridge is ready.',
+  webPosTapToPaySetupTitle: 'Set up Tap to Pay on this tablet',
+  webPosTapToPaySetupBody:
+    'Take contactless card payments in WebPOS — no backend panel needed. Bridge Reborn handles NFC in the background.',
+  webPosTapToPaySetupStepBridge: 'Bridge Reborn is running on this tablet',
+  webPosTapToPaySetupStepSdk: 'Tap to Pay build installed (Adyen SDK)',
+  webPosTapToPaySetupStepSdkMissing:
+    'Update Bridge Reborn from Settings → Printing — install the latest APK (Tap to Pay build).',
+  webPosTapToPaySetupStepActivate: 'Activate Tap to Pay on this device (one tap below)',
+  webPosTapToPaySetupLater: 'Remind me later',
   adyenLiveRegion: 'Live region',
   currentKey: 'Current key',
   apiKeyHint: 'Leave blank to keep the existing key.',

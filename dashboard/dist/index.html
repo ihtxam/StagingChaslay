@@ -59,7 +59,10 @@
           window.addEventListener('beforeinstallprompt', suppressInstallPrompt, { capture: true });
         }
         try {
-          if (localStorage.getItem('reborn_pwa_installed') === '1') armInstallGuard();
+          if (
+            localStorage.getItem('reborn_pwa_installed') === '1' ||
+            localStorage.getItem('reborn_bridge_installed') === '1'
+          ) armInstallGuard();
         } catch (e) {}
         window.addEventListener('appinstalled', function () {
           try {
@@ -70,7 +73,11 @@
         });
         if (!standalone) {
           try {
-            if (localStorage.getItem('reborn_pwa_installed') === '1' && !/^\/kiosk(\/|$)/.test(location.pathname || '')) {
+            if (
+              (localStorage.getItem('reborn_pwa_installed') === '1' ||
+                localStorage.getItem('reborn_bridge_installed') === '1') &&
+              !/^\/kiosk(\/|$)/.test(location.pathname || '')
+            ) {
               var manifestLink = document.querySelector('link[rel="manifest"]');
               if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
             }
@@ -89,8 +96,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-BeN7ZCUn.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-D39DBit4.css">
+    <script type="module" crossorigin src="/assets/index-DrW1u139.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Crm74TUt.css">
   </head>
   <body>
     <div id="root">

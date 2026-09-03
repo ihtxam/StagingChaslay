@@ -39,6 +39,15 @@ class BridgeHttpServer(
         }
 
         return when {
+            uri == "/config" && method == Method.POST -> {
+                val body = readBody(session)
+                val origin = body.optString("webpos_origin", "").trim()
+                if (origin.startsWith("http")) {
+                    OemSetupPreferences.setWebPosOrigin(appContext, origin)
+                }
+                jsonResponse(JSONObject().put("ok", true))
+            }
+
             uri == "/health" && method == Method.GET -> {
                 registry.refresh(appContext)
                 val features = JSONArray()

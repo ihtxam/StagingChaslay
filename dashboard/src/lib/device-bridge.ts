@@ -5,6 +5,7 @@
  * always-on foreground service; WebPOS stays a normal PWA in Chrome.
  */
 
+import { resolveApiOriginForBridge } from '@/lib/api';
 import { PRINT_AGENT_URL } from '@/lib/print-agent';
 
 export type DeviceBridgeHealth = {
@@ -44,6 +45,20 @@ function bridgeUrl(path: string): string {
   return `${PRINT_AGENT_URL}${path}`;
 }
 
+/** Push WebPOS origin so Bridge setup wizard can reopen the correct site (staging vs prod). */
+export async function syncBridgeWebPosOrigin(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch(bridgeUrl('/config'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webpos_origin: window.location.origin }),
+    });
+  } catch {
+    /* bridge offline */
+  }
+}
+
 /** Extend /health with tap-to-pay capability flags from Device Bridge ≥ 0.3.0 */
 export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
   try {
@@ -72,7 +87,14 @@ export async function probeDeviceBridgeHealth(attempts = 5): Promise<DeviceBridg
   const tries = Math.max(1, attempts);
   for (let i = 0; i < tries; i++) {
     last = await getDeviceBridgeHealth();
-    if (last.ok) return last;
+    if (last.ok) {
+      try {
+        localStorage.setItem('reborn_bridge_installed', '1');
+      } catch {
+        /* ignore */
+      }
+      return last;
+    }
     if (i + 1 < tries) {
       await new Promise((r) => setTimeout(r, 400 * (i + 1)));
     }
@@ -149,11 +171,30 @@ export type TapToPayRegisterResult = {
   message?: string;
 };
 
+/** Session defaults for Bridge tap-to-pay (api origin + merchant JWT). */
+export function resolveBridgeTapToPayAuth(): { apiBaseUrl: string; authToken: string } | null {
+  if (typeof window === 'undefined') return null;
+  const authToken = String(localStorage.getItem('token') || '').trim();
+  if (!authToken) return null;
+  const apiBaseUrl = resolveApiOriginForBridge();
+  if (!apiBaseUrl) return null;
+  return { apiBaseUrl, authToken };
+}
+
 /** One-time Tap to Pay activation (Adyen warmUp + device registration). */
 export async function registerDeviceBridgeTapToPay(
-  request: { apiBaseUrl: string; authToken: string },
+  request?: { apiBaseUrl?: string; authToken?: string },
   options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<TapToPayRegisterResult> {
+  const defaults = resolveBridgeTapToPayAuth();
+  const apiBaseUrl = (request?.apiBaseUrl || defaults?.apiBaseUrl || '').trim();
+  const authToken = (request?.authToken || defaults?.authToken || '').trim();
+  if (!apiBaseUrl || !authToken) {
+    return {
+      ok: false,
+      message: 'Sign in to WebPOS on this tablet first, then try again.',
+    };
+  }
   const timeoutMs = options?.timeoutMs ?? 120_000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -165,8 +206,8 @@ export async function registerDeviceBridgeTapToPay(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        api_base_url: request.apiBaseUrl.replace(/\/$/, ''),
-        auth_token: request.authToken,
+        api_base_url: apiBaseUrl.replace(/\/$/, ''),
+        auth_token: authToken,
       }),
       signal: controller.signal,
     });

@@ -2,6 +2,8 @@ package com.rebornsense.printbridge
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.service.PrintBridgeService
@@ -23,7 +25,14 @@ object PrintBridgeLauncher {
     fun start(context: Context) {
         val appContext = context.applicationContext
         val intent = Intent(appContext, PrintBridgeService::class.java)
-        ContextCompat.startForegroundService(appContext, intent)
+        runCatching {
+            ContextCompat.startForegroundService(appContext, intent)
+        }.onFailure {
+            // Retry once — some OEMs reject FGS until notification permission is granted.
+            Handler(Looper.getMainLooper()).postDelayed({
+                runCatching { ContextCompat.startForegroundService(appContext, intent) }
+            }, 1500L)
+        }
     }
 
     /** Ask a running service to re-scan USB, Bluetooth, and LAN printers. */

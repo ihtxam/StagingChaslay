@@ -11,6 +11,7 @@ object OemSetupPreferences {
     private const val KEY_SETUP_VERSION_CODE = "setup_version_code"
     /** Detects reinstall when Android backup restores stale wizard prefs. */
     private const val KEY_FIRST_INSTALL_TIME = "first_install_time"
+    private const val KEY_WEBPOS_ORIGIN = "webpos_origin"
 
     /**
      * Clears wizard completion when the app was updated or reinstalled so merchants
@@ -83,6 +84,22 @@ object OemSetupPreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_TAP_TO_PAY_REGISTERED, registered)
+            .apply()
+    }
+
+    fun getWebPosOrigin(context: Context): String? {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_WEBPOS_ORIGIN, null)
+            ?.trim()
+            ?.takeIf { it.startsWith("http") }
+    }
+
+    fun setWebPosOrigin(context: Context, origin: String?) {
+        val trimmed = origin?.trim().orEmpty()
+        if (trimmed.isBlank() || !trimmed.startsWith("http")) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_WEBPOS_ORIGIN, trimmed.trimEnd('/'))
             .apply()
     }
 

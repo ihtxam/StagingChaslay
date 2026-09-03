@@ -2,6 +2,7 @@
  * Platform detection and download URLs for Print Agent (Windows) vs Bridge Reborn (Android).
  */
 
+import { resolveApiOriginForBridge } from '@/lib/api';
 import { compareAgentVersion, isBridgeVersion } from '@/lib/print-agent';
 
 const PRINT_AGENT_SETUP_FILE = 'reborn-print-agent-setup.exe';
@@ -20,7 +21,7 @@ export type DownloadManifest = {
 };
 
 function apiOrigin(): string {
-  return (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+  return resolveApiOriginForBridge();
 }
 
 export function isAndroidDevice(): boolean {

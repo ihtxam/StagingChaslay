@@ -14,7 +14,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
-            ACTION_QUICKBOOT_POWERON -> PrintBridgeLauncher.startIfEnabled(context)
+            ACTION_QUICKBOOT_POWERON -> PrintBridgeLauncher.start(context)
         }
     }
 

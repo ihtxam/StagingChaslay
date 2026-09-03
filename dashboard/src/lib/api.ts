@@ -29,6 +29,11 @@ export function resolveAbsoluteApiBaseUrl(): string {
   return base.replace(/\/$/, '');
 }
 
+/** Site origin for Bridge Reborn tap-to-pay (no /api suffix), e.g. https://app.chaslay.com */
+export function resolveApiOriginForBridge(): string {
+  return resolveAbsoluteApiBaseUrl().replace(/\/api\/?$/, '');
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {

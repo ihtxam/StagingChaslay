@@ -43,19 +43,9 @@ export default function TapToPayDeviceSetup({ adyenReady, tapToPayEnabled }: Pro
   const canActivate = adyenReady && tapToPayEnabled && bridgeOk && registered !== true;
 
   const activate = async () => {
-    const token = localStorage.getItem('token') || '';
-    if (!token.trim()) {
-      toast.error(t('webPosTapToPaySignIn'));
-      return;
-    }
-    const apiBase =
-      (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
     setBusy(true);
     try {
-      const result = await registerDeviceBridgeTapToPay({
-        apiBaseUrl: apiBase,
-        authToken: token,
-      });
+      const result = await registerDeviceBridgeTapToPay();
       if (result.ok) {
         toast.success(result.message || t('tapToPayDeviceActivated'));
         await refresh();

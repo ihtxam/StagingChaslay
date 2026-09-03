@@ -34,7 +34,7 @@ class AdyenTapToPayEngine : TapToPayEngine {
         !nfcAvailable(context) ->
             "This device has no NFC reader."
         !OemSetupPreferences.isTapToPayDeviceRegistered(context) ->
-            "Tap to Pay not activated on this device. In WebPOS go to Settings → Payments → Activate Tap to Pay."
+            "Tap to Pay not activated on this device. Open WebPOS — the setup guide will activate it in one tap."
         else -> "Ready — take a card payment in WebPOS to start Tap to Pay."
     }
 
