@@ -3128,6 +3128,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     quantity = 1,
     lineNote?: string
   ) => {
+    setSearch('');
     const price = roundMoney2(unitPrice);
     const qty = Math.max(1, Math.round(quantity));
     const sig = lineSignature(selectedExtras, comboSelections);
