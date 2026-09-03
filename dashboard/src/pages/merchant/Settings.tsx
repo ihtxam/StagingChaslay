@@ -92,9 +92,11 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
+import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import {
   buildSettingsSearchIndex,
   filterAccessibleSettingsSearch,
+  formatSettingsSearchSectionLabel,
   matchSettingsSearch,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
@@ -723,14 +725,20 @@ export default function Settings() {
   );
 
   const matchedSearch = useMemo(() => {
-    const raw = matchSettingsSearch(searchIndex, normalizedQuery);
-    return filterAccessibleSettingsSearch(raw, {
-      visibleTabIds,
-      canOpenTab: canOpenSettingsTab,
-      isSectionRendered: isSearchSectionRendered,
-    });
+    try {
+      const raw = matchSettingsSearch(searchIndex, settingsQuery || normalizedQuery);
+      return filterAccessibleSettingsSearch(raw, {
+        visibleTabIds,
+        canOpenTab: canOpenSettingsTab,
+        isSectionRendered: isSearchSectionRendered,
+      });
+    } catch (err) {
+      console.error('[settings-search]', err);
+      return [];
+    }
   }, [
     normalizedQuery,
+    settingsQuery,
     searchIndex,
     visibleTabIds,
     canOpenSettingsTab,
@@ -747,35 +755,40 @@ export default function Settings() {
   const searchNavigationKeyRef = useRef('');
 
   useEffect(() => {
-    if (!normalizedQuery) {
-      searchNavigationKeyRef.current = '';
-      setHighlightId(null);
-      return;
-    }
-    if (matchedSearch.length === 0) {
+    try {
+      if (!normalizedQuery) {
+        searchNavigationKeyRef.current = '';
+        setHighlightId(null);
+        return;
+      }
+      if (matchedSearch.length === 0) {
+        searchNavigationKeyRef.current = normalizedQuery;
+        setHighlightId(null);
+        return;
+      }
+      const best = pickSettingsSearchMatch(matchedSearch, contentTab);
+      if (!best) {
+        setHighlightId(null);
+        return;
+      }
+      const shouldSwitchTab =
+        searchNavigationKeyRef.current !== normalizedQuery || tab !== best.tab;
       searchNavigationKeyRef.current = normalizedQuery;
+      setHighlightId(best.id);
+      if (shouldSwitchTab && tab !== best.tab) {
+        selectTab(best.tab);
+      }
+      const timer = window.setTimeout(
+        () => {
+          document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        shouldSwitchTab && tab !== best.tab ? 120 : 80
+      );
+      return () => window.clearTimeout(timer);
+    } catch (err) {
+      console.error('[settings-search]', err);
       setHighlightId(null);
-      return;
     }
-    const best = pickSettingsSearchMatch(matchedSearch, contentTab);
-    if (!best) {
-      setHighlightId(null);
-      return;
-    }
-    const shouldSwitchTab =
-      searchNavigationKeyRef.current !== normalizedQuery || tab !== best.tab;
-    searchNavigationKeyRef.current = normalizedQuery;
-    setHighlightId(best.id);
-    if (shouldSwitchTab && tab !== best.tab) {
-      selectTab(best.tab);
-    }
-    const timer = window.setTimeout(
-      () => {
-        document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      },
-      shouldSwitchTab && tab !== best.tab ? 120 : 80
-    );
-    return () => window.clearTimeout(timer);
   }, [normalizedQuery, matchedSearch, contentTab, tab, selectTab]);
 
   const isSectionHighlight = (id: string) => highlightId === id;
@@ -1484,19 +1497,20 @@ export default function Settings() {
       {normalizedQuery ? (
         <p className="text-xs muted">
           {matchedSearch.length
-            ? t('settingsSearchMatches').replace('{count}', String(matchedSearch.length))
+            ? String(t('settingsSearchMatches') ?? '').replace('{count}', String(matchedSearch.length))
             : t('settingsSearchNoMatches')}
         </p>
       ) : null}
+      <SettingsSearchErrorBoundary
+        resetKey={settingsQuery}
+        fallbackText={t('settingsSearchNoMatches')}
+      >
       {normalizedQuery && matchedSearch.length > 0 ? (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3">
           <ul className="flex flex-col gap-1" role="listbox" aria-label={t('settingsSearch')}>
             {matchedSearch.map((entry) => {
               const tabMeta = visibleTabs.find((item) => item.id === entry.tab);
-              const sectionLabel = entry.id
-                .split('-')
-                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-                .join(' ');
+              const sectionLabel = formatSettingsSearchSectionLabel(entry.id);
               return (
                 <li key={entry.id}>
                   <button
@@ -1539,8 +1553,12 @@ export default function Settings() {
               {visibleTabs.map((item) => {
                 const Icon = item.icon;
                 const active = contentTab === item.id;
-                const searchHit = normalizedQuery ? matchedTabs.has(item.id) : false;
-                const searchMiss = normalizedQuery ? !searchHit : false;
+                const searchHit =
+                  normalizedQuery && matchedSearch.length > 0
+                    ? matchedTabs.has(item.id)
+                    : false;
+                const searchMiss =
+                  normalizedQuery && matchedSearch.length > 0 ? !searchHit : false;
                 const navText = item.navLabel ?? item.label;
                 return (
                   <button
@@ -4920,6 +4938,7 @@ export default function Settings() {
           </div>
         </div>
       </div>
+      </SettingsSearchErrorBoundary>
       <p className="text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
   );

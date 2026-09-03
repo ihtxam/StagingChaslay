@@ -3,12 +3,14 @@ import test from 'node:test';
 import {
   buildSettingsSearchIndex,
   filterAccessibleSettingsSearch,
+  formatSettingsSearchSectionLabel,
   hasSettingsSearchMatchesOnTab,
   matchSettingsSearch,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
   resolveSettingsContentTab,
   shouldDimSettingsSectionDuringSearch,
+  tokenizeSettingsSearchQuery,
   type SettingsSearchContext,
 } from './settingsSearch.ts';
 
@@ -50,10 +52,50 @@ test('normalizeSettingsSearchQuery trims and lowercases', () => {
   assert.equal(normalizeSettingsSearchQuery('  Express  '), 'express');
 });
 
-test('matchSettingsSearch finds express checkout on pos tab', () => {
+test('tokenizeSettingsSearchQuery drops empty second word and trailing space', () => {
+  assert.deepEqual(tokenizeSettingsSearchQuery('express '), ['express']);
+  assert.deepEqual(tokenizeSettingsSearchQuery('express  '), ['express']);
+  assert.deepEqual(tokenizeSettingsSearchQuery('kitchen printer'), ['kitchen', 'printer']);
+  assert.deepEqual(tokenizeSettingsSearchQuery('  kitchen   printer  '), ['kitchen', 'printer']);
+  assert.deepEqual(tokenizeSettingsSearchQuery('   '), []);
+});
+
+test('matchSettingsSearch two words matches across separate keywords (not phrase-only)', () => {
   const index = buildSettingsSearchIndex(t);
-  const matches = matchSettingsSearch(index, 'express');
-  assert.ok(matches.some((entry) => entry.id === 'pos-checkout' && entry.tab === 'pos'));
+  const matches = matchSettingsSearch(index, 'kitchen printer');
+  assert.ok(matches.some((entry) => entry.id === 'receipt-print'));
+});
+
+test('matchSettingsSearch trailing space and empty second token still returns first-word hits', () => {
+  const index = buildSettingsSearchIndex(t);
+  const withSpace = matchSettingsSearch(index, 'express ');
+  const emptySecond = matchSettingsSearch(index, 'express  checkout'.replace('checkout', ''));
+  assert.ok(withSpace.some((entry) => entry.id === 'pos-checkout'));
+  assert.ok(emptySecond.some((entry) => entry.id === 'pos-checkout'));
+  assert.deepEqual(
+    matchSettingsSearch(index, 'express ').map((e) => e.id).sort(),
+    matchSettingsSearch(index, 'express').map((e) => e.id).sort()
+  );
+});
+
+test('matchSettingsSearch whitespace-only never matches all sections ([] .every trap)', () => {
+  const index = buildSettingsSearchIndex(t);
+  assert.equal(matchSettingsSearch(index, '   ').length, 0);
+  assert.equal(matchSettingsSearch(index, '\t').length, 0);
+});
+
+test('matchSettingsSearch never throws on regex-like or incomplete tokens', () => {
+  const index = buildSettingsSearchIndex(t);
+  for (const query of ['foo (', 'foo [', '*', '.*', 'express|', '(express', 'kitchen printer', 'a b']) {
+    assert.doesNotThrow(() => matchSettingsSearch(index, query));
+  }
+  assert.ok(Array.isArray(matchSettingsSearch(null as unknown as [], 'two words')));
+});
+
+test('formatSettingsSearchSectionLabel handles empty and dashed ids', () => {
+  assert.equal(formatSettingsSearchSectionLabel('pos-checkout'), 'Pos Checkout');
+  assert.equal(formatSettingsSearchSectionLabel(''), 'Setting');
+  assert.equal(formatSettingsSearchSectionLabel(null), 'Setting');
 });
 
 test('filterAccessibleSettingsSearch drops hidden tables sections', () => {

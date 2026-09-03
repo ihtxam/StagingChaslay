@@ -30,23 +30,65 @@ export type SettingsSearchContext = {
   isSectionRendered: (id: string) => boolean;
 };
 
+/**
+ * Split a settings search box value into tokens.
+ * Empty tokens from a trailing space / double space ("foo ", "foo  bar")
+ * are dropped — [].every() is true in JS and would otherwise match every section.
+ */
+export function tokenizeSettingsSearchQuery(query: string): string[] {
+  return String(query ?? '')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
 export function normalizeSettingsSearchQuery(query: string): string {
-  return query.trim().toLowerCase();
+  return tokenizeSettingsSearchQuery(query).join(' ');
 }
 
 export function keywordMatchesSettingsQuery(keyword: string, normalizedQuery: string): boolean {
-  if (!normalizedQuery) return false;
-  return String(keyword ?? '').toLowerCase().includes(normalizedQuery);
+  const tokens = tokenizeSettingsSearchQuery(normalizedQuery);
+  if (!tokens.length) return false;
+  const haystack = String(keyword ?? '').toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function entrySearchHaystack(entry: SettingsSearchEntry | null | undefined): string {
+  const keywords = Array.isArray(entry?.keywords) ? entry.keywords : [];
+  return keywords.map((keyword) => String(keyword ?? '').toLowerCase()).join(' ');
+}
+
+/** All tokens must appear in the entry (across keywords). Phrase-only includes() failed on the second word. */
+export function entryMatchesSettingsTokens(
+  entry: SettingsSearchEntry | null | undefined,
+  tokens: string[]
+): boolean {
+  if (!entry || !tokens.length) return false;
+  const haystack = entrySearchHaystack(entry);
+  return tokens.every((token) => haystack.includes(token));
+}
+
+export function formatSettingsSearchSectionLabel(id: string | undefined | null): string {
+  const parts = String(id ?? '')
+    .split(/[-_]+/)
+    .filter((part) => part.length > 0);
+  if (!parts.length) return 'Setting';
+  return parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
 export function matchSettingsSearch(
   index: SettingsSearchEntry[],
-  normalizedQuery: string
+  query: string
 ): SettingsSearchEntry[] {
-  if (!normalizedQuery) return [];
-  return index.filter((entry) =>
-    entry.keywords.some((keyword) => keywordMatchesSettingsQuery(keyword, normalizedQuery))
-  );
+  try {
+    const tokens = tokenizeSettingsSearchQuery(query);
+    if (!tokens.length) return [];
+    const list = Array.isArray(index) ? index : [];
+    return list.filter((entry) => entryMatchesSettingsTokens(entry, tokens));
+  } catch {
+    return [];
+  }
 }
 
 export function filterAccessibleSettingsSearch(
