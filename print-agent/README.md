@@ -25,7 +25,7 @@ Older `chaslayreborn-*` download links redirect here. Setup migrates settings fr
 USB scales (CH340) and Bluetooth COM printers often get a **new COM number** after each plug-in or Windows restart.
 
 - **Scale:** Settings ? Print ? Scan scale lists the manufacturer/model (for example `USB-SERIAL CH340 (COM7)`). That name is saved. On the next sale the agent finds the current COM port from the name.
-- **Printer:** Pick the Windows printer by its real name. Bluetooth / virtual-COM (SPP) queues are paced automatically so multi-item kitchen tickets do not overflow the radio buffer.
+- **Printer:** Pick the Windows printer by its real name. Bluetooth / virtual-COM (SPP) queues are paced automatically so multi-item kitchen tickets do not overflow the radio buffer. USB ESC/POS (USB001 / USBPRINT) is unpaced — Print Agent 1.10.3+ returns as soon as WritePrinter finishes instead of sleeping ~4–5s (`drainMs` + cut trailer) that used to apply to any queue named thermal/receipt/xprinter.
 
 Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen tickets stay paced and cut.
 

@@ -4,10 +4,9 @@
 #   {"cmd":"ping"}
 # Replies with one JSON line per request.
 #
-# v1.9.6: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Bluetooth / virtual-COM ports are paced; FlushPrinter is skipped for all paced
-# writes (often reports success with 0 bytes) and WritePrinter uses smaller chunks.
-# One feed+cut trailer after drain (matches escposKitchenCut); advertises bt-cut-trailer.
+# v1.10.3: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Pace BT / virtual-COM only. USB is unpaced 4KB WritePrinter (no drain/cut sleeps).
+# Those sleeps were ~4–5s of HTTP /print wait when USB thermal names were paced.
 
 $ErrorActionPreference = "Stop"
 
@@ -102,17 +101,13 @@ function Get-WinPrinterPortName {
 
 function Test-NeedsPacedWrite {
     param([string]$Port, [string]$Printer, [int]$ByteCount = 0)
-    $blob = ("{0} {1}" -f $Port, $Printer).ToLowerInvariant()
+    $port = ($Port + '').ToLowerInvariant()
+    $name = ($Printer + '').ToLowerInvariant()
+    $blob = ("{0} {1}" -f $port, $name)
+    if ($port -match 'usb\d+|usb00|usbprint|dot4|lpt') {
+        return $false
+    }
     if ($blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|bluetoothprinter|bt_') {
-        return $true
-    }
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b') {
-        return $true
-    }
-    if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|pos-?80c|r80a?|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
-        return $true
-    }
-    if ($ByteCount -ge 1800) {
         return $true
     }
     return $false
@@ -281,6 +276,7 @@ function Send-RawToPrinter {
             }
             [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay -ComSerialPort:$isComPort)
             if ($paced) {
+                # BT/COM only — see win-raw-print.ps1 for the USB 4–5s drainMs breakdown.
                 $drainMs = [Math]::Min(1200 + [int]([Math]::Floor($body.Length / 6)), 10000)
                 if ($isComPort) { $drainMs += 200 }
                 Start-Sleep -Milliseconds $drainMs

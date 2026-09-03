@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.2";
+const VERSION = "1.10.3";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.2 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.3 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -31,6 +31,7 @@ test("print-agent version is 1.10.2 in package.json, server.js, and download man
   assert.match(server, /com-serial-write-fallback/);
   assert.match(server, /ensurePrintWorker/);
   assert.match(server, /bt-cut-trailer/);
+  assert.match(server, /usb-unpaced-raw/);
   assert.match(server, /printViaWorker/);
   assert.match(server, /enqueuePrint/);
   assert.match(server, /timeout: 180000/);
@@ -65,6 +66,9 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
+  assert.match(src, /usb\\d\+\|usb00\|usbprint/);
+  assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /xprinter\|gprinter/);
+  assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);
   assert.equal(/ChunkSize\s*=\s*64/.test(src), false);
   assert.equal(/ChunkSize\s*=\s*128/.test(src), false);
   assert.match(src, /Send-RawToPrinter -Printer \$PrinterName -Data \$bytes/);
@@ -95,6 +99,9 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
   assert.match(src, /Start-Sleep -Milliseconds \$drainMs/);
+  assert.match(src, /usb\\d\+\|usb00\|usbprint/);
+  assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /xprinter\|gprinter/);
+  assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);
 });
 
 test("server.js does not copy or invoke COM-direct / BT slow-mode", () => {

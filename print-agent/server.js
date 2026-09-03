@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.2";
+const VERSION = "1.10.3";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1373,6 +1373,7 @@ function startServer() {
         "niimbot-diagnostics",
         "niimbot-test-pattern",
         "bt-cut-trailer",
+        "usb-unpaced-raw",
       ],
     });
   });
