@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   buildSettingsSearchIndex,
@@ -53,6 +56,18 @@ function openContext(overrides: Partial<SettingsSearchContext> = {}): SettingsSe
     ...overrides,
   };
 }
+
+test('Settings.tsx imports PosPostsSection before any JSX use (no bare identifier / TDZ)', () => {
+  const settingsPath = join(dirname(fileURLToPath(import.meta.url)), '../Settings.tsx');
+  const src = readFileSync(settingsPath, 'utf8');
+  const importIdx = src.indexOf("import PosPostsSection from '@/components/settings/PosPostsSection'");
+  const blockIdx = src.indexOf('function SettingsPosPostsBlock');
+  const jsxIdx = src.search(/<PosPostsSection[\s>]/);
+  assert.ok(importIdx >= 0, 'PosPostsSection must be imported in Settings.tsx');
+  assert.ok(blockIdx > importIdx, 'SettingsPosPostsBlock must be declared after the import');
+  assert.ok(jsxIdx > blockIdx, 'PosPostsSection JSX must be inside SettingsPosPostsBlock after its declaration');
+  assert.equal(src.includes('<PosPostsSection'), true);
+});
 
 test('normalizeSettingsSearchQuery trims and lowercases', () => {
   assert.equal(normalizeSettingsSearchQuery('  Express  '), 'express');

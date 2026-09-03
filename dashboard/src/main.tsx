@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import './index.css'
@@ -56,7 +57,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     </ThemeProvider>
   </React.StrictMode>,
 )

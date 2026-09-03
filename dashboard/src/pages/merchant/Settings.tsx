@@ -28,6 +28,7 @@ import {
   Copy,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
+import PosPostsSection from '@/components/settings/PosPostsSection';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
@@ -443,6 +444,33 @@ function Section({
         </SettingsReportCard>
       </SettingsSearchErrorBoundary>
     </div>
+  );
+}
+
+/** Child so a PosPostsSection render throw is inside Section's error boundary, not Settings itself. */
+function SettingsPosPostsBlock({
+  hint,
+  maxPosPosts,
+  maxWaiterPosts,
+}: {
+  hint: string;
+  maxPosPosts: number;
+  maxWaiterPosts: number;
+}) {
+  if (typeof PosPostsSection !== 'function') {
+    return (
+      <p role="alert" className="text-sm text-red-700">
+        POS posts are unavailable.
+      </p>
+    );
+  }
+  return (
+    <PosPostsSection
+      readOnly
+      hint={hint}
+      maxPosPosts={maxPosPosts}
+      maxWaiterPosts={maxWaiterPosts}
+    />
   );
 }
 
@@ -2017,6 +2045,10 @@ export default function Settings() {
           )}
 
           {tab === 'pos' && (
+            <SettingsSearchErrorBoundary
+              resetKey={`pos-tab:${normalizedQuery}`}
+              fallbackText={t('settingsPosSectionFailed')}
+            >
             <form
               onSubmit={onSave}
               className="min-h-[20rem] space-y-5"
@@ -2350,8 +2382,7 @@ export default function Settings() {
                 description={t('posPostsAgencyHint')}
                 highlight={isSectionHighlight('pos-posts')}
               >
-                <PosPostsSection
-                  readOnly
+                <SettingsPosPostsBlock
                   hint={t('posPostsAgencyHint')}
                   maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
                   maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
@@ -2666,6 +2697,7 @@ export default function Settings() {
 
               <SettingsSaveBar saving={saving} />
             </form>
+            </SettingsSearchErrorBoundary>
           )}
 
           {tab === 'payments' && (

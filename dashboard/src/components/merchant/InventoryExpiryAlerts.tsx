@@ -41,7 +41,7 @@ export default function InventoryExpiryAlerts() {
       const res = await api.get('/merchant/inventory/expiring-soon', {
         validateStatus: (status) => status < 500,
       });
-      if (res.status === 404 || res.status === 403) {
+      if (res.status === 404 || res.status === 403 || res.status === 400 || res.status === 401) {
         disabledRef.current = true;
         return;
       }

@@ -34,6 +34,7 @@ import Offers from './Offers';
 import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
+import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
 import Billing from './Billing';
@@ -1260,7 +1261,12 @@ function MerchantShell() {
               path="settings"
               element={
                 <PanelRouteGuard path="/merchant/settings" allow={allow}>
-                  <Settings />
+                  <SettingsSearchErrorBoundary
+                    resetKey="merchant-settings"
+                    fallbackText={t('settingsSearchOpenFailed')}
+                  >
+                    <Settings />
+                  </SettingsSearchErrorBoundary>
                 </PanelRouteGuard>
               }
             />
