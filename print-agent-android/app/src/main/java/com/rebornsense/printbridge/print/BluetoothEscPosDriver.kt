@@ -78,6 +78,11 @@ class BluetoothEscPosDriver : PrinterDriver {
      * after the body drains — avoids 3–4 visible cuts on Chinese clones.
      */
     private fun transmitBluetoothJob(socket: BluetoothSocket, data: ByteArray) {
+        if (NiimbotPrintClient.isNiimbotPayload(data)) {
+            writePaced(socket, data, chunkSize = 96, delayMs = 40)
+            Thread.sleep(400)
+            return
+        }
         val (body, _) = splitCutSuffix(data)
         if (body.isNotEmpty()) {
             writePaced(socket, body, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)

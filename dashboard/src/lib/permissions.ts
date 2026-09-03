@@ -472,6 +472,22 @@ export function isPosFloorPath(pathname: string): boolean {
   return path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/');
 }
 
+/** KüBBan setup pill + WebPOS first-run tour — managers/owners only (not cashiers). */
+export function canSeeMerchantOnboarding(opts: {
+  jwtPermissions: Permission[] | undefined;
+  jwtIsOwner: boolean;
+  authRole?: string | null;
+  pinSession: WebPosStaffSession | null;
+}): boolean {
+  if (opts.pinSession) {
+    return hasPermission(opts.pinSession.permissions, 'ACCESS_PANEL', false);
+  }
+  const ownerEffective = opts.jwtIsOwner && opts.authRole !== 'staff';
+  return (
+    ownerEffective || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false)
+  );
+}
+
 /** JWT user may open the merchant back office (owner or panel staff). */
 export function jwtHasPanelAccess(
   jwtPermissions: Permission[] | undefined,

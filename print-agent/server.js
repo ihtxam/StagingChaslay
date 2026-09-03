@@ -19,9 +19,10 @@ const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
+const { printNiimbotLabel } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.6";
+const VERSION = "1.9.7";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1214,7 +1215,7 @@ function startServer() {
         "cloud-relay",
         "bt-com-paced-spooler",
         "com-serial-write-fallback",
-        "warm-print-worker",
+        "niimbot-label",
         "bt-cut-trailer",
       ],
     });
@@ -1278,6 +1279,40 @@ function startServer() {
     } catch (error) {
       const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
       console.error("[print-agent] print failed:", payload.error);
+      res.status(500).json(payload);
+    }
+  });
+
+  /** POST /print/niimbot-label — Niimbot K3/B21/D11 (bitmap protocol, not ESC/POS). */
+  app.post("/print/niimbot-label", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const bitmapBase64 = String(body.bitmapBase64 || "").trim();
+      const widthPx = Number(body.widthPx);
+      const heightPx = Number(body.heightPx);
+      if (!bitmapBase64 || !widthPx || !heightPx) {
+        res.status(400).json({ ok: false, error: "bitmapBase64, widthPx, and heightPx are required" });
+        return;
+      }
+      const printerName = String(body.printerName || "").trim();
+      const portName = String(body.portName || "").trim();
+      const usedPrinter = await enqueuePrint(() =>
+        printNiimbotLabel({
+          printerName,
+          portName: portName || printerName,
+          bitmapBase64,
+          widthPx,
+          heightPx,
+          density: body.density,
+          printRawFn: async ({ printerName: name, dataBase64 }) => {
+            await printRaw({ printerName: name, dataBase64 });
+          },
+        })
+      );
+      res.json({ ok: true, printer: usedPrinter });
+    } catch (error) {
+      const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
+      console.error("[print-agent] niimbot label failed:", payload.error);
       res.status(500).json(payload);
     }
   });

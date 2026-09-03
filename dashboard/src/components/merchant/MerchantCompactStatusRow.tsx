@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -9,6 +9,12 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 import { useAuthStore } from '@/store/auth';
+import {
+  WEBPOS_STAFF_SESSION_EVENT,
+  canSeeMerchantOnboarding,
+  loadWebPosStaffSession,
+  type Permission,
+} from '@/lib/permissions';
 
 interface MerchantCompactStatusRowProps {
   onMenuClick?: () => void;
@@ -32,12 +38,35 @@ export default function MerchantCompactStatusRow({
   const user = useAuthStore((s) => s.user);
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const [pinSession, setPinSession] = useState(() => loadWebPosStaffSession());
+  const showMerchantOnboarding = useMemo(
+    () =>
+      canSeeMerchantOnboarding({
+        jwtPermissions: user?.permissions as Permission[] | undefined,
+        jwtIsOwner,
+        authRole: user?.role,
+        pinSession,
+      }),
+    [user?.permissions, user?.role, jwtIsOwner, pinSession]
+  );
   const platformUi = usePlatformMessagesUi();
   const { theme, toggleTheme } = useTheme();
 
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
+
+  useEffect(() => {
+    const syncPin = () => setPinSession(loadWebPosStaffSession());
+    syncPin();
+    window.addEventListener('storage', syncPin);
+    window.addEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
+    return () => {
+      window.removeEventListener('storage', syncPin);
+      window.removeEventListener(WEBPOS_STAFF_SESSION_EVENT, syncPin);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +192,7 @@ export default function MerchantCompactStatusRow({
         return <BellSlot />;
       })() : null}
 
-      <MerchantOnboarding />
+      <MerchantOnboarding enabled={showMerchantOnboarding} />
 
       {showAcceptingMenu ? <AcceptingMenu /> : null}
     </div>

@@ -3466,7 +3466,7 @@ const en: Dict = {
   cmsOrderOnline: 'Order online',
   printRoleLabels: 'Labels',
   barcodeLabelsTitle: 'Barcode labels',
-  barcodeLabelsHint: 'Default size and fields for Code128 product labels. Assign a Labels printer role under printer profiles.',
+  barcodeLabelsHint: 'Default size and fields for Code128 product labels. Assign a Labels printer role under printer profiles. Niimbot K3/B21 printers are detected by name and use the Niimbot protocol (not ESC/POS).',
   barcodeLabelWidth: 'Label width',
   barcodeLabelHeight: 'Label height',
   barcodeShowStore: 'Store name',

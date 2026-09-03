@@ -2,6 +2,11 @@ import JsBarcode from 'jsbarcode';
 import { concatBytes, escposCode128 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
+import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
+import {
+  labelPrinterUsesNiimbot,
+  renderNiimbotLabelPng,
+} from '@/lib/niimbot-label';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 export type LabelHeightMm = 20 | 25 | 30 | 40;
@@ -133,6 +138,28 @@ export async function printLabelsViaAgentOrQueue(
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
   if (!printable.length) throw new Error('No barcodes to print');
 
+  const labelsPrinters = printersForRole(settings || null, 'labels');
+  const labelProfile = labelsPrinters[0];
+  const printerName = labelProfile?.name;
+  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
+  const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
+
+  if (useNiimbot) {
+    for (const product of printable) {
+      for (let c = 0; c < o.copies; c++) {
+        const rendered = await renderNiimbotLabelPng(product, o);
+        await printNiimbotLabelViaAgent({
+          printerName,
+          portName,
+          bitmapBase64: rendered.bitmapBase64,
+          widthPx: rendered.widthPx,
+          heightPx: rendered.heightPx,
+        });
+      }
+    }
+    return 'local';
+  }
+
   const chunks: Uint8Array[] = [];
   for (const product of printable) {
     for (let c = 0; c < o.copies; c++) {
@@ -140,8 +167,6 @@ export async function printLabelsViaAgentOrQueue(
     }
   }
   const data = concatBytes(...chunks);
-  const labelsPrinters = printersForRole(settings || null, 'labels');
-  const printerName = labelsPrinters[0]?.name;
   try {
     return await printViaAgentOrQueue({
       dataBase64: toBase64(data),

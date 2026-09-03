@@ -3,6 +3,7 @@ package com.rebornsense.printbridge.http
 import android.content.Context
 import com.rebornsense.printbridge.BuildConfig
 import com.rebornsense.printbridge.device.DeviceProfiler
+import com.rebornsense.printbridge.print.NiimbotPrintClient
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
 import com.rebornsense.printbridge.payment.PaymentCoordinator
@@ -50,6 +51,7 @@ class BridgeHttpServer(
                     features.put("bt-cut-trailer")
                 }
                 if (registry.list().any { it.connectionType == "lan" }) features.put("lan")
+                features.put("niimbot-label")
 
                 val engine = TapToPayEngines.current()
                 val nfcAvailable = appContext.hasNfcFeature()
@@ -97,6 +99,51 @@ class BridgeHttpServer(
                 val arr = JSONArray()
                 printers.forEach { arr.put(it) }
                 jsonResponse(JSONObject().put("printers", arr))
+            }
+
+            uri == "/print/niimbot-label" && method == Method.POST -> {
+                val body = readBody(session)
+                val printerName = body.optString("printerName", "")
+                val bitmapBase64 = body.optString("bitmapBase64", "")
+                val widthPx = body.optInt("widthPx", 0)
+                val heightPx = body.optInt("heightPx", 0)
+                val density = body.optInt("density", 3)
+                if (bitmapBase64.isBlank() || widthPx <= 0 || heightPx <= 0) {
+                    return jsonResponse(
+                        JSONObject().put("ok", false).put("error", "bitmapBase64, widthPx, heightPx required"),
+                        Response.Status.BAD_REQUEST
+                    )
+                }
+                val endpoint = registry.findByName(printerName)
+                    ?: return jsonResponse(
+                        JSONObject().put("ok", false).put("error", "No printer available"),
+                        Response.Status.BAD_REQUEST
+                    )
+                val bytes = try {
+                    PrintJobQueue.decodeBase64(bitmapBase64)
+                } catch (e: Exception) {
+                    return jsonResponse(
+                        JSONObject().put("ok", false).put("error", "Invalid base64"),
+                        Response.Status.BAD_REQUEST
+                    )
+                }
+                val result = NiimbotPrintClient.print(
+                    appContext,
+                    endpoint,
+                    registry,
+                    bytes,
+                    widthPx,
+                    heightPx,
+                    density,
+                )
+                if (result.isSuccess) {
+                    jsonResponse(JSONObject().put("ok", true).put("printer", endpoint.name))
+                } else {
+                    jsonResponse(
+                        JSONObject().put("ok", false).put("error", result.exceptionOrNull()?.message ?: "Niimbot print failed"),
+                        Response.Status.INTERNAL_ERROR
+                    )
+                }
             }
 
             uri == "/print" && method == Method.POST -> {
