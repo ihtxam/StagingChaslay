@@ -190,9 +190,13 @@ export default function OrderingPage() {
         setAllCategoriesOpen(true);
 
         try {
-          const z = await axios.get(`/api/shop/${shopKey}/delivery-zones`);
-          const raw = z.data?.data ?? z.data?.zones ?? z.data;
-          setDeliveryZones(Array.isArray(raw) ? raw : []);
+          if (data.deliveryMode !== 'zipcode') {
+            const z = await axios.get(`/api/shop/${shopKey}/delivery-zones`);
+            const raw = z.data?.data ?? z.data?.zones ?? z.data;
+            setDeliveryZones(Array.isArray(raw) ? raw : []);
+          } else {
+            setDeliveryZones([]);
+          }
         } catch {
           setDeliveryZones([]);
         }

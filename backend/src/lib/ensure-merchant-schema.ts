@@ -93,6 +93,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cart_layout varchar(20) NOT NULL DEFAULT 'hidden_slide'",
   delivery_menu_markup:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_menu_markup numeric(10,2) DEFAULT 0",
+  delivery_mode:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_mode varchar(20) NOT NULL DEFAULT 'zones'",
   min_pre_order_delay_minutes:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
   category_pricing_enabled:
@@ -492,6 +494,22 @@ const TABLE_PATCHES: string[] = [
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS delivery_driver_shifts_merchant_staff_idx ON delivery_driver_shifts (merchant_id, staff_id, started_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS delivery_zip_rules (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    zip_code varchar(20),
+    zip_from varchar(20),
+    zip_to varchar(20),
+    min_order_amount numeric(10,2) NOT NULL DEFAULT 0,
+    delivery_fee numeric(10,2) NOT NULL DEFAULT 0,
+    estimated_minutes integer DEFAULT 45,
+    is_active boolean NOT NULL DEFAULT true,
+    sort_order integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS delivery_zip_rules_merchant_id_idx ON delivery_zip_rules (merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,

@@ -6,9 +6,9 @@ import {
   getDisplayHoursNow,
   isChannelOpenNow,
   isWithinChannelHours,
-  pointInPolygon,
   type StoreHours,
 } from "@/lib/geo";
+import { findMatchingDeliveryRule, normalizeDeliveryMode } from "@/lib/delivery-match";
 import { roundMoney2, roundTo005, roundingAdjustment } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { ShopCustomerService } from "@/services/shop-customer.service";
@@ -555,27 +555,13 @@ function mapChannelKey(channel: FulfillmentChannel): "takeaway" | "dine_in" | "d
   return channel === "dine_in" ? "dine_in" : channel === "delivery" ? "delivery" : "takeaway";
 }
 
-async function findMatchingZone(merchantId: string, lng?: number, lat?: number, zip?: string) {
-  const db = getDb();
-  const zones = await db.query.deliveryZones.findMany({
-    where: and(eq(schema.deliveryZones.merchantId, merchantId), eq(schema.deliveryZones.isActive, true)),
-    orderBy: [asc(schema.deliveryZones.sortOrder)],
-  });
-
-  if (lng != null && lat != null && Number.isFinite(lng) && Number.isFinite(lat)) {
-    const hit = zones.find((z) => pointInPolygon(lng, lat, (z.polygon || []) as Array<[number, number]>));
-    if (hit) return hit;
-  }
-
-  if (zip) {
-    const normalized = String(zip).trim().toLowerCase();
-    const hit = zones.find((z) =>
-      (z.zipCodes || []).some((c) => String(c).trim().toLowerCase() === normalized)
-    );
-    if (hit) return hit;
-  }
-
-  return null;
+async function findMatchingZone(
+  merchant: Pick<typeof schema.merchants.$inferSelect, "id" | "deliveryMode">,
+  lng?: number,
+  lat?: number,
+  zip?: string
+) {
+  return findMatchingDeliveryRule(merchant.id, merchant.deliveryMode, lng, lat, zip);
 }
 
 /**
@@ -707,6 +693,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
         vacation: vacationPublicPayload(merchant.vacationSettings),
+        deliveryMode: normalizeDeliveryMode(merchant.deliveryMode),
         /** Merchant panel language — used as shop default when customer has no preference */
         language: merchant.shopLanguage || merchant.panelLanguage || "en",
       },
@@ -1381,14 +1368,18 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
     const zipCode = req.body.zipCode ? String(req.body.zipCode) : undefined;
     const subtotal = Number(req.body.subtotal || 0);
 
-    const zone = await findMatchingZone(merchant.id, lng, lat, zipCode);
+    const zone = await findMatchingZone(merchant, lng, lat, zipCode);
     if (!zone) {
+      const outsideMessage =
+        normalizeDeliveryMode(merchant.deliveryMode) === "zipcode"
+          ? "Delivery is not available for this ZIP code"
+          : "Address is outside delivery zones";
       return res.json({
         success: true,
         deliverable: false,
         open: hours.open,
         todayLabel: hours.todayLabel,
-        error: "Address is outside delivery zones",
+        error: outsideMessage,
       });
     }
 
@@ -2382,13 +2373,17 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let deliveryZoneId: string | undefined;
     if (channel === "delivery") {
       const zone = await findMatchingZone(
-        merchant.id,
+        merchant,
         lng != null ? Number(lng) : undefined,
         lat != null ? Number(lat) : undefined,
         zipCode
       );
       if (!zone) {
-        return res.status(400).json({ error: "Address is outside delivery zones" });
+        const outsideMessage =
+          normalizeDeliveryMode(merchant.deliveryMode) === "zipcode"
+            ? "Delivery is not available for this ZIP code"
+            : "Address is outside delivery zones";
+        return res.status(400).json({ error: outsideMessage });
       }
       const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
       if (subtotal < minOrder) {
