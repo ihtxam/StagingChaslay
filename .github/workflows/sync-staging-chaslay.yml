@@ -50,6 +50,8 @@ jobs:
 
       - name: Prepare staging tree
         if: steps.token.outputs.configured == 'true'
+        env:
+          SYNC_TOKEN: ${{ secrets.STAGING_CHASLAY_SYNC_TOKEN }}
         run: |
           set -euo pipefail
           # rebornSense-only workflows (must not land in StagingChaslay)
@@ -58,6 +60,13 @@ jobs:
           rm -f .github/workflows/restart-rebornsense.yml
           rm -f .github/workflows/restore-rebornsense-now.yml
           rm -f .github/workflows/sync-staging-chaslay.yml
+          # STAGING_CHASLAY_SYNC_TOKEN often lacks workflow scope — keep StagingChaslay's
+          # build-bridge-apk.yml so the mirror push is not rejected.
+          if git fetch "https://x-access-token:${SYNC_TOKEN}@github.com/ihtxam/StagingChaslay.git" main:staging-main-ref 2>/dev/null; then
+            if git rev-parse staging-main-ref >/dev/null 2>&1; then
+              git checkout staging-main-ref -- .github/workflows/build-bridge-apk.yml 2>/dev/null || true
+            fi
+          fi
           # Do not copy deploy-hetzner.yml overlay — STAGING_CHASLAY_SYNC_TOKEN often lacks
           # the workflow scope, which blocks the entire sync push. StagingChaslay already has
           # deploy-hetzner.yml; git remote + deploy key handling lives in scripts/deploy-hetzner.sh.
