@@ -15,6 +15,8 @@ import {
   kitchenPrintJobHasTarget,
   kitchenPrintJobKey,
   resolveKitchenPrintJobs,
+  resolveKitchenPrintJobsWithFallback,
+  resolveKitchenPrinterTarget,
   buildKitchenTicketItemFromLine,
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
@@ -5507,10 +5509,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
       const escpos = generateKitchenMessageTicketEscPos(msgOpts);
       const text = generateKitchenMessageTicketText(msgOpts);
-      const kitchenProfile = (printSettings?.printers || []).find(
-        (p) => p.enabled !== false && p.printKitchenTickets && (p.name || p.portName)
-      );
-      const configuredKitchenName = (kitchenProfile?.name || printerName || '').trim();
+      const kitchenProfile = resolveKitchenPrinterTarget(printSettings, { receiptPrinterName: printerName });
+      const configuredKitchenName = (kitchenProfile?.printerName || '').trim();
       const resolvedKitchenName =
         resolveLivePrinterName(configuredKitchenName, printers, {
           portName: kitchenProfile?.portName,
@@ -7281,9 +7281,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jobLabel: kitchenLabel || t('webPosPrintJobKitchen'),
       lineIds: opts?.lineIds,
     };
-    const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) =>
-      kitchenPrintJobHasTarget(j)
-    );
+    const printJobs = resolveKitchenPrintJobsWithFallback(receiptItems, printSettings, {
+      receiptPrinterName: printerName,
+    }).filter((j) => kitchenPrintJobHasTarget(j));
     const crossFooters = buildKitchenCrossStationFooters(printJobs);
     const otherStationLabel = t('kitchenOtherStationFooter');
     if (printJobs.length) {

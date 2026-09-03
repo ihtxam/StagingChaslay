@@ -5,7 +5,7 @@ import {
   generateKitchenTicketEscPos,
   generateKitchenTicketText,
   kitchenPrintJobHasTarget,
-  resolveKitchenPrintJobs,
+  resolveKitchenPrintJobsWithFallback,
   resolveKitchenPaperWidthMm,
   resolveReceiptLanguage,
   uint8ToBase64,
@@ -79,9 +79,13 @@ export async function printWaiterKitchen(opts: {
   };
 
   let queuedAny = false;
-  const printJobs = resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) =>
-    kitchenPrintJobHasTarget(j)
-  );
+  const receiptPrinterName =
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('manupos_webpos_printer') || ''
+      : '';
+  const printJobs = resolveKitchenPrintJobsWithFallback(receiptItems, printSettings, {
+    receiptPrinterName,
+  }).filter((j) => kitchenPrintJobHasTarget(j));
   const agentOnline = await isPrintAgentAvailable();
   const retryLocally = resolvePrintRetryLocally(agentOnline);
   const forceQueue = !isLocalPrintStation(agentOnline);
