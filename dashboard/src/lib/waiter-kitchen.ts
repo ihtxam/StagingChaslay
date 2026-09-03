@@ -99,39 +99,45 @@ export async function printWaiterKitchen(opts: {
   }
   if (printJobs.length) {
     let printedAny = false;
-    for (const job of printJobs) {
-      const configuredName = (job.printerName || '').trim();
-      const resolvedName =
-        resolveLivePrinterName(configuredName, livePrinters, {
-          portName: job.portName,
-          matchHint: job.matchHint,
-        }) || configuredName;
-      if (!resolvedName) continue;
+    const results = await Promise.all(
+      printJobs.map(async (job) => {
+        const configuredName = (job.printerName || '').trim();
+        const resolvedName =
+          resolveLivePrinterName(configuredName, livePrinters, {
+            portName: job.portName,
+            matchHint: job.matchHint,
+          }) || configuredName;
+        if (!resolvedName) return { skipped: true as const };
+        const paperWidthMm = job.paperWidthMm;
+        const escpos = generateKitchenTicketEscPos({
+          ...kitchenOpts,
+          items: job.items,
+          paperWidthMm,
+        });
+        const text = generateKitchenTicketText({
+          ...kitchenOpts,
+          items: job.items,
+          paperWidthMm,
+        });
+        const mode = await printKitchenViaAgentOrQueue({
+          printerName: resolvedName,
+          dataBase64: uint8ToBase64(escpos),
+          text,
+          orderId: orderNumber,
+          retryLocally,
+          forceQueue,
+          jobKind: 'kitchen',
+          jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
+          printers: livePrinters,
+          configuredName,
+        });
+        return { skipped: false as const, mode };
+      })
+    );
+    for (const result of results) {
+      if (result.skipped) continue;
       printedAny = true;
-      const paperWidthMm = job.paperWidthMm;
-      const escpos = generateKitchenTicketEscPos({
-        ...kitchenOpts,
-        items: job.items,
-        paperWidthMm,
-      });
-      const text = generateKitchenTicketText({
-        ...kitchenOpts,
-        items: job.items,
-        paperWidthMm,
-      });
-      const mode = await printKitchenViaAgentOrQueue({
-        printerName: resolvedName,
-        dataBase64: uint8ToBase64(escpos),
-        text,
-        orderId: orderNumber,
-        retryLocally,
-        forceQueue,
-        jobKind: 'kitchen',
-        jobLabel: orderNumber ? `Kitchen · ${orderNumber}` : 'Kitchen',
-        printers: livePrinters,
-        configuredName,
-      });
-      if (mode === 'queued') queuedAny = true;
+      if (result.mode === 'queued') queuedAny = true;
     }
     if (!printedAny) {
       toast.error(t('webPosNoKitchenPrinterConfigured'));

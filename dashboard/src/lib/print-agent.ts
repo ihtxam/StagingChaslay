@@ -438,9 +438,9 @@ export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 export const MIN_NIIMBOT_AGENT_VERSION = '1.10.2';
 
 const BT_COM_PRINTER_RE =
-  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
+  /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
 
-/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
+/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. USB skips this. */
 export const BLUETOOTH_KITCHEN_SETTLE_MS = 1800;
 
 export function looksLikeBluetoothOrComPrinter(
@@ -448,12 +448,18 @@ export function looksLikeBluetoothOrComPrinter(
 ): boolean {
   if (!printer) return false;
   if (typeof printer === 'object' && printer.connectionType === 'bluetooth') return true;
-  if (typeof printer === 'string') return BT_COM_PRINTER_RE.test(printer);
-  return BT_COM_PRINTER_RE.test(
-    [printer.name, printer.portName, printer.driverName, printer.matchHint, printer.connectionType]
-      .filter(Boolean)
-      .join(' ')
-  );
+  const blob =
+    typeof printer === 'string'
+      ? printer
+      : [printer.portName, printer.connectionType, printer.name, printer.driverName, printer.matchHint]
+          .filter(Boolean)
+          .join(' ');
+  // USB001 / USBPRINT / LPT are fast RAW. Do not match "XP-80" / "Receipt" / "80mm" as Bluetooth —
+  // that used to add BLUETOOTH_KITCHEN_SETTLE_MS (1.8s) on top of paced USB drain sleeps (~4–5s).
+  if (/\busb\d+\b|\busb00|usbprint|\bdot4\b|\blpt\d*\b/i.test(blob) && !BT_COM_PRINTER_RE.test(blob)) {
+    return false;
+  }
+  return BT_COM_PRINTER_RE.test(blob);
 }
 
 export async function settleAfterBluetoothKitchenPrint(

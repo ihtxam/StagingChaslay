@@ -737,16 +737,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         channel,
         lines: unsent,
       });
-      await printWaiterKitchen({
-        lines: unsent,
-        channel,
-        printSettings: printSettings as Parameters<typeof printWaiterKitchen>[0]['printSettings'],
-        locale,
-        staffName: staff?.name,
-        tableLabel,
-        orderNumber: ticket.display,
-        t,
-      });
       const savedId = await persistWaiterHeldOrder({
         heldId: activeHeldIdRef.current,
         cartLines: nextCart,
@@ -765,6 +755,19 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       setCart(nextCart);
       setOrdersRefresh((n) => n + 1);
       toast.success(t('waiterSentToKitchen'));
+      // Don't hold Send on Print Agent USB paced sleeps (~4–5s) or BT drain.
+      void printWaiterKitchen({
+        lines: unsent,
+        channel,
+        printSettings: printSettings as Parameters<typeof printWaiterKitchen>[0]['printSettings'],
+        locale,
+        staffName: staff?.name,
+        tableLabel,
+        orderNumber: ticket.display,
+        t,
+      }).catch((e: unknown) => {
+        toastPrintError(e, t, 'webPosKitchenPrintFailed');
+      });
     } catch (e: any) {
       toastPrintError(e, t, 'webPosKitchenPrintFailed');
     } finally {

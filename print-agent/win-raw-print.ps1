@@ -10,10 +10,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.9.6: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Bluetooth / virtual-COM ports are paced; FlushPrinter is skipped for all paced
-# writes (often reports success with 0 bytes) and WritePrinter uses smaller chunks.
-# One feed+cut trailer after drain (matches escposKitchenCut); advertises bt-cut-trailer.
+# v1.10.3: self-contained spooler-only WritePrinter. No COM-direct writes.
+# Pace BT / virtual-COM only. USB (USB001/USBPRINT) is a single 4KB WritePrinter
+# with no drain/cut-trailer sleeps — those sleeps were ~4–5s of HTTP /print wait
+# when thermal/receipt/xprinter names were wrongly treated as slow radios.
+# Bluetooth / COM: FlushPrinter skipped; small chunks; one feed+cut trailer after drain.
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -135,19 +136,16 @@ function Get-WinPrinterPortName {
 
 function Test-NeedsPacedWrite {
     param([string]$Port, [string]$Printer, [int]$ByteCount = 0)
-    $blob = ("{0} {1}" -f $Port, $Printer).ToLowerInvariant()
+    # $ByteCount kept for call-site compatibility; USB size must not force pacing.
+    $port = ($Port + '').ToLowerInvariant()
+    $name = ($Printer + '').ToLowerInvariant()
+    $blob = ("{0} {1}" -f $port, $name)
+    # Fast USB RAW — never pace even if the queue is named "XP-80" / "Receipt".
+    if ($port -match 'usb\d+|usb00|usbprint|dot4|lpt') {
+        return $false
+    }
+    # Slow radios / virtual COM only.
     if ($blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|bluetoothprinter|bt_') {
-        return $true
-    }
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b') {
-        return $true
-    }
-    # Cheap Chinese ESC/POS (Xprinter, RPP, Gprinter, …) — often on USB001 with a BT dongle.
-    if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|pos-?80c|r80a?|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
-        return $true
-    }
-    # Kitchen tickets over ~1.8 KB overflow many slow BT/COM buffers even when the port name is opaque.
-    if ($ByteCount -ge 1800) {
         return $true
     }
     return $false
@@ -316,6 +314,9 @@ function Send-RawToPrinter {
             }
             [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay -ComSerialPort:$isComPort)
             if ($paced) {
+                # BT/COM only. Typical USB receipt used to hit this path (~2KB body):
+                # drainMs = 1200 + 2000/6 ≈ 1.5s, plus 96-byte/100ms chunks (~2s),
+                # plus 600ms post-cut and 500ms post-job ≈ 4–5s blocking /print.
                 $drainMs = [Math]::Min(1200 + [int]([Math]::Floor($body.Length / 6)), 10000)
                 if ($isComPort) { $drainMs += 200 }
                 Start-Sleep -Milliseconds $drainMs
