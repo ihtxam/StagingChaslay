@@ -13,6 +13,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.R
+import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 
 class SetupWizardActivity : AppCompatActivity() {
