@@ -36,8 +36,6 @@ export default function SettingsTablesTab({
   onSave,
   saving,
   highlightId,
-  normalizedQuery,
-  isSectionVisible,
   isSectionHighlight,
   onGoToPosTab,
 }: {
@@ -46,8 +44,6 @@ export default function SettingsTablesTab({
   onSave: (e: FormEvent) => void;
   saving: boolean;
   highlightId?: string | null;
-  normalizedQuery?: string;
-  isSectionVisible: (id: string) => boolean;
   isSectionHighlight: (id: string) => boolean;
   onGoToPosTab: (query: string, sectionId: string) => void;
 }) {
@@ -71,11 +67,7 @@ export default function SettingsTablesTab({
       <SettingsPageHeader title={t('settingsTables')} subtitle={t('tableManagementHint')} />
 
       <form onSubmit={onSave} className="space-y-5">
-        <div
-          className={`transition-opacity ${
-            normalizedQuery && !isSectionVisible('tables-floor') ? 'pointer-events-none opacity-40' : ''
-          }`}
-        >
+        <div>
           <SettingsReportCard
             id="tables-floor"
             icon={UtensilsCrossed}

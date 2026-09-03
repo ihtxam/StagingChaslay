@@ -9,6 +9,8 @@ import {
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
   resolveSettingsContentTab,
+  SETTINGS_SEARCH_STAY_ON_TAB_MARK,
+  settingsSearchView,
   shouldDimSettingsSectionDuringSearch,
   tokenizeSettingsSearchQuery,
   type SettingsSearchContext,
@@ -129,13 +131,36 @@ test('signage addon stays on pos tab in search index', () => {
   assert.equal(signage?.tab, 'pos');
 });
 
-test('resolveSettingsContentTab jumps to payments immediately for adyen on pos url', () => {
+test('settingsSearchView never idles on a non-empty query (failsafe)', () => {
+  assert.equal(settingsSearchView('', 0), 'idle');
+  assert.equal(settingsSearchView('kitchen', 2), 'results');
+  assert.equal(settingsSearchView('kitchen printer', 1), 'results');
+  assert.equal(settingsSearchView('zzzz nohit', 0), 'empty');
+  assert.equal(settingsSearchView('a b', 0), 'empty');
+  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'stay-on-tab-v4');
+});
+
+test('resolveSettingsContentTab never leaves the current tab while typing', () => {
   const index = buildSettingsSearchIndex(t);
   const query = 'adyen';
   const raw = matchSettingsSearch(index, query);
   const matches = filterAccessibleSettingsSearch(raw, openContext());
   assert.ok(matches.some((entry) => entry.tab === 'payments'));
-  assert.equal(resolveSettingsContentTab('pos', query, matches), 'payments');
+  assert.equal(resolveSettingsContentTab('pos', query, matches), 'pos');
+});
+
+test('second word that matches another tab still keeps current tab (kitchen printer)', () => {
+  const index = buildSettingsSearchIndex(t);
+  const first = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'kitchen'), openContext());
+  const second = filterAccessibleSettingsSearch(
+    matchSettingsSearch(index, 'kitchen printer'),
+    openContext()
+  );
+  assert.ok(first.some((entry) => entry.tab === 'pos'));
+  assert.ok(second.some((entry) => entry.tab === 'receipt'));
+  assert.ok(!second.some((entry) => entry.id === 'pos-courses'));
+  assert.equal(resolveSettingsContentTab('pos', 'kitchen', first), 'pos');
+  assert.equal(resolveSettingsContentTab('pos', 'kitchen printer', second), 'pos');
 });
 
 test('resolveSettingsContentTab stays on pos when match is on pos', () => {
@@ -157,11 +182,12 @@ test('shouldDimSettingsSectionDuringSearch is always false (no blank panel regre
   assert.equal(shouldDimSettingsSectionDuringSearch(), false);
 });
 
-test('pos tab with only off-tab matches still resolves a content tab', () => {
+test('pos tab with only off-tab matches still shows POS (no auto-jump)', () => {
   const index = buildSettingsSearchIndex(t);
   const query = 'smtp';
   const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, query), openContext());
   const contentTab = resolveSettingsContentTab('pos', query, matches);
-  assert.notEqual(contentTab, 'pos');
-  assert.ok(hasSettingsSearchMatchesOnTab(matches, contentTab));
+  assert.equal(contentTab, 'pos');
+  assert.equal(hasSettingsSearchMatchesOnTab(matches, 'pos'), false);
+  assert.equal(settingsSearchView(query, matches.length), 'results');
 });

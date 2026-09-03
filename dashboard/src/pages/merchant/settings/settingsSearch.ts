@@ -1,3 +1,4 @@
+/** Live-bundle grep marker: stay-on-tab-v4 */
 export type SettingsTabId =
   | 'business'
   | 'taxes'
@@ -111,14 +112,35 @@ export function pickSettingsSearchMatch(
   return matches.find((entry) => entry.tab === currentTab) ?? matches[0];
 }
 
-/** Tab whose panel should render while searching (avoids blank flash before URL/state sync). */
+/**
+ * Grep marker for the live staging bundle. Must stay a real string so
+ * `curl https://app.chaslay.com/assets/index-*.js` can prove this build is served.
+ */
+export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'stay-on-tab-v4';
+
+export type SettingsSearchView = 'idle' | 'results' | 'empty';
+
+/**
+ * Failsafe: any non-empty search box value must map to results OR empty-state.
+ * Never "query active but render nothing".
+ */
+export function settingsSearchView(query: string, matchCount: number): SettingsSearchView {
+  if (String(query ?? '').length === 0) return 'idle';
+  return matchCount > 0 ? 'results' : 'empty';
+}
+
+/**
+ * Never change tabs while the merchant is typing. Jumping to the best-match tab
+ * (e.g. "kitchen" on POS → "kitchen printer" on Receipts) unmounted the current
+ * panel; if that destination threw, the search error boundary blanked the page.
+ * Results list clicks still call selectTab.
+ */
 export function resolveSettingsContentTab(
   currentTab: SettingsTabId,
-  normalizedQuery: string,
-  matches: SettingsSearchEntry[]
+  _normalizedQuery?: string,
+  _matches?: SettingsSearchEntry[]
 ): SettingsTabId {
-  if (!normalizedQuery || matches.length === 0) return currentTab;
-  return pickSettingsSearchMatch(matches, currentTab)?.tab ?? currentTab;
+  return currentTab;
 }
 
 export function hasSettingsSearchMatchesOnTab(

@@ -94,13 +94,13 @@ import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import {
+  SETTINGS_SEARCH_STAY_ON_TAB_MARK,
   buildSettingsSearchIndex,
   filterAccessibleSettingsSearch,
   formatSettingsSearchSectionLabel,
   matchSettingsSearch,
   normalizeSettingsSearchQuery,
-  pickSettingsSearchMatch,
-  resolveSettingsContentTab,
+  settingsSearchView,
   type SettingsTabId,
 } from './settings/settingsSearch';
 import Staff from './Staff';
@@ -579,6 +579,7 @@ export default function Settings() {
   const paymentsDataLoadedRef = useRef(false);
   const emailUsageLoadedRef = useRef(false);
   const [settingsQuery, setSettingsQuery] = useState('');
+  const [debouncedSettingsQuery, setDebouncedSettingsQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>(() => parseSettingsTabFromSearch(window.location.search));
 
@@ -694,7 +695,12 @@ export default function Settings() {
     setTab((current) => (current === fromUrl ? current : fromUrl));
   }, [canOpenSettingsTab, searchParams]);
 
-  const normalizedQuery = normalizeSettingsSearchQuery(settingsQuery);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSettingsQuery(settingsQuery), 200);
+    return () => window.clearTimeout(timer);
+  }, [settingsQuery]);
+
+  const normalizedQuery = normalizeSettingsSearchQuery(debouncedSettingsQuery);
 
   useEffect(() => {
     if (!settings) return;
@@ -726,7 +732,7 @@ export default function Settings() {
 
   const matchedSearch = useMemo(() => {
     try {
-      const raw = matchSettingsSearch(searchIndex, settingsQuery || normalizedQuery);
+      const raw = matchSettingsSearch(searchIndex, debouncedSettingsQuery || normalizedQuery);
       return filterAccessibleSettingsSearch(raw, {
         visibleTabIds,
         canOpenTab: canOpenSettingsTab,
@@ -738,58 +744,30 @@ export default function Settings() {
     }
   }, [
     normalizedQuery,
-    settingsQuery,
+    debouncedSettingsQuery,
     searchIndex,
     visibleTabIds,
     canOpenSettingsTab,
     isSearchSectionRendered,
   ]);
 
-  const contentTab = useMemo(
-    () => resolveSettingsContentTab(tab as SettingsTabId, normalizedQuery, matchedSearch),
-    [matchedSearch, normalizedQuery, tab]
-  );
+  const searchView = settingsSearchView(debouncedSettingsQuery, matchedSearch.length);
 
   const matchedTabs = useMemo(() => new Set(matchedSearch.map((m) => m.tab)), [matchedSearch]);
-
-  const searchNavigationKeyRef = useRef('');
 
   useEffect(() => {
     try {
       if (!normalizedQuery) {
-        searchNavigationKeyRef.current = '';
         setHighlightId(null);
         return;
       }
-      if (matchedSearch.length === 0) {
-        searchNavigationKeyRef.current = normalizedQuery;
-        setHighlightId(null);
-        return;
-      }
-      const best = pickSettingsSearchMatch(matchedSearch, contentTab);
-      if (!best) {
-        setHighlightId(null);
-        return;
-      }
-      const shouldSwitchTab =
-        searchNavigationKeyRef.current !== normalizedQuery || tab !== best.tab;
-      searchNavigationKeyRef.current = normalizedQuery;
-      setHighlightId(best.id);
-      if (shouldSwitchTab && tab !== best.tab) {
-        selectTab(best.tab);
-      }
-      const timer = window.setTimeout(
-        () => {
-          document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-        shouldSwitchTab && tab !== best.tab ? 120 : 80
-      );
-      return () => window.clearTimeout(timer);
+      const onCurrentTab = matchedSearch.find((entry) => entry.tab === tab);
+      setHighlightId(onCurrentTab?.id ?? null);
     } catch (err) {
       console.error('[settings-search]', err);
       setHighlightId(null);
     }
-  }, [normalizedQuery, matchedSearch, contentTab, tab, selectTab]);
+  }, [normalizedQuery, matchedSearch, tab]);
 
   const isSectionHighlight = (id: string) => highlightId === id;
 
@@ -1471,7 +1449,15 @@ export default function Settings() {
   const posRetailMode = isRetailMerchant;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
+    <SettingsSearchErrorBoundary
+      resetKey={settingsQuery}
+      fallbackText={t('settingsSearchNoMatches')}
+      fullPage
+    >
+    <div
+      className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4"
+      data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">{t('settings')}</h1>
@@ -1494,19 +1480,18 @@ export default function Settings() {
           />
         </label>
       </div>
-      {normalizedQuery ? (
+      {searchView === 'results' ? (
         <p className="text-xs muted">
-          {matchedSearch.length
-            ? String(t('settingsSearchMatches') ?? '').replace('{count}', String(matchedSearch.length))
-            : t('settingsSearchNoMatches')}
+          {t('settingsSearchMatches', { count: matchedSearch.length })}
         </p>
+      ) : searchView === 'empty' ? (
+        <p className="text-xs muted">{t('settingsSearchNoMatches')}</p>
       ) : null}
-      <SettingsSearchErrorBoundary
-        resetKey={settingsQuery}
-        fallbackText={t('settingsSearchNoMatches')}
-      >
-      {normalizedQuery && matchedSearch.length > 0 ? (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3">
+      {searchView === 'results' ? (
+        <div
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3"
+          data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+        >
           <ul className="flex flex-col gap-1" role="listbox" aria-label={t('settingsSearch')}>
             {matchedSearch.map((entry) => {
               const tabMeta = visibleTabs.find((item) => item.id === entry.tab);
@@ -1541,6 +1526,13 @@ export default function Settings() {
             })}
           </ul>
         </div>
+      ) : searchView === 'empty' ? (
+        <div
+          className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-6 text-center text-sm text-[var(--text-muted)]"
+          data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+        >
+          {t('settingsSearchNoMatches')}
+        </div>
       ) : null}
 
       <div className="card !p-0 overflow-hidden">
@@ -1552,13 +1544,9 @@ export default function Settings() {
             >
               {visibleTabs.map((item) => {
                 const Icon = item.icon;
-                const active = contentTab === item.id;
+                const active = tab === item.id;
                 const searchHit =
-                  normalizedQuery && matchedSearch.length > 0
-                    ? matchedTabs.has(item.id)
-                    : false;
-                const searchMiss =
-                  normalizedQuery && matchedSearch.length > 0 ? !searchHit : false;
+                  searchView === 'results' ? matchedTabs.has(item.id) : false;
                 const navText = item.navLabel ?? item.label;
                 return (
                   <button
@@ -1577,7 +1565,7 @@ export default function Settings() {
                       active
                         ? 'bg-[var(--bg-muted)] text-[var(--text)]'
                         : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
-                    } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''} ${searchMiss ? 'opacity-45' : ''}`}
+                    } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''}`}
                   >
                     <Icon className="h-4 w-4 shrink-0" aria-hidden />
                     <span className="min-w-0 truncate lg:whitespace-normal">
@@ -1591,12 +1579,11 @@ export default function Settings() {
           </aside>
 
           <div className="min-w-0 flex-1 p-4 sm:p-5 pb-24 sm:pb-5">
-          {normalizedQuery && matchedSearch.length === 0 ? (
-            <div className="mb-4 rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-6 text-center text-sm text-[var(--text-muted)]">
-              {t('settingsSearchNoMatches')}
-            </div>
-          ) : null}
-          {contentTab === 'business' && (
+          <SettingsSearchErrorBoundary
+            resetKey={`${tab}:${normalizedQuery}`}
+            fallbackText={t('settingsSearchNoMatches')}
+          >
+          {tab === 'business' && (
             <SettingsBusinessTab
               settings={settings}
               setSettings={(next) => setSettings(next)}
@@ -1608,7 +1595,7 @@ export default function Settings() {
           )}
 
 
-          {contentTab === 'taxes' && (
+          {tab === 'taxes' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsTaxes')}
@@ -1755,7 +1742,7 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'shop' && (
+          {tab === 'shop' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('shop')}
@@ -1949,35 +1936,33 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'delivery' && <SettingsDeliveryPlatformsTab />}
+          {tab === 'delivery' && <SettingsDeliveryPlatformsTab />}
 
-          {contentTab === 'delivery-map' && (
+          {tab === 'delivery-map' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('deliveryMapNav')} subtitle={t('deliveryMapHint')} />
               <DeliveryTrackingPage embedded />
             </div>
           )}
 
-          {contentTab === 'users' && (
+          {tab === 'users' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHint')} />
               <Staff embedded kioskLicensed={isKioskLicensed(settings)} />
             </div>
           )}
 
-          {contentTab === 'hours' && <SettingsHoursTab />}
+          {tab === 'hours' && <SettingsHoursTab />}
 
-          {contentTab === 'reservations' && <SettingsReservationsTab />}
+          {tab === 'reservations' && <SettingsReservationsTab />}
 
-          {contentTab === 'tables' && (
+          {tab === 'tables' && (
             <SettingsTablesTab
               settings={settings}
               setSettings={(next) => setSettings({ ...settings, ...next })}
               onSave={onSave}
               saving={saving}
               highlightId={highlightId}
-              normalizedQuery={normalizedQuery}
-              isSectionVisible={() => true}
               isSectionHighlight={isSectionHighlight}
               onGoToPosTab={(query, sectionId) => {
                 setSettingsQuery(query);
@@ -1987,7 +1972,7 @@ export default function Settings() {
             />
           )}
 
-          {contentTab === 'pos' && (
+          {tab === 'pos' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsPos')}
@@ -2635,7 +2620,7 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'payments' && (
+          {tab === 'payments' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('settingsPayments')} subtitle={t('adyenSettingsHint')} />
               <form onSubmit={saveAdyen} className="space-y-5">
@@ -3030,7 +3015,7 @@ export default function Settings() {
             </div>
           )}
 
-          {contentTab === 'email' && (
+          {tab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsEmail')}
@@ -3599,7 +3584,7 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'receipt' && (
+          {tab === 'receipt' && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
                 title={t('settingsReceipt')}
@@ -4598,33 +4583,33 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'kds' && (
+          {tab === 'kds' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('kdsSettingsTitle')} subtitle={t('kdsSettingsHint')} />
               <KdsSettingsPanel />
             </div>
           )}
 
-          {contentTab === 'ods' && (
+          {tab === 'ods' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
               <OdsSettingsPanel />
             </div>
           )}
 
-          {contentTab === 'signage' && (
+          {tab === 'signage' && (
             <div className="space-y-5">
               <SignagePage embedded />
             </div>
           )}
 
-          {contentTab === 'kiosk' && (
+          {tab === 'kiosk' && (
             <div className="space-y-5">
               <KioskSettingsPage embedded />
             </div>
           )}
 
-          {contentTab === 'email' && (
+          {tab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
               <Section title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
@@ -4886,7 +4871,7 @@ export default function Settings() {
             </form>
           )}
 
-          {contentTab === 'language' && (
+          {tab === 'language' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
               <Section icon={Languages} accent={settingsDash.accent} title={t('language')} description={t('languageSettingsHint')}>
@@ -4935,11 +4920,12 @@ export default function Settings() {
             </div>
           )}
 
+          </SettingsSearchErrorBoundary>
           </div>
         </div>
       </div>
-      </SettingsSearchErrorBoundary>
       <p className="text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
+    </SettingsSearchErrorBoundary>
   );
 }
