@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
     private var pendingWizardLaunch = false
+    private var runtimePermissionsResolved = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+            runtimePermissionsResolved = true
             startBridge()
             refreshPrinters()
             window.decorView.postDelayed({ refreshPrinters() }, 2_500)
@@ -134,6 +136,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeLaunchOemWizard() {
+        if (!runtimePermissionsResolved) return
         if (pendingWizardLaunch) return
         if (OemSetupPreferences.isWizardCompleted(this)) return
         pendingWizardLaunch = true
@@ -213,6 +216,7 @@ class MainActivity : AppCompatActivity() {
         }
         needed += bluetoothPermissionsNeeded()
         if (needed.isEmpty()) {
+            runtimePermissionsResolved = true
             startBridge()
             refreshPrinters()
             maybeLaunchOemWizard()

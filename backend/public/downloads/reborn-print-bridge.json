@@ -2,9 +2,9 @@
   "name": "reborn-print-bridge",
   "displayName": "Bridge Reborn",
   "description": "WebPOS companion for Android — printing and NFC tap-to-pay. Run WebPOS in Chrome; Bridge Reborn handles printers and card payments locally.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "apkFile": "reborn-print-bridge.apk",
   "platform": "android",
-  "builtAt": "2026-09-03T15:45:00.000Z",
+  "builtAt": "2026-09-03T16:31:58.968502775Z",
   "signed": true
 }

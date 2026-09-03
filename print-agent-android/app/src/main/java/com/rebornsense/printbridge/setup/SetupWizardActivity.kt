@@ -1,26 +1,41 @@
 package com.rebornsense.printbridge.setup
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.rebornsense.printbridge.BridgeHealthChecker
+import com.rebornsense.printbridge.BridgePermissions
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.device.DeviceProfiler
-import com.rebornsense.printbridge.setup.OemSetupPreferences
 
 class SetupWizardActivity : AppCompatActivity() {
     private lateinit var steps: List<OemSetupStep>
     private var stepIndex = 0
     private val healthHandler = Handler(Looper.getMainLooper())
     private var healthPollRunnable: Runnable? = null
+    private var bridgeStartAttempts = 0
+    private var awaitingNotificationPermission = false
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            awaitingNotificationPermission = false
+            if (granted) {
+                startBridgeAndPoll()
+            } else {
+                showNotificationPermissionRequired()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +58,13 @@ class SetupWizardActivity : AppCompatActivity() {
         super.onResume()
         renderStep()
         if (currentStep().action == OemSetupAction.START_BRIDGE) {
-            pollBridgeHealth(showChecking = false)
+            if (BridgeHealthChecker.isHealthy()) {
+                renderBridgeStatus(findViewById(R.id.wizardStatusText))
+            } else if (!awaitingNotificationPermission && healthPollRunnable == null) {
+                ensureBridgeRunningWithPermission()
+            } else {
+                pollBridgeHealth(showChecking = false)
+            }
         }
     }
 
@@ -147,6 +168,14 @@ class SetupWizardActivity : AppCompatActivity() {
                 health.version ?: getString(R.string.oem_step_bridge_version_unknown),
             )
             OemSetupPreferences.setStepCompleted(this, "start_bridge", true)
+        } else if (awaitingNotificationPermission) {
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(R.string.oem_step_bridge_notification_prompt)
+        } else if (healthPollRunnable != null) {
+            // pollBridgeHealth updates status text
+        } else if (!BridgePermissions.hasNotificationPermission(this)) {
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(R.string.oem_step_bridge_notification_required)
         } else {
             statusText.visibility = View.VISIBLE
             statusText.text = getString(R.string.oem_step_bridge_pending)
@@ -171,7 +200,7 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.OPEN_BATTERY -> OemSettingsNavigator.openBatteryOptimizationRequest(this)
             OemSetupAction.OPEN_AUTOSTART -> OemSettingsNavigator.openAutostartSettings(this)
             OemSetupAction.OPEN_BACKGROUND -> OemSettingsNavigator.openBackgroundActivitySettings(this)
-            OemSetupAction.START_BRIDGE -> startBridgeAndPoll()
+            OemSetupAction.START_BRIDGE -> ensureBridgeRunningWithPermission()
             OemSetupAction.INSTRUCTION_ONLY -> {
                 if (step.id == "tap_to_pay") {
                     openWebPosTapToPaySetup()
@@ -200,7 +229,28 @@ class SetupWizardActivity : AppCompatActivity() {
         goToNextStep()
     }
 
+    private fun ensureBridgeRunningWithPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            BridgePermissions.needsNotificationPermission(this)
+        ) {
+            awaitingNotificationPermission = true
+            val statusText = findViewById<TextView>(R.id.wizardStatusText)
+            statusText.visibility = View.VISIBLE
+            statusText.text = getString(R.string.oem_step_bridge_notification_prompt)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        startBridgeAndPoll()
+    }
+
+    private fun showNotificationPermissionRequired() {
+        val statusText = findViewById<TextView>(R.id.wizardStatusText)
+        statusText.visibility = View.VISIBLE
+        statusText.text = getString(R.string.oem_step_bridge_notification_denied)
+    }
+
     private fun startBridgeAndPoll() {
+        bridgeStartAttempts += 1
         PrintBridgeLauncher.start(this)
         pollBridgeHealth(showChecking = true)
     }
@@ -210,7 +260,7 @@ class SetupWizardActivity : AppCompatActivity() {
         val statusText = findViewById<TextView>(R.id.wizardStatusText)
         if (showChecking) {
             statusText.visibility = View.VISIBLE
-            statusText.text = getString(R.string.oem_step_bridge_checking)
+            statusText.text = getString(R.string.oem_step_bridge_checking, 1, HEALTH_POLL_MAX_ATTEMPTS)
         }
 
         var attempts = 0
@@ -228,14 +278,42 @@ class SetupWizardActivity : AppCompatActivity() {
                     stopHealthPolling()
                     return
                 }
+
+                if (!BridgePermissions.hasNotificationPermission(this@SetupWizardActivity)) {
+                    statusText.visibility = View.VISIBLE
+                    statusText.text = getString(R.string.oem_step_bridge_notification_denied)
+                    stopHealthPolling()
+                    return
+                }
+
+                // Re-trigger FGS periodically while waiting (OEMs may delay or reject first start).
+                if (attempts % SERVICE_RESTART_EVERY_ATTEMPTS == 0) {
+                    PrintBridgeLauncher.start(this@SetupWizardActivity)
+                }
+
                 if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) {
                     statusText.visibility = View.VISIBLE
                     statusText.text = getString(R.string.oem_step_bridge_failed)
                     stopHealthPolling()
+                    // Auto-retry once without requiring another tap.
+                    if (bridgeStartAttempts < MAX_BRIDGE_START_ROUNDS) {
+                        healthHandler.postDelayed({
+                            if (currentStep().action == OemSetupAction.START_BRIDGE &&
+                                !BridgeHealthChecker.isHealthy()
+                            ) {
+                                startBridgeAndPoll()
+                            }
+                        }, AUTO_RETRY_DELAY_MS)
+                    }
                     return
                 }
+
                 statusText.visibility = View.VISIBLE
-                statusText.text = getString(R.string.oem_step_bridge_checking)
+                statusText.text = getString(
+                    R.string.oem_step_bridge_checking,
+                    attempts,
+                    HEALTH_POLL_MAX_ATTEMPTS,
+                )
                 healthHandler.postDelayed(this, HEALTH_POLL_INTERVAL_MS)
             }
         }
@@ -312,7 +390,10 @@ class SetupWizardActivity : AppCompatActivity() {
     companion object {
         private const val STATE_STEP_INDEX = "step_index"
         private const val HEALTH_POLL_INTERVAL_MS = 500L
-        private const val HEALTH_POLL_MAX_ATTEMPTS = 20
+        private const val HEALTH_POLL_MAX_ATTEMPTS = 60
+        private const val SERVICE_RESTART_EVERY_ATTEMPTS = 5
+        private const val MAX_BRIDGE_START_ROUNDS = 3
+        private const val AUTO_RETRY_DELAY_MS = 2_000L
 
         fun createIntent(context: android.content.Context): Intent {
             return Intent(context, SetupWizardActivity::class.java)
