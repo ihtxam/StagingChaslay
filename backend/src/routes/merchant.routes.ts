@@ -30,6 +30,7 @@ import locationsRoutes from "@/routes/locations.routes";
 import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
 import { setLocationContext } from "@/middleware/location.middleware";
+import type { ReportPreset } from "@/services/pos-reports.service";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -2482,7 +2483,7 @@ router.get("/pos/orders", async (req: Request, res: Response) => {
     const merchantId = req.merchantId;
     if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
     const { PosOrdersService } = await import("@/services/pos-orders.service");
-    const { resolveReportRange, type ReportPreset } = await import("@/services/pos-reports.service");
+    const { resolveReportRange } = await import("@/services/pos-reports.service");
     const preset = req.query.preset ? (String(req.query.preset) as ReportPreset) : undefined;
     let from = req.query.from ? String(req.query.from) : undefined;
     let to = req.query.to ? String(req.query.to) : undefined;
