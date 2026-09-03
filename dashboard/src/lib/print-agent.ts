@@ -948,7 +948,7 @@ export async function printNiimbotLabelViaAgent(opts: {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
-        'Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v1.9.9+).'
+        'Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v1.10.0+).'
       );
     }
     throw error;

@@ -1,6 +1,6 @@
 {
   "name": "reborn-print-agent",
-  "version": "1.9.9",
+  "version": "1.10.0",
   "private": true,
   "description": "Local print service for Reborn - silent ESC/POS to Windows default printer",
   "main": "server.js",
@@ -16,6 +16,7 @@
     "assets": [
       "win-raw-print.ps1",
       "win-raw-print-worker.ps1",
+      "win-niimbot-print.ps1",
       "win-scale-read.ps1",
       "aclas-scale.js",
       "niimbot-client.js"
