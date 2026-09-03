@@ -2797,6 +2797,51 @@ function enabledKitchenPrinterProfiles(
   );
 }
 
+/** Profile + routing target for kitchen tickets (matches kitchen-message fallback). */
+export function resolveKitchenPrinterTarget(
+  settings: PosPrintSettingsClient | null | undefined,
+  opts?: { receiptPrinterName?: string | null }
+): Pick<KitchenPrintJob, 'printerName' | 'portName' | 'matchHint' | 'paperWidthMm'> | null {
+  const list = (settings?.printers || []).filter((p) => p.enabled !== false);
+
+  const kitchen = list.find((p) => p.printKitchenTickets && (p.name || p.portName));
+  if (kitchen) {
+    return {
+      printerName: kitchen.name || kitchen.portName || '',
+      portName: kitchen.portName ?? null,
+      matchHint: kitchen.matchHint ?? null,
+      paperWidthMm: resolveKitchenPaperWidthMm(settings, kitchen.paperWidthMm),
+    };
+  }
+
+  const receipt = list.find((p) => p.printReceipts && (p.name || p.portName));
+  const receiptName = (opts?.receiptPrinterName || '').trim();
+  const name = (receipt?.name || receipt?.portName || receiptName).trim();
+  if (!name) return null;
+
+  return {
+    printerName: name,
+    portName: receipt?.portName ?? null,
+    matchHint: receipt?.matchHint ?? null,
+    paperWidthMm: resolveKitchenPaperWidthMm(settings, receipt?.paperWidthMm),
+  };
+}
+
+function kitchenPrintJobsWithFallback(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined,
+  opts?: { receiptPrinterName?: string | null }
+): KitchenPrintJob[] {
+  const jobs = resolveKitchenPrintJobs(items, settings).filter((j) => kitchenPrintJobHasTarget(j));
+  if (jobs.length || !items.length) return jobs;
+
+  const fallback = resolveKitchenPrinterTarget(settings, opts);
+  if (fallback && kitchenPrintJobHasTarget(fallback)) {
+    return [{ ...fallback, items }];
+  }
+  return [];
+}
+
 /** Stable key for cross-station footers and print-job lookup. */
 export function kitchenPrintJobKey(job: Pick<KitchenPrintJob, 'printerName' | 'portName'>): string {
   return (job.printerName || job.portName || '').trim();
@@ -2885,6 +2930,10 @@ export function buildKitchenPrintJobs(
   };
 
   if (!kitchenPrinters.length) {
+    const fallback = resolveKitchenPrinterTarget(settings);
+    if (fallback && kitchenPrintJobHasTarget(fallback)) {
+      return [{ ...fallback, items }];
+    }
     return [{ printerName: '', paperWidthMm: globalPaper, items }];
   }
 
@@ -2902,10 +2951,26 @@ export function buildKitchenPrintJobs(
   }
 
   if (!jobs.length) {
+    const fallback = resolveKitchenPrinterTarget(settings);
+    if (fallback && kitchenPrintJobHasTarget(fallback)) {
+      return [{ ...fallback, items }];
+    }
     return [{ printerName: '', paperWidthMm: globalPaper, items }];
   }
 
   return appendUnroutedKitchenItems(jobs, items, kitchenPrinters, settings);
+}
+
+/**
+ * Kitchen print jobs with receipt-printer fallback when routing yields no target
+ * (same behaviour as kitchen messages and online-order auto-print).
+ */
+export function resolveKitchenPrintJobsWithFallback(
+  items: KitchenTicketItem[],
+  settings: PosPrintSettingsClient | null | undefined,
+  opts?: { receiptPrinterName?: string | null }
+): KitchenPrintJob[] {
+  return kitchenPrintJobsWithFallback(items, settings, opts);
 }
 
 /** When multiple kitchen printers share one order, map printer name → items on other stations. */

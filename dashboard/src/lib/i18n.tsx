@@ -1912,7 +1912,7 @@ const en: Dict = {
   webPosKitchenPrintPartialFailed:
     'Some kitchen tickets did not print — check the kitchen printer is online, then retry from the cart.',
   webPosNoKitchenPrinterConfigured:
-    'No kitchen printer configured. Enable Kitchen on a printer in Settings (not Receipt only).',
+    'No kitchen printer configured. Enable Kitchen on a printer in Settings, or select a printer in WebPOS → Printing.',
   waiterTableOccupiedEmpty:
     'This table has an open order on another device — cart could not be loaded. Try again or use the main till.',
   webPosKitchenPrintRetrying: 'Kitchen print failed — retrying automatically…',
