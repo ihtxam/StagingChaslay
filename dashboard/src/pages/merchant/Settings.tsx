@@ -92,6 +92,14 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
+import {
+  buildSettingsSearchIndex,
+  filterAccessibleSettingsSearch,
+  matchSettingsSearch,
+  normalizeSettingsSearchQuery,
+  pickSettingsSearchMatch,
+  type SettingsTabId,
+} from './settings/settingsSearch';
 import Staff from './Staff';
 import DeliveryTrackingPage from './DeliveryTracking';
 import { useAuthStore } from '@/store/auth';
@@ -371,12 +379,6 @@ function parseSettingsTabFromSearch(search: string): TabId {
   }
   return 'business';
 }
-
-type SettingsSearchEntry = {
-  id: string;
-  tab: TabId;
-  keywords: string[];
-};
 
 function Field({
   label,
@@ -689,331 +691,94 @@ export default function Settings() {
     setTab((current) => (current === fromUrl ? current : fromUrl));
   }, [canOpenSettingsTab, searchParams]);
 
+  const normalizedQuery = normalizeSettingsSearchQuery(settingsQuery);
+
   useEffect(() => {
     if (!settings) return;
+    if (normalizedQuery) return;
     if (tab === 'tables' && !showTablesSettings) {
       selectTab('pos');
     }
     if (tab === 'reservations' && isRetailMerchant) {
       selectTab('business');
     }
-  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab]);
+  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab, normalizedQuery]);
 
-  const normalizedQuery = settingsQuery.trim().toLowerCase();
+  const searchIndex = useMemo(() => buildSettingsSearchIndex(t), [t]);
 
-  const searchIndex = useMemo<SettingsSearchEntry[]>(
-    () => [
-      {
-        id: 'pos-mode',
-        tab: 'pos',
-        keywords: [
-          'pos mode',
-          'retail',
-          'restaurant',
-          'barcode',
-          'mode',
-          'magasin',
-          'einzelhandel',
-          'gastronomie',
-          'tables',
-          'fast food',
-          'fast-food',
-          'counter',
-          t('posMode'),
-          t('posModeRetail'),
-          t('posModeRestaurant'),
-          t('posTablesEnabled'),
-        ],
-      },
-      {
-        id: 'pos-layout',
-        tab: 'pos',
-        keywords: [
-          'cart',
-          'cart side',
-          'cart position',
-          'left',
-          'right',
-          'layout',
-          'panier',
-          'position panier',
-          'gauche',
-          'droite',
-          'warenkorb',
-          'position',
-          'links',
-          'rechts',
-          'post success',
-          'after payment',
-          'navigate',
-          'après paiement',
-          'nach zahlung',
-          'theme',
-          'color',
-          'couleur',
-          'farbe',
-          'teal',
-          'violet',
-          t('posCartSide'),
-          t('posCartSideLeft'),
-          t('posCartSideRight'),
-          t('webPosPostSuccessNav'),
-          t('posColorTheme'),
-          t('posLayoutSettings'),
-        ],
-      },
-      {
-        id: 'pos-courses',
-        tab: 'pos',
-        keywords: [
-          'courses',
-          'course',
-          'cours',
-          'gänge',
-          'gange',
-          'gang',
-          'fire',
-          'kitchen',
-          'send mode',
-          t('coursesEnabled'),
-          t('courseSendMode'),
-        ],
-      },
-      {
-        id: 'pos-checkout',
-        tab: 'pos',
-        keywords: [
-          'tips',
-          'pourboire',
-          'trinkgeld',
-          'discount',
-          'remise',
-          'rabatt',
-          'quick cash',
-          'split',
-          'checkout',
-          'express',
-          'express checkout',
-          t('posCheckoutSettings'),
-          t('tipsEnabled'),
-          t('discountsEnabled'),
-          t('quickCashEnabled'),
-          t('splitBillsEnabled'),
-          t('expressCheckoutEnabled'),
-        ],
-      },
-      {
-        id: 'pos-payments',
-        tab: 'pos',
-        keywords: [
-          'cash',
-          'card',
-          'terminal',
-          'paiement',
-          'zahlung',
-          t('webposPaymentMethods'),
-          t('webposCash'),
-          t('webposCard'),
-          t('webposTerminal'),
-        ],
-      },
-      {
-        id: 'pos-shifts',
-        tab: 'pos',
-        keywords: [
-          'shift',
-          'shifts',
-          'caisse',
-          'kasse',
-          'float',
-          'operations',
-          'opérations',
-          t('settingsOperations'),
-          t('shiftsEnabled'),
-          t('webPosShiftMenu'),
-        ],
-      },
-      {
-        id: 'tables-floor',
-        tab: 'tables',
-        keywords: ['tables', 'floor', 'plan', 'pax', t('floorPlanEnabled'), t('paxOrderingEnabled')],
-      },
-      {
-        id: 'tables-management',
-        tab: 'tables',
-        keywords: [
-          'table',
-          'tables',
-          'section',
-          'layout',
-          'qr',
-          t('navTableManagement'),
-          t('tableNavSettings'),
-          t('tableNavLayout'),
-          t('tableNavQr'),
-        ],
-      },
-      {
-        id: 'payments-adyen',
-        tab: 'payments',
-        keywords: ['adyen', 'swisspayout', 'terminal', 'tap to pay', 'softpos', t('adyenCredentials'), t('tapToPaySettings')],
-      },
-      {
-        id: 'payments-tap-to-pay',
-        tab: 'payments',
-        keywords: ['tap to pay', 'nfc', 'softpos', 'android', t('tapToPaySettings'), t('tapToPayEnabled')],
-      },
-      {
-        id: 'business-profile',
-        tab: 'business',
-        keywords: ['business', 'name', 'address', 'vat', t('businessSettings')],
-      },
-      {
-        id: 'taxes-rates',
-        tab: 'taxes',
-        keywords: ['tax', 'vat', 'tva', 'mwst', t('taxRates')],
-      },
-      {
-        id: 'shop-online',
-        tab: 'shop',
-        keywords: [
-          'shop',
-          'online',
-          'domain',
-          'subdomain',
-          'photo',
-          'photos',
-          'image',
-          'images',
-          'product photo',
-          'menu photo',
-          t('shop'),
-          t('shopShowProductPhotos'),
-          t('shopMenuPhotos'),
-        ],
-      },
-      {
-        id: 'delivery-platforms',
-        tab: 'delivery',
-        keywords: [
-          'just eat',
-          'uber eats',
-          'delivery',
-          'aggregator',
-          'webhook',
-          t('settingsDeliveryPlatforms'),
-          t('deliveryPlatformJustEat'),
-          t('deliveryPlatformUberEats'),
-        ],
-      },
-      {
-        id: 'hours-schedule',
-        tab: 'hours',
-        keywords: ['hours', 'opening', 'pickup', 'delivery', 'dine', 'schedule', t('settingsHours')],
-      },
-      {
-        id: 'reservations-config',
-        tab: 'reservations',
-        keywords: ['reservations', 'booking', 'slots', t('settingsReservations'), t('reservationsEnable')],
-      },
-      {
-        id: 'receipt-print',
-        tab: 'receipt',
-        keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
-      },
-      {
-        id: 'barcode-labels',
-        tab: 'receipt',
-        keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
-      },
-      {
-        id: 'inventory-addon',
-        tab: 'pos',
-        keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
-      },
-      {
-        id: 'storekeeper-addon',
-        tab: 'pos',
-        keywords: ['storekeeper', 'barcode', 'scan', 'intake', t('storekeeperTitle')],
-      },
-      {
-        id: 'signage-addon',
-        tab: 'signage',
-        keywords: ['signage', 'tv', 'menu board', 'screens', 'playlist', t('signageTitle'), t('signageNav')],
-      },
-      {
-        id: 'kiosk-setup',
-        tab: 'kiosk',
-        keywords: ['kiosk', 'self order', 'attract', 'slider', t('kioskNav')],
-      },
-      {
-        id: 'email-smtp',
-        tab: 'email',
-        keywords: [
-          'email',
-          'smtp',
-          'brevo',
-          'sendinblue',
-          'api',
-          'marketing',
-          'newsletter',
-          t('settingsEmail'),
-          t('settingsBrevo'),
-        ],
-      },
-      {
-        id: 'email-brevo',
-        tab: 'email',
-        keywords: ['brevo', 'sendinblue', 'api key', 'newsletter', t('settingsBrevo')],
-      },
-      {
-        id: 'language-panel',
-        tab: 'language',
-        keywords: ['language', 'langue', 'sprache', t('language')],
-      },
-    ],
-    [t]
+  const isSearchSectionRendered = useCallback(
+    (id: string) => {
+      if (id === 'pos-courses') return showCoursesSettings;
+      if (id === 'tables-floor' || id === 'tables-management') return showTablesSettings;
+      if (id === 'reservations-config') return !isRetailMerchant;
+      return true;
+    },
+    [isRetailMerchant, showCoursesSettings, showTablesSettings]
   );
 
-  const keywordMatchesQuery = useCallback(
-    (keyword: string) => String(keyword ?? '').toLowerCase().includes(normalizedQuery),
-    [normalizedQuery]
+  const visibleTabIds = useMemo(
+    () => new Set(visibleTabs.map((item) => item.id as SettingsTabId)),
+    [visibleTabs]
   );
 
   const matchedSearch = useMemo(() => {
-    if (!normalizedQuery) return [] as SettingsSearchEntry[];
-    return searchIndex.filter((entry) => entry.keywords.some(keywordMatchesQuery));
-  }, [normalizedQuery, searchIndex, keywordMatchesQuery]);
+    const raw = matchSettingsSearch(searchIndex, normalizedQuery);
+    return filterAccessibleSettingsSearch(raw, {
+      visibleTabIds,
+      canOpenTab: canOpenSettingsTab,
+      isSectionRendered: isSearchSectionRendered,
+    });
+  }, [
+    normalizedQuery,
+    searchIndex,
+    visibleTabIds,
+    canOpenSettingsTab,
+    isSearchSectionRendered,
+  ]);
 
-  const matchedIds = useMemo(() => new Set(matchedSearch.map((m) => m.id)), [matchedSearch]);
+  const matchedIdsOnCurrentTab = useMemo(() => {
+    if (!normalizedQuery || matchedSearch.length === 0) return new Set<string>();
+    return new Set(matchedSearch.filter((entry) => entry.tab === tab).map((entry) => entry.id));
+  }, [matchedSearch, normalizedQuery, tab]);
+
   const matchedTabs = useMemo(() => new Set(matchedSearch.map((m) => m.tab)), [matchedSearch]);
+
+  const searchNavigationKeyRef = useRef('');
 
   useEffect(() => {
     if (!normalizedQuery) {
+      searchNavigationKeyRef.current = '';
       setHighlightId(null);
       return;
     }
     if (matchedSearch.length === 0) {
+      searchNavigationKeyRef.current = normalizedQuery;
       setHighlightId(null);
       return;
     }
-    const visibleTabIds = new Set(visibleTabs.map((item) => item.id));
-    const best =
-      matchedSearch.find((entry) => visibleTabIds.has(entry.tab) && canOpenSettingsTab(entry.tab)) ??
-      matchedSearch[0];
-    if (!visibleTabIds.has(best.tab) || !canOpenSettingsTab(best.tab)) {
+    const best = pickSettingsSearchMatch(matchedSearch, tab as SettingsTabId);
+    if (!best) {
       setHighlightId(null);
       return;
     }
-    selectTab(best.tab);
+    const shouldSwitchTab =
+      searchNavigationKeyRef.current !== normalizedQuery || tab !== best.tab;
+    searchNavigationKeyRef.current = normalizedQuery;
     setHighlightId(best.id);
-    const timer = window.setTimeout(() => {
-      document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
+    if (shouldSwitchTab && tab !== best.tab) {
+      selectTab(best.tab);
+    }
+    const timer = window.setTimeout(
+      () => {
+        document.getElementById(best.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+      shouldSwitchTab && tab !== best.tab ? 120 : 80
+    );
     return () => window.clearTimeout(timer);
-  }, [normalizedQuery, matchedSearch, visibleTabs, canOpenSettingsTab, selectTab]);
+  }, [normalizedQuery, matchedSearch, tab, selectTab]);
 
-  const isSectionVisible = (id: string) => !normalizedQuery || matchedIds.has(id);
+  const isSectionVisible = (id: string) =>
+    !normalizedQuery || matchedSearch.length === 0 || matchedIdsOnCurrentTab.has(id);
   const isSectionHighlight = (id: string) => highlightId === id;
 
   useEffect(() => {
