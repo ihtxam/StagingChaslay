@@ -488,6 +488,7 @@ import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-
 import {
   backOfficeHomePath,
   canJwtReturnToPanel,
+  canSeeMerchantOnboarding,
   deliveryDriverHomePath,
   getEffectivePanelAccess,
   hasPermission,
@@ -1153,6 +1154,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
   /** Owner on the till without a clock-in keeps owner/manager perms. */
   const ownerOnRegister = jwtIsOwner && !webposStaff;
+  const canSeeOnboardingTour = canSeeMerchantOnboarding({
+    jwtPermissions: authUser?.permissions as Permission[] | undefined,
+    jwtIsOwner,
+    authRole: authUser?.role,
+    pinSession: webposStaff,
+  });
 
   const applyStaffRoster = useCallback(
     (staffList: StaffRosterRow[], opts?: { openPinGate?: boolean }) => {
@@ -2428,10 +2435,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         merchantName: merchant?.name || merchant?.businessName,
       }),
     });
+    if (pinGateRequired || !canSeeOnboardingTour) return;
     if (!readWebPosOnboardingDone()) {
       setOnboardingOpen(true);
     }
-  }, [locale, webposStaff?.name, webposStaff?.roleName, merchant?.name, merchant?.businessName]);
+  }, [
+    locale,
+    webposStaff?.name,
+    webposStaff?.roleName,
+    merchant?.name,
+    merchant?.businessName,
+    pinGateRequired,
+    canSeeOnboardingTour,
+  ]);
 
   useEffect(() => {
     if (!shiftsEnabled || !offlineSync.online) return;
@@ -10616,10 +10632,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
       />
 
-      <WebPosOnboardingTour
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
-      />
+      {canSeeOnboardingTour ? (
+        <WebPosOnboardingTour
+          open={onboardingOpen}
+          onClose={() => setOnboardingOpen(false)}
+        />
+      ) : null}
 
       <WebPosCustomerPicker
         open={customerOpen}
