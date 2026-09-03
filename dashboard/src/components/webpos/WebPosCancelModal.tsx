@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
@@ -28,6 +28,7 @@ type Props = {
   simpleConfirm?: boolean;
   /** Optional API reasons (en/fr/de). Falls back to i18n keys. */
   reasons?: CancelReasonOption[];
+  busy?: boolean;
   onClose: () => void;
   /** reasonId + localized label for display; backend normalizes to English. */
   onConfirm: (reason: string, reasonId: string) => void;
@@ -39,6 +40,7 @@ export default function WebPosCancelModal({
   itemLabel,
   simpleConfirm = false,
   reasons: apiReasons,
+  busy = false,
   onClose,
   onConfirm,
 }: Props) {
@@ -56,9 +58,15 @@ export default function WebPosCancelModal({
     }));
   }, [apiReasons, locale, t]);
   const [reasonId, setReasonId] = useState('');
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setReasonId(options[0]?.id || '');
   }, [open, options]);
 
@@ -81,15 +89,16 @@ export default function WebPosCancelModal({
             <p className="text-sm text-[var(--text-muted)]">{t('webPosCancelConfirm')}</p>
           </div>
           <div className="flex gap-2 border-t border-[var(--border)] p-4">
-            <button type="button" className="btn-secondary flex-1" onClick={onClose}>
+            <button type="button" className="btn-secondary flex-1" onClick={onClose} disabled={busy}>
               {t('cancel')}
             </button>
             <button
               type="button"
-              className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white hover:bg-rose-700"
+              className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-40"
+              disabled={busy}
               onClick={() => onConfirm(t('webPosCancelConfirm'), 'unsent_cart')}
             >
-              {t('confirm')}
+              {busy ? t('saving') : t('confirm')}
             </button>
           </div>
         </div>
@@ -135,16 +144,16 @@ export default function WebPosCancelModal({
           </div>
         </div>
         <div className="flex gap-2 border-t border-[var(--border)] p-4">
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>
+          <button type="button" className="btn-secondary flex-1" onClick={onClose} disabled={busy}>
             {t('cancel')}
           </button>
           <button
             type="button"
             className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-40"
-            disabled={!selected}
+            disabled={!selected || busy}
             onClick={() => selected && onConfirm(selected.label, selected.id)}
           >
-            {t('confirm')}
+            {busy ? t('saving') : t('confirm')}
           </button>
         </div>
       </div>

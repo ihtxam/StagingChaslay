@@ -41,6 +41,7 @@ import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
+import WebPosCancelModal, { type CancelReasonOption } from '@/components/webpos/WebPosCancelModal';
 import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
@@ -446,6 +447,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [collectOpen, setCollectOpen] = useState(false);
   const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
   const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
+  const [cancelReasons, setCancelReasons] = useState<CancelReasonOption[]>([]);
+  const [cancelFor, setCancelFor] = useState<MerchantOrder | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
     order: MerchantOrder;
@@ -522,6 +526,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         setOrders((ordersRes.data.orders || []) as MerchantOrder[]);
         setHeldRows((heldRes.data.held || []) as HeldRow[]);
         setRefundReasons(ordersRes.data.refundReasons || []);
+        setCancelReasons(ordersRes.data.cancelReasons || []);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
@@ -688,6 +693,32 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
       toast.error(e.response?.data?.error || t('actionFailed'));
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const doCancelOrder = async (reason: string, reasonId: string) => {
+    if (!cancelFor || cancelBusy) return;
+    const orderSnapshot = cancelFor;
+    setCancelBusy(true);
+    try {
+      if (isOnlineShopOrder(orderSnapshot)) {
+        await api.post(`/merchant/orders/${orderSnapshot.id}/action`, {
+          action: 'cancel',
+          rejectReason: reasonId || reason,
+        });
+      } else {
+        await api.post(`/merchant/pos/orders/${orderSnapshot.id}/cancel`, {
+          reason: reasonId || reason,
+        });
+      }
+      toast.success(t('webPosOrderCancelled'));
+      setCancelFor(null);
+      if (selected?.id === orderSnapshot.id) setSelected(null);
+      void load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('webPosCancelFailed'));
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -1497,7 +1528,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   <button
                     type="button"
                     disabled={actionBusy}
-                    onClick={() => void runOrderAction(selected, 'cancel')}
+                    onClick={() => setCancelFor(selected)}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                   >
                     {t('webPosCancelOrder')}
@@ -1531,6 +1562,18 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         open={salesAdjOpen}
         onClose={() => setSalesAdjOpen(false)}
         onApplied={() => void load()}
+      />
+
+      <WebPosCancelModal
+        open={!!cancelFor}
+        scope="order"
+        reasons={cancelReasons}
+        busy={cancelBusy}
+        onClose={() => {
+          if (cancelBusy) return;
+          setCancelFor(null);
+        }}
+        onConfirm={(reason, reasonId) => void doCancelOrder(reason, reasonId)}
       />
 
       <WebPosRefundModal
