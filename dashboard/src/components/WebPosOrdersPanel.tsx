@@ -525,6 +525,7 @@ export default function WebPosOrdersPanel({
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [cancelFor, setCancelFor] = useState<PosOrder | null>(null);
   const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
   const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
     order: PosOrder;
@@ -896,26 +897,33 @@ export default function WebPosOrdersPanel({
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
 
-  const doCancelOrder = async (reason: string) => {
-    if (!cancelFor) return;
+  const doCancelOrder = async (reason: string, reasonId: string) => {
+    if (!cancelFor || cancelBusy) return;
+    const orderSnapshot = cancelFor;
+    setCancelBusy(true);
     try {
-      await api.post(`/merchant/pos/orders/${cancelFor.id}/cancel`, { reason });
+      await api.post(`/merchant/pos/orders/${orderSnapshot.id}/cancel`, {
+        reason: reasonId || reason,
+      });
       toast.success(t('webPosOrderCancelled'));
       setCancelFor(null);
       setSelectedOrder(null);
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosCancelFailed'));
+    } finally {
+      setCancelBusy(false);
     }
   };
 
-  const doCancelHeld = async (reason: string) => {
-    if (!cancelHeldFor) return;
+  const doCancelHeld = async (reason: string, reasonId: string) => {
+    if (!cancelHeldFor || cancelBusy) return;
     const heldRow = cancelHeldFor;
+    setCancelBusy(true);
     try {
       if (heldRow.status === 'sent_to_kitchen' && onVoidHeldKitchen) {
         try {
-          await onVoidHeldKitchen(heldRow, reason);
+          await onVoidHeldKitchen(heldRow, reasonId || reason);
         } catch {
           /* kitchen print is best-effort */
         }
@@ -929,7 +937,9 @@ export default function WebPosOrdersPanel({
           tabNumber: meta.tabNumber,
         });
       } else {
-        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
+        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, {
+          reason: reasonId || reason,
+        });
       }
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
@@ -937,6 +947,8 @@ export default function WebPosOrdersPanel({
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosCancelFailed'));
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -2377,13 +2389,15 @@ export default function WebPosOrdersPanel({
         open={cancelModalOpen}
         scope="order"
         reasons={reasons}
+        busy={cancelBusy}
         onClose={() => {
+          if (cancelBusy) return;
           setCancelFor(null);
           setCancelHeldFor(null);
         }}
-        onConfirm={(reason) => {
-          if (cancelHeldFor) void doCancelHeld(reason);
-          else void doCancelOrder(reason);
+        onConfirm={(reason, reasonId) => {
+          if (cancelHeldFor) void doCancelHeld(reason, reasonId);
+          else void doCancelOrder(reason, reasonId);
         }}
       />
 
