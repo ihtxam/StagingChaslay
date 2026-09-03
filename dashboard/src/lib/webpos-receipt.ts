@@ -1352,10 +1352,14 @@ export function strikethroughText(text: string): string {
   return [...text].map((ch) => (ch === '\n' ? ch : `${ch}\u0336`)).join('');
 }
 
-/** CP850-safe visual strikethrough for thermal printers. */
+/** CP850-safe visual strikethrough for thermal printers (preserves leading indent). */
 export function strikethroughEscPosLabel(text: string): string {
-  const trimmed = text.trim();
-  return trimmed ? `- ${trimmed} -` : trimmed;
+  const match = text.match(/^(\s*)(.*)$/);
+  if (!match) return text;
+  const leading = match[1] ?? '';
+  const trimmed = (match[2] ?? '').trim();
+  if (!trimmed) return text;
+  return `${leading}- ${trimmed} -`;
 }
 
 /** e.g. "TAKEAWAY : ASAP" or "TAKEAWAY : 17:00" */
@@ -1392,11 +1396,13 @@ function formatKitchenChannelWhenLines(
 }
 
 type KitchenLine = {
-  kind: 'center' | 'header' | 'item' | 'extra' | 'note' | 'normal' | 'strike' | 'course';
+  kind: 'center' | 'header' | 'item' | 'extra' | 'note' | 'normal' | 'course';
   /** Line body without trailing newlines (ESC/POS adds LF bytes explicitly). */
   text: string;
   /** Extra blank lines after this row (kitchen readability). */
   blankAfter?: number;
+  /** Void/cancel ticket: strikethrough styling while keeping item vs modifier scale. */
+  cancelledLine?: boolean;
   /** Cross-station footer: smaller + italic so other table items read as secondary. */
   deemphasized?: boolean;
 };
@@ -1460,25 +1466,31 @@ function formatKitchenItemLines(
   const wrappedPrimary = wrapKitchenWords(primary, width);
   const lines: KitchenLine[] = [];
 
-  const pushLine = (kind: KitchenLine['kind'], text: string, blankAfter = 0) => {
-    if (!cancelled) {
-      lines.push({ kind, text, blankAfter });
-      return;
-    }
-    if (forEscPos) {
-      lines.push({
-        kind: 'strike',
-        text: strikethroughEscPosLabel(text).slice(0, width),
-        blankAfter,
-      });
-    } else {
-      lines.push({ kind: 'strike', text: strikethroughText(text), blankAfter });
-    }
+  const pushLine = (
+    kind: KitchenLine['kind'],
+    text: string,
+    blankAfter = 0,
+    maxWidth = width
+  ) => {
+    const body =
+      cancelled
+        ? forEscPos
+          ? strikethroughEscPosLabel(text)
+          : strikethroughText(text)
+        : text;
+    lines.push({
+      kind,
+      text: body.slice(0, maxWidth),
+      blankAfter,
+      cancelledLine: cancelled || undefined,
+    });
   };
 
-  const pushExtra = (text: string, blankAfter = 0) => pushLine('extra', text, blankAfter);
+  const pushExtra = (text: string, blankAfter = 0) =>
+    pushLine('extra', text, blankAfter, modifierWidth);
   const pushItem = (text: string, blankAfter = 0) => pushLine('item', text, blankAfter);
-  const pushNote = (text: string, blankAfter = 0) => pushLine('note', text, blankAfter);
+  const pushNote = (text: string, blankAfter = 0) =>
+    pushLine('note', text, blankAfter, modifierWidth);
 
   if (wrappedPrimary.length) {
     wrappedPrimary.forEach((w, i) => {
@@ -1722,7 +1734,6 @@ function escAlign(mode: 0 | 1 | 2): Uint8Array {
   return new Uint8Array([0x1b, 0x61, mode]);
 }
 
-/** ESC/POS underline (closest hardware strikethrough on most thermal printers). */
 function escUnderline(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x2d, on ? 1 : 0]);
 }
@@ -1819,18 +1830,6 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
       );
       feedLine(line.blankAfter);
       resetSize();
-    } else if (line.kind === 'strike') {
-      parts.push(
-        escAlign(0),
-        escKitchenSize(lineItemScale),
-        escBold(true),
-        escUnderline(true),
-        escItalic(italic),
-        body(line.text),
-        escUnderline(false)
-      );
-      feedLine(line.blankAfter);
-      resetSize();
     } else if (line.kind === 'item') {
       parts.push(
         escAlign(0),
@@ -1858,7 +1857,7 @@ export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array
         escAlign(0),
         escKitchenSize(1),
         escBold(false),
-        escUnderline(true),
+        escUnderline(!line.cancelledLine),
         escItalic(italic),
         body(line.text),
         escUnderline(false)
