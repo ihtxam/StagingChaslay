@@ -69,10 +69,13 @@
     <string name="oem_step_start_bridge_title">Start Bridge service</string>
     <string name="oem_step_start_bridge_desc">Bridge Reborn runs as a foreground service on port 9101. Tap Start below — we verify WebPOS can reach it before you continue.</string>
     <string name="oem_step_start_bridge_action">Start Bridge service</string>
-    <string name="oem_step_bridge_checking">Starting Bridge… checking http://127.0.0.1:9101/health</string>
+    <string name="oem_step_bridge_checking">Starting Bridge… checking http://127.0.0.1:9101/health (%1$d/%2$d)</string>
     <string name="oem_step_bridge_verified">Bridge is running (version %1$s). WebPOS can print and take NFC payments.</string>
-    <string name="oem_step_bridge_pending">Bridge is not responding yet. Tap Start Bridge service, then wait a few seconds.</string>
-    <string name="oem_step_bridge_failed">Bridge did not respond. Check notification permission, then tap Start Bridge service again.</string>
+    <string name="oem_step_bridge_pending">Starting Bridge service automatically…</string>
+    <string name="oem_step_bridge_notification_prompt">Allow notifications so Bridge Reborn can run in the background.</string>
+    <string name="oem_step_bridge_notification_required">Notifications are required on Android 13+. Tap Start Bridge service to grant permission.</string>
+    <string name="oem_step_bridge_notification_denied">Notifications are off — Bridge cannot run. Open Android Settings → Apps → Bridge Reborn → Notifications, enable them, then return here.</string>
+    <string name="oem_step_bridge_failed">Bridge did not respond after several attempts. Retrying automatically… If this persists, check notification permission in Android Settings.</string>
     <string name="oem_step_bridge_version_unknown">unknown</string>
     <string name="oem_step_open_webpos">Open WebPOS</string>
     <string name="oem_step_tap_to_pay_title">Activate Tap to Pay</string>
