@@ -141,8 +141,8 @@ test('settingsSearchView never idles on a non-empty query (failsafe)', () => {
   assert.equal(settingsSearchView('kitchen printer', 1), 'results');
   assert.equal(settingsSearchView('zzzz nohit', 0), 'empty');
   assert.equal(settingsSearchView('a b', 0), 'empty');
-  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'search-click-v6');
-  assert.equal(SETTINGS_SEARCH_CLICK_MARK, 'search-click-v6');
+  assert.equal(SETTINGS_SEARCH_STAY_ON_TAB_MARK, 'search-click-v7');
+  assert.equal(SETTINGS_SEARCH_CLICK_MARK, 'search-click-v7');
 });
 
 test('resolveSettingsContentTab never leaves the current tab while typing', () => {
@@ -292,32 +292,52 @@ test('planSettingsSearchResultClick for POS rows targets pos without forcing rem
   assert.equal(planSettingsSearchResultClick(taxes, 'business')?.tab, 'taxes');
 });
 
-test('scrollToSettingsSearchSection scrolls overflow auto, not overflow hidden', () => {
+test('scrollToSettingsSearchSection scrolls the designated inner root only', () => {
   if (typeof document === 'undefined') return;
   const hidden = document.createElement('div');
+  hidden.className = 'panel-shell';
   hidden.style.cssText = 'overflow:hidden;height:80px;width:200px;';
+  hidden.scrollTop = 40;
+  const falsePort = document.createElement('div');
+  falsePort.style.cssText = 'overflow-x:hidden;overflow-y:visible;height:90px;width:200px;';
+  Object.defineProperty(falsePort, 'scrollHeight', { configurable: true, get: () => 400 });
+  Object.defineProperty(falsePort, 'clientHeight', { configurable: true, get: () => 90 });
+  falsePort.scrollTop = 18;
+  let falseScrolled = false;
+  falsePort.scrollTo = ((opts: { top?: number }) => {
+    falseScrolled = true;
+    falsePort.scrollTop = Number(opts?.top) || 0;
+  }) as typeof falsePort.scrollTo;
   const scroller = document.createElement('div');
+  scroller.setAttribute('data-settings-scroll-root', 'search-click-v7');
   scroller.style.cssText = 'overflow-y:auto;height:100px;width:200px;';
   Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 400 });
   Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 100 });
   scroller.scrollTop = 0;
   let scrolled = false;
+  let scrolledTop = -1;
   scroller.scrollTo = ((opts: { top?: number }) => {
     scrolled = true;
-    scroller.scrollTop = Number(opts?.top) || 0;
+    scrolledTop = Number(opts?.top) || 0;
+    scroller.scrollTop = scrolledTop;
   }) as typeof scroller.scrollTo;
   hidden.scrollTo = (() => {
-    throw new Error('must not scroll overflow:hidden');
+    throw new Error('must not scroll overflow:hidden panel-shell');
   }) as typeof hidden.scrollTo;
   const target = document.createElement('div');
   target.id = 'pos-mode';
-  scroller.appendChild(hidden);
-  hidden.appendChild(target);
-  document.body.appendChild(scroller);
+  scroller.appendChild(target);
+  falsePort.appendChild(scroller);
+  hidden.appendChild(falsePort);
+  document.body.appendChild(hidden);
   try {
     assert.equal(scrollToSettingsSearchSection('pos-mode'), true);
     assert.equal(scrolled, true);
+    assert.equal(falseScrolled, false);
+    assert.equal(hidden.scrollTop, 0);
+    assert.equal(falsePort.scrollTop, 0);
+    assert.ok(scrolledTop >= 0);
   } finally {
-    scroller.remove();
+    hidden.remove();
   }
 });

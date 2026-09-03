@@ -1,4 +1,4 @@
-/** Live-bundle grep marker: search-click-v6 */
+/** Live-bundle grep marker: search-click-v7 */
 export type SettingsTabId =
   | 'business'
   | 'taxes'
@@ -156,50 +156,66 @@ export function nextTabForHiddenRetailSettings(
   return null;
 }
 
-function overflowYOf(el: Element): string {
+/**
+ * v6 walked ancestors for overflow-y:auto. That is wrong here:
+ * SettingsReportCard and the settings `.card` used overflow-x-hidden + overflow-y-visible,
+ * which CSS computes to overflow-y:auto (pairing). POS is the only long tab whose
+ * search hits all have DOM ids, so the walker "succeeded" on that false scrollport
+ * (or leftover overflow:hidden scrollTop on .panel-shell) and the POS body looked blank.
+ * Taxes/Payments are short panels, so the same leftover clip still showed content.
+ *
+ * v7: zero clipper scrollTops, then scroll ONLY [data-settings-scroll-root] / .panel-main.
+ */
+export function findSettingsSearchScrollRoot(from: HTMLElement): HTMLElement | null {
+  const inner = from.closest('[data-settings-scroll-root]');
+  if (inner instanceof HTMLElement) return inner;
+  if (typeof document === 'undefined') return null;
+  const main = document.querySelector('.panel-main');
+  return main instanceof HTMLElement ? main : null;
+}
+
+export function resetSettingsClipperScroll(from?: HTMLElement | null): void {
   try {
-    return (window.getComputedStyle(el).overflowY || '').toLowerCase();
+    if (typeof document === 'undefined') return;
+    let parent: HTMLElement | null = from?.parentElement ?? document.body;
+    while (parent && parent !== document.documentElement) {
+      const designated =
+        parent.hasAttribute('data-settings-scroll-root') || parent.classList.contains('panel-main');
+      if (!designated && parent.scrollTop) parent.scrollTop = 0;
+      parent = parent.parentElement;
+    }
+    const shell = document.querySelector('.panel-shell');
+    if (shell instanceof HTMLElement && shell.scrollTop) shell.scrollTop = 0;
   } catch {
-    return '';
+    /* ignore */
   }
 }
 
-function isSafeScrollport(el: HTMLElement): boolean {
-  const oy = overflowYOf(el);
-  if (oy !== 'auto' && oy !== 'scroll') return false;
-  return el.scrollHeight > el.clientHeight + 2;
+function clampScrollTop(el: HTMLElement, nextTop: number): number {
+  const max = Math.max(0, el.scrollHeight - el.clientHeight);
+  return Math.min(max, Math.max(0, nextTop));
 }
 
 /**
- * Scroll a mounted #id into view without Element.scrollIntoView.
- * scrollIntoView walks overflow:hidden ancestors (panel-shell, settings card,
- * report cards) and sets their scrollTop — that clips the POS tab to empty.
- * Taxes/Payments looked fine because taxes-rates had no DOM id (no scroll)
- * and payments sections sit near the top of a short panel.
+ * Scroll a mounted #id inside the settings tab body only.
+ * Never Element.scrollIntoView (it mutates overflow:hidden clippers).
  */
 export function scrollToSettingsSearchSection(id: string | undefined | null): boolean {
   try {
     if (!id || typeof document === 'undefined') return false;
     const el = document.getElementById(id);
     if (!el) return false;
-    let parent = el.parentElement;
-    while (parent && parent !== document.body && parent !== document.documentElement) {
-      if (isSafeScrollport(parent)) {
-        const parentRect = parent.getBoundingClientRect();
-        const rect = el.getBoundingClientRect();
-        const nextTop = parent.scrollTop + (rect.top - parentRect.top) - 16;
-        if (typeof parent.scrollTo === 'function') {
-          parent.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
-        } else {
-          parent.scrollTop = Math.max(0, nextTop);
-        }
-        return true;
-      }
-      parent = parent.parentElement;
-    }
+    resetSettingsClipperScroll(el);
+    const root = findSettingsSearchScrollRoot(el);
+    if (!root) return true;
+    const parentRect = root.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
-    const top = (window.scrollY || document.documentElement.scrollTop || 0) + rect.top - 16;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    const nextTop = clampScrollTop(root, root.scrollTop + (rect.top - parentRect.top) - 12);
+    if (typeof root.scrollTo === 'function') {
+      root.scrollTo({ top: nextTop, behavior: 'smooth' });
+    } else {
+      root.scrollTop = nextTop;
+    }
     return true;
   } catch {
     return false;
@@ -231,8 +247,8 @@ export function scheduleScrollToSettingsSearchSection(
  * Grep marker for the live staging bundle. Must stay a real string so
  * `curl https://app.chaslay.com/assets/index-*.js` can prove this build is served.
  */
-export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'search-click-v6';
-export const SETTINGS_SEARCH_CLICK_MARK = 'search-click-v6';
+export const SETTINGS_SEARCH_STAY_ON_TAB_MARK = 'search-click-v7';
+export const SETTINGS_SEARCH_CLICK_MARK = 'search-click-v7';
 
 export type SettingsSearchView = 'idle' | 'results' | 'empty';
 

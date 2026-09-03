@@ -97,7 +97,7 @@ export function SettingsReportCard({
     <section
       id={id}
       data-settings-section={id}
-      className={`scroll-mt-4 overflow-x-hidden overflow-y-visible rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-sm transition-colors ${
+      className={`scroll-mt-4 overflow-x-clip overflow-y-visible rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-sm transition-colors ${
         highlight ? 'ring-2 ring-[var(--ring)]' : ''
       }`}
     >

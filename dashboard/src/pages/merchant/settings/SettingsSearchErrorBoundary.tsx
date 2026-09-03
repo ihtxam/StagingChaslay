@@ -35,7 +35,7 @@ export default class SettingsSearchErrorBoundary extends Component<Props, State>
     if (this.state.error) {
       return (
         <div
-          data-settings-search="search-click-v6"
+          data-settings-search="search-click-v7"
           role="alert"
           className="min-h-[12rem] rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-8 text-center text-sm text-[var(--text)]"
         >

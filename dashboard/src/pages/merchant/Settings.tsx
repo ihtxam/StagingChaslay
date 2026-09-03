@@ -426,10 +426,10 @@ function Section({
 }) {
   const { t } = useI18n();
   return (
-    <div className={`transition-opacity ${dimmed ? 'pointer-events-none opacity-40' : ''}`}>
+    <div className={`min-h-[6rem] transition-opacity ${dimmed ? 'pointer-events-none opacity-40' : ''}`}>
       <SettingsSearchErrorBoundary
         resetKey={id || title}
-        fallbackText={t('settingsPosSectionFailed')}
+        fallbackText={`${title} — ${t('settingsPosSectionFailed')}`}
       >
         <SettingsReportCard
           id={id}
@@ -1481,10 +1481,10 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4"
+      className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-3 sm:gap-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">{t('settings')}</h1>
           <p className="page-sub">
@@ -1515,7 +1515,7 @@ export default function Settings() {
       ) : null}
       {searchView === 'results' ? (
         <div
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3"
+          className="max-h-[min(28vh,16rem)] shrink-0 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:max-h-[min(32vh,18rem)] sm:p-3"
           data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
         >
           <ul className="flex flex-col gap-1" role="listbox" aria-label={t('settingsSearch')}>
@@ -1576,8 +1576,8 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 overflow-x-hidden overflow-y-visible">
-        <div className="flex flex-col lg:flex-row min-h-[60vh]">
+      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-x-clip">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <aside className="shrink-0 border-b border-[var(--border)] lg:w-56 lg:border-b-0 lg:border-r">
             <nav
               className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-col lg:gap-0.5 lg:overflow-visible max-h-[min(42vh,320px)] overflow-y-auto overscroll-y-contain lg:max-h-none [-webkit-overflow-scrolling:touch]"
@@ -1619,7 +1619,10 @@ export default function Settings() {
             </nav>
           </aside>
 
-          <div className="min-w-0 flex-1 p-4 sm:p-5 pb-24 sm:pb-5">
+          <div
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5 pb-24 sm:pb-5"
+            data-settings-scroll-root="search-click-v7"
+          >
           <SettingsSearchErrorBoundary
             resetKey={`${tab}:${normalizedQuery}`}
             fallbackText={t('settingsSearchOpenFailed')}
@@ -2014,7 +2017,11 @@ export default function Settings() {
           )}
 
           {tab === 'pos' && (
-            <form onSubmit={onSave} className="space-y-5" data-settings-pos-panel={SETTINGS_SEARCH_CLICK_MARK}>
+            <form
+              onSubmit={onSave}
+              className="min-h-[20rem] space-y-5"
+              data-settings-pos-panel={SETTINGS_SEARCH_CLICK_MARK}
+            >
               <SettingsPageHeader
                 title={t('settingsPos')}
                 subtitle={t('posLayoutSettingsHint')}
