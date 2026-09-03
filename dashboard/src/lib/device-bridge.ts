@@ -6,6 +6,7 @@
  */
 
 import { resolveApiOriginForBridge } from '@/lib/api';
+import { markBridgeRebornInstalled } from '@/lib/pwa';
 import { PRINT_AGENT_URL } from '@/lib/print-agent';
 
 export type DeviceBridgeHealth = {
@@ -88,11 +89,7 @@ export async function probeDeviceBridgeHealth(attempts = 5): Promise<DeviceBridg
   for (let i = 0; i < tries; i++) {
     last = await getDeviceBridgeHealth();
     if (last.ok) {
-      try {
-        localStorage.setItem('reborn_bridge_installed', '1');
-      } catch {
-        /* ignore */
-      }
+      markBridgeRebornInstalled();
       return last;
     }
     if (i + 1 < tries) {

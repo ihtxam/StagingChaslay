@@ -42,45 +42,60 @@
     </script>
     <script>
       (function () {
+        var p = location.pathname || '';
+        var isKiosk = /^\/kiosk(\/|$)/.test(p);
+        var isPos = /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(p);
+        var isAndroid = /android/i.test(navigator.userAgent || '');
         var standalone =
           (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
           (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
           window.navigator.standalone === true;
+        var KEYS = {
+          pwa: 'reborn_pwa_installed',
+          bridge: 'reborn_bridge_installed',
+          browser: 'reborn_pwa_browser_preferred',
+          guide: 'reborn_pwa_launch_guide_dismissed',
+          session: 'reborn_install_prompt_suppressed',
+        };
         if (standalone) {
           try {
-            localStorage.setItem('reborn_pwa_installed', '1');
+            localStorage.setItem(KEYS.pwa, '1');
           } catch (e) {}
+        }
+        function shouldSuppress() {
+          if (standalone) return true;
+          try {
+            if (sessionStorage.getItem(KEYS.session) === '1') return true;
+            if (localStorage.getItem(KEYS.pwa) === '1') return true;
+            if (localStorage.getItem(KEYS.bridge) === '1') return true;
+            if (localStorage.getItem(KEYS.browser) === '1') return true;
+            if (localStorage.getItem(KEYS.guide) === '1') return true;
+          } catch (e) {}
+          if (isAndroid && isPos && !standalone && !isKiosk) return true;
+          return false;
         }
         function suppressInstallPrompt(e) {
-          if (/^\/kiosk(\/|$)/.test(location.pathname || '')) return;
+          if (isKiosk) return;
+          if (!shouldSuppress()) return;
           e.preventDefault();
+          try {
+            sessionStorage.setItem(KEYS.session, '1');
+          } catch (e2) {}
         }
-        function armInstallGuard() {
+        if (!isKiosk) {
           window.addEventListener('beforeinstallprompt', suppressInstallPrompt, { capture: true });
         }
-        try {
-          if (
-            localStorage.getItem('reborn_pwa_installed') === '1' ||
-            localStorage.getItem('reborn_bridge_installed') === '1'
-          ) armInstallGuard();
-        } catch (e) {}
         window.addEventListener('appinstalled', function () {
           try {
-            localStorage.setItem('reborn_pwa_installed', '1');
+            localStorage.setItem(KEYS.pwa, '1');
             sessionStorage.setItem('reborn_pwa_just_installed', '1');
+            sessionStorage.setItem(KEYS.session, '1');
           } catch (e) {}
-          armInstallGuard();
         });
-        if (!standalone) {
+        if (!standalone && !isKiosk && shouldSuppress()) {
           try {
-            if (
-              (localStorage.getItem('reborn_pwa_installed') === '1' ||
-                localStorage.getItem('reborn_bridge_installed') === '1') &&
-              !/^\/kiosk(\/|$)/.test(location.pathname || '')
-            ) {
-              var manifestLink = document.querySelector('link[rel="manifest"]');
-              if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
-            }
+            var manifestLink = document.querySelector('link[rel="manifest"]');
+            if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
           } catch (e) {}
         }
       })();

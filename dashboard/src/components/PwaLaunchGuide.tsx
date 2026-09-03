@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Smartphone, X } from 'lucide-react';
 import { isAndroidDevice } from '@/lib/print-agent-platform';
-import { isRebornPwaInstalled, isStandalonePwa } from '@/lib/pwa';
-
-const JUST_INSTALLED_KEY = 'reborn_pwa_just_installed';
-const GUIDE_DISMISSED_KEY = 'reborn_pwa_launch_guide_dismissed';
+import {
+  isBrowserPreferredForWebPos,
+  isLaunchGuideDismissed,
+  isRebornPwaInstalled,
+  isStandalonePwa,
+  JUST_INSTALLED_KEY,
+  markBrowserPreferredForWebPos,
+  markLaunchGuideDismissed,
+  markRebornPwaInstalled,
+} from '@/lib/pwa';
 
 function isPosLikePath(): boolean {
   if (typeof window === 'undefined') return false;
@@ -18,6 +24,7 @@ export default function PwaLaunchGuide() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!isPosLikePath()) return;
+    if (isBrowserPreferredForWebPos() || isLaunchGuideDismissed()) return;
 
     let cancelled = false;
     void (async () => {
@@ -38,11 +45,6 @@ export default function PwaLaunchGuide() {
       }
 
       if (!show && isAndroidDevice()) {
-        try {
-          if (sessionStorage.getItem(GUIDE_DISMISSED_KEY) === '1') return;
-        } catch {
-          /* ignore */
-        }
         const installed = await isRebornPwaInstalled();
         if (!cancelled && installed) show = true;
       }
@@ -66,12 +68,18 @@ export default function PwaLaunchGuide() {
 
   if (!open) return null;
 
-  const dismiss = () => {
+  const closeGuide = (mode: 'browser' | 'icon') => {
     try {
       sessionStorage.removeItem(JUST_INSTALLED_KEY);
-      sessionStorage.setItem(GUIDE_DISMISSED_KEY, '1');
     } catch {
       /* ignore */
+    }
+    if (mode === 'browser') {
+      markBrowserPreferredForWebPos();
+      markRebornPwaInstalled();
+    } else {
+      markLaunchGuideDismissed();
+      markRebornPwaInstalled();
     }
     setOpen(false);
   };
@@ -92,17 +100,38 @@ export default function PwaLaunchGuide() {
             <p className="mt-2 text-sm text-[var(--text-muted)]">
               {justInstalled
                 ? 'Installation finished in Chrome. Close this browser tab, then open Reborn from your home screen icon — not from Chrome again.'
-                : 'Reborn is already on this tablet. Close Chrome and open the Reborn home screen icon. Installing again from Chrome only adds duplicate shortcuts and will not update the app.'}
+                : 'Reborn is already on this tablet. Use the home screen icon, or keep using Chrome here. Installing again from Chrome only adds duplicate shortcuts.'}
             </p>
-            <button type="button" className="btn-primary mt-4 w-full" onClick={dismiss}>
-              Got it
-            </button>
+            <div className="mt-4 flex flex-col gap-2">
+              {!justInstalled ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-primary w-full"
+                    onClick={() => closeGuide('browser')}
+                  >
+                    Continue in Chrome
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary w-full"
+                    onClick={() => closeGuide('icon')}
+                  >
+                    I&apos;ll use the home screen icon
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn-primary w-full" onClick={() => closeGuide('icon')}>
+                  Got it
+                </button>
+              )}
+            </div>
           </div>
           <button
             type="button"
             className="shrink-0 rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
             aria-label="Close"
-            onClick={dismiss}
+            onClick={() => closeGuide(justInstalled ? 'icon' : 'browser')}
           >
             <X className="h-5 w-5" />
           </button>

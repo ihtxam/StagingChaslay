@@ -10,52 +10,171 @@ export function isStandalonePwa(): boolean {
 
 type RelatedWebApp = { platform: string; url?: string; id?: string };
 
-const PWA_INSTALLED_KEY = 'reborn_pwa_installed';
-const BRIDGE_INSTALLED_KEY = 'reborn_bridge_installed';
+export const PWA_INSTALLED_KEY = 'reborn_pwa_installed';
+export const BRIDGE_INSTALLED_KEY = 'reborn_bridge_installed';
+export const BROWSER_PREFERRED_KEY = 'reborn_pwa_browser_preferred';
+export const GUIDE_DISMISSED_KEY = 'reborn_pwa_launch_guide_dismissed';
+export const JUST_INSTALLED_KEY = 'reborn_pwa_just_installed';
+const SESSION_SUPPRESS_KEY = 'reborn_install_prompt_suppressed';
 
-function isAndroidTabletBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /android/i.test(navigator.userAgent);
+/** Android WebPOS is designed for Chrome + Bridge — never nag for a second PWA install. */
+export function isAndroidTabletBrowser(userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : ''): boolean {
+  return /android/i.test(userAgent);
 }
 
-function isPosLikePath(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): boolean {
+export function isPosLikePath(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): boolean {
   return /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(pathname);
+}
+
+export function isKioskPath(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): boolean {
+  return /^\/kiosk(\/|$)/.test(pathname);
+}
+
+export type InstallPromptStorage = {
+  pwaInstalled?: boolean;
+  bridgeInstalled?: boolean;
+  browserPreferred?: boolean;
+  guideDismissed?: boolean;
+};
+
+/** Pure install-suppression rules (unit-tested). */
+export function shouldSuppressRebornInstallPromptSync(
+  opts: InstallPromptStorage & {
+    standalone?: boolean;
+    kioskPath?: boolean;
+    androidPosBrowser?: boolean;
+    sessionSuppressed?: boolean;
+  }
+): boolean {
+  if (opts.kioskPath) return false;
+  if (opts.standalone) return true;
+  if (opts.sessionSuppressed) return true;
+  if (opts.pwaInstalled) return true;
+  if (opts.bridgeInstalled) return true;
+  if (opts.browserPreferred) return true;
+  if (opts.guideDismissed) return true;
+  if (opts.androidPosBrowser) return true;
+  return false;
+}
+
+function readStorageFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeStorageFlag(key: string): void {
+  try {
+    localStorage.setItem(key, '1');
+  } catch {
+    /* private mode */
+  }
+}
+
+function readSessionFlag(key: string): boolean {
+  try {
+    return sessionStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionFlag(key: string): void {
+  try {
+    sessionStorage.setItem(key, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isBrowserPreferredForWebPos(): boolean {
+  return readStorageFlag(BROWSER_PREFERRED_KEY);
+}
+
+export function isLaunchGuideDismissed(): boolean {
+  return readStorageFlag(GUIDE_DISMISSED_KEY);
+}
+
+/** Persist "continue in Chrome" and stop all install prompts. */
+export function markBrowserPreferredForWebPos(): void {
+  writeStorageFlag(BROWSER_PREFERRED_KEY);
+  writeStorageFlag(GUIDE_DISMISSED_KEY);
+  writeSessionFlag(SESSION_SUPPRESS_KEY);
+  removeInstallManifestIfNeeded();
+}
+
+export function markLaunchGuideDismissed(): void {
+  writeStorageFlag(GUIDE_DISMISSED_KEY);
+  writeSessionFlag(SESSION_SUPPRESS_KEY);
+  removeInstallManifestIfNeeded();
+}
+
+export function markRebornPwaInstalled(): void {
+  writeStorageFlag(PWA_INSTALLED_KEY);
+  writeSessionFlag(SESSION_SUPPRESS_KEY);
+  removeInstallManifestIfNeeded();
+}
+
+export function markBridgeRebornInstalled(): void {
+  writeStorageFlag(BRIDGE_INSTALLED_KEY);
+  writeSessionFlag(SESSION_SUPPRESS_KEY);
+  removeInstallManifestIfNeeded();
+}
+
+export function removeInstallManifestIfNeeded(): void {
+  if (typeof document === 'undefined') return;
+  if (isKioskPath()) return;
+  document.querySelector('link[rel="manifest"]')?.remove();
+}
+
+function currentSuppressContext(): InstallPromptStorage & {
+  standalone: boolean;
+  kioskPath: boolean;
+  androidPosBrowser: boolean;
+  sessionSuppressed: boolean;
+} {
+  const standalone = isStandalonePwa();
+  const kioskPath = isKioskPath();
+  const androidPosBrowser =
+    isAndroidTabletBrowser() && isPosLikePath() && !standalone && !kioskPath;
+  return {
+    standalone,
+    kioskPath,
+    androidPosBrowser,
+    sessionSuppressed: readSessionFlag(SESSION_SUPPRESS_KEY),
+    pwaInstalled: readStorageFlag(PWA_INSTALLED_KEY),
+    bridgeInstalled: readStorageFlag(BRIDGE_INSTALLED_KEY),
+    browserPreferred: readStorageFlag(BROWSER_PREFERRED_KEY),
+    guideDismissed: readStorageFlag(GUIDE_DISMISSED_KEY),
+  };
+}
+
+function shouldSuppressRebornInstallPrompt(): boolean {
+  return shouldSuppressRebornInstallPromptSync(currentSuppressContext());
 }
 
 /** Bridge Reborn APK responding on localhost:9101 (Android WebPOS companion). */
 export async function isBridgeRebornInstalled(): Promise<boolean> {
   if (!isAndroidTabletBrowser()) return false;
-  try {
-    if (localStorage.getItem(BRIDGE_INSTALLED_KEY) === '1') return true;
-  } catch {
-    /* ignore */
-  }
+  if (readStorageFlag(BRIDGE_INSTALLED_KEY)) return true;
   try {
     const res = await fetch('http://127.0.0.1:9101/health', { method: 'GET' });
     if (!res.ok) return false;
     const data = (await res.json()) as { ok?: boolean; platform?: string };
     const installed = data.ok === true && data.platform === 'android';
-    if (installed) {
-      try {
-        localStorage.setItem(BRIDGE_INSTALLED_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-    }
+    if (installed) markBridgeRebornInstalled();
     return installed;
   } catch {
-    return false;
+    return readStorageFlag(BRIDGE_INSTALLED_KEY);
   }
 }
 
 /** Chrome/Android may open an installed PWA in a normal browser tab — detect that case. */
 export async function isRebornPwaInstalled(): Promise<boolean> {
   if (isStandalonePwa()) return true;
-  try {
-    if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') return true;
-  } catch {
-    /* private mode */
-  }
+  if (readStorageFlag(PWA_INSTALLED_KEY)) return true;
   const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<RelatedWebApp[]> };
   if (!nav.getInstalledRelatedApps) return false;
   try {
@@ -75,13 +194,7 @@ export async function isRebornPwaInstalled(): Promise<boolean> {
         url.includes('/merchant/pos')
       );
     });
-    if (installed) {
-      try {
-        localStorage.setItem(PWA_INSTALLED_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-    }
+    if (installed) markRebornPwaInstalled();
     return installed;
   } catch {
     return false;
@@ -96,69 +209,54 @@ export function probeRebornPwaInstalled(): void {
   if (typeof window === 'undefined') return;
   if (isStandalonePwa()) {
     rebornPwaInstalledCache = true;
-    try {
-      localStorage.setItem(PWA_INSTALLED_KEY, '1');
-    } catch {
-      /* ignore */
-    }
+    markRebornPwaInstalled();
     return;
   }
-  try {
-    if (localStorage.getItem(BRIDGE_INSTALLED_KEY) === '1') {
-      bridgeInstalledCache = true;
-    }
-    if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') {
-      rebornPwaInstalledCache = true;
-    }
-  } catch {
-    /* ignore */
-  }
+  if (readStorageFlag(BRIDGE_INSTALLED_KEY)) bridgeInstalledCache = true;
+  if (readStorageFlag(PWA_INSTALLED_KEY)) rebornPwaInstalledCache = true;
+  if (shouldSuppressRebornInstallPrompt()) removeInstallManifestIfNeeded();
+
   void isRebornPwaInstalled().then((installed) => {
     rebornPwaInstalledCache = installed;
+    if (installed) removeInstallManifestIfNeeded();
   });
-  if (isAndroidTabletBrowser() && isPosLikePath()) {
+  if (isAndroidTabletBrowser()) {
     void isBridgeRebornInstalled().then((installed) => {
       bridgeInstalledCache = installed;
+      if (installed) removeInstallManifestIfNeeded();
     });
   }
 }
 
-function shouldSuppressRebornInstallPrompt(): boolean {
-  if (isStandalonePwa()) return true;
-  if (rebornPwaInstalledCache === true || bridgeInstalledCache === true) return true;
-  try {
-    if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') return true;
-    if (localStorage.getItem(BRIDGE_INSTALLED_KEY) === '1') return true;
-  } catch {
-    return false;
-  }
-  return false;
-}
-
 /**
- * Stop Chrome from re-prompting to install when Reborn is already on the home screen
- * or Bridge Reborn is installed (Android tablets often use Chrome + Bridge, not a PWA tab).
+ * Stop Chrome from re-prompting to install when Reborn is already on the home screen,
+ * Bridge Reborn is installed, or the merchant chose to keep using Chrome.
  */
 export function bindRebornPwaInstallGuard(): () => void {
   if (typeof window === 'undefined') return () => undefined;
 
   const onBip = (event: Event) => {
-    if (/^\/kiosk(\/|$)/.test(window.location.pathname)) return;
+    if (isKioskPath()) return;
+    if (rebornPwaInstalledCache === true || bridgeInstalledCache === true) {
+      event.preventDefault();
+      writeSessionFlag(SESSION_SUPPRESS_KEY);
+      return;
+    }
     if (!shouldSuppressRebornInstallPrompt()) return;
     event.preventDefault();
+    writeSessionFlag(SESSION_SUPPRESS_KEY);
   };
 
   const onInstalled = () => {
     rebornPwaInstalledCache = true;
     try {
       localStorage.setItem(PWA_INSTALLED_KEY, '1');
-      sessionStorage.setItem('reborn_pwa_just_installed', '1');
+      sessionStorage.setItem(JUST_INSTALLED_KEY, '1');
+      sessionStorage.setItem(SESSION_SUPPRESS_KEY, '1');
     } catch {
       /* ignore */
     }
-    if (!isStandalonePwa() && typeof document !== 'undefined') {
-      document.querySelector('link[rel="manifest"]')?.remove();
-    }
+    removeInstallManifestIfNeeded();
   };
 
   window.addEventListener('beforeinstallprompt', onBip, { capture: true });
