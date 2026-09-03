@@ -9548,6 +9548,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             open
             kitchenEnabled={kitchenEnabled}
             autoPrintReceipt={shouldAutoPrintReceipt(printSettings)}
+            taxIncludedInPrice={vatIncludedInPrice}
+            vatAfterDiscount={vatAfterDiscount}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

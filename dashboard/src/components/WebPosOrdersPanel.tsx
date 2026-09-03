@@ -82,6 +82,7 @@ import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
+import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
@@ -274,6 +275,9 @@ type Props = {
   kitchenEnabled?: boolean;
   /** Merchant Settings — auto-print receipt after collect payment */
   autoPrintReceipt?: boolean;
+  /** Merchant tax mode — drives VAT breakdown in order detail */
+  taxIncludedInPrice?: boolean;
+  vatAfterDiscount?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -500,6 +504,8 @@ export default function WebPosOrdersPanel({
   canSalesAdjust = false,
   kitchenEnabled = true,
   autoPrintReceipt = true,
+  taxIncludedInPrice,
+  vatAfterDiscount = true,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -2065,9 +2071,13 @@ export default function WebPosOrdersPanel({
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-4 flex justify-between border-t border-stone-200 pt-3 text-base font-bold">
-                    <span>{t('webPosTotal')}</span>
-                    <span className="tabular-nums">{money(selectedOrder.total)}</span>
+                  <div className="mt-4 border-t border-stone-200 pt-3">
+                    <OrderDetailTotals
+                      order={selectedOrder}
+                      taxIncludedInPrice={taxIncludedInPrice}
+                      vatAfterDiscount={vatAfterDiscount}
+                      compact
+                    />
                   </div>
                   {selectedOrder.paymentMethod ? (
                     <p className="mt-2 text-sm text-stone-600">

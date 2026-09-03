@@ -42,6 +42,7 @@ import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
+import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
@@ -427,6 +428,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     vatNumber?: string;
     vatRate?: string;
     taxIncludedInPrice?: boolean;
+    vatAfterDiscount?: boolean;
     shopLogoUrl?: string;
     latitude?: number | null;
     longitude?: number | null;
@@ -473,6 +475,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         vatNumber: s.vatNumber,
         vatRate: s.vatRate,
         taxIncludedInPrice: s.taxIncludedInPrice,
+        vatAfterDiscount: s.vatAfterDiscount !== false,
         shopLogoUrl: s.shopLogoUrl,
         latitude: s.latitude != null ? Number(s.latitude) : null,
         longitude: s.longitude != null ? Number(s.longitude) : null,
@@ -1279,17 +1282,21 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </li>
                 ))}
               </ul>
-              <p className="text-right text-sm font-extrabold tabular-nums">
-                Total CHF {Number(selected.total).toFixed(2)}
+              <div className="border-t border-[var(--border)] pt-3">
+                <OrderDetailTotals
+                  order={selected}
+                  taxIncludedInPrice={merchant?.taxIncludedInPrice === true}
+                  vatAfterDiscount={merchant?.vatAfterDiscount !== false}
+                />
                 {Number(selected.refundAmount || 0) > 0 ? (
-                  <span className="block text-xs font-semibold text-rose-700">
+                  <p className="mt-1 text-right text-xs font-semibold text-rose-700 tabular-nums">
                     {t('webPosRefundRemaining').replace(
                       '{amount}',
                       `CHF ${Math.max(0, Number(selected.total) - Number(selected.refundAmount || 0)).toFixed(2)}`
                     )}
-                  </span>
+                  </p>
                 ) : null}
-              </p>
+              </div>
             </div>
 
             <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5">
