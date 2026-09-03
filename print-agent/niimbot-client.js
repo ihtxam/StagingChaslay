@@ -25,12 +25,13 @@ function niimbotPacket(type, data) {
   return Buffer.concat([Buffer.from([0x55, 0x55, type, len]), buf, Buffer.from([checksum, 0xaa, 0xaa])]);
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 function isComPort(name) {
   return /^COM\d+$/i.test(String(name || "").trim());
+}
+
+/** Windows spooler USB port (e.g. USB005) — use WritePrinter, not SerialPort. */
+function isWindowsUsbPort(name) {
+  return /^USB\d+$/i.test(String(name || "").trim());
 }
 
 /** Extract COM port from strings like "Niimbot K3 (COM7)" or "COM7". */
@@ -42,6 +43,17 @@ function extractComPort(...values) {
     const paren = text.match(/\((COM\d+)\)/i);
     if (paren) return paren[1].toUpperCase();
     const inline = text.match(/\b(COM\d+)\b/i);
+    if (inline) return inline[1].toUpperCase();
+  }
+  return null;
+}
+
+function extractWindowsUsbPort(...values) {
+  for (const raw of values) {
+    const text = String(raw || "").trim();
+    if (!text) continue;
+    if (isWindowsUsbPort(text)) return text.toUpperCase();
+    const inline = text.match(/\b(USB\d+)\b/i);
     if (inline) return inline[1].toUpperCase();
   }
   return null;
@@ -82,11 +94,14 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3) {
   const push = (type, data) => packets.push(niimbotPacket(type, Buffer.from(data)));
   push(RequestCode.SET_LABEL_DENSITY, [d]);
   push(RequestCode.SET_LABEL_TYPE, [1]);
-  push(RequestCode.START_PRINT, [1]);
+  // K3/B21 official app uses 2-byte START_PRINT (copy count = 1).
+  push(RequestCode.START_PRINT, [0, 1]);
   push(RequestCode.START_PAGE_PRINT, [1]);
-  const dim = Buffer.alloc(4);
+  // 6-byte dimension (h, w, mode=1) per Niimbot Windows app captures.
+  const dim = Buffer.alloc(6);
   dim.writeUInt16BE(heightPx, 0);
   dim.writeUInt16BE(widthPx, 2);
+  dim.writeUInt16BE(1, 4);
   push(RequestCode.SET_DIMENSION, dim);
   packets.push(...encodeBitmapLines(bitmap, widthPx, heightPx));
   push(RequestCode.END_PAGE_PRINT, [1]);
@@ -94,9 +109,12 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3) {
   return packets;
 }
 
+function concatJobPackets(bitmap, widthPx, heightPx, density) {
+  return Buffer.concat(buildNiimbotJobPackets(bitmap, widthPx, heightPx, density));
+}
+
 /**
  * Send a full Niimbot label job over one serial session (open port once).
- * Opening/closing per packet caused USB COM locks and multi-minute hangs.
  */
 async function printNiimbotJobSerial(comPort, { bitmap, widthPx, heightPx, density = 3 }) {
   const port = normalizeComPort(comPort);
@@ -134,15 +152,13 @@ ${payloadB64}
   );
 }
 
-async function printNiimbotViaRawPrinter({ printerName, bitmap, widthPx, heightPx, density, printRawFn }) {
-  const packets = buildNiimbotJobPackets(bitmap, widthPx, heightPx, density);
-  for (const pkt of packets) {
-    await printRawFn({
-      printerName,
-      dataBase64: pkt.toString("base64"),
-    });
-    await sleep(25);
-  }
+/** Windows USB00x spooler port — one RAW job with all protocol bytes concatenated. */
+async function printNiimbotViaWindowsPrinter({ printerName, bitmap, widthPx, heightPx, density, printRawFn }) {
+  const combined = concatJobPackets(bitmap, widthPx, heightPx, density);
+  await printRawFn({
+    printerName,
+    dataBase64: combined.toString("base64"),
+  });
 }
 
 async function printNiimbotLabel(opts) {
@@ -155,6 +171,7 @@ async function printNiimbotLabel(opts) {
     density = 3,
     printRawFn,
     resolveComPortFn,
+    resolveWindowsUsbPortFn,
   } = opts;
   const bitmap = Buffer.from(bitmapBase64, "base64");
   const w = Number(widthPx);
@@ -171,21 +188,31 @@ async function printNiimbotLabel(opts) {
     return comPort;
   }
 
-  if (!printRawFn) {
+  let usbPort = extractWindowsUsbPort(portName);
+  if (!usbPort && typeof resolveWindowsUsbPortFn === "function") {
+    usbPort = await resolveWindowsUsbPortFn(printerName, portName);
+  }
+
+  const name = String(printerName || "").trim();
+  if (!name) {
     throw new Error(
-      "Niimbot label printer needs a COM port (USB or Bluetooth). In Windows, open the printer properties and note the port (e.g. COM3), then select that printer in Settings → Receipts & printers."
+      "No Niimbot label printer configured. Enable Labels on a printer profile in Settings → Receipts & printers."
     );
   }
 
-  const name = String(printerName || portName || "").trim();
-  if (!name) {
-    throw new Error("No Niimbot label printer configured. Enable Labels on a printer profile in Settings → Receipts & printers.");
+  if (!printRawFn) {
+    throw new Error(
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.9.9+ and select NIIMBOT K3 in Settings → Receipts & printers."
+    );
   }
 
-  console.warn(
-    `[print-agent] Niimbot label: no COM port for '${name}' — raw printer fallback (may be unreliable on USB)`
-  );
-  await printNiimbotViaRawPrinter({
+  if (usbPort) {
+    console.log(`[print-agent] Niimbot label via Windows USB port ${usbPort} -> '${name}'`);
+  } else {
+    console.log(`[print-agent] Niimbot label via Windows printer '${name}' (port ${portName || "unknown"})`);
+  }
+
+  await printNiimbotViaWindowsPrinter({
     printerName: name,
     bitmap,
     widthPx: w,
@@ -202,5 +229,7 @@ module.exports = {
     return Buffer.isBuffer(buf) && buf.length >= 2 && buf[0] === 0x55 && buf[1] === 0x55;
   },
   extractComPort,
+  extractWindowsUsbPort,
+  buildNiimbotJobPackets,
   printNiimbotLabel,
 };
