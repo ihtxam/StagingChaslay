@@ -98,6 +98,7 @@ import {
   matchSettingsSearch,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
+  resolveSettingsContentTab,
   type SettingsTabId,
 } from './settings/settingsSearch';
 import Staff from './Staff';
@@ -736,10 +737,10 @@ export default function Settings() {
     isSearchSectionRendered,
   ]);
 
-  const matchedIdsOnCurrentTab = useMemo(() => {
-    if (!normalizedQuery || matchedSearch.length === 0) return new Set<string>();
-    return new Set(matchedSearch.filter((entry) => entry.tab === tab).map((entry) => entry.id));
-  }, [matchedSearch, normalizedQuery, tab]);
+  const contentTab = useMemo(
+    () => resolveSettingsContentTab(tab as SettingsTabId, normalizedQuery, matchedSearch),
+    [matchedSearch, normalizedQuery, tab]
+  );
 
   const matchedTabs = useMemo(() => new Set(matchedSearch.map((m) => m.tab)), [matchedSearch]);
 
@@ -756,7 +757,7 @@ export default function Settings() {
       setHighlightId(null);
       return;
     }
-    const best = pickSettingsSearchMatch(matchedSearch, tab as SettingsTabId);
+    const best = pickSettingsSearchMatch(matchedSearch, contentTab);
     if (!best) {
       setHighlightId(null);
       return;
@@ -775,10 +776,8 @@ export default function Settings() {
       shouldSwitchTab && tab !== best.tab ? 120 : 80
     );
     return () => window.clearTimeout(timer);
-  }, [normalizedQuery, matchedSearch, tab, selectTab]);
+  }, [normalizedQuery, matchedSearch, contentTab, tab, selectTab]);
 
-  const isSectionVisible = (id: string) =>
-    !normalizedQuery || matchedSearch.length === 0 || matchedIdsOnCurrentTab.has(id);
   const isSectionHighlight = (id: string) => highlightId === id;
 
   useEffect(() => {
@@ -1489,6 +1488,46 @@ export default function Settings() {
             : t('settingsSearchNoMatches')}
         </p>
       ) : null}
+      {normalizedQuery && matchedSearch.length > 0 ? (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3">
+          <ul className="flex flex-col gap-1" role="listbox" aria-label={t('settingsSearch')}>
+            {matchedSearch.map((entry) => {
+              const tabMeta = visibleTabs.find((item) => item.id === entry.tab);
+              const sectionLabel = entry.id
+                .split('-')
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+              return (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={highlightId === entry.id}
+                    className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg-muted)] ${
+                      highlightId === entry.id ? 'bg-[var(--bg-muted)] ring-1 ring-[var(--ring)]' : ''
+                    }`}
+                    onClick={() => {
+                      selectTab(entry.tab);
+                      setHighlightId(entry.id);
+                      window.setTimeout(() => {
+                        document.getElementById(entry.id)?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        });
+                      }, 80);
+                    }}
+                  >
+                    <span className="font-medium text-[var(--text)]">{sectionLabel}</span>
+                    <span className="shrink-0 text-xs text-[var(--text-muted)]">
+                      {tabMeta?.navLabel ?? tabMeta?.label ?? entry.tab}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="card !p-0 overflow-hidden">
         <div className="flex flex-col lg:flex-row min-h-[60vh]">
@@ -1499,7 +1538,7 @@ export default function Settings() {
             >
               {visibleTabs.map((item) => {
                 const Icon = item.icon;
-                const active = tab === item.id;
+                const active = contentTab === item.id;
                 const searchHit = normalizedQuery ? matchedTabs.has(item.id) : false;
                 const searchMiss = normalizedQuery ? !searchHit : false;
                 const navText = item.navLabel ?? item.label;
@@ -1539,7 +1578,7 @@ export default function Settings() {
               {t('settingsSearchNoMatches')}
             </div>
           ) : null}
-          {tab === 'business' && (
+          {contentTab === 'business' && (
             <SettingsBusinessTab
               settings={settings}
               setSettings={(next) => setSettings(next)}
@@ -1551,7 +1590,7 @@ export default function Settings() {
           )}
 
 
-          {tab === 'taxes' && (
+          {contentTab === 'taxes' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsTaxes')}
@@ -1698,7 +1737,7 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'shop' && (
+          {contentTab === 'shop' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('shop')}
@@ -1892,27 +1931,27 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'delivery' && <SettingsDeliveryPlatformsTab />}
+          {contentTab === 'delivery' && <SettingsDeliveryPlatformsTab />}
 
-          {tab === 'delivery-map' && (
+          {contentTab === 'delivery-map' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('deliveryMapNav')} subtitle={t('deliveryMapHint')} />
               <DeliveryTrackingPage embedded />
             </div>
           )}
 
-          {tab === 'users' && (
+          {contentTab === 'users' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHint')} />
               <Staff embedded kioskLicensed={isKioskLicensed(settings)} />
             </div>
           )}
 
-          {tab === 'hours' && <SettingsHoursTab />}
+          {contentTab === 'hours' && <SettingsHoursTab />}
 
-          {tab === 'reservations' && <SettingsReservationsTab />}
+          {contentTab === 'reservations' && <SettingsReservationsTab />}
 
-          {tab === 'tables' && (
+          {contentTab === 'tables' && (
             <SettingsTablesTab
               settings={settings}
               setSettings={(next) => setSettings({ ...settings, ...next })}
@@ -1920,7 +1959,7 @@ export default function Settings() {
               saving={saving}
               highlightId={highlightId}
               normalizedQuery={normalizedQuery}
-              isSectionVisible={isSectionVisible}
+              isSectionVisible={() => true}
               isSectionHighlight={isSectionHighlight}
               onGoToPosTab={(query, sectionId) => {
                 setSettingsQuery(query);
@@ -1930,7 +1969,7 @@ export default function Settings() {
             />
           )}
 
-          {tab === 'pos' && (
+          {contentTab === 'pos' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsPos')}
@@ -1949,7 +1988,6 @@ export default function Settings() {
                 title={posRetailMode ? t('posRetailOrderTypes') : t('settingsTablesFeatures')}
                 description={posRetailMode ? t('posRetailOrderTypesHint') : t('posTablesEnabledHint')}
                 highlight={isSectionHighlight('pos-mode')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-mode') : false}
               >
                 {settings.businessCategory ? (
                   <p className="text-sm">
@@ -2054,7 +2092,6 @@ export default function Settings() {
                 title={t('posLayoutSettings')}
                 description={t('posLayoutSettingsHint')}
                 highlight={isSectionHighlight('pos-layout')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-layout') : false}
               >
                 <Field label={t('posCartSide')} hint={t('posCartSideHint')}>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2206,7 +2243,6 @@ export default function Settings() {
                 title={t('settingsOperations')}
                 description={t('shiftsEnabledHint')}
                 highlight={isSectionHighlight('pos-shifts')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-shifts') : false}
               >
                 <div
                   className={`rounded-lg border-2 px-4 py-4 ${
@@ -2262,7 +2298,6 @@ export default function Settings() {
                 title={t('posPostsTitle')}
                 description={t('posPostsAgencyHint')}
                 highlight={isSectionHighlight('pos-posts')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-posts') : false}
               >
                 <PosPostsSection
                   readOnly
@@ -2279,7 +2314,6 @@ export default function Settings() {
                 title={t('invTitle')}
                 description={t('invSettingsHint')}
                 highlight={isSectionHighlight('inventory-addon')}
-                dimmed={normalizedQuery ? !isSectionVisible('inventory-addon') : false}
               >
                 <p className="text-sm">
                   {isInventoryLicensed(settings) ? t('invAddonOn') : t('invAddonOff')}
@@ -2370,7 +2404,6 @@ export default function Settings() {
                 title={t('storekeeperTitle')}
                 description={t('storekeeperAddonReadOnly')}
                 highlight={isSectionHighlight('storekeeper-addon')}
-                dimmed={normalizedQuery ? !isSectionVisible('storekeeper-addon') : false}
               >
                 <p className="text-sm">
                   {isStorekeeperLicensed(settings) ? t('storekeeperAddonOn') : t('storekeeperAddonOff')}
@@ -2390,7 +2423,6 @@ export default function Settings() {
                 title={t('signageTitle')}
                 description={t('signageAddonReadOnly')}
                 highlight={isSectionHighlight('signage-addon')}
-                dimmed={normalizedQuery ? !isSectionVisible('signage-addon') : false}
               >
                 <p className="text-sm">
                   {isSignageLicensed(settings) ? t('signageAddonOn') : t('signageAddonOff')}
@@ -2415,7 +2447,6 @@ export default function Settings() {
                 title={t('coursesEnabled')}
                 description={t('coursesEnabledHint')}
                 highlight={isSectionHighlight('pos-courses')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-courses') : false}
               >
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
@@ -2465,7 +2496,6 @@ export default function Settings() {
                 title={t('posCheckoutSettings')}
                 description={t('posCheckoutHint')}
                 highlight={isSectionHighlight('pos-checkout')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-checkout') : false}
               >
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(
@@ -2550,7 +2580,6 @@ export default function Settings() {
                 title={t('webposPaymentMethods')}
                 description={t('webposPaymentMethodsHint')}
                 highlight={isSectionHighlight('pos-payments')}
-                dimmed={normalizedQuery ? !isSectionVisible('pos-payments') : false}
               >
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(
@@ -2588,7 +2617,7 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'payments' && (
+          {contentTab === 'payments' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('settingsPayments')} subtitle={t('adyenSettingsHint')} />
               <form onSubmit={saveAdyen} className="space-y-5">
@@ -2599,7 +2628,6 @@ export default function Settings() {
                   title={t('adyenCredentials')}
                   description={t('adyenSettingsHint')}
                   highlight={isSectionHighlight('payments-adyen')}
-                  dimmed={normalizedQuery ? !isSectionVisible('payments-adyen') : false}
                 >
                   <p className="text-sm text-[var(--text-muted)]">
                     {t('swisspayoutNoAccount')}{' '}
@@ -2679,7 +2707,6 @@ export default function Settings() {
                   title={t('tapToPaySettings')}
                   description={t('tapToPaySettingsHint')}
                   highlight={isSectionHighlight('payments-tap-to-pay')}
-                  dimmed={normalizedQuery ? !isSectionVisible('payments-tap-to-pay') : false}
                 >
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -2985,7 +3012,7 @@ export default function Settings() {
             </div>
           )}
 
-          {tab === 'email' && (
+          {contentTab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
               <SettingsPageHeader
                 title={t('settingsEmail')}
@@ -3554,7 +3581,7 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'receipt' && (
+          {contentTab === 'receipt' && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
                 title={t('settingsReceipt')}
@@ -4473,7 +4500,6 @@ export default function Settings() {
                 title={t('barcodeLabelsTitle')}
                 description={t('barcodeLabelsHint')}
                 highlight={isSectionHighlight('barcode-labels')}
-                dimmed={normalizedQuery ? !isSectionVisible('barcode-labels') : false}
               >
                 <div className="grid grid-cols-2 gap-3">
                   <SettingsField label={t('barcodeLabelWidth')}>
@@ -4554,33 +4580,33 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'kds' && (
+          {contentTab === 'kds' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('kdsSettingsTitle')} subtitle={t('kdsSettingsHint')} />
               <KdsSettingsPanel />
             </div>
           )}
 
-          {tab === 'ods' && (
+          {contentTab === 'ods' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
               <OdsSettingsPanel />
             </div>
           )}
 
-          {tab === 'signage' && (
+          {contentTab === 'signage' && (
             <div className="space-y-5">
               <SignagePage embedded />
             </div>
           )}
 
-          {tab === 'kiosk' && (
+          {contentTab === 'kiosk' && (
             <div className="space-y-5">
               <KioskSettingsPage embedded />
             </div>
           )}
 
-          {tab === 'email' && (
+          {contentTab === 'email' && (
             <form onSubmit={onSave} className="space-y-5">
               <Section title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
@@ -4842,7 +4868,7 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'language' && (
+          {contentTab === 'language' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
               <Section icon={Languages} accent={settingsDash.accent} title={t('language')} description={t('languageSettingsHint')}>

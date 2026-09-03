@@ -3,9 +3,12 @@ import test from 'node:test';
 import {
   buildSettingsSearchIndex,
   filterAccessibleSettingsSearch,
+  hasSettingsSearchMatchesOnTab,
   matchSettingsSearch,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
+  resolveSettingsContentTab,
+  shouldDimSettingsSectionDuringSearch,
   type SettingsSearchContext,
 } from './settingsSearch.ts';
 
@@ -82,4 +85,41 @@ test('signage addon stays on pos tab in search index', () => {
   const index = buildSettingsSearchIndex(t);
   const signage = index.find((entry) => entry.id === 'signage-addon');
   assert.equal(signage?.tab, 'pos');
+});
+
+test('resolveSettingsContentTab jumps to payments immediately for adyen on pos url', () => {
+  const index = buildSettingsSearchIndex(t);
+  const query = 'adyen';
+  const raw = matchSettingsSearch(index, query);
+  const matches = filterAccessibleSettingsSearch(raw, openContext());
+  assert.ok(matches.some((entry) => entry.tab === 'payments'));
+  assert.equal(resolveSettingsContentTab('pos', query, matches), 'payments');
+});
+
+test('resolveSettingsContentTab stays on pos when match is on pos', () => {
+  const index = buildSettingsSearchIndex(t);
+  const query = 'express';
+  const raw = matchSettingsSearch(index, query);
+  const matches = filterAccessibleSettingsSearch(raw, openContext());
+  assert.equal(resolveSettingsContentTab('pos', query, matches), 'pos');
+});
+
+test('hasSettingsSearchMatchesOnTab detects cross-tab matches', () => {
+  const index = buildSettingsSearchIndex(t);
+  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'adyen'), openContext());
+  assert.equal(hasSettingsSearchMatchesOnTab(matches, 'pos'), false);
+  assert.equal(hasSettingsSearchMatchesOnTab(matches, 'payments'), true);
+});
+
+test('shouldDimSettingsSectionDuringSearch is always false (no blank panel regression)', () => {
+  assert.equal(shouldDimSettingsSectionDuringSearch(), false);
+});
+
+test('pos tab with only off-tab matches still resolves a content tab', () => {
+  const index = buildSettingsSearchIndex(t);
+  const query = 'smtp';
+  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, query), openContext());
+  const contentTab = resolveSettingsContentTab('pos', query, matches);
+  assert.notEqual(contentTab, 'pos');
+  assert.ok(hasSettingsSearchMatchesOnTab(matches, contentTab));
 });

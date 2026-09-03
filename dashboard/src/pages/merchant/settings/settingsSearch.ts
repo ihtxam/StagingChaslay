@@ -69,6 +69,31 @@ export function pickSettingsSearchMatch(
   return matches.find((entry) => entry.tab === currentTab) ?? matches[0];
 }
 
+/** Tab whose panel should render while searching (avoids blank flash before URL/state sync). */
+export function resolveSettingsContentTab(
+  currentTab: SettingsTabId,
+  normalizedQuery: string,
+  matches: SettingsSearchEntry[]
+): SettingsTabId {
+  if (!normalizedQuery || matches.length === 0) return currentTab;
+  return pickSettingsSearchMatch(matches, currentTab)?.tab ?? currentTab;
+}
+
+export function hasSettingsSearchMatchesOnTab(
+  matches: SettingsSearchEntry[],
+  tab: SettingsTabId
+): boolean {
+  return matches.some((entry) => entry.tab === tab);
+}
+
+/**
+ * Dimming non-matching sections caused a blank-looking panel on ?tab=pos when matches
+ * lived on another tab or below the fold. Highlight + results list only.
+ */
+export function shouldDimSettingsSectionDuringSearch(): boolean {
+  return false;
+}
+
 export function buildSettingsSearchIndex(
   t: (key: string) => string
 ): SettingsSearchEntry[] {
