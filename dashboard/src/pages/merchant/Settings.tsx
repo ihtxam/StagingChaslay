@@ -94,12 +94,16 @@ import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import {
-  SETTINGS_SEARCH_STAY_ON_TAB_MARK,
+  SETTINGS_SEARCH_CLICK_MARK,
   buildSettingsSearchIndex,
   filterAccessibleSettingsSearch,
   formatSettingsSearchSectionLabel,
+  isSettingsSearchQueryActive,
   matchSettingsSearch,
+  nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
+  planSettingsSearchResultClick,
+  scrollToSettingsSearchSection,
   settingsSearchView,
   type SettingsTabId,
 } from './settings/settingsSearch';
@@ -581,6 +585,7 @@ export default function Settings() {
   const [settingsQuery, setSettingsQuery] = useState('');
   const [debouncedSettingsQuery, setDebouncedSettingsQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const pinnedSearchHighlightRef = useRef<string | null>(null);
   const [tab, setTab] = useState<TabId>(() => parseSettingsTabFromSearch(window.location.search));
 
   const tabs = useMemo(
@@ -675,12 +680,14 @@ export default function Settings() {
   const selectTab = useCallback(
     (nextTab: TabId) => {
       if (!canOpenSettingsTab(nextTab)) return;
-      setTab(nextTab);
+      setTab((current) => (current === nextTab ? current : nextTab));
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev);
+          if (nextTab !== 'tables') params.delete('section');
           if (nextTab === 'business') params.delete('tab');
           else params.set('tab', nextTab);
+          if (params.toString() === new URLSearchParams(prev).toString()) return prev;
           return params;
         },
         { replace: true }
@@ -704,14 +711,13 @@ export default function Settings() {
 
   useEffect(() => {
     if (!settings) return;
-    if (normalizedQuery) return;
-    if (tab === 'tables' && !showTablesSettings) {
-      selectTab('pos');
-    }
-    if (tab === 'reservations' && isRetailMerchant) {
-      selectTab('business');
-    }
-  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab, normalizedQuery]);
+    const redirect = nextTabForHiddenRetailSettings(tab as SettingsTabId, {
+      showTablesSettings,
+      isRetailMerchant,
+      query: settingsQuery || normalizedQuery,
+    });
+    if (redirect) selectTab(redirect);
+  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab, normalizedQuery, settingsQuery]);
 
   const searchIndex = useMemo(() => buildSettingsSearchIndex(t), [t]);
 
@@ -756,9 +762,19 @@ export default function Settings() {
   const matchedTabs = useMemo(() => new Set(matchedSearch.map((m) => m.tab)), [matchedSearch]);
 
   useEffect(() => {
+    pinnedSearchHighlightRef.current = null;
+  }, [normalizedQuery]);
+
+  useEffect(() => {
     try {
       if (!normalizedQuery) {
         setHighlightId(null);
+        return;
+      }
+      const pinnedId = pinnedSearchHighlightRef.current;
+      const pinned = pinnedId ? matchedSearch.find((entry) => entry.id === pinnedId) : null;
+      if (pinned && pinned.tab === tab) {
+        setHighlightId(pinned.id);
         return;
       }
       const onCurrentTab = matchedSearch.find((entry) => entry.tab === tab);
@@ -773,13 +789,17 @@ export default function Settings() {
 
   useEffect(() => {
     if (loading) return;
-    const hash = window.location.hash.replace(/^#/, '');
-    if (!hash) return;
-    setHighlightId(hash);
-    const timer = window.setTimeout(() => {
-      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
-    return () => window.clearTimeout(timer);
+    try {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (!hash) return;
+      setHighlightId(hash);
+      const timer = window.setTimeout(() => {
+        scrollToSettingsSearchSection(hash);
+      }, 120);
+      return () => window.clearTimeout(timer);
+    } catch {
+      /* ignore */
+    }
   }, [loading, tab]);
 
   const loadSettings = useCallback(async () => {
@@ -1411,10 +1431,13 @@ export default function Settings() {
 
   useEffect(() => {
     if (!visibleTabs.length) return;
+    if (isSettingsSearchQueryActive(settingsQuery) || isSettingsSearchQueryActive(normalizedQuery)) {
+      return;
+    }
     if (!visibleTabs.some((item) => item.id === tab)) {
       selectTab(visibleTabs[0].id);
     }
-  }, [selectTab, tab, visibleTabs]);
+  }, [selectTab, tab, visibleTabs, settingsQuery, normalizedQuery]);
 
   if (loading && !settingsOptionalTab) {
     return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
@@ -1449,14 +1472,9 @@ export default function Settings() {
   const posRetailMode = isRetailMerchant;
 
   return (
-    <SettingsSearchErrorBoundary
-      resetKey={settingsQuery}
-      fallbackText={t('settingsSearchNoMatches')}
-      fullPage
-    >
     <div
       className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4"
-      data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+      data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -1490,7 +1508,7 @@ export default function Settings() {
       {searchView === 'results' ? (
         <div
           className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-2 sm:p-3"
-          data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+          data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
         >
           <ul className="flex flex-col gap-1" role="listbox" aria-label={t('settingsSearch')}>
             {matchedSearch.map((entry) => {
@@ -1506,14 +1524,17 @@ export default function Settings() {
                       highlightId === entry.id ? 'bg-[var(--bg-muted)] ring-1 ring-[var(--ring)]' : ''
                     }`}
                     onClick={() => {
-                      selectTab(entry.tab);
-                      setHighlightId(entry.id);
-                      window.setTimeout(() => {
-                        document.getElementById(entry.id)?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'start',
-                        });
-                      }, 80);
+                      const plan = planSettingsSearchResultClick(entry, tab as SettingsTabId);
+                      if (!plan) return;
+                      pinnedSearchHighlightRef.current = plan.highlightId;
+                      setHighlightId(plan.highlightId);
+                      if (plan.shouldSwitchTab) {
+                        selectTab(plan.tab);
+                      }
+                      window.setTimeout(
+                        () => scrollToSettingsSearchSection(plan.highlightId),
+                        plan.shouldSwitchTab ? 220 : 40
+                      );
                     }}
                   >
                     <span className="font-medium text-[var(--text)]">{sectionLabel}</span>
@@ -1529,7 +1550,7 @@ export default function Settings() {
       ) : searchView === 'empty' ? (
         <div
           className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-6 text-center text-sm text-[var(--text-muted)]"
-          data-settings-search={SETTINGS_SEARCH_STAY_ON_TAB_MARK}
+          data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
         >
           {t('settingsSearchNoMatches')}
         </div>
@@ -1581,7 +1602,7 @@ export default function Settings() {
           <div className="min-w-0 flex-1 p-4 sm:p-5 pb-24 sm:pb-5">
           <SettingsSearchErrorBoundary
             resetKey={`${tab}:${normalizedQuery}`}
-            fallbackText={t('settingsSearchNoMatches')}
+            fallbackText={t('settingsSearchOpenFailed')}
           >
           {tab === 'business' && (
             <SettingsBusinessTab
@@ -4920,12 +4941,20 @@ export default function Settings() {
             </div>
           )}
 
+          {searchView !== 'idle' ? (
+            <div
+              data-settings-search-panel={SETTINGS_SEARCH_CLICK_MARK}
+              className="sr-only"
+            >
+              {matchedSearch.length} settings search matches
+            </div>
+          ) : null}
+
           </SettingsSearchErrorBoundary>
           </div>
         </div>
       </div>
       <p className="text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
-    </SettingsSearchErrorBoundary>
   );
 }

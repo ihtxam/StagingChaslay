@@ -4,16 +4,15 @@ type Props = {
   children: ReactNode;
   resetKey: string;
   fallbackText: string;
-  /** When true, occupy the settings card so a crash cannot look like a white page. */
+  /** @deprecated Nav/search stay outside this boundary so a crash cannot white-out the page. */
   fullPage?: boolean;
 };
 
 type State = { error: Error | null };
 
 /**
- * Search-driven rendering must never blank Settings.
- * Wrap the entire page (not only the listbox): a destination-tab throw used to
- * replace nav + content with a tiny dashed box.
+ * Only wrap the tab panel. Title, search, results list, and tab nav stay mounted
+ * so a destination-tab throw cannot become a blank page.
  */
 export default class SettingsSearchErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
@@ -36,10 +35,9 @@ export default class SettingsSearchErrorBoundary extends Component<Props, State>
     if (this.state.error) {
       return (
         <div
-          data-settings-search="stay-on-tab-v4"
-          className={`rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-8 text-center text-sm text-[var(--text-muted)] ${
-            this.props.fullPage ? 'min-h-[60vh]' : ''
-          }`}
+          data-settings-search="search-click-v5"
+          role="alert"
+          className="min-h-[12rem] rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/40 px-4 py-8 text-center text-sm text-[var(--text)]"
         >
           {this.props.fallbackText}
         </div>
