@@ -44,8 +44,6 @@
       (function () {
         var p = location.pathname || '';
         var isKiosk = /^\/kiosk(\/|$)/.test(p);
-        var isPos = /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(p);
-        var isAndroid = /android/i.test(navigator.userAgent || '');
         var standalone =
           (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
           (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
@@ -54,7 +52,6 @@
           pwa: 'reborn_pwa_installed',
           bridge: 'reborn_bridge_installed',
           browser: 'reborn_pwa_browser_preferred',
-          guide: 'reborn_pwa_launch_guide_dismissed',
           session: 'reborn_install_prompt_suppressed',
         };
         if (standalone) {
@@ -69,9 +66,20 @@
             if (localStorage.getItem(KEYS.pwa) === '1') return true;
             if (localStorage.getItem(KEYS.bridge) === '1') return true;
             if (localStorage.getItem(KEYS.browser) === '1') return true;
-            if (localStorage.getItem(KEYS.guide) === '1') return true;
           } catch (e) {}
-          if (isAndroid && isPos && !standalone && !isKiosk) return true;
+          return false;
+        }
+        function shouldRemoveManifest() {
+          if (standalone || isKiosk) return false;
+          try {
+            if (localStorage.getItem(KEYS.browser) === '1') return true;
+            if (
+              localStorage.getItem(KEYS.bridge) === '1' &&
+              localStorage.getItem(KEYS.pwa) !== '1'
+            ) {
+              return true;
+            }
+          } catch (e) {}
           return false;
         }
         function suppressInstallPrompt(e) {
@@ -92,7 +100,7 @@
             sessionStorage.setItem(KEYS.session, '1');
           } catch (e) {}
         });
-        if (!standalone && !isKiosk && shouldSuppress()) {
+        if (!standalone && !isKiosk && shouldRemoveManifest()) {
           try {
             var manifestLink = document.querySelector('link[rel="manifest"]');
             if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
