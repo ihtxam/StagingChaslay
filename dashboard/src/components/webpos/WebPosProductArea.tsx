@@ -148,6 +148,15 @@ export default function WebPosProductArea({
 
   const showCollapsibleFilters = isPhoneLayout;
   const filtersVisible = !showCollapsibleFilters || filtersOpen;
+  const hasFilterButtons = !!(
+    (showSearch && isPhoneLayout && onSearchChange) ||
+    onToggleShowImages ||
+    onCycleTileSize ||
+    (isBelow9Inch && onCategoryLayoutChange) ||
+    onToggleSortAlpha ||
+    onToggleSortBestseller
+  );
+  const desktopFiltersBesideChips = !showCollapsibleFilters && hasFilterButtons;
 
   const onFilterGripClick = () => {
     if (!showCollapsibleFilters) return;
@@ -174,9 +183,10 @@ export default function WebPosProductArea({
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div
         className={`shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2 ${
-          showCollapsibleFilters ? '' : 'flex items-start gap-2'
+          desktopFiltersBesideChips ? 'flex items-start gap-2' : ''
         }`}
       >
+        {showCollapsibleFilters || hasFilterButtons ? (
         <div
           className={
             showCollapsibleFilters
@@ -283,6 +293,7 @@ export default function WebPosProductArea({
             </button>
           ) : null}
         </div>
+        ) : null}
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
           <label className="relative mb-2 block sm:hidden">
             <Search
@@ -309,7 +320,7 @@ export default function WebPosProductArea({
         ) : null}
         <div
           className={`webpos-cat-scroll flex flex-wrap gap-1.5 ${
-            showCollapsibleFilters ? '' : 'order-1 min-w-0 flex-1'
+            desktopFiltersBesideChips ? 'order-1 min-w-0 flex-1' : ''
           }`}
           data-cat-layout={categoryLayoutMode}
           data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
