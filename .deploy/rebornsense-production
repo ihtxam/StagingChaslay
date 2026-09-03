@@ -1,2 +1,2 @@
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
-# Last deploy request: 2026-09-03T22:20:00Z — Print Agent 1.10.3 (usb-unpaced-raw) + current main
+# Last deploy request: 2026-09-03T22:32:00Z — Print Agent 1.10.3 (retry after SSH 10m timeout)

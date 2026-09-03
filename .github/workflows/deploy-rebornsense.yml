@@ -36,6 +36,7 @@ jobs:
           username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
           key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          command_timeout: 30m
           script_stop: true
           script: |
             if [[ -z "${{ secrets.REBORN_HETZNER_HOST }}" ]]; then
