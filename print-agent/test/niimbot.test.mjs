@@ -13,18 +13,21 @@ const {
   extractComPort,
   extractWindowsUsbPort,
   detectNiimbotProfile,
+  chooseNiimbotTransport,
+  describeSerialFailure,
+  printNiimbotLabel,
   WAKE_BYTES,
   countPixelsForLine,
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.1";
+const VERSION = "1.10.2";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.1 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.2 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -129,6 +132,89 @@ test("port extractors recognize COM and USB spooler ports", () => {
   assert.equal(extractComPort("Niimbot K3 (COM7)"), "COM7");
   assert.equal(extractWindowsUsbPort("USB005"), "USB005");
   assert.equal(extractWindowsUsbPort("NIIMBOT K3 on USB005"), "USB005");
+});
+
+test("USB005 K3 is not hijacked by a discovered COM port (CH340 scale)", () => {
+  const t = chooseNiimbotTransport({
+    printerName: "NIIMBOT K3",
+    portName: "USB005",
+    resolvedCom: "COM3",
+    resolvedUsb: "USB005",
+  });
+  assert.equal(t.mode, "windows");
+  assert.equal(t.comPort, null);
+  assert.equal(t.usbPort, "USB005");
+});
+
+test("explicit COM in printer name still uses serial", () => {
+  const t = chooseNiimbotTransport({
+    printerName: "NIIMBOT K3 (COM7)",
+    portName: "",
+    resolvedCom: "COM3",
+    resolvedUsb: "",
+  });
+  assert.equal(t.mode, "com");
+  assert.equal(t.comPort, "COM7");
+});
+
+test("COM-only B21 without USB port uses serial", () => {
+  const t = chooseNiimbotTransport({
+    printerName: "Niimbot B21",
+    portName: "COM4",
+    resolvedCom: "COM4",
+    resolvedUsb: "",
+  });
+  assert.equal(t.mode, "com");
+  assert.equal(t.comPort, "COM4");
+});
+
+test("describeSerialFailure maps access denied", () => {
+  const msg = describeSerialFailure("COM3", {
+    message: "UnauthorizedAccessException: Access to the port 'COM3' is denied.",
+  });
+  assert.match(msg, /COM3 is in use or access denied/i);
+});
+
+test("COM discovery does not match CH340 VID 1a86", () => {
+  const server = read("../server.js");
+  assert.equal(server.includes("3513|0483|1a86"), false);
+  assert.match(server, /Name tokens only/);
+});
+
+test("printNiimbotLabel uses Windows when printer is USB005 even if COM is discovered", async () => {
+  const bitmap = buildTestPatternBitmap(32, 16);
+  let usedWindows = false;
+  const result = await printNiimbotLabel({
+    printerName: "NIIMBOT K3",
+    portName: "USB005",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 32,
+    heightPx: 16,
+    resolveComPortFn: async () => "COM3",
+    resolveWindowsUsbPortFn: async () => "USB005",
+    printWindowsPacketsFn: async () => {
+      usedWindows = true;
+    },
+  });
+  assert.equal(usedWindows, true);
+  assert.equal(result.path, "usb:USB005");
+});
+
+test("printNiimbotLabel falls back to Windows when COM serial fails", async () => {
+  const bitmap = buildTestPatternBitmap(32, 16);
+  let usedWindows = false;
+  const result = await printNiimbotLabel({
+    printerName: "NIIMBOT K3",
+    portName: "COM7",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 32,
+    heightPx: 16,
+    printWindowsPacketsFn: async () => {
+      usedWindows = true;
+    },
+  });
+  assert.equal(usedWindows, true);
+  assert.equal(result.printer, "NIIMBOT K3");
 });
 
 test("server wires Niimbot diagnostics and packet print path", () => {

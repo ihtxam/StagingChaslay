@@ -72,7 +72,7 @@ async function drawBarcodeOnCanvasAsync(
 export async function renderNiimbotLabelPng(
   product: LabelProduct,
   opts: LabelPrintOptions
-): Promise<{ imageBase64: string; widthPx: number; heightPx: number }> {
+): Promise<{ imageBase64: string; bitmapBase64: string; widthPx: number; heightPx: number }> {
   if (typeof document === 'undefined') {
     throw new Error('Label rendering requires a browser');
   }
