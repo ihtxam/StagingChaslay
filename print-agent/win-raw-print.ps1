@@ -139,6 +139,9 @@ function Test-NeedsPacedWrite {
     if ($blob -match 'com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|bluetoothprinter|bt_') {
         return $true
     }
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b') {
+        return $true
+    }
     # Cheap Chinese ESC/POS (Xprinter, RPP, Gprinter, …) — often on USB001 with a BT dongle.
     if ($blob -match 'xprinter|gprinter|gainscha|rongta|munbyn|rpp|pos-?58|pos-?80|pos-?80c|r80a?|58mm|80mm|thermal|receipt|escpos|zj|printer_|generic.*text') {
         return $true

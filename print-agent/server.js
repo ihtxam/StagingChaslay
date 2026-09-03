@@ -19,10 +19,10 @@ const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
-const { printNiimbotLabel, extractComPort } = require("./niimbot-client");
+const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.8";
+const VERSION = "1.9.9";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -934,6 +934,18 @@ async function resolveNiimbotComPort(printerName, portName) {
   return extractComPort(match?.portName, match?.name);
 }
 
+async function resolveNiimbotWindowsUsbPort(printerName, portName) {
+  const direct = extractWindowsUsbPort(portName, printerName);
+  if (direct) return direct;
+  const resolved = printerName ? await resolvePrinterName(printerName) : "";
+  const printers = await listPrinters();
+  const match =
+    printers.find((p) => p.name === resolved) ||
+    printers.find((p) => p.name === printerName) ||
+    printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
+  return extractWindowsUsbPort(match?.portName);
+}
+
 function buildPrintErrorPayload(error, printerName) {
   const errorText = sanitizePrintAgentError(error, printerName);
   const payload = { error: errorText };
@@ -1317,6 +1329,7 @@ function startServer() {
           heightPx,
           density: body.density,
           resolveComPortFn: resolveNiimbotComPort,
+          resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printRawFn: async ({ printerName: name, dataBase64 }) => {
             await printRaw({ printerName: name, dataBase64 });
           },
