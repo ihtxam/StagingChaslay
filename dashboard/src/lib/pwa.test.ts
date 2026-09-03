@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   isAndroidTabletBrowser,
   isPosLikePath,
+  PWA_OPEN_IN_APP_MARK,
+  shouldRemoveInstallManifestSync,
   shouldSuppressRebornInstallPromptSync,
 } from './pwa.ts';
 
@@ -18,12 +20,21 @@ test('isAndroidTabletBrowser detects Android user agents', () => {
   assert.equal(isAndroidTabletBrowser('Mozilla/5.0 (Windows NT 10.0)'), false);
 });
 
-test('shouldSuppressRebornInstallPromptSync suppresses Android POS browser tabs', () => {
+test('shouldSuppressRebornInstallPromptSync suppresses when PWA already installed', () => {
   assert.equal(
     shouldSuppressRebornInstallPromptSync({
-      androidPosBrowser: true,
+      pwaInstalled: true,
     }),
     true
+  );
+});
+
+test('shouldSuppressRebornInstallPromptSync allows first install on Android POS browser', () => {
+  assert.equal(
+    shouldSuppressRebornInstallPromptSync({
+      standalone: false,
+    }),
+    false
   );
 });
 
@@ -49,19 +60,43 @@ test('shouldSuppressRebornInstallPromptSync does not suppress kiosk install flow
   assert.equal(
     shouldSuppressRebornInstallPromptSync({
       kioskPath: true,
-      androidPosBrowser: true,
       pwaInstalled: true,
     }),
     false
   );
 });
 
-test('shouldSuppressRebornInstallPromptSync does not suppress fresh Windows browser POS', () => {
+test('shouldRemoveInstallManifestSync keeps manifest when PWA installed for Open in app', () => {
   assert.equal(
-    shouldSuppressRebornInstallPromptSync({
-      androidPosBrowser: false,
-      standalone: false,
+    shouldRemoveInstallManifestSync({
+      pwaInstalled: true,
+      bridgeInstalled: false,
+      browserPreferred: false,
     }),
     false
   );
+});
+
+test('shouldRemoveInstallManifestSync removes manifest for bridge-only Chrome users', () => {
+  assert.equal(
+    shouldRemoveInstallManifestSync({
+      pwaInstalled: false,
+      bridgeInstalled: true,
+      browserPreferred: false,
+    }),
+    true
+  );
+});
+
+test('shouldRemoveInstallManifestSync removes manifest when browser preferred', () => {
+  assert.equal(
+    shouldRemoveInstallManifestSync({
+      browserPreferred: true,
+    }),
+    true
+  );
+});
+
+test('staging bundle marker is present for grep verification', () => {
+  assert.equal(PWA_OPEN_IN_APP_MARK, 'pwa-open-in-app-v1');
 });
