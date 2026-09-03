@@ -1,6 +1,6 @@
 {
   "name": "reborn-print-agent",
-  "version": "1.9.7",
+  "version": "1.9.8",
   "setupFile": "reborn-print-agent-setup.exe",
   "builtAt": null,
   "platform": "win32-x64",

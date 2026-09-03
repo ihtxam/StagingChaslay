@@ -4,9 +4,6 @@
  */
 const { execFile } = require("child_process");
 const { promisify } = require("util");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
 
 const execFileAsync = promisify(execFile);
 
@@ -36,57 +33,30 @@ function isComPort(name) {
   return /^COM\d+$/i.test(String(name || "").trim());
 }
 
-async function serialTransceive(port, packet, { readResponses = true } = {}) {
-  const ps = `
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.IO.Ports
-$port = New-Object System.IO.Ports.SerialPort '${port.replace(/'/g, "''")}',115200,'None',8,'One'
-$port.ReadTimeout = 800
-$port.WriteTimeout = 5000
-$port.Open()
-try {
-  $bytes = [Convert]::FromBase64String('${packet.toString("base64")}')
-  $port.Write($bytes, 0, $bytes.Length)
-  if (${readResponses ? "$true" : "$false"}) {
-    Start-Sleep -Milliseconds 60
-    $buf = New-Object byte[] 512
-    $read = 0
-    try { $read = $port.Read($buf, 0, $buf.Length) } catch {}
-    if ($read -gt 0) {
-      [Convert]::ToBase64String($buf[0..($read-1)])
-    }
+/** Extract COM port from strings like "Niimbot K3 (COM7)" or "COM7". */
+function extractComPort(...values) {
+  for (const raw of values) {
+    const text = String(raw || "").trim();
+    if (!text) continue;
+    if (isComPort(text)) return text.toUpperCase();
+    const paren = text.match(/\((COM\d+)\)/i);
+    if (paren) return paren[1].toUpperCase();
+    const inline = text.match(/\b(COM\d+)\b/i);
+    if (inline) return inline[1].toUpperCase();
   }
-} finally { $port.Close() }
-`;
-  const { stdout } = await execFileAsync(
-    "powershell.exe",
-    ["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps],
-    { windowsHide: true, timeout: 15000, maxBuffer: 1024 * 1024 }
-  );
-  return String(stdout || "").trim();
+  return null;
 }
 
-async function transceive(transport, type, data, respOffset = 1) {
-  const packet = niimbotPacket(type, data);
-  if (transport.kind === "serial") {
-    await serialTransceive(transport.port, packet);
-    return true;
-  }
-  await transport.write(packet);
-  if (transport.read) {
-    for (let i = 0; i < 6; i++) {
-      const resp = await transport.read(256);
-      if (resp && resp.length >= 4 && resp[0] === 0x55 && resp[1] === 0x55) {
-        const respType = resp[2];
-        if (respType === type + respOffset || respType === 16 + type) return true;
-      }
-      await sleep(80);
-    }
-  } else {
-    await sleep(60);
-    return true;
-  }
-  return true;
+/** Windows COM10+ needs \\.\COM10 prefix for SerialPort. */
+function normalizeComPort(port) {
+  const raw = String(port || "").trim();
+  if (!raw) return "";
+  const stripped = raw.replace(/^\\\\\.\\/i, "").toUpperCase();
+  const m = stripped.match(/^COM(\d+)$/);
+  if (!m) return raw;
+  const num = parseInt(m[1], 10);
+  const com = `COM${num}`;
+  return num >= 10 ? `\\\\.\\${com}` : com;
 }
 
 function encodeBitmapLines(bitmap, widthPx, heightPx) {
@@ -106,75 +76,72 @@ function encodeBitmapLines(bitmap, widthPx, heightPx) {
   return packets;
 }
 
-async function printNiimbotBitmap({
-  bitmap,
-  widthPx,
-  heightPx,
-  density = 3,
-  transport,
-}) {
+function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3) {
   const d = Math.min(5, Math.max(1, Number(density) || 3));
-  await transceive(transport, RequestCode.SET_LABEL_DENSITY, Buffer.from([d]), 16);
-  await transceive(transport, RequestCode.SET_LABEL_TYPE, Buffer.from([1]), 16);
-  await transceive(transport, RequestCode.START_PRINT, Buffer.from([1]));
-  await transceive(transport, RequestCode.START_PAGE_PRINT, Buffer.from([1]));
+  const packets = [];
+  const push = (type, data) => packets.push(niimbotPacket(type, Buffer.from(data)));
+  push(RequestCode.SET_LABEL_DENSITY, [d]);
+  push(RequestCode.SET_LABEL_TYPE, [1]);
+  push(RequestCode.START_PRINT, [1]);
+  push(RequestCode.START_PAGE_PRINT, [1]);
   const dim = Buffer.alloc(4);
   dim.writeUInt16BE(heightPx, 0);
   dim.writeUInt16BE(widthPx, 2);
-  await transceive(transport, RequestCode.SET_DIMENSION, dim);
-  const linePackets = encodeBitmapLines(bitmap, widthPx, heightPx);
-  for (const pkt of linePackets) {
-    if (transport.kind === "serial") {
-      await serialTransceive(transport.port, pkt, { readResponses: false });
-    } else {
-      await transport.write(pkt);
-      await sleep(12);
-    }
-  }
-  await transceive(transport, RequestCode.END_PAGE_PRINT, Buffer.from([1]));
-  await sleep(300);
-  for (let i = 0; i < 30; i++) {
-    const done = await transceive(transport, RequestCode.END_PRINT, Buffer.from([1]));
-    if (done) break;
-    await sleep(100);
-  }
+  push(RequestCode.SET_DIMENSION, dim);
+  packets.push(...encodeBitmapLines(bitmap, widthPx, heightPx));
+  push(RequestCode.END_PAGE_PRINT, [1]);
+  push(RequestCode.END_PRINT, [1]);
+  return packets;
 }
 
-function createWriteOnlyTransport(writeFn) {
-  return {
-    kind: "write-only",
-    write: writeFn,
-    read: null,
-  };
+/**
+ * Send a full Niimbot label job over one serial session (open port once).
+ * Opening/closing per packet caused USB COM locks and multi-minute hangs.
+ */
+async function printNiimbotJobSerial(comPort, { bitmap, widthPx, heightPx, density = 3 }) {
+  const port = normalizeComPort(comPort);
+  const packets = buildNiimbotJobPackets(bitmap, widthPx, heightPx, density);
+  const payloadB64 = packets.map((p) => p.toString("base64")).join("\n");
+  const lineDelayMs = 12;
+  const timeoutMs = Math.min(180000, Math.max(45000, 8000 + packets.length * (lineDelayMs + 40)));
+
+  const ps = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Ports
+$port = New-Object System.IO.Ports.SerialPort '${port.replace(/'/g, "''")}',115200,'None',8,'One'
+$port.ReadTimeout = 400
+$port.WriteTimeout = 15000
+$port.Open()
+try {
+  $lines = @'
+${payloadB64}
+'@ -split "\\n" | Where-Object { $_ -and $_.Trim() }
+  foreach ($line in $lines) {
+    $bytes = [Convert]::FromBase64String($line.Trim())
+    $port.Write($bytes, 0, $bytes.Length)
+    Start-Sleep -Milliseconds ${lineDelayMs}
+  }
+  Start-Sleep -Milliseconds 600
+} finally {
+  if ($port.IsOpen) { $port.Close() }
+  $port.Dispose()
+}
+`;
+  await execFileAsync(
+    "powershell.exe",
+    ["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps],
+    { windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }
+  );
 }
 
 async function printNiimbotViaRawPrinter({ printerName, bitmap, widthPx, heightPx, density, printRawFn }) {
-  const packets = [];
-  const collect = (type, data, respOffset = 1) => {
-    packets.push({ type, data: Buffer.from(data), respOffset });
-  };
-  const d = Math.min(5, Math.max(1, Number(density) || 3));
-  collect(RequestCode.SET_LABEL_DENSITY, [d], 16);
-  collect(RequestCode.SET_LABEL_TYPE, [1], 16);
-  collect(RequestCode.START_PRINT, [1]);
-  collect(RequestCode.START_PAGE_PRINT, [1]);
-  const dim = Buffer.alloc(4);
-  dim.writeUInt16BE(heightPx, 0);
-  dim.writeUInt16BE(widthPx, 2);
-  collect(RequestCode.SET_DIMENSION, dim);
-  const linePackets = encodeBitmapLines(bitmap, widthPx, heightPx);
-  const all = [
-    ...packets.map((p) => niimbotPacket(p.type, p.data)),
-    ...linePackets,
-    niimbotPacket(RequestCode.END_PAGE_PRINT, Buffer.from([1])),
-    niimbotPacket(RequestCode.END_PRINT, Buffer.from([1])),
-  ];
-  for (const pkt of all) {
+  const packets = buildNiimbotJobPackets(bitmap, widthPx, heightPx, density);
+  for (const pkt of packets) {
     await printRawFn({
       printerName,
       dataBase64: pkt.toString("base64"),
     });
-    await sleep(40);
+    await sleep(25);
   }
 }
 
@@ -187,29 +154,46 @@ async function printNiimbotLabel(opts) {
     heightPx,
     density = 3,
     printRawFn,
+    resolveComPortFn,
   } = opts;
   const bitmap = Buffer.from(bitmapBase64, "base64");
   const w = Number(widthPx);
   const h = Number(heightPx);
   if (!bitmap.length || !w || !h) throw new Error("Invalid Niimbot label payload");
 
-  const port = String(portName || printerName || "").trim();
-  if (isComPort(port)) {
-    const transport = { kind: "serial", port: port.toUpperCase() };
-    await printNiimbotBitmap({ bitmap, widthPx: w, heightPx: h, density, transport });
-    return port;
+  let comPort = extractComPort(portName, printerName);
+  if (!comPort && typeof resolveComPortFn === "function") {
+    comPort = await resolveComPortFn(printerName, portName);
   }
 
-  if (!printRawFn) throw new Error("Niimbot printer requires COM port or print agent raw handler");
+  if (comPort) {
+    await printNiimbotJobSerial(comPort, { bitmap, widthPx: w, heightPx: h, density });
+    return comPort;
+  }
+
+  if (!printRawFn) {
+    throw new Error(
+      "Niimbot label printer needs a COM port (USB or Bluetooth). In Windows, open the printer properties and note the port (e.g. COM3), then select that printer in Settings → Receipts & printers."
+    );
+  }
+
+  const name = String(printerName || portName || "").trim();
+  if (!name) {
+    throw new Error("No Niimbot label printer configured. Enable Labels on a printer profile in Settings → Receipts & printers.");
+  }
+
+  console.warn(
+    `[print-agent] Niimbot label: no COM port for '${name}' — raw printer fallback (may be unreliable on USB)`
+  );
   await printNiimbotViaRawPrinter({
-    printerName: printerName || port,
+    printerName: name,
     bitmap,
     widthPx: w,
     heightPx: h,
     density,
     printRawFn,
   });
-  return printerName || port;
+  return name;
 }
 
 module.exports = {
@@ -217,5 +201,6 @@ module.exports = {
   isNiimbotPrintPayload(buf) {
     return Buffer.isBuffer(buf) && buf.length >= 2 && buf[0] === 0x55 && buf[1] === 0x55;
   },
+  extractComPort,
   printNiimbotLabel,
 };

@@ -916,10 +916,14 @@ export async function printNiimbotLabelViaAgent(opts: {
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitableRawPrinterMessage(name));
   }
-  const data = await agentFetch(
-    '/print/niimbot-label',
-    {
-      method: 'POST',
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const method = 'POST';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label`, {
+      method,
+      headers,
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
         portName: opts.portName || undefined,
@@ -928,10 +932,29 @@ export async function printNiimbotLabelViaAgent(opts: {
         heightPx: opts.heightPx,
         density: opts.density,
       }),
-    },
-    name
-  );
-  return { ok: true, printer: data?.printer };
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        friendlyPrintAgentError(
+          collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+          name
+        )
+      );
+    }
+    const data = await res.json();
+    return { ok: true, printer: data?.printer };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        'Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v1.9.8+).'
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */

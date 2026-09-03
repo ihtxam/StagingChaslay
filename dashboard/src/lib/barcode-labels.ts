@@ -140,7 +140,12 @@ export async function printLabelsViaAgentOrQueue(
 
   const labelsPrinters = printersForRole(settings || null, 'labels');
   const labelProfile = labelsPrinters[0];
-  const printerName = labelProfile?.name;
+  const printerName = labelProfile?.name?.trim();
+  if (!printerName) {
+    throw new Error(
+      'No label printer configured. Open Settings → Receipts & printers, add your Niimbot, and enable Labels.'
+    );
+  }
   const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
 
@@ -155,6 +160,9 @@ export async function printLabelsViaAgentOrQueue(
           widthPx: rendered.widthPx,
           heightPx: rendered.heightPx,
         });
+        if (printable.length > 1 || o.copies > 1) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
       }
     }
     return 'local';

@@ -311,6 +311,7 @@ export default function Products() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [printingLabels, setPrintingLabels] = useState(false);
   const [printTargets, setPrintTargets] = useState<LabelProduct[]>([]);
   const [businessModule, setBusinessModule] = useState<BusinessModule | null>(null);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
@@ -1014,6 +1015,7 @@ export default function Products() {
       price: p.price,
       sku: p.sku,
     }));
+    setPrintingLabels(true);
     try {
       if (mode === 'browser') {
         printLabelsHtml(payload, opts);
@@ -1029,6 +1031,8 @@ export default function Products() {
       setPrintOpen(false);
     } catch (error: any) {
       toast.error(error.message || t('barcodePrintFailed'));
+    } finally {
+      setPrintingLabels(false);
     }
   };
 
@@ -2645,13 +2649,28 @@ export default function Products() {
               {t('barcodePrintCount').replace('{n}', String(printTargets.length))}
             </p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-primary" onClick={() => void runPrint('agent')}>
-                {t('barcodePrintThermal')}
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={printingLabels}
+                onClick={() => void runPrint('agent')}
+              >
+                {printingLabels ? t('loading') : t('barcodePrintThermal')}
               </button>
-              <button type="button" className="btn-secondary" onClick={() => void runPrint('browser')}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={printingLabels}
+                onClick={() => void runPrint('browser')}
+              >
                 {t('barcodePrintBrowser')}
               </button>
-              <button type="button" className="btn-secondary" onClick={() => setPrintOpen(false)}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={printingLabels}
+                onClick={() => setPrintOpen(false)}
+              >
                 {t('cancel')}
               </button>
             </div>
