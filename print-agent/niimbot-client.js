@@ -121,6 +121,8 @@ async function printNiimbotJobSerial(comPort, { bitmap, widthPx, heightPx, densi
   const packets = buildNiimbotJobPackets(bitmap, widthPx, heightPx, density);
   const payloadB64 = packets.map((p) => p.toString("base64")).join("\n");
   const lineDelayMs = 12;
+  const setupDelayMs = 80;
+  const endDelayMs = 250;
   const timeoutMs = Math.min(180000, Math.max(45000, 8000 + packets.length * (lineDelayMs + 40)));
 
   const ps = `
@@ -131,15 +133,21 @@ $port.ReadTimeout = 400
 $port.WriteTimeout = 15000
 $port.Open()
 try {
+  $port.Write([byte[]](0x54), 0, 1)
+  Start-Sleep -Milliseconds 120
   $lines = @'
 ${payloadB64}
 '@ -split "\\n" | Where-Object { $_ -and $_.Trim() }
   foreach ($line in $lines) {
     $bytes = [Convert]::FromBase64String($line.Trim())
     $port.Write($bytes, 0, $bytes.Length)
-    Start-Sleep -Milliseconds ${lineDelayMs}
+    $type = if ($bytes.Length -ge 3) { [int]$bytes[2] } else { 0 }
+    $delay = ${setupDelayMs}
+    if ($type -eq 0x85) { $delay = ${lineDelayMs} }
+    elseif ($type -in 0xE3, 0xF3) { $delay = ${endDelayMs} }
+    Start-Sleep -Milliseconds $delay
   }
-  Start-Sleep -Milliseconds 600
+  Start-Sleep -Milliseconds 800
 } finally {
   if ($port.IsOpen) { $port.Close() }
   $port.Dispose()
@@ -152,12 +160,15 @@ ${payloadB64}
   );
 }
 
-/** Windows USB00x spooler port — one RAW job with all protocol bytes concatenated. */
-async function printNiimbotViaWindowsPrinter({ printerName, bitmap, widthPx, heightPx, density, printRawFn }) {
-  const combined = concatJobPackets(bitmap, widthPx, heightPx, density);
-  await printRawFn({
+/** Windows USB00x spooler port — one WritePrinter call per Niimbot packet (not ESC/POS chunked RAW). */
+async function printNiimbotViaWindowsPrinter({ printerName, bitmap, widthPx, heightPx, density, printWindowsPacketsFn }) {
+  const packets = buildNiimbotJobPackets(bitmap, widthPx, heightPx, density);
+  if (typeof printWindowsPacketsFn !== "function") {
+    throw new Error("Niimbot Windows print requires Print Agent 1.10.0+.");
+  }
+  await printWindowsPacketsFn({
     printerName,
-    dataBase64: combined.toString("base64"),
+    packetsBase64: packets.map((p) => p.toString("base64")),
   });
 }
 
@@ -169,7 +180,7 @@ async function printNiimbotLabel(opts) {
     widthPx,
     heightPx,
     density = 3,
-    printRawFn,
+    printWindowsPacketsFn,
     resolveComPortFn,
     resolveWindowsUsbPortFn,
   } = opts;
@@ -200,16 +211,16 @@ async function printNiimbotLabel(opts) {
     );
   }
 
-  if (!printRawFn) {
+  if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.9.9+ and select NIIMBOT K3 in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.0+ and select NIIMBOT K3 in Settings → Receipts & printers."
     );
   }
 
   if (usbPort) {
-    console.log(`[print-agent] Niimbot label via Windows USB port ${usbPort} -> '${name}'`);
+    console.log(`[print-agent] Niimbot label via Windows USB port ${usbPort} -> '${name}' (packet mode)`);
   } else {
-    console.log(`[print-agent] Niimbot label via Windows printer '${name}' (port ${portName || "unknown"})`);
+    console.log(`[print-agent] Niimbot label via Windows printer '${name}' (port ${portName || "unknown"}, packet mode)`);
   }
 
   await printNiimbotViaWindowsPrinter({
@@ -218,7 +229,7 @@ async function printNiimbotLabel(opts) {
     widthPx: w,
     heightPx: h,
     density,
-    printRawFn,
+    printWindowsPacketsFn,
   });
   return name;
 }

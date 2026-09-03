@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.9";
+const VERSION = "1.10.0";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -244,7 +244,7 @@ function assetPath(filename) {
 
 function ensurePs1OnDisk() {
   const dir = runtimeDir();
-  const scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1"];
+  const scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-niimbot-print.ps1"];
   for (const name of scripts) {
     const dest = path.join(dir, name);
     const bundled = path.join(__dirname, name);
@@ -259,9 +259,92 @@ function ensurePs1OnDisk() {
   return path.join(dir, "win-raw-print.ps1");
 }
 
+function ensureNiimbotPs1OnDisk() {
+  ensurePs1OnDisk();
+  return path.join(runtimeDir(), "win-niimbot-print.ps1");
+}
+
 function ensureWorkerPs1OnDisk() {
   ensurePs1OnDisk();
   return path.join(runtimeDir(), "win-raw-print-worker.ps1");
+}
+
+async function discoverNiimbotComPorts() {
+  if (!isWindows()) return [];
+  const ps = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$ports = @()
+try {
+  Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
+    $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b') {
+      $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
+    }
+  }
+} catch { }
+try {
+  Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
+    $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b') {
+      if ($_.FriendlyName -match '(COM\\d+)') {
+        $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
+      }
+    }
+  }
+} catch { }
+($ports | Sort-Object port -Unique | ConvertTo-Json -Compress -Depth 3)
+`;
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, maxBuffer: 1024 * 1024, encoding: "utf8", timeout: 15000 }
+    );
+    const raw = (stdout || "").trim().replace(/^\uFEFF/, "");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    return list
+      .map((row) => extractComPort(row.port, row.caption))
+      .filter(Boolean);
+  } catch (error) {
+    console.warn("[print-agent] Niimbot COM discovery failed:", error.message || error);
+    return [];
+  }
+}
+
+async function printNiimbotWindows({ printerName, packetsBase64 }) {
+  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  if (!name) throw new Error("Niimbot printer name is required.");
+  const lines = Array.isArray(packetsBase64) ? packetsBase64.filter(Boolean) : [];
+  if (!lines.length) throw new Error("No Niimbot packets to print.");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-"));
+  const packetsFile = path.join(tmpDir, "packets.txt");
+  const nameFile = path.join(tmpDir, "printer-name.txt");
+  fs.writeFileSync(packetsFile, lines.join("\n"), "utf8");
+
+  try {
+    const scriptPath = ensureNiimbotPs1OnDisk();
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(`win-niimbot-print.ps1 not found at ${scriptPath}`);
+    }
+    const args = ["-PacketsFile", packetsFile];
+    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
+    args.push("-PrinterNameFile", nameFile);
+    const usedPrinter = await runPowerShell(scriptPath, args, name);
+    return usedPrinter || name;
+  } finally {
+    try {
+      fs.unlinkSync(packetsFile);
+      if (fs.existsSync(nameFile)) fs.unlinkSync(nameFile);
+      fs.rmdirSync(tmpDir);
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
 }
 
 function killPrintWorker() {
@@ -580,7 +663,7 @@ async function doInstall() {
     appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
-  const ps1Scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1"];
+  const ps1Scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-niimbot-print.ps1"];
   for (const ps1Name of ps1Scripts) {
     const ps1Src = path.join(__dirname, ps1Name);
     const ps1Dest = path.join(dir, ps1Name);
@@ -931,7 +1014,20 @@ async function resolveNiimbotComPort(printerName, portName) {
     printers.find((p) => p.name === resolved) ||
     printers.find((p) => p.name === printerName) ||
     printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
-  return extractComPort(match?.portName, match?.name);
+  const fromPrinter = extractComPort(match?.portName, match?.name);
+  if (fromPrinter) return fromPrinter;
+
+  const discovered = await discoverNiimbotComPorts();
+  if (!discovered.length) return null;
+  const want = stableDeviceKey(printerName || match?.name || match?.matchHint);
+  if (want) {
+    const scored = discovered
+      .map((port) => ({ port, score: scoreDeviceMatch(want, port) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+    if (scored[0]) return scored[0].port;
+  }
+  return discovered[0];
 }
 
 async function resolveNiimbotWindowsUsbPort(printerName, portName) {
@@ -1330,9 +1426,7 @@ function startServer() {
           density: body.density,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
-          printRawFn: async ({ printerName: name, dataBase64 }) => {
-            await printRaw({ printerName: name, dataBase64 });
-          },
+          printWindowsPacketsFn: printNiimbotWindows,
         })
       );
       res.json({ ok: true, printer: usedPrinter });
