@@ -79,6 +79,7 @@ export function getDeliveryPlatformPublic(raw: unknown): DeliveryPlatformSetting
   const je = norm.justEat || {};
   const ue = norm.uberEats || {};
   return {
+    onlineShopAutoAccept: norm.onlineShopAutoAccept,
     justEat: {
       ...je,
       apiKey: undefined,

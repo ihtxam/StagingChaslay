@@ -98,16 +98,16 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
         {step === 'gallery' ? (
           <>
-            <DialogHeader>
+            <DialogHeader className="px-6 pt-6 pr-12">
               <DialogTitle>{t('title')}</DialogTitle>
               <DialogDescription>{t('subtitle')}</DialogDescription>
             </DialogHeader>
 
             {/* Template grid */}
-            <ScrollArea className="flex-1 -mx-6 px-6">
+            <ScrollArea className="flex-1 min-h-0 px-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
                 {/* Start from Scratch card */}
                 <Card
@@ -157,12 +157,12 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
           </>
         ) : (
           <>
-            <DialogHeader>
+            <DialogHeader className="px-6 pt-6 pr-12 shrink-0">
               <DialogTitle>{t('enterName')}</DialogTitle>
               <DialogDescription>{t('enterNameDesc')}</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
               {selectedTemplate && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
                   <div className="w-16 h-12 relative rounded overflow-hidden bg-background">
@@ -194,7 +194,7 @@ export function TemplateGallery({ open, onOpenChange, onCreate, isSaving }: Temp
               </div>
             </div>
 
-            <DialogFooter className="flex-row gap-2 sm:gap-0">
+            <DialogFooter className="mt-auto shrink-0 flex-row gap-2 border-t bg-background px-6 py-4 sm:justify-between">
               <Button variant="outline" onClick={handleBack} disabled={isCreating}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 {t('backToTemplates')}

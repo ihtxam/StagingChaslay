@@ -300,19 +300,18 @@ export default function TableQrCodes() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
-            <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+          <div className="flex max-h-[min(92vh,48rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+            <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-4 py-3">
               <QrCode className="h-5 w-5 text-emerald-500" />
               <h3 className="font-semibold text-[var(--text-primary)]">
                 {t('tableQrFor')} {selected.label}
               </h3>
             </div>
-            <div className="space-y-4 p-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <div className="flex flex-col items-center gap-2 rounded-lg bg-white p-4">
                 <img src={selected.qrUrl} alt="" className="h-40 w-40" />
                 <span className="text-2xl font-bold text-gray-900">{selected.label}</span>
               </div>
-              <p className="break-all text-xs text-[var(--text-muted)]">{selected.payload}</p>
               <p className="break-all text-xs text-[var(--text-muted)]">{selected.shopUrl}</p>
               <div className="rounded-lg border border-violet-200 bg-violet-50/80 p-3">
                 <p className="text-xs font-semibold text-violet-900">{t('tableQrWaiterTitle')}</p>
@@ -390,12 +389,13 @@ export default function TableQrCodes() {
 
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
-            <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+          <div className="flex max-h-[min(92vh,40rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+            <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-4 py-3">
               <Settings2 className="h-5 w-5 text-emerald-500" />
               <h3 className="font-semibold text-[var(--text-primary)]">{t('tableQrStandSettings')}</h3>
             </div>
-            <form onSubmit={saveSettings} className="space-y-4 p-4">
+            <form onSubmit={saveSettings} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <p className="text-xs text-[var(--text-muted)]">{t('tableQrStandSettingsHint')}</p>
               <label className="block text-sm">
                 <span className="font-medium">{t('tableQrHeaderText')}</span>
@@ -463,7 +463,8 @@ export default function TableQrCodes() {
                   }
                 />
               </label>
-              <div className="flex justify-end gap-2">
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] p-4">
                 <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
                   {t('cancel')}
                 </button>
