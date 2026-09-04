@@ -202,6 +202,12 @@ interface SettingsData {
   bankName?: string | null;
   bankAccountHolder?: string | null;
   webposTerminalEnabled?: boolean;
+  adyenMerchantAccount?: string | null;
+  adyenApiKeyMasked?: string | null;
+  adyenApiKeySet?: boolean;
+  adyenClientId?: string | null;
+  adyenHmacKeyMasked?: string | null;
+  adyenHmacKeySet?: boolean;
   adyenLiveEnvironment?: boolean;
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
@@ -839,6 +845,27 @@ export default function Settings() {
     }
   }, [loading, tab]);
 
+  const applyAdyenCreds = useCallback((a: AdyenCreds) => {
+    setAdyen(a);
+    if (a.merchantAccount != null && a.merchantAccount !== '') {
+      setMerchantAccount(a.merchantAccount);
+    }
+    if (a.clientId != null && a.clientId !== '') {
+      setClientId(a.clientId);
+    }
+  }, []);
+
+  const adyenCredsFromSettings = useCallback((s: SettingsData): AdyenCreds => {
+    return {
+      merchantAccount: s.adyenMerchantAccount,
+      clientId: s.adyenClientId,
+      apiKeyMasked: s.adyenApiKeyMasked,
+      apiKeySet: s.adyenApiKeySet,
+      hmacKeyMasked: s.adyenHmacKeyMasked,
+      hmacKeySet: s.adyenHmacKeySet,
+    };
+  }, []);
+
   const loadSettings = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -856,6 +883,7 @@ export default function Settings() {
           name: s.name || '',
           email: s.email || '',
         });
+        applyAdyenCreds(adyenCredsFromSettings(s as SettingsData));
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
         setCardFeePercent(String(s?.onlineCardFeePercent ?? '0'));
 
@@ -889,24 +917,25 @@ export default function Settings() {
     setSettings(null);
     setLoadError(msg);
     toast.error(msg);
-  }, [setLocale, t]);
+  }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, t]);
 
-  const loadPaymentsData = useCallback(async () => {
-    if (paymentsDataLoadedRef.current) return;
-    try {
-      const terminalsRes = await api
-        .get('/terminals')
-        .catch(() => ({ data: { adyen: {}, terminals: [] } }));
-      const a = terminalsRes.data.adyen || {};
-      setAdyen(a);
-      setMerchantAccount(a.merchantAccount || '');
-      setClientId(a.clientId || '');
-      setTerminals(terminalsRes.data.terminals || []);
-      paymentsDataLoadedRef.current = true;
-    } catch {
-      /* payments tab can retry */
-    }
-  }, []);
+  const loadPaymentsData = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (paymentsDataLoadedRef.current && !opts?.force) return;
+      try {
+        const terminalsRes = await api.get('/terminals');
+        const a = terminalsRes.data.adyen || {};
+        applyAdyenCreds(a);
+        setTerminals(terminalsRes.data.terminals || []);
+        paymentsDataLoadedRef.current = true;
+      } catch (error: unknown) {
+        paymentsDataLoadedRef.current = false;
+        const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        if (msg) toast.error(msg);
+      }
+    },
+    [applyAdyenCreds]
+  );
 
   const loadReceiptCatalog = useCallback(async () => {
     if (receiptCatalogLoadedRef.current) return;
@@ -1217,9 +1246,12 @@ export default function Settings() {
         adyenClientId: clientId,
         adyenHmacKey: hmacKey || undefined,
       });
-      setAdyen(response.data.adyen || {});
+      const a = response.data.adyen || {};
+      applyAdyenCreds(a);
       setApiKey('');
       setHmacKey('');
+      paymentsDataLoadedRef.current = false;
+      await loadPaymentsData({ force: true });
       toast.success(t('adyenSaved'));
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to save Swisspayout credentials');
@@ -1445,8 +1477,8 @@ export default function Settings() {
       toast.success(t('terminalAdded'));
       setTerminalId('');
       setTerminalName('');
-      const res = await api.get('/terminals');
-      setTerminals(res.data.terminals || []);
+      paymentsDataLoadedRef.current = false;
+      await loadPaymentsData({ force: true });
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('failedAddTerminal'));
     } finally {
