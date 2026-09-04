@@ -32,8 +32,6 @@ import {
 } from '@/components/reports/CashDrawerBreakdown';
 import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
 import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
-import { loadWebPosStaffSession } from '@/lib/permissions';
-import { useAuthStore } from '@/store/auth';
 
 type EodShiftCash = CashDrawerShift;
 
@@ -96,8 +94,6 @@ type ReportEmailSettings = {
 
 export default function ReportsPage() {
   const { t, locale, formatDateTime } = useI18n();
-  const authUser = useAuthStore((s) => s.user);
-  const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
   const [tab, setTab] = useState<Tab>('eod');
   const [preset, setPreset] = useState<Preset>('today');
   const [from, setFrom] = useState('');
@@ -136,14 +132,8 @@ export default function ReportsPage() {
         if (from) params.set('from', from);
         if (to) params.set('to', to);
       }
-      const pinSession = loadWebPosStaffSession();
-      // Owner on the back-office panel should see company totals, not the till PIN session.
-      const reportHeaders =
-        !jwtIsOwner && pinSession?.accessToken
-          ? { 'X-WebPos-Staff-Access': pinSession.accessToken }
-          : undefined;
       const [repRes, setRes] = await Promise.all([
-        api.get(`/merchant/reports/eod?${params}`, { headers: reportHeaders }),
+        api.get(`/merchant/reports/eod?${params}`),
         api.get('/merchant/settings'),
       ]);
       setReport(repRes.data.report);
@@ -156,7 +146,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [preset, from, to, t, jwtIsOwner]);
+  }, [preset, from, to, t]);
 
   useEffect(() => {
     void load();
