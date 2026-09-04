@@ -106,6 +106,7 @@ import {
   nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
   planSettingsSearchResultClick,
+  resetSettingsClipperScroll,
   scheduleScrollToSettingsSearchSection,
   scrollToSettingsSearchSection,
   settingsSearchView,
@@ -765,6 +766,24 @@ export default function Settings() {
     },
     [canOpenSettingsTab, setSearchParams]
   );
+
+  const goToPosSection = useCallback(
+    (sectionId: string) => {
+      setSettingsQuery('');
+      selectTab('pos');
+      setHighlightId(sectionId);
+      scheduleScrollToSettingsSearchSection(sectionId);
+    },
+    [selectTab]
+  );
+
+  useEffect(() => {
+    resetSettingsClipperScroll();
+    const root = document.querySelector('[data-settings-scroll-root]');
+    if (root instanceof HTMLElement) {
+      root.scrollTop = 0;
+    }
+  }, [tab]);
 
   useEffect(() => {
     const fromUrl = parseSettingsTabFromSearch(searchParams.toString());
@@ -1902,7 +1921,6 @@ export default function Settings() {
                   </div>
                 </Section>
               ) : null}
-              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
@@ -2096,7 +2114,6 @@ export default function Settings() {
                   </Link>
                 </div>
               </Section>
-              <SettingsSaveBar saving={saving} />
             </form>
           )}
 
@@ -2128,10 +2145,8 @@ export default function Settings() {
               saving={saving}
               highlightId={highlightId}
               isSectionHighlight={isSectionHighlight}
-              onGoToPosTab={(query, sectionId) => {
-                setSettingsQuery(query);
-                selectTab('pos');
-                setHighlightId(sectionId);
+              onGoToPosTab={(_query, sectionId) => {
+                goToPosSection(sectionId);
               }}
             />
           )}
@@ -2959,50 +2974,14 @@ export default function Settings() {
                     tapToPayEnabled={settings?.tapToPayEnabled === true}
                   />
                 </Section>
-                <SettingsSaveBar saving={savingWebposPay} />
-              </form>
 
-              <form onSubmit={saveCardFees} className="space-y-5">
-                <Section icon={CreditCard} accent={settingsDash.warning} title={t('onlineCardFees')} description={t('onlineCardFeesHint')}>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label={t('cardFeeFixed')} hint={t('cardFeeFixedHint')}>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        step="0.05"
-                        value={cardFeeFixed}
-                        onChange={(e) => setCardFeeFixed(e.target.value)}
-                      />
-                    </Field>
-                    <Field label={t('cardFeePercent')} hint={t('cardFeePercentHint')}>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={cardFeePercent}
-                        onChange={(e) => setCardFeePercent(e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                </Section>
-                <SettingsSaveBar saving={savingFee} />
-              </form>
-
-              <form onSubmit={saveWebposPayments} className="space-y-5">
                 <Section icon={CreditCard} accent={settingsDash.info} title={t('adyenTerminalEnv')}>
                   <p className="text-xs muted">
                     {t('webposPaymentMethodsMovedHint')}{' '}
                     <button
                       type="button"
                       className="font-medium text-[var(--text)] underline underline-offset-2"
-                      onClick={() => {
-                        setSettingsQuery('payment');
-                        selectTab('pos');
-                        setHighlightId('pos-payments');
-                      }}
+                      onClick={() => goToPosSection('pos-payments')}
                     >
                       {t('settingsPos')}
                     </button>
@@ -3057,10 +3036,7 @@ export default function Settings() {
                     {t('adyenLegacyEndpoint')}
                   </label>
                 </Section>
-                <SettingsSaveBar saving={savingWebposPay} />
-              </form>
 
-              <form onSubmit={saveWebposPayments} className="space-y-5">
                 <Section
                   id="payments-invoice-bank"
                   icon={Building2}
@@ -3118,6 +3094,35 @@ export default function Settings() {
                   </div>
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
+              </form>
+
+              <form onSubmit={saveCardFees} className="space-y-5">
+                <Section icon={CreditCard} accent={settingsDash.warning} title={t('onlineCardFees')} description={t('onlineCardFeesHint')}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label={t('cardFeeFixed')} hint={t('cardFeeFixedHint')}>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.05"
+                        value={cardFeeFixed}
+                        onChange={(e) => setCardFeeFixed(e.target.value)}
+                      />
+                    </Field>
+                    <Field label={t('cardFeePercent')} hint={t('cardFeePercentHint')}>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={cardFeePercent}
+                        onChange={(e) => setCardFeePercent(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </Section>
+                <SettingsSaveBar saving={savingFee} />
               </form>
 
               <Section icon={CreditCard} accent={settingsDash.success} title={t('paymentTerminals')} description={t('paymentTerminalsHint')}>
