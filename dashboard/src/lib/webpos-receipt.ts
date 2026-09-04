@@ -155,6 +155,26 @@ export function encodeOrderMetaNotes(opts: {
   return joined || undefined;
 }
 
+/** POS checkout lines embedded in order.notes — not user-facing order notes. */
+function stripPosCheckoutLinesFromText(text: string): string {
+  return text
+    .replace(/\bTendered\s+CHF\s+[\d.]+\b/gi, '')
+    .replace(/\bChange\s+CHF\s+[\d.]+\b/gi, '')
+    .replace(/\bRounding\s+[+-]?[\d.]+\b/gi, '')
+    .replace(/\bTip\s+CHF\s+[\d.]+\b/gi, '')
+    .replace(/\bPoints\s+[−-]CHF\s+[\d.]+\s*\([^)]*\)/gi, '')
+    .replace(/\bPickup\/delivery:\s*[^\n·]+/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[·\s]+|[·\s]+$/g, '')
+    .trim();
+}
+
+/** User-facing order notes for lists/detail (drops ticket tags + checkout metadata). */
+export function formatOrderNotesForDisplay(notes?: string | null): string {
+  const meta = parseOrderMetaNotes(notes);
+  return stripPosCheckoutLinesFromText(meta.cleanNotes);
+}
+
 export function parseOrderMetaNotes(notes?: string | null): {
   ticketDisplay?: string;
   tabNumber?: string;
