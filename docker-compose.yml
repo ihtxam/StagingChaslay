@@ -27,6 +27,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-manupos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-manupos}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_EXPIRY: ${JWT_EXPIRY:-24h}
+      DOMAIN: ${DOMAIN:-rebornsense.com}
+      SHOP_PUBLIC_HOST: ${SHOP_PUBLIC_HOST:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://app.rebornsense.com}
       PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
       SUPERADMIN_URL: ${PUBLIC_APP_URL:-https://manupos.webprintmedia.swiss}
