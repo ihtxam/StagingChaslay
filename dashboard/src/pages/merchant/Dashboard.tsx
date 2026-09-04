@@ -178,6 +178,7 @@ function MerchantShell() {
   const isKioskRoute =
     /^\/merchant\/kiosk\/?$/.test(location.pathname) ||
     (location.pathname.replace(/\/$/, '') === '/merchant/settings' && isKioskSettingsTab(location.search));
+  const isSettingsRoute = /^\/merchant\/settings\/?$/.test(location.pathname);
   const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute || isKioskRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
@@ -973,10 +974,12 @@ function MerchantShell() {
 
         <main
           className={
-            ((isPosLikeRoute || isOrderCenterRoute || isStorekeeperRoute) && !isKioskRoute && posAppMode) ||
-            isStorekeeperRoute
-              ? 'flex-1 overflow-hidden p-0 min-h-0'
-              : 'panel-main flex-1 p-3 sm:p-4'
+            isSettingsRoute
+              ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4'
+              : ((isPosLikeRoute || isOrderCenterRoute || isStorekeeperRoute) && !isKioskRoute && posAppMode) ||
+                  isStorekeeperRoute
+                ? 'flex-1 overflow-hidden p-0 min-h-0'
+                : 'panel-main flex-1 p-3 sm:p-4'
           }
         >
           <Routes>

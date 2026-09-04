@@ -1791,7 +1791,7 @@ export function escposFeedAndCut(): Uint8Array {
   return escposKitchenCut();
 }
 
-const KITCHEN_TICKET_CUT = escposKitchenTicketEnd();
+const KITCHEN_TICKET_CUT = escposKitchenCut();
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {

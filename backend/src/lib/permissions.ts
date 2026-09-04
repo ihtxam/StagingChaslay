@@ -98,6 +98,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_BILLING",
       "END_OF_DAY",
       "MANAGE_INVENTORY",
+      "GANDOLA_PURGE",
     ],
   },
   {
@@ -179,20 +180,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     isSystem: true,
     sortOrder: 57,
     permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
-  },
-  {
-    /** Hidden bulk delete of completed cash sales from POS history and reports. */
-    name: "gandola",
-    isSystem: true,
-    sortOrder: 58,
-    permissions: [
-      "USE_WEBPOS",
-      "VIEW_ORDER_HISTORY",
-      "VIEW_ALL_SALES",
-      "VIEW_REPORTS",
-      "END_OF_DAY",
-      "GANDOLA_PURGE",
-    ],
   },
   {
     /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
