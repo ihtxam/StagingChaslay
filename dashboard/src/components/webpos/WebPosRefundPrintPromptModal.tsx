@@ -48,7 +48,7 @@ export default function WebPosRefundPrintPromptModal({
           </button>
           <button
             type="button"
-            className="webpos-accent-btn rounded-xl py-3 text-sm font-bold text-white"
+            className="btn-primary rounded-xl py-3 text-sm font-bold"
             disabled={busy}
             onClick={onPrint}
           >
