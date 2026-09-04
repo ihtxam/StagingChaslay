@@ -757,17 +757,34 @@ docker ps -aq --filter "name=${migrate_project}-api" | xargs -r docker rm -f 2>/
 docker ps -aq --filter "name=_${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
 dc up -d --build db api dashboard caddy
 
-# Caddyfile is bind-mounted; reload in place (avoid --force-recreate name conflicts)
+# Caddyfile is bind-mounted. `caddy reload` can leave stale site blocks (e.g. new
+# order.rebornsense.com hub) — force-recreate when the file changes or reload fails.
 echo "=== Reload Caddy ==="
 caddy_project="$(compose_project_name "$REPO_DIR")"
 docker ps -aq --filter "name=${caddy_project}-caddy" --filter "status=exited" | xargs -r docker rm -f 2>/dev/null || true
 dc up -d caddy
-if dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
+
+CADDY_SOURCE="${CADDYFILE:-$REPO_DIR/deploy/Caddyfile.rebornsense}"
+[[ "$CADDY_SOURCE" != /* ]] && CADDY_SOURCE="$REPO_DIR/${CADDY_SOURCE#./}"
+CADDY_HASH="$(sha256sum "$CADDY_SOURCE" 2>/dev/null | awk '{print $1}')"
+CADDY_HASH_FILE="$REPO_DIR/.deploy/caddyfile.sha256"
+PREV_CADDY_HASH="$(cat "$CADDY_HASH_FILE" 2>/dev/null || true)"
+CADDY_NEEDS_RECREATE=0
+if [[ -n "$CADDY_HASH" && "$CADDY_HASH" != "$PREV_CADDY_HASH" ]]; then
+  echo "Caddyfile changed — will force-recreate caddy"
+  CADDY_NEEDS_RECREATE=1
+fi
+
+if [[ "$CADDY_NEEDS_RECREATE" == "1" ]]; then
+  dc up -d --force-recreate caddy
+  echo "Caddy recreated (Caddyfile changed)"
+elif dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
   echo "Caddy reloaded"
 else
-  echo "Caddy reload failed; restarting container"
-  dc restart caddy 2>/dev/null || true
+  echo "Caddy reload failed; force-recreating container"
+  dc up -d --force-recreate caddy
 fi
+[[ -n "$CADDY_HASH" ]] && mkdir -p "$REPO_DIR/.deploy" && echo "$CADDY_HASH" >"$CADDY_HASH_FILE"
 
 echo "=== Verify Caddy TLS config ==="
 CADDY_CONTAINER="$(dc ps -q caddy 2>/dev/null | head -1)"
@@ -779,9 +796,13 @@ if [[ -n "$CADDY_CONTAINER" ]]; then
       echo "  Expected: CADDYFILE=./deploy/Caddyfile.rebornsense"
       exit 1
     fi
+    if ! docker exec "$CADDY_CONTAINER" grep -q 'order\.rebornsense\.com' /etc/caddy/Caddyfile 2>/dev/null; then
+      echo "ERROR: Caddyfile missing order.rebornsense.com shop hub block."
+      exit 1
+    fi
   fi
   echo "Caddyfile host block sample:"
-  docker exec "$CADDY_CONTAINER" grep -E '^[a-z*].*\.(rebornsense|chaslay)\.com|^https://' /etc/caddy/Caddyfile 2>/dev/null | head -8 || true
+  docker exec "$CADDY_CONTAINER" grep -E '^[a-z*].*\.(rebornsense|chaslay)\.com|^https://' /etc/caddy/Caddyfile 2>/dev/null | head -12 || true
 fi
 
 echo "=== Wait for services ==="
@@ -958,6 +979,27 @@ if grep -qE '^BREVO_API_KEY=.+' "$ENV_FILE" && grep -qE '^BREVO_FROM_EMAIL=.+' "
   echo "Brevo ready for merchant invite emails"
 else
   echo "WARNING: Brevo not fully configured ? invite links will be copy-only until BREVO_API_KEY + BREVO_FROM_EMAIL are set"
+fi
+
+if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
+  echo "=== Shop hub TLS check (order.rebornsense.com) ==="
+  SHOP_HUB_HOST="${SHOP_PUBLIC_HOST:-order.rebornsense.com}"
+  SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/" 2>/dev/null || echo "000")"
+  echo "https://${SHOP_HUB_HOST}/ HTTP ${SHOP_HUB_CODE}"
+  if [[ "$SHOP_HUB_CODE" != "200" && "$SHOP_HUB_CODE" != "301" && "$SHOP_HUB_CODE" != "302" && "$SHOP_HUB_CODE" != "308" ]]; then
+    echo "WARNING: shop hub HTTPS check failed — force-recreating caddy and retrying"
+    dc up -d --force-recreate caddy
+    sleep 15
+    SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/" 2>/dev/null || echo "000")"
+    echo "retry https://${SHOP_HUB_HOST}/ HTTP ${SHOP_HUB_CODE}"
+    if [[ "$SHOP_HUB_CODE" != "200" && "$SHOP_HUB_CODE" != "301" && "$SHOP_HUB_CODE" != "302" && "$SHOP_HUB_CODE" != "308" ]]; then
+      echo "ERROR: shop hub still unreachable at https://${SHOP_HUB_HOST}/"
+      echo "  Ensure DNS A record points to this server and Caddy can obtain a TLS cert."
+      exit 1
+    fi
+  fi
+  LEGACY_SHOP_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -L "https://shop.rebornsense.com/" 2>/dev/null || echo "000")"
+  echo "https://shop.rebornsense.com/ (expect redirect) HTTP ${LEGACY_SHOP_CODE}"
 fi
 
 echo "=== Deploy complete ==="

@@ -40,4 +40,6 @@ jobs:
             dc exec -T api wget -qO- http://127.0.0.1:3000/health || true
             curl -sf https://api.rebornsense.com/health || curl -sf https://app.rebornsense.com/api/health || true
             echo
+            SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://order.rebornsense.com/ 2>/dev/null || echo "000")"
+            echo "shop hub https://order.rebornsense.com/ HTTP ${SHOP_HUB_CODE}"
             dc ps
