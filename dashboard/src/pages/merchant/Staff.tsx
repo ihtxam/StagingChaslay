@@ -9,6 +9,7 @@ import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
+import { PasswordInput } from '@/components/PasswordInput';
 
 type RoleRow = {
   id: string;
@@ -436,9 +437,8 @@ export default function StaffPage({
               </label>
               <label className="block text-sm">
                 {t('password')}
-                <input
-                  className="input mt-1"
-                  type="password"
+                <PasswordInput
+                  wrapperClassName="mt-1"
                   autoComplete="new-password"
                   minLength={8}
                   value={staffForm.password}
@@ -806,9 +806,8 @@ export default function StaffPage({
               </label>
               <label className="block text-sm">
                 {t('staffNewPassword')}
-                <input
-                  className="input mt-1"
-                  type="password"
+                <PasswordInput
+                  wrapperClassName="mt-1"
                   autoComplete="new-password"
                   minLength={8}
                   placeholder={
