@@ -227,10 +227,37 @@ function effectiveQty(item: OrderRow["items"][number]): number {
   return roundMoney2(Math.max(0, qty - refunded));
 }
 
+function lineValue(item: OrderRow["items"][number]): number {
+  return roundMoney2(Number(item.totalPrice) || 0);
+}
+
+function isWeightedLine(item: OrderRow["items"][number]): boolean {
+  return item.weightKg != null && Number(item.weightKg) > 0;
+}
+
+/** Line can be reduced (weighed kg, unit qty, or positive line total). */
+export function isAdjustableCashLine(item: OrderRow["items"][number]): boolean {
+  const value = lineValue(item);
+  if (value <= 0.001) return false;
+  if (isWeightedLine(item)) return true;
+  return effectiveQty(item) > 0;
+}
+
 function unitLineValue(item: OrderRow["items"][number]): number {
   const qty = effectiveQty(item);
-  if (qty <= 0) return 0;
+  if (qty <= 0) return lineValue(item);
   return roundMoney2(Number(item.totalPrice) / qty);
+}
+
+/** Value removed in one reduction step (for prioritising larger lines). */
+function reducibleStepValue(item: OrderRow["items"][number]): number {
+  const total = lineValue(item);
+  if (total <= 0.001) return 0;
+  if (isWeightedLine(item)) return total;
+  const qty = effectiveQty(item);
+  if (qty <= 0) return total;
+  if (qty >= 1) return unitLineValue(item);
+  return total;
 }
 
 function scaleOrderAmounts(
@@ -315,9 +342,15 @@ export class SalesAdjustmentService {
 
       currentCashTotal = roundMoney2(currentCashTotal + cashNet);
       eligibleOrderCount += 1;
+      let orderHasAdjustableLine = false;
       for (const item of o.items || []) {
-        if (item.weightKg != null && Number(item.weightKg) > 0) continue;
-        if (effectiveQty(item) > 0) adjustableItemCount += 1;
+        if (isAdjustableCashLine(item)) {
+          adjustableItemCount += 1;
+          orderHasAdjustableLine = true;
+        }
+      }
+      if (!orderHasAdjustableLine && cashNet > 0.001) {
+        adjustableItemCount += 1;
       }
     }
 
@@ -363,7 +396,9 @@ export class SalesAdjustmentService {
       throw new Error("Nothing to adjust — cash sales are already at or below the target.");
     }
     if (preview.adjustableItemCount === 0) {
-      throw new Error("No adjustable cash order lines found for this period.");
+      throw new Error(
+        "No adjustable cash order lines found for this period. Lines may be fully discounted or missing item detail on the order."
+      );
     }
 
     const { start, end, from, to, label } = resolveSalesAdjustmentRange(rangeOpts || {});
@@ -378,8 +413,9 @@ export class SalesAdjustmentService {
 
     type Candidate = {
       order: OrderRow;
-      item: OrderRow["items"][number];
-      unitValue: number;
+      item?: OrderRow["items"][number];
+      stepValue: number;
+      orderHeaderOnly?: boolean;
     };
 
     const buildCandidates = (): Candidate[] => {
@@ -387,16 +423,116 @@ export class SalesAdjustmentService {
       for (const order of orders) {
         if (!isCashOnlyOrder(order)) continue;
         for (const item of order.items || []) {
-          if (item.weightKg != null && Number(item.weightKg) > 0) continue;
-          const qty = effectiveQty(item);
-          if (qty <= 0) continue;
-          const unitValue = unitLineValue(item);
-          if (unitValue <= 0) continue;
-          list.push({ order, item, unitValue });
+          if (!isAdjustableCashLine(item)) continue;
+          const stepValue = reducibleStepValue(item);
+          if (stepValue <= 0) continue;
+          list.push({ order, item, stepValue });
+        }
+        const hasLines = (order.items || []).some(isAdjustableCashLine);
+        const net = orderNetTotal(order);
+        if (!hasLines && net > 0.001) {
+          list.push({ order, stepValue: net, orderHeaderOnly: true });
         }
       }
-      list.sort((a, b) => b.unitValue - a.unitValue);
+      list.sort((a, b) => b.stepValue - a.stepValue);
       return list;
+    };
+
+    const rescaleOrderFromItems = (order: OrderRow, oldItemsSum: number) => {
+      const newItemsSum = (order.items || []).reduce((s, it) => s + Number(it.totalPrice), 0);
+      const orderRatio = oldItemsSum > 0 ? newItemsSum / oldItemsSum : 1;
+      const scaled = scaleOrderAmounts(order, orderRatio);
+      order.subtotal = scaled.subtotal;
+      order.taxAmount = scaled.taxAmount;
+      order.discountAmount = scaled.discountAmount;
+      order.total = scaled.total;
+    };
+
+    const markOrderAdjusted = (order: OrderRow) => {
+      if (!adjustedOrderIds.has(order.id)) {
+        originalOrderTotals.set(order.id, Number(order.total) || 0);
+        adjustedOrderIds.add(order.id);
+        ordersAdjusted += 1;
+      }
+    };
+
+    const applyLineReduction = async (
+      order: OrderRow,
+      item: OrderRow["items"][number],
+      remaining: number
+    ): Promise<number> => {
+      const oldItemsSum = (order.items || []).reduce((s, it) => s + Number(it.totalPrice), 0);
+      const oldLineTotal = lineValue(item);
+      const oldQty = effectiveQty(item);
+      const weighted = isWeightedLine(item);
+
+      if (!weighted && oldQty >= 1) {
+        const newQty = roundMoney2(Math.max(0, oldQty - 1));
+        const ratio = oldQty > 0 ? newQty / oldQty : 0;
+        const newTotalPrice = roundMoney2(Number(item.totalPrice) * ratio);
+        const newTaxAmount = roundMoney2(Number(item.taxAmount) * ratio);
+        const qtyDelta = roundMoney2(oldQty - newQty);
+        const newQuantity = roundMoney2(Math.max(0, Number(item.quantity) - qtyDelta));
+
+        await db
+          .update(schema.orderItems)
+          .set({
+            quantity: Math.max(0, newQuantity).toFixed(3),
+            totalPrice: newTotalPrice.toFixed(2),
+            taxAmount: newTaxAmount.toFixed(2),
+          })
+          .where(eq(schema.orderItems.id, item.id));
+
+        item.quantity = Math.max(0, newQuantity).toFixed(3);
+        item.totalPrice = newTotalPrice.toFixed(2);
+        item.taxAmount = newTaxAmount.toFixed(2);
+        rescaleOrderFromItems(order, oldItemsSum);
+        return roundMoney2(Math.min(remaining, oldLineTotal - newTotalPrice));
+      }
+
+      const reduceBy = roundMoney2(Math.min(remaining, oldLineTotal));
+      if (reduceBy <= 0.001) return 0;
+      const newLineTotal = roundMoney2(Math.max(0, oldLineTotal - reduceBy));
+      const ratio = oldLineTotal > 0 ? newLineTotal / oldLineTotal : 0;
+      const newTaxAmount = roundMoney2(Number(item.taxAmount) * ratio);
+      const patch: {
+        totalPrice: string;
+        taxAmount: string;
+        quantity?: string;
+        weightKg?: string | null;
+      } = {
+        totalPrice: newLineTotal.toFixed(2),
+        taxAmount: newTaxAmount.toFixed(2),
+      };
+      if (weighted && item.weightKg) {
+        patch.weightKg = Math.max(0, Number(item.weightKg) * ratio).toFixed(3);
+        item.weightKg = patch.weightKg;
+      } else if (oldQty > 0) {
+        const newQuantity = Math.max(0, Number(item.quantity) * ratio);
+        patch.quantity = newQuantity.toFixed(3);
+        item.quantity = patch.quantity;
+      }
+      await db.update(schema.orderItems).set(patch).where(eq(schema.orderItems.id, item.id));
+      item.totalPrice = patch.totalPrice;
+      item.taxAmount = patch.taxAmount;
+      rescaleOrderFromItems(order, oldItemsSum);
+      return reduceBy;
+    };
+
+    const applyOrderHeaderReduction = async (
+      order: OrderRow,
+      remaining: number
+    ): Promise<number> => {
+      const net = orderNetTotal(order);
+      if (net <= 0.001) return 0;
+      const reduceBy = roundMoney2(Math.min(remaining, net));
+      const ratio = Math.max(0, Math.min(1, (net - reduceBy) / net));
+      const scaled = scaleOrderAmounts(order, ratio);
+      order.subtotal = scaled.subtotal;
+      order.taxAmount = scaled.taxAmount;
+      order.discountAmount = scaled.discountAmount;
+      order.total = scaled.total;
+      return reduceBy;
     };
 
     while (remaining > 0.01) {
@@ -404,53 +540,20 @@ export class SalesAdjustmentService {
       if (!candidates.length) break;
 
       const pick = candidates[0];
-      const oldQty = effectiveQty(pick.item);
-      const newQty =
-        oldQty >= 1 ? roundMoney2(Math.max(0, oldQty - 1)) : 0;
-      const ratio = oldQty > 0 ? newQty / oldQty : 0;
+      let applied = 0;
 
-      const newTotalPrice = roundMoney2(Number(pick.item.totalPrice) * ratio);
-      const newTaxAmount = roundMoney2(Number(pick.item.taxAmount) * ratio);
-      const qtyDelta = roundMoney2(oldQty - newQty);
-      const newQuantity = roundMoney2(Math.max(0, Number(pick.item.quantity) - qtyDelta));
-
-      await db
-        .update(schema.orderItems)
-        .set({
-          quantity: Math.max(0, newQuantity).toFixed(3),
-          totalPrice: newTotalPrice.toFixed(2),
-          taxAmount: newTaxAmount.toFixed(2),
-        })
-        .where(eq(schema.orderItems.id, pick.item.id));
-
-      pick.item.quantity = Math.max(0, newQuantity).toFixed(3);
-      pick.item.totalPrice = newTotalPrice.toFixed(2);
-      pick.item.taxAmount = newTaxAmount.toFixed(2);
-
-      const oldItemsSum = (pick.order.items || []).reduce(
-        (s, it) => s + Number(it.totalPrice),
-        0
-      );
-      const newItemsSum = (pick.order.items || []).reduce(
-        (s, it) => s + Number(it.totalPrice),
-        0
-      );
-      const orderRatio = oldItemsSum > 0 ? newItemsSum / oldItemsSum : 1;
-      const scaled = scaleOrderAmounts(pick.order, orderRatio);
-
-      if (!adjustedOrderIds.has(pick.order.id)) {
-        originalOrderTotals.set(pick.order.id, Number(pick.order.total) || 0);
-        adjustedOrderIds.add(pick.order.id);
-        ordersAdjusted += 1;
+      if (pick.orderHeaderOnly || !pick.item) {
+        applied = await applyOrderHeaderReduction(pick.order, remaining);
+        if (applied <= 0.001) break;
+        markOrderAdjusted(pick.order);
+        itemsAdjusted += 1;
+      } else {
+        applied = await applyLineReduction(pick.order, pick.item, remaining);
+        if (applied <= 0.001) break;
+        markOrderAdjusted(pick.order);
+        itemsAdjusted += 1;
       }
 
-      pick.order.subtotal = scaled.subtotal;
-      pick.order.taxAmount = scaled.taxAmount;
-      pick.order.discountAmount = scaled.discountAmount;
-      pick.order.total = scaled.total;
-      itemsAdjusted += 1;
-
-      const applied = roundMoney2(Math.min(remaining, pick.unitValue));
       remaining = roundMoney2(remaining - applied);
     }
 
