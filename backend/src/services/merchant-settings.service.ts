@@ -284,6 +284,12 @@ export class MerchantSettingsService {
         (merchant as { businessCategory?: string | null }).businessCategory
       ),
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
+      panelNavHidden: Array.isArray((merchant as { panelNavHidden?: string[] | null }).panelNavHidden)
+        ? (merchant as { panelNavHidden?: string[] | null }).panelNavHidden
+        : [],
+      shopCommissionPercent: Number(
+        (merchant as { shopCommissionPercent?: string | number | null }).shopCommissionPercent ?? 0
+      ) || 0,
       /**
        * null = legacy full access for edition routes.
        * Inventory is a paid merchant addon — never grant it via edition JSON.

@@ -311,6 +311,83 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
 });
 
 /**
+ * PUT /api/reseller/merchants/:merchantId/panel-nav
+ * Hide sidebar menu groups or routes from the merchant panel.
+ */
+router.put("/merchants/:merchantId/panel-nav", async (req: Request, res: Response) => {
+  try {
+    const { hidden, panelNavHidden } = req.body || {};
+    const merchant = await ResellerService.updateMerchantPanelNav(
+      resellerId(req),
+      req.params.merchantId,
+      panelNavHidden ?? hidden ?? []
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update panel menu" });
+  }
+});
+
+/**
+ * PUT /api/reseller/merchants/:merchantId/shop-commission
+ * Set monthly shop order commission % for this merchant.
+ */
+router.put("/merchants/:merchantId/shop-commission", async (req: Request, res: Response) => {
+  try {
+    const { shopCommissionPercent, percent } = req.body || {};
+    const merchant = await ResellerService.updateMerchantShopCommission(
+      resellerId(req),
+      req.params.merchantId,
+      shopCommissionPercent ?? percent
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update commission" });
+  }
+});
+
+/**
+ * GET /api/reseller/merchants/:merchantId/shop-commission?month=YYYY-MM
+ */
+router.get("/merchants/:merchantId/shop-commission", async (req: Request, res: Response) => {
+  try {
+    await ResellerService.assertOwnsMerchant(resellerId(req), req.params.merchantId);
+    const { ShopCommissionService } = await import("@/services/shop-commission.service");
+    const month = typeof req.query.month === "string" ? req.query.month : undefined;
+    const report = await ShopCommissionService.getMonthlyReport(req.params.merchantId, month);
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to load report" });
+  }
+});
+
+/**
+ * GET /api/reseller/merchants/:merchantId/shop-commission/pdf?month=YYYY-MM
+ */
+router.get("/merchants/:merchantId/shop-commission/pdf", async (req: Request, res: Response) => {
+  try {
+    const rid = resellerId(req);
+    await ResellerService.assertOwnsMerchant(rid, req.params.merchantId);
+    const { ShopCommissionService } = await import("@/services/shop-commission.service");
+    const month =
+      typeof req.query.month === "string"
+        ? req.query.month
+        : ShopCommissionService.currentMonthKey();
+    const reseller = await ResellerService.getById(rid);
+    const pdf = await ShopCommissionService.generatePdf(req.params.merchantId, month, {
+      name: reseller?.name,
+      email: reseller?.email,
+    });
+    const filename = `shop-commission-${req.params.merchantId.slice(0, 8)}-${month}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to generate PDF" });
+  }
+});
+
+/**
  * GET /api/reseller/plans
  * Active subscription plans assignable to merchants.
  */

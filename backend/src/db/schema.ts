@@ -403,6 +403,13 @@ export const merchants = pgTable(
     adyenRecurringDetailReference: varchar("adyen_recurring_detail_reference", { length: 255 }),
     /** Owning reseller/agency (null = legacy unassigned) */
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
+    /**
+     * Reseller-hidden sidebar entries for this merchant (group ids + route paths).
+     * Example: ["cms", "customers", "/merchant/online-shop"]
+     */
+    panelNavHidden: json("panel_nav_hidden").$type<string[] | null>(),
+    /** Reseller shop commission % on completed web_shop order subtotals (null/0 = off). */
+    shopCommissionPercent: decimal("shop_commission_percent", { precision: 6, scale: 3 }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
     editionId: uuid("edition_id").references(() => editions.id, { onDelete: "set null" }),
     /** Locked vertical: retail shop vs restaurant / food service. */

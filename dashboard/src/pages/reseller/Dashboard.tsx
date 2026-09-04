@@ -28,6 +28,8 @@ import {
   type EditionFeatureKey,
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
+import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
+import { PANEL_NAV_HIDE_OPTIONS } from '@/lib/panel-nav-hidden';
 import SupportInbox from '../shared/SupportInbox';
 import ResellerPackages from './Packages';
 
@@ -147,6 +149,18 @@ function MerchantsPage() {
     { id: 'enterprise', slug: 'enterprise', name: 'Enterprise' },
   ]);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [panelNavFor, setPanelNavFor] = useState<{
+    id: string;
+    name: string;
+    hidden: string[];
+  } | null>(null);
+  const [savingPanelNav, setSavingPanelNav] = useState(false);
+  const [shopBillFor, setShopBillFor] = useState<{
+    id: string;
+    name: string;
+    shopCommissionPercent: number;
+  } | null>(null);
+  const [savingShopCommission, setSavingShopCommission] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [revokingSessionsId, setRevokingSessionsId] = useState<string | null>(null);
@@ -305,6 +319,40 @@ function MerchantsPage() {
       toast.error(err.response?.data?.error || t('resellerSaveFailed'));
     } finally {
       setSavingLimits(false);
+    }
+  };
+
+  const savePanelNav = async () => {
+    if (!panelNavFor) return;
+    setSavingPanelNav(true);
+    try {
+      await api.put(`/reseller/merchants/${panelNavFor.id}/panel-nav`, {
+        panelNavHidden: panelNavFor.hidden,
+      });
+      toast.success(t('panelNavSaved'));
+      setPanelNavFor(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setSavingPanelNav(false);
+    }
+  };
+
+  const saveShopCommission = async () => {
+    if (!shopBillFor) return;
+    setSavingShopCommission(true);
+    try {
+      await api.put(`/reseller/merchants/${shopBillFor.id}/shop-commission`, {
+        shopCommissionPercent: Number(shopBillFor.shopCommissionPercent) || 0,
+      });
+      toast.success(t('shopCommissionSaved'));
+      setShopBillFor(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setSavingShopCommission(false);
     }
   };
 
@@ -783,6 +831,32 @@ function MerchantsPage() {
                   </button>
                   <button
                     type="button"
+                    className="text-stone-700 hover:underline"
+                    onClick={() =>
+                      setPanelNavFor({
+                        id: m.id,
+                        name: m.name,
+                        hidden: Array.isArray(m.panelNavHidden) ? m.panelNavHidden : [],
+                      })
+                    }
+                  >
+                    {t('panelNavManage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-stone-700 hover:underline"
+                    onClick={() =>
+                      setShopBillFor({
+                        id: m.id,
+                        name: m.name,
+                        shopCommissionPercent: Number(m.shopCommissionPercent ?? 0) || 0,
+                      })
+                    }
+                  >
+                    {t('shopCommissionManage')}
+                  </button>
+                  <button
+                    type="button"
                     className="text-teal-700 hover:underline disabled:opacity-40 disabled:no-underline"
                     disabled={m.status === 'suspended' || m.status === 'expired'}
                     onClick={() => void openPanel(m)}
@@ -1000,6 +1074,100 @@ function MerchantsPage() {
                 {savingLimits ? '…' : t('save')}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {panelNavFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold">{t('panelNavManage')}</h2>
+            <p className="text-sm text-stone-600">{panelNavFor.name}</p>
+            <p className="text-xs text-stone-500">{t('panelNavManageHint')}</p>
+            <div className="space-y-2">
+              {PANEL_NAV_HIDE_OPTIONS.map((opt) => {
+                const checked = panelNavFor.hidden.includes(opt.key);
+                return (
+                  <label key={opt.key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...panelNavFor.hidden, opt.key]
+                          : panelNavFor.hidden.filter((k) => k !== opt.key);
+                        setPanelNavFor({ ...panelNavFor, hidden: next });
+                      }}
+                    />
+                    {t(opt.labelKey as any)}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setPanelNavFor(null)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={savingPanelNav}
+                onClick={() => void savePanelNav()}
+              >
+                {savingPanelNav ? '…' : t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shopBillFor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border bg-white p-5 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">{t('shopCommissionManage')}</h2>
+                <p className="text-sm text-stone-600">{shopBillFor.name}</p>
+              </div>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setShopBillFor(null)}>
+                {t('close')}
+              </button>
+            </div>
+            <label className="block text-sm max-w-xs">
+              {t('shopCommissionRate')}
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                className="input mt-1"
+                value={shopBillFor.shopCommissionPercent}
+                onChange={(e) =>
+                  setShopBillFor({
+                    ...shopBillFor,
+                    shopCommissionPercent: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <span className="text-xs text-stone-500 mt-1 block">{t('shopCommissionRateHint')}</span>
+            </label>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={savingShopCommission}
+                onClick={() => void saveShopCommission()}
+              >
+                {savingShopCommission ? '…' : t('save')}
+              </button>
+            </div>
+            {shopBillFor.shopCommissionPercent > 0 ? (
+              <ShopCommissionSection
+                resellerMode
+                merchantId={shopBillFor.id}
+                merchantName={shopBillFor.name}
+              />
+            ) : null}
           </div>
         </div>
       ) : null}
