@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
+import { setLocationContext } from "@/middleware/location.middleware";
 import { SyncService } from "@/services/sync.service";
 
 const router = Router();
@@ -7,6 +8,7 @@ const router = Router();
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(setLocationContext);
 
 /**
  * GET /api/sync/pull?since=ISO
@@ -49,7 +51,9 @@ router.post("/push-sales", async (req: Request, res: Response) => {
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
     if (!(await WebPosEntitlementService.guard(merchantId, res))) return;
     const sales = Array.isArray(req.body?.sales) ? req.body.sales : [];
-    const result = await SyncService.pushSales(merchantId, sales);
+    const result = await SyncService.pushSales(merchantId, sales, {
+      contextLocationId: req.locationId,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Sync push-sales failed:", error);

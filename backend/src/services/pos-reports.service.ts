@@ -879,10 +879,21 @@ export class PosReportsService {
         paymentStatus: true,
       },
     });
+    const locations = await db.query.locations.findMany({
+      where: eq(schema.locations.merchantId, merchantId),
+      columns: { id: true, name: true, slug: true, isDefault: true },
+    });
+    const nameById = new Map(locations.map((l) => [l.id, l.name]));
+    const defaultLocationId =
+      locations.find((l) => l.isDefault)?.id ?? locations[0]?.id ?? null;
+
     const completed = orders.filter((o) => isCountableSale(o));
     const byLoc = new Map<string, { revenue: number; orders: number }>();
     for (const o of completed) {
-      const key = o.locationId || "unknown";
+      let key = o.locationId;
+      if (!key || !nameById.has(key)) {
+        key = defaultLocationId ?? key ?? "unknown";
+      }
       const cur = byLoc.get(key) || { revenue: 0, orders: 0 };
       cur.revenue += netTaxableSale(
         Number(o.total || 0),
@@ -892,14 +903,10 @@ export class PosReportsService {
       cur.orders += 1;
       byLoc.set(key, cur);
     }
-    const locations = await db.query.locations.findMany({
-      where: eq(schema.locations.merchantId, merchantId),
-      columns: { id: true, name: true, slug: true },
-    });
-    const nameById = new Map(locations.map((l) => [l.id, l.name]));
+    const defaultName = defaultLocationId ? nameById.get(defaultLocationId) : null;
     return [...byLoc.entries()].map(([locationId, stats]) => ({
       locationId,
-      name: nameById.get(locationId) || "Unknown",
+      name: nameById.get(locationId) || defaultName || "Unknown",
       revenue: round2(stats.revenue),
       orders: stats.orders,
     }));
