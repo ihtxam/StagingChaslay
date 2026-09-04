@@ -30,10 +30,15 @@ export function resolveShopPublicHost(): string {
   const domain = BRAND_DOMAIN.toLowerCase();
   const apex = brandApexDomain();
 
-  // Chaslay staging/production: canonical shop hub is shop.chaslay.com (not shop.app.chaslay.com).
+  // Chaslay staging: order.chaslay.com is unavailable — use shop.chaslay.com/{slug}.
   if (apex === "chaslay.com") {
     if (domain.startsWith("shop.")) return domain;
     return `shop.${apex}`;
+  }
+
+  // Reborn production: order.rebornsense.com/{slug} (legacy shop.app.* still redirects).
+  if (apex === "rebornsense.com") {
+    return "order.rebornsense.com";
   }
 
   const appHost = APP_ORIGIN.replace(/^https?:\/\//, "").toLowerCase();

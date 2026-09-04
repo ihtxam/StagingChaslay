@@ -36,10 +36,15 @@ export function resolveShopPublicHost(): string {
   const domain = BRAND_DOMAIN;
   const apex = brandApexDomain();
 
-  // Chaslay staging/production: canonical shop hub is shop.chaslay.com (not shop.app.chaslay.com).
+  // Chaslay staging: order.chaslay.com is unavailable — use shop.chaslay.com/{slug}.
   if (apex === 'chaslay.com') {
     if (domain.startsWith('shop.')) return domain;
     return `shop.${apex}`;
+  }
+
+  // Reborn production: order.rebornsense.com/{slug}.
+  if (apex === 'rebornsense.com') {
+    return 'order.rebornsense.com';
   }
 
   const appHost = APP_ORIGIN.replace(/^https?:\/\//, '').toLowerCase();
@@ -51,6 +56,12 @@ export function resolveShopPublicHost(): string {
 
 export const SHOP_HOST = resolveShopPublicHost();
 export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
+
+/** True when the hostname serves path-based shops at /{slug} (shop.chaslay.com, order.rebornsense.com, …). */
+export function isShopPathHubHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === SHOP_HOST.toLowerCase() || host.startsWith('shop.');
+}
 
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
 export const PAY_ORIGIN = (

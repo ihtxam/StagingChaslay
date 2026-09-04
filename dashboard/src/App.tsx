@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
+import { isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
@@ -120,7 +121,7 @@ const MAIN_HOST = (
 ).toLowerCase();
 
 /** Reserved hosts that must never be treated as a merchant shop subdomain. */
-const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status']);
+const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status', 'order', 'shop']);
 
 /** Local dev hosts should use panel routes (/login, /merchant), not shop subdomain mode. */
 const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
@@ -128,8 +129,8 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
-  // Shop hub: shop.{apex} (e.g. shop.chaslay.com); shop.app.* still matches via shop.* prefix
-  if (host.startsWith('shop.')) return { host, kind: 'shop_hub' as const, label: 'shop' };
+  // Path shop hub: shop.chaslay.com/{slug}, order.rebornsense.com/{slug}, legacy shop.*
+  if (isShopPathHubHost(host)) return { host, kind: 'shop_hub' as const, label: 'shop' };
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));

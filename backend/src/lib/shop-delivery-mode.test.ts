@@ -13,19 +13,25 @@ assert.equal(filterMerchantShopUrl("https://demo.chaslay.com"), null);
 
 assert.deepEqual(
   listMerchantShopPublicLinks({
-    shopPathUrl: "https://shop.app.rebornsense.com/my-cafe",
-    shopMenuUrl: "https://shop.app.rebornsense.com/my-cafe/menu",
+    shopPathUrl: "https://order.rebornsense.com/my-cafe",
+    shopMenuUrl: "https://order.rebornsense.com/my-cafe/menu",
     shopPanelPathUrl: "https://app.rebornsense.com/shop/my-cafe",
     shopSubdomainUrl: "https://my-cafe.rebornsense.com",
   }),
-  [{ key: "shopWebsiteLink", url: "https://shop.app.rebornsense.com/my-cafe" }]
+  [{ key: "shopWebsiteLink", url: "https://order.rebornsense.com/my-cafe" }]
 );
 assert.deepEqual(
   listMerchantShopPublicLinks({
-    shopPathUrl: "https://shop.app.rebornsense.com/my-cafe",
+    shopPathUrl: "https://order.rebornsense.com/my-cafe",
     shopCustomDomainUrl: "https://www.mycafe.ch",
   }),
   [{ key: "shopCustomDomainLink", url: "https://www.mycafe.ch" }]
+);
+assert.deepEqual(
+  listMerchantShopPublicLinks({
+    shopPathUrl: "https://shop.chaslay.com/demo",
+  }),
+  [{ key: "shopWebsiteLink", url: "https://shop.chaslay.com/demo" }]
 );
 
 assert.equal(normalizeDeliveryMode("zipcode"), "zipcode");
