@@ -1556,10 +1556,16 @@ router.get("/settings", async (req: Request, res: Response) => {
     }
 
     const settings = await MerchantSettingsService.getMerchantSettings(merchantId);
+    const { AdyenMerchantWebhookService } = await import(
+      "@/services/adyen-merchant-webhook.service"
+    );
 
     res.json({
       success: true,
-      settings,
+      settings: {
+        ...settings,
+        adyenWebhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(merchantId, req),
+      },
     });
   } catch (error) {
     const { dbErrorChain, formatDbMigrateError, migrateLogTag } = await import(

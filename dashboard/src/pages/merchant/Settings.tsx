@@ -209,6 +209,7 @@ interface SettingsData {
   adyenClientId?: string | null;
   adyenHmacKeyMasked?: string | null;
   adyenHmacKeySet?: boolean;
+  adyenWebhookUrl?: string | null;
   adyenLiveEnvironment?: boolean;
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
@@ -323,6 +324,7 @@ interface AdyenCreds {
   apiKeySet?: boolean;
   hmacKeyMasked?: string | null;
   hmacKeySet?: boolean;
+  webhookUrl?: string | null;
 }
 
 interface TerminalRow {
@@ -554,7 +556,10 @@ export default function Settings() {
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
+  const [adyen, setAdyen] = useState<AdyenCreds>({});
   const adyenWebhookUrl = useMemo(() => {
+    if (settings?.adyenWebhookUrl) return settings.adyenWebhookUrl;
+    if (adyen.webhookUrl) return adyen.webhookUrl;
     const merchantId =
       settings?.id ||
       user?.merchantId ||
@@ -563,8 +568,7 @@ export default function Settings() {
     const env = import.meta.env.VITE_API_URL as string | undefined;
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
-  }, [settings?.id, user?.merchantId, user?.role, user?.id]);
-  const [adyen, setAdyen] = useState<AdyenCreds>({});
+  }, [settings?.adyenWebhookUrl, settings?.id, adyen.webhookUrl, user?.merchantId, user?.role, user?.id]);
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -867,6 +871,7 @@ export default function Settings() {
       apiKeySet: s.adyenApiKeySet,
       hmacKeyMasked: s.adyenHmacKeyMasked,
       hmacKeySet: s.adyenHmacKeySet,
+      webhookUrl: s.adyenWebhookUrl,
     };
   }, []);
 
@@ -2813,32 +2818,32 @@ export default function Settings() {
                           autoComplete="new-password"
                         />
                       </Field>
+                      {adyenWebhookUrl ? (
+                        <div className="mt-3 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
+                          <p className="text-sm font-medium text-[var(--text)]">{t('adyenWebhookUrl')}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
+                              {adyenWebhookUrl}
+                            </code>
+                            <button
+                              type="button"
+                              className="btn-secondary shrink-0"
+                              aria-label={t('copied')}
+                              onClick={() => {
+                                void navigator.clipboard.writeText(adyenWebhookUrl).then(
+                                  () => toast.success(t('copied')),
+                                  () => toast.error(t('copyFailed'))
+                                );
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <p className="text-xs text-[var(--text-muted)]">{t('adyenWebhookSetupHint')}</p>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                  {adyenWebhookUrl ? (
-                    <div className="mt-1 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
-                      <p className="text-sm font-medium text-[var(--text)]">{t('adyenWebhookUrl')}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
-                          {adyenWebhookUrl}
-                        </code>
-                        <button
-                          type="button"
-                          className="btn-secondary shrink-0"
-                          aria-label={t('copied')}
-                          onClick={() => {
-                            void navigator.clipboard.writeText(adyenWebhookUrl).then(
-                              () => toast.success(t('copied')),
-                              () => toast.error(t('copyFailed'))
-                            );
-                          }}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-[var(--text-muted)]">{t('adyenWebhookSetupHint')}</p>
-                    </div>
-                  ) : null}
                 </Section>
                 <SettingsSaveBar saving={savingAdyen} />
               </form>
