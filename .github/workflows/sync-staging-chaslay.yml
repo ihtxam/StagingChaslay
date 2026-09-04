@@ -118,12 +118,15 @@ jobs:
           username: ${{ secrets.HETZNER_USER || 'root' }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          command_timeout: 30m
           envs: STAGING_CHASLAY_DEPLOY_KEY
           script_stop: true
           script: |
             export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
             export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"
+            # Web/dashboard deploys do not need a full Bridge APK rebuild (~10+ min).
+            export SKIP_ANDROID_BRIDGE_BUILD=1
             staging_ssh="git@github.com-staging-chaslay:ihtxam/StagingChaslay.git"
             staging_key="/root/.ssh/staging_chaslay_deploy"
             mkdir -p /root/.ssh
