@@ -116,6 +116,8 @@ export interface SyncSaleItem {
 
 export interface SyncSalePayload {
   clientId: string;
+  /** POS / WebPOS location; falls back to request context or merchant default */
+  locationId?: string | null;
   deviceId?: string;
   orderNumber?: string;
   /** Kitchen / takeaway shout number shown to staff & customers, e.g. #4821 */
@@ -481,8 +483,16 @@ export class SyncService {
   /**
    * Idempotent push of offline sales/orders.
    */
-  static async pushSales(merchantId: string, sales: SyncSalePayload[]) {
+  static async pushSales(
+    merchantId: string,
+    sales: SyncSalePayload[],
+    opts?: { contextLocationId?: string | null }
+  ) {
     const db = getDb();
+    const { LocationsService } = await import("@/services/locations.service");
+    const contextLocationId = opts?.contextLocationId
+      ? await LocationsService.resolveLocationIdOrNull(merchantId, opts.contextLocationId)
+      : null;
     const results: Array<{
       clientId: string;
       orderId: string;
@@ -619,8 +629,14 @@ export class SyncService {
         }
       }
 
+      const resolvedLocationId = await LocationsService.resolveLocationId(
+        merchantId,
+        sale.locationId ?? contextLocationId
+      );
+
       const orderValuesBase = {
         merchantId,
+        locationId: resolvedLocationId,
         orderType: "pos" as const,
         fulfillmentChannel: channel,
         status,
