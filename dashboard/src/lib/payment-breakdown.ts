@@ -2,6 +2,10 @@ import { roundMoney2 } from '@/lib/money';
 
 export type PaymentTender = { method: string; amount: number };
 
+const TERMINAL_METHODS = new Set(['terminal', 'card']);
+const GIFT_METHODS = new Set(['gift_card']);
+const CASH_METHODS = new Set(['cash']);
+
 const PAYMENT_METHOD_ALIASES: Record<string, string> = {
   cash: 'cash',
   express: 'cash',
@@ -110,6 +114,22 @@ export function parsePaymentBreakdown(
     return [{ method, amount: total }];
   }
   return [];
+}
+
+export function paymentBreakdownTotals(tenders: PaymentTender[]) {
+  let giftCard = 0;
+  let cash = 0;
+  let terminal = 0;
+  let other = 0;
+  for (const t of tenders) {
+    const m = normalizePaymentMethod(t.method);
+    const amt = roundMoney2(t.amount);
+    if (GIFT_METHODS.has(m)) giftCard = roundMoney2(giftCard + amt);
+    else if (CASH_METHODS.has(m)) cash = roundMoney2(cash + amt);
+    else if (TERMINAL_METHODS.has(m)) terminal = roundMoney2(terminal + amt);
+    else other = roundMoney2(other + amt);
+  }
+  return { giftCard, cash, terminal, other };
 }
 
 export function hasTerminalPortion(tenders: PaymentTender[]): boolean {
