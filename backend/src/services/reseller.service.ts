@@ -373,6 +373,8 @@ export class ResellerService {
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
         justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
         uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
+        panelNavHidden: schema.merchants.panelNavHidden,
+        shopCommissionPercent: schema.merchants.shopCommissionPercent,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -503,6 +505,46 @@ export class ResellerService {
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
       kioskAddonEnabled: limits.kioskAddonEnabled,
     });
+    return MerchantService.getMerchantById(merchantId);
+  }
+
+  static async updateMerchantPanelNav(
+    resellerId: string,
+    merchantId: string,
+    hidden: unknown
+  ) {
+    await this.assertOwnsMerchant(resellerId, merchantId);
+    const { normalizePanelNavHidden } = await import("@/lib/panel-nav-hidden");
+    const panelNavHidden = normalizePanelNavHidden(hidden);
+    const db = getDb();
+    await db
+      .update(schema.merchants)
+      .set({ panelNavHidden, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
+    const { MerchantService } = await import("./merchant.service");
+    return MerchantService.getMerchantById(merchantId);
+  }
+
+  static async updateMerchantShopCommission(
+    resellerId: string,
+    merchantId: string,
+    shopCommissionPercent: unknown
+  ) {
+    await this.assertOwnsMerchant(resellerId, merchantId);
+    let value: string | null = null;
+    if (shopCommissionPercent != null && shopCommissionPercent !== "") {
+      const n = Number(shopCommissionPercent);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        throw new Error("Commission percent must be between 0 and 100");
+      }
+      value = n.toFixed(3).replace(/\.?0+$/, "") || "0";
+    }
+    const db = getDb();
+    await db
+      .update(schema.merchants)
+      .set({ shopCommissionPercent: value, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
+    const { MerchantService } = await import("./merchant.service");
     return MerchantService.getMerchantById(merchantId);
   }
 

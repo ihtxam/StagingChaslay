@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { mountAdyenDropin, normalizeAdyenPaymentSession, formatAdyenError } from '@/lib/adyen-checkout';
 import { useI18n } from '@/lib/i18n';
+import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
 
 type Plan = {
   id: string;
@@ -104,6 +105,7 @@ export default function Billing() {
   const [payMsg, setPayMsg] = useState('');
   const [payDebug, setPayDebug] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shopCommissionEnabled, setShopCommissionEnabled] = useState(false);
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
@@ -133,6 +135,16 @@ export default function Billing() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    api
+      .get('/merchant/settings')
+      .then((res) => {
+        const percent = Number(res.data?.settings?.shopCommissionPercent ?? 0) || 0;
+        setShopCommissionEnabled(percent > 0);
+      })
+      .catch(() => setShopCommissionEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
@@ -494,6 +506,8 @@ export default function Billing() {
           </table>
         </div>
       </div>
+
+      {shopCommissionEnabled ? <ShopCommissionSection /> : null}
     </div>
   );
 }

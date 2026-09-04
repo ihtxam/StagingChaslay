@@ -112,6 +112,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
+import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -202,6 +203,7 @@ function MerchantShell() {
   const [shopEnabled, setShopEnabled] = useState(false);
   const [maxPosPosts, setMaxPosPosts] = useState(0);
   const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
+  const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -340,6 +342,7 @@ function MerchantShell() {
       kioskAddonEnabled?: boolean;
       kioskEnabled?: boolean;
       maxLocations?: number | null;
+      panelNavHidden?: string[] | null;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
@@ -353,6 +356,7 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
+      setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
     };
     const load = () => {
       api
@@ -517,6 +521,9 @@ function MerchantShell() {
       if (normalized === '/merchant/pos' && !hasPos) {
         return false;
       }
+      if (isPanelNavHidden(path, panelNavHidden)) {
+        return false;
+      }
       return canAccessRoute(
         path,
         effective.permissions,
@@ -525,7 +532,7 @@ function MerchantShell() {
         businessModule
       );
     },
-    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter, hasPos]
+    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter, hasPos, panelNavHidden]
   );
 
   /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
@@ -822,10 +829,13 @@ function MerchantShell() {
     },
   ]
     .filter((entry) => {
+      if ('id' in entry && typeof entry.id === 'string' && isPanelNavGroupHidden(entry.id, panelNavHidden)) {
+        return false;
+      }
       if ('children' in entry && Array.isArray(entry.children)) {
         return entry.children.length > 0;
       }
-      if (entry.path) return allow(entry.path);
+      if ('path' in entry && entry.path) return allow(entry.path);
       return false;
     });
 
@@ -951,7 +961,9 @@ function MerchantShell() {
           }}
           shopName={merchantShopName}
           shopPath={
-            !panelChromeRestricted && allow('/merchant/platform-shop')
+            !panelChromeRestricted &&
+            !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
+            allow('/merchant/platform-shop')
               ? '/merchant/platform-shop'
               : null
           }

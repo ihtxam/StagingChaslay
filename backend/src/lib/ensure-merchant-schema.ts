@@ -151,6 +151,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
   storekeeper_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
+  panel_nav_hidden:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS panel_nav_hidden jsonb",
+  shop_commission_percent:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shop_commission_percent numeric(6,3)",
   loyalty_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS loyalty_enabled boolean NOT NULL DEFAULT false",
   loyalty_earn_points_per_chf:

@@ -3211,6 +3211,35 @@ router.post("/platform-shop/confirm", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/merchant/shop-commission?month=YYYY-MM
+ * Monthly web shop orders + reseller commission (when configured).
+ */
+router.get("/shop-commission", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { shopCommissionPercent: true, resellerId: true },
+    });
+    if (!merchant?.resellerId) {
+      return res.status(404).json({ error: "Shop commission billing is not configured" });
+    }
+    const percent = Number(merchant.shopCommissionPercent ?? 0) || 0;
+    if (percent <= 0) {
+      return res.status(404).json({ error: "Shop commission billing is not configured" });
+    }
+    const { ShopCommissionService } = await import("@/services/shop-commission.service");
+    const month = typeof req.query.month === "string" ? req.query.month : undefined;
+    const report = await ShopCommissionService.getMonthlyReport(merchantId, month);
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to load report" });
+  }
+});
+
 router.use(posSessionsRoutes);
 router.use(locationsRoutes);
 router.use(hqRoutes);
