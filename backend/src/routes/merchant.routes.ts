@@ -2635,6 +2635,23 @@ router.post("/pos/sales-adjustment/apply", requirePermission("VIEW_ALL_SALES"), 
   }
 });
 
+/** POST /api/merchant/pos/orders/purge — permanently delete completed cash sales (gandola). */
+router.post("/pos/orders/purge", requirePermission("GANDOLA_PURGE"), async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const raw = req.body?.orderIds;
+    const orderIds = Array.isArray(raw) ? raw.map((id) => String(id)) : [];
+    const { OrderPurgeService } = await import("@/services/order-purge.service");
+    const result = await OrderPurgeService.purgeOrders(merchantId, orderIds);
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to delete orders",
+    });
+  }
+});
+
 /** Save clocked-in staff POS preferences (e.g. preferred payment terminal). */
 router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
   try {

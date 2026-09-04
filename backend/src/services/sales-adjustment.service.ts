@@ -438,16 +438,16 @@ export class SalesAdjustmentService {
       const orderRatio = oldItemsSum > 0 ? newItemsSum / oldItemsSum : 1;
       const scaled = scaleOrderAmounts(pick.order, orderRatio);
 
+      if (!adjustedOrderIds.has(pick.order.id)) {
+        originalOrderTotals.set(pick.order.id, Number(pick.order.total) || 0);
+        adjustedOrderIds.add(pick.order.id);
+        ordersAdjusted += 1;
+      }
+
       pick.order.subtotal = scaled.subtotal;
       pick.order.taxAmount = scaled.taxAmount;
       pick.order.discountAmount = scaled.discountAmount;
       pick.order.total = scaled.total;
-
-      if (!adjustedOrderIds.has(pick.order.id)) {
-        adjustedOrderIds.add(pick.order.id);
-        originalOrderTotals.set(pick.order.id, Number(pick.order.total) || 0);
-        ordersAdjusted += 1;
-      }
       itemsAdjusted += 1;
 
       const applied = roundMoney2(Math.min(remaining, pick.unitValue));
