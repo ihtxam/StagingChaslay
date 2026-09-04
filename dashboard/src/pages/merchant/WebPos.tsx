@@ -9699,7 +9699,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setDeliveryHubOpen(true);
               setDeliveryHubMinimized(false);
             }}
-            canSalesAdjust={canViewAllSales}
             canGandolaPurge={canGandolaPurge}
           />
         ) : (

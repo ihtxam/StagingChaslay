@@ -286,8 +286,8 @@ export async function printKitchenViaAgentOrQueue(
   const isBt = looksLikeBluetoothOrComPrinter(printerRef);
   const agentHealth = isBt ? await getPrintAgentHealth().catch(() => ({ ok: false })) : null;
   const skipCutFollowUp = isBt && agentSupportsBtCutTrailer(agentHealth);
-  if (isBt && !skipCutFollowUp) {
-    // Let the ticket body finish printing before the cut-only follow-up job.
+  if (!skipCutFollowUp) {
+    // USB/network and legacy BT: separate cut job so the blade runs after the ticket body.
     await new Promise((resolve) => setTimeout(resolve, 450));
     try {
       await printViaAgentOrQueue({

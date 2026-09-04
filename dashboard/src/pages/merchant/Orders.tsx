@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, FileText, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
@@ -47,9 +48,7 @@ import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
 } from '@/components/settings/SettingsReportUi';
-import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
-import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
 import {
   isGandolaPurgeEligible,
@@ -403,9 +402,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const { t, formatDateTime, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
-  const canSalesAdjust =
-    jwtIsOwner ||
-    hasPermission(user?.permissions as Permission[] | undefined, 'VIEW_ALL_SALES', false);
   const canGandolaPurge =
     jwtIsOwner ||
     hasPermission(user?.permissions as Permission[] | undefined, 'GANDOLA_PURGE', false);
@@ -451,7 +447,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
-  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
   const [purgeMode, setPurgeMode] = useState(false);
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
@@ -937,6 +932,15 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     search.trim() !== '' ||
     (!showingInvoices && datePreset !== 'today');
 
+  useEffect(() => {
+    if (!selected) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [selected]);
+
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
   }
@@ -972,14 +976,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
 
       <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-2.5 sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
-          {canSalesAdjust ? (
-            <SecretSearchTapButton
-              onUnlock={() => setSalesAdjOpen(true)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
-            />
-          ) : null}
           {canGandolaPurge ? (
-            <SecretGandolaTapButton
+            <SecretSearchTapButton
               onUnlock={enterPurgeMode}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
             />
@@ -1265,16 +1263,19 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         })}
       </div>
 
-      {selected ? (
+      {selected
+        ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40"
+          className="fixed inset-0 z-[300] flex justify-end bg-black/40"
+          role="dialog"
+          aria-modal="true"
           onClick={() => setSelected(null)}
         >
           <div
-            className="flex h-[100dvh] max-h-[100dvh] w-full max-w-md flex-col bg-[var(--bg-elevated)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl"
+            className="flex h-[100svh] max-h-[100svh] w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))]">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-extrabold">
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
@@ -1442,7 +1443,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5">
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
               <div className="mb-2.5 flex items-center gap-2">
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -1667,14 +1668,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-      <SalesAdjustmentModal
-        open={salesAdjOpen}
-        onClose={() => setSalesAdjOpen(false)}
-        onApplied={() => void load()}
-      />
-
+        </div>,
+        document.body
+      )
+        : null}
       <WebPosCancelModal
         open={!!cancelFor}
         scope="order"

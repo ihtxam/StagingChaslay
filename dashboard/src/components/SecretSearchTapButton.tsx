@@ -7,7 +7,7 @@ type Props = {
   className?: string;
 };
 
-/** Visible search icon to the left of the orders search box. Five quick taps open sales adjustment. */
+/** Visible search icon beside the orders search box. Five quick taps unlock cash order delete mode. */
 export default function SecretSearchTapButton({ onUnlock, className }: Props) {
   const registerTap = useSecretTap(5, 3500);
 

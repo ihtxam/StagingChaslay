@@ -2282,7 +2282,7 @@ const en: Dict = {
   gandolaPurgeSkipped: 'Deleted {deleted}; {skipped} order(s) were not eligible.',
   staffRoleGandola: 'Gandola',
   staffRoleGandolaHint:
-    'POS orders: tap the earthworm icon five times to delete completed cash sales from history and reports.',
+    'POS orders: tap the search icon five times to delete completed cash sales from history and reports.',
   barcodePlaceholder: 'EAN / UPC or number',
   stockTooManyDigits: 'Stock cannot exceed {n} digits',
   offerPercentRange: 'Percent off must be between 1 and {max}',
@@ -6047,7 +6047,7 @@ const fr: Dict = {
   gandolaPurgeSkipped: '{deleted} supprimée(s) ; {skipped} non éligible(s).',
   staffRoleGandola: 'Gandola',
   staffRoleGandolaHint:
-    'Commandes POS : appuyez cinq fois sur l\'icône ver de terre pour supprimer définitivement les ventes espèces de l\'historique et des rapports.',
+    'Commandes POS : appuyez cinq fois sur l\'icône de recherche pour supprimer définitivement les ventes espèces de l\'historique et des rapports.',
   barcodePlaceholder: 'EAN / UPC ou numéro',
   stockTooManyDigits: 'Le stock ne peut pas dépasser {n} chiffres',
   offerPercentRange: 'La remise doit être entre 1 et {max} %',

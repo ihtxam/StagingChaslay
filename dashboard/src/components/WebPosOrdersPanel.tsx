@@ -85,9 +85,7 @@ import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintP
 import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
-import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
-import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
 import {
   isGandolaPurgeEligible,
@@ -279,9 +277,7 @@ type Props = {
   onChannelFilterChange?: (filter: ChannelFilter) => void;
   /** Open full delivery management hub (map + drivers) */
   onOpenDeliveryHub?: () => void;
-  /** Owner/manager only — unlock cash sales adjustment via search icon taps */
-  canSalesAdjust?: boolean;
-  /** Gandola role — five taps on earthworm unlocks permanent cash order deletion */
+  /** Gandola role — five taps on search icon unlocks permanent cash order deletion */
   canGandolaPurge?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
@@ -513,7 +509,6 @@ export default function WebPosOrdersPanel({
   onRefreshOnline,
   onChannelFilterChange,
   onOpenDeliveryHub,
-  canSalesAdjust = false,
   canGandolaPurge = false,
   kitchenEnabled = true,
   autoPrintReceipt = true,
@@ -562,7 +557,6 @@ export default function WebPosOrdersPanel({
   const [rowMenuOrderId, setRowMenuOrderId] = useState<string | null>(null);
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
-  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
   const [purgeMode, setPurgeMode] = useState(false);
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
@@ -1432,11 +1426,8 @@ export default function WebPosOrdersPanel({
             </button>
           ) : null}
           <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
-            {canSalesAdjust ? (
-              <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
-            ) : null}
             {canGandolaPurge ? (
-              <SecretGandolaTapButton onUnlock={enterPurgeMode} />
+              <SecretSearchTapButton onUnlock={enterPurgeMode} />
             ) : null}
             <input
               type="search"
@@ -2590,11 +2581,6 @@ export default function WebPosOrdersPanel({
               setRefundPrintPrompt(null);
             });
         }}
-      />
-      <SalesAdjustmentModal
-        open={salesAdjOpen}
-        onClose={() => setSalesAdjOpen(false)}
-        onApplied={() => void load()}
       />
     </div>
   );
