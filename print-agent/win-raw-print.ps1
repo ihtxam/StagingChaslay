@@ -10,11 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.10.3: self-contained spooler-only WritePrinter. No COM-direct writes.
-# Pace BT / virtual-COM only. USB (USB001/USBPRINT) is a single 4KB WritePrinter
-# with no drain/cut-trailer sleeps — those sleeps were ~4–5s of HTTP /print wait
-# when thermal/receipt/xprinter names were wrongly treated as slow radios.
-# Bluetooth / COM: FlushPrinter skipped; small chunks; one feed+cut trailer after drain.
+# v1.10.4: faster BT/COM paced writes; WSD + spooler thermal queues unpaced.
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -140,8 +136,12 @@ function Test-NeedsPacedWrite {
     $port = ($Port + '').ToLowerInvariant()
     $name = ($Printer + '').ToLowerInvariant()
     $blob = ("{0} {1}" -f $port, $name)
-    # Fast USB RAW — never pace even if the queue is named "XP-80" / "Receipt".
-    if ($port -match 'usb\d+|usb00|usbprint|dot4|lpt') {
+    # Fast spooler-backed paths — USB, WSD, LPT, DOT4.
+    if ($port -match 'usb\d+|usb00|usbprint|dot4|lpt|wsd') {
+        return $false
+    }
+    # Empty port but thermal ESC/POS queue — spooler buffers; do not pace.
+    if ([string]::IsNullOrWhiteSpace($port) -and $name -match 'thermal|receipt|escpos|esc/pos|xprinter|gprinter|pos-|tm-t|rp80|star tsp|bixolon|citizen|epson tm') {
         return $false
     }
     # Slow radios / virtual COM only.
@@ -274,8 +274,8 @@ function Send-RawToPrinter {
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
-        $writeChunk = if ($isComPort) { 32 } else { 96 }
-        $writeDelay = if ($isComPort) { 120 } else { 100 }
+        $writeChunk = if ($isComPort) { 64 } else { 128 }
+        $writeDelay = if ($isComPort) { 50 } else { 40 }
     }
     $body = $Data
     $cutSuffix = [byte[]]@()
@@ -314,16 +314,14 @@ function Send-RawToPrinter {
             }
             [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay -ComSerialPort:$isComPort)
             if ($paced) {
-                # BT/COM only. Typical USB receipt used to hit this path (~2KB body):
-                # drainMs = 1200 + 2000/6 ≈ 1.5s, plus 96-byte/100ms chunks (~2s),
-                # plus 600ms post-cut and 500ms post-job ≈ 4–5s blocking /print.
-                $drainMs = [Math]::Min(1200 + [int]([Math]::Floor($body.Length / 6)), 10000)
-                if ($isComPort) { $drainMs += 200 }
+                # BT/COM only — reduced sleeps vs 1.10.3 (~4–5s → ~1–2s typical receipt).
+                $drainMs = [Math]::Min(400 + [int]([Math]::Floor($body.Length / 20)), 2500)
+                if ($isComPort) { $drainMs += 100 }
                 Start-Sleep -Milliseconds $drainMs
-                $cutDelay = if ($isComPort) { 100 } else { 80 }
+                $cutDelay = if ($isComPort) { 50 } else { 40 }
                 $cutBytes = if ($cutSuffix -and $cutSuffix.Length -gt 0) { $cutSuffix } else { Get-BtCutTrailer }
-                [void](Write-RawChunks -Handle $handle -Data $cutBytes -Printer $Printer -ChunkSize 32 -DelayMs $cutDelay -ComSerialPort:$isComPort)
-                Start-Sleep -Milliseconds $(if ($isComPort) { 800 } else { 600 })
+                [void](Write-RawChunks -Handle $handle -Data $cutBytes -Printer $Printer -ChunkSize 64 -DelayMs $cutDelay -ComSerialPort:$isComPort)
+                Start-Sleep -Milliseconds $(if ($isComPort) { 350 } else { 250 })
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
@@ -335,7 +333,7 @@ function Send-RawToPrinter {
         [RawPrinterHelper]::ClosePrinter($handle) | Out-Null
     }
     if ($paced) {
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 150
     }
 }
 

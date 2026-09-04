@@ -51,6 +51,11 @@ test('USB thermal queues are not treated as Bluetooth', () => {
   assert.equal(looksLikeBluetoothOrComPrinter({ name: 'Thermal 80mm', portName: 'USB002' }), false);
 });
 
+test('isPrintAgentAvailable skips health probe after recent successful print', () => {
+  assert.match(src, /markPrintAgentRecentSuccess/);
+  assert.match(src, /PRINT_AGENT_OK_TTL_MS/);
+});
+
 test('COM and Bluetooth ports still match', () => {
   assert.equal(looksLikeBluetoothOrComPrinter({ name: 'RPP02', portName: 'COM7' }), true);
   assert.equal(looksLikeBluetoothOrComPrinter('RPP02 (COM12)'), true);

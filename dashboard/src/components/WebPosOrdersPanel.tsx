@@ -88,6 +88,10 @@ import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
+import {
+  mergeOrdersWithOnlineForAllFilter,
+  onlineOrderAsPosOrder,
+} from '@/lib/webpos-orders-merge';
 
 function toMs(raw: string | number | Date | null | undefined): number {
   if (raw == null || raw === '') return 0;
@@ -692,16 +696,19 @@ export default function WebPosOrdersPanel({
   }, [channelFilter, onChannelFilterChange]);
 
   useEffect(() => {
-    if (!open || !highlightOrderId || orders.length === 0) return;
-    const match = orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId);
-    if (match) {
-      setStatusFilter(isOpenWebPosOrder(match) ? 'active' : 'completed');
-      if (isOnlineShopOrder(match)) setChannelFilter('online');
-      setSelectedOrder(match);
-      setSelectedHeld(null);
-      setOrdersView('list');
-    }
-  }, [open, highlightOrderId, orders]);
+    if (!open || !highlightOrderId) return;
+    const match =
+      orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId) ||
+      onlineOrders.find((o) => o.id === highlightOrderId);
+    if (!match) return;
+    const asPos =
+      'refundAmount' in match ? (match as PosOrder) : onlineOrderAsPosOrder(match as OnlineOrder);
+    setStatusFilter(isOpenWebPosOrder(asPos) ? 'active' : 'completed');
+    if (isOnlineShopOrder(asPos)) setChannelFilter('online');
+    setSelectedOrder(asPos);
+    setSelectedHeld(null);
+    setOrdersView('list');
+  }, [open, highlightOrderId, orders, onlineOrders]);
 
   useEffect(() => {
     setPage(0);
@@ -716,6 +723,11 @@ export default function WebPosOrdersPanel({
     }
     return map;
   }, [orders]);
+
+  const ordersForList = useMemo(
+    () => mergeOrdersWithOnlineForAllFilter(orders, onlineOrders, channelFilter) as PosOrder[],
+    [orders, onlineOrders, channelFilter]
+  );
 
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
@@ -749,7 +761,7 @@ export default function WebPosOrdersPanel({
         heldBucket.push(h);
       }
       if (view !== 'held') {
-      for (const o of orders) {
+      for (const o of ordersForList) {
         const showOnActive =
           isOpenWebPosOrder(o) ||
           (view === 'active' && isScheduledPosKitchenTicket(o)) ||
@@ -781,7 +793,7 @@ export default function WebPosOrdersPanel({
       }
     }
     if (view === 'completed' || view === 'all') {
-      for (const o of orders) {
+      for (const o of ordersForList) {
         // Ongoing orders already listed under Active; skip them here (including "All").
         // Invoice sales stay in history even when unpaid / still "preparing".
         const listedInActive =
@@ -819,7 +831,7 @@ export default function WebPosOrdersPanel({
     // Single chronology: newest activity at the top (held / open / completed interleaved).
     items.sort((a, b) => listItemTimeMs(b) - listItemTimeMs(a));
     return items;
-  }, [held, orders, statusFilter, channelFilter, search]);
+  }, [held, ordersForList, statusFilter, channelFilter, search]);
 
   const pageSize = ordersView === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
   const pageCount = Math.max(1, Math.ceil(listItems.length / pageSize));
@@ -1451,7 +1463,7 @@ export default function WebPosOrdersPanel({
               className="rounded p-1.5 hover:bg-stone-100"
               onClick={() => {
                 void load();
-                if (isOnlineMode && onRefreshOnline) void onRefreshOnline();
+                if ((channelFilter === 'all' || isOnlineMode) && onRefreshOnline) void onRefreshOnline();
               }}
               disabled={loading}
               aria-label={t('webPosRefreshOrders')}

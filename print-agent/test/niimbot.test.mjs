@@ -21,13 +21,13 @@ const {
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.3";
+const VERSION = "1.10.4";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.3 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.4 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
