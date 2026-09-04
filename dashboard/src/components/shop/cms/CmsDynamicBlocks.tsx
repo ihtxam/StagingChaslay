@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { parseIdList } from '@/lib/cms/split-openpage-html';
 import { resolveShopKey } from '@/lib/shop-cart';
+import { dayKeyOf, isChannelOpenAt, type StoreHours } from '@/lib/shop-hours';
 import InlineReservationsWidget from '@/components/shop/InlineReservationsWidget';
 
 export type CmsMenuCategory = {

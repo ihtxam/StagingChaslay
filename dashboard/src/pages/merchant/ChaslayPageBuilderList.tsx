@@ -14,12 +14,17 @@ import {
 import { TemplateGallery } from '@/chaslay-pagebuilder/TemplateGallery';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 import { useAuthStore } from '@/store/auth';
-import { shopBasePath } from '@/lib/shop-cart';
+import { SHOP_ORIGIN } from '@/lib/brand';
+import { primaryMerchantShopPublicUrl } from '@/lib/shop-public-urls';
 
 export default function ChaslayPageBuilderList() {
   const navigate = useNavigate();
   const merchantSlug = useAuthStore((s) => s.user?.slug || s.user?.subdomain || '');
-  const shopPreviewPath = merchantSlug ? shopBasePath(merchantSlug) || `/shop/${merchantSlug}` : '';
+  const shopPreviewUrl = merchantSlug
+    ? primaryMerchantShopPublicUrl({
+        shopPathUrl: `${SHOP_ORIGIN}/${encodeURIComponent(merchantSlug)}`,
+      })
+    : null;
   const [isLoading, setIsLoading] = useState(true);
   const [homepages, setHomepages] = useState<HomepageBuilderListItem[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -105,9 +110,9 @@ export default function ChaslayPageBuilderList() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {shopPreviewPath ? (
+          {shopPreviewUrl ? (
             <a
-              href={shopPreviewPath}
+              href={shopPreviewUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm"
@@ -259,8 +264,8 @@ export default function ChaslayPageBuilderList() {
                   if (res.success) {
                     setHomepages((prev) => prev.map((h) => ({ ...h, is_active: h.id === activatingHomepage.id })));
                     toast.success('Homepage published on your shop');
-                    if (shopPreviewPath) {
-                      window.open(shopPreviewPath, '_blank', 'noopener,noreferrer');
+                    if (shopPreviewUrl) {
+                      window.open(shopPreviewUrl, '_blank', 'noopener,noreferrer');
                     }
                   } else {
                     toast.error(res.message || 'Failed to activate');

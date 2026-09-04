@@ -1,7 +1,7 @@
 import toast from 'react-hot-toast';
 import { Copy, ExternalLink } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { filterMerchantShopUrl } from '@/lib/shop-public-urls';
+import { listMerchantShopPublicLinks } from '@/lib/shop-public-urls';
 
 type ShopPublicLinksProps = {
   shopPathUrl?: string | null;
@@ -62,7 +62,7 @@ function ShopLinkRow({
   );
 }
 
-/** Clickable public shop URLs for merchant settings (homepage, menu, panel path). */
+/** Clickable public shop URL for merchant settings and CMS shop page. */
 export default function ShopPublicLinks({
   shopPathUrl,
   shopMenuUrl,
@@ -72,13 +72,14 @@ export default function ShopPublicLinks({
   className,
 }: ShopPublicLinksProps) {
   const { t } = useI18n();
-  const websiteUrl = filterMerchantShopUrl(shopPathUrl);
-  const menuUrl = filterMerchantShopUrl(shopMenuUrl);
-  const panelUrl = filterMerchantShopUrl(shopPanelPathUrl);
-  const subdomainUrl = filterMerchantShopUrl(shopSubdomainUrl);
-  const customDomainUrl = filterMerchantShopUrl(shopCustomDomainUrl);
-  const hasLinks = websiteUrl || menuUrl || panelUrl || subdomainUrl || customDomainUrl;
-  if (!hasLinks) return null;
+  const links = listMerchantShopPublicLinks({
+    shopPathUrl,
+    shopMenuUrl,
+    shopPanelPathUrl,
+    shopSubdomainUrl,
+    shopCustomDomainUrl,
+  });
+  if (!links.length) return null;
 
   return (
     <div
@@ -86,17 +87,9 @@ export default function ShopPublicLinks({
     >
       <p className="text-sm font-medium">{t('shopPublicLinksTitle')}</p>
       <p className="text-xs muted">{t('shopPublicLinksHint')}</p>
-      {websiteUrl ? <ShopLinkRow label={t('shopWebsiteLink')} url={websiteUrl} t={t} /> : null}
-      {menuUrl ? <ShopLinkRow label={t('shopMenuLink')} url={menuUrl} t={t} /> : null}
-      {panelUrl ? (
-        <ShopLinkRow label={t('shopPanelPathLink')} url={panelUrl} t={t} />
-      ) : null}
-      {subdomainUrl ? (
-        <ShopLinkRow label={t('shopSubdomainLink')} url={subdomainUrl} t={t} />
-      ) : null}
-      {customDomainUrl ? (
-        <ShopLinkRow label={t('shopCustomDomainLink')} url={customDomainUrl} t={t} />
-      ) : null}
+      {links.map((link) => (
+        <ShopLinkRow key={link.url} label={t(link.key)} url={link.url} t={t} />
+      ))}
     </div>
   );
 }
