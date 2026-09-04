@@ -35,6 +35,11 @@ function inferPaymentMethod(
   return "card";
 }
 
+type RequestLike = {
+  protocol?: string;
+  get(name: string): string | undefined;
+};
+
 export class AdyenMerchantWebhookService {
   static webhookUrl(merchantId: string): string {
     const base =
@@ -45,6 +50,18 @@ export class AdyenMerchantWebhookService {
       ? base.replace(/\/$/, "")
       : `${base.replace(/\/$/, "")}/api`;
     return `${apiBase}/webhooks/adyen/${merchantId}`;
+  }
+
+  /** Prefer the host the merchant is using (chaslay vs rebornSense) for copy-paste URLs. */
+  static webhookUrlFromRequest(merchantId: string, req: RequestLike): string {
+    const proto = (req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0]?.trim();
+    const host = (req.get("x-forwarded-host") || req.get("host") || "").split(",")[0]?.trim();
+    if (host && proto) {
+      const origin = `${proto}://${host}`.replace(/\/$/, "");
+      const apiBase = origin.includes("/api") ? origin : `${origin}/api`;
+      return `${apiBase}/webhooks/adyen/${merchantId}`;
+    }
+    return this.webhookUrl(merchantId);
   }
 
   static async processWebhook(merchantId: string, body: unknown): Promise<void> {

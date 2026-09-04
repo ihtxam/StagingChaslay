@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
 import { getDb, schema } from "@/db";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
+import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.get("/", async (req: Request, res: Response) => {
       where: eq(schema.paymentTerminals.merchantId, req.merchantId!),
     });
     const settings = await MerchantSettingsService.getMerchantSettings(req.merchantId!);
+    const webhookUrl = AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId!, req);
     res.json({
       success: true,
       terminals: terminals.map(sanitizeTerminal),
@@ -46,6 +48,7 @@ router.get("/", async (req: Request, res: Response) => {
         clientId: settings.adyenClientId,
         hmacKeyMasked: settings.adyenHmacKeyMasked,
         hmacKeySet: settings.adyenHmacKeySet,
+        webhookUrl,
       },
     });
   } catch (error) {
@@ -75,6 +78,7 @@ router.put("/adyen-credentials", async (req: Request, res: Response) => {
         clientId: settings.adyenClientId,
         hmacKeyMasked: settings.adyenHmacKeyMasked,
         hmacKeySet: settings.adyenHmacKeySet,
+        webhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId!, req),
       },
     });
   } catch (error) {
