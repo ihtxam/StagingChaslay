@@ -564,11 +564,6 @@ export default function Settings() {
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
   }, [settings?.id, user?.merchantId, user?.role, user?.id]);
-<<<<<<< Updated upstream
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [settings, setSettings] = useState<SettingsData | null>(null);
-=======
->>>>>>> Stashed changes
   const [adyen, setAdyen] = useState<AdyenCreds>({});
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
