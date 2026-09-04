@@ -501,9 +501,13 @@ export class PosOrdersService {
       throw new Error("Only completed orders can change payment method");
     }
 
+    const orderTotal = roundMoney2(Number(order.total) || 0);
     const [updated] = await db
       .update(schema.orders)
-      .set({ paymentMethod: method })
+      .set({
+        paymentMethod: method,
+        paymentBreakdown: [{ method, amount: orderTotal }],
+      })
       .where(eq(schema.orders.id, orderId))
       .returning();
 
