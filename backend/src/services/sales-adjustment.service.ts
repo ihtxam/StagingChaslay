@@ -8,6 +8,7 @@ import {
   parsePaymentBreakdown,
   paymentBreakdownTotals,
 } from "@/lib/payment-breakdown";
+import { stripPosCheckoutMetaFromNotes } from "@/lib/order-notes-meta";
 import { resolveReportRange, type ReportPreset } from "@/services/pos-reports.service";
 
 export type SalesAdjustmentPeriodPreset =
@@ -210,6 +211,8 @@ type OrderRow = {
   refundAmount: string | null;
   paymentMethod: string | null;
   paymentBreakdown: unknown;
+  notes?: string | null;
+  amountTendered?: string | null;
   items: Array<{
     id: string;
     quantity: string;
@@ -570,16 +573,29 @@ export class SalesAdjustmentService {
         amount: number;
       }>;
       order.paymentBreakdown = paymentBreakdown;
-      await db
-        .update(schema.orders)
-        .set({
-          subtotal: order.subtotal,
-          taxAmount: order.taxAmount,
-          discountAmount: order.discountAmount || "0",
-          total: order.total,
-          paymentBreakdown,
-        })
-        .where(eq(schema.orders.id, orderId));
+      const newTotal = Number(order.total) || 0;
+      const cleanedNotes = stripPosCheckoutMetaFromNotes(order.notes);
+      order.notes = cleanedNotes;
+      const patch: {
+        subtotal: string;
+        taxAmount: string;
+        discountAmount: string;
+        total: string;
+        paymentBreakdown: typeof paymentBreakdown;
+        notes?: string | null;
+        amountTendered?: string | null;
+      } = {
+        subtotal: order.subtotal,
+        taxAmount: order.taxAmount,
+        discountAmount: order.discountAmount || "0",
+        total: order.total,
+        paymentBreakdown,
+        notes: cleanedNotes,
+      };
+      if (newTotal <= 0.01) {
+        patch.amountTendered = null;
+      }
+      await db.update(schema.orders).set(patch).where(eq(schema.orders.id, orderId));
     }
 
     const afterPreview = await SalesAdjustmentService.preview(merchantId, percent, rangeOpts);

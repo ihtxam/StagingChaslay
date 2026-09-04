@@ -37,7 +37,7 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
-import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import { formatOrderNotesForDisplay, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
@@ -1271,7 +1271,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           onClick={() => setSelected(null)}
         >
           <div
-            className="flex h-full w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
+            className="flex h-[100dvh] max-h-[100dvh] w-full max-w-md flex-col bg-[var(--bg-elevated)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
@@ -1362,11 +1362,15 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     {formatDateTime(selected.scheduledFor)}
                   </p>
                 ) : null}
-                {selected.notes ? (
-                  <p>
-                    <span className="text-[var(--text-muted)]">{t('ordersNotes')}:</span> {selected.notes}
-                  </p>
-                ) : null}
+                {(() => {
+                  const displayNotes = formatOrderNotesForDisplay(selected.notes);
+                  return displayNotes ? (
+                    <p>
+                      <span className="text-[var(--text-muted)]">{t('ordersNotes')}:</span>{' '}
+                      {displayNotes}
+                    </p>
+                  ) : null;
+                })()}
                 {selected.cancelReason ? (
                   <p className="text-rose-700">
                     {t('webPosCancelReason')}: {selected.cancelReason}
