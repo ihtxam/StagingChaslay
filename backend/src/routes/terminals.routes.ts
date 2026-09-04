@@ -119,6 +119,12 @@ router.post("/", async (req: Request, res: Response) => {
         },
       })
       .returning();
+    if (!terminal) {
+      return res.status(500).json({ error: "Failed to register terminal" });
+    }
+    if (terminal.merchantId !== req.merchantId!) {
+      return res.status(409).json({ error: "Terminal ID is already registered to another merchant" });
+    }
     res.status(201).json({ success: true, terminal: sanitizeTerminal(terminal) });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to register terminal" });
