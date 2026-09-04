@@ -130,6 +130,30 @@ export function parsePaymentBreakdown(
   return [];
 }
 
+/** Scale tender amounts proportionally so they sum to orderTotal (fixes stale oversized breakdowns). */
+export function scaleTendersToOrderTotal(
+  tenders: PaymentTender[],
+  orderTotal: number
+): PaymentTender[] {
+  if (!tenders.length) return tenders;
+  const target = roundMoney2(Math.max(0, Number(orderTotal) || 0));
+  if (target <= 0) return [];
+  const sum = roundMoney2(tenders.reduce((s, t) => s + t.amount, 0));
+  if (sum <= 0) return [];
+  if (Math.abs(sum - target) < 0.01) return tenders;
+  const ratio = target / sum;
+  const scaled = tenders.map((t) => ({
+    method: t.method,
+    amount: roundMoney2(t.amount * ratio),
+  }));
+  const scaledSum = roundMoney2(scaled.reduce((s, t) => s + t.amount, 0));
+  const diff = roundMoney2(target - scaledSum);
+  if (Math.abs(diff) >= 0.01 && scaled.length) {
+    scaled[0]!.amount = roundMoney2(scaled[0]!.amount + diff);
+  }
+  return scaled;
+}
+
 export function paymentBreakdownTotals(tenders: PaymentTender[]) {
   let giftCard = 0;
   let cash = 0;
@@ -222,7 +246,10 @@ export function refundBucketsFromCumulative(
   const refund = roundMoney2(Math.max(0, Number(refundAmount) || 0));
   if (refund <= 0) return new Map();
   const total = roundMoney2(Number(orderTotal) || 0);
-  const tenders = parsePaymentBreakdown(rawBreakdown, paymentMethod, total);
+  const tenders = scaleTendersToOrderTotal(
+    parsePaymentBreakdown(rawBreakdown, paymentMethod, total),
+    total
+  );
   const pm = resolveSalePaymentMethod(tenders, String(paymentMethod || ""));
   if (pm === "mixed") return new Map([["mixed", refund]]);
 
@@ -249,7 +276,10 @@ export function netPaymentBucketsAfterRefund(
 ): Map<string, number> {
   const total = roundMoney2(Number(orderTotal) || 0);
   const refund = roundMoney2(Math.max(0, Number(refundAmount) || 0));
-  const tenders = parsePaymentBreakdown(rawBreakdown, paymentMethod, total);
+  const tenders = scaleTendersToOrderTotal(
+    parsePaymentBreakdown(rawBreakdown, paymentMethod, total),
+    total
+  );
   const pm = resolveSalePaymentMethod(tenders, String(paymentMethod || ""));
 
   if (pm === "mixed") {

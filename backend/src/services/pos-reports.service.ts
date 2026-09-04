@@ -321,14 +321,10 @@ export class PosReportsService {
         o.paymentBreakdown,
         o.paymentMethod
       );
-      const sliceKey =
-        netBuckets.size === 1
-          ? [...netBuckets.keys()][0]!
-          : normalizePaymentMethod(o.paymentMethod || "") || "other";
-      payments[sliceKey] = payments[sliceKey] || { count: 0, total: 0 };
-      payments[sliceKey].count += 1;
       for (const [method, net] of netBuckets) {
+        if (net <= 0) continue;
         payments[method] = payments[method] || { count: 0, total: 0 };
+        payments[method].count += 1;
         payments[method].total += net;
       }
 
@@ -628,14 +624,21 @@ export class PosReportsService {
       grandTotal,
       coversServed: covers || null,
       vatRows,
-      paymentRows: Object.entries(payments)
-        .map(([method, v]) => ({
-          method,
-          count: v.count,
-          total: round2(v.total),
-          percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
-        }))
-        .sort((a, b) => b.total - a.total),
+      paymentRows: (() => {
+        const rows = Object.entries(payments)
+          .map(([method, v]) => ({
+            method,
+            count: v.count,
+            total: round2(v.total),
+          }))
+          .filter((r) => r.total > 0)
+          .sort((a, b) => b.total - a.total);
+        const paymentSum = round2(rows.reduce((s, r) => s + r.total, 0));
+        return rows.map((r) => ({
+          ...r,
+          percent: paymentSum > 0 ? round2((r.total / paymentSum) * 100) : 0,
+        }));
+      })(),
       refundRows: Object.entries(refundByMethod)
         .map(([method, total]) => ({
           method,
