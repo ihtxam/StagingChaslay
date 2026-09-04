@@ -89,6 +89,14 @@ function normalizeCartLayout(raw?: string | null): ShopCartLayout {
   return "hidden_slide";
 }
 
+function normalizeTaxRatePercent(value: number, field: string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    throw new Error(`${field} must be between 0 and 100`);
+  }
+  return n.toFixed(2);
+}
+
 export class MerchantSettingsService {
   static async getMerchantSettings(merchantId: string) {
     return withMerchantSchemaRetry(() => this.buildMerchantSettings(merchantId));
@@ -415,10 +423,16 @@ export class MerchantSettingsService {
     if (updates.country !== undefined) patch.country = updates.country;
     if (updates.businessLicense !== undefined) patch.businessLicense = updates.businessLicense;
     if (updates.vatNumber !== undefined) patch.vatNumber = updates.vatNumber;
-    if (updates.vatRate !== undefined) patch.vatRate = updates.vatRate.toString();
-    if (updates.taxTakeawayRate !== undefined) patch.taxTakeawayRate = updates.taxTakeawayRate.toString();
-    if (updates.taxDineInRate !== undefined) patch.taxDineInRate = updates.taxDineInRate.toString();
-    if (updates.taxDeliveryRate !== undefined) patch.taxDeliveryRate = updates.taxDeliveryRate.toString();
+    if (updates.vatRate !== undefined) patch.vatRate = normalizeTaxRatePercent(updates.vatRate, "vatRate");
+    if (updates.taxTakeawayRate !== undefined) {
+      patch.taxTakeawayRate = normalizeTaxRatePercent(updates.taxTakeawayRate, "taxTakeawayRate");
+    }
+    if (updates.taxDineInRate !== undefined) {
+      patch.taxDineInRate = normalizeTaxRatePercent(updates.taxDineInRate, "taxDineInRate");
+    }
+    if (updates.taxDeliveryRate !== undefined) {
+      patch.taxDeliveryRate = normalizeTaxRatePercent(updates.taxDeliveryRate, "taxDeliveryRate");
+    }
     if (updates.taxIncludedInPrice !== undefined) patch.taxIncludedInPrice = !!updates.taxIncludedInPrice;
     if (updates.vatAfterDiscount !== undefined) patch.vatAfterDiscount = !!updates.vatAfterDiscount;
     if (updates.shopEnabled !== undefined) patch.shopEnabled = !!updates.shopEnabled;
