@@ -376,6 +376,25 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'users',
 ];
 
+const TAX_RATE_MAX = 100;
+
+function sanitizeTaxRateInput(raw: string): string {
+  if (raw === '' || raw === '-') return raw === '-' ? '0' : '';
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return raw;
+  if (n < 0) return '0';
+  if (n > TAX_RATE_MAX) return String(TAX_RATE_MAX);
+  return raw;
+}
+
+/** Returns undefined when empty, null when invalid, otherwise a clamped rate. */
+function parseTaxRateForSave(value: string | null | undefined): number | undefined | null {
+  if (value == null || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > TAX_RATE_MAX) return null;
+  return Math.round(n * 100) / 100;
+}
+
 function parseSettingsTabFromSearch(search: string): TabId {
   try {
     const params = new URLSearchParams(search);
@@ -1137,6 +1156,14 @@ export default function Settings() {
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
+    const vatRate = parseTaxRateForSave(settings.vatRate);
+    const taxTakeawayRate = parseTaxRateForSave(settings.taxTakeawayRate);
+    const taxDineInRate = parseTaxRateForSave(settings.taxDineInRate);
+    const taxDeliveryRate = parseTaxRateForSave(settings.taxDeliveryRate);
+    if ([vatRate, taxTakeawayRate, taxDineInRate, taxDeliveryRate].some((rate) => rate === null)) {
+      toast.error(t('taxRateRange'));
+      return;
+    }
     setSaving(true);
     try {
       const response = await api.put('/merchant/settings', {
@@ -1147,12 +1174,10 @@ export default function Settings() {
         city: settings.city,
         country: settings.country,
         vatNumber: settings.vatNumber,
-        vatRate: settings.vatRate ? Number(settings.vatRate) : undefined,
-        taxTakeawayRate:
-          settings.taxTakeawayRate != null ? Number(settings.taxTakeawayRate) : undefined,
-        taxDineInRate: settings.taxDineInRate != null ? Number(settings.taxDineInRate) : undefined,
-        taxDeliveryRate:
-          settings.taxDeliveryRate != null ? Number(settings.taxDeliveryRate) : undefined,
+        vatRate,
+        taxTakeawayRate,
+        taxDineInRate,
+        taxDeliveryRate,
         taxIncludedInPrice: !!settings.taxIncludedInPrice,
         vatAfterDiscount: settings.vatAfterDiscount !== false,
         slug: settings.slug || undefined,
@@ -1727,36 +1752,61 @@ export default function Settings() {
                     <input
                       className="input"
                       type="number"
+                      min={0}
+                      max={TAX_RATE_MAX}
                       step="0.01"
                       value={settings.vatRate || ''}
-                      onChange={(e) => setSettings({ ...settings, vatRate: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({ ...settings, vatRate: sanitizeTaxRateInput(e.target.value) })
+                      }
                     />
                   </Field>
                   <Field label={`${t('takeaway')} (%)`}>
                     <input
                       className="input"
                       type="number"
+                      min={0}
+                      max={TAX_RATE_MAX}
                       step="0.01"
                       value={settings.taxTakeawayRate ?? settings.vatRate ?? ''}
-                      onChange={(e) => setSettings({ ...settings, taxTakeawayRate: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          taxTakeawayRate: sanitizeTaxRateInput(e.target.value),
+                        })
+                      }
                     />
                   </Field>
                   <Field label={`${t('dineIn')} (%)`}>
                     <input
                       className="input"
                       type="number"
+                      min={0}
+                      max={TAX_RATE_MAX}
                       step="0.01"
                       value={settings.taxDineInRate ?? settings.vatRate ?? ''}
-                      onChange={(e) => setSettings({ ...settings, taxDineInRate: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          taxDineInRate: sanitizeTaxRateInput(e.target.value),
+                        })
+                      }
                     />
                   </Field>
                   <Field label={`${t('delivery')} (%)`}>
                     <input
                       className="input"
                       type="number"
+                      min={0}
+                      max={TAX_RATE_MAX}
                       step="0.01"
                       value={settings.taxDeliveryRate ?? settings.vatRate ?? ''}
-                      onChange={(e) => setSettings({ ...settings, taxDeliveryRate: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          taxDeliveryRate: sanitizeTaxRateInput(e.target.value),
+                        })
+                      }
                     />
                   </Field>
                 </div>
