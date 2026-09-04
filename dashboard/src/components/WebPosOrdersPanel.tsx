@@ -1032,18 +1032,25 @@ export default function WebPosOrdersPanel({
 
   const doUpdatePayment = async () => {
     if (!paymentEditFor) return;
+    const orderId = paymentEditFor.id;
+    const method = paymentMethodDraft;
+    const paymentPatch = {
+      paymentMethod: method,
+      paymentBreakdown: [{ method, amount: Number(paymentEditFor.total) || 0 }],
+    };
     try {
-      await api.patch(`/merchant/pos/orders/${paymentEditFor.id}/payment-method`, {
-        paymentMethod: paymentMethodDraft,
+      await api.patch(`/merchant/pos/orders/${orderId}/payment-method`, {
+        paymentMethod: method,
       });
       toast.success(t('webPosPaymentUpdated'));
       setPaymentEditFor(null);
-      void load();
       setSelectedOrder((prev) =>
-        prev && prev.id === paymentEditFor.id
-          ? { ...prev, paymentMethod: paymentMethodDraft }
-          : prev
+        prev && prev.id === orderId ? { ...prev, ...paymentPatch } : prev
       );
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, ...paymentPatch } : o))
+      );
+      void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentUpdateFailed'));
     }
