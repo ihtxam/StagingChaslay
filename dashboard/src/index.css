@@ -612,7 +612,7 @@ button {
     display: none;
   }
 
-  /* Category layout modes — horizontal scroll with 2 or 3 fixed rows (no vertical scroll) */
+  /* Category layout modes — column flow fills 2 or 3 rows before the next column */
   .webpos-cat-scroll[data-cat-layout='rows-2'],
   .webpos-cat-scroll[data-cat-layout='rows-3'] {
     display: grid !important;
@@ -625,7 +625,6 @@ button {
     column-gap: 0.375rem;
     row-gap: 0.375rem;
     flex-wrap: nowrap !important;
-    /* Room for active chip ring-offset so selection highlight is not clipped */
     padding-block: 2px;
     padding-inline: 1px;
   }
@@ -639,36 +638,74 @@ button {
   }
   .webpos-cat-scroll[data-cat-layout='rows-2'] .webpos-category-chip,
   .webpos-cat-scroll[data-cat-layout='rows-3'] .webpos-category-chip {
-    width: max-content;
-    min-width: 4.5rem;
-    max-width: 9rem;
     flex-shrink: 0;
     scroll-snap-align: start;
   }
+  @media (max-width: 767px) {
+    .webpos-cat-scroll[data-cat-layout='rows-2'] .webpos-category-chip,
+    .webpos-cat-scroll[data-cat-layout='rows-3'] .webpos-category-chip {
+      width: max-content;
+      min-width: 4.5rem;
+      max-width: 9rem;
+    }
+  }
 
-  /* Desktop / wide register — wrap categories into 2–3 rows, no horizontal scroll */
+  /* Category chip size — independent from row count */
+  .webpos-cat-scroll[data-cat-size='sm'] {
+    --webpos-cat-chip-h: 2rem;
+  }
+  .webpos-cat-scroll[data-cat-size='md'] {
+    --webpos-cat-chip-h: 2.25rem;
+  }
+  .webpos-cat-scroll[data-cat-size='lg'] {
+    --webpos-cat-chip-h: 2.75rem;
+  }
+  .webpos-cat-scroll[data-cat-size='sm'] .webpos-category-chip {
+    width: 76px;
+    height: 32px;
+    font-size: 0.625rem;
+  }
+  .webpos-cat-scroll[data-cat-size='lg'] .webpos-category-chip {
+    width: 100px;
+    height: 44px;
+    font-size: 0.75rem;
+  }
   @media (min-width: 768px) {
-    .webpos-cat-scroll[data-cat-desktop-wrap='1'][data-cat-layout='rows-2'],
-    .webpos-cat-scroll[data-cat-desktop-wrap='1'][data-cat-layout='rows-3'] {
-      display: flex !important;
-      flex-wrap: wrap;
-      overflow-x: hidden !important;
-      overflow-y: hidden !important;
-      grid-auto-flow: unset;
-      grid-auto-columns: unset;
-      grid-template-rows: unset;
-      align-content: flex-start;
-      align-items: flex-start;
+    .webpos-cat-scroll[data-cat-size='sm'] {
+      --webpos-cat-chip-h: 2.75rem;
     }
-    .webpos-cat-scroll[data-cat-desktop-wrap='1'][data-cat-layout='rows-2'] {
-      max-height: calc(2 * var(--webpos-cat-chip-h, 2.25rem) + 0.375rem + 4px);
+    .webpos-cat-scroll[data-cat-size='md'] {
+      --webpos-cat-chip-h: 3.25rem;
     }
-    .webpos-cat-scroll[data-cat-desktop-wrap='1'][data-cat-layout='rows-3'] {
-      max-height: calc(3 * var(--webpos-cat-chip-h, 2.25rem) + 0.75rem + 4px);
+    .webpos-cat-scroll[data-cat-size='lg'] {
+      --webpos-cat-chip-h: 3.625rem;
     }
-    .webpos-cat-scroll[data-cat-desktop-wrap='1'] .webpos-category-chip {
-      max-width: min(9rem, 100%);
-      scroll-snap-align: unset;
+    .webpos-cat-scroll[data-cat-size='sm'] .webpos-category-chip {
+      width: 110px;
+      height: 44px;
+      font-size: 0.6875rem;
+    }
+    .webpos-cat-scroll[data-cat-size='md'] .webpos-category-chip {
+      width: 139px;
+      height: 52px;
+      font-size: 0.75rem;
+    }
+    .webpos-cat-scroll[data-cat-size='lg'] .webpos-category-chip {
+      width: 158px;
+      height: 58px;
+      font-size: 0.8125rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .webpos-cat-scroll[data-cat-size='md'] .webpos-category-chip {
+      width: 158px;
+      height: 52px;
+      font-size: 0.8125rem;
+    }
+    .webpos-cat-scroll[data-cat-size='lg'] .webpos-category-chip {
+      width: 175px;
+      height: 58px;
+      font-size: 0.875rem;
     }
   }
 
@@ -951,7 +988,7 @@ button {
   }
 
   /*
-   * Category chips — fixed sizes by viewport (~20% smaller than prior):
+   * Category chips — default (md) sizes when data-cat-size is not on a parent:
    *   small  (< md / 768px):  92×40
    *   medium (≥ md / 768px):  139×52
    *   large  (≥ xl / 1280px): 158×52

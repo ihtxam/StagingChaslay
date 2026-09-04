@@ -311,9 +311,14 @@ function blurPosInputs() {
   }
 }
 import {
+  cycleCategoryChipSize,
+  cycleCategoryLayout,
+  persistCategoryChipSize,
   persistCategoryLayout,
+  readStoredCategoryChipSize,
   readStoredCategoryLayout,
   WEBPOS_BELOW_9IN_MEDIA_QUERY,
+  type WebPosCategoryChipSize,
   type WebPosCategoryLayoutMode,
 } from '@/lib/webpos-category-layout';
 import { activateWaitingServiceWorker, isStandalonePwaSession } from '@/lib/pwa-recover';
@@ -796,6 +801,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const [categoryLayout, setCategoryLayout] = useState<WebPosCategoryLayoutMode>(() =>
     readStoredCategoryLayout()
+  );
+  const [categoryChipSize, setCategoryChipSize] = useState<WebPosCategoryChipSize>(() =>
+    readStoredCategoryChipSize()
   );
   const [gridSort, setGridSort] = useState<ProductGridSort>(() => readStoredGridSort());
   const [openShift, setOpenShift] = useState<{
@@ -9895,9 +9903,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 isPhoneLayout={isPhoneViewport}
                 isBelow9Inch={isBelow9InchViewport}
                 categoryLayout={categoryLayout}
-                onCategoryLayoutChange={(mode) => {
-                  setCategoryLayout(mode);
-                  persistCategoryLayout(mode);
+                categoryChipSize={categoryChipSize}
+                onCycleCategoryRows={() => {
+                  setCategoryLayout((cur) => {
+                    const next = cycleCategoryLayout(cur);
+                    persistCategoryLayout(next);
+                    return next;
+                  });
+                }}
+                onCycleCategoryChipSize={() => {
+                  setCategoryChipSize((cur) => {
+                    const next = cycleCategoryChipSize(cur);
+                    persistCategoryChipSize(next);
+                    return next;
+                  });
                 }}
                 onCycleTileSize={() => {
                   if (isPhoneViewport) {

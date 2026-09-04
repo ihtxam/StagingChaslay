@@ -7,6 +7,9 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   MonitorSmartphone,
+  Rows2,
+  Rows3,
+  Scaling,
   Search,
   TrendingUp,
   Wallet,
@@ -22,8 +25,10 @@ import {
   normalizeActionButtonSize,
   type WebPosActionButtonSize,
 } from '@/lib/webpos-action-button-size';
-import type { WebPosCategoryLayoutMode } from '@/lib/webpos-category-layout';
-import WebPosCategoryLayoutPicker from '@/components/webpos/WebPosCategoryLayoutPicker';
+import type {
+  WebPosCategoryChipSize,
+  WebPosCategoryLayoutMode,
+} from '@/lib/webpos-category-layout';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import {
   POS_GIFT_CARDS_CATEGORY,
@@ -63,7 +68,9 @@ type Props = {
   onToggleSortAlpha?: () => void;
   onToggleSortBestseller?: () => void;
   categoryLayout?: WebPosCategoryLayoutMode;
-  onCategoryLayoutChange?: (mode: WebPosCategoryLayoutMode) => void;
+  onCycleCategoryRows?: () => void;
+  categoryChipSize?: WebPosCategoryChipSize;
+  onCycleCategoryChipSize?: () => void;
   expressCheckout?: boolean;
   expressMethods?: { cash: boolean; card: boolean; terminal: boolean };
   onExpressPay?: (method: PosPaymentMethod) => void;
@@ -111,7 +118,9 @@ export default function WebPosProductArea({
   onToggleSortAlpha,
   onToggleSortBestseller,
   categoryLayout = 'rows-3',
-  onCategoryLayoutChange,
+  onCycleCategoryRows,
+  categoryChipSize = 'md',
+  onCycleCategoryChipSize,
   expressCheckout = false,
   expressMethods,
   onExpressPay,
@@ -146,7 +155,8 @@ export default function WebPosProductArea({
     (showSearch && isPhoneLayout && onSearchChange) ||
     onToggleShowImages ||
     onCycleTileSize ||
-    onCategoryLayoutChange ||
+    onCycleCategoryRows ||
+    onCycleCategoryChipSize ||
     onToggleSortAlpha ||
     onToggleSortBestseller
   );
@@ -247,12 +257,35 @@ export default function WebPosProductArea({
           <LayoutGrid size={isPhoneLayout ? 14 : 16} aria-hidden />
         </button>
       ) : null}
-      {onCategoryLayoutChange ? (
-        <WebPosCategoryLayoutPicker
-          value={categoryLayout}
-          onChange={onCategoryLayoutChange}
-          compact={isPhoneLayout}
-        />
+      {onCycleCategoryRows ? (
+        <button
+          type="button"
+          onClick={onCycleCategoryRows}
+          title={
+            categoryLayout === 'rows-2'
+              ? t('webPosCategoryLayoutRows2')
+              : t('webPosCategoryLayoutRows3')
+          }
+          aria-label={t('webPosCategoryLayoutLabel')}
+          className={toolbarBtnClass(categoryLayout === 'rows-3')}
+        >
+          {categoryLayout === 'rows-2' ? (
+            <Rows2 size={isPhoneLayout ? 14 : 16} aria-hidden />
+          ) : (
+            <Rows3 size={isPhoneLayout ? 14 : 16} aria-hidden />
+          )}
+        </button>
+      ) : null}
+      {onCycleCategoryChipSize ? (
+        <button
+          type="button"
+          onClick={onCycleCategoryChipSize}
+          title={t('webPosCategoryChipSize')}
+          aria-label={t('webPosCategoryChipSize')}
+          className={toolbarBtnClass(categoryChipSize !== 'md')}
+        >
+          <Scaling size={isPhoneLayout ? 14 : 16} aria-hidden />
+        </button>
       ) : null}
       {onToggleSortAlpha ? (
         <button
@@ -317,17 +350,11 @@ export default function WebPosProductArea({
         ) : null}
 
         <div className="flex min-w-0 items-start gap-1.5">
-          {isPhoneLayout && hasFilterButtons ? (
-            <div className="shrink-0 self-start pt-0.5" data-webpos-filter-toolbar="phone-grip">
-              {filterGripButton}
-            </div>
-          ) : null}
-
           <div
             className="webpos-cat-scroll min-w-0 flex-1 flex-wrap gap-1.5"
             data-cat-layout={categoryLayoutMode}
             data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
-            data-cat-desktop-wrap={!isPhoneLayout && categoryLayoutMode ? '1' : undefined}
+            data-cat-size={categoryChipSize}
           >
           <button
             type="button"
@@ -375,12 +402,12 @@ export default function WebPosProductArea({
           })}
           </div>
 
-          {!isPhoneLayout && hasFilterButtons ? (
+          {hasFilterButtons ? (
             <div
-              className="flex shrink-0 items-center gap-1 self-start"
-              data-webpos-filter-toolbar="desktop"
+              className="flex shrink-0 items-center gap-1 self-start pt-0.5"
+              data-webpos-filter-toolbar={isPhoneLayout ? 'phone-grip' : 'desktop'}
             >
-              {filtersVisible ? filterButtonRow : null}
+              {!isPhoneLayout && filtersVisible ? filterButtonRow : null}
               {filterGripButton}
             </div>
           ) : null}
