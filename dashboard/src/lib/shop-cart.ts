@@ -297,7 +297,9 @@ export function removeOfferInstance(items: ShopCartItem[], offerInstanceId: stri
   return items.filter((i) => i.offerInstanceId !== offerInstanceId);
 }
 
-const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'shop']);
+import { isShopPathHubHost } from '@/lib/brand';
+
+const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'shop', 'order']);
 
 function publicDomain() {
   return (import.meta.env.VITE_PUBLIC_DOMAIN || 'manupos.webprintmedia.swiss').toLowerCase();
@@ -305,7 +307,7 @@ function publicDomain() {
 
 function subdomainLabel() {
   const host = window.location.hostname.toLowerCase();
-  if (host.startsWith('shop.')) return 'shop';
+  if (isShopPathHubHost(host)) return 'shop';
   const main = publicDomain();
   if (host === main || !host.endsWith(`.${main}`)) return '';
   return host.slice(0, -(main.length + 1));

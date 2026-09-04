@@ -177,6 +177,8 @@ ensure_env_production() {
     else
       echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.rebornsense.com' >>"$ENV_FILE"
     fi
+    grep -qE '^SHOP_PUBLIC_HOST=' "$ENV_FILE" || echo 'SHOP_PUBLIC_HOST=order.rebornsense.com' >>"$ENV_FILE"
+    sed -i 's|^SHOP_PUBLIC_HOST=.*|SHOP_PUBLIC_HOST=order.rebornsense.com|' "$ENV_FILE"
     export_stack_caddyfile
   else
     grep -qE '^DOMAIN=' "$ENV_FILE" || echo 'DOMAIN=chaslay.com' >>"$ENV_FILE"
@@ -196,6 +198,8 @@ ensure_env_production() {
     else
       echo 'PUBLIC_RECEIPT_BASE_URL=https://pay.chaslay.com' >>"$ENV_FILE"
     fi
+    grep -qE '^SHOP_PUBLIC_HOST=' "$ENV_FILE" || echo 'SHOP_PUBLIC_HOST=shop.chaslay.com' >>"$ENV_FILE"
+    sed -i 's|^SHOP_PUBLIC_HOST=.*|SHOP_PUBLIC_HOST=shop.chaslay.com|' "$ENV_FILE"
     export_stack_caddyfile
   fi
 
@@ -960,8 +964,8 @@ echo "=== Deploy complete ==="
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
   echo "  Admin:  https://app.rebornsense.com/"
   echo "  API:    https://api.rebornsense.com/health"
-  echo "  Shop hub: https://shop.app.rebornsense.com/{slug}  (requires DNS A/CNAME for shop.app.rebornsense.com)"
-  echo "  Shop:   https://shop.rebornsense.com/  (legacy apex hub)"
+  echo "  Shop hub: https://order.rebornsense.com/{slug}  (requires DNS A/CNAME for order.rebornsense.com)"
+  echo "  Legacy:   shop.app.rebornsense.com + shop.rebornsense.com redirect here"
   echo "  Pay:    https://pay.rebornsense.com/receipt/"
   echo "  Status: https://status.rebornsense.com/"
 else
