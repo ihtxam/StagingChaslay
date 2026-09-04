@@ -85,9 +85,10 @@ export class StaffService {
       }
     }
     await this.ensureStorekeeperSystemRole(merchantId);
-    await this.ensureGandolaSystemRole(merchantId);
+    await this.removeGandolaSystemRole(merchantId);
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
+    await this.ensureManagerGandolaPurge(merchantId);
     // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
@@ -277,41 +278,46 @@ export class StaffService {
     }
   }
 
-  /** Re-seed the gandola system role if it was deleted or stripped. */
-  static async ensureGandolaSystemRole(merchantId: string) {
+  /** Remove deprecated gandola system role; reassign staff to Manager when possible. */
+  static async removeGandolaSystemRole(merchantId: string) {
     const db = getDb();
-    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "gandola");
-    if (!template) return;
     const roles = await db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
-    const existing = roles.find((r) => r.name.trim().toLowerCase() === "gandola");
-    if (!existing) {
-      await db.insert(schema.merchantRoles).values({
-        merchantId,
-        name: template.name,
-        permissions: encodePermissions(template.permissions),
-        isSystem: template.isSystem,
-        sortOrder: template.sortOrder,
-      });
-      return;
+    const gandola = roles.find((r) => r.name.trim().toLowerCase() === "gandola");
+    if (!gandola) return;
+    const manager = roles.find((r) => r.name.trim().toLowerCase() === "manager");
+    if (manager) {
+      await db
+        .update(schema.merchantStaff)
+        .set({ roleId: manager.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.merchantStaff.merchantId, merchantId),
+            eq(schema.merchantStaff.roleId, gandola.id)
+          )
+        );
     }
-    const expected = encodePermissions(template.permissions);
-    if (
-      !existing.isSystem ||
-      existing.sortOrder !== template.sortOrder ||
-      existing.permissions !== expected
-    ) {
+    await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, gandola.id));
+  }
+
+  /** Grant GANDOLA_PURGE to system Manager roles (cash order purge via search 5× tap). */
+  static async ensureManagerGandolaPurge(merchantId: string) {
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
+    });
+    for (const role of roles) {
+      if (!role.name.trim().toLowerCase().startsWith("manager")) continue;
+      const perms = parsePermissions(role.permissions);
+      if (perms.includes("GANDOLA_PURGE")) continue;
       await db
         .update(schema.merchantRoles)
         .set({
-          name: template.name,
-          permissions: expected,
-          isSystem: true,
-          sortOrder: template.sortOrder,
+          permissions: encodePermissions([...perms, "GANDOLA_PURGE"]),
           updatedAt: new Date(),
         })
-        .where(eq(schema.merchantRoles.id, existing.id));
+        .where(eq(schema.merchantRoles.id, role.id));
     }
   }
 

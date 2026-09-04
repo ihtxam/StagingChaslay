@@ -1510,7 +1510,7 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-3 sm:gap-4"
+      className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-3 overflow-hidden sm:gap-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1605,11 +1605,11 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-x-clip">
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <aside className="shrink-0 border-b border-[var(--border)] lg:w-56 lg:border-b-0 lg:border-r">
+      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          <aside className="shrink-0 border-b border-[var(--border)] lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
             <nav
-              className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-col lg:gap-0.5 lg:overflow-visible max-h-[min(42vh,320px)] overflow-y-auto overscroll-y-contain lg:max-h-none [-webkit-overflow-scrolling:touch]"
+              className="grid max-h-[min(36vh,280px)] grid-cols-2 gap-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch] sm:grid-cols-3 md:grid-cols-4 lg:max-h-none lg:flex lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-y-auto"
               aria-label={t('settings')}
             >
               {visibleTabs.map((item) => {
@@ -1649,7 +1649,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5 pb-24 sm:pb-5"
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch] sm:p-5"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
@@ -5014,7 +5014,7 @@ export default function Settings() {
           </div>
         </div>
       </div>
-      <p className="text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
+      <p className="shrink-0 text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
   );
 }

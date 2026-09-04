@@ -4,7 +4,7 @@ import api from '@/lib/api';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
-import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, isKioskOperatorRoleName, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, isKioskOperatorRoleName, isGandolaRoleName, type Permission } from '@/lib/permissions';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
@@ -89,7 +89,11 @@ export default function StaffPage({
     [kioskLicensed]
   );
   const visibleRoles = useMemo(
-    () => roles.filter((r) => kioskLicensed || !isKioskOperatorRoleName(r.name)),
+    () =>
+      roles.filter(
+        (r) =>
+          (kioskLicensed || !isKioskOperatorRoleName(r.name)) && !isGandolaRoleName(r.name)
+      ),
     [roles, kioskLicensed]
   );
 
@@ -688,9 +692,6 @@ export default function StaffPage({
                 ) : null}
                 {role.name.trim().toLowerCase() === 'order center operator' ? (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleOrderCenterHint')}</p>
-                ) : null}
-                {role.name.trim().toLowerCase() === 'gandola' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleGandolaHint')}</p>
                 ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>

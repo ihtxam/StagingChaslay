@@ -292,7 +292,7 @@ export async function printKitchenViaAgentOrQueue(
     try {
       await printViaAgentOrQueue({
         printerName: opts.printerName,
-        dataBase64: uint8ToBase64(escposFeedAndCut()),
+        dataBase64: uint8ToBase64(escposKitchenCut()),
         orderId: opts.orderId,
         retryLocally: opts.retryLocally,
         forceQueue: opts.forceQueue,
@@ -459,11 +459,12 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           if (relayKind === 'kitchen') {
             try {
               const livePrinter = resolvedPrinter || '';
-              if (looksLikeBluetoothOrComPrinter(livePrinter) && !skipBtCutFollowUp) {
+              const isBt = looksLikeBluetoothOrComPrinter(livePrinter);
+              if (!isBt || !skipBtCutFollowUp) {
                 await new Promise((r) => setTimeout(r, 450));
                 await printViaAgent({
                   printerName: resolvedPrinter,
-                  dataBase64: uint8ToBase64(escposFeedAndCut()),
+                  dataBase64: uint8ToBase64(escposKitchenCut()),
                 });
               }
             } catch {
