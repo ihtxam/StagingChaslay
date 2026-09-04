@@ -1983,9 +1983,12 @@ router.get(
         channel: req.query.channel ? String(req.query.channel) : undefined,
         staffId,
         staffName,
-        locationId: req.query.locationId
-          ? String(req.query.locationId)
-          : req.locationId || undefined,
+        locationId:
+          req.query.scope === "location"
+            ? (req.locationId as string | undefined) || undefined
+            : req.query.locationId
+              ? String(req.query.locationId)
+              : undefined,
       });
       res.json({ success: true, report });
     } catch (error) {
