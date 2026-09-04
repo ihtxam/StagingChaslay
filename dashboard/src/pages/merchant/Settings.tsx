@@ -119,6 +119,7 @@ import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '
 import { normalizeBusinessModule } from '@/lib/business-module';
 
 interface SettingsData {
+  id?: string;
   name: string;
   email: string;
   phone?: string | null;
@@ -552,12 +553,15 @@ export default function Settings() {
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const adyenWebhookUrl = useMemo(() => {
-    const merchantId = user?.merchantId;
+    const merchantId =
+      settings?.id ||
+      user?.merchantId ||
+      (user?.role === 'merchant' ? user?.id : undefined);
     if (!merchantId) return '';
     const env = import.meta.env.VITE_API_URL as string | undefined;
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
-  }, [user?.merchantId]);
+  }, [settings?.id, user?.merchantId, user?.role, user?.id]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [adyen, setAdyen] = useState<AdyenCreds>({});
@@ -1542,7 +1546,7 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-3 overflow-hidden sm:gap-4"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4 lg:h-full lg:min-h-0 lg:overflow-hidden"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1637,11 +1641,11 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-          <aside className="shrink-0 border-b border-[var(--border)] lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
+      <div className="card !p-0 flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden">
+          <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] lg:static lg:z-auto lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
             <nav
-              className="grid max-h-[min(36vh,280px)] grid-cols-2 gap-1 overflow-y-auto overscroll-y-contain p-2 [-webkit-overflow-scrolling:touch] sm:grid-cols-3 md:grid-cols-4 lg:max-h-none lg:flex lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-y-auto"
+              className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto"
               aria-label={t('settings')}
             >
               {visibleTabs.map((item) => {
@@ -1663,7 +1667,7 @@ export default function Settings() {
                     }}
                     aria-label={item.label}
                     title={item.label}
-                    className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors lg:w-full lg:py-2 ${
+                    className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors whitespace-nowrap lg:w-full lg:py-2 lg:whitespace-normal ${
                       active
                         ? 'bg-[var(--bg-muted)] text-[var(--text)]'
                         : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
@@ -1681,7 +1685,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch] sm:p-5"
+            className="min-w-0 flex-1 p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain [-webkit-overflow-scrolling:touch]"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
@@ -2811,6 +2815,30 @@ export default function Settings() {
                       </Field>
                     </div>
                   </div>
+                  {adyenWebhookUrl ? (
+                    <div className="mt-1 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
+                      <p className="text-sm font-medium text-[var(--text)]">{t('adyenWebhookUrl')}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
+                          {adyenWebhookUrl}
+                        </code>
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
+                          aria-label={t('copied')}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(adyenWebhookUrl).then(
+                              () => toast.success(t('copied')),
+                              () => toast.error(t('copyFailed'))
+                            );
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)]">{t('adyenWebhookSetupHint')}</p>
+                    </div>
+                  ) : null}
                 </Section>
                 <SettingsSaveBar saving={savingAdyen} />
               </form>
@@ -2875,30 +2903,6 @@ export default function Settings() {
                     }
                     tapToPayEnabled={settings?.tapToPayEnabled === true}
                   />
-                  {adyenWebhookUrl ? (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs muted">{t('adyenWebhookUrl')}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <code className="block max-w-full break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-[11px]">
-                          {adyenWebhookUrl}
-                        </code>
-                        <button
-                          type="button"
-                          className="btn-secondary shrink-0"
-                          aria-label={t('copied')}
-                          onClick={() => {
-                            void navigator.clipboard.writeText(adyenWebhookUrl).then(
-                              () => toast.success(t('copied')),
-                              () => toast.error(t('copyFailed'))
-                            );
-                          }}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs muted">{t('adyenWebhookSetupHint')}</p>
-                    </div>
-                  ) : null}
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
