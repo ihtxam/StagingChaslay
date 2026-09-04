@@ -552,6 +552,8 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [settings, setSettings] = useState<SettingsData | null>(null);
   const adyenWebhookUrl = useMemo(() => {
     const merchantId =
       settings?.id ||
@@ -562,8 +564,11 @@ export default function Settings() {
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
   }, [settings?.id, user?.merchantId, user?.role, user?.id]);
+<<<<<<< Updated upstream
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
+=======
+>>>>>>> Stashed changes
   const [adyen, setAdyen] = useState<AdyenCreds>({});
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
