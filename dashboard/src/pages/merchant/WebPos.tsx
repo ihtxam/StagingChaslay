@@ -8115,7 +8115,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     setCheckoutExtras(null);
-    setCheckoutOpen(moreSplits);
+    // Split flow uses WebPosCheckoutView (posView=checkout), not WebPosCheckoutModal.
+    setCheckoutOpen(false);
     const payLater = method === 'pay_later' || method === 'invoice';
     const paidTotal = sale.total;
     const splitPaidTotal = roundMoney2(
@@ -10788,9 +10789,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setCheckoutOpen(false);
           setCustomerOpen(false);
           setPendingPayMethod(null);
-          setSplitQueue([]);
-          setSplitIndex(0);
-          splitMasterIdRef.current = null;
+          // Keep split-bill state when the legacy modal is dismissed mid split flow.
+          if (!splitBillActive()) {
+            setSplitQueue([]);
+            setSplitIndex(0);
+            splitMasterIdRef.current = null;
+          }
         }}
         onConfirm={(r) => void completeFromCheckout(r)}
         onSplit={
