@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
@@ -550,6 +550,7 @@ export default function WebPosOrdersPanel({
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
   const [ordersView, setOrdersView] = useState<OrdersViewMode>(() => readOrdersView());
+  const highlightNavRef = useRef<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   /** Overflow menu for selected order (side detail breadcrumb) */
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
@@ -696,20 +697,25 @@ export default function WebPosOrdersPanel({
     setChannelFilter(initialChannelFilter);
     setStatusFilter('active');
     setPage(0);
-  }, [open, initialChannelFilter, refreshToken]);
+  }, [open, initialChannelFilter]);
 
   useEffect(() => {
     onChannelFilterChange?.(channelFilter);
   }, [channelFilter, onChannelFilterChange]);
 
   useEffect(() => {
-    if (!open || !highlightOrderId) return;
+    if (!open || !highlightOrderId) {
+      highlightNavRef.current = null;
+      return;
+    }
+    if (highlightNavRef.current === highlightOrderId) return;
     const match =
       orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId) ||
       onlineOrders.find((o) => o.id === highlightOrderId);
     if (!match) return;
     const asPos =
       'refundAmount' in match ? (match as PosOrder) : onlineOrderAsPosOrder(match as OnlineOrder);
+    highlightNavRef.current = highlightOrderId;
     setStatusFilter(isOpenWebPosOrder(asPos) ? 'active' : 'completed');
     if (isOnlineShopOrder(asPos)) setChannelFilter('online');
     setSelectedOrder(asPos);
@@ -1502,6 +1508,7 @@ export default function WebPosOrdersPanel({
                 aria-pressed={ordersView === 'grid'}
                 onClick={() => {
                   setOrdersView('grid');
+                  if (highlightOrderId) highlightNavRef.current = highlightOrderId;
                   setPage(0);
                   setSelectedHeld(null);
                   setSelectedOrder(null);
