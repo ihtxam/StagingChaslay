@@ -109,23 +109,46 @@ export function buildGiftCardBarcodePayload(code: string): string {
 export async function resolvePublishedReceiptRef(
   backendOrderId: string | null | undefined,
   clientId: string,
-  orderNumber?: string | null
+  orderNumber?: string | null,
+  opts?: { maxWaitMs?: number }
 ): Promise<string | null> {
   const candidates = [
     ...new Set([backendOrderId, orderNumber, clientId].filter(Boolean)),
   ] as string[];
-  for (const ref of candidates) {
-    try {
-      const res = await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
-      if (res.data?.success && res.data?.receipt?.id) {
-        return String(res.data.receipt.id);
+  const fallback = backendOrderId || orderNumber || clientId || null;
+  const maxWaitMs = Math.max(0, Number(opts?.maxWaitMs ?? 0) || 0);
+  if (!maxWaitMs) {
+    for (const ref of candidates) {
+      try {
+        const res = await publicApi.get(`/receipts/${encodeURIComponent(ref)}`);
+        if (res.data?.success && res.data?.receipt?.id) {
+          return String(res.data.receipt.id);
+        }
+        if (res.status === 200 && res.data?.receipt) return ref;
+      } catch {
+        /* try next candidate */
       }
-      if (res.status === 200 && res.data?.receipt) return ref;
-    } catch {
-      /* try next candidate */
     }
+    return null;
   }
-  return null;
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    for (const ref of candidates) {
+      try {
+        const res = await publicApi.get(`/receipts/${encodeURIComponent(ref)}`, {
+          timeout: Math.min(400, Math.max(80, deadline - Date.now())),
+        });
+        if (res.data?.success && res.data?.receipt?.id) {
+          return String(res.data.receipt.id);
+        }
+        if (res.status === 200 && res.data?.receipt) return ref;
+      } catch {
+        /* retry until deadline */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  return fallback;
 }
 
 export type EscPosErrorCorrection = 'L' | 'M' | 'Q' | 'H';

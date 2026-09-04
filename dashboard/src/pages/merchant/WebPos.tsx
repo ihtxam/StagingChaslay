@@ -6944,6 +6944,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       singleTarget?: boolean;
       /** Pre-built ESC/POS base64 — skip buildReceiptEscPos (success-screen reprint). */
       dataBase64?: string;
+      /** Use embedded QR instead of slow network raster fetch. */
+      fastQr?: boolean;
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
@@ -6994,6 +6996,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         logoBytes: logo,
         barcodeData: barcode,
         paperWidthMm: paper,
+        fastQr: opts.fastQr !== false,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
@@ -7099,7 +7102,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     receiptText: string,
     receiptUrl?: string,
     deliveryQrUrl?: string,
-    opts?: { singleTarget?: boolean; dataBase64?: string }
+    opts?: { singleTarget?: boolean; dataBase64?: string; fastQr?: boolean }
   ) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
@@ -7108,6 +7111,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       quiet: true,
       singleTarget: opts?.singleTarget,
       dataBase64: opts?.dataBase64,
+      fastQr: opts?.fastQr,
     });
   };
 
@@ -7875,12 +7879,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     const receiptRef = queuedOffline
       ? clientId
-      : (await resolvePublishedReceiptRef(
-          backendOrderId,
-          clientId,
-          ticket.orderNumber || lastReceiptOrderNumber
-        )) ||
-        backendOrderId ||
+      : backendOrderId ||
+        (await resolvePublishedReceiptRef(backendOrderId, clientId, ticket.orderNumber, {
+          maxWaitMs: 400,
+        })) ||
         clientId;
     const receiptUrl = buildReceiptUrl(receiptRef);
     const lang = resolveReceiptLanguage(
@@ -8156,28 +8158,38 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       method !== 'invoice' &&
       method !== 'pay_later' &&
       shouldAutoPrintReceipt(printSettings);
-    // Offline sales have no published receipt URL yet — still print text via local Print Agent.
-    if (shouldPrintReceipt) {
-      // Never hold checkout/busy on the print agent.
-      void printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
-        singleTarget: method === 'pay_later',
-      }).catch((e: unknown) => {
-        notifyPrintError(e, 'webPosPrintFailed');
-      });
-    }
     const kitchenDelta = unsentKitchenLines(cartSnapshot);
-    if ((!moreSplits || splitIndex === 0) && kitchenDelta.length) {
-      // Don't hold checkout/busy on kitchen print — agent latency is often several seconds.
-      void printKitchenForCart(kitchenDelta, channelSnapshot, {
-        orderNumber: kitchenOrderNumber({ ticket }),
-        when: whenSnapshot,
-        tabNumber: tabSnapshot,
-        tableLabel: tableLabelSnapshot,
-        lineIds: kitchenDelta.map((l) => l.lineId),
-        dedicatedKitchenOnly: method === 'pay_later',
-      }).catch((e: unknown) => {
-        handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
-      });
+    const shouldPrintKitchen =
+      (!moreSplits || splitIndex === 0) && kitchenDelta.length > 0;
+    // Offline sales have no published receipt URL yet — still print text via local Print Agent.
+    // Kitchen first, then customer receipt — avoids one long strip when both hit the same printer.
+    if (shouldPrintKitchen || shouldPrintReceipt) {
+      void (async () => {
+        if (shouldPrintKitchen) {
+          try {
+            await printKitchenForCart(kitchenDelta, channelSnapshot, {
+              orderNumber: kitchenOrderNumber({ ticket }),
+              when: whenSnapshot,
+              tabNumber: tabSnapshot,
+              tableLabel: tableLabelSnapshot,
+              lineIds: kitchenDelta.map((l) => l.lineId),
+              dedicatedKitchenOnly: method === 'pay_later',
+            });
+          } catch (e: unknown) {
+            handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
+          }
+        }
+        if (shouldPrintReceipt) {
+          try {
+            await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+              singleTarget: method === 'pay_later',
+              fastQr: true,
+            });
+          } catch (e: unknown) {
+            notifyPrintError(e, 'webPosPrintFailed');
+          }
+        }
+      })();
     }
     if (method === 'invoice' && backendOrderId) {
       void openInvoicePdf(backendOrderId);

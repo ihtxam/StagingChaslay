@@ -288,7 +288,7 @@ export async function printKitchenViaAgentOrQueue(
   const skipCutFollowUp = isBt && agentSupportsBtCutTrailer(agentHealth);
   if (!skipCutFollowUp) {
     // USB/network and legacy BT: separate cut job so the blade runs after the ticket body.
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await new Promise((resolve) => setTimeout(resolve, 150));
     try {
       await printViaAgentOrQueue({
         printerName: opts.printerName,
@@ -461,7 +461,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
               const livePrinter = resolvedPrinter || '';
               const isBt = looksLikeBluetoothOrComPrinter(livePrinter);
               if (!isBt || !skipBtCutFollowUp) {
-                await new Promise((r) => setTimeout(r, 450));
+                await new Promise((r) => setTimeout(r, 150));
                 await printViaAgent({
                   printerName: resolvedPrinter,
                   dataBase64: uint8ToBase64(escposKitchenCut()),

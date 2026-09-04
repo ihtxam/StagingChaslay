@@ -2484,7 +2484,6 @@ export function textToEscPos(
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const feed = new Uint8Array([0x1b, 0x64, 0x04]);
-  const cut = new Uint8Array([0x1d, 0x56, 0x41, 0x10]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
     parts.push(alignCenter, logoBytes, alignLeft);
@@ -2502,7 +2501,7 @@ export function textToEscPos(
       parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
   }
-  parts.push(feed, cut);
+  parts.push(feed, escposFeedAndCut());
   return concatBytes(...parts);
 }
 
@@ -2518,6 +2517,8 @@ export async function buildReceiptEscPos(
     barcodeData?: string;
     barcodeLabel?: string;
     paperWidthMm?: 58 | 80;
+    /** Skip slow external QR fetch — embedded ESC/POS QR (~1s faster at checkout). */
+    fastQr?: boolean;
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -2529,14 +2530,18 @@ export async function buildReceiptEscPos(
   let qrRaster: Uint8Array | null = null;
 
   if (qrData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.digitalReceiptQrTitle,
-        data: qrData,
-        paperWidthMm: paper,
-      })) ||
-      (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-      escposQrCode(qrData, paper === 58 ? 5 : 5);
+    if (opts.fastQr !== false) {
+      qrRaster = escposQrCode(qrData, paper === 58 ? 5 : 5);
+    } else {
+      qrRaster =
+        (await buildLabeledReceiptQrRasterEscPos({
+          label: L.digitalReceiptQrTitle,
+          data: qrData,
+          paperWidthMm: paper,
+        })) ||
+        (await generateReceiptQrRasterEscPos(qrData, paper)) ||
+        escposQrCode(qrData, paper === 58 ? 5 : 5);
+    }
   }
 
   return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);
