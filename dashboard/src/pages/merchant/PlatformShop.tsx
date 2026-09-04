@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
-import { mountAdyenDropin, formatAdyenError } from '@/lib/adyen-checkout';
+import {
+  mountAdyenDropin,
+  normalizeAdyenPaymentSession,
+  formatAdyenError,
+} from '@/lib/adyen-checkout';
 import { useI18n } from '@/lib/i18n';
 
 type Product = {
@@ -57,6 +61,19 @@ export default function PlatformShop() {
   const [payMsg, setPayMsg] = useState('');
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
+  const checkoutDetailsRef = useRef({ voucherCode: '', notes: '' });
+
+  const clearDropin = useCallback(() => {
+    if (dropinEl) dropinEl.innerHTML = '';
+    dropinMounted.current = false;
+  }, [dropinEl]);
+
+  const resetPayment = useCallback(() => {
+    setSession(null);
+    setCheckoutOrderId(null);
+    setPayMsg('');
+    clearDropin();
+  }, [clearDropin]);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +101,15 @@ export default function PlatformShop() {
     const orderId = searchParams.get('orderId');
     if (orderId) setCheckoutOrderId(orderId);
   }, [searchParams]);
+
+  useEffect(() => {
+    const prev = checkoutDetailsRef.current;
+    const next = { voucherCode, notes };
+    checkoutDetailsRef.current = next;
+    if (!session) return;
+    if (prev.voucherCode === next.voucherCode && prev.notes === next.notes) return;
+    resetPayment();
+  }, [voucherCode, notes, session, resetPayment]);
 
   const cartLines = useMemo(() => {
     return products
@@ -120,7 +146,7 @@ export default function PlatformShop() {
       return;
     }
     setBusy(true);
-    setPayMsg('');
+    resetPayment();
     try {
       const items = cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty }));
       const res = await api.post('/merchant/platform-shop/checkout', {
@@ -133,17 +159,21 @@ export default function PlatformShop() {
         setCart({});
         setVoucherCode('');
         setNotes('');
-        setSession(null);
-        setCheckoutOrderId(null);
-        dropinMounted.current = false;
+        resetPayment();
         await load();
         return;
       }
+      const normalized = normalizeAdyenPaymentSession(res.data.paymentSession);
+      if (!normalized) {
+        throw new Error('Invalid payment session');
+      }
       setCheckoutOrderId(res.data.order?.id || null);
-      setSession(res.data.paymentSession || null);
+      setSession(normalized);
     } catch (err: unknown) {
+      resetPayment();
       toast.error(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          (err instanceof Error ? err.message : null) ||
           t('platformShopCheckoutFailed')
       );
     } finally {
@@ -152,8 +182,10 @@ export default function PlatformShop() {
   };
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) return;
+    if (!session?.sessionData || !session.clientKey || !dropinEl) return;
     let cancelled = false;
+    dropinEl.innerHTML = '';
+    dropinMounted.current = false;
     void (async () => {
       try {
         await mountAdyenDropin({
@@ -169,9 +201,7 @@ export default function PlatformShop() {
               });
               toast.success(t('platformShopOrderPlaced'));
               setCart({});
-              setSession(null);
-              setCheckoutOrderId(null);
-              dropinMounted.current = false;
+              resetPayment();
               await load();
             } catch (err: unknown) {
               toast.error(
@@ -186,13 +216,18 @@ export default function PlatformShop() {
         });
         if (!cancelled) dropinMounted.current = true;
       } catch (err) {
-        if (!cancelled) setPayMsg(formatAdyenError(err, 'mount') || 'Could not load payment form');
+        if (!cancelled) {
+          setPayMsg(formatAdyenError(err, 'mount') || 'Could not load payment form');
+          resetPayment();
+        }
       }
     })();
     return () => {
       cancelled = true;
+      dropinEl.innerHTML = '';
+      dropinMounted.current = false;
     };
-  }, [session, dropinEl, checkoutOrderId, t, load]);
+  }, [session?.id, dropinEl, checkoutOrderId, t, load, resetPayment]);
 
   if (loading) {
     return <div className="text-sm text-stone-500">{t('loading')}</div>;
@@ -308,22 +343,30 @@ export default function PlatformShop() {
               onChange={(e) => setNotes(e.target.value)}
             />
           </label>
-          {!session ? (
-            <button
-              type="button"
-              className="btn-primary w-full text-sm"
-              disabled={busy || !cartLines.length}
-              onClick={() => void startCheckout()}
-            >
-              {busy ? t('loading') : t('checkout')}
-            </button>
-          ) : (
+          <button
+            type="button"
+            className="btn-primary w-full text-sm"
+            disabled={busy || !cartLines.length}
+            onClick={() => void startCheckout()}
+          >
+            {busy ? t('loading') : t('checkout')}
+          </button>
+          {session ? (
             <div className="space-y-2">
-              <p className="text-xs text-stone-600">{t('platformShopPayOnline')}</p>
-              <div ref={setDropinEl} />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-stone-600">{t('platformShopPayOnline')}</p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-stone-600 underline"
+                  onClick={resetPayment}
+                >
+                  {t('cancel')}
+                </button>
+              </div>
+              <div key={session.id} ref={setDropinEl} />
               {payMsg ? <p className="text-xs text-red-600">{payMsg}</p> : null}
             </div>
-          )}
+          ) : null}
         </aside>
       </div>
 
