@@ -807,10 +807,22 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
   }
 }
 
+const PRINT_AGENT_OK_TTL_MS = 30_000;
+let printAgentLastOkAt = 0;
+
+/** Skip repeated /health probes after a recent successful print on this tab. */
+export function markPrintAgentRecentSuccess(): void {
+  printAgentLastOkAt = Date.now();
+}
+
 export async function isPrintAgentAvailable(): Promise<boolean> {
+  if (printAgentLastOkAt > 0 && Date.now() - printAgentLastOkAt < PRINT_AGENT_OK_TTL_MS) {
+    return true;
+  }
   const health = isAndroidTabletDevice()
     ? await getPrintAgentHealth(2)
     : await probePrintAgentHealth(3);
+  if (health.ok) markPrintAgentRecentSuccess();
   return health.ok;
 }
 
@@ -933,6 +945,7 @@ export async function printViaAgent(opts: {
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }
+    markPrintAgentRecentSuccess();
     return { ok: true, printer: res.printer };
   }
   const data = await agentFetch(
@@ -950,6 +963,7 @@ export async function printViaAgent(opts: {
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
+  markPrintAgentRecentSuccess();
   return { ok: true, printer: data?.printer };
 }
 

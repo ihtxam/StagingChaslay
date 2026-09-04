@@ -924,6 +924,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const splitReceiptsRef = useRef<SplitReceiptPart[]>([]);
   /** Cache receipt logo ESC/POS so checkout print is not waiting on image decode. */
   const logoEscPosCacheRef = useRef<{ key: string; bytes: Uint8Array | null } | null>(null);
+  /** Cached receipt ESC/POS (base64) from first build — success-screen reprint skips rebuild. */
+  const lastReceiptEscPosBase64Ref = useRef<string>('');
   const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
   const [sendReceiptBusy, setSendReceiptBusy] = useState(false);
   const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
@@ -6627,6 +6629,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.orderNumber ||
           '';
         setLastReceipt(receiptText);
+        lastReceiptEscPosBase64Ref.current = '';
         setLastReceiptUrl(receiptPayload.receiptUrl);
         setLastReceiptOrderId(orderId);
         setLastReceiptOrderNumber(orderNumber);
@@ -6931,6 +6934,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       quiet?: boolean;
       /** Pay Later: one guest receipt only (first receipt printer). */
       singleTarget?: boolean;
+      /** Pre-built ESC/POS base64 — skip buildReceiptEscPos (success-screen reprint). */
+      dataBase64?: string;
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
@@ -6949,38 +6954,44 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
 
-    const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
-    const logoUrl =
-      opts.role === 'receipt' || opts.role === 'eod'
-        ? printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl
-        : null;
-    let logo: Uint8Array | null = null;
-    if (logoUrl) {
-      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
-      const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
-      if (logoEscPosCacheRef.current?.key === cacheKey) {
-        logo = logoEscPosCacheRef.current.bytes;
-      } else {
-        logo = await logoUrlToEscPos(String(logoUrl), logoWidth);
-        logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
+    let dataBase64 = opts.dataBase64 || '';
+    if (!dataBase64) {
+      const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
+      const logoUrl =
+        opts.role === 'receipt' || opts.role === 'eod'
+          ? printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl
+          : null;
+      let logo: Uint8Array | null = null;
+      if (logoUrl) {
+        const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+        const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
+        if (logoEscPosCacheRef.current?.key === cacheKey) {
+          logo = logoEscPosCacheRef.current.bytes;
+        } else {
+          logo = await logoUrlToEscPos(String(logoUrl), logoWidth);
+          logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
+        }
+      }
+      const qr =
+        opts.forceScannable ||
+        (opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false)
+          ? opts.qrUrl
+          : undefined;
+      const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
+      const lang = resolveReceiptLanguage(printSettings, locale);
+      const escpos = await buildReceiptEscPos(text, {
+        qrData: qr,
+        deliveryQrData: opts.deliveryQrUrl,
+        language: lang,
+        logoBytes: logo,
+        barcodeData: barcode,
+        paperWidthMm: paper,
+      });
+      dataBase64 = uint8ToBase64(escpos);
+      if (opts.role === 'receipt') {
+        lastReceiptEscPosBase64Ref.current = dataBase64;
       }
     }
-    const qr =
-      opts.forceScannable ||
-      (opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false)
-        ? opts.qrUrl
-        : undefined;
-    const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
-    const lang = resolveReceiptLanguage(printSettings, locale);
-    const escpos = await buildReceiptEscPos(text, {
-      qrData: qr,
-      deliveryQrData: opts.deliveryQrUrl,
-      language: lang,
-      logoBytes: logo,
-      barcodeData: barcode,
-      paperWidthMm: paper,
-    });
-    const dataBase64 = uint8ToBase64(escpos);
 
     let printedOk = 0;
     let queuedOk = 0;
@@ -7080,7 +7091,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     receiptText: string,
     receiptUrl?: string,
     deliveryQrUrl?: string,
-    opts?: { singleTarget?: boolean }
+    opts?: { singleTarget?: boolean; dataBase64?: string }
   ) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
@@ -7088,6 +7099,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       role: 'receipt',
       quiet: true,
       singleTarget: opts?.singleTarget,
+      dataBase64: opts?.dataBase64,
     });
   };
 
@@ -7097,9 +7109,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     if (lastReceipt) {
-      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined).catch(
-        (e: unknown) => notifyPrintError(e, 'webPosPrintFailed')
-      );
+      toast(t('webPosPrinting'));
+      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined, {
+        dataBase64: lastReceiptEscPosBase64Ref.current || undefined,
+      }).catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
       return;
     }
     toast.error(t('webPosPrintFailed'));
@@ -7958,6 +7971,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
     if (method !== 'pay_later' && method !== 'invoice') {
       setLastReceipt(receiptText);
+      lastReceiptEscPosBase64Ref.current = '';
       setLastReceiptUrl(receiptUrl);
       setLastDeliveryQrUrl(deliveryQrUrl || '');
       setLastReceiptOrderId(receiptRef || clientId);
