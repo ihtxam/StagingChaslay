@@ -2016,6 +2016,8 @@ export default function Settings() {
                   >
                     {CUSTOM_DOMAIN_WIZARD_ENABLED ? (
                       <CustomDomainWizard
+                        initialActiveDomain={settings.customDomain}
+                        initialShopUrl={settings.shopCustomDomainUrl}
                         onStatusChange={(next) => {
                           if (!next?.activeDomain) return;
                           setSettings((prev) =>

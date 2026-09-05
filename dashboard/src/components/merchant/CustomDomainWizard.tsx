@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { SHOP_HOST } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
@@ -18,6 +18,8 @@ export type CustomDomainSetupStatus = {
 };
 
 type Props = {
+  initialActiveDomain?: string | null;
+  initialShopUrl?: string | null;
   onStatusChange?: (status: CustomDomainSetupStatus | null) => void;
 };
 
@@ -27,26 +29,52 @@ function stepIndex(step: CustomDomainSetupStatus['step']): number {
   return STEPS.indexOf(step === 'enter' ? 'enter' : step);
 }
 
-export default function CustomDomainWizard({ onStatusChange }: Props) {
+function bootstrapStatus(
+  activeDomain?: string | null,
+  shopUrl?: string | null
+): CustomDomainSetupStatus | null {
+  const active = activeDomain?.trim();
+  if (!active) return null;
+  return {
+    enabled: true,
+    shopHost: SHOP_HOST,
+    domain: active,
+    pendingDomain: null,
+    activeDomain: active,
+    dnsStatus: 'verified',
+    sslStatus: 'active',
+    verifiedAt: null,
+    shopUrl: shopUrl || `https://${active}`,
+    step: 'active',
+    dnsHintHost: active.split('.')[0] === 'www' ? 'www' : active.split('.')[0] || 'www',
+  };
+}
+
+export default function CustomDomainWizard({
+  initialActiveDomain,
+  initialShopUrl,
+  onStatusChange,
+}: Props) {
   const { t } = useI18n();
-  const [status, setStatus] = useState<CustomDomainSetupStatus | null>(null);
-  const [domainInput, setDomainInput] = useState('');
-  const [loading, setLoading] = useState(true);
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
+
+  const [status, setStatus] = useState<CustomDomainSetupStatus | null>(() =>
+    bootstrapStatus(initialActiveDomain, initialShopUrl)
+  );
+  const [domainInput, setDomainInput] = useState(() => initialActiveDomain?.trim() || '');
+  const [loading, setLoading] = useState(() => !bootstrapStatus(initialActiveDomain, initialShopUrl));
   const [busy, setBusy] = useState<'start' | 'verify' | 'ssl' | 'remove' | null>(null);
   const [error, setError] = useState('');
 
-  const applyStatus = useCallback(
-    (next: CustomDomainSetupStatus) => {
-      setStatus(next);
-      onStatusChange?.(next);
-      if (next.pendingDomain) setDomainInput(next.pendingDomain);
-      else if (next.activeDomain) setDomainInput(next.activeDomain);
-    },
-    [onStatusChange]
-  );
+  const applyStatus = useCallback((next: CustomDomainSetupStatus) => {
+    setStatus(next);
+    onStatusChangeRef.current?.(next);
+    if (next.pendingDomain) setDomainInput(next.pendingDomain);
+    else if (next.activeDomain) setDomainInput(next.activeDomain);
+  }, []);
 
   const loadStatus = useCallback(async () => {
-    setLoading(true);
     setError('');
     try {
       const { data } = await api.get('/merchant/custom-domain');
@@ -158,7 +186,7 @@ export default function CustomDomainWizard({ onStatusChange }: Props) {
     }
   }
 
-  if (loading) {
+  if (loading && !status) {
     return <p className="text-sm muted">{t('loading')}</p>;
   }
 
@@ -167,6 +195,7 @@ export default function CustomDomainWizard({ onStatusChange }: Props) {
 
   return (
     <div className="space-y-4">
+      {loading ? <p className="text-xs muted">{t('loading')}</p> : null}
       <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {stepLabels.map((label, index) => {
           const done = index < activeIndex || (index === 3 && currentStep === 'active');
