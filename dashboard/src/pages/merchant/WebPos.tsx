@@ -126,6 +126,7 @@ import {
   revokePosSession,
   fetchActivePosSessions,
   setPosSessionHeartbeatExtras,
+  type RegisterPosSessionResult,
 } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
@@ -744,6 +745,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }
   const bootCart = bootCartRef.current;
   const bootActive = bootCart?.active || null;
+  /** Avoid duplicate registerPosSession when PIN success already registers in the same render. */
+  const skipPosAutoRegisterRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const catalogBootedRef = useRef(false);
@@ -1229,6 +1232,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearPosSessionLocal();
       return;
     }
+    if (skipPosAutoRegisterRef.current) return;
     void registerPosSession({
       sessionKind: 'main',
       platform: 'webpos',
@@ -8742,15 +8746,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     setPosAuthAlert(null);
     clearPosSessionLocal();
+    skipPosAutoRegisterRef.current = true;
     setWebposStaff(session);
     saveWebPosStaffSession(session);
     notifyWebPosStaffSessionChanged();
-    const reg = await registerPosSession({
-      sessionKind: 'main',
-      platform: 'webpos',
-      staffId: session.id,
-      staffName: session.name,
-    });
+    let reg: RegisterPosSessionResult;
+    try {
+      reg = await registerPosSession({
+        sessionKind: 'main',
+        platform: 'webpos',
+        staffId: session.id,
+        staffName: session.name,
+      });
+    } finally {
+      window.setTimeout(() => {
+        skipPosAutoRegisterRef.current = false;
+      }, 0);
+    }
     if (!reg.ok) {
       const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(
         reg.error || ''

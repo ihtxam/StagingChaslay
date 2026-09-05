@@ -105,8 +105,26 @@ export type RegisterPosSessionResult =
   | { ok: true; sessionId: string; kickedSessionIds: string[] }
   | { ok: false; error?: string };
 
-/** Register or refresh a POS station session (last login wins when at post limit). */
-export async function registerPosSession(opts: {
+function registerPosSessionKey(opts: {
+  sessionKind: PosSessionKind;
+  platform: PosSessionPlatform;
+  staffId?: string | null;
+  locationId?: string | null;
+}): string {
+  const locationId = opts.locationId ?? getSelectedLocationId();
+  return [
+    opts.sessionKind,
+    opts.platform,
+    webPosDeviceId(),
+    opts.staffId ?? '',
+    locationId ?? '',
+  ].join('|');
+}
+
+let registerInFlight: Promise<RegisterPosSessionResult> | null = null;
+let registerInFlightKey = '';
+
+async function registerPosSessionOnce(opts: {
   sessionKind: PosSessionKind;
   platform: PosSessionPlatform;
   staffId?: string | null;
@@ -144,6 +162,29 @@ export async function registerPosSession(opts: {
     console.warn('[pos-session] register failed', e);
     return { ok: false, error: String(error) };
   }
+}
+
+/** Register or refresh a POS station session (last login wins when at post limit). */
+export async function registerPosSession(opts: {
+  sessionKind: PosSessionKind;
+  platform: PosSessionPlatform;
+  staffId?: string | null;
+  staffName?: string | null;
+  deviceLabel?: string;
+  locationId?: string | null;
+}): Promise<RegisterPosSessionResult> {
+  const key = registerPosSessionKey(opts);
+  if (registerInFlight && registerInFlightKey === key) {
+    return registerInFlight;
+  }
+  registerInFlightKey = key;
+  registerInFlight = registerPosSessionOnce(opts).finally(() => {
+    if (registerInFlightKey === key) {
+      registerInFlight = null;
+      registerInFlightKey = '';
+    }
+  });
+  return registerInFlight;
 }
 
 export async function revokePosSession(): Promise<void> {

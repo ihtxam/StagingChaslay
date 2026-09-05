@@ -88,6 +88,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
   const merchantId = authUser?.merchantId;
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
+  const skipPosAutoRegisterRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<WebPosStaffSession | null>(() => loadWebPosStaffSession());
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -195,6 +196,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       clearPosSessionLocal();
       return;
     }
+    if (skipPosAutoRegisterRef.current) return;
     void registerPosSession({
       sessionKind: 'waiter',
       platform: 'waiter_web',
@@ -664,18 +666,30 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     }
     setPosAuthAlert(null);
     clearPosSessionLocal();
-    clearWebPosStaffSession();
-    const reg = await registerPosSession({
-      sessionKind: 'waiter',
-      platform: 'waiter_web',
-      staffId: session.id,
-      staffName: session.name,
-    });
+    skipPosAutoRegisterRef.current = true;
+    saveWebPosStaffSession(session);
+    setStaff(session);
+    notifyWebPosStaffSessionChanged();
+    let reg: Awaited<ReturnType<typeof registerPosSession>>;
+    try {
+      reg = await registerPosSession({
+        sessionKind: 'waiter',
+        platform: 'waiter_web',
+        staffId: session.id,
+        staffName: session.name,
+      });
+    } finally {
+      window.setTimeout(() => {
+        skipPosAutoRegisterRef.current = false;
+      }, 0);
+    }
     if (!reg.ok) {
       const schemaLag = /Failed query|does not exist|location_id|pos_sessions/i.test(
         reg.error || ''
       );
       if (!schemaLag) {
+        clearWebPosStaffSession();
+        setStaff(null);
         setPosAuthAlert({
           title: t('webPosPinErrorTitle'),
           message: reg.error || t('webPosSessionRegisterFailed'),
@@ -686,9 +700,6 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       }
       console.warn('[waiter] session register skipped (schema):', reg.error);
     }
-    saveWebPosStaffSession(session);
-    setStaff(session);
-    notifyWebPosStaffSessionChanged();
     setPinModalOpen(false);
     if (reg.ok && reg.kickedSessionIds.length > 0) {
       toast.info(t('webPosSessionReclaimed'));
