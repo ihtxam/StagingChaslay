@@ -12,6 +12,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { useStorefront } from '../StorefrontContext';
 import { resolveSectionId } from '../utils/section-id';
+import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 
 const defaultProps: ContactInfoProps = {
   title: 'Contact Us',
