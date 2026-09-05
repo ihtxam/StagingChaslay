@@ -28,6 +28,7 @@ import {
   Copy,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
+import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
@@ -1201,7 +1202,9 @@ export default function Settings() {
         vatAfterDiscount: settings.vatAfterDiscount !== false,
         slug: settings.slug || undefined,
         subdomain: settings.subdomain || undefined,
-        customDomain: settings.customDomain?.trim() || null,
+        ...(CUSTOM_DOMAIN_WIZARD_ENABLED
+          ? {}
+          : { customDomain: settings.customDomain?.trim() || null }),
         shopEnabled: !!settings.shopEnabled,
         acceptingOrders: settings.acceptingOrders !== false,
         acceptingReservations: settings.acceptingReservations !== false,
@@ -2003,37 +2006,63 @@ export default function Settings() {
                       placeholder="my-cafe"
                     />
                   </Field>
-                  <Field label={t('cmsCustomDomain')} hint={settings.shopCustomDomainUrl || undefined}>
-                    <p className="text-xs muted mb-1.5">{t('cmsDnsGoCreate')}</p>
-                    <table className="w-full max-w-md text-xs border border-[var(--border)]">
-                      <tbody>
-                        <tr className="border-b border-[var(--border)]">
-                          <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium w-24">
-                            {t('cmsDnsType')}
-                          </th>
-                          <td className="px-2 py-1.5 font-mono">CNAME</td>
-                        </tr>
-                        <tr className="border-b border-[var(--border)]">
-                          <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
-                            {t('cmsDnsHost')}
-                          </th>
-                          <td className="px-2 py-1.5 font-mono">www</td>
-                        </tr>
-                        <tr>
-                          <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
-                            {t('cmsDnsPointsTo')}
-                          </th>
-                          <td className="px-2 py-1.5 font-mono">{SHOP_HOST}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <p className="text-xs muted mt-1.5 mb-1.5">{t('cmsDnsThenEnter')}</p>
-                    <input
-                      className="input"
-                      value={settings.customDomain || ''}
-                      onChange={(e) => setSettings({ ...settings, customDomain: e.target.value })}
-                      placeholder="www.mycafe.ch"
-                    />
+                  <Field
+                    label={t('cmsCustomDomain')}
+                    hint={
+                      CUSTOM_DOMAIN_WIZARD_ENABLED
+                        ? t('customDomainWizardFieldHint')
+                        : settings.shopCustomDomainUrl || undefined
+                    }
+                  >
+                    {CUSTOM_DOMAIN_WIZARD_ENABLED ? (
+                      <CustomDomainWizard
+                        onStatusChange={(next) => {
+                          if (!next?.activeDomain) return;
+                          setSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  customDomain: next.activeDomain,
+                                  shopCustomDomainUrl: next.shopUrl,
+                                }
+                              : prev
+                          );
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <p className="text-xs muted mb-1.5">{t('cmsDnsGoCreate')}</p>
+                        <table className="w-full max-w-md text-xs border border-[var(--border)]">
+                          <tbody>
+                            <tr className="border-b border-[var(--border)]">
+                              <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium w-24">
+                                {t('cmsDnsType')}
+                              </th>
+                              <td className="px-2 py-1.5 font-mono">CNAME</td>
+                            </tr>
+                            <tr className="border-b border-[var(--border)]">
+                              <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
+                                {t('cmsDnsHost')}
+                              </th>
+                              <td className="px-2 py-1.5 font-mono">www</td>
+                            </tr>
+                            <tr>
+                              <th className="bg-[var(--bg-muted)] px-2 py-1.5 text-left font-medium">
+                                {t('cmsDnsPointsTo')}
+                              </th>
+                              <td className="px-2 py-1.5 font-mono">{SHOP_HOST}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <p className="text-xs muted mt-1.5 mb-1.5">{t('cmsDnsThenEnter')}</p>
+                        <input
+                          className="input"
+                          value={settings.customDomain || ''}
+                          onChange={(e) => setSettings({ ...settings, customDomain: e.target.value })}
+                          placeholder="www.mycafe.ch"
+                        />
+                      </>
+                    )}
                   </Field>
                 </div>
 

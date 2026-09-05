@@ -572,10 +572,14 @@ router.get("/tls-ask", async (req: Request, res: Response) => {
     const domain = String(req.query.domain || "").toLowerCase().split(":")[0];
     if (!domain) return res.status(400).end();
     const merchant = await resolveMerchant(domain);
-    if (
-      merchant?.shopEnabled &&
-      (merchant.subdomain || merchant.customDomain === domain || merchant.slug)
-    ) {
+    if (!merchant?.shopEnabled) return res.status(404).end();
+
+    if (merchant.customDomain === domain) {
+      const dns = String(merchant.customDomainDnsStatus || "none").toLowerCase();
+      if (dns !== "none" && dns !== "verified") return res.status(404).end();
+    }
+
+    if (merchant.subdomain || merchant.customDomain === domain || merchant.slug) {
       return res.status(200).end();
     }
     return res.status(404).end();

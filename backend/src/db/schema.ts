@@ -134,6 +134,13 @@ export const merchants = pgTable(
     subdomain: varchar("subdomain", { length: 63 }),
     /** Custom apex/domain for CMS website (e.g. cafe.ch) — DNS CNAME to platform */
     customDomain: varchar("custom_domain", { length: 255 }),
+    /** Domain entered in the setup wizard before DNS is verified (not used for routing) */
+    customDomainPending: varchar("custom_domain_pending", { length: 255 }),
+    /** none | pending | verified | failed */
+    customDomainDnsStatus: varchar("custom_domain_dns_status", { length: 20 }).default("none"),
+    /** none | pending | active | failed */
+    customDomainSslStatus: varchar("custom_domain_ssl_status", { length: 20 }).default("none"),
+    customDomainVerifiedAt: timestamp("custom_domain_verified_at"),
     shopEnabled: boolean("shop_enabled").default(false).notNull(),
     /**
      * Soft close for online ordering (shop stays browsable).

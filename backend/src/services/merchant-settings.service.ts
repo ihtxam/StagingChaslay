@@ -7,6 +7,7 @@ import type {
 } from "@/db/schema";
 import { eq, and, or, ne } from "drizzle-orm";
 import { normalizeCustomDomain } from "@/lib/domain";
+import { CustomDomainService } from "@/services/custom-domain.service";
 import { normalizeDeliveryMode } from "@/lib/delivery-match";
 import { filterMerchantShopUrl } from "@/lib/shop-public-urls";
 import { normalizeVacationSettings } from "@/lib/vacation";
@@ -183,6 +184,12 @@ export class MerchantSettingsService {
       slug: merchant.slug,
       subdomain: merchant.subdomain,
       customDomain: merchant.customDomain,
+      customDomainPending: merchant.customDomainPending || null,
+      customDomainDnsStatus: merchant.customDomainDnsStatus || "none",
+      customDomainSslStatus: merchant.customDomainSslStatus || "none",
+      customDomainVerifiedAt: merchant.customDomainVerifiedAt
+        ? new Date(merchant.customDomainVerifiedAt).toISOString()
+        : null,
       cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
       shopEnabled: merchant.shopEnabled,
       acceptingOrders: merchant.acceptingOrders !== false,
@@ -584,16 +591,20 @@ export class MerchantSettingsService {
       patch.subdomain = normalizeSubdomain(updates.subdomain);
     }
     if (updates.customDomain !== undefined) {
-      const domainNorm = normalizeCustomDomain(updates.customDomain);
-      if (domainNorm) {
-        const taken = await db.query.merchants.findFirst({
-          where: eq(schema.merchants.customDomain, domainNorm),
-        });
-        if (taken && taken.id !== merchantId) {
-          throw new Error("Custom domain already in use");
+      if (CustomDomainService.isWizardEnabled()) {
+        // Custom domain is managed by /merchant/custom-domain when the wizard is enabled.
+      } else {
+        const domainNorm = normalizeCustomDomain(updates.customDomain);
+        if (domainNorm) {
+          const taken = await db.query.merchants.findFirst({
+            where: eq(schema.merchants.customDomain, domainNorm),
+          });
+          if (taken && taken.id !== merchantId) {
+            throw new Error("Custom domain already in use");
+          }
         }
+        patch.customDomain = domainNorm;
       }
-      patch.customDomain = domainNorm;
     }
     if (updates.cmsHomepageEnabled !== undefined) {
       patch.cmsHomepageEnabled = !!updates.cmsHomepageEnabled;
@@ -898,11 +909,14 @@ export class MerchantSettingsService {
       key = host.slice(0, -(domain.length + 1));
     }
 
-    // Custom apex / branded domain first
+    // Custom apex / branded domain first (verified or legacy direct-save)
     const byCustom = await db.query.merchants.findFirst({
       where: eq(schema.merchants.customDomain, host),
     });
-    if (byCustom) return byCustom;
+    if (byCustom) {
+      const dns = String(byCustom.customDomainDnsStatus || "none").toLowerCase();
+      if (dns === "none" || dns === "verified") return byCustom;
+    }
 
     return db.query.merchants.findFirst({
       where: or(eq(schema.merchants.subdomain, key), eq(schema.merchants.slug, key)),

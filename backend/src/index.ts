@@ -52,7 +52,8 @@ import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-sch
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { APP_NAME, CURRENT_HOST_ALIASES, LEGACY_HOST_ALIASES } from "@/lib/brand";
-import downloadsRoutes from "@/routes/downloads.routes";
+import customDomainRoutes from "@/routes/custom-domain.routes";
+import { shopHostMiddleware } from "@/middleware/shop-host.middleware";
 
 // Load environment variables
 dotenv.config();
@@ -219,6 +220,8 @@ app.get("/api/public/status", async (_req: Request, res: Response) => {
   });
 });
 
+app.use(shopHostMiddleware);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/licensing", licensingRoutes);
 app.use("/api/superadmin", superadminRoutes);
@@ -226,6 +229,7 @@ app.use("/api/panel", panelRoutes);
 app.use("/api/reseller", resellerRoutes);
 app.use("/api/reseller/support", resellerSupportRoutes);
 app.use("/api/merchant", merchantRoutes);
+app.use("/api/merchant/custom-domain", customDomainRoutes);
 app.use("/api/merchant/support", merchantSupportRoutes);
 app.use("/api/merchant", staffRoutes);
 app.use("/api/payment", paymentRoutes);

@@ -79,6 +79,14 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS accepting_orders boolean NOT NULL DEFAULT true",
   accepting_reservations:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS accepting_reservations boolean NOT NULL DEFAULT true",
+  custom_domain_pending:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_pending varchar(255)",
+  custom_domain_dns_status:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_dns_status varchar(20) DEFAULT 'none'",
+  custom_domain_ssl_status:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_ssl_status varchar(20) DEFAULT 'none'",
+  custom_domain_verified_at:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_verified_at timestamp",
   cms_homepage_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cms_homepage_enabled boolean NOT NULL DEFAULT false",
   channel_select_mode:
