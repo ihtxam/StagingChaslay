@@ -50,7 +50,7 @@ import { nextWebPosTicketNumber, webPosBackendOrderId } from '@/lib/webpos-recei
 import { findHeldOrderForTable, parseHeldCartJson, buildHeldTableInfoMap, releaseHeldOrder } from '@/lib/webpos-held';
 import type { TableHeldDisplay } from '@/components/webpos/WebPosTablesView';
 import { resolveCartCheckoutGuard } from '@/lib/order-to-cart';
-import type { MerchantOrder } from '@/lib/order-management';
+import { isPaidOrder, type MerchantOrder } from '@/lib/order-management';
 import {
   pushCartLinesToKds,
   fetchKdsBoardStatus,
@@ -406,6 +406,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         ticketDisplay: ticketDisplay || order?.ticketDisplay,
         tableId,
         tabNumber: order?.tabNumber,
+        paidTotal: order ? Number(order.total) || 0 : null,
+        settleKitchen: !!(order && isPaidOrder(order)),
       });
       setCart([]);
       setTableId(null);

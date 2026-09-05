@@ -859,6 +859,8 @@ export class SyncService {
               ticketDisplay: sale.ticketDisplay,
               tabNumber: sale.tabNumber,
               tableId: sale.tableId,
+              paidTotal: Number(sale.total) || Number(order.total) || 0,
+              settleKitchen: true,
             });
           } catch (heldErr) {
             console.warn("[sync] held release failed:", heldErr);

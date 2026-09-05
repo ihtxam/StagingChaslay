@@ -5182,9 +5182,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (cj.tableId !== sourceId) continue;
         const prevCart = Array.isArray(cj.cart) ? (cj.cart as CartLine[]) : [];
         const nextCart = mutateCart ? mutateCart(prevCart) : prevCart;
-        await api.delete(`/merchant/pos/held/${h.id}`);
         if (!nextCart.length && mutateCart) continue;
         await api.post('/merchant/pos/held', {
+          id: h.id,
           label: h.label || `${target.label} · ${money(payableFullTotals.total)}`,
           channel: 'dine_in',
           cartJson: {
@@ -5409,17 +5409,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!prevCart.some((l) => l.lineId === lineId)) continue;
         const moved = prevCart.find((l) => l.lineId === lineId)!;
         const remaining = prevCart.filter((l) => l.lineId !== lineId);
-        await api.delete(`/merchant/pos/held/${h.id}`);
-        if (remaining.length) {
-          await api.post('/merchant/pos/held', {
-            label: h.label,
-            channel: (cj.channel as string) || 'dine_in',
-            cartJson: { ...cj, cart: remaining },
-            staffId: webposStaff?.id,
-            staffName: webposStaff?.name,
-            sendToKitchen: h.status === 'sent_to_kitchen',
-          });
-        }
+        await api.post('/merchant/pos/held', {
+          id: h.id,
+          label: h.label,
+          channel: (cj.channel as string) || 'dine_in',
+          cartJson: { ...cj, cart: remaining },
+          staffId: webposStaff?.id,
+          staffName: webposStaff?.name,
+          sendToKitchen: h.status === 'sent_to_kitchen',
+        });
         await api.post('/merchant/pos/held', {
           label: `${target.label} · ${moved.name}`,
           channel: 'dine_in',
@@ -6377,6 +6375,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketDisplay: link.ticketDisplay || order?.ticketDisplay || ticketDisplay,
       tableId: link.tableId || tableId,
       tabNumber: link.tabNumber || tabNumber,
+      paidTotal: order ? Number(order.total) || 0 : null,
+      settleKitchen: !!(order && isPaidOrder(order)),
     });
     clearCollectCheckout();
     setCart([]);

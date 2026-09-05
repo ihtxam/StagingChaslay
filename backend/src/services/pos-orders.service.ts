@@ -17,6 +17,10 @@ import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { AdyenService } from "@/services/adyen.service";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import {
+  decideOpenTicketClose,
+  nextOpenTicketStatus,
+} from "@/lib/pos-open-ticket";
 
 
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
@@ -1166,7 +1170,35 @@ export class PosOrdersService {
         : requested === "dine_in" || requested === "delivery" || requested === "takeaway"
           ? requested
           : "takeaway";
-    const status = body.sendToKitchen ? "sent_to_kitchen" : "held";
+    const open = await db.query.heldOrders.findMany({
+      where: and(
+        eq(schema.heldOrders.merchantId, merchantId),
+        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+      ),
+    });
+    const existing =
+      (body.id && open.find((r) => r.id === body.id)) ||
+      open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
+
+    const incomingCart = Array.isArray((body.cartJson as { cart?: unknown })?.cart)
+      ? ((body.cartJson as { cart: unknown[] }).cart)
+      : Array.isArray(body.cartJson)
+        ? body.cartJson
+        : [];
+    if (existing && incomingCart.length === 0) {
+      // Empty cart + explicit id = table/dish transfer. Never wipe kitchen by identity alone.
+      if (existing.status === "sent_to_kitchen" && !body.id) {
+        console.warn("[pos-held] refuse empty overwrite of kitchen ticket", {
+          merchantId,
+          id: existing.id,
+        });
+        return existing;
+      }
+      await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, existing.id));
+      return { ...existing, status: "closed" };
+    }
+
+    const status = nextOpenTicketStatus(existing?.status, !!body.sendToKitchen);
     const values = {
       label: (body.label || "").trim().slice(0, 120) || null,
       status,
@@ -1177,16 +1209,6 @@ export class PosOrdersService {
       staffName: body.staffName || null,
       updatedAt: new Date(),
     };
-
-    const open = await db.query.heldOrders.findMany({
-      where: and(
-        eq(schema.heldOrders.merchantId, merchantId),
-        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-      ),
-    });
-    const existing =
-      (body.id && open.find((r) => r.id === body.id)) ||
-      open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
 
     if (existing) {
       const [row] = await db
@@ -1229,6 +1251,9 @@ export class PosOrdersService {
       where: and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)),
     });
     if (!existing) throw new Error("Held order not found");
+    if (existing.status === "sent_to_kitchen") {
+      throw new Error("Kitchen tickets cannot be deleted. Cancel or collect payment.");
+    }
     await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
     return { ok: true };
   }
@@ -1301,20 +1326,25 @@ export class PosOrdersService {
 
     const toDelete = new Set<string>();
     for (const row of open) {
-      if (!matchesTarget(row)) continue;
-      if (row.status === "sent_to_kitchen" && !opts.settleKitchen) {
-        const openTotal = heldCartTotal(row.cartJson);
-        const fullyPaid = paidKnown && openTotal > 0 && openTotal - paidTotal <= 0.05;
-        if (!fullyPaid) {
-          console.info("[pos-held] keep kitchen ticket after partial/unsettled pay", {
+      const matched = matchesTarget(row);
+      const decision = decideOpenTicketClose({
+        status: row.status,
+        cartTotal: heldCartTotal(row.cartJson),
+        paidTotal: paidKnown ? paidTotal : null,
+        settleKitchen: opts.settleKitchen === true,
+        identityMatched: matched,
+      });
+      if (decision !== "close") {
+        if (matched) {
+          console.info("[pos-held] keep open ticket", {
             merchantId,
             id: row.id,
+            status: row.status,
             ticket: normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay),
-            openTotal,
             paidTotal: paidKnown ? paidTotal : null,
           });
-          continue;
         }
+        continue;
       }
       toDelete.add(row.id);
     }
