@@ -48,7 +48,6 @@ export const AboutUs: React.FC<AboutUsProps> & {
     return (
       <div
         ref={(ref) => { if (ref) connect(drag(ref)); }}
-      id={sectionAnchorId(mergedProps.sectionId, 'about')}
         id={sectionAnchorId(mergedProps.sectionId, 'about')}
         style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '80px 20px', width: '100%' }}
       >
