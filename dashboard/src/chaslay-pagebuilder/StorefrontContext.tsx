@@ -11,6 +11,14 @@ export type SitePageLink = {
   sortOrder?: number;
 };
 
+export type MerchantContact = {
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+};
+
 export type StorefrontContextValue = {
   shopKey: string;
   basePath: string;
@@ -18,6 +26,7 @@ export type StorefrontContextValue = {
   locale: string;
   defaultLanguage: string;
   sitePages: SitePageLink[];
+  contact: MerchantContact | null;
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
 };
@@ -31,6 +40,7 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   locale: 'en',
   defaultLanguage: 'en',
   sitePages: [],
+  contact: null,
   shopHref: defaultShopHref,
   pageHref: () => '#',
 });
@@ -41,6 +51,7 @@ export function StorefrontProvider({
   locale = 'en',
   defaultLanguage = 'en',
   sitePages = [],
+  contact = null,
   children,
 }: {
   shopKey: string;
@@ -48,6 +59,7 @@ export function StorefrontProvider({
   locale?: string;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
+  contact?: MerchantContact | null;
   children: React.ReactNode;
 }) {
   const shopHref = useCallback(
@@ -70,6 +82,7 @@ export function StorefrontProvider({
         locale,
         defaultLanguage,
         sitePages,
+        contact,
         shopHref,
         pageHref,
       }}

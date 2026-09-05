@@ -6,7 +6,7 @@ import axios from 'axios';
 import { Editor as CraftEditor, Frame } from '@craftjs/core';
 import { chaslayPageBuilderResolver } from './resolver';
 import { MenuDataProvider } from './MenuDataContext';
-import { StorefrontProvider, type SitePageLink } from './StorefrontContext';
+import { StorefrontProvider, type SitePageLink, type MerchantContact } from './StorefrontContext';
 import { BuilderLanguageProvider } from './BuilderLanguageContext';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 
@@ -18,6 +18,7 @@ type ChaslayHomepageRendererProps = {
   locale?: string;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
+  contact?: MerchantContact | null;
 };
 
 /**
@@ -31,6 +32,7 @@ export default function ChaslayHomepageRenderer({
   locale = 'en',
   defaultLanguage = 'en',
   sitePages = [],
+  contact = null,
 }: ChaslayHomepageRendererProps) {
   const [navPages, setNavPages] = useState<SitePageLink[]>(sitePages);
 
@@ -67,6 +69,7 @@ export default function ChaslayHomepageRenderer({
       locale={locale}
       defaultLanguage={defaultLanguage}
       sitePages={navPages}
+      contact={contact}
     >
       <BuilderLanguageProvider locale={locale} defaultLanguage={defaultLanguage}>
         <MenuDataProvider>

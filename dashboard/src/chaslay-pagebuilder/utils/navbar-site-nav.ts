@@ -25,15 +25,18 @@ export function buildSiteNavMenuItems(
   return items;
 }
 
-/** Prefer auto site nav on the public storefront when enabled and pages exist. */
+/** Prefer builder-configured nav links; fall back to published site pages when empty. */
 export function resolveNavbarMenuItems(
   configured: NavbarMenuItem[] | undefined,
   sitePages: SitePageLink[],
   useSitePagesNav: boolean,
   isStorefront: boolean
 ): NavbarMenuItem[] {
+  if (configured?.length) {
+    return configured;
+  }
   if (isStorefront && useSitePagesNav && sitePages.length > 0) {
     return buildSiteNavMenuItems(sitePages);
   }
-  return configured?.length ? configured : buildSiteNavMenuItems(sitePages);
+  return buildSiteNavMenuItems(sitePages);
 }

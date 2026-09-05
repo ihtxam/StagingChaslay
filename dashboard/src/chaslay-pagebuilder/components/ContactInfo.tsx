@@ -10,6 +10,8 @@ import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Phone, Mail, MapPin, Map, Clock } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useStorefront } from '../StorefrontContext';
+import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 
 const defaultProps: ContactInfoProps = {
   title: 'Contact Us',
@@ -38,6 +40,23 @@ const placeholderHours = [
   { days: 'Sunday', time: '11:00am – 9:00pm' },
 ];
 
+function formatAddress(contact: { address?: string | null; city?: string | null; country?: string | null }) {
+  return [contact.address, contact.city, contact.country].filter(Boolean).join(', ');
+}
+
+function useContactDetails() {
+  const { isStorefront, contact } = useStorefront();
+  if (isStorefront && contact) {
+    const address = formatAddress(contact);
+    return {
+      phone: contact.phone?.trim() || '',
+      email: contact.email?.trim() || '',
+      address,
+    };
+  }
+  return placeholderContact;
+}
+
 export const ContactInfo: React.FC<ContactInfoProps> & {
   craft: {
     props: ContactInfoProps;
@@ -48,6 +67,11 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
   const {
     connectors: { connect, drag },
   } = useNode();
+  const { locale, defaultLanguage } = useStorefront();
+  const contactDetails = useContactDetails();
+  const title =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
+    mergedProps.title;
 
   // 2-column layout with image
   if (mergedProps.image) {
@@ -71,9 +95,9 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
         }}>
           {/* Left: Contact Details */}
           <div style={{ padding: '60px 40px' }}>
-            {mergedProps.title && (
+            {title && (
               <h2 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '32px' }}>
-                {mergedProps.title}
+                {title}
               </h2>
             )}
             <div style={{ width: '60px', height: '3px', backgroundColor: mergedProps.accentColor || '#e94560', marginBottom: '32px' }} />
@@ -82,19 +106,19 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
               {mergedProps.showAddress && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                   <MapPin size={18} style={{ marginTop: '3px', opacity: 0.7, flexShrink: 0 }} />
-                  <span style={{ fontSize: '15px', lineHeight: 1.6, opacity: 0.85 }}>{placeholderContact.address}</span>
+                  <span style={{ fontSize: '15px', lineHeight: 1.6, opacity: 0.85 }}>{contactDetails.address}</span>
                 </div>
               )}
               {mergedProps.showPhone && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Phone size={18} style={{ opacity: 0.7, flexShrink: 0 }} />
-                  <span style={{ fontSize: '15px', opacity: 0.85 }}>{placeholderContact.phone}</span>
+                  <span style={{ fontSize: '15px', opacity: 0.85 }}>{contactDetails.phone}</span>
                 </div>
               )}
               {mergedProps.showEmail && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Mail size={18} style={{ opacity: 0.7, flexShrink: 0 }} />
-                  <span style={{ fontSize: '15px', opacity: 0.85 }}>{placeholderContact.email}</span>
+                  <span style={{ fontSize: '15px', opacity: 0.85 }}>{contactDetails.email}</span>
                 </div>
               )}
             </div>
@@ -144,9 +168,9 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
       }}
     >
       <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
-        {mergedProps.title && (
+        {title && (
           <h2 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '40px' }}>
-            {mergedProps.title}
+            {title}
           </h2>
         )}
 
@@ -162,7 +186,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
               </div>
               <div>
                 <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Phone</h3>
-                <p style={{ fontSize: '18px', fontWeight: 500 }}>{placeholderContact.phone}</p>
+                <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.phone}</p>
               </div>
             </div>
           )}
@@ -174,7 +198,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
               </div>
               <div>
                 <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Email</h3>
-                <p style={{ fontSize: '18px', fontWeight: 500 }}>{placeholderContact.email}</p>
+                <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.email}</p>
               </div>
             </div>
           )}
@@ -186,7 +210,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
               </div>
               <div>
                 <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Address</h3>
-                <p style={{ fontSize: '18px', fontWeight: 500 }}>{placeholderContact.address}</p>
+                <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.address}</p>
               </div>
             </div>
           )}

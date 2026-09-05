@@ -11,6 +11,8 @@ import { ImageUpload } from './ImageUpload';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { normalizeLink } from '../utils/normalizeLink';
 import { TranslatableInput } from './TranslatableInput';
+import { useStorefront } from '../StorefrontContext';
+import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 
 export interface HeroSplitProps {
   title?: string;
@@ -66,6 +68,19 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
   const {
     connectors: { connect, drag },
   } = useNode();
+  const { shopHref, locale, defaultLanguage } = useStorefront();
+  const title =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
+    mergedProps.title;
+  const subtitle =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'subtitle', locale, defaultLanguage) ||
+    mergedProps.subtitle;
+  const description =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'description', locale, defaultLanguage) ||
+    mergedProps.description;
+  const buttonText =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'buttonText', locale, defaultLanguage) ||
+    mergedProps.buttonText;
 
   const isImageLeft = mergedProps.imagePosition === 'left';
 
@@ -114,7 +129,7 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
           color: mergedProps.textColor,
         }}
       >
-        {mergedProps.subtitle && (
+        {subtitle && (
           <span
             style={{
               fontSize: '14px',
@@ -125,7 +140,7 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
               marginBottom: '12px',
             }}
           >
-            {mergedProps.subtitle}
+            {subtitle}
           </span>
         )}
         <h1
@@ -137,9 +152,9 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
             marginBottom: '20px',
           }}
         >
-          {mergedProps.title}
+          {title}
         </h1>
-        {mergedProps.description && (
+        {description && (
           <p
             style={{
               fontSize: `${mergedProps.descriptionFontSize}px`,
@@ -148,13 +163,15 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
               marginBottom: '32px',
             }}
           >
-            {mergedProps.description}
+            {description}
           </p>
         )}
-        {mergedProps.buttonText && (
+        {buttonText && (
           <div>
-            <button
+            <a
+              href={shopHref(mergedProps.buttonLink || '/menu')}
               style={{
+                display: 'inline-block',
                 backgroundColor: mergedProps.buttonColor,
                 color: '#ffffff',
                 padding: '14px 32px',
@@ -163,10 +180,11 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
+                textDecoration: 'none',
               }}
             >
-              {mergedProps.buttonText}
-            </button>
+              {buttonText}
+            </a>
           </div>
         )}
       </div>

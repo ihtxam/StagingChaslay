@@ -16,6 +16,8 @@ import { Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
+import { useStorefront } from '../StorefrontContext';
+import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 
 const defaultProps: HeroBannerProps = {
   title: 'Welcome to Our Restaurant',
@@ -61,6 +63,17 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
   const { enabled: editorEnabled } = useEditor((state) => ({
     enabled: state.options.enabled,
   }));
+  const { shopHref, locale, defaultLanguage } = useStorefront();
+
+  const title =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
+    mergedProps.title;
+  const subtitle =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'subtitle', locale, defaultLanguage) ||
+    mergedProps.subtitle;
+  const buttonText =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'buttonText', locale, defaultLanguage) ||
+    mergedProps.buttonText;
 
   const enableSlider = mergedProps.enableSlider || false;
   const sliderImages = mergedProps.sliderImages || [];
@@ -184,9 +197,9 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
             lineHeight: 1.2,
           }}
         >
-          {mergedProps.title}
+          {title}
         </h1>
-        {mergedProps.subtitle && (
+        {subtitle && (
           <p
             style={{
               color: mergedProps.textColor,
@@ -197,12 +210,14 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
               marginBottom: '32px',
             }}
           >
-            {mergedProps.subtitle}
+            {subtitle}
           </p>
         )}
-        {mergedProps.buttonText && (
-          <button
+        {buttonText && (
+          <a
+            href={shopHref(mergedProps.buttonLink || '/menu')}
             style={{
+              display: 'inline-block',
               backgroundColor: mergedProps.buttonColor,
               color: '#ffffff',
               padding: '14px 32px',
@@ -211,11 +226,12 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
+              textDecoration: 'none',
               transition: 'opacity 0.2s',
             }}
           >
-            {mergedProps.buttonText}
-          </button>
+            {buttonText}
+          </a>
         )}
       </div>
 

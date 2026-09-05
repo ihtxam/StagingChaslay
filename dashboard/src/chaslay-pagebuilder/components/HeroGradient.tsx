@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
+import { useStorefront } from '../StorefrontContext';
+import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 
 export interface HeroGradientProps {
   title?: string;
@@ -74,6 +76,16 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
   const {
     connectors: { connect, drag },
   } = useNode();
+  const { shopHref, locale, defaultLanguage } = useStorefront();
+  const title =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
+    mergedProps.title;
+  const subtitle =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'subtitle', locale, defaultLanguage) ||
+    mergedProps.subtitle;
+  const buttonText =
+    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'buttonText', locale, defaultLanguage) ||
+    mergedProps.buttonText;
 
   const gradientStyle = `linear-gradient(${gradientDirections[mergedProps.gradientDirection || 'to-br']}, ${mergedProps.gradientFrom}, ${mergedProps.gradientTo})`;
 
@@ -110,9 +122,9 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
             marginBottom: '24px',
           }}
         >
-          {mergedProps.title}
+          {title}
         </h1>
-        {mergedProps.subtitle && (
+        {subtitle && (
           <p
             style={{
               fontSize: `${mergedProps.subtitleFontSize}px`,
@@ -122,12 +134,14 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
               marginBottom: '36px',
             }}
           >
-            {mergedProps.subtitle}
+            {subtitle}
           </p>
         )}
-        {mergedProps.buttonText && (
-          <button
+        {buttonText && (
+          <a
+            href={shopHref(mergedProps.buttonLink || '/menu')}
             style={{
+              display: 'inline-block',
               backgroundColor: mergedProps.buttonStyle === 'solid' ? mergedProps.textColor : 'transparent',
               color: mergedProps.buttonStyle === 'solid' ? mergedProps.gradientFrom : mergedProps.textColor,
               padding: '16px 40px',
@@ -136,11 +150,12 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
               border: mergedProps.buttonStyle === 'outline' ? `2px solid ${mergedProps.textColor}` : 'none',
               borderRadius: '50px',
               cursor: 'pointer',
+              textDecoration: 'none',
               transition: 'all 0.3s',
             }}
           >
-            {mergedProps.buttonText}
-          </button>
+            {buttonText}
+          </a>
         )}
       </div>
     </div>
