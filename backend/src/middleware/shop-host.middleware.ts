@@ -1,7 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { schema } from "@/db/schema";
+import { getDb, schema } from "@/db";
 
 declare global {
   namespace Express {
