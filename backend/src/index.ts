@@ -52,6 +52,7 @@ import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-sch
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { APP_NAME, CURRENT_HOST_ALIASES, LEGACY_HOST_ALIASES } from "@/lib/brand";
+import downloadsRoutes from "@/routes/downloads.routes";
 import customDomainRoutes from "@/routes/custom-domain.routes";
 import { shopHostMiddleware } from "@/middleware/shop-host.middleware";
 
