@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import { resolveSectionId } from '../utils/section-id';
 import { useNode } from '@craftjs/core';
 import { ProcessStepsProps, ProcessStep } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
@@ -39,6 +40,7 @@ export const ProcessSteps: React.FC<ProcessStepsProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={resolveSectionId(mergedProps.sectionId, 'services')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

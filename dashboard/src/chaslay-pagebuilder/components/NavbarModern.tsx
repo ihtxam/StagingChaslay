@@ -12,6 +12,8 @@ import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
+import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
   label: string;
@@ -38,19 +40,14 @@ const defaultProps: NavbarModernProps = {
   logoImageUrl: '',
   logoWidth: 120,
   logoHeight: 36,
-  menuItems: [
-    { label: 'Home', link: '/' },
-    { label: 'Menu', link: '/menu' },
-    { label: 'About', link: '/about' },
-    { label: 'Contact', link: '/contact' },
-  ],
+  menuItems: DEFAULT_SMOOTH_SCROLL_MENU,
   backgroundColor: '#1a1a2e',
   textColor: '#ffffff',
   buttonText: 'Reserve Table',
   buttonLink: '/reserve',
   buttonColor: '#ffffff',
   buttonTextColor: '#1a1a2e',
-  useSitePagesNav: true,
+  useSitePagesNav: false,
 };
 
 export const NavbarModern: React.FC<NavbarModernProps> & {
@@ -80,6 +77,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           backgroundColor: mergedProps.backgroundColor,
           padding: '18px 40px',
           width: '100%',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -92,39 +90,32 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
             )}
           </div>
 
-          {/* Desktop Menu */}
-          <div className="navbar-modern-menu" style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-            {menuItems?.map((item, i) => (
-              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500, opacity: 0.85 }}>
-                {item.label}
-              </a>
-            ))}
+          <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+            <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
           </div>
 
-          {/* Desktop Button */}
           {buttonText && (
-            <a className="navbar-modern-button" href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+            <a
+              className="navbar-modern-button navbar-modern-desktop"
+              href={shopHref(mergedProps.buttonLink)}
+              onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
+              style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}
+            >
               {buttonText}
             </a>
           )}
 
-          {/* Mobile Menu Button */}
-          <div className="navbar-modern-mobile" style={{ display: 'none', padding: '8px' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={mergedProps.textColor} strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </div>
+          <NavbarMobileMenu
+            menuItems={menuItems}
+            textColor={mergedProps.textColor || '#ffffff'}
+            backgroundColor={mergedProps.backgroundColor || '#1a1a2e'}
+            showButton={!!buttonText}
+            buttonText={buttonText}
+            buttonLink={mergedProps.buttonLink}
+            buttonColor={mergedProps.buttonColor}
+          />
         </div>
       </nav>
-      <style>{`
-        @container (max-width: 768px) {
-          .navbar-modern-menu { display: none !important; }
-          .navbar-modern-button { display: none !important; }
-          .navbar-modern-mobile { display: block !important; }
-        }
-      `}</style>
     </>
   );
 };

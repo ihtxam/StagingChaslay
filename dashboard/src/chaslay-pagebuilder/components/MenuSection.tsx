@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { useStorefront } from '../StorefrontContext';
 import { formatMenuProductPrice } from '../menu-product-utils';
 import { useStorefrontCart } from '../useStorefrontCart';
+import { resolveSectionId } from '../utils/section-id';
 
 const defaultProps: MenuSectionProps = {
   title: 'Our Menu',
@@ -186,6 +187,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={resolveSectionId(mergedProps.sectionId, 'menu')}
       style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '60px 0', width: '100%', overflow: 'hidden' }}
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>

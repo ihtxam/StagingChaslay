@@ -8,7 +8,7 @@ import {
   isWithinChannelHours,
   type StoreHours,
 } from "@/lib/geo";
-import { findMatchingDeliveryRule, normalizeDeliveryMode } from "@/lib/delivery-match";
+import { findMatchingDeliveryRule, normalizeDeliveryMode, computeEffectiveDeliveryFee } from "@/lib/delivery-match";
 import { roundMoney2, roundTo005, roundingAdjustment } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { ShopCustomerService } from "@/services/shop-customer.service";
@@ -1390,7 +1390,7 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
     }
 
     const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
-    const fee = parseFloat(zone.deliveryFee?.toString() || "0");
+    const fee = computeEffectiveDeliveryFee(zone, subtotal);
     const meetsMin = subtotal >= minOrder;
 
     res.json({
@@ -1403,6 +1403,7 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
         name: zone.name,
         minOrderAmount: minOrder,
         deliveryFee: fee,
+        freeDeliveryMinOrder: parseFloat(zone.freeDeliveryMinOrder?.toString() || "0"),
         estimatedMinutes: zone.estimatedMinutes,
       },
       meetsMinOrder: meetsMin,
@@ -2397,7 +2398,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           error: `Minimum order for this zone is CHF ${minOrder.toFixed(2)}`,
         });
       }
-      deliveryFee = parseFloat(zone.deliveryFee?.toString() || "0");
+      deliveryFee = computeEffectiveDeliveryFee(zone, subtotal);
       deliveryZoneId = zone.id;
     }
 

@@ -9,6 +9,7 @@ export type DeliveryMatch = {
   name: string;
   minOrderAmount: string | number | null;
   deliveryFee: string | number | null;
+  freeDeliveryMinOrder?: string | number | null;
   estimatedMinutes: number | null;
 };
 
@@ -25,30 +26,27 @@ export function normalizeZipCode(value: unknown): string {
     .replace(/\s+/g, "");
 }
 
-function zipInRange(zip: string, from: string | null | undefined, to: string | null | undefined): boolean {
-  const zipNum = Number(zip);
-  const fromNum = Number(String(from || "").trim());
-  const toNum = Number(String(to || "").trim());
-  if (!Number.isFinite(zipNum) || !Number.isFinite(fromNum) || !Number.isFinite(toNum)) return false;
-  return zipNum >= fromNum && zipNum <= toNum;
-}
-
 function matchesZipRule(
   zip: string,
   rule: {
     zipCode?: string | null;
-    zipFrom?: string | null;
-    zipTo?: string | null;
   }
 ): boolean {
   const normalized = normalizeZipCode(zip).toLowerCase();
   if (!normalized) return false;
   const exact = normalizeZipCode(rule.zipCode || "").toLowerCase();
-  if (exact && exact === normalized) return true;
-  if (rule.zipFrom && rule.zipTo) {
-    return zipInRange(normalized, rule.zipFrom, rule.zipTo);
-  }
-  return false;
+  return !!exact && exact === normalized;
+}
+
+/** Apply free-delivery threshold when subtotal is high enough. */
+export function computeEffectiveDeliveryFee(
+  rule: Pick<DeliveryMatch, "deliveryFee" | "freeDeliveryMinOrder">,
+  subtotal: number
+): number {
+  const baseFee = parseFloat(String(rule.deliveryFee ?? 0)) || 0;
+  const freeThreshold = parseFloat(String(rule.freeDeliveryMinOrder ?? 0)) || 0;
+  if (freeThreshold > 0 && subtotal >= freeThreshold) return 0;
+  return baseFee;
 }
 
 async function findMatchingZoneRule(

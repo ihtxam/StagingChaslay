@@ -39,23 +39,22 @@ interface Zone {
 interface ZipRule {
   id: string;
   name: string;
+  city?: string | null;
   zipCode?: string | null;
-  zipFrom?: string | null;
-  zipTo?: string | null;
   minOrderAmount: string;
   deliveryFee: string;
+  freeDeliveryMinOrder?: string | null;
   estimatedMinutes?: number | null;
   isActive: boolean;
 }
 
 function resetZipRuleForm() {
   return {
-    ruleName: '',
+    ruleCity: '',
     ruleZipCode: '',
-    ruleZipFrom: '',
-    ruleZipTo: '',
-    ruleMinOrder: '20',
-    ruleDeliveryFee: '5',
+    ruleMinOrder: '35',
+    ruleDeliveryFee: '0',
+    ruleFreeDelivery: '35',
     ruleEta: '45',
     editingZipRuleId: null as string | null,
   };
@@ -92,12 +91,11 @@ export default function OnlineShop() {
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [savingZone, setSavingZone] = useState(false);
   const [keepExistingPolygon, setKeepExistingPolygon] = useState(false);
-  const [ruleName, setRuleName] = useState('');
+  const [ruleCity, setRuleCity] = useState('');
   const [ruleZipCode, setRuleZipCode] = useState('');
-  const [ruleZipFrom, setRuleZipFrom] = useState('');
-  const [ruleZipTo, setRuleZipTo] = useState('');
-  const [ruleMinOrder, setRuleMinOrder] = useState('20');
-  const [ruleDeliveryFee, setRuleDeliveryFee] = useState('5');
+  const [ruleMinOrder, setRuleMinOrder] = useState('35');
+  const [ruleDeliveryFee, setRuleDeliveryFee] = useState('0');
+  const [ruleFreeDelivery, setRuleFreeDelivery] = useState('35');
   const [ruleEta, setRuleEta] = useState('45');
   const [editingZipRuleId, setEditingZipRuleId] = useState<string | null>(null);
   const [savingZipRule, setSavingZipRule] = useState(false);
@@ -376,62 +374,53 @@ export default function OnlineShop() {
 
   const clearZipRuleEditor = () => {
     const reset = resetZipRuleForm();
-    setRuleName(reset.ruleName);
+    setRuleCity(reset.ruleCity);
     setRuleZipCode(reset.ruleZipCode);
-    setRuleZipFrom(reset.ruleZipFrom);
-    setRuleZipTo(reset.ruleZipTo);
     setRuleMinOrder(reset.ruleMinOrder);
     setRuleDeliveryFee(reset.ruleDeliveryFee);
+    setRuleFreeDelivery(reset.ruleFreeDelivery);
     setRuleEta(reset.ruleEta);
     setEditingZipRuleId(null);
   };
 
   const startEditZipRule = (rule: ZipRule) => {
     setEditingZipRuleId(rule.id);
-    setRuleName(rule.name);
+    setRuleCity(rule.city || rule.name || '');
     setRuleZipCode(rule.zipCode || '');
-    setRuleZipFrom(rule.zipFrom || '');
-    setRuleZipTo(rule.zipTo || '');
     setRuleMinOrder(String(rule.minOrderAmount ?? '0'));
     setRuleDeliveryFee(String(rule.deliveryFee ?? '0'));
+    setRuleFreeDelivery(String(rule.freeDeliveryMinOrder ?? rule.minOrderAmount ?? '0'));
     setRuleEta(String(rule.estimatedMinutes ?? 45));
   };
 
   const onSaveZipRule = async (e: FormEvent) => {
     e.preventDefault();
-    const hasExact = !!ruleZipCode.trim();
-    const hasRange = !!ruleZipFrom.trim() && !!ruleZipTo.trim();
-    if (!hasExact && !hasRange) {
-      toast.error('Enter a ZIP code or a ZIP range');
-      return;
-    }
-    if (hasExact && hasRange) {
-      toast.error('Use either a single ZIP code or a range, not both');
+    if (!ruleZipCode.trim()) {
+      toast.error('Postal code is required');
       return;
     }
 
     setSavingZipRule(true);
     try {
       const payload = {
-        name: ruleName,
-        zipCode: hasExact ? ruleZipCode.trim() : undefined,
-        zipFrom: hasRange ? ruleZipFrom.trim() : undefined,
-        zipTo: hasRange ? ruleZipTo.trim() : undefined,
+        city: ruleCity.trim(),
+        zipCode: ruleZipCode.trim(),
         minOrderAmount: Number(ruleMinOrder),
         deliveryFee: Number(ruleDeliveryFee),
+        freeDeliveryMinOrder: Number(ruleFreeDelivery),
         estimatedMinutes: Number(ruleEta),
       };
       if (editingZipRuleId) {
         await api.put(`/delivery-zip-rules/${editingZipRuleId}`, payload);
-        toast.success('ZIP rule updated');
+        toast.success('Postal code rule updated');
       } else {
         await api.post('/delivery-zip-rules', payload);
-        toast.success('ZIP rule created');
+        toast.success('Postal code rule created');
       }
       clearZipRuleEditor();
       await load();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to save ZIP rule');
+      toast.error(error.response?.data?.error || 'Failed to save postal code rule');
     } finally {
       setSavingZipRule(false);
     }
@@ -1005,66 +994,55 @@ export default function OnlineShop() {
           )}
         </div>
 
-        <form onSubmit={onSaveZipRule} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="md:col-span-3 text-sm font-medium">
-            {editingZipRuleId ? 'Editing ZIP rule' : 'New ZIP rule'}
+        <form onSubmit={onSaveZipRule} className="space-y-3">
+          <div className="text-sm font-medium">
+            {editingZipRuleId ? 'Editing postal code rule' : 'Add postal code rule'}
           </div>
-          <input
-            className="input"
-            placeholder={t('deliveryZipRuleLabel')}
-            value={ruleName}
-            onChange={(e) => setRuleName(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            placeholder={t('deliveryZipCode')}
-            value={ruleZipCode}
-            onChange={(e) => setRuleZipCode(e.target.value)}
-            disabled={!!ruleZipFrom.trim() || !!ruleZipTo.trim()}
-          />
-          <input
-            className="input"
-            placeholder={t('deliveryZipFrom')}
-            value={ruleZipFrom}
-            onChange={(e) => setRuleZipFrom(e.target.value)}
-            disabled={!!ruleZipCode.trim()}
-          />
-          <input
-            className="input"
-            placeholder={t('deliveryZipTo')}
-            value={ruleZipTo}
-            onChange={(e) => setRuleZipTo(e.target.value)}
-            disabled={!!ruleZipCode.trim()}
-          />
-          <input
-            className="input"
-            type="number"
-            step="0.01"
-            placeholder="Min order CHF"
-            value={ruleMinOrder}
-            onChange={(e) => setRuleMinOrder(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            type="number"
-            step="0.01"
-            placeholder="Delivery fee CHF"
-            value={ruleDeliveryFee}
-            onChange={(e) => setRuleDeliveryFee(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            type="number"
-            placeholder="ETA minutes"
-            value={ruleEta}
-            onChange={(e) => setRuleEta(e.target.value)}
-          />
-          <div className="md:col-span-3 flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <input
+              className="input"
+              placeholder="City"
+              value={ruleCity}
+              onChange={(e) => setRuleCity(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder={t('deliveryZipCode')}
+              value={ruleZipCode}
+              onChange={(e) => setRuleZipCode(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              placeholder="Delivery fee CHF"
+              value={ruleDeliveryFee}
+              onChange={(e) => setRuleDeliveryFee(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              placeholder="Min price CHF"
+              value={ruleMinOrder}
+              onChange={(e) => setRuleMinOrder(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              placeholder="Free delivery CHF"
+              value={ruleFreeDelivery}
+              onChange={(e) => setRuleFreeDelivery(e.target.value)}
+              required
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button type="submit" className="btn-primary" disabled={savingZipRule}>
-              {savingZipRule ? 'Saving…' : editingZipRuleId ? 'Update ZIP rule' : 'Save ZIP rule'}
+              {savingZipRule ? 'Saving…' : editingZipRuleId ? 'Update rule' : 'Add rule'}
             </button>
             {editingZipRuleId && (
               <button type="button" className="btn-secondary" onClick={clearZipRuleEditor}>
@@ -1077,11 +1055,11 @@ export default function OnlineShop() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b">
-              <th className="py-2">Rule</th>
-              <th className="py-2">ZIP</th>
-              <th className="py-2">Min order</th>
-              <th className="py-2">Fee</th>
-              <th className="py-2">ETA</th>
+              <th className="py-2">City</th>
+              <th className="py-2">Postal code</th>
+              <th className="py-2">Delivery fee</th>
+              <th className="py-2">Min price</th>
+              <th className="py-2">Free delivery</th>
               <th className="py-2"></th>
             </tr>
           </thead>
@@ -1089,7 +1067,7 @@ export default function OnlineShop() {
             {zipRules.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-6 text-gray-500">
-                  No ZIP rules yet — add one above.
+                  No postal code rules yet — add one above.
                 </td>
               </tr>
             )}
@@ -1098,17 +1076,13 @@ export default function OnlineShop() {
                 key={rule.id}
                 className={`border-b last:border-0 ${editingZipRuleId === rule.id ? 'bg-amber-50' : ''}`}
               >
-                <td className="py-3 font-medium">{rule.name}</td>
-                <td className="py-3">
-                  {rule.zipCode
-                    ? rule.zipCode
-                    : rule.zipFrom && rule.zipTo
-                      ? `${rule.zipFrom}–${rule.zipTo}`
-                      : '—'}
-                </td>
-                <td className="py-3">CHF {Number(rule.minOrderAmount).toFixed(2)}</td>
+                <td className="py-3 font-medium">{rule.city || rule.name}</td>
+                <td className="py-3">{rule.zipCode || '—'}</td>
                 <td className="py-3">CHF {Number(rule.deliveryFee).toFixed(2)}</td>
-                <td className="py-3">{rule.estimatedMinutes || 45} min</td>
+                <td className="py-3">CHF {Number(rule.minOrderAmount).toFixed(2)}</td>
+                <td className="py-3">
+                  CHF {Number(rule.freeDeliveryMinOrder ?? rule.minOrderAmount).toFixed(2)}
+                </td>
                 <td className="py-3 text-right space-x-3">
                   <button
                     type="button"

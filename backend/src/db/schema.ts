@@ -2380,11 +2380,13 @@ export const deliveryZipRules = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
+    city: varchar("city", { length: 255 }),
     zipCode: varchar("zip_code", { length: 20 }),
     zipFrom: varchar("zip_from", { length: 20 }),
     zipTo: varchar("zip_to", { length: 20 }),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
     deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0").notNull(),
+    freeDeliveryMinOrder: decimal("free_delivery_min_order", { precision: 10, scale: 2 }).default("0").notNull(),
     estimatedMinutes: integer("estimated_minutes").default(45),
     isActive: boolean("is_active").default(true).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),

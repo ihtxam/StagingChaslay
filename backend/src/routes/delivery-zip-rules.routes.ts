@@ -11,18 +11,17 @@ router.use(setMerchantContext);
 
 function normalizeZipRuleInput(body: Record<string, unknown>) {
   const zipCode = body.zipCode != null ? String(body.zipCode).trim() : "";
-  const zipFrom = body.zipFrom != null ? String(body.zipFrom).trim() : "";
-  const zipTo = body.zipTo != null ? String(body.zipTo).trim() : "";
-  if (!zipCode && (!zipFrom || !zipTo)) {
-    throw new Error("Provide a ZIP code or a ZIP range (from + to)");
+  const city = body.city != null ? String(body.city).trim() : "";
+  if (!zipCode) {
+    throw new Error("Postal code is required");
   }
-  if (zipCode && (zipFrom || zipTo)) {
-    throw new Error("Use either a single ZIP code or a range, not both");
-  }
+  const name = city ? `${city} (${zipCode})` : zipCode;
   return {
-    zipCode: zipCode || null,
-    zipFrom: zipFrom || null,
-    zipTo: zipTo || null,
+    name,
+    city: city || null,
+    zipCode,
+    zipFrom: null,
+    zipTo: null,
   };
 }
 
@@ -48,14 +47,13 @@ router.get("/", async (req: Request, res: Response) => {
 router.post("/", async (req: Request, res: Response) => {
   try {
     const {
-      name,
       minOrderAmount,
       deliveryFee,
+      freeDeliveryMinOrder,
       estimatedMinutes,
       isActive,
       sortOrder,
     } = req.body;
-    if (!name) return res.status(400).json({ error: "name is required" });
     const zip = normalizeZipRuleInput(req.body);
 
     const db = getDb();
@@ -63,12 +61,14 @@ router.post("/", async (req: Request, res: Response) => {
       .insert(schema.deliveryZipRules)
       .values({
         merchantId: req.merchantId!,
-        name,
+        name: zip.name,
+        city: zip.city,
         zipCode: zip.zipCode,
         zipFrom: zip.zipFrom,
         zipTo: zip.zipTo,
         minOrderAmount: String(minOrderAmount ?? 0),
         deliveryFee: String(deliveryFee ?? 0),
+        freeDeliveryMinOrder: String(freeDeliveryMinOrder ?? 0),
         estimatedMinutes: estimatedMinutes ?? 45,
         isActive: isActive !== false,
         sortOrder: sortOrder ?? 0,
@@ -87,23 +87,25 @@ router.post("/", async (req: Request, res: Response) => {
 router.put("/:id", async (req: Request, res: Response) => {
   try {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    if (req.body.name !== undefined) patch.name = req.body.name;
     if (
-      req.body.zipCode !== undefined ||
-      req.body.zipFrom !== undefined ||
-      req.body.zipTo !== undefined
+      req.body.city !== undefined ||
+      req.body.zipCode !== undefined
     ) {
       const zip = normalizeZipRuleInput({
+        city: req.body.city,
         zipCode: req.body.zipCode,
-        zipFrom: req.body.zipFrom,
-        zipTo: req.body.zipTo,
       });
+      patch.name = zip.name;
+      patch.city = zip.city;
       patch.zipCode = zip.zipCode;
-      patch.zipFrom = zip.zipFrom;
-      patch.zipTo = zip.zipTo;
+      patch.zipFrom = null;
+      patch.zipTo = null;
     }
     if (req.body.minOrderAmount !== undefined) patch.minOrderAmount = String(req.body.minOrderAmount);
     if (req.body.deliveryFee !== undefined) patch.deliveryFee = String(req.body.deliveryFee);
+    if (req.body.freeDeliveryMinOrder !== undefined) {
+      patch.freeDeliveryMinOrder = String(req.body.freeDeliveryMinOrder);
+    }
     if (req.body.estimatedMinutes !== undefined) patch.estimatedMinutes = req.body.estimatedMinutes;
     if (req.body.isActive !== undefined) patch.isActive = !!req.body.isActive;
     if (req.body.sortOrder !== undefined) patch.sortOrder = req.body.sortOrder;

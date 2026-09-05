@@ -12,6 +12,8 @@ import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
+import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
   label: string;
@@ -38,19 +40,14 @@ const defaultProps: NavbarClassicProps = {
   logoImageUrl: '',
   logoWidth: 120,
   logoHeight: 40,
-  menuItems: [
-    { label: 'Home', link: '/' },
-    { label: 'Menu', link: '/menu' },
-    { label: 'About', link: '/about' },
-    { label: 'Contact', link: '/contact' },
-  ],
+  menuItems: DEFAULT_SMOOTH_SCROLL_MENU,
   backgroundColor: '#ffffff',
   textColor: '#1a1a2e',
   showButton: true,
   buttonText: 'Order Now',
   buttonLink: '/order',
   buttonColor: '#e94560',
-  useSitePagesNav: true,
+  useSitePagesNav: false,
 };
 
 export const NavbarClassic: React.FC<NavbarClassicProps> & {
@@ -81,6 +78,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           padding: '16px 40px',
           width: '100%',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -95,36 +93,29 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
 
           {/* Desktop Menu + Button */}
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-            <div style={{ display: 'flex', gap: '24px' }}>
-              {menuItems?.map((item, i) => (
-                <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500 }}>
-                  {item.label}
-                </a>
-              ))}
-            </div>
+            <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#1a1a2e'} />
             {mergedProps.showButton && buttonText && (
-              <a href={shopHref(mergedProps.buttonLink)} style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+              <a
+                href={shopHref(mergedProps.buttonLink)}
+                onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
+                style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}
+              >
                 {buttonText}
               </a>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="navbar-classic-mobile" style={{ display: 'none', padding: '8px' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={mergedProps.textColor} strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </div>
+          <NavbarMobileMenu
+            menuItems={menuItems}
+            textColor={mergedProps.textColor || '#1a1a2e'}
+            backgroundColor={mergedProps.backgroundColor || '#ffffff'}
+            showButton={mergedProps.showButton}
+            buttonText={buttonText}
+            buttonLink={mergedProps.buttonLink}
+            buttonColor={mergedProps.buttonColor}
+          />
         </div>
       </nav>
-      <style>{`
-        @container (max-width: 768px) {
-          .navbar-classic-desktop { display: none !important; }
-          .navbar-classic-mobile { display: block !important; }
-        }
-      `}</style>
     </>
   );
 };

@@ -11,7 +11,7 @@ import { Phone, Mail, MapPin, Map, Clock } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { useStorefront } from '../StorefrontContext';
-import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { resolveSectionId } from '../utils/section-id';
 
 const defaultProps: ContactInfoProps = {
   title: 'Contact Us',
@@ -78,6 +78,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
     return (
       <div
         ref={(ref) => { if (ref) connect(drag(ref)); }}
+        id={resolveSectionId(mergedProps.sectionId, 'contact')}
         className="hb-section-padding"
         style={{
           backgroundColor: mergedProps.backgroundColor,
@@ -158,6 +159,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={resolveSectionId(mergedProps.sectionId, 'contact')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

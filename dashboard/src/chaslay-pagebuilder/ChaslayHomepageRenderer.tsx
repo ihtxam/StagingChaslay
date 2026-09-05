@@ -8,6 +8,7 @@ import { chaslayPageBuilderResolver } from './resolver';
 import { MenuDataProvider } from './MenuDataContext';
 import { StorefrontProvider, type SitePageLink, type MerchantContact } from './StorefrontContext';
 import { BuilderLanguageProvider } from './BuilderLanguageContext';
+import { scrollToAnchor } from './utils/anchor-scroll';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 
 type ChaslayHomepageRendererProps = {
@@ -61,6 +62,35 @@ export default function ChaslayHomepageRenderer({
       cancelled = true;
     };
   }, [shopKey, sitePages]);
+
+  useEffect(() => {
+    const root = document.querySelector('.chaslay-storefront-page');
+    if (!root) return;
+
+    const onClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href') || '';
+      if (!href.startsWith('#')) return;
+      e.preventDefault();
+      scrollToAnchor(href);
+      try {
+        history.replaceState(null, '', href);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    root.addEventListener('click', onClick);
+    return () => root.removeEventListener('click', onClick);
+  }, [editorState]);
+
+  useEffect(() => {
+    if (window.location.hash) {
+      const t = window.setTimeout(() => scrollToAnchor(window.location.hash), 150);
+      return () => window.clearTimeout(t);
+    }
+  }, [editorState]);
 
   return (
     <StorefrontProvider

@@ -12,6 +12,7 @@ import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
+import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 
 interface MenuItem {
   label: string;
@@ -34,14 +35,10 @@ const defaultProps: NavbarMinimalProps = {
   logoImageUrl: '',
   logoWidth: 100,
   logoHeight: 32,
-  menuItems: [
-    { label: 'Menu', link: '/menu' },
-    { label: 'About', link: '/about' },
-    { label: 'Contact', link: '/contact' },
-  ],
+  menuItems: DEFAULT_SMOOTH_SCROLL_MENU,
   backgroundColor: '#faf9f6',
   textColor: '#1a1a2e',
-  useSitePagesNav: true,
+  useSitePagesNav: false,
 };
 
 export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
@@ -70,6 +67,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
           backgroundColor: mergedProps.backgroundColor,
           padding: '24px 40px',
           width: '100%',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -82,31 +80,21 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
             )}
           </div>
 
-          {/* Desktop Menu */}
-          <div className="navbar-minimal-menu" style={{ display: 'flex', gap: '40px' }}>
-            {menuItems?.map((item, i) => (
-              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '13px', fontWeight: 400, letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.7 }}>
-                {item.label}
-              </a>
-            ))}
+          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '40px' }}>
+            <NavbarDesktopLinks
+              menuItems={menuItems}
+              textColor={mergedProps.textColor || '#1a1a2e'}
+              className=""
+            />
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="navbar-minimal-mobile" style={{ display: 'none', padding: '8px' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={mergedProps.textColor} strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </div>
+          <NavbarMobileMenu
+            menuItems={menuItems}
+            textColor={mergedProps.textColor || '#1a1a2e'}
+            backgroundColor={mergedProps.backgroundColor || '#faf9f6'}
+          />
         </div>
       </nav>
-      <style>{`
-        @container (max-width: 768px) {
-          .navbar-minimal-menu { display: none !important; }
-          .navbar-minimal-mobile { display: block !important; }
-        }
-      `}</style>
     </>
   );
 };

@@ -45,6 +45,44 @@
 .chaslay-storefront-page {
   color: var(--color-text-0, inherit);
   background: var(--color-bg-0, #fff);
+  scroll-behavior: smooth;
+}
+
+.chaslay-storefront-page [id] {
+  scroll-margin-top: 100px;
+}
+
+.chaslay-storefront-page .hb-navbar-classic,
+.chaslay-storefront-page .hb-navbar-modern,
+.chaslay-storefront-page .hb-navbar-centered,
+.chaslay-storefront-page .hb-navbar-minimal {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.chaslay-storefront-page .navbar-centered-mobile-row {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .chaslay-storefront-page .navbar-classic-desktop,
+  .chaslay-storefront-page .navbar-modern-menu,
+  .chaslay-storefront-page .navbar-modern-button,
+  .chaslay-storefront-page .navbar-centered-inner,
+  .chaslay-storefront-page .navbar-centered-left,
+  .chaslay-storefront-page .navbar-centered-right,
+  .chaslay-storefront-page .navbar-minimal-menu {
+    display: none !important;
+  }
+  .chaslay-storefront-page .navbar-centered-mobile-row,
+  .chaslay-storefront-page .navbar-mobile-toggle,
+  .chaslay-storefront-page .navbar-mobile-drawer {
+    display: flex !important;
+  }
+  .chaslay-storefront-page .navbar-mobile-drawer {
+    display: block !important;
+  }
 }
 
 .chaslay-storefront-page .hb-section {

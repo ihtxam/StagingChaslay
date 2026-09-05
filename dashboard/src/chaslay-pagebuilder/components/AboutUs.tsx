@@ -12,6 +12,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
+import { resolveSectionId } from '../utils/section-id';
 
 const defaultProps: AboutUsProps = {
   title: 'About Us',
@@ -46,6 +47,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
     return (
       <div
         ref={(ref) => { if (ref) connect(drag(ref)); }}
+        id={resolveSectionId(mergedProps.sectionId, 'about')}
         style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '80px 20px', width: '100%' }}
       >
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center' }}>
@@ -139,6 +141,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={resolveSectionId(mergedProps.sectionId, 'about')}
       style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '60px 20px', width: '100%' }}
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: mergedProps.image ? '1fr 1fr' : '1fr', gap: '40px', alignItems: 'center' }}>

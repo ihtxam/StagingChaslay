@@ -12,6 +12,8 @@ import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
+import { NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
   label: string;
@@ -35,16 +37,11 @@ const defaultProps: NavbarCenteredProps = {
   logoImageUrl: '',
   logoWidth: 150,
   logoHeight: 50,
-  menuItems: [
-    { label: 'Home', link: '/' },
-    { label: 'Menu', link: '/menu' },
-    { label: 'About', link: '/about' },
-    { label: 'Contact', link: '/contact' },
-  ],
+  menuItems: DEFAULT_SMOOTH_SCROLL_MENU,
   backgroundColor: '#ffffff',
   textColor: '#1a1a2e',
   accentColor: '#e94560',
-  useSitePagesNav: true,
+  useSitePagesNav: false,
 };
 
 export const NavbarCentered: React.FC<NavbarCenteredProps> & {
@@ -56,7 +53,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref } = useStorefront();
+  const { shopHref, basePath, isStorefront } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -68,6 +65,18 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
   const leftMenu = menuItems?.slice(0, midPoint) || [];
   const rightMenu = menuItems?.slice(midPoint) || [];
 
+  const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
+    const resolved = shopHref(link);
+    if (isStorefront && (link === '/' || link === '' || resolved === basePath)) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    handleStorefrontNavClick(e, resolved);
+  };
+
+  const linkStyle = { color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' as const };
+
   return (
     <>
       <nav
@@ -78,19 +87,17 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           padding: '20px 40px',
           width: '100%',
           borderBottom: `1px solid ${mergedProps.textColor}15`,
+          position: 'relative',
         }}
       >
-        <div className="navbar-centered-inner" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '60px' }}>
-          {/* Left Menu */}
+        <div className="navbar-centered-inner navbar-centered-desktop" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '60px' }}>
           <div className="navbar-centered-left" style={{ display: 'flex', gap: '32px' }}>
             {leftMenu.map((item, i) => (
-              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <a key={i} href={shopHref(item.link)} onClick={(e) => onNavClick(e, item.link)} style={linkStyle}>
                 {item.label}
               </a>
             ))}
           </div>
-
-          {/* Center Logo */}
           <div style={{ textAlign: 'center' }}>
             {mergedProps.logoImageUrl ? (
               <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
@@ -101,23 +108,23 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
               </div>
             )}
           </div>
-
-          {/* Right Menu */}
           <div className="navbar-centered-right" style={{ display: 'flex', gap: '32px' }}>
             {rightMenu.map((item, i) => (
-              <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <a key={i} href={shopHref(item.link)} onClick={(e) => onNavClick(e, item.link)} style={linkStyle}>
                 {item.label}
               </a>
             ))}
           </div>
         </div>
+        <div className="navbar-centered-mobile-row" style={{ maxWidth: '1350px', margin: '0 auto', display: 'none', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>{mergedProps.logoImageUrl ? null : <span style={{ fontSize: '18px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>}</div>
+          <NavbarMobileMenu
+            menuItems={menuItems}
+            textColor={mergedProps.textColor || '#1a1a2e'}
+            backgroundColor={mergedProps.backgroundColor || '#ffffff'}
+          />
+        </div>
       </nav>
-      <style>{`
-        @container (max-width: 768px) {
-          .navbar-centered-inner { flex-direction: column; gap: 16px !important; }
-          .navbar-centered-left, .navbar-centered-right { display: none !important; }
-        }
-      `}</style>
     </>
   );
 };
