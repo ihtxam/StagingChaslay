@@ -2724,6 +2724,7 @@ router.post("/pos/held/release", async (req: Request, res: Response) => {
       tabNumber: body.tabNumber != null ? String(body.tabNumber) : null,
       paidTotal: body.paidTotal != null ? Number(body.paidTotal) : null,
       settleKitchen: body.settleKitchen === true,
+      paymentSettled: body.paymentSettled === false ? false : undefined,
     });
     res.json({ success: true, ...result });
   } catch (error) {

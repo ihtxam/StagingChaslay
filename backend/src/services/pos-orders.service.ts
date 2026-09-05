@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gte, ilike, lte, inArray, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lte, inArray, or } from "drizzle-orm";
 import {
   POS_CANCEL_REASONS,
   POS_REFUND_REASONS,
@@ -20,6 +20,8 @@ import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import {
   decideOpenTicketClose,
   nextOpenTicketStatus,
+  OPEN_TICKET_STATUSES,
+  type TicketCloseReason,
 } from "@/lib/pos-open-ticket";
 
 
@@ -221,6 +223,38 @@ function heldCartTotal(cartJson: unknown): number {
       ? ((data as { cart: Array<{ lineTotal?: unknown }> }).cart)
       : [];
   return cart.reduce((sum, line) => sum + (Number(line?.lineTotal) || 0), 0);
+}
+
+function openHeldWhere(merchantId: string) {
+  return and(
+    eq(schema.heldOrders.merchantId, merchantId),
+    inArray(schema.heldOrders.status, [...OPEN_TICKET_STATUSES]),
+    isNull(schema.heldOrders.closedAt)
+  );
+}
+
+async function closeHeldRow(
+  merchantId: string,
+  id: string,
+  reason: TicketCloseReason,
+  paidTotal?: number | null
+) {
+  const db = getDb();
+  const paid =
+    paidTotal != null && Number.isFinite(Number(paidTotal)) ? Number(paidTotal).toFixed(2) : null;
+  const [row] = await db
+    .update(schema.heldOrders)
+    .set({
+      status: "closed",
+      closedAt: new Date(),
+      closedReason: reason,
+      ...(paid != null ? { paidTotal: paid } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)))
+    .returning();
+  console.info("[pos-held] soft-close", { merchantId, id, reason, paidTotal: paid });
+  return row;
 }
 
 export class PosOrdersService {
@@ -936,10 +970,7 @@ export class PosOrdersService {
         ),
       });
       const openHeld = await db.query.heldOrders.findMany({
-        where: and(
-          eq(schema.heldOrders.merchantId, merchantId),
-          inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-        ),
+        where: openHeldWhere(merchantId),
       });
 
       const shoutTickets = tickets.filter((ticket) =>
@@ -987,18 +1018,13 @@ export class PosOrdersService {
         if (!restored) continue;
         const ghost = !isPosShoutTicket(key) || existingOrderTickets.has(key);
         if (ghost) {
-          await db
-            .delete(schema.heldOrders)
-            .where(and(eq(schema.heldOrders.id, row.id), eq(schema.heldOrders.merchantId, merchantId)));
-          console.info("[pos-held] dropped ghost kitchen restore", { merchantId, ticket: key, id: row.id });
+          await closeHeldRow(merchantId, row.id, "superseded");
+          console.info("[pos-held] closed ghost kitchen restore", { merchantId, ticket: key, id: row.id });
         }
       }
 
       const heldAfterCleanup = await db.query.heldOrders.findMany({
-        where: and(
-          eq(schema.heldOrders.merchantId, merchantId),
-          inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-        ),
+        where: openHeldWhere(merchantId),
       });
       const heldByTicket = new Map<string, (typeof heldAfterCleanup)[number]>();
       for (const row of heldAfterCleanup) {
@@ -1120,13 +1146,11 @@ export class PosOrdersService {
   }
 
   static async listHeld(merchantId: string) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     await this.restoreHeldFromOpenKitchen(merchantId);
     const rows = await db.query.heldOrders.findMany({
-      where: and(
-        eq(schema.heldOrders.merchantId, merchantId),
-        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-      ),
+      where: openHeldWhere(merchantId),
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
     console.info("[pos-held] list", {
@@ -1145,6 +1169,7 @@ export class PosOrdersService {
       }),
     });
     return rows;
+    });
   }
 
   static async holdOrder(
@@ -1160,6 +1185,7 @@ export class PosOrdersService {
       sendToKitchen?: boolean;
     }
   ) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     if (body.cartJson == null) throw new Error("cartJson is required");
     const ident = heldIdentity(body.cartJson);
@@ -1171,10 +1197,7 @@ export class PosOrdersService {
           ? requested
           : "takeaway";
     const open = await db.query.heldOrders.findMany({
-      where: and(
-        eq(schema.heldOrders.merchantId, merchantId),
-        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-      ),
+      where: openHeldWhere(merchantId),
     });
     const existing =
       (body.id && open.find((r) => r.id === body.id)) ||
@@ -1194,8 +1217,8 @@ export class PosOrdersService {
         });
         return existing;
       }
-      await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, existing.id));
-      return { ...existing, status: "closed" };
+      const closed = await closeHeldRow(merchantId, existing.id, "transferred");
+      return closed || { ...existing, status: "closed" as const };
     }
 
     const status = nextOpenTicketStatus(existing?.status, !!body.sendToKitchen);
@@ -1243,19 +1266,24 @@ export class PosOrdersService {
       tableId: ident.tableId,
     });
     return row;
+    });
   }
 
   static async deleteHeld(merchantId: string, id: string) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const existing = await db.query.heldOrders.findFirst({
       where: and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)),
     });
     if (!existing) throw new Error("Held order not found");
-    if (existing.status === "sent_to_kitchen") {
+    if (existing.status === "sent_to_kitchen" && !existing.closedAt) {
       throw new Error("Kitchen tickets cannot be deleted. Cancel or collect payment.");
     }
-    await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+    if (!existing.closedAt) {
+      await closeHeldRow(merchantId, id, "deleted");
+    }
     return { ok: true };
+    });
   }
 
   /**
@@ -1273,8 +1301,11 @@ export class PosOrdersService {
       paidTotal?: number | null;
       /** True when the caller confirmed no remaining kitchen items. */
       settleKitchen?: boolean;
+      /** False for pay-later / invoice — cart total is not collected money. */
+      paymentSettled?: boolean;
     }
   ) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const target = heldIdentity({
       ticketDisplay: opts.ticketDisplay,
@@ -1286,10 +1317,7 @@ export class PosOrdersService {
     if (!hasTarget) return { released: 0 };
 
     const open = await db.query.heldOrders.findMany({
-      where: and(
-        eq(schema.heldOrders.merchantId, merchantId),
-        inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
-      ),
+      where: openHeldWhere(merchantId),
     });
 
     const targetTicket = normalizeHeldTicket(target.ticketDisplay);
@@ -1324,7 +1352,7 @@ export class PosOrdersService {
       return sameHeldIdentity(ident, target);
     };
 
-    const toDelete = new Set<string>();
+    const toClose = new Set<string>();
     for (const row of open) {
       const matched = matchesTarget(row);
       const decision = decideOpenTicketClose({
@@ -1333,6 +1361,7 @@ export class PosOrdersService {
         paidTotal: paidKnown ? paidTotal : null,
         settleKitchen: opts.settleKitchen === true,
         identityMatched: matched,
+        paymentSettled: opts.paymentSettled,
       });
       if (decision !== "close") {
         if (matched) {
@@ -1342,29 +1371,29 @@ export class PosOrdersService {
             status: row.status,
             ticket: normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay),
             paidTotal: paidKnown ? paidTotal : null,
+            paymentSettled: opts.paymentSettled,
           });
         }
         continue;
       }
-      toDelete.add(row.id);
+      toClose.add(row.id);
     }
 
-    for (const id of toDelete) {
-      await db
-        .delete(schema.heldOrders)
-        .where(and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)));
+    for (const id of toClose) {
+      await closeHeldRow(merchantId, id, "paid", paidKnown ? paidTotal : null);
     }
 
-    if (toDelete.size) {
+    if (toClose.size) {
       console.info("[pos-held] release", {
         merchantId,
-        released: toDelete.size,
+        released: toClose.size,
         ticket: target.ticketDisplay,
         tableId: target.tableId,
         tab: target.tabNumber,
       });
     }
-    return { released: toDelete.size };
+    return { released: toClose.size };
+    });
   }
 
   /**
@@ -1372,6 +1401,7 @@ export class PosOrdersService {
    * Records a cancelled POS sale for EOD and sales reports, then removes the hold.
    */
   static async cancelHeld(merchantId: string, id: string, reason: string) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const existing = await db.query.heldOrders.findFirst({
       where: and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)),
@@ -1383,7 +1413,7 @@ export class PosOrdersService {
 
     const { lines, channel, tableLabel, notes } = parseHeldCart(existing.cartJson);
     if (!lines.length) {
-      await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+      await closeHeldRow(merchantId, id, "cancelled");
       return { ok: true, order: null, heldStatus: existing.status };
     }
 
@@ -1446,17 +1476,21 @@ export class PosOrdersService {
       });
     }
 
-    await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+    await closeHeldRow(merchantId, id, "cancelled");
     return { ok: true, order, heldStatus: existing.status, cancelReason: reasonText };
+    });
   }
 
   static async resumeHeld(merchantId: string, id: string) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const existing = await db.query.heldOrders.findFirst({
       where: and(eq(schema.heldOrders.id, id), eq(schema.heldOrders.merchantId, merchantId)),
     });
     if (!existing) throw new Error("Held order not found");
-    await db.delete(schema.heldOrders).where(eq(schema.heldOrders.id, id));
+    // Opening a ticket onto the register must not remove it. Persist updates
+    // the same row; payment or cancel is the only close.
     return existing;
+    });
   }
 }

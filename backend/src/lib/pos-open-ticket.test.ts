@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  closeReasonForDecision,
   decideOpenTicketClose,
   isFullyPaidTicket,
+  isOpenTicketStatus,
   nextOpenTicketStatus,
 } from "./pos-open-ticket.ts";
 
@@ -51,6 +53,15 @@ test("kitchen ticket closes only when fully paid", () => {
     }),
     "close"
   );
+  assert.equal(
+    closeReasonForDecision({
+      status: "sent_to_kitchen",
+      cartTotal: 44,
+      paidTotal: 44,
+      identityMatched: true,
+    }),
+    "paid"
+  );
 });
 
 test("kitchen ticket closes on explicit settle", () => {
@@ -62,6 +73,29 @@ test("kitchen ticket closes on explicit settle", () => {
       identityMatched: true,
     }),
     "close"
+  );
+});
+
+test("pay-later never closes an open ticket", () => {
+  assert.equal(
+    decideOpenTicketClose({
+      status: "sent_to_kitchen",
+      cartTotal: 36.7,
+      paidTotal: 36.7,
+      identityMatched: true,
+      paymentSettled: false,
+    }),
+    "keep"
+  );
+  assert.equal(
+    decideOpenTicketClose({
+      status: "held",
+      cartTotal: 12,
+      paidTotal: 12,
+      identityMatched: true,
+      paymentSettled: false,
+    }),
+    "keep"
   );
 });
 
@@ -96,6 +130,15 @@ test("cancel always closes a matched ticket", () => {
     }),
     "close"
   );
+  assert.equal(
+    closeReasonForDecision({
+      status: "sent_to_kitchen",
+      cartTotal: 44,
+      explicitCancel: true,
+      identityMatched: true,
+    }),
+    "cancelled"
+  );
 });
 
 test("kitchen status never downgrades", () => {
@@ -109,4 +152,11 @@ test("fully paid requires a positive cart and covering amount", () => {
   assert.equal(isFullyPaidTicket(10, 0), false);
   assert.equal(isFullyPaidTicket(10, 9.94), false);
   assert.equal(isFullyPaidTicket(10, 9.96), true);
+});
+
+test("only held and kitchen statuses are open", () => {
+  assert.equal(isOpenTicketStatus("held"), true);
+  assert.equal(isOpenTicketStatus("sent_to_kitchen"), true);
+  assert.equal(isOpenTicketStatus("closed"), false);
+  assert.equal(isOpenTicketStatus("paid"), false);
 });

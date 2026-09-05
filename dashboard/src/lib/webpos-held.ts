@@ -304,7 +304,14 @@ export type HeldReleaseIdent = {
   tabNumber?: string | null;
   paidTotal?: number | null;
   settleKitchen?: boolean;
+  /** False for pay-later / invoice — ticket stays until money is collected. */
+  paymentSettled?: boolean;
 };
+
+export function shouldDropLocalHeldDraft(ident: HeldReleaseIdent): boolean {
+  if (ident.paymentSettled === false) return false;
+  return ident.settleKitchen === true || (Number(ident.paidTotal) || 0) > 0;
+}
 
 /** Drop held rows after payment — works without CANCEL_ORDERS permission. */
 export async function releaseHeldOrder(ident: HeldReleaseIdent): Promise<void> {
@@ -322,9 +329,10 @@ export async function releaseHeldOrder(ident: HeldReleaseIdent): Promise<void> {
       tabNumber: ident.tabNumber || undefined,
       paidTotal: ident.paidTotal ?? undefined,
       settleKitchen: ident.settleKitchen === true,
+      paymentSettled: ident.paymentSettled === false ? false : undefined,
     });
   } catch {
     /* payment already recorded — best-effort cleanup */
   }
-  removeLocalHeldDraft(ident);
+  if (shouldDropLocalHeldDraft(ident)) removeLocalHeldDraft(ident);
 }

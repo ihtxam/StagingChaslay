@@ -317,6 +317,9 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_settings jsonb",
   merchants_vacation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vacation_settings jsonb",
   merchants_marketing_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_settings jsonb",
+  held_orders_closed_at: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_at timestamp",
+  held_orders_closed_reason: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_reason varchar(40)",
+  held_orders_paid_total: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)",
   subscription_plans_max_locations:
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
 };
@@ -1166,6 +1169,10 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
   `ALTER TABLE signage_screens ADD COLUMN IF NOT EXISTS screen_size_in integer NOT NULL DEFAULT 32`,
   `CREATE UNIQUE INDEX IF NOT EXISTS signage_screens_short_code_uidx ON signage_screens(short_code) WHERE short_code IS NOT NULL`,
+  `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_at timestamp`,
+  `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_reason varchar(40)`,
+  `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
+  `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
