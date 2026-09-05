@@ -9,8 +9,10 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: BusinessHoursProps = {
+  sectionId: SECTION_ANCHORS.openingHours,
   title: 'Opening Hours',
   showCurrentStatus: true,
   backgroundColor: '#f8f9fa',
@@ -49,6 +51,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
       ref={(ref) => {
         if (ref) connect(drag(ref));
       }}
+      id={sectionAnchorId(mergedProps.sectionId, 'openingHours')}
       style={{
         backgroundColor: mergedProps.backgroundColor,
         color: mergedProps.textColor,

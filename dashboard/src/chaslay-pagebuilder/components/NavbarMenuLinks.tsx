@@ -4,16 +4,13 @@
 import React, { useState } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
+import {
+  DEFAULT_SMOOTH_SCROLL_MENU,
+  type NavbarMenuItem,
+} from '../utils/default-nav-menu';
 
-export type NavbarMenuItem = { label: string; link: string };
-
-export const DEFAULT_SMOOTH_SCROLL_MENU: NavbarMenuItem[] = [
-  { label: 'Home', link: '/' },
-  { label: 'About', link: '#about' },
-  { label: 'Menu', link: '#menu' },
-  { label: 'Services', link: '#services' },
-  { label: 'Contact', link: '#contact' },
-];
+export type { NavbarMenuItem };
+export { DEFAULT_SMOOTH_SCROLL_MENU };
 
 type Props = {
   menuItems: NavbarMenuItem[];

@@ -12,6 +12,7 @@ import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { formatMenuProductPrice } from '../menu-product-utils';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface MenuModernProps {
   title?: string;
@@ -26,6 +27,7 @@ export interface MenuModernProps {
 }
 
 const defaultProps: MenuModernProps = {
+  sectionId: SECTION_ANCHORS.menu,
   title: 'Featured Dishes',
   subtitle: 'Chef\'s special selection crafted with passion',
   backgroundColor: '#1a1a2e',
@@ -68,6 +70,7 @@ export const MenuModern: React.FC<MenuModernProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'menu')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

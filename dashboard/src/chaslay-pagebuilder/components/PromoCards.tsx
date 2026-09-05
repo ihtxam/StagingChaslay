@@ -10,6 +10,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultCards: PromoItem[] = [
   { title: 'Weekend Brunch', description: 'Enjoy our special brunch menu every Saturday & Sunday', image: '', badge: '20% Off', buttonText: 'View Menu', buttonLink: '#' },
@@ -18,6 +19,7 @@ const defaultCards: PromoItem[] = [
 ];
 
 const defaultProps: PromoCardProps = {
+  sectionId: SECTION_ANCHORS.promotions,
   title: 'Special Offers',
   cards: defaultCards,
   backgroundColor: '#f8f9fa',
@@ -38,6 +40,7 @@ export const PromoCards: React.FC<PromoCardProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'promotions')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

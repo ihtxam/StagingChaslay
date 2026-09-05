@@ -3,6 +3,11 @@
 // Homepage Builder Types
 // ==========================================
 
+export interface SectionAnchorProps {
+  /** DOM id for in-page nav (#home, #menu, …). */
+  sectionId?: string;
+}
+
 // Component Props Types
 export interface ContainerProps {
   background?: string;
@@ -28,7 +33,7 @@ export interface TextProps {
   letterSpacing?: number;
 }
 
-export interface HeroBannerProps {
+export interface HeroBannerProps extends SectionAnchorProps {
   title?: string;
   titleFontSize?: number;
   titleFontWeight?: 'normal' | 'medium' | 'semibold' | 'bold';
@@ -52,7 +57,7 @@ export interface HeroBannerProps {
   sliderTransition?: 'fade' | 'slide';
 }
 
-export interface MenuSectionProps {
+export interface MenuSectionProps extends SectionAnchorProps {
   title?: string;
   subtitle?: string;
   showCategories?: boolean;
@@ -73,7 +78,7 @@ export interface MenuSectionProps {
   featuredProductIds?: string[];
 }
 
-export interface AboutUsProps {
+export interface AboutUsProps extends SectionAnchorProps {
   title?: string;
   content?: string;
   image?: string;
@@ -96,7 +101,7 @@ export interface BusinessHoursProps {
   highlightToday?: boolean;
 }
 
-export interface ContactInfoProps {
+export interface ContactInfoProps extends SectionAnchorProps {
   title?: string;
   showPhone?: boolean;
   showEmail?: boolean;

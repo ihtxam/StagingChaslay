@@ -9,6 +9,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultStats: StatItem[] = [
   { value: 15, label: 'Years of Experience', suffix: '+' },
@@ -18,6 +19,7 @@ const defaultStats: StatItem[] = [
 ];
 
 const defaultProps: StatsCounterProps = {
+  sectionId: SECTION_ANCHORS.reservations,
   title: 'Our Numbers Speak',
   stats: defaultStats,
   backgroundColor: '#1a1a2e',
@@ -38,6 +40,7 @@ export const StatsCounter: React.FC<StatsCounterProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

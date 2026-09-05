@@ -2,7 +2,6 @@
 'use client';
 
 import React from 'react';
-import { resolveSectionId } from '../utils/section-id';
 import { useNode } from '@craftjs/core';
 import { ProcessStepsProps, ProcessStep } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
@@ -11,6 +10,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultSteps: ProcessStep[] = [
   { title: 'Choose Your Dish', description: 'Browse our menu and pick your favorite dishes from our wide selection', icon: '🍽️', stepNumber: 1 },
@@ -19,6 +19,7 @@ const defaultSteps: ProcessStep[] = [
 ];
 
 const defaultProps: ProcessStepsProps = {
+  sectionId: SECTION_ANCHORS.reservations,
   title: 'How It Works',
   subtitle: 'Simple steps to your perfect meal',
   steps: defaultSteps,
@@ -40,7 +41,7 @@ export const ProcessSteps: React.FC<ProcessStepsProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
-      id={resolveSectionId(mergedProps.sectionId, 'services')}
+      id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

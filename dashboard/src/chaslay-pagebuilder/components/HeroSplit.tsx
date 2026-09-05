@@ -13,6 +13,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { TranslatableInput } from './TranslatableInput';
 import { useStorefront } from '../StorefrontContext';
 import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroSplitProps {
   title?: string;
@@ -33,6 +34,7 @@ export interface HeroSplitProps {
 }
 
 const defaultProps: HeroSplitProps = {
+  sectionId: SECTION_ANCHORS.home,
   title: 'Delicious Food Delivered',
   titleFontSize: 42,
   titleFontWeight: 'bold',
@@ -90,6 +92,7 @@ export const HeroSplit: React.FC<HeroSplitProps> & {
       ref={(ref) => {
         if (ref) connect(drag(ref));
       }}
+      id={sectionAnchorId(mergedProps.sectionId, 'home')}
       className="hb-hero-split"
       style={{
         display: 'grid',

@@ -8,8 +8,10 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Slider } from '@/chaslay-pagebuilder/ui/slider';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: LocationMapProps = {
+  sectionId: SECTION_ANCHORS.map,
   title: 'Find Us',
   address: '123 Main Street, New York, NY 10001',
   height: 400,
@@ -35,6 +37,7 @@ export const LocationMap: React.FC<LocationMapProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'map')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

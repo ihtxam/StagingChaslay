@@ -8,8 +8,10 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: FeaturedDishProps = {
+  sectionId: SECTION_ANCHORS.featured,
   title: 'Chef\'s Special',
   subtitle: 'Our signature dish, crafted with passion',
   dishName: 'Truffle Risotto',
@@ -35,6 +37,7 @@ export const FeaturedDish: React.FC<FeaturedDishProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'featured')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

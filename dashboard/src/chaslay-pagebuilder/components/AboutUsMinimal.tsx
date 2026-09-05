@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsMinimalProps {
   title?: string;
@@ -19,6 +20,7 @@ export interface AboutUsMinimalProps {
 }
 
 const defaultProps: AboutUsMinimalProps = {
+  sectionId: SECTION_ANCHORS.about,
   title: 'Our Philosophy',
   content: 'We believe in the power of simple, honest food. Every dish we create is a celebration of fresh ingredients, time-honored techniques, and the joy of sharing a meal together.',
   quote: 'Good food is the foundation of genuine happiness.',
@@ -41,6 +43,7 @@ export const AboutUsMinimal: React.FC<AboutUsMinimalProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'about')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

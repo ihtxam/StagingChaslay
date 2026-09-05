@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface SocialLink {
   platform: string;
@@ -24,6 +25,7 @@ export interface FooterModernProps {
 }
 
 const defaultProps: FooterModernProps = {
+  sectionId: SECTION_ANCHORS.footer,
   logoText: 'resto.',
   logoImageUrl: '',
   socialLinks: [
@@ -71,6 +73,7 @@ export const FooterModern: React.FC<FooterModernProps> & {
   return (
     <footer
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'footer')}
       className="hb-footer hb-section-padding"
       style={{
         background: `linear-gradient(to right, ${mergedProps.gradientFrom}, ${mergedProps.gradientTo})`,

@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursClassicProps {
   title?: string;
@@ -18,6 +19,7 @@ export interface HoursClassicProps {
 }
 
 const defaultProps: HoursClassicProps = {
+  sectionId: SECTION_ANCHORS.openingHours,
   title: 'Opening Hours',
   showStatus: true,
   backgroundColor: '#ffffff',
@@ -50,6 +52,7 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'openingHours')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

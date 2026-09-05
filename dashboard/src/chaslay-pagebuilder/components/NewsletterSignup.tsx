@@ -8,8 +8,10 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: NewsletterProps = {
+  sectionId: SECTION_ANCHORS.reservations,
   title: 'Stay Updated',
   subtitle: 'Subscribe to our newsletter for exclusive offers and updates',
   buttonText: 'Subscribe',
@@ -34,6 +36,7 @@ export const NewsletterSignup: React.FC<NewsletterProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

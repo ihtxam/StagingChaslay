@@ -12,6 +12,7 @@ import { TranslatableInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroGradientProps {
   title?: string;
@@ -32,6 +33,7 @@ export interface HeroGradientProps {
 }
 
 const defaultProps: HeroGradientProps = {
+  sectionId: SECTION_ANCHORS.home,
   title: 'Taste the Difference',
   titleFontSize: 52,
   titleFontWeight: 'bold',
@@ -94,6 +96,7 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
       ref={(ref) => {
         if (ref) connect(drag(ref));
       }}
+      id={sectionAnchorId(mergedProps.sectionId, 'home')}
       className="hb-hero"
       style={{
         background: gradientStyle,

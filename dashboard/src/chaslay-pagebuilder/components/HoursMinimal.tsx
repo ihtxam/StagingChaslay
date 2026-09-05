@@ -6,6 +6,7 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursMinimalProps {
   title?: string;
@@ -15,6 +16,7 @@ export interface HoursMinimalProps {
 }
 
 const defaultProps: HoursMinimalProps = {
+  sectionId: SECTION_ANCHORS.openingHours,
   title: 'HOURS',
   backgroundColor: '#ffffff',
   textColor: '#1c1917',
@@ -40,6 +42,7 @@ export const HoursMinimal: React.FC<HoursMinimalProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'openingHours')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

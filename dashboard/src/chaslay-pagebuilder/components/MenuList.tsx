@@ -12,6 +12,7 @@ import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { formatMenuProductPrice } from '../menu-product-utils';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface MenuListProps {
   title?: string;
@@ -26,6 +27,7 @@ export interface MenuListProps {
 }
 
 const defaultProps: MenuListProps = {
+  sectionId: SECTION_ANCHORS.menu,
   title: 'Menu',
   subtitle: 'Fresh ingredients, made with love',
   backgroundColor: '#faf9f6',
@@ -81,6 +83,7 @@ export const MenuList: React.FC<MenuListProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'menu')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

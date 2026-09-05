@@ -13,6 +13,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { formatMenuProductPrice } from '../menu-product-utils';
 import { useStorefrontCart } from '../useStorefrontCart';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface MenuGridProps {
   title?: string;
@@ -28,6 +29,7 @@ export interface MenuGridProps {
 }
 
 const defaultProps: MenuGridProps = {
+  sectionId: SECTION_ANCHORS.menu,
   title: 'Our Menu',
   subtitle: 'Discover our delicious offerings',
   backgroundColor: '#ffffff',
@@ -66,6 +68,7 @@ export const MenuGrid: React.FC<MenuGridProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'menu')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

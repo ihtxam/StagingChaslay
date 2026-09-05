@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursSplitProps {
   title?: string;
@@ -18,6 +19,7 @@ export interface HoursSplitProps {
 }
 
 const defaultProps: HoursSplitProps = {
+  sectionId: SECTION_ANCHORS.openingHours,
   title: 'Visit Us',
   subtitle: 'We look forward to serving you',
   image: '',
@@ -45,6 +47,7 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'openingHours')}
       style={{
         backgroundColor: mergedProps.backgroundColor,
         color: mergedProps.textColor,

@@ -9,6 +9,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroMinimalProps {
   title?: string;
@@ -26,6 +27,7 @@ export interface HeroMinimalProps {
 }
 
 const defaultProps: HeroMinimalProps = {
+  sectionId: SECTION_ANCHORS.home,
   title: 'Welcome to Our Restaurant',
   titleFontSize: 56,
   titleFontWeight: 'normal',
@@ -64,6 +66,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
       ref={(ref) => {
         if (ref) connect(drag(ref));
       }}
+      id={sectionAnchorId(mergedProps.sectionId, 'home')}
       className="hb-hero hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

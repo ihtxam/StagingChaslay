@@ -12,6 +12,7 @@ import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultTestimonials: TestimonialItem[] = [
   { text: 'The food was absolutely amazing! Best dining experience we have had in years.', author: 'Sarah Johnson', rating: 5, role: 'Food Critic', photo: '' },
@@ -20,6 +21,7 @@ const defaultTestimonials: TestimonialItem[] = [
 ];
 
 const defaultProps: TestimonialsProps = {
+  sectionId: SECTION_ANCHORS.testimonials,
   title: 'What Our Guests Say',
   testimonials: defaultTestimonials,
   backgroundColor: '#ffffff',
@@ -43,6 +45,7 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'testimonials')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

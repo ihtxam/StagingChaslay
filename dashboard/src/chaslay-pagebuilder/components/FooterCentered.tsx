@@ -9,6 +9,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { useStorefront } from '../StorefrontContext';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface MenuItem {
   label: string;
@@ -25,6 +26,7 @@ export interface FooterCenteredProps {
 }
 
 const defaultProps: FooterCenteredProps = {
+  sectionId: SECTION_ANCHORS.footer,
   logoText: 'Restaurant',
   logoImageUrl: '',
   menuItems: [
@@ -52,6 +54,7 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
   return (
     <footer
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'footer')}
       className="hb-footer hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

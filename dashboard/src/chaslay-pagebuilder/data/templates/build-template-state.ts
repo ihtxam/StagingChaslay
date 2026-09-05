@@ -1,4 +1,6 @@
 /** Build minimal Craft.js editor state for starter templates. */
+import { SECTION_ANCHORS } from '../../utils/section-id';
+
 type CraftNode = Record<string, unknown>;
 
 function node(
@@ -71,6 +73,7 @@ export function buildTemplateEditorState(preset: TemplatePreset): string {
   }
 
   add('HeroBanner', {
+    sectionId: SECTION_ANCHORS.home,
     title: 'Welcome to Our Restaurant',
     subtitle: 'Fresh ingredients, unforgettable flavours',
     backgroundColor: '#1a1a2e',
@@ -85,6 +88,7 @@ export function buildTemplateEditorState(preset: TemplatePreset): string {
   });
 
   add(preset.menu?.component ?? 'MenuGrid', {
+    sectionId: SECTION_ANCHORS.menu,
     title: 'Our Menu',
     subtitle: 'Chef specials and guest favourites',
     backgroundColor: '#fafaf9',
@@ -96,12 +100,14 @@ export function buildTemplateEditorState(preset: TemplatePreset): string {
   });
 
   add(preset.about?.component ?? 'AboutUsClassic', {
+    sectionId: SECTION_ANCHORS.about,
     title: 'Our Story',
     subtitle: 'Passion on every plate',
     ...preset.about?.props,
   });
 
   add('ReservationForm', {
+    sectionId: SECTION_ANCHORS.reservations,
     title: 'Reserve a Table',
     subtitle: 'Book your dining experience with us',
     backgroundColor: '#1a1a2e',
@@ -114,12 +120,14 @@ export function buildTemplateEditorState(preset: TemplatePreset): string {
   });
 
   add(preset.hours?.component ?? 'HoursClassic', {
+    sectionId: SECTION_ANCHORS.openingHours,
     title: 'Opening Hours',
     showStatus: true,
     ...preset.hours?.props,
   });
 
   add(preset.footer?.component ?? 'FooterClassic', {
+    sectionId: SECTION_ANCHORS.footer,
     logoText: 'Restaurant',
     copyrightText: `© ${new Date().getFullYear()} All rights reserved.`,
     ...preset.footer?.props,

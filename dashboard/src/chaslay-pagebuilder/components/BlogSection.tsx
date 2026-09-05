@@ -10,6 +10,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultPosts: BlogPost[] = [
   { title: 'The Art of Italian Cooking', excerpt: 'Discover the secrets behind authentic Italian cuisine and the traditions that make it special.', image: '', date: '2024-12-15', author: 'Chef Marco', link: '#' },
@@ -18,6 +19,7 @@ const defaultPosts: BlogPost[] = [
 ];
 
 const defaultProps: BlogSectionProps = {
+  sectionId: SECTION_ANCHORS.blog,
   title: 'From Our Blog',
   subtitle: 'Stories, tips, and culinary inspiration',
   posts: defaultPosts,
@@ -39,6 +41,7 @@ export const BlogSection: React.FC<BlogSectionProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'blog')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

@@ -10,6 +10,7 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import { FooterColumnsEditor } from './FooterColumnsEditor';
 import { useStorefront } from '../StorefrontContext';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface LinkItem {
   label: string;
@@ -32,6 +33,7 @@ export interface FooterClassicProps {
 }
 
 const defaultProps: FooterClassicProps = {
+  sectionId: SECTION_ANCHORS.footer,
   logoText: 'Restaurant Name',
   logoImageUrl: '',
   description: 'Serving delicious food since 2020. Visit us for an unforgettable dining experience.',
@@ -73,6 +75,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
     <>
     <footer
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'footer')}
       style={{
         backgroundColor: mergedProps.backgroundColor,
         color: mergedProps.textColor,

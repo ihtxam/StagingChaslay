@@ -18,8 +18,10 @@ import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
 import { useStorefront } from '../StorefrontContext';
 import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: HeroBannerProps = {
+  sectionId: SECTION_ANCHORS.home,
   title: 'Welcome to Our Restaurant',
   titleFontSize: 48,
   titleFontWeight: 'bold',
@@ -116,6 +118,7 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
       ref={(ref) => {
         if (ref) connect(drag(ref));
       }}
+      id={sectionAnchorId(mergedProps.sectionId, 'home')}
       className="hb-hero"
       style={{
         position: 'relative',

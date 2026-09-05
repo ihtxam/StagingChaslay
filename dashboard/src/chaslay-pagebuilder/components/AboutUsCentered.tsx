@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsCenteredProps {
   title?: string;
@@ -20,6 +21,7 @@ export interface AboutUsCenteredProps {
 }
 
 const defaultProps: AboutUsCenteredProps = {
+  sectionId: SECTION_ANCHORS.about,
   title: 'About Our Restaurant',
   subtitle: 'A Culinary Journey',
   content: 'Founded in 2010, we have dedicated ourselves to bringing you the finest culinary experience. Our chefs use only the freshest ingredients, sourced locally whenever possible, to create dishes that delight and inspire.',
@@ -42,6 +44,7 @@ export const AboutUsCentered: React.FC<AboutUsCenteredProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'about')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

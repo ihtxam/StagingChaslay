@@ -11,6 +11,7 @@ import { Slider } from '@/chaslay-pagebuilder/ui/slider';
 import { Lightbox } from './Lightbox';
 import { TranslatableInput } from './TranslatableInput';
 import { MultiImageUpload } from './MultiImageUpload';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultImages = [
   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80',
@@ -22,6 +23,7 @@ const defaultImages = [
 ];
 
 const defaultProps: GalleryProps = {
+  sectionId: SECTION_ANCHORS.gallery,
   title: 'Photo Gallery',
   images: defaultImages,
   columns: 3,
@@ -50,6 +52,7 @@ export const GalleryMasonry: React.FC<GalleryProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'gallery')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

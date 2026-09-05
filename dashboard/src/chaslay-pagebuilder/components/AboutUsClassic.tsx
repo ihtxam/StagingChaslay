@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsClassicProps {
   title?: string;
@@ -18,6 +19,7 @@ export interface AboutUsClassicProps {
 }
 
 const defaultProps: AboutUsClassicProps = {
+  sectionId: SECTION_ANCHORS.about,
   title: 'Our Story',
   content: 'Welcome to our restaurant! We have been serving delicious food to our community for over 20 years. Our passion for quality ingredients and exceptional service has made us a local favorite. Come visit us and experience the difference.',
   image: '',
@@ -38,6 +40,7 @@ export const AboutUsClassic: React.FC<AboutUsClassicProps> & {
   return (
     <section
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'about')}
       className="hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

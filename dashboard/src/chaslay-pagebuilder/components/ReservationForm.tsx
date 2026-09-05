@@ -11,8 +11,10 @@ import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
 import InlineReservationsWidget from '@/components/shop/InlineReservationsWidget';
 import { useStorefront } from '../StorefrontContext';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: ReservationFormProps = {
+  sectionId: SECTION_ANCHORS.reservations,
   title: 'Reserve a Table',
   subtitle: 'Book your dining experience with us',
   backgroundColor: '#1a1a2e',
@@ -40,6 +42,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
   if (isStorefront && !enabled && shopKey) {
     return (
       <section
+        id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
         className="hb-section px-4 py-10 md:px-10 md:py-14"
         style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor }}
       >
@@ -63,6 +66,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
     return (
       <div
         ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
         className="hb-section"
         style={{
           backgroundColor: mergedProps.backgroundColor,
@@ -175,6 +179,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,

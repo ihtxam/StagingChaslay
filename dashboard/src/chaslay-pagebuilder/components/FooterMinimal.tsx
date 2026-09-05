@@ -6,6 +6,7 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { TranslatableInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface SocialLink {
   platform: string;
@@ -20,6 +21,7 @@ export interface FooterMinimalProps {
 }
 
 const defaultProps: FooterMinimalProps = {
+  sectionId: SECTION_ANCHORS.footer,
   copyrightText: '© 2024 Restaurant Name',
   socialLinks: [
     { platform: 'facebook', url: '#' },
@@ -64,6 +66,7 @@ export const FooterMinimal: React.FC<FooterMinimalProps> & {
   return (
     <footer
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'footer')}
       className="hb-footer"
       style={{
         backgroundColor: mergedProps.backgroundColor,

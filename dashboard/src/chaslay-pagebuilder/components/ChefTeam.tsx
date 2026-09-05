@@ -10,6 +10,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
+import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultMembers: TeamMember[] = [
   { name: 'Marco Rossi', role: 'Head Chef', photo: '', bio: '15 years of culinary excellence' },
@@ -18,6 +19,7 @@ const defaultMembers: TeamMember[] = [
 ];
 
 const defaultProps: ChefTeamProps = {
+  sectionId: SECTION_ANCHORS.team,
   title: 'Meet Our Team',
   subtitle: 'Passionate culinary artists behind every dish',
   members: defaultMembers,
@@ -40,6 +42,7 @@ export const ChefTeam: React.FC<ChefTeamProps> & {
   return (
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
+      id={sectionAnchorId(mergedProps.sectionId, 'team')}
       className="hb-section hb-section-padding"
       style={{
         backgroundColor: mergedProps.backgroundColor,
