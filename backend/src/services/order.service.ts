@@ -21,6 +21,7 @@ async function releaseHeldAfterPosPayment(
     notes?: string | null;
     tableId?: string | null;
     guestCount?: number | null;
+    total?: string | number | null;
   }
 ) {
   try {
@@ -35,6 +36,7 @@ async function releaseHeldAfterPosPayment(
           ? String(order.guestCount)
           : null),
       tableId: order.tableId || null,
+      paidTotal: Number(order.total) || 0,
     });
   } catch (err) {
     console.warn("Held release after payment failed:", err);

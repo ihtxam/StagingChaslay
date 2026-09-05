@@ -1644,6 +1644,8 @@ export const kdsTicketItems = pgTable(
 
 export const ODS_THEMES = ["light", "teal", "dark"] as const;
 export type OdsTheme = (typeof ODS_THEMES)[number];
+export const ODS_LAYOUTS = ["columns", "rows"] as const;
+export type OdsLayout = (typeof ODS_LAYOUTS)[number];
 
 export const odsDisplays = pgTable(
   "ods_displays",
@@ -1658,6 +1660,8 @@ export const odsDisplays = pgTable(
     shortCode: varchar("short_code", { length: 8 }),
     /** Customer board color theme */
     theme: varchar("theme", { length: 32 }).default("light").notNull(),
+    /** columns = side-by-side, rows = preparation on top / ready below */
+    layout: varchar("layout", { length: 20 }).default("columns").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

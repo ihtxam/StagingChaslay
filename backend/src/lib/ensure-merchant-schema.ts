@@ -595,6 +595,7 @@ const TABLE_PATCHES: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_token_uidx ON ods_displays(token)`,
   `CREATE INDEX IF NOT EXISTS ods_displays_merchant_id_idx ON ods_displays(merchant_id)`,
   `ALTER TABLE ods_displays ADD COLUMN IF NOT EXISTS short_code varchar(8)`,
+  `ALTER TABLE ods_displays ADD COLUMN IF NOT EXISTS layout varchar(20) DEFAULT 'columns'`,
   `CREATE UNIQUE INDEX IF NOT EXISTS ods_displays_short_code_uidx ON ods_displays(short_code) WHERE short_code IS NOT NULL`,
   `CREATE TABLE IF NOT EXISTS ods_orders (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

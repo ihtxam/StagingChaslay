@@ -97,6 +97,7 @@ import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
+import { writeShowPosToasts } from '@/lib/pos-toast-pref';
 import {
   SETTINGS_SEARCH_CLICK_MARK,
   buildSettingsSearchIndex,
@@ -183,6 +184,7 @@ interface SettingsData {
     requireTableForDineIn?: boolean;
     actionButtonSize?: 'sm' | 'md' | 'lg';
     expressCheckoutEnabled?: boolean;
+    showPosToasts?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -1284,6 +1286,7 @@ export default function Settings() {
       } catch {
         /* ignore */
       }
+      writeShowPosToasts(settings.posCheckoutSettings?.showPosToasts === true);
       toast.success(t('settingsSaved'));
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to save settings');
@@ -2768,6 +2771,26 @@ export default function Settings() {
                   <span>
                     <span className="font-medium">{t('expressCheckoutEnabled')}</span>
                     <span className="mt-0.5 block text-xs muted">{t('expressCheckoutEnabledHint')}</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posCheckoutSettings?.showPosToasts === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          showPosToasts: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('showPosToasts')}</span>
+                    <span className="mt-0.5 block text-xs muted">{t('showPosToastsHint')}</span>
                   </span>
                 </label>
                 <Field label={t('quickCashDenominations')} hint={t('quickCashDenominationsHint')}>

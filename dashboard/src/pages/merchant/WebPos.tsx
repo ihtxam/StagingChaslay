@@ -55,6 +55,7 @@ import {
   normalizePosCheckoutSettings,
   type PosCheckoutSettings,
 } from '@/lib/pos-checkout';
+import { writeShowPosToasts } from '@/lib/pos-toast-pref';
 import { normalizeBusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature } from '@/lib/edition-features';
 import WebPosFulfillmentModal, {
@@ -1601,6 +1602,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     () => normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings),
     [paymentConfig?.posCheckoutSettings]
   );
+  useEffect(() => {
+    writeShowPosToasts(checkoutSettings.showPosToasts === true);
+  }, [checkoutSettings.showPosToasts]);
   const loyaltyProgram = useMemo(
     () =>
       normalizeLoyaltyProgram(
@@ -6692,6 +6696,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ticketDisplay: ticketShout,
         tableId: orderForReceipt?.tableId || tableId,
         tabNumber: orderForReceipt?.tabNumber || tabNumber,
+        paidTotal: Number(ctx.total) || 0,
       });
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
@@ -8086,6 +8091,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ticketDisplay: ticket.display,
         tableId,
         tabNumber,
+        paidTotal: Number(sale.total) || 0,
       });
       setDraftVersion((n) => n + 1);
       setSendReceiptPrefillEmail(selectedCustomer?.email || '');
