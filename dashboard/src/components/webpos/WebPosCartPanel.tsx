@@ -143,19 +143,21 @@ type Props = {
 
 function lineExtrasLabel(l: CartLine) {
   const parts: string[] = [];
-  if (l.comboSelections.length) {
+  const combos = l.comboSelections || [];
+  const extras = l.selectedExtras || [];
+  if (combos.length) {
     parts.push(
-      ...l.comboSelections.map((c) => {
+      ...combos.map((c) => {
         const productName = repairCatalogText(c.productName || '');
-        const extras = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
-        return extras.length ? `${productName} (${extras.join(', ')})` : productName;
+        const extraNames = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
+        return extraNames.length ? `${productName} (${extraNames.join(', ')})` : productName;
       })
     );
   }
-  if (!l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
-  } else if (l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
+  if (!combos.length && extras.length) {
+    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
+  } else if (combos.length && extras.length) {
+    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
   }
   return normalizeDashes(parts.join(', '));
 }
