@@ -166,14 +166,15 @@ export class PosSessionsService {
     }
     active = active.filter((s) => s.deviceId !== keepDeviceId);
 
-    if (max > 0 && active.length >= max) {
-      const kind = sessionKind === "waiter" ? "waiter" : "POS";
-      const err = new Error(
-        `${kind} station limit reached (${max}). Close another session or upgrade your package.`
-      ) as Error & { statusCode?: number; code?: string };
-      err.statusCode = 403;
-      err.code = sessionKind === "waiter" ? "WAITER_LIMIT_REACHED" : "POS_LIMIT_REACHED";
-      throw err;
+    // Last login wins: make room for this device by revoking oldest active stations.
+    while (max > 0 && active.length >= max) {
+      const victim = active.shift();
+      if (!victim) break;
+      await db
+        .update(schema.posSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(schema.posSessions.id, victim.id));
+      kicked.push(victim.id);
     }
 
     return kicked;
