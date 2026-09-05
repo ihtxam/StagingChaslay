@@ -1440,18 +1440,22 @@ export const heldOrders = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     label: varchar("label", { length: 120 }),
-    status: varchar("status", { length: 40 }).default("held").notNull(), // held | sent_to_kitchen
+    status: varchar("status", { length: 40 }).default("held").notNull(), // held | sent_to_kitchen | closed
     channel: varchar("channel", { length: 50 }).default("takeaway"),
     cartJson: json("cart_json").$type<unknown>().notNull(),
     notes: text("notes"),
     staffId: uuid("staff_id"),
     staffName: varchar("staff_name", { length: 255 }),
+    closedAt: timestamp("closed_at"),
+    closedReason: varchar("closed_reason", { length: 40 }),
+    paidTotal: decimal("paid_total", { precision: 10, scale: 2 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("held_orders_merchant_id_idx").on(table.merchantId),
     statusIdx: index("held_orders_status_idx").on(table.merchantId, table.status),
+    openIdx: index("held_orders_merchant_open_idx").on(table.merchantId, table.closedAt),
   })
 );
 

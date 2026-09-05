@@ -6370,14 +6370,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const key of draftKeys) openCartDraftsRef.current.delete(key);
     const heldId = resumedHeldIdRef.current;
     resumedHeldIdRef.current = null;
-    void releaseHeldOrder({
-      heldId,
-      ticketDisplay: link.ticketDisplay || order?.ticketDisplay || ticketDisplay,
-      tableId: link.tableId || tableId,
-      tabNumber: link.tabNumber || tabNumber,
-      paidTotal: order ? Number(order.total) || 0 : null,
-      settleKitchen: !!(order && isPaidOrder(order)),
-    });
+      void releaseHeldOrder({
+        heldId,
+        ticketDisplay: link.ticketDisplay || order?.ticketDisplay || ticketDisplay,
+        tableId: link.tableId || tableId,
+        tabNumber: link.tabNumber || tabNumber,
+        paidTotal: order ? Number(order.total) || 0 : null,
+        settleKitchen: !!(order && isPaidOrder(order)),
+        paymentSettled: !!(order && isPaidOrder(order)),
+      });
     clearCollectCheckout();
     setCart([]);
     setSelectedLineId(null);
@@ -6701,6 +6702,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tableId: orderForReceipt?.tableId || tableId,
         tabNumber: orderForReceipt?.tabNumber || tabNumber,
         paidTotal: Number(ctx.total) || 0,
+        settleKitchen: !!(orderForReceipt && isPaidOrder(orderForReceipt)),
+        paymentSettled: !!(orderForReceipt && isPaidOrder(orderForReceipt)),
       });
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
@@ -8096,6 +8099,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         tableId,
         tabNumber,
         paidTotal: Number(sale.total) || 0,
+        settleKitchen: !payLaterSale,
+        paymentSettled: !payLaterSale,
       });
       setDraftVersion((n) => n + 1);
       setSendReceiptPrefillEmail(selectedCustomer?.email || '');

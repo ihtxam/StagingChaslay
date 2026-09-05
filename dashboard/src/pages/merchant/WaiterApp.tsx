@@ -408,6 +408,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         tabNumber: order?.tabNumber,
         paidTotal: order ? Number(order.total) || 0 : null,
         settleKitchen: !!(order && isPaidOrder(order)),
+        paymentSettled: !!(order && isPaidOrder(order)),
       });
       setCart([]);
       setTableId(null);
