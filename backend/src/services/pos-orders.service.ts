@@ -140,20 +140,39 @@ function heldIdentity(cartJson: unknown): {
   };
 }
 
+function normalizeHeldTicket(value?: string | null): string {
+  const raw = String(value || "")
+    .trim()
+    .replace(/^#/, "");
+  return raw ? `#${raw}` : "";
+}
+
 function sameHeldIdentity(
   a: ReturnType<typeof heldIdentity>,
   b: ReturnType<typeof heldIdentity>
 ): boolean {
-  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
+  const aTicket = normalizeHeldTicket(a.ticketDisplay);
+  const bTicket = normalizeHeldTicket(b.ticketDisplay);
+  if (aTicket && bTicket && aTicket === bTicket) return true;
   if (a.tableId && b.tableId && a.tableId === b.tableId) {
-    if (a.ticketDisplay && b.ticketDisplay) return a.ticketDisplay === b.ticketDisplay;
-    if (a.ticketDisplay || b.ticketDisplay) return false;
+    if (aTicket && bTicket) return aTicket === bTicket;
+    if (aTicket || bTicket) return false;
     return true;
   }
   if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
     return true;
   }
   return false;
+}
+
+function heldCartTotal(cartJson: unknown): number {
+  const data = normalizeHeldCartJson(cartJson);
+  const cart = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && Array.isArray((data as { cart?: unknown }).cart)
+      ? ((data as { cart: Array<{ lineTotal?: unknown }> }).cart)
+      : [];
+  return cart.reduce((sum, line) => sum + (Number(line?.lineTotal) || 0), 0);
 }
 
 export class PosOrdersService {
@@ -854,8 +873,86 @@ export class PosOrdersService {
     };
   }
 
+  /**
+   * Recreate POS held rows from open KDS tickets when the hold was deleted
+   * (partial payment / stale session) but kitchen/ODS still show the ticket.
+   */
+  static async restoreHeldFromOpenKitchen(merchantId: string) {
+    const db = getDb();
+    try {
+      const tickets = await db.query.kdsTickets.findMany({
+        where: and(
+          eq(schema.kdsTickets.merchantId, merchantId),
+          inArray(schema.kdsTickets.status, ["pending", "in_progress", "preparing"])
+        ),
+      });
+      if (!tickets.length) return;
+      const openHeld = await db.query.heldOrders.findMany({
+        where: and(
+          eq(schema.heldOrders.merchantId, merchantId),
+          inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+        ),
+      });
+      const heldTickets = new Set(
+        openHeld
+          .map((row) => normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay))
+          .filter(Boolean)
+      );
+
+      for (const ticket of tickets) {
+        const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
+        if (!key || heldTickets.has(key)) continue;
+        const items = await db.query.kdsTicketItems.findMany({
+          where: eq(schema.kdsTicketItems.ticketId, ticket.id),
+        });
+        if (!items.length) continue;
+        const cart = items.map((item) => {
+          const qty = Number(item.quantity) || 1;
+          const mods =
+            item.modifiersJson && typeof item.modifiersJson === "object"
+              ? (item.modifiersJson as Record<string, unknown>)
+              : {};
+          const unit = Number(mods.unitPrice) || 0;
+          return {
+            lineId: item.lineId,
+            productId: item.productId || item.lineId,
+            name: item.name,
+            quantity: qty,
+            unitPrice: unit,
+            lineTotal: Number(mods.lineTotal) || unit * qty,
+            sentToKitchen: true,
+            courseNumber: item.courseNumber || 1,
+            modifiers: mods.modifiers || [],
+            lineNote: item.lineNote || null,
+          };
+        });
+        const channel = String(ticket.channel || "takeaway");
+        await db.insert(schema.heldOrders).values({
+          merchantId,
+          label: `${key} · ${channel}`,
+          status: "sent_to_kitchen",
+          channel,
+          cartJson: {
+            cart,
+            channel,
+            tableLabel: ticket.tableLabel || null,
+            tabNumber: ticket.tabNumber || null,
+            ticketDisplay: key,
+            kitchenTicketKey: key,
+          },
+          notes: `restored from kitchen ${key}`,
+        });
+        heldTickets.add(key);
+        console.info("[pos-held] restored from kitchen", { merchantId, ticket: key, lines: cart.length });
+      }
+    } catch (err) {
+      console.warn("[pos-held] kitchen restore skipped:", err);
+    }
+  }
+
   static async listHeld(merchantId: string) {
     const db = getDb();
+    await this.restoreHeldFromOpenKitchen(merchantId);
     const rows = await db.query.heldOrders.findMany({
       where: and(
         eq(schema.heldOrders.merchantId, merchantId),
@@ -982,6 +1079,10 @@ export class PosOrdersService {
       ticketDisplay?: string | null;
       tableId?: string | null;
       tabNumber?: string | null;
+      /** Paid amount — kitchen holds are kept when this is less than the open ticket. */
+      paidTotal?: number | null;
+      /** True when the caller confirmed no remaining kitchen items. */
+      settleKitchen?: boolean;
     }
   ) {
     const db = getDb();
@@ -1001,12 +1102,56 @@ export class PosOrdersService {
       ),
     });
 
-    const toDelete = new Set<string>();
-    if (opts.heldId) toDelete.add(opts.heldId);
-    for (const row of open) {
-      if (sameHeldIdentity(heldIdentity(row.cartJson), target)) {
-        toDelete.add(row.id);
+    const targetTicket = normalizeHeldTicket(target.ticketDisplay);
+    const paidTotal = Number(opts.paidTotal);
+    const paidKnown = Number.isFinite(paidTotal) && paidTotal > 0;
+    const hasIdentFields = !!(target.ticketDisplay || target.tableId || target.tabNumber);
+
+    const matchesTarget = (row: (typeof open)[number]) => {
+      const ident = heldIdentity(row.cartJson);
+      if (opts.heldId && row.id === opts.heldId) {
+        const rowTicket = normalizeHeldTicket(ident.ticketDisplay);
+        if (targetTicket && rowTicket && targetTicket !== rowTicket) {
+          console.warn("[pos-held] skip stale heldId", {
+            merchantId,
+            heldId: opts.heldId,
+            heldTicket: rowTicket,
+            paidTicket: targetTicket,
+          });
+          return false;
+        }
+        if (hasIdentFields && !sameHeldIdentity(ident, target)) {
+          console.warn("[pos-held] skip heldId identity mismatch", {
+            merchantId,
+            heldId: opts.heldId,
+            heldTicket: rowTicket,
+            paidTicket: targetTicket,
+          });
+          return false;
+        }
+        return true;
       }
+      return sameHeldIdentity(ident, target);
+    };
+
+    const toDelete = new Set<string>();
+    for (const row of open) {
+      if (!matchesTarget(row)) continue;
+      if (row.status === "sent_to_kitchen" && !opts.settleKitchen) {
+        const openTotal = heldCartTotal(row.cartJson);
+        const fullyPaid = paidKnown && openTotal > 0 && openTotal - paidTotal <= 0.05;
+        if (!fullyPaid) {
+          console.info("[pos-held] keep kitchen ticket after partial/unsettled pay", {
+            merchantId,
+            id: row.id,
+            ticket: normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay),
+            openTotal,
+            paidTotal: paidKnown ? paidTotal : null,
+          });
+          continue;
+        }
+      }
+      toDelete.add(row.id);
     }
 
     for (const id of toDelete) {

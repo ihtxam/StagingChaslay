@@ -5,16 +5,20 @@ import api from '@/lib/api';
 import { clearAllOdsOrders } from '@/lib/ods-push';
 import { useI18n } from '@/lib/i18n';
 
+type OdsLayout = 'columns' | 'rows';
+
 type OdsDisplay = {
   id: string;
   name: string;
   token: string;
   shortCode?: string | null;
   theme: 'light' | 'teal' | 'dark';
+  layout?: OdsLayout;
   isActive: boolean;
 };
 
 const THEMES = ['light', 'teal', 'dark'] as const;
+const LAYOUTS = ['columns', 'rows'] as const;
 
 const PANEL_CARD = 'rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]';
 const CHIP_IDLE = 'bg-[var(--bg-muted)] text-[var(--text)] hover:opacity-90';
@@ -34,6 +38,7 @@ export default function OdsSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [theme, setTheme] = useState<(typeof THEMES)[number]>('light');
+  const [layout, setLayout] = useState<OdsLayout>('columns');
   const [busy, setBusy] = useState(false);
   const [licenseError, setLicenseError] = useState(false);
 
@@ -64,9 +69,10 @@ export default function OdsSettingsPanel() {
     if (!trimmed) return;
     setBusy(true);
     try {
-      await api.post('/merchant/ods/displays', { name: trimmed, theme });
+      await api.post('/merchant/ods/displays', { name: trimmed, theme, layout });
       setName('');
       setTheme('light');
+      setLayout('columns');
       toast.success(t('odsDisplayCreated'));
       await load();
     } catch (e: any) {
@@ -80,6 +86,16 @@ export default function OdsSettingsPanel() {
     try {
       await api.put(`/merchant/ods/displays/${id}`, { theme: nextTheme });
       toast.success(t('odsThemeUpdated'));
+      await load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('odsActionFailed'));
+    }
+  };
+
+  const updateLayout = async (id: string, nextLayout: OdsLayout) => {
+    try {
+      await api.put(`/merchant/ods/displays/${id}`, { layout: nextLayout });
+      toast.success(t('odsLayoutUpdated'));
       await load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('odsActionFailed'));
@@ -182,6 +198,21 @@ export default function OdsSettingsPanel() {
           ))}
         </div>
         <p className="text-xs text-[var(--text-muted)]">{t('odsThemeHint')}</p>
+        <div className="flex flex-wrap gap-2">
+          {LAYOUTS.map((ly) => (
+            <button
+              key={ly}
+              type="button"
+              onClick={() => setLayout(ly)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                layout === ly ? 'bg-teal-600 text-white' : CHIP_IDLE
+              }`}
+            >
+              {t(ly === 'columns' ? 'odsLayoutColumns' : 'odsLayoutRows')}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">{t('odsLayoutHint')}</p>
         <button
           type="button"
           disabled={busy || !name.trim()}
@@ -222,6 +253,20 @@ export default function OdsSettingsPanel() {
                           }`}
                         >
                           {t(`odsTheme_${th}`)}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {LAYOUTS.map((ly) => (
+                        <button
+                          key={ly}
+                          type="button"
+                          onClick={() => void updateLayout(d.id, ly)}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                            (d.layout || 'columns') === ly ? 'bg-teal-600 text-white' : CHIP_IDLE
+                          }`}
+                        >
+                          {t(ly === 'columns' ? 'odsLayoutColumns' : 'odsLayoutRows')}
                         </button>
                       ))}
                     </div>

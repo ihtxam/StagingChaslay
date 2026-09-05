@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster, ToastBar } from 'react-hot-toast';
+import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
 import { isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
@@ -58,6 +59,20 @@ function isWebPosRoute(pathname: string): boolean {
 function AppToaster() {
   const { pathname } = useLocation();
   const webPos = isWebPosRoute(pathname);
+  const [showPosToasts, setShowPosToasts] = useState(readShowPosToasts);
+
+  useEffect(() => {
+    const onPref = (ev: Event) => {
+      const enabled = (ev as CustomEvent<boolean>).detail;
+      setShowPosToasts(enabled === true);
+    };
+    window.addEventListener(POS_TOAST_PREF_EVENT, onPref);
+    return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
+  }, []);
+
+  if (webPos && !showPosToasts) {
+    return null;
+  }
 
   return (
     <Toaster
@@ -68,7 +83,7 @@ function AppToaster() {
           ? {
               bottom: 'auto',
               height: 'auto',
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
               left: '50%',
               right: 'auto',
               width: 'min(92vw, 22rem)',
@@ -77,17 +92,27 @@ function AppToaster() {
             }
           : undefined
       }
-      toastOptions={
-        webPos
+      toastOptions={{
+        duration: 3500,
+        style: webPos
           ? {
-              style: {
-                maxWidth: 'min(92vw, 22rem)',
-                fontSize: '0.875rem',
-              },
+              maxWidth: 'min(92vw, 22rem)',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
             }
-          : undefined
-      }
-    />
+          : { cursor: 'pointer' },
+      }}
+    >
+      {(t) => (
+        <div
+          role="presentation"
+          className="cursor-pointer"
+          onClick={() => toast.dismiss(t.id)}
+        >
+          <ToastBar toast={t} />
+        </div>
+      )}
+    </Toaster>
   );
 }
 

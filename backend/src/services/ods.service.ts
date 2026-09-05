@@ -23,6 +23,7 @@ export class OdsLicenseError extends Error {
 export type OdsDisplayInput = {
   name: string;
   theme?: OdsTheme;
+  layout?: "columns" | "rows";
   isActive?: boolean;
 };
 
@@ -206,6 +207,10 @@ function normalizeTheme(value: unknown): OdsTheme {
   return ODS_THEMES.includes(t as OdsTheme) ? (t as OdsTheme) : "light";
 }
 
+function normalizeLayout(value: unknown): "columns" | "rows" {
+  return String(value || "columns").toLowerCase() === "rows" ? "rows" : "columns";
+}
+
 function normalizeOrderNumber(value: unknown): string {
   let s = String(value || "")
     .trim()
@@ -364,6 +369,7 @@ export class OdsService {
         token: newToken(),
         shortCode: await allocateDisplayShortCode(db),
         theme: normalizeTheme(input.theme),
+        layout: normalizeLayout(input.layout),
         isActive: input.isActive !== false,
       })
       .returning();
@@ -376,6 +382,7 @@ export class OdsService {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name != null) patch.name = String(input.name).trim().slice(0, 255);
     if (input.theme != null) patch.theme = normalizeTheme(input.theme);
+    if (input.layout != null) patch.layout = normalizeLayout(input.layout);
     if (input.isActive != null) patch.isActive = !!input.isActive;
     const [row] = await db
       .update(schema.odsDisplays)
@@ -733,6 +740,7 @@ export class OdsService {
         id: display.id,
         name: display.name,
         theme: display.theme as OdsTheme,
+        layout: normalizeLayout(display.layout),
       },
       serverTime: new Date().toISOString(),
       preparing: filtered.preparing,

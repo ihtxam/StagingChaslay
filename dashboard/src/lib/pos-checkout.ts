@@ -50,6 +50,8 @@ export type PosCheckoutSettings = {
   actionButtonSize: ActionButtonSize;
   /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
   expressCheckoutEnabled: boolean;
+  /** Show POS toast notifications. Off by default. */
+  showPosToasts: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -79,6 +81,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   requireTableForDineIn: true,
   actionButtonSize: 'md',
   expressCheckoutEnabled: true,
+  showPosToasts: false,
 };
 
 export function isRetailPosMode(raw: unknown): boolean {
@@ -136,5 +139,6 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         ? src.actionButtonSize
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
     expressCheckoutEnabled: src.expressCheckoutEnabled !== false,
+    showPosToasts: src.showPosToasts === true,
   };
 }

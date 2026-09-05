@@ -182,10 +182,12 @@ export function sameHeldIdentity(
   a: { ticketDisplay?: string | null; tableId?: string | null; tabNumber?: string | null },
   b: { ticketDisplay?: string | null; tableId?: string | null; tabNumber?: string | null }
 ): boolean {
-  if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay) return true;
+  const aTicket = normHeldTicket(a.ticketDisplay);
+  const bTicket = normHeldTicket(b.ticketDisplay);
+  if (aTicket && bTicket && aTicket === bTicket) return true;
   if (a.tableId && b.tableId && a.tableId === b.tableId) {
-    if (a.ticketDisplay && b.ticketDisplay) return a.ticketDisplay === b.ticketDisplay;
-    if (a.ticketDisplay || b.ticketDisplay) return false;
+    if (aTicket && bTicket) return aTicket === bTicket;
+    if (aTicket || bTicket) return false;
     return true;
   }
   if (!a.tableId && !b.tableId && a.tabNumber && b.tabNumber && a.tabNumber === b.tabNumber) {
@@ -298,6 +300,8 @@ export type HeldReleaseIdent = {
   ticketDisplay?: string | null;
   tableId?: string | null;
   tabNumber?: string | null;
+  paidTotal?: number | null;
+  settleKitchen?: boolean;
 };
 
 /** Drop held rows after payment — works without CANCEL_ORDERS permission. */
@@ -314,6 +318,8 @@ export async function releaseHeldOrder(ident: HeldReleaseIdent): Promise<void> {
       ticketDisplay: ident.ticketDisplay || undefined,
       tableId: ident.tableId || undefined,
       tabNumber: ident.tabNumber || undefined,
+      paidTotal: ident.paidTotal ?? undefined,
+      settleKitchen: ident.settleKitchen === true,
     });
   } catch {
     /* payment already recorded — best-effort cleanup */
