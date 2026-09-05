@@ -294,9 +294,9 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
-/** In-store open ticket awaiting payment — show preview + load/collect, not instant checkout. */
+/** In-store unpaid ticket — load into register / collect, even if kitchen already closed. */
 function isOpenPosAwaitingOrder(o: PosOrder): boolean {
-  return !isOnlineShopOrder(o) && isOpenWebPosOrder(o) && isAwaitingPaymentOrder(o);
+  return !isOnlineShopOrder(o) && isAwaitingPaymentOrder(o);
 }
 
 /** Ongoing / kitchen / unpaid — not completed sales (POS cancel rules) */
@@ -2036,7 +2036,11 @@ export default function WebPosOrdersPanel({
               purgeMode
                 ? 'hidden'
                 : detailOpen
-                  ? 'fixed inset-0 z-[45] flex min-h-0 w-full flex-col bg-stone-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0'
+                  ? `${
+                      embedded
+                        ? 'absolute inset-0 z-[55]'
+                        : 'fixed inset-0 z-[55] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+                    } flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0`
                   : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
             }
           >
@@ -2124,10 +2128,10 @@ export default function WebPosOrdersPanel({
               </>
             ) : selectedOrder ? (
               <>
-                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="shrink-0 border-b border-stone-200 px-4 pb-3 pt-4 lg:hidden">
                   <button
                     type="button"
-                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 lg:hidden"
+                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50"
                     onClick={() => {
                       setSelectedOrder(null);
                       closeMenus();
@@ -2136,7 +2140,33 @@ export default function WebPosOrdersPanel({
                     <ChevronLeft size={16} />
                     {t('back')}
                   </button>
-
+                  {isOpenPosAwaitingOrder(selectedOrder) ? (
+                    <div className="space-y-2">
+                      {onLoadPosOrder ? (
+                        <button
+                          type="button"
+                          className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900"
+                          onClick={() => {
+                            onLoadPosOrder(selectedOrder);
+                            onClose();
+                          }}
+                        >
+                          {t('webPosLoadOrder')}
+                        </button>
+                      ) : null}
+                      {canCollectPayment(selectedOrder) || canAdminCollectPayment(selectedOrder) ? (
+                        <button
+                          type="button"
+                          className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
+                          onClick={() => startCollectPayment(selectedOrder)}
+                        >
+                          {t('webPosTakePayment')} · {money(selectedOrder.total)}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
                   {/* Side breadcrumb / overflow actions (print, refund, cancel) */}
                   {(() => {
                     const refs = orderPublicRefs(selectedOrder);
@@ -2341,7 +2371,7 @@ export default function WebPosOrdersPanel({
                   </div>
                 ) : null}
                 {isOpenPosAwaitingOrder(selectedOrder) ? (
-                  <div className="space-y-2 border-t border-stone-200 p-3">
+                  <div className="hidden space-y-2 border-t border-stone-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:block">
                     {onLoadPosOrder ? (
                       <button
                         type="button"

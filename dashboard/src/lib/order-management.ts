@@ -143,10 +143,14 @@ export function isTerminalOrderStatus(status?: string | null): boolean {
 }
 
 /**
- * WebPOS Orders panel — still in kitchen / fulfillment.
+ * WebPOS Orders panel — still in kitchen / fulfillment, or unpaid POS.
  * Paid internal POS closes after payment; online / 3P stay open until status=completed.
+ * Pay-later / invoice stay open even when fulfillment was marked completed.
  */
 export function isOpenWebPosOrder(o: MerchantOrder): boolean {
+  const status = normalizeOrderStatus(o.status);
+  if (status === 'cancelled' || status === 'refunded') return false;
+  if (!isOnlineShopOrder(o) && isAwaitingPaymentOrder(o)) return true;
   if (isTerminalOrderStatus(o.status)) return false;
   if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
   return true;
@@ -292,10 +296,8 @@ export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const method = (o.paymentMethod || '').toLowerCase().replace(/-/g, '_');
   if (['cancelled', 'refunded'].includes(status)) return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
-  // Invoice + awaiting_payment stays visible even when fulfillment status is completed
-  // (same class of hide-bug as paid POS delivery vanishing from Kitchen / history).
+  // Invoice / pay-later stay collectable even when fulfillment status is completed.
   if (isInvoiceOrder(o) || pay === 'awaiting_payment') return true;
-  if (status === 'completed') return false;
   if (method === 'pay_later' || method === 'pay-later') return true;
   if (isOnlineShopOrder(o) && (pay === 'cash' || method === 'cash')) return true;
   return false;
