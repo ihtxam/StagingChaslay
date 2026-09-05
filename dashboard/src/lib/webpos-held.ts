@@ -40,6 +40,8 @@ export function parseHeldCartJson(raw: unknown): HeldCartMeta {
     lineTotal: Number(line.lineTotal) || 0,
     unitPrice: Number(line.unitPrice) || 0,
     quantity: Number(line.quantity) || 0,
+    selectedExtras: Array.isArray(line.selectedExtras) ? line.selectedExtras : [],
+    comboSelections: Array.isArray(line.comboSelections) ? line.comboSelections : [],
   }));
   return {
     cart,

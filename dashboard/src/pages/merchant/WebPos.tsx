@@ -569,19 +569,21 @@ type CartLine = {
 
 function lineExtrasLabel(l: CartLine) {
   const parts: string[] = [];
-  if (l.comboSelections.length) {
+  const combos = l.comboSelections || [];
+  const extras = l.selectedExtras || [];
+  if (combos.length) {
     parts.push(
-      ...l.comboSelections.map((c) => {
+      ...combos.map((c) => {
         const productName = repairCatalogText(c.productName || '');
-        const extras = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
-        return extras.length ? `${productName} (${extras.join(', ')})` : productName;
+        const extraNames = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
+        return extraNames.length ? `${productName} (${extraNames.join(', ')})` : productName;
       })
     );
   }
-  if (!l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
-  } else if (l.comboSelections.length && l.selectedExtras.length) {
-    parts.push(...l.selectedExtras.map((e) => repairCatalogText(e.name || '')));
+  if (!combos.length && extras.length) {
+    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
+  } else if (combos.length && extras.length) {
+    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
   }
   return parts.join(', ');
 }
@@ -659,6 +661,8 @@ function normalizeCartLines(lines: CartLine[] | null | undefined): CartLine[] {
     lineTotal: Number(line.lineTotal) || 0,
     unitPrice: Number(line.unitPrice) || 0,
     quantity: Number(line.quantity) || 0,
+    selectedExtras: Array.isArray(line.selectedExtras) ? line.selectedExtras : [],
+    comboSelections: Array.isArray(line.comboSelections) ? line.comboSelections : [],
   }));
 }
 
@@ -3306,8 +3310,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const lineIsEditable = (line: CartLine, product?: Product | null) => {
     if (line.sentToKitchen || line.giftCard || line.isOpenPrice || line.isWeighed) return false;
-    if (line.comboSelections.length) return true;
-    if (line.selectedExtras.length || line.lineNote?.trim()) return true;
+    if (line.comboSelections?.length) return true;
+    if (line.selectedExtras?.length || line.lineNote?.trim()) return true;
     if (product && productHasComboSlots(product)) return true;
     if (product && productHasModifiers(product as ShopProductForModifiers)) return true;
     return false;
@@ -3328,7 +3332,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setEditingLineId(line.lineId);
     setSelectedLineId(null);
     setKeypadBuffer('');
-    if (line.comboSelections.length || productHasComboSlots(product)) {
+    if (line.comboSelections?.length || productHasComboSlots(product)) {
       setPendingCombo({
         id: product.id,
         name: product.name,

@@ -165,6 +165,50 @@ function sameHeldIdentity(
   return false;
 }
 
+/** POS shout numbers like #6893 — not WEB-1 / WP- / table labels. */
+function isPosShoutTicket(value?: string | null): boolean {
+  const raw = String(value || "")
+    .trim()
+    .replace(/^#/, "");
+  return /^\d{3,6}$/.test(raw);
+}
+
+function extraPriceSum(extras: unknown): number {
+  if (!Array.isArray(extras)) return 0;
+  return extras.reduce((sum, extra) => {
+    const row = extra && typeof extra === "object" ? (extra as { price?: unknown }) : {};
+    return sum + (Number(row.price) || 0);
+  }, 0);
+}
+
+function comboPriceSum(combos: unknown): number {
+  if (!Array.isArray(combos)) return 0;
+  return combos.reduce((sum, combo) => {
+    const row =
+      combo && typeof combo === "object"
+        ? (combo as { extraPrice?: unknown; selectedExtras?: unknown })
+        : {};
+    return sum + (Number(row.extraPrice) || 0) + extraPriceSum(row.selectedExtras);
+  }, 0);
+}
+
+function kdsModifiers(raw: unknown): {
+  selectedExtras: unknown[];
+  comboSelections: unknown[];
+  unitPrice: number;
+  lineTotal: number;
+} {
+  const mods = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const selectedExtras = Array.isArray(mods.selectedExtras) ? mods.selectedExtras : [];
+  const comboSelections = Array.isArray(mods.comboSelections) ? mods.comboSelections : [];
+  return {
+    selectedExtras,
+    comboSelections,
+    unitPrice: Number(mods.unitPrice) || 0,
+    lineTotal: Number(mods.lineTotal) || 0,
+  };
+}
+
 function heldCartTotal(cartJson: unknown): number {
   const data = normalizeHeldCartJson(cartJson);
   const cart = Array.isArray(data)
@@ -876,6 +920,7 @@ export class PosOrdersService {
   /**
    * Recreate POS held rows from open KDS tickets when the hold was deleted
    * (partial payment / stale session) but kitchen/ODS still show the ticket.
+   * Only POS shout numbers (#6893). Never clone paid sales or web-shop tickets.
    */
   static async restoreHeldFromOpenKitchen(merchantId: string) {
     const db = getDb();
@@ -886,64 +931,184 @@ export class PosOrdersService {
           inArray(schema.kdsTickets.status, ["pending", "in_progress", "preparing"])
         ),
       });
-      if (!tickets.length) return;
       const openHeld = await db.query.heldOrders.findMany({
         where: and(
           eq(schema.heldOrders.merchantId, merchantId),
           inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
         ),
       });
-      const heldTickets = new Set(
-        openHeld
-          .map((row) => normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay))
-          .filter(Boolean)
-      );
 
-      for (const ticket of tickets) {
+      const shoutTickets = tickets.filter((ticket) =>
+        isPosShoutTicket(ticket.ticketKey || ticket.orderNumber)
+      );
+      const restoredHoldTickets = openHeld
+        .filter((row) => String(row.notes || "").startsWith("restored from kitchen"))
+        .map((row) => normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay))
+        .filter(Boolean);
+      const ticketKeys = [
+        ...new Set(
+          [
+            ...shoutTickets.map((ticket) =>
+              normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber)
+            ),
+            ...restoredHoldTickets,
+          ].filter(Boolean)
+        ),
+      ];
+
+      const existingOrderTickets = new Set<string>();
+      if (ticketKeys.length) {
+        const noteFilters = ticketKeys.flatMap((key) => {
+          const bare = key.replace(/^#/, "");
+          return [
+            ilike(schema.orders.notes, `%[ticket:${key}]%`),
+            ilike(schema.orders.notes, `%[ticket:${bare}]%`),
+          ];
+        });
+        const orderRows = await db
+          .select({ notes: schema.orders.notes })
+          .from(schema.orders)
+          .where(and(eq(schema.orders.merchantId, merchantId), or(...noteFilters)));
+        for (const row of orderRows) {
+          const match = String(row.notes || "").match(/\[ticket:([^\]]+)\]/i);
+          const key = normalizeHeldTicket(match?.[1]);
+          if (key) existingOrderTickets.add(key);
+        }
+      }
+
+      for (const row of openHeld) {
+        const ident = heldIdentity(row.cartJson);
+        const key = normalizeHeldTicket(ident.ticketDisplay);
+        const restored = String(row.notes || "").startsWith("restored from kitchen");
+        if (!restored) continue;
+        const ghost = !isPosShoutTicket(key) || existingOrderTickets.has(key);
+        if (ghost) {
+          await db
+            .delete(schema.heldOrders)
+            .where(and(eq(schema.heldOrders.id, row.id), eq(schema.heldOrders.merchantId, merchantId)));
+          console.info("[pos-held] dropped ghost kitchen restore", { merchantId, ticket: key, id: row.id });
+        }
+      }
+
+      const heldAfterCleanup = await db.query.heldOrders.findMany({
+        where: and(
+          eq(schema.heldOrders.merchantId, merchantId),
+          inArray(schema.heldOrders.status, ["held", "sent_to_kitchen"])
+        ),
+      });
+      const heldByTicket = new Map<string, (typeof heldAfterCleanup)[number]>();
+      for (const row of heldAfterCleanup) {
+        const key = normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay);
+        if (key) heldByTicket.set(key, row);
+      }
+
+      const productIds = new Set<string>();
+      const itemsByTicket = new Map<string, Array<(typeof schema.kdsTicketItems)["$inferSelect"]>>();
+      for (const ticket of shoutTickets) {
         const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
-        if (!key || heldTickets.has(key)) continue;
+        if (!key || existingOrderTickets.has(key)) continue;
         const items = await db.query.kdsTicketItems.findMany({
           where: eq(schema.kdsTicketItems.ticketId, ticket.id),
         });
         if (!items.length) continue;
-        const cart = items.map((item) => {
+        itemsByTicket.set(key, items);
+        for (const item of items) {
+          if (item.productId) productIds.add(item.productId);
+        }
+      }
+
+      const priceByProduct = new Map<string, number>();
+      if (productIds.size) {
+        const products = await db
+          .select({ id: schema.products.id, price: schema.products.price })
+          .from(schema.products)
+          .where(
+            and(eq(schema.products.merchantId, merchantId), inArray(schema.products.id, [...productIds]))
+          );
+        for (const product of products) {
+          priceByProduct.set(product.id, Number(product.price) || 0);
+        }
+      }
+
+      const buildCart = (items: Array<(typeof schema.kdsTicketItems)["$inferSelect"]>) =>
+        items.map((item) => {
           const qty = Number(item.quantity) || 1;
-          const mods =
-            item.modifiersJson && typeof item.modifiersJson === "object"
-              ? (item.modifiersJson as Record<string, unknown>)
-              : {};
-          const unit = Number(mods.unitPrice) || 0;
+          const mods = kdsModifiers(item.modifiersJson);
+          const catalog = item.productId ? priceByProduct.get(item.productId) || 0 : 0;
+          const extras = extraPriceSum(mods.selectedExtras) + comboPriceSum(mods.comboSelections);
+          const unit = mods.unitPrice > 0 ? mods.unitPrice : catalog + extras;
+          const lineTotal = mods.lineTotal > 0 ? mods.lineTotal : roundMoney2(unit * qty);
           return {
             lineId: item.lineId,
             productId: item.productId || item.lineId,
             name: item.name,
             quantity: qty,
-            unitPrice: unit,
-            lineTotal: Number(mods.lineTotal) || unit * qty,
+            unitPrice: roundMoney2(unit),
+            lineTotal,
+            taxable: true,
             sentToKitchen: true,
             courseNumber: item.courseNumber || 1,
-            modifiers: mods.modifiers || [],
+            selectedExtras: mods.selectedExtras,
+            comboSelections: mods.comboSelections,
             lineNote: item.lineNote || null,
           };
         });
+
+      for (const ticket of shoutTickets) {
+        const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
+        if (!key || existingOrderTickets.has(key)) continue;
+        const items = itemsByTicket.get(key);
+        if (!items?.length) continue;
+        const cart = buildCart(items);
         const channel = String(ticket.channel || "takeaway");
+        const cartJson = {
+          cart,
+          channel,
+          tableLabel: ticket.tableLabel || null,
+          tabNumber: ticket.tabNumber || null,
+          ticketDisplay: key,
+          kitchenTicketKey: key,
+        };
+        const existing = heldByTicket.get(key);
+        if (existing) {
+          const restored = String(existing.notes || "").startsWith("restored from kitchen");
+          const openTotal = heldCartTotal(existing.cartJson);
+          if (restored && openTotal <= 0.05) {
+            await db
+              .update(schema.heldOrders)
+              .set({
+                cartJson,
+                label: `${key} · ${channel}`,
+                channel,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.heldOrders.id, existing.id));
+            console.info("[pos-held] repriced kitchen restore", {
+              merchantId,
+              ticket: key,
+              lines: cart.length,
+              total: heldCartTotal(cartJson),
+            });
+          }
+          continue;
+        }
         await db.insert(schema.heldOrders).values({
           merchantId,
           label: `${key} · ${channel}`,
           status: "sent_to_kitchen",
           channel,
-          cartJson: {
-            cart,
-            channel,
-            tableLabel: ticket.tableLabel || null,
-            tabNumber: ticket.tabNumber || null,
-            ticketDisplay: key,
-            kitchenTicketKey: key,
-          },
+          cartJson,
           notes: `restored from kitchen ${key}`,
         });
-        heldTickets.add(key);
-        console.info("[pos-held] restored from kitchen", { merchantId, ticket: key, lines: cart.length });
+        heldByTicket.set(key, {
+          id: "new",
+        } as (typeof heldAfterCleanup)[number]);
+        console.info("[pos-held] restored from kitchen", {
+          merchantId,
+          ticket: key,
+          lines: cart.length,
+          total: heldCartTotal(cartJson),
+        });
       }
     } catch (err) {
       console.warn("[pos-held] kitchen restore skipped:", err);
