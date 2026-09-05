@@ -1,7 +1,6 @@
 import https from "node:https";
 import { eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { schema } from "@/db/schema";
+import { getDb, schema } from "@/db";
 import { resolveShopPublicHost } from "@/lib/brand";
 import { verifyCustomDomainDns } from "@/lib/custom-domain-dns";
 import {
