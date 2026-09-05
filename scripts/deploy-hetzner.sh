@@ -303,7 +303,9 @@ ln -sfn "$ENV_FILE" "$REPO_DIR/.env.production"
 ln -sfn "$ENV_FILE" "$REPO_DIR/.env"
 
 echo "=== Git pull ==="
-if [[ ! -d "$REPO_DIR/.git" ]]; then
+if [[ "${SKIP_GIT_SYNC:-}" == "1" ]]; then
+  echo "SKIP_GIT_SYNC=1 — using current tree ($(git rev-parse --short HEAD 2>/dev/null || echo unknown))"
+elif [[ ! -d "$REPO_DIR/.git" ]]; then
   echo "ERROR: $REPO_DIR is not a git repository (no .git directory)."
   echo ""
   echo "Deploy needs 'git fetch' to pull latest code. Common fixes:"
@@ -425,6 +427,9 @@ ensure_git_ssh_remote() {
 
 ensure_git_ssh_remote
 
+if [[ "${SKIP_GIT_SYNC:-}" == "1" ]]; then
+  :
+else
 # Concurrent deploys can race on refs/remotes/origin/main (cannot lock ref).
 git_fetch_main_with_retry() {
   local attempt max_attempts=3 sleep_secs=2
@@ -453,6 +458,7 @@ git_fetch_main_with_retry() {
 
 git_fetch_main_with_retry
 git reset --hard origin/main
+fi
 chmod +x "$REPO_DIR/scripts/deploy-hetzner.sh" || true
 
 # Re-exec updated script so new ensure_env_production / seed logic is used
