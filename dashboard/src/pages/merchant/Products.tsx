@@ -1245,7 +1245,7 @@ export default function Products() {
                   onClick={() => setMoreActionsOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[14rem] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-xl"
+                  className="absolute left-0 top-[calc(100%+6px)] z-40 min-w-[14rem] max-w-[min(18rem,calc(100vw-1.5rem))] max-h-[min(70vh,24rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-xl sm:left-auto sm:right-0"
                   role="menu"
                 >
                   <button
