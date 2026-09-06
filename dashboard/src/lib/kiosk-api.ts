@@ -133,6 +133,7 @@ export type KioskCartLine = {
   name: string;
   price: number;
   quantity: number;
+  image?: string;
   selectedExtras?: Array<{ id: string; name: string; price: number }>;
   comboSelections?: KioskComboSelection[];
 };

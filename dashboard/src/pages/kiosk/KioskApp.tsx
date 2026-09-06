@@ -9,11 +9,14 @@ import {
   ChevronDown,
   CreditCard,
   Loader2,
+  Minus,
+  Pencil,
   Plus,
   Printer,
   QrCode,
   Settings,
   ShoppingBag,
+  Trash2,
   Truck,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -59,7 +62,6 @@ type Step =
   | 'table-badge'
   | 'membership'
   | 'menu'
-  | 'cart-review'
   | 'checkout'
   | 'success';
 
@@ -102,7 +104,7 @@ function toWizardProduct(item: KioskMenuItem): KioskWizardProduct {
 export default function KioskApp() {
   const { token = '' } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const [step, setStep] = useState<Step>('attract');
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<KioskConfig | null>(null);
@@ -120,6 +122,8 @@ export default function KioskApp() {
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [cart, setCart] = useState<KioskCartLine[]>([]);
   const [customizeProduct, setCustomizeProduct] = useState<KioskWizardProduct | null>(null);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
@@ -230,6 +234,8 @@ export default function KioskApp() {
     setOrderId('');
     setOrderNumber('');
     setCustomizeProduct(null);
+    setEditingLineId(null);
+    setOrderSheetOpen(false);
     setFulfillmentChannel('dine_in');
     setLastPrintCtx(null);
   }, []);
@@ -313,10 +319,57 @@ export default function KioskApp() {
           name: item.name,
           price: item.price,
           quantity: 1,
+          image: item.image,
         },
       ];
     });
   }, []);
+
+  const openOrderSheet = useCallback(() => {
+    if (!cart.length) return;
+    setOrderSheetOpen(true);
+  }, [cart.length]);
+
+  const setLineQuantity = useCallback((lineId: string, quantity: number) => {
+    setCart((prev) => {
+      const next = prev
+        .map((l) => (l.id === lineId ? { ...l, quantity } : l))
+        .filter((l) => l.quantity > 0);
+      if (!next.length) setOrderSheetOpen(false);
+      return next;
+    });
+  }, []);
+
+  const removeLine = useCallback((lineId: string) => {
+    setCart((prev) => {
+      const next = prev.filter((l) => l.id !== lineId);
+      if (!next.length) setOrderSheetOpen(false);
+      return next;
+    });
+  }, []);
+
+  const findMenuItem = useCallback(
+    (productId: string) => {
+      for (const cat of menu) {
+        const found = cat.items.find((item) => item.id === productId);
+        if (found) return found;
+      }
+      return undefined;
+    },
+    [menu]
+  );
+
+  const editLine = useCallback(
+    (line: KioskCartLine) => {
+      const item = findMenuItem(line.productId);
+      if (!item) return;
+      const wizardProduct = toWizardProduct(item);
+      if (!kioskProductNeedsWizard(wizardProduct)) return;
+      setEditingLineId(line.id);
+      setCustomizeProduct(wizardProduct);
+    },
+    [findMenuItem]
+  );
 
   const applyMembershipCode = useCallback(
     async (raw: string) => {
@@ -354,7 +407,8 @@ export default function KioskApp() {
     !scanningMembership &&
     !scanningBarcode &&
     !adminPinOpen &&
-    !customizeProduct;
+    !customizeProduct &&
+    !orderSheetOpen;
 
   const onBarcodeWedgeScan = useCallback(
     (code: string) => {
@@ -763,7 +817,7 @@ export default function KioskApp() {
               <button
                 type="button"
                 className="kiosk-cart-badge flex h-11 items-center rounded-full px-4 text-sm font-bold"
-                onClick={() => cartCount && setStep('cart-review')}
+                onClick={openOrderSheet}
               >
                 {money(cartTotal)}
                 <ShoppingBag className="ml-2 h-4 w-4" />
@@ -1085,57 +1139,13 @@ export default function KioskApp() {
               <button
                 type="button"
                 disabled={!cart.length}
-                onClick={() => setStep('cart-review')}
+                onClick={openOrderSheet}
                 className="kiosk-btn-primary ml-auto min-w-[11rem]"
               >
-                Review order <ArrowRight className="ml-2 h-5 w-5" />
+                {t('kioskReviewOrder')} <ArrowRight className="ml-2 h-5 w-5" />
               </button>
             </div>
             </div>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 'cart-review' ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-            <h2 className="kiosk-step-title font-bold">Your order</h2>
-            <ul className="mt-6 flex-1 space-y-3 overflow-y-auto">
-              {cart.map((line) => (
-                <li
-                  key={line.id}
-                  className="flex items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-4"
-                >
-                  <div>
-                    <p className="font-semibold">
-                      {line.quantity}× {line.name}
-                    </p>
-                    {(line.comboSelections || []).map((c) => (
-                      <p key={`${c.slotId}-${c.productId}`} className="text-sm text-stone-500">
-                        {c.slotName ? `${c.slotName}: ` : ''}
-                        {c.productName || c.productId}
-                        {(c.selectedExtras || []).length
-                          ? ` (${c.selectedExtras!.map((e) => e.name).join(', ')})`
-                          : ''}
-                      </p>
-                    ))}
-                    {(line.selectedExtras || []).map((e) => (
-                      <p key={e.id} className="text-sm text-stone-500">
-                        + {e.name}
-                      </p>
-                    ))}
-                  </div>
-                  <p className="text-lg font-bold">{money(lineTotal(line))}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-right text-[1.75em] font-bold">{money(cartTotal)}</p>
-            <div className="mt-6 flex gap-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-              <button type="button" onClick={() => setStep('menu')} className="kiosk-btn-secondary flex-1">
-                Back to menu
-              </button>
-              <button type="button" onClick={() => setStep('checkout')} className="kiosk-btn-primary flex-[2]">
-                Checkout
-              </button>
             </div>
           </div>
         ) : null}
@@ -1144,7 +1154,24 @@ export default function KioskApp() {
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-6">
             <h2 className="kiosk-step-title font-bold">How would you like to pay?</h2>
             <p className="text-[2em] font-bold kiosk-text-accent">{money(cartTotal)}</p>
-            <div className="grid w-full max-w-lg grid-cols-1 gap-4">
+            <div
+              className={`grid w-full max-w-3xl gap-4 ${
+                cashEnabled && cardEnabled ? 'grid-cols-2' : 'max-w-lg grid-cols-1'
+              }`}
+            >
+              {cardEnabled ? (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitOrder('card')}
+                className="kiosk-checkout-card relative flex min-h-[var(--kiosk-choice-min-h,140px)] flex-col items-center justify-center gap-3 rounded-2xl border-2 p-8 active:scale-[0.98]"
+              >
+                <span className="kiosk-pay-faster">Faster</span>
+                <CreditCard className="h-12 w-12 kiosk-text-accent" />
+                <span className="text-[1.25em] font-bold">Card or wallet</span>
+                <span className="text-sm text-stone-500">Pay here on the terminal</span>
+              </button>
+              ) : null}
               {cashEnabled ? (
               <button
                 type="button"
@@ -1153,20 +1180,8 @@ export default function KioskApp() {
                 className="flex min-h-[var(--kiosk-choice-min-h,140px)] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-stone-200 bg-white p-8 active:scale-[0.98]"
               >
                 <Banknote className="h-12 w-12 text-amber-600" />
-                <span className="text-[1.25em] font-bold">Pay with cash</span>
-                <span className="text-sm text-stone-500">Pay at the counter</span>
-              </button>
-              ) : null}
-              {cardEnabled ? (
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => void submitOrder('card')}
-                className="kiosk-checkout-card flex min-h-[var(--kiosk-choice-min-h,140px)] flex-col items-center justify-center gap-3 rounded-2xl border-2 p-8 active:scale-[0.98]"
-              >
-                <CreditCard className="h-12 w-12 kiosk-text-accent" />
-                <span className="text-[1.25em] font-bold">Pay by card</span>
-                <span className="text-sm text-stone-500">Use payment terminal</span>
+                <span className="text-[1.25em] font-bold">At the counter</span>
+                <span className="text-sm text-stone-500">Pay with cash</span>
               </button>
               ) : null}
             </div>
@@ -1178,7 +1193,14 @@ export default function KioskApp() {
                 <Loader2 className="h-5 w-5 animate-spin" /> Processing…
               </p>
             ) : null}
-            <button type="button" onClick={() => setStep('cart-review')} className="kiosk-btn-secondary mt-4 mb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('menu');
+                setOrderSheetOpen(true);
+              }}
+              className="kiosk-btn-secondary mt-4 mb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            >
               Back
             </button>
           </div>
@@ -1220,38 +1242,158 @@ export default function KioskApp() {
       {customizeProduct ? (
         <KioskCustomizeWizard
           product={customizeProduct}
-          onClose={() => setCustomizeProduct(null)}
+          onClose={() => {
+            setCustomizeProduct(null);
+            setEditingLineId(null);
+          }}
           onConfirm={({ selectedExtras, comboSelections, unitPrice }) => {
-            setCart((prev) => [
-              ...prev,
-              {
-                id: `${customizeProduct.id}-${Date.now()}`,
-                productId: customizeProduct.id,
-                name: customizeProduct.name,
-                price: unitPrice,
-                quantity: 1,
-                selectedExtras: selectedExtras.map((e) => ({
+            const nextLine: KioskCartLine = {
+              id: editingLineId || `${customizeProduct.id}-${Date.now()}`,
+              productId: customizeProduct.id,
+              name: customizeProduct.name,
+              price: unitPrice,
+              quantity: 1,
+              image: customizeProduct.image,
+              selectedExtras: selectedExtras.map((e) => ({
+                id: e.id,
+                name: e.name,
+                price: e.price,
+              })),
+              comboSelections: comboSelections.map((c) => ({
+                slotId: c.slotId,
+                slotName: c.slotName,
+                productId: c.productId,
+                productName: c.productName,
+                extraPrice: c.extraPrice,
+                selectedExtras: (c.selectedExtras || []).map((e) => ({
                   id: e.id,
                   name: e.name,
                   price: e.price,
                 })),
-                comboSelections: comboSelections.map((c) => ({
-                  slotId: c.slotId,
-                  slotName: c.slotName,
-                  productId: c.productId,
-                  productName: c.productName,
-                  extraPrice: c.extraPrice,
-                  selectedExtras: (c.selectedExtras || []).map((e) => ({
-                    id: e.id,
-                    name: e.name,
-                    price: e.price,
-                  })),
-                })),
-              },
-            ]);
+              })),
+            };
+            setCart((prev) => {
+              if (editingLineId) {
+                const existing = prev.find((l) => l.id === editingLineId);
+                nextLine.quantity = existing?.quantity || 1;
+                return prev.map((l) => (l.id === editingLineId ? nextLine : l));
+              }
+              return [...prev, nextLine];
+            });
             setCustomizeProduct(null);
+            setEditingLineId(null);
           }}
         />
+      ) : null}
+
+      {orderSheetOpen ? (
+        <div className="kiosk-order-overlay" role="dialog" aria-modal="true" aria-label={t('kioskYourOrder')}>
+          <button
+            type="button"
+            className="kiosk-order-backdrop"
+            aria-label={t('kioskContinueOrder')}
+            onClick={() => setOrderSheetOpen(false)}
+          />
+          <div className="kiosk-order-sheet">
+            <header className="kiosk-order-head">
+              <h2>{t('kioskYourOrder')}</h2>
+              <button
+                type="button"
+                className="kiosk-wizard-close"
+                onClick={() => setOrderSheetOpen(false)}
+                aria-label={t('close')}
+              >
+                <span className="text-2xl leading-none">×</span>
+              </button>
+            </header>
+            {cart.length ? (
+              <ul className="kiosk-order-list">
+                {cart.map((line) => {
+                  const item = findMenuItem(line.productId);
+                  const canEdit = !!item && kioskProductNeedsWizard(toWizardProduct(item));
+                  return (
+                    <li key={line.id} className="kiosk-order-line">
+                      {line.image ? (
+                        <img src={line.image} alt="" />
+                      ) : (
+                        <div className="kiosk-order-line-ph" />
+                      )}
+                      <div className="kiosk-order-line-body">
+                        <p className="kiosk-order-line-name">{line.name}</p>
+                        {(line.comboSelections || []).map((c) => (
+                          <p key={`${c.slotId}-${c.productId}`} className="kiosk-order-line-meta">
+                            {c.slotName ? `${c.slotName}: ` : ''}
+                            {c.productName || c.productId}
+                            {(c.selectedExtras || []).length
+                              ? ` (${c.selectedExtras!.map((e) => e.name).join(', ')})`
+                              : ''}
+                          </p>
+                        ))}
+                        {(line.selectedExtras || []).map((e) => (
+                          <p key={e.id} className="kiosk-order-line-meta">
+                            + {e.name}
+                          </p>
+                        ))}
+                        <div className="kiosk-order-line-actions">
+                          {canEdit ? (
+                            <button type="button" onClick={() => editLine(line)}>
+                              <Pencil className="h-4 w-4" />
+                              {t('kioskEditItem')}
+                            </button>
+                          ) : null}
+                          <button type="button" onClick={() => removeLine(line.id)}>
+                            <Trash2 className="h-4 w-4" />
+                            {t('kioskRemove')}
+                          </button>
+                          <div className="kiosk-order-qty">
+                            <button
+                              type="button"
+                              aria-label="-"
+                              onClick={() => setLineQuantity(line.id, line.quantity - 1)}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span>{line.quantity}</span>
+                            <button
+                              type="button"
+                              aria-label="+"
+                              onClick={() => setLineQuantity(line.id, line.quantity + 1)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="kiosk-order-line-price">{money(lineTotal(line))}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="kiosk-order-empty">{t('kioskOrderEmpty')}</p>
+            )}
+            <footer className="kiosk-order-foot">
+              <button
+                type="button"
+                className="kiosk-btn-secondary flex-1"
+                onClick={() => setOrderSheetOpen(false)}
+              >
+                {t('kioskContinueOrder')}
+              </button>
+              <button
+                type="button"
+                disabled={!cart.length}
+                className="kiosk-btn-primary flex-[1.4]"
+                onClick={() => {
+                  setOrderSheetOpen(false);
+                  setStep('checkout');
+                }}
+              >
+                {t('kioskCheckout')} {money(cartTotal)}
+              </button>
+            </footer>
+          </div>
+        </div>
       ) : null}
 
       {adminPinOpen ? (
