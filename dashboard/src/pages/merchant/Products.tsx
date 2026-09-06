@@ -1224,7 +1224,7 @@ export default function Products() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               type="button"
               className="btn-secondary inline-flex items-center gap-1.5"
@@ -1245,7 +1245,7 @@ export default function Products() {
                   onClick={() => setMoreActionsOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[14rem] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-xl"
+                  className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 max-h-[min(70vh,24rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-xl sm:left-auto sm:right-0 sm:w-auto sm:min-w-[16rem]"
                   role="menu"
                 >
                   <button
