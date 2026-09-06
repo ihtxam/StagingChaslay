@@ -8,6 +8,8 @@ import {
   queryRaw,
 } from "@/lib/ensure-merchant-schema";
 import { normalizeKioskSettings, type KioskSettings } from "@/lib/kiosk-settings";
+import { normalizeComboSlots } from "@/lib/combo";
+import { roundMoney2 } from "@/lib/money";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { GiftCardService } from "@/services/gift-card.service";
@@ -95,6 +97,7 @@ export class KioskService {
         autoPrintKitchen: settings.autoPrintKitchen !== false,
         autoPrintReceipt: settings.autoPrintReceipt === true,
         screenSizeIn: settings.screenSizeIn === 27 ? 27 : 23,
+        categoryNav: settings.categoryNav === "top" ? "top" : "left",
       },
       tables,
     };
@@ -153,11 +156,17 @@ export class KioskService {
       (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
     );
 
+    const comboChildIds = new Set<string>();
+    for (const p of visibleProducts) {
+      if (String((p as { productType?: string }).productType || "") !== "combo") continue;
+      for (const slot of normalizeComboSlots((p as { comboItems?: unknown }).comboItems)) {
+        for (const opt of slot.options) comboChildIds.add(opt.productId);
+      }
+    }
     const { ModifierService } = await import("@/services/modifier.service");
-    const groupsByProduct = await ModifierService.getGroupsForProducts(
-      merchant.id,
-      visibleProducts.map((p) => p.id)
-    );
+    const groupsByProduct = await ModifierService.getGroupsForProducts(merchant.id, [
+      ...new Set([...visibleProducts.map((p) => p.id), ...comboChildIds]),
+    ]);
 
     const serializeGroup = (g: {
       id: string;
@@ -192,21 +201,86 @@ export class KioskService {
         })),
     });
 
+    const catalogById = new Map(withOverrides.map((p) => [p.id, p]));
+    const serializeProduct = (p: (typeof visibleProducts)[number]) => {
+      const extras = Array.isArray((p as { extras?: unknown[] }).extras)
+        ? ((p as { extras: Array<{ id?: string; name?: string; price?: unknown }> }).extras)
+        : [];
+      const productType = String((p as { productType?: string }).productType || "standard");
+      const isCombo = productType === "combo";
+      const slots = isCombo ? normalizeComboSlots((p as { comboItems?: unknown }).comboItems) : [];
+      const comboSlots = slots
+        .map((slot) => ({
+          id: slot.id,
+          name: slot.name,
+          minPick: slot.minPick,
+          maxPick: slot.maxPick,
+          options: slot.options
+            .map((opt) => {
+              const child = catalogById.get(opt.productId);
+              if (!child || child.isActive === false) return null;
+              const childGroups = (groupsByProduct.get(child.id) || []).map(serializeGroup);
+              const childExtras = Array.isArray((child as { extras?: unknown[] }).extras)
+                ? ((child as { extras: Array<{ id?: string; name?: string; price?: unknown }> }).extras)
+                : [];
+              return {
+                productId: child.id,
+                name: child.name,
+                image: (child as { imageUrl?: string | null }).imageUrl || null,
+                description: child.description || null,
+                extraPrice: roundMoney2(opt.extraPrice),
+                allowExtras: !!(child as { allowExtras?: boolean }).allowExtras || childGroups.length > 0 || childExtras.length > 0,
+                extras: childExtras.map((e) => ({
+                  id: String(e.id || ""),
+                  name: String(e.name || ""),
+                  price: Number(e.price) || 0,
+                })),
+                modifierGroups: childGroups,
+              };
+            })
+            .filter(Boolean),
+        }))
+        .filter((s) => s.options.length > 0);
+      const specifications = Array.isArray((p as { specifications?: unknown[] }).specifications)
+        ? ((p as { specifications: Array<Record<string, unknown>> }).specifications)
+            .filter((s) => String(s?.name || "").trim() && String(s.saleStatus || "in_stock") !== "out_of_stock")
+            .map((s, i) => ({
+              id: String(s.id || `spec-${i + 1}`),
+              name: String(s.name).trim(),
+              price: roundMoney2(Number(s.price) || 0),
+              saleStatus: String(s.saleStatus || "in_stock"),
+              isDefault: !!s.isDefault,
+              sortOrder: Number(s.sortOrder) || i,
+            }))
+        : [];
+      const modifierGroups = (groupsByProduct.get(p.id) || []).map(serializeGroup);
+      return {
+        id: p.id,
+        name: p.name,
+        price: Number(p.price || 0),
+        description: p.description || undefined,
+        image: (p as { imageUrl?: string | null }).imageUrl || undefined,
+        barcode: (p as { barcode?: string | null }).barcode || undefined,
+        sku: (p as { sku?: string | null }).sku || undefined,
+        productType,
+        allowExtras: !!(p as { allowExtras?: boolean }).allowExtras || modifierGroups.length > 0 || extras.length > 0,
+        extras: extras.map((e) => ({
+          id: String(e.id || ""),
+          name: String(e.name || ""),
+          price: Number(e.price) || 0,
+        })),
+        specifications,
+        modifierGroups,
+        comboSlots: isCombo ? comboSlots : [],
+      };
+    };
+
     const menu = visibleCategories.map((cat) => ({
       id: cat.id,
       name: cat.name,
-      items: visibleProducts
-        .filter((p) => p.categoryId === cat.id)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: Number(p.price || 0),
-          description: p.description || undefined,
-          image: (p as { imageUrl?: string | null }).imageUrl || undefined,
-          barcode: (p as { barcode?: string | null }).barcode || undefined,
-          sku: (p as { sku?: string | null }).sku || undefined,
-          modifierGroups: (groupsByProduct.get(p.id) || []).map(serializeGroup),
-        })),
+      image: (cat as { imageUrl?: string | null }).imageUrl || undefined,
+      color: (cat as { color?: string | null }).color || undefined,
+      items: visibleProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
     }));
 
     return { menu, locationId };

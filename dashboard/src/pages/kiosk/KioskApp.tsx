@@ -17,10 +17,10 @@ import {
   Truck,
   UtensilsCrossed,
 } from 'lucide-react';
-import ShopProductModifiersModal, {
-  productHasModifiers,
-  type ShopProductForModifiers,
-} from '@/components/shop/ShopProductModifiersModal';
+import KioskCustomizeWizard, {
+  kioskProductNeedsWizard,
+  type KioskWizardProduct,
+} from '@/components/kiosk/KioskCustomizeWizard';
 import { acquireCameraStream, describeCameraAccessError, isCameraAvailable } from '@/lib/camera-stream';
 import { startQrCameraScan } from '@/lib/qr-camera-scan';
 import {
@@ -40,6 +40,7 @@ import {
   type KioskConfig,
   type KioskFulfillmentChannel,
   type KioskMenuCategory,
+  type KioskMenuItem,
 } from '@/lib/kiosk-api';
 import { printKioskOrder, type KioskPrintContext } from '@/lib/kiosk-print';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -75,7 +76,27 @@ function money(n: number): string {
 
 function lineTotal(line: KioskCartLine): number {
   const extras = (line.selectedExtras || []).reduce((s, e) => s + e.price, 0);
-  return (line.price + extras) * line.quantity;
+  const combo = (line.comboSelections || []).reduce(
+    (s, c) => s + (Number(c.extraPrice) || 0) + (c.selectedExtras || []).reduce((x, e) => x + e.price, 0),
+    0
+  );
+  return (line.price + extras + combo) * line.quantity;
+}
+
+function toWizardProduct(item: KioskMenuItem): KioskWizardProduct {
+  return {
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    description: item.description,
+    image: item.image,
+    allowExtras: item.allowExtras,
+    extras: item.extras,
+    specifications: item.specifications,
+    modifierGroups: item.modifierGroups as KioskWizardProduct['modifierGroups'],
+    productType: item.productType,
+    comboSlots: item.comboSlots as KioskWizardProduct['comboSlots'],
+  };
 }
 
 export default function KioskApp() {
@@ -98,7 +119,7 @@ export default function KioskApp() {
   const [barcodeCameraError, setBarcodeCameraError] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [cart, setCart] = useState<KioskCartLine[]>([]);
-  const [modifierProduct, setModifierProduct] = useState<ShopProductForModifiers | null>(null);
+  const [customizeProduct, setCustomizeProduct] = useState<KioskWizardProduct | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
@@ -208,7 +229,7 @@ export default function KioskApp() {
     setCart([]);
     setOrderId('');
     setOrderNumber('');
-    setModifierProduct(null);
+    setCustomizeProduct(null);
     setFulfillmentChannel('dine_in');
     setLastPrintCtx(null);
   }, []);
@@ -272,16 +293,9 @@ export default function KioskApp() {
   }, [bumpIdle]);
 
   const addProduct = useCallback((item: KioskMenuCategory['items'][number]) => {
-    const asModifier: ShopProductForModifiers = {
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      description: item.description,
-      image: item.image,
-      modifierGroups: item.modifierGroups as ShopProductForModifiers['modifierGroups'],
-    };
-    if (productHasModifiers(asModifier)) {
-      setModifierProduct(asModifier);
+    const wizardProduct = toWizardProduct(item);
+    if (kioskProductNeedsWizard(wizardProduct)) {
+      setCustomizeProduct(wizardProduct);
       return;
     }
     setCart((prev) => {
@@ -340,7 +354,7 @@ export default function KioskApp() {
     !scanningMembership &&
     !scanningBarcode &&
     !adminPinOpen &&
-    !modifierProduct;
+    !customizeProduct;
 
   const onBarcodeWedgeScan = useCallback(
     (code: string) => {
@@ -536,6 +550,12 @@ export default function KioskApp() {
           productId: l.productId,
           quantity: l.quantity,
           selectedExtras: (l.selectedExtras || []).map((e) => ({ id: e.id })),
+          comboSelections: (l.comboSelections || []).map((c) => ({
+            slotId: c.slotId,
+            slotName: c.slotName,
+            productId: c.productId,
+            selectedExtras: (c.selectedExtras || []).map((e) => ({ id: e.id })),
+          })),
         })),
         paymentMethod,
         fulfillmentChannel,
@@ -740,11 +760,15 @@ export default function KioskApp() {
               ) : null}
             </div>
             {step !== 'attract' && step !== 'success' ? (
-              <div className="kiosk-cart-badge flex h-11 items-center rounded-full px-4 text-sm font-bold">
+              <button
+                type="button"
+                className="kiosk-cart-badge flex h-11 items-center rounded-full px-4 text-sm font-bold"
+                onClick={() => cartCount && setStep('cart-review')}
+              >
                 {money(cartTotal)}
                 <ShoppingBag className="ml-2 h-4 w-4" />
                 <span className="ml-1">{cartCount}</span>
-              </div>
+              </button>
             ) : null}
           </div>
         </div>
@@ -930,6 +954,12 @@ export default function KioskApp() {
 
         {step === 'menu' ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div
+              className={`kiosk-menu-layout ${
+                config?.settings.categoryNav === 'top' ? 'is-top' : 'is-left'
+              }`}
+            >
+            {config?.settings.categoryNav === 'top' ? (
             <nav className="kiosk-category-nav" aria-label="Menu categories">
               {menu.map((cat) => (
                 <button
@@ -940,10 +970,37 @@ export default function KioskApp() {
                     activeCategory?.id === cat.id ? 'kiosk-category-active' : ''
                   }`}
                 >
+                  {cat.image ? (
+                    <img src={cat.image} alt="" className="kiosk-category-thumb" />
+                  ) : (
+                    <span className="kiosk-category-thumb-ph" />
+                  )}
                   {cat.name}
                 </button>
               ))}
             </nav>
+            ) : (
+            <nav className="kiosk-category-sidebar" aria-label="Menu categories">
+              {menu.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategoryId(cat.id)}
+                  className={`kiosk-category-side-btn ${
+                    activeCategory?.id === cat.id ? 'is-active' : ''
+                  }`}
+                >
+                  {cat.image ? (
+                    <img src={cat.image} alt="" className="kiosk-category-thumb" />
+                  ) : (
+                    <span className="kiosk-category-thumb-ph" />
+                  )}
+                  <span>{cat.name}</span>
+                </button>
+              ))}
+            </nav>
+            )}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="kiosk-product-scroll">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="kiosk-step-title font-bold">{activeCategory?.name}</h2>
@@ -1034,6 +1091,8 @@ export default function KioskApp() {
                 Review order <ArrowRight className="ml-2 h-5 w-5" />
               </button>
             </div>
+            </div>
+            </div>
           </div>
         ) : null}
 
@@ -1050,6 +1109,15 @@ export default function KioskApp() {
                     <p className="font-semibold">
                       {line.quantity}× {line.name}
                     </p>
+                    {(line.comboSelections || []).map((c) => (
+                      <p key={`${c.slotId}-${c.productId}`} className="text-sm text-stone-500">
+                        {c.slotName ? `${c.slotName}: ` : ''}
+                        {c.productName || c.productId}
+                        {(c.selectedExtras || []).length
+                          ? ` (${c.selectedExtras!.map((e) => e.name).join(', ')})`
+                          : ''}
+                      </p>
+                    ))}
                     {(line.selectedExtras || []).map((e) => (
                       <p key={e.id} className="text-sm text-stone-500">
                         + {e.name}
@@ -1149,32 +1217,39 @@ export default function KioskApp() {
         ) : null}
       </main>
 
-      {modifierProduct ? (
-        <ShopProductModifiersModal
-          product={modifierProduct}
-          wide
-          compact={false}
-          touchLarge
-          showProductImages
-          onClose={() => setModifierProduct(null)}
-          onConfirm={(extras, unitPrice, options) => {
-            const qty = options?.qty ?? 1;
+      {customizeProduct ? (
+        <KioskCustomizeWizard
+          product={customizeProduct}
+          onClose={() => setCustomizeProduct(null)}
+          onConfirm={({ selectedExtras, comboSelections, unitPrice }) => {
             setCart((prev) => [
               ...prev,
               {
-                id: `${modifierProduct.id}-${Date.now()}`,
-                productId: modifierProduct.id,
-                name: modifierProduct.name,
+                id: `${customizeProduct.id}-${Date.now()}`,
+                productId: customizeProduct.id,
+                name: customizeProduct.name,
                 price: unitPrice,
-                quantity: qty,
-                selectedExtras: extras.map((e) => ({
+                quantity: 1,
+                selectedExtras: selectedExtras.map((e) => ({
                   id: e.id,
                   name: e.name,
                   price: e.price,
                 })),
+                comboSelections: comboSelections.map((c) => ({
+                  slotId: c.slotId,
+                  slotName: c.slotName,
+                  productId: c.productId,
+                  productName: c.productName,
+                  extraPrice: c.extraPrice,
+                  selectedExtras: (c.selectedExtras || []).map((e) => ({
+                    id: e.id,
+                    name: e.name,
+                    price: e.price,
+                  })),
+                })),
               },
             ]);
-            setModifierProduct(null);
+            setCustomizeProduct(null);
           }}
         />
       ) : null}

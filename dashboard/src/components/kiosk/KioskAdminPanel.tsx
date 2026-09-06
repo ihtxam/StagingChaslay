@@ -626,6 +626,32 @@ export default function KioskAdminPanel({
               </select>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskScreenSizeHint')}</p>
             </label>
+            <div className="md:col-span-2">
+              <p className="text-sm font-semibold text-[var(--text)]">{t('kioskCategoryNavLabel')}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskCategoryNavHint')}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
+                  <input
+                    type="radio"
+                    name="kioskCategoryNav"
+                    checked={(settings.categoryNav || 'left') === 'left'}
+                    disabled={!tokenModeEditable}
+                    onChange={() => setSettings({ ...settings, categoryNav: 'left' })}
+                  />
+                  <span className="text-sm">{t('kioskCategoryNavLeft')}</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
+                  <input
+                    type="radio"
+                    name="kioskCategoryNav"
+                    checked={settings.categoryNav === 'top'}
+                    disabled={!tokenModeEditable}
+                    onChange={() => setSettings({ ...settings, categoryNav: 'top' })}
+                  />
+                  <span className="text-sm">{t('kioskCategoryNavTop')}</span>
+                </label>
+              </div>
+            </div>
           </div>
           <div className="space-y-2 border-t border-[var(--border)] pt-3">
             <p className="text-sm font-semibold text-[var(--text)]">{t('kioskOrderTypeButtonsTitle')}</p>

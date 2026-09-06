@@ -10,6 +10,9 @@ export type KioskPromoSlide = {
 
 export type KioskTableMode = "table" | "badge" | "both";
 
+/** Restaurant menu category bar — left sidebar (default) or top strip. */
+export type KioskCategoryNav = "left" | "top";
+
 export type KioskSettings = {
   accessToken?: string;
   name?: string;
@@ -49,6 +52,8 @@ export type KioskSettings = {
   autoPrintReceipt?: boolean;
   /** Portrait touch screen diagonal in inches — scales UI for 23" or 27" kiosks. */
   screenSizeIn?: 23 | 27;
+  /** Restaurant category navigation: photo sidebar (left) or top strip. */
+  categoryNav?: KioskCategoryNav;
 };
 
 export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
@@ -72,6 +77,7 @@ export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
   autoPrintKitchen: true,
   autoPrintReceipt: false,
   screenSizeIn: 23,
+  categoryNav: "left",
 };
 
 export function generateKioskToken(): string {
@@ -161,7 +167,12 @@ export function normalizeKioskSettings(raw: unknown): KioskSettings {
     autoPrintKitchen: src.autoPrintKitchen !== false,
     autoPrintReceipt: src.autoPrintReceipt === true,
     screenSizeIn: normalizeScreenSizeIn(src.screenSizeIn),
+    categoryNav: normalizeCategoryNav(src.categoryNav),
   };
+}
+
+function normalizeCategoryNav(value: unknown): KioskCategoryNav {
+  return String(value || "").toLowerCase() === "top" ? "top" : "left";
 }
 
 function normalizeScreenSizeIn(value: unknown): 23 | 27 {

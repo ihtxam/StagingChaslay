@@ -34,6 +34,7 @@ export type KioskConfig = {
     autoPrintKitchen?: boolean;
     autoPrintReceipt?: boolean;
     screenSizeIn?: 23 | 27;
+    categoryNav?: 'left' | 'top';
   };
   tables: Array<{ id: string; label: string }>;
 };
@@ -83,21 +84,47 @@ export type KioskAdminSettings = {
   autoPrintKitchen?: boolean;
   autoPrintReceipt?: boolean;
   screenSizeIn?: 23 | 27;
+  categoryNav?: 'left' | 'top';
+};
+
+export type KioskMenuItem = {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  image?: string;
+  barcode?: string;
+  sku?: string;
+  productType?: string;
+  allowExtras?: boolean;
+  extras?: Array<{ id: string; name: string; price: number }>;
+  specifications?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    saleStatus?: string;
+    isDefault?: boolean;
+    sortOrder?: number;
+  }>;
+  modifierGroups?: unknown[];
+  comboSlots?: unknown[];
 };
 
 export type KioskMenuCategory = {
   id: string;
   name: string;
-  items: Array<{
-    id: string;
-    name: string;
-    price: number;
-    description?: string;
-    image?: string;
-    barcode?: string;
-    sku?: string;
-    modifierGroups?: unknown[];
-  }>;
+  image?: string;
+  color?: string;
+  items: KioskMenuItem[];
+};
+
+export type KioskComboSelection = {
+  slotId: string;
+  slotName?: string;
+  productId: string;
+  productName?: string;
+  extraPrice?: number;
+  selectedExtras?: Array<{ id: string; name: string; price: number }>;
 };
 
 export type KioskCartLine = {
@@ -107,6 +134,7 @@ export type KioskCartLine = {
   price: number;
   quantity: number;
   selectedExtras?: Array<{ id: string; name: string; price: number }>;
+  comboSelections?: KioskComboSelection[];
 };
 
 export async function fetchKioskConfig(token: string): Promise<KioskConfig> {
@@ -132,6 +160,12 @@ export async function createKioskOrder(
       productId: string;
       quantity: number;
       selectedExtras?: Array<{ id: string }>;
+      comboSelections?: Array<{
+        slotId: string;
+        slotName?: string;
+        productId: string;
+        selectedExtras?: Array<{ id: string }>;
+      }>;
     }>;
     paymentMethod: 'cash' | 'card';
     fulfillmentChannel?: KioskFulfillmentChannel;
