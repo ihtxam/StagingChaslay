@@ -83,8 +83,8 @@ export function printerNameInList(
   const want = stableDeviceKey(name);
   if (!want) return false;
   return printers.some((p) => {
-    const keys = [p.name, p.matchHint, p.driverName, p.portName].map(stableDeviceKey).filter(Boolean);
-    return keys.some((k) => k === want || k.includes(want) || want.includes(k));
+    const keys = [p.name, p.matchHint, p.driverName].map(stableDeviceKey).filter(Boolean);
+    return keys.some((k) => k === want);
   });
 }
 
@@ -198,7 +198,7 @@ export function resolveAgentPrinterName(
         scoreDeviceMatch(want, p.portName || '')
       ),
     }))
-    .filter((x) => x.score >= 12)
+    .filter((x) => x.score >= 20)
     .sort((a, b) => b.score - a.score);
   return scored[0]?.p.name || null;
 }
@@ -206,6 +206,8 @@ export function resolveAgentPrinterName(
 export type PrinterResolutionHints = {
   portName?: string | null;
   matchHint?: string | null;
+  /** Only for explicit user-driven rematch. Never use when persisting defaults. */
+  allowAutoHeal?: boolean;
 };
 
 function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
@@ -219,16 +221,17 @@ function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
 }
 
 /**
- * Resolve a saved printer profile to the current Windows queue name.
- * Falls back to stored COM port / match hint, similarity heal, then default printer.
+ * Match a saved printer to a queue that is actually on this PC.
+ * Exact name, case-insensitive name, stored COM port, or exact device key (COM number stripped).
+ * Does not pick Windows default / first thermal / similar names.
  */
-export function resolveLivePrinterName(
+export function matchLivePrinterName(
   configuredName: string,
   livePrinters: AgentPrinter[],
   hints?: PrinterResolutionHints
 ): string | null {
   const want = String(configuredName || '').trim();
-  if (!livePrinters.length) return want || null;
+  if (!livePrinters.length) return null;
 
   if (want) {
     const resolved = resolveAgentPrinterName(want, livePrinters);
@@ -244,13 +247,31 @@ export function resolveLivePrinterName(
     if (byHint) return byHint;
   }
 
-  const heal = suggestPrinterAutoHeal(want || hint, livePrinters);
-  if (heal) return heal.name;
+  return null;
+}
 
-  const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
-  if (candidates[0]?.name) return candidates[0].name;
-
-  return defaultLivePrinter(livePrinters)?.name || null;
+/**
+ * Resolve a saved printer for a print job.
+ * Keeps the saved name when the queue is temporarily missing (reboot / USB settle).
+ * Does not replace it with another printer unless allowAutoHeal is set.
+ */
+export function resolveLivePrinterName(
+  configuredName: string,
+  livePrinters: AgentPrinter[],
+  hints?: PrinterResolutionHints
+): string | null {
+  const want = String(configuredName || '').trim();
+  const matched = matchLivePrinterName(want, livePrinters, hints);
+  if (matched) return matched;
+  if (hints?.allowAutoHeal) {
+    const hint = String(hints.matchHint || '').trim();
+    const heal = suggestPrinterAutoHeal(want || hint, livePrinters);
+    if (heal) return heal.name;
+    const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
+    if (candidates[0]?.name) return candidates[0].name;
+    return defaultLivePrinter(livePrinters)?.name || null;
+  }
+  return want || null;
 }
 
 const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
@@ -265,7 +286,7 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
     return null;
   }
   if (!stored) return null;
-  const resolved = resolveLivePrinterName(stored, livePrinters);
+  const resolved = matchLivePrinterName(stored, livePrinters);
   if (!resolved || resolved === stored) return null;
   try {
     localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, resolved);
@@ -303,8 +324,8 @@ export type PosPrinterProfileLike = {
 };
 
 /**
- * After a live /printers refresh: heal renamed queues, clear names that no longer exist.
- * Keeps profile rows so kitchen routing / category links are not lost.
+ * After a live /printers refresh: remap the same device when Windows renamed the queue
+ * (e.g. COM7 → COM12). Missing queues keep their saved name — do not clear or swap.
  */
 export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
@@ -314,53 +335,42 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
   const next = profiles.map((p) => {
     const name = String(p.name || '').trim();
     if (!name && !String(p.portName || '').trim()) return p;
-    const resolved = resolveLivePrinterName(name, livePrinters, {
+    const resolved = matchLivePrinterName(name, livePrinters, {
       portName: p.portName,
       matchHint: p.matchHint,
     });
-    if (resolved) {
-      const picked = livePrinters.find((ap) => ap.name === resolved);
-      if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
-      changed = true;
-      return {
-        ...p,
-        name: resolved,
-        portName: picked?.portName ?? p.portName ?? null,
-        matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
-      };
-    }
+    if (!resolved) return p;
+    const picked = livePrinters.find((ap) => ap.name === resolved);
+    if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
     changed = true;
-    return { ...p, name: '' };
+    return {
+      ...p,
+      name: resolved,
+      portName: picked?.portName ?? p.portName ?? null,
+      matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+    };
   });
   return { profiles: next, changed };
 }
 
 export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
-  livePrinters: AgentPrinter[]
+  _livePrinters?: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
   const next = profiles.filter((p) => {
     const name = String(p.name || '').trim();
-    if (!name && !String(p.portName || '').trim()) return false;
-    return !!resolveLivePrinterName(name, livePrinters, {
-      portName: p.portName,
-      matchHint: p.matchHint,
-    });
+    const port = String(p.portName || '').trim();
+    return !!(name || port);
   });
   return { profiles: next, changed: next.length !== profiles.length };
 }
 
-/** Reconcile names against live printers, then remove profiles with no matching queue. */
+/** Remap the same device if Windows renamed it. Never drop a saved receipt/kitchen printer. */
 export function reconcileAndPrunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
   livePrinters: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
-  const reconciled = reconcilePosPrinterProfiles(profiles, livePrinters);
-  const pruned = prunePosPrinterProfiles(reconciled.profiles, livePrinters);
-  return {
-    profiles: pruned.profiles,
-    changed: reconciled.changed || pruned.changed,
-  };
+  return reconcilePosPrinterProfiles(profiles, livePrinters);
 }
 
 /** Agent is up but the stored Windows name is gone (rename / 1801). */
@@ -380,7 +390,7 @@ export function isConfiguredPrinterMissing(
   if (!name && !String(portName || '').trim()) return false;
   if (opts?.agentOk === false) return false;
   if (opts?.printersReady === false) return false;
-  return !resolveLivePrinterName(name, printers as AgentPrinter[], { portName, matchHint });
+  return !matchLivePrinterName(name, printers as AgentPrinter[], { portName, matchHint });
 }
 
 /** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */

@@ -947,7 +947,7 @@ async function listPrinters() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $items = Get-CimInstance -ClassName Win32_Printer | Where-Object {
-  $_.WorkOffline -ne $true -and [int]$_.PrinterStatus -ne 7 -and [int]$_.PrinterStatus -ne 2
+  [int]$_.PrinterStatus -ne 7
 } | ForEach-Object {
   $hint = [regex]::Replace([string]$_.Name, '\s*\(COM\d+\)\s*', ' ')
   $hint = $hint.Trim()
