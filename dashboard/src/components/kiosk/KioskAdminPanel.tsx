@@ -627,12 +627,54 @@ export default function KioskAdminPanel({
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskScreenSizeHint')}</p>
             </label>
             <div className="md:col-span-2">
-              <p className="text-sm font-semibold text-[var(--text)]">{t('kioskCategoryNavLabel')}</p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskCategoryNavHint')}</p>
+              <p className="text-sm font-semibold text-[var(--text)]">{t('kioskLayoutLabel')}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskLayoutHint')}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-3 ${
+                  (settings.kioskLayout || 'restaurant') === 'restaurant'
+                    ? 'border-[var(--accent,#059669)]'
+                    : 'border-[var(--border)]'
+                }`}>
+                  <input
+                    type="radio"
+                    name="kioskLayout"
+                    checked={(settings.kioskLayout || 'restaurant') === 'restaurant'}
+                    disabled={!tokenModeEditable}
+                    onChange={() =>
+                      setSettings({ ...settings, kioskLayout: 'restaurant', categoryNav: 'left' })
+                    }
+                  />
+                  <span className="text-sm font-semibold">{t('kioskLayoutRestaurant')}</span>
+                </label>
+                <label className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-3 ${
+                  settings.kioskLayout === 'grocery'
+                    ? 'border-[var(--accent,#059669)]'
+                    : 'border-[var(--border)]'
+                }`}>
+                  <input
+                    type="radio"
+                    name="kioskLayout"
+                    checked={settings.kioskLayout === 'grocery'}
+                    disabled={!tokenModeEditable}
+                    onChange={() =>
+                      setSettings({ ...settings, kioskLayout: 'grocery', categoryNav: 'bottom' })
+                    }
+                  />
+                  <span className="text-sm font-semibold">{t('kioskLayoutGrocery')}</span>
+                </label>
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-semibold text-[var(--text)]">
+                {settings.kioskLayout === 'grocery' ? t('kioskGroceryNavLabel') : t('kioskCategoryNavLabel')}
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                {settings.kioskLayout === 'grocery' ? t('kioskGroceryNavHint') : t('kioskCategoryNavHint')}
+              </p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <label
                   className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
-                    (settings.categoryNav || 'left') === 'left'
+                    (settings.categoryNav || (settings.kioskLayout === 'grocery' ? 'bottom' : 'left')) === 'left'
                       ? 'border-[var(--accent,#059669)] bg-[var(--surface-2,transparent)]'
                       : 'border-[var(--border)]'
                   }`}
@@ -641,7 +683,11 @@ export default function KioskAdminPanel({
                     <input
                       type="radio"
                       name="kioskCategoryNav"
-                      checked={(settings.categoryNav || 'left') === 'left'}
+                      checked={
+                        settings.kioskLayout === 'grocery'
+                          ? settings.categoryNav === 'left'
+                          : (settings.categoryNav || 'left') === 'left'
+                      }
                       disabled={!tokenModeEditable}
                       onChange={() => setSettings({ ...settings, categoryNav: 'left' })}
                     />
@@ -659,6 +705,39 @@ export default function KioskAdminPanel({
                     </span>
                   </span>
                 </label>
+                {settings.kioskLayout === 'grocery' ? (
+                <label
+                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
+                    (settings.categoryNav || 'bottom') === 'bottom'
+                      ? 'border-[var(--accent,#059669)] bg-[var(--surface-2,transparent)]'
+                      : 'border-[var(--border)]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="kioskCategoryNav"
+                      checked={(settings.categoryNav || 'bottom') !== 'left'}
+                      disabled={!tokenModeEditable}
+                      onChange={() => setSettings({ ...settings, categoryNav: 'bottom' })}
+                    />
+                    <span className="text-sm font-semibold">{t('kioskCategoryNavBottom')}</span>
+                  </span>
+                  <span className="flex h-16 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface,#fff)]">
+                    <span className="grid flex-1 grid-cols-3 gap-1 p-1">
+                      <span className="rounded-sm bg-stone-200" />
+                      <span className="rounded-sm bg-stone-200" />
+                      <span className="rounded-sm bg-stone-200" />
+                    </span>
+                    <span className="grid grid-cols-4 gap-1 border-t border-[var(--border)] bg-stone-100 p-1">
+                      <span className="h-3 rounded-sm bg-stone-400" />
+                      <span className="h-3 rounded-sm bg-stone-300" />
+                      <span className="h-3 rounded-sm bg-stone-300" />
+                      <span className="h-3 rounded-sm bg-stone-300" />
+                    </span>
+                  </span>
+                </label>
+                ) : (
                 <label
                   className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
                     settings.categoryNav === 'top'
@@ -688,6 +767,7 @@ export default function KioskAdminPanel({
                     </span>
                   </span>
                 </label>
+                )}
               </div>
             </div>
           </div>

@@ -10,8 +10,11 @@ export type KioskPromoSlide = {
 
 export type KioskTableMode = "table" | "badge" | "both";
 
-/** Restaurant menu category bar — left sidebar (default) or top strip. */
-export type KioskCategoryNav = "left" | "top";
+/** Restaurant: left (default) or top. Grocery: bottom (default) or left. */
+export type KioskCategoryNav = "left" | "top" | "bottom";
+
+/** Restaurant combo/wizard layout vs grocery / retail scan-and-browse. */
+export type KioskLayout = "restaurant" | "grocery";
 
 export type KioskSettings = {
   accessToken?: string;
@@ -52,7 +55,9 @@ export type KioskSettings = {
   autoPrintReceipt?: boolean;
   /** Portrait touch screen diagonal in inches — scales UI for 23" or 27" kiosks. */
   screenSizeIn?: 23 | 27;
-  /** Restaurant category navigation: photo sidebar (left) or top strip. */
+  /** Restaurant self-order vs grocery / retail browse + scan. */
+  kioskLayout?: KioskLayout;
+  /** Category bar position. Restaurant: left|top. Grocery: bottom|left. */
   categoryNav?: KioskCategoryNav;
 };
 
@@ -77,6 +82,7 @@ export const DEFAULT_KIOSK_SETTINGS: KioskSettings = {
   autoPrintKitchen: true,
   autoPrintReceipt: false,
   screenSizeIn: 23,
+  kioskLayout: "restaurant",
   categoryNav: "left",
 };
 
@@ -167,12 +173,21 @@ export function normalizeKioskSettings(raw: unknown): KioskSettings {
     autoPrintKitchen: src.autoPrintKitchen !== false,
     autoPrintReceipt: src.autoPrintReceipt === true,
     screenSizeIn: normalizeScreenSizeIn(src.screenSizeIn),
-    categoryNav: normalizeCategoryNav(src.categoryNav),
+    kioskLayout: normalizeKioskLayout(src.kioskLayout),
+    categoryNav: normalizeCategoryNav(src.categoryNav, src.kioskLayout),
   };
 }
 
-function normalizeCategoryNav(value: unknown): KioskCategoryNav {
-  return String(value || "").toLowerCase() === "top" ? "top" : "left";
+function normalizeKioskLayout(value: unknown): KioskLayout {
+  return String(value || "").toLowerCase() === "grocery" ? "grocery" : "restaurant";
+}
+
+function normalizeCategoryNav(value: unknown, layout?: unknown): KioskCategoryNav {
+  const raw = String(value || "").toLowerCase();
+  if (normalizeKioskLayout(layout) === "grocery") {
+    return raw === "left" ? "left" : "bottom";
+  }
+  return raw === "top" ? "top" : "left";
 }
 
 function normalizeScreenSizeIn(value: unknown): 23 | 27 {

@@ -65,6 +65,8 @@ type Step =
   | 'checkout'
   | 'success';
 
+const POPULAR_CATEGORY_ID = '__popular__';
+
 const LANG_LABELS: Record<string, string> = {
   en: 'English',
   fr: 'Français',
@@ -120,6 +122,7 @@ export default function KioskApp() {
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [barcodeCameraError, setBarcodeCameraError] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState('');
+  const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
   const [cart, setCart] = useState<KioskCartLine[]>([]);
   const [customizeProduct, setCustomizeProduct] = useState<KioskWizardProduct | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -153,7 +156,26 @@ export default function KioskApp() {
   const cartTotal = useMemo(() => cart.reduce((s, l) => s + lineTotal(l), 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, l) => s + l.quantity, 0), [cart]);
 
+  const isGrocery = config?.settings.kioskLayout === 'grocery';
+  const categoryNav = config?.settings.categoryNav;
+  const menuLayoutClass = isGrocery
+    ? categoryNav === 'left'
+      ? 'is-left'
+      : 'is-bottom'
+    : categoryNav === 'top'
+      ? 'is-top'
+      : 'is-left';
+  const allMenuItems = useMemo(() => menu.flatMap((c) => c.items), [menu]);
+  const popularItems = useMemo(() => {
+    const byId = new Map(allMenuItems.map((item) => [item.id, item]));
+    const ranked = bestsellerIds.map((id) => byId.get(id)).filter(Boolean) as KioskMenuItem[];
+    if (ranked.length) return ranked;
+    return allMenuItems.slice(0, 16);
+  }, [allMenuItems, bestsellerIds]);
+  const showingPopular = isGrocery && activeCategoryId === POPULAR_CATEGORY_ID;
   const activeCategory = menu.find((c) => c.id === activeCategoryId) || menu[0];
+  const displayItems = showingPopular ? popularItems : activeCategory?.items || [];
+  const displayTitle = showingPopular ? t('kioskMostSold') : activeCategory?.name;
   const tableLabel =
     config?.tables.find((t) => t.id === selectedTableId)?.label || selectedTableId;
 
@@ -238,7 +260,11 @@ export default function KioskApp() {
     setOrderSheetOpen(false);
     setFulfillmentChannel('dine_in');
     setLastPrintCtx(null);
-  }, []);
+    setScanningBarcode(false);
+    setActiveCategoryId(
+      config?.settings.kioskLayout === 'grocery' ? POPULAR_CATEGORY_ID : menu[0]?.id || ''
+    );
+  }, [config?.settings.kioskLayout, menu]);
 
   const bumpIdle = useCallback(() => {
     if (idleTimer.current) window.clearTimeout(idleTimer.current);
@@ -269,9 +295,14 @@ export default function KioskApp() {
         const cfg = await fetchKioskConfig(token);
         setConfig(cfg);
         setLocale((cfg.settings.defaultLanguage as Locale) || 'en');
-        const cats = await fetchKioskMenu(token);
-        setMenu(cats);
-        if (cats[0]?.id) setActiveCategoryId(cats[0].id);
+        const loaded = await fetchKioskMenu(token);
+        setMenu(loaded.categories);
+        setBestsellerIds(loaded.bestsellerIds);
+        if (cfg.settings.kioskLayout === 'grocery') {
+          setActiveCategoryId(POPULAR_CATEGORY_ID);
+        } else if (loaded.categories[0]?.id) {
+          setActiveCategoryId(loaded.categories[0].id);
+        }
         if (cfg.settings.tableMode === 'badge') setTableMode('badge');
       } catch (e: unknown) {
         const err = e as { response?: { data?: { error?: string } } };
@@ -674,6 +705,18 @@ export default function KioskApp() {
     setStep(config?.settings.membershipScanEnabled ? 'membership' : 'menu');
   };
 
+  const startGrocery = () => {
+    if (config?.settings.takeawayEnabled !== false) {
+      startWithChannel('takeaway');
+      return;
+    }
+    if (config?.settings.deliveryEnabled) {
+      startWithChannel('delivery');
+      return;
+    }
+    startWithChannel('dine_in');
+  };
+
   const reprintLastOrder = async () => {
     if (!lastPrintCtx) return;
     setReprinting(true);
@@ -843,7 +886,15 @@ export default function KioskApp() {
           <div className="kiosk-attract flex flex-1 flex-col items-center justify-center">
             <h1 className="kiosk-attract-headline text-center font-bold">{attractHeadline}</h1>
             <p className="kiosk-attract-sub text-center text-stone-600">{attractSubheadline}</p>
-            {channelOptions.length ? (
+            {isGrocery ? (
+              <button
+                type="button"
+                onClick={startGrocery}
+                className="kiosk-btn-primary mt-4 min-w-[16rem] px-16 text-[1.35em]"
+              >
+                Start
+              </button>
+            ) : channelOptions.length ? (
               <div className="kiosk-attract-grid">
                 {channelOptions.map(({ channel, label, hint, Icon }) => (
                   <button
@@ -1008,12 +1059,8 @@ export default function KioskApp() {
 
         {step === 'menu' ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div
-              className={`kiosk-menu-layout ${
-                config?.settings.categoryNav === 'top' ? 'is-top' : 'is-left'
-              }`}
-            >
-            {config?.settings.categoryNav === 'top' ? (
+            <div className={`kiosk-menu-layout ${menuLayoutClass}`}>
+            {menuLayoutClass === 'is-top' ? (
             <nav className="kiosk-category-nav" aria-label="Menu categories">
               {menu.map((cat) => (
                 <button
@@ -1033,15 +1080,25 @@ export default function KioskApp() {
                 </button>
               ))}
             </nav>
-            ) : (
+            ) : menuLayoutClass === 'is-left' ? (
             <nav className="kiosk-category-sidebar" aria-label="Menu categories">
+              {isGrocery ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveCategoryId(POPULAR_CATEGORY_ID)}
+                  className={`kiosk-category-side-btn ${showingPopular ? 'is-active' : ''}`}
+                >
+                  <span className="kiosk-category-thumb-ph" />
+                  <span>{t('kioskMostSold')}</span>
+                </button>
+              ) : null}
               {menu.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveCategoryId(cat.id)}
                   className={`kiosk-category-side-btn ${
-                    activeCategory?.id === cat.id ? 'is-active' : ''
+                    !showingPopular && activeCategory?.id === cat.id ? 'is-active' : ''
                   }`}
                 >
                   {cat.image ? (
@@ -1053,11 +1110,16 @@ export default function KioskApp() {
                 </button>
               ))}
             </nav>
-            )}
+            ) : null}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="kiosk-product-scroll">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="kiosk-step-title font-bold">{activeCategory?.name}</h2>
+                <div>
+                  <h2 className="kiosk-step-title font-bold">{displayTitle}</h2>
+                  {isGrocery ? (
+                    <p className="mt-1 text-sm text-stone-500">{t('kioskScanOrChoose')}</p>
+                  ) : null}
+                </div>
                 {scanningBarcode ? (
                   <button
                     type="button"
@@ -1073,7 +1135,7 @@ export default function KioskApp() {
                     onClick={() => setScanningBarcode(true)}
                   >
                     <Barcode className="h-4 w-4" />
-                    Scan barcode
+                    {isGrocery ? t('kioskScanArticle') : 'Scan barcode'}
                   </button>
                 )}
               </div>
@@ -1108,7 +1170,7 @@ export default function KioskApp() {
                 </div>
               ) : null}
               <div className="kiosk-product-grid">
-                {(activeCategory?.items || []).map((item) => (
+                {displayItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -1132,6 +1194,37 @@ export default function KioskApp() {
                 ))}
               </div>
             </div>
+            {menuLayoutClass === 'is-bottom' ? (
+              <nav className="kiosk-category-dock" aria-label="Menu categories">
+                <div className="kiosk-category-dock-grid">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategoryId(POPULAR_CATEGORY_ID)}
+                    className={`kiosk-category-dock-btn ${showingPopular ? 'is-active' : ''}`}
+                  >
+                    <span className="kiosk-category-dock-ph" />
+                    <span>{t('kioskMostSold')}</span>
+                  </button>
+                  {menu.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategoryId(cat.id)}
+                      className={`kiosk-category-dock-btn ${
+                        !showingPopular && activeCategory?.id === cat.id ? 'is-active' : ''
+                      }`}
+                    >
+                      {cat.image ? (
+                        <img src={cat.image} alt="" />
+                      ) : (
+                        <span className="kiosk-category-dock-ph" />
+                      )}
+                      <span>{cat.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </nav>
+            ) : null}
             <div className="kiosk-footer-bar">
               <button type="button" onClick={goBackFromMenu} className="kiosk-btn-secondary">
                 Back

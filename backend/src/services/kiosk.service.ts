@@ -97,7 +97,15 @@ export class KioskService {
         autoPrintKitchen: settings.autoPrintKitchen !== false,
         autoPrintReceipt: settings.autoPrintReceipt === true,
         screenSizeIn: settings.screenSizeIn === 27 ? 27 : 23,
-        categoryNav: settings.categoryNav === "top" ? "top" : "left",
+        kioskLayout: settings.kioskLayout === "grocery" ? "grocery" : "restaurant",
+        categoryNav:
+          settings.kioskLayout === "grocery"
+            ? settings.categoryNav === "left"
+              ? "left"
+              : "bottom"
+            : settings.categoryNav === "top"
+              ? "top"
+              : "left",
       },
       tables,
     };
@@ -283,7 +291,18 @@ export class KioskService {
       items: visibleProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
     }));
 
-    return { menu, locationId };
+    let bestsellerIds: string[] = [];
+    try {
+      const { PosReportsService } = await import("@/services/pos-reports.service");
+      bestsellerIds = await PosReportsService.getBestsellerProductIds(merchant.id, {
+        limit: 16,
+        days: 30,
+      });
+    } catch {
+      bestsellerIds = [];
+    }
+
+    return { menu, locationId, bestsellerIds };
   }
 
   static async lookupMembership(token: string, code: string) {
