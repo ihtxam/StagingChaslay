@@ -371,6 +371,7 @@ export class ResellerService {
         signageScreenLimit: schema.merchants.signageScreenLimit,
         kdsAddonEnabled: schema.merchants.kdsAddonEnabled,
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
+        kioskAddonEnabled: schema.merchants.kioskAddonEnabled,
         justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
         uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
         panelNavHidden: schema.merchants.panelNavHidden,
@@ -390,6 +391,7 @@ export class ResellerService {
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
       kdsAddonEnabled: r.kdsAddonEnabled === true,
       odsAddonEnabled: r.odsAddonEnabled === true,
+      kioskAddonEnabled: r.kioskAddonEnabled === true,
       deliveryPlatformsAddonEnabled:
         r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
     }));
@@ -422,6 +424,7 @@ export class ResellerService {
       odsAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -468,6 +471,7 @@ export class ResellerService {
         odsAddonEnabled: input.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
+        kioskAddonEnabled: input.kioskAddonEnabled,
       }
     );
     return created;

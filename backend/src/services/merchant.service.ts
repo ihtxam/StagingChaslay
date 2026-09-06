@@ -415,6 +415,14 @@ export class MerchantService {
         await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId, {
           businessCategory: lockedModule || options?.businessCategory,
         });
+        const edition = await EditionService.getById(options.editionId);
+        if (edition?.features) {
+          const { PackageProvisioningService } = await import("./package-provisioning.service");
+          await PackageProvisioningService.applyEditionFeatureAddons(
+            created.id,
+            edition.features as import("@/lib/edition-features").EditionFeatureKey[] | null
+          );
+        }
       } else if (lockedModule) {
         const modulePatch = businessModuleMerchantPatch(lockedModule, {});
         await db
@@ -494,6 +502,11 @@ export class MerchantService {
         await writeJustEatAddonEnabled(created.id, true);
         await writeUberEatsAddonEnabled(created.id, true);
       }
+      const kioskOn = await readKioskAddonEnabled(created.id).catch(() => false);
+      if (kioskOn) {
+        const { KioskService } = await import("./kiosk.service");
+        await KioskService.readSettingsForMerchant(created.id);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -519,6 +532,8 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        kioskAddonEnabled: kioskOn,
+        kioskEnabled: kioskOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
