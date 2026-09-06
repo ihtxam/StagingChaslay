@@ -630,25 +630,63 @@ export default function KioskAdminPanel({
               <p className="text-sm font-semibold text-[var(--text)]">{t('kioskCategoryNavLabel')}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskCategoryNavHint')}</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
-                  <input
-                    type="radio"
-                    name="kioskCategoryNav"
-                    checked={(settings.categoryNav || 'left') === 'left'}
-                    disabled={!tokenModeEditable}
-                    onChange={() => setSettings({ ...settings, categoryNav: 'left' })}
-                  />
-                  <span className="text-sm">{t('kioskCategoryNavLeft')}</span>
+                <label
+                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
+                    (settings.categoryNav || 'left') === 'left'
+                      ? 'border-[var(--accent,#059669)] bg-[var(--surface-2,transparent)]'
+                      : 'border-[var(--border)]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="kioskCategoryNav"
+                      checked={(settings.categoryNav || 'left') === 'left'}
+                      disabled={!tokenModeEditable}
+                      onChange={() => setSettings({ ...settings, categoryNav: 'left' })}
+                    />
+                    <span className="text-sm font-semibold">{t('kioskCategoryNavLeft')}</span>
+                  </span>
+                  <span className="flex h-16 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface,#fff)]">
+                    <span className="flex w-8 flex-col gap-1 border-r border-[var(--border)] bg-stone-100 p-1">
+                      <span className="h-3 rounded-sm bg-stone-400" />
+                      <span className="h-3 rounded-sm bg-stone-300" />
+                      <span className="h-3 rounded-sm bg-stone-300" />
+                    </span>
+                    <span className="grid flex-1 grid-cols-2 gap-1 p-1">
+                      <span className="rounded-sm bg-stone-200" />
+                      <span className="rounded-sm bg-stone-200" />
+                    </span>
+                  </span>
                 </label>
-                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
-                  <input
-                    type="radio"
-                    name="kioskCategoryNav"
-                    checked={settings.categoryNav === 'top'}
-                    disabled={!tokenModeEditable}
-                    onChange={() => setSettings({ ...settings, categoryNav: 'top' })}
-                  />
-                  <span className="text-sm">{t('kioskCategoryNavTop')}</span>
+                <label
+                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
+                    settings.categoryNav === 'top'
+                      ? 'border-[var(--accent,#059669)] bg-[var(--surface-2,transparent)]'
+                      : 'border-[var(--border)]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="kioskCategoryNav"
+                      checked={settings.categoryNav === 'top'}
+                      disabled={!tokenModeEditable}
+                      onChange={() => setSettings({ ...settings, categoryNav: 'top' })}
+                    />
+                    <span className="text-sm font-semibold">{t('kioskCategoryNavTop')}</span>
+                  </span>
+                  <span className="flex h-16 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface,#fff)]">
+                    <span className="flex gap-1 border-b border-[var(--border)] bg-stone-100 p-1">
+                      <span className="h-3 w-8 rounded-full bg-stone-400" />
+                      <span className="h-3 w-8 rounded-full bg-stone-300" />
+                      <span className="h-3 w-8 rounded-full bg-stone-300" />
+                    </span>
+                    <span className="grid flex-1 grid-cols-2 gap-1 p-1">
+                      <span className="rounded-sm bg-stone-200" />
+                      <span className="rounded-sm bg-stone-200" />
+                    </span>
+                  </span>
                 </label>
               </div>
             </div>
