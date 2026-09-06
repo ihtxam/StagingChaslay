@@ -25,7 +25,11 @@ export type KioskPrintContext = {
 
 function lineTotal(line: KioskCartLine): number {
   const extras = (line.selectedExtras || []).reduce((s, e) => s + e.price, 0);
-  return (line.price + extras) * line.quantity;
+  const combo = (line.comboSelections || []).reduce(
+    (s, c) => s + (Number(c.extraPrice) || 0) + (c.selectedExtras || []).reduce((x, e) => x + e.price, 0),
+    0
+  );
+  return (line.price + extras + combo) * line.quantity;
 }
 
 function channelLabel(channel: KioskPrintContext['fulfillmentChannel']): string {
@@ -50,7 +54,17 @@ export async function printKioskKitchenTicket(
       unitPrice: line.price,
       lineTotal: lineTotal(line),
       productId: line.productId,
-      selectedExtras: line.selectedExtras || [],
+      selectedExtras: [
+        ...(line.selectedExtras || []),
+        ...(line.comboSelections || []).flatMap((c) => [
+          {
+            id: c.productId,
+            name: `${c.slotName ? `${c.slotName}: ` : ''}${c.productName || c.productId}`,
+            price: Number(c.extraPrice) || 0,
+          },
+          ...(c.selectedExtras || []),
+        ]),
+      ],
     })
   );
   const jobs = buildKitchenPrintJobs(items, printSettings);
