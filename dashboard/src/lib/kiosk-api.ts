@@ -34,7 +34,8 @@ export type KioskConfig = {
     autoPrintKitchen?: boolean;
     autoPrintReceipt?: boolean;
     screenSizeIn?: 23 | 27;
-    categoryNav?: 'left' | 'top';
+    kioskLayout?: 'restaurant' | 'grocery';
+    categoryNav?: 'left' | 'top' | 'bottom';
   };
   tables: Array<{ id: string; label: string }>;
 };
@@ -84,7 +85,8 @@ export type KioskAdminSettings = {
   autoPrintKitchen?: boolean;
   autoPrintReceipt?: boolean;
   screenSizeIn?: 23 | 27;
-  categoryNav?: 'left' | 'top';
+  kioskLayout?: 'restaurant' | 'grocery';
+  categoryNav?: 'left' | 'top' | 'bottom';
 };
 
 export type KioskMenuItem = {
@@ -143,9 +145,15 @@ export async function fetchKioskConfig(token: string): Promise<KioskConfig> {
   return res.data as KioskConfig;
 }
 
-export async function fetchKioskMenu(token: string): Promise<KioskMenuCategory[]> {
+export async function fetchKioskMenu(token: string): Promise<{
+  categories: KioskMenuCategory[];
+  bestsellerIds: string[];
+}> {
   const res = await axios.get(`/api/kiosk/${token}/menu`);
-  return res.data.data || [];
+  return {
+    categories: res.data.data || [],
+    bestsellerIds: Array.isArray(res.data.bestsellerIds) ? res.data.bestsellerIds : [],
+  };
 }
 
 export async function lookupKioskMembership(token: string, code: string) {

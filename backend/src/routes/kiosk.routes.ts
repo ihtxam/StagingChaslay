@@ -42,7 +42,7 @@ router.get("/:token/config", async (req: Request, res: Response) => {
 router.get("/:token/menu", async (req: Request, res: Response) => {
   try {
     const data = await KioskService.getMenu(req.params.token);
-    res.json({ success: true, data: data.menu });
+    res.json({ success: true, data: data.menu, bestsellerIds: data.bestsellerIds || [] });
   } catch (error) {
     handleError(res, error, "Failed to load menu", 500);
   }
