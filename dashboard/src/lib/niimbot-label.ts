@@ -5,10 +5,12 @@ import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 /** Niimbot thermal head resolution (203 dpi ≈ 8 dots/mm). */
 export const NIIMBOT_DPMM = 8;
+/** K3 / B21 / B1 printhead width. Wider canvases (58 mm) must be clamped. */
+export const NIIMBOT_PRINTHEAD_PX = 384;
 
 export function isNiimbotPrinterName(name?: string | null): boolean {
   const n = String(name || '').toLowerCase();
-  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
+  return /niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
 }
 
 export function labelPrinterUsesNiimbot(
@@ -26,10 +28,14 @@ export function labelPrinterUsesNiimbot(
 
 export function labelPixelSize(opts: LabelPrintOptions): { widthPx: number; heightPx: number } {
   const o = normalizeLabelOptions(opts);
-  return {
-    widthPx: Math.max(8, Math.round(o.widthMm * NIIMBOT_DPMM)),
-    heightPx: Math.max(8, Math.round(o.heightMm * NIIMBOT_DPMM)),
-  };
+  let widthPx = Math.max(8, Math.round(o.widthMm * NIIMBOT_DPMM));
+  let heightPx = Math.max(8, Math.round(o.heightMm * NIIMBOT_DPMM));
+  if (widthPx > NIIMBOT_PRINTHEAD_PX) {
+    const scale = NIIMBOT_PRINTHEAD_PX / widthPx;
+    widthPx = NIIMBOT_PRINTHEAD_PX;
+    heightPx = Math.max(8, Math.round(heightPx * scale));
+  }
+  return { widthPx, heightPx };
 }
 
 async function drawBarcodeOnCanvasAsync(

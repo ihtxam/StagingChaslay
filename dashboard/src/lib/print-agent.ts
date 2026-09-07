@@ -435,7 +435,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.2';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.8';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;

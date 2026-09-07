@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.4";
+const VERSION = "1.10.8";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1469,6 +1469,7 @@ function startServer() {
           density: body.density,
           profile: body.profile,
           testPattern,
+          invertBitmap: body.invertBitmap === true,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printWindowsPacketsFn: printNiimbotWindows,
@@ -1491,19 +1492,141 @@ function startServer() {
     try {
       const printerName = String(req.query.printerName || "").trim();
       const portName = String(req.query.portName || "").trim();
-      const { detectNiimbotProfile } = require("./niimbot-client");
-      const comPorts = await discoverNiimbotComPorts();
-      const resolvedCom = await resolveNiimbotComPort(printerName, portName);
-      const usbPort = await resolveNiimbotWindowsUsbPort(printerName, portName);
-      res.json({
+      const widthPx = Number(req.query.widthPx) || 320;
+      const heightPx = Number(req.query.heightPx) || 160;
+      const compareOfficial = String(req.query.compare || "").toLowerCase() === "official";
+      const {
+        detectNiimbotProfile,
+        detectNiimbotProfileCandidates,
+        buildNiimbotJobPackets,
+        buildOfficialPacketExpectations,
+        buildTestPatternBitmap,
+        alignBitmapCols,
+        PROTOCOL_PROFILES,
+        CONNECT_BYTES,
+        WAKE_BYTES,
+        chooseNiimbotTransport,
+        estimateJobDelayMs,
+        summarizePacketTypes,
+      } = require("./niimbot-client");
+      const profile = detectNiimbotProfile(printerName, portName, req.query.profile);
+      const profileCandidates = detectNiimbotProfileCandidates(printerName, portName);
+      const printheadPx = PROTOCOL_PROFILES[profile].printheadPixels;
+      const aligned = alignBitmapCols(
+        buildTestPatternBitmap(widthPx, heightPx),
+        widthPx,
+        heightPx
+      );
+      const knownUsb = extractWindowsUsbPort(portName, printerName);
+      let resolvedCom = extractComPort(portName, printerName);
+      if (!resolvedCom && !knownUsb) {
+        resolvedCom = await resolveNiimbotComPort(printerName, portName);
+      }
+      const usbPort = knownUsb || (await resolveNiimbotWindowsUsbPort(printerName, portName));
+      const transport = chooseNiimbotTransport({
+        portName,
+        printerName,
+        resolvedCom,
+        resolvedUsb: usbPort,
+      });
+      const sample = buildNiimbotJobPackets(aligned.bitmap, widthPx, heightPx, 3, {
+        printerName,
+        portName,
+        profile,
+        transport: transport.mode,
+      });
+      const pathLabel =
+        transport.mode === "com"
+          ? "com"
+          : transport.usbPort
+            ? `usb:${transport.usbPort}`
+            : "spooler";
+      const comPorts = knownUsb ? [] : await discoverNiimbotComPorts();
+      const dim = sample.packets.find((p) => p[2] === 0x13);
+      const first3 = sample.packets.slice(0, 3).map((p) =>
+        p.subarray(0, Math.min(16, p.length)).toString("hex")
+      );
+      const payload = {
         ok: true,
         version: VERSION,
-        profile: detectNiimbotProfile(printerName, portName, req.query.profile),
+        requiredAgentVersion: "1.10.8",
+        profile,
+        profileCandidates,
+        transport: pathLabel,
+        printheadPx,
+        inputPx: { widthPx, heightPx },
+        alignedPx: { widthPx: sample.widthPx, heightPx: sample.heightPx },
+        connectHex: CONNECT_BYTES.toString("hex"),
+        wakeHex: WAKE_BYTES.toString("hex"),
+        setDimensionBytes: dim ? dim[3] : null,
+        setDimensionHex: sample.setDimensionHex,
+        rasterRowBytes: sample.rasterRowBytes,
+        rasterPacketLen: sample.rasterPacketLen,
+        rasterLines: sample.packets.filter((p) => p[2] === 0x85).length,
+        packetCount: sample.packets.length,
+        packetTypeSequence: summarizePacketTypes(sample.packets, { includePreamble: true }),
+        countsMode: sample.countsMode,
+        firstPacketHex: first3[0] || "",
+        first3PacketsHex: first3,
+        estimatedDelayMs: estimateJobDelayMs(
+          sample.packets,
+          transport.mode === "com" ? "com" : "windows"
+        ),
         comPorts,
         resolvedComPort: resolvedCom,
         windowsUsbPort: usbPort,
-        preferredPath: resolvedCom ? "com" : usbPort ? `usb:${usbPort}` : "spooler",
-      });
+        preferredPath: pathLabel,
+        hint:
+          "Blank label with beep+feed: health version MUST be 1.10.8. Niimbus: try profile=b1 (default), profile=b21, or profile=k3. POST testPattern=true. A/B: invertBitmap=true.",
+      };
+      if (compareOfficial) {
+        const official = buildOfficialPacketExpectations(widthPx, heightPx);
+        payload.official = official;
+        payload.compare = Object.fromEntries(
+          Object.keys(official).map((key) => {
+            const exp = official[key];
+            const act =
+              key === profile
+                ? {
+                    setDimensionBytes: sample.setDimensionBytes,
+                    setDimensionHex: sample.setDimensionHex,
+                    rasterRowBytes: sample.rasterRowBytes,
+                    rasterPacketLen: sample.rasterPacketLen,
+                    packetTypeSequence: payload.packetTypeSequence,
+                  }
+                : buildNiimbotJobPackets(aligned.bitmap, widthPx, heightPx, 3, {
+                    printerName,
+                    portName,
+                    profile: key,
+                    transport: transport.mode,
+                  });
+            return [
+              key,
+              {
+                expected: exp,
+                actual:
+                  key === profile
+                    ? act
+                    : {
+                        setDimensionBytes: act.setDimensionBytes,
+                        setDimensionHex: act.setDimensionHex,
+                        rasterRowBytes: act.rasterRowBytes,
+                        rasterPacketLen: act.rasterPacketLen,
+                        packetTypeSequence: summarizePacketTypes(act.packets, {
+                          includePreamble: true,
+                        }),
+                      },
+                matches:
+                  key === profile &&
+                  exp.setDimensionBytes === act.setDimensionBytes &&
+                  exp.rasterRowBytes === act.rasterRowBytes &&
+                  exp.rasterPacketLen === act.rasterPacketLen,
+              },
+            ];
+          })
+        );
+      }
+      res.json(payload);
     } catch (error) {
       res.status(500).json({ error: error.message || "diagnostics failed" });
     }
