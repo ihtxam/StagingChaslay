@@ -44,7 +44,7 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
-import { isNiimbotPrinterName, labelPixelSize } from '@/lib/niimbot-label';
+import { labelPixelSize, shouldTestNiimbotBars } from '@/lib/niimbot-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -1126,9 +1126,11 @@ export default function Settings() {
           widthMm: settings?.posPrintSettings?.labelWidthMm,
           heightMm: settings?.posPrintSettings?.labelHeightMm,
         });
+        const live = agentPrinters.find((ap) => ap.name === name);
+        const portName = String(profile.portName || live?.portName || '').trim() || undefined;
         const result = await printNiimbotLabelViaAgent({
           printerName: name,
-          portName: profile.portName,
+          portName,
           widthPx: size.widthPx,
           heightPx: size.heightPx,
           testPattern: true,
@@ -1157,7 +1159,13 @@ export default function Settings() {
         setTestingPrinterId(null);
       }
     },
-    [printAgentOk, settings?.posPrintSettings?.labelWidthMm, settings?.posPrintSettings?.labelHeightMm, t]
+    [
+      printAgentOk,
+      agentPrinters,
+      settings?.posPrintSettings?.labelWidthMm,
+      settings?.posPrintSettings?.labelHeightMm,
+      t,
+    ]
   );
 
   const testPrinterProfile = useCallback(
@@ -1167,7 +1175,7 @@ export default function Settings() {
         toast.error(t('testPrinterNeedName'));
         return;
       }
-      if (isNiimbotPrinterName(name)) {
+      if (shouldTestNiimbotBars(profile)) {
         await testNiimbotBars(profile);
         return;
       }
@@ -4728,7 +4736,7 @@ export default function Settings() {
                       </div>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-3">
-                      {isNiimbotPrinterName(p.name) ? (
+                      {shouldTestNiimbotBars(p) ? (
                         <button
                           type="button"
                           className="btn-secondary inline-flex items-center gap-2 text-sm"

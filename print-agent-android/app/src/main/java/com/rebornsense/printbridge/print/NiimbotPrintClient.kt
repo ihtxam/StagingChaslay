@@ -99,23 +99,26 @@ object NiimbotPrintClient {
         }
     }
 
-    private fun alignBitmapCols(bitmap: ByteArray, widthPx: Int, heightPx: Int): Pair<ByteArray, Int> {
+    private const val PRINTHEAD_PX = 384
+
+    private fun padBitmapToPrinthead(bitmap: ByteArray, widthPx: Int, heightPx: Int): Pair<ByteArray, Int> {
+        val destW = PRINTHEAD_PX
+        val destRowBytes = ceil(destW / 8.0).toInt()
         val srcW = widthPx.coerceAtLeast(1)
-        val alignedW = ceil(srcW / 8.0).toInt() * 8
-        val rows = heightPx.coerceAtLeast(1)
         val srcRowBytes = ceil(srcW / 8.0).toInt()
-        val rowBytes = ceil(alignedW / 8.0).toInt()
-        if (alignedW == srcW && bitmap.size >= srcRowBytes * rows) {
-            return bitmap.copyOf(srcRowBytes * rows) to alignedW
+        val rows = heightPx.coerceAtLeast(1)
+        if (srcRowBytes == destRowBytes && bitmap.size >= destRowBytes * rows) {
+            return bitmap.copyOf(destRowBytes * rows) to destW
         }
-        val out = ByteArray(rowBytes * rows)
+        val out = ByteArray(destRowBytes * rows)
+        val copyBytes = minOf(srcRowBytes, destRowBytes)
         for (y in 0 until rows) {
             val srcOff = y * srcRowBytes
             if (srcOff >= bitmap.size) break
-            val n = minOf(srcRowBytes, bitmap.size - srcOff)
-            System.arraycopy(bitmap, srcOff, out, y * rowBytes, n)
+            val n = minOf(copyBytes, bitmap.size - srcOff)
+            System.arraycopy(bitmap, srcOff, out, y * destRowBytes, n)
         }
-        return out to alignedW
+        return out to destW
     }
 
     private fun lineCounts(line: ByteArray, totalMode: Boolean): Triple<Int, Int, Int> {
@@ -147,7 +150,7 @@ object NiimbotPrintClient {
     private fun buildAllPackets(bitmap: ByteArray, widthPx: Int, heightPx: Int, density: Int, printerName: String?): List<ByteArray> {
         val profile = detectProfile(printerName)
         val d = density.coerceIn(1, 5)
-        val (aligned, colsPx) = alignBitmapCols(bitmap, widthPx, heightPx)
+        val (aligned, colsPx) = padBitmapToPrinthead(bitmap, widthPx, heightPx)
         val rowsPx = heightPx.coerceAtLeast(1)
         val packets = mutableListOf<ByteArray>()
         packets += packet(0x21, byteArrayOf(d.toByte()))
@@ -210,7 +213,7 @@ object NiimbotPrintClient {
                 transceive(out, input, 0x01, profile.startPrint)
                 transceive(out, input, 0xA3, byteArrayOf(1))
                 transceive(out, input, 0x03, byteArrayOf(1))
-                val (aligned, colsPx) = alignBitmapCols(bitmap, widthPx, heightPx)
+                val (aligned, colsPx) = padBitmapToPrinthead(bitmap, widthPx, heightPx)
                 transceive(out, input, 0x13, dimensionBytes(profile, heightPx, colsPx))
                 val rowBytes = ceil(colsPx / 8.0).toInt()
                 for (y in 0 until heightPx) {

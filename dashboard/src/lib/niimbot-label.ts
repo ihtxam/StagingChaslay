@@ -13,6 +13,32 @@ export function isNiimbotPrinterName(name?: string | null): boolean {
   return /niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
 }
 
+export function extractNiimbotComPort(...values: Array<string | null | undefined>): string | null {
+  for (const raw of values) {
+    const text = String(raw || '').trim();
+    if (!text) continue;
+    const stripped = text.replace(/^\\\\\.\\/i, '').replace(/:$/, '');
+    if (/^COM\d+$/i.test(stripped)) return stripped.toUpperCase();
+    const paren = text.match(/\((COM\d+)\)/i);
+    if (paren) return paren[1]!.toUpperCase();
+    const inline = text.match(/\b(COM\d+)\b/i);
+    if (inline) return inline[1]!.toUpperCase();
+  }
+  return null;
+}
+
+export function shouldTestNiimbotBars(profile: {
+  name?: string | null;
+  portName?: string | null;
+  printLabels?: boolean;
+}): boolean {
+  const name = String(profile.name || '');
+  const port = String(profile.portName || '');
+  if (isNiimbotPrinterName(name) || isNiimbotPrinterName(port)) return true;
+  if (profile.printLabels && extractNiimbotComPort(name, port)) return true;
+  return false;
+}
+
 export function labelPrinterUsesNiimbot(
   settings?: PosPrintSettingsClient | null,
   printerName?: string | null
@@ -23,6 +49,7 @@ export function labelPrinterUsesNiimbot(
     profiles.find((p) => isNiimbotPrinterName(p.name)) ||
     profiles[0];
   if (profile && isNiimbotPrinterName(profile.name)) return true;
+  if (profile && profile.printLabels && extractNiimbotComPort(profile.name, profile.portName)) return true;
   return isNiimbotPrinterName(printerName);
 }
 

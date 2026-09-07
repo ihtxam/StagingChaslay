@@ -33,10 +33,10 @@ Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen ticke
 
 Niimbot is **not ESC/POS**. Labels go to `POST /print/niimbot-label`. A beep + paper feed with no ink usually means:
 
-1. The till is still on Print Agent older than 1.10.9, or
-2. Windows installed the printer as **USBPRINT** (`USB005`). That spooler often accepts start/end (beep+feed) and drops raster.
+1. The till is still on Print Agent older than 1.10.10, or
+2. Raster rows were 40 bytes (320 dots) instead of 48 bytes (384-dot printhead). 1.10.10 pads left-aligned to 384 and sends `SET_DIMENSION` `00a00180`. USB005 uses one WritePrinter per framed packet.
 
-**Till fix:** in Windows, prefer the Niimbot **COM** port (CH340 UART). Disable or do not use the USB005 queue for labels. Settings ? Receipts & printers ? **Test Niimbot bars** posts a bar pattern and the toast shows `path`, `profile`, `inkBytes` (`bitmapNonZeroBytes`). `path=usb:USB005` + blank label ? switch to COM. `inkBytes=0` ? empty bitmap, not the USB path.
+**Till fix:** reinstall Print Agent 1.10.10. Settings ? Receipts & printers ? **Test Niimbot bars** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `rowBytes=48` · `dim=00a00180`. Pick **COM6** (Bluetooth) from the dropdown to force serial — a COM failure toasts the real error (access denied / port not found) and does **not** fall back to USB005. `inkBytes=0` means empty bitmap.
 
 ## Dev (Node)
 

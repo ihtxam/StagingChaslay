@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.9";
+const VERSION = "1.10.10";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -320,7 +320,7 @@ async function printNiimbotWindows({ printerName, packetsBase64, writeMode }) {
   if (!name) throw new Error("Niimbot printer name is required.");
   const lines = Array.isArray(packetsBase64) ? packetsBase64.filter(Boolean) : [];
   if (!lines.length) throw new Error("No Niimbot packets to print.");
-  const mode = String(writeMode || "concat").toLowerCase() === "packets" ? "packets" : "concat";
+  const mode = String(writeMode || "packets").toLowerCase() === "concat" ? "concat" : "packets";
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-"));
   const packetsFile = path.join(tmpDir, "packets.txt");
@@ -1373,6 +1373,7 @@ function startServer() {
         "niimbot-test-pattern",
         "niimbot-com-prefer",
         "niimbot-usb-concat",
+        "niimbot-usb-packets",
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
@@ -1516,7 +1517,7 @@ function startServer() {
         buildNiimbotJobPackets,
         buildOfficialPacketExpectations,
         buildTestPatternBitmap,
-        alignBitmapCols,
+        padBitmapToPrinthead,
         PROTOCOL_PROFILES,
         CONNECT_BYTES,
         WAKE_BYTES,
@@ -1527,10 +1528,11 @@ function startServer() {
       const profile = detectNiimbotProfile(printerName, portName, req.query.profile);
       const profileCandidates = detectNiimbotProfileCandidates(printerName, portName);
       const printheadPx = PROTOCOL_PROFILES[profile].printheadPixels;
-      const aligned = alignBitmapCols(
+      const aligned = padBitmapToPrinthead(
         buildTestPatternBitmap(widthPx, heightPx),
         widthPx,
-        heightPx
+        heightPx,
+        printheadPx
       );
       const knownUsb = extractWindowsUsbPort(portName, printerName);
       let resolvedCom = extractComPort(portName, printerName);
@@ -1544,7 +1546,7 @@ function startServer() {
         resolvedCom,
         resolvedUsb: usbPort,
       });
-      const sample = buildNiimbotJobPackets(aligned.bitmap, widthPx, heightPx, 3, {
+      const sample = buildNiimbotJobPackets(aligned.bitmap, aligned.widthPx, aligned.heightPx, 3, {
         printerName,
         portName,
         profile,
@@ -1565,11 +1567,11 @@ function startServer() {
       const payload = {
         ok: true,
         version: VERSION,
-        requiredAgentVersion: "1.10.9",
+        requiredAgentVersion: "1.10.10",
         profile,
         profileCandidates,
         transport: pathLabel,
-        usbWriteMode: "concat",
+        usbWriteMode: "packets",
         printheadPx,
         inputPx: { widthPx, heightPx },
         alignedPx: { widthPx: sample.widthPx, heightPx: sample.heightPx },
@@ -1595,7 +1597,7 @@ function startServer() {
         windowsUsbPort: usbPort,
         preferredPath: pathLabel,
         hint:
-          "Blank beep+feed: health.version MUST be 1.10.9. POST testPattern=true. Response path=com vs usb:USB005 and bitmapNonZeroBytes tell the cause. USB005 often swallows raster — install as COM / disable USBPRINT. bitmapNonZeroBytes=0 means empty bitmap.",
+          "Blank beep+feed: health.version MUST be 1.10.10. POST testPattern=true. Expect rowBytes=48 dim=00a00180 for 320x160 K3. path=com vs usb:USB005. USB005 uses one WritePrinter per packet. Explicit COM (COM6) never USB-falls-back. bitmapNonZeroBytes=0 means empty bitmap.",
       };
       if (compareOfficial) {
         const official = buildOfficialPacketExpectations(widthPx, heightPx);
@@ -1612,7 +1614,7 @@ function startServer() {
                     rasterPacketLen: sample.rasterPacketLen,
                     packetTypeSequence: payload.packetTypeSequence,
                   }
-                : buildNiimbotJobPackets(aligned.bitmap, widthPx, heightPx, 3, {
+                : buildNiimbotJobPackets(aligned.bitmap, aligned.widthPx, aligned.heightPx, 3, {
                     printerName,
                     portName,
                     profile: key,

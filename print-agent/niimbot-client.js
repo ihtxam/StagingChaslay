@@ -128,7 +128,7 @@ function detectNiimbotProfileCandidates(printerName, portName) {
   return candidates;
 }
 
-/** Pad cols to a multiple of 8 px (niimbluelib ImageEncoder — not forced to 384). */
+/** Pad cols to a multiple of 8 px (byte boundary only). */
 function alignBitmapCols(bitmap, widthPx, heightPx) {
   const srcW = Math.max(1, Number(widthPx) || 1);
   const alignedW = Math.ceil(srcW / 8) * 8;
@@ -149,9 +149,29 @@ function alignBitmapCols(bitmap, widthPx, heightPx) {
   return { bitmap: out, widthPx: alignedW, heightPx: rows };
 }
 
-/** @deprecated alias — kept for diagnostics imports */
-function padBitmapToPrinthead(bitmap, widthPx, heightPx) {
-  return alignBitmapCols(bitmap, widthPx, heightPx);
+/**
+ * Left-align label bits into the 384-dot printhead (48-byte rows).
+ * 320-dot / 40-byte rows + SET_DIMENSION width=320 is the K3 "lizard tongue"
+ * (beep+feed, no ink). Dimension width must match this padded stride.
+ */
+function padBitmapToPrinthead(bitmap, widthPx, heightPx, printheadPixels) {
+  const destW = Math.max(8, Number(printheadPixels) || 384);
+  const destRowBytes = Math.ceil(destW / 8);
+  const srcW = Math.max(1, Number(widthPx) || destW);
+  const srcRowBytes = Math.ceil(srcW / 8);
+  const rows = Math.max(1, Number(heightPx) || 1);
+  const src = Buffer.isBuffer(bitmap) ? bitmap : Buffer.from(bitmap || []);
+  if (srcRowBytes === destRowBytes && src.length >= destRowBytes * rows) {
+    return { bitmap: src.subarray(0, destRowBytes * rows), widthPx: destW, heightPx: rows };
+  }
+  const padded = Buffer.alloc(destRowBytes * rows);
+  const copyBytes = Math.min(srcRowBytes, destRowBytes);
+  for (let y = 0; y < rows; y++) {
+    const srcOff = y * srcRowBytes;
+    if (srcOff >= src.length) break;
+    src.copy(padded, y * destRowBytes, srcOff, srcOff + Math.min(copyBytes, src.length - srcOff));
+  }
+  return { bitmap: padded, widthPx: destW, heightPx: rows };
 }
 
 function invertBitmap(bitmap, widthPx, heightPx) {
@@ -255,7 +275,7 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options 
   if (options.invertBitmap === true) {
     working = invertBitmap(working, widthPx, heightPx);
   }
-  const aligned = alignBitmapCols(working, widthPx, heightPx);
+  const aligned = padBitmapToPrinthead(working, widthPx, heightPx, profile.printheadPixels);
   const d = Math.min(5, Math.max(1, Number(density) || 3));
   const usbPath = options.transport === "windows" || options.transport === "usb";
   const pollCount = usbPath
@@ -301,10 +321,10 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options 
 }
 
 function buildOfficialPacketExpectations(widthPx, heightPx) {
-  const aligned = alignBitmapCols(buildTestPatternBitmap(widthPx, heightPx), widthPx, heightPx);
+  const bitmap = buildTestPatternBitmap(widthPx, heightPx);
   const out = {};
   for (const name of Object.keys(PROTOCOL_PROFILES)) {
-    const sample = buildNiimbotJobPackets(aligned.bitmap, widthPx, heightPx, 3, { profile: name });
+    const sample = buildNiimbotJobPackets(bitmap, widthPx, heightPx, 3, { profile: name });
     out[name] = {
       task: PROTOCOL_PROFILES[name].task,
       packetTypeSequence: summarizePacketTypes(sample.packets, { includePreamble: true }),
@@ -345,7 +365,8 @@ function extractComPort(...values) {
   for (const raw of values) {
     const text = String(raw || "").trim();
     if (!text) continue;
-    if (isComPort(text)) return text.toUpperCase();
+    const stripped = text.replace(/^\\\\\.\\/i, "").replace(/:$/, "");
+    if (isComPort(stripped)) return stripped.toUpperCase();
     const paren = text.match(/\((COM\d+)\)/i);
     if (paren) return paren[1].toUpperCase();
     const inline = text.match(/\b(COM\d+)\b/i);
@@ -444,16 +465,16 @@ function describeSerialFailure(comPort, error) {
   return `Niimbot ${label} serial write failed`;
 }
 
-async function printNiimbotJobSerial(comPort, job) {
-  const port = normalizeComPort(comPort);
-  const { packets } = job;
-  const payloadB64 = packets.map((p) => p.toString("base64")).join("\n");
-  const timeoutMs = Math.min(180000, Math.max(45000, 12000 + packets.length * 50));
-
-  const ps = `
+function serialJobPowerShell(port, baud, payloadB64) {
+  const safePort = String(port).replace(/'/g, "''");
+  const rate = Number(baud) || 115200;
+  return `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Ports
-$port = New-Object System.IO.Ports.SerialPort '${port.replace(/'/g, "''")}',115200,'None',8,'One'
+$port = New-Object System.IO.Ports.SerialPort '${safePort}',${rate},'None',8,'One'
+$port.Handshake = [System.IO.Ports.Handshake]::None
+$port.DtrEnable = $true
+$port.RtsEnable = $true
 $port.ReadTimeout = 500
 $port.WriteTimeout = 15000
 $port.Open()
@@ -487,6 +508,21 @@ ${payloadB64}
   $port.Dispose()
 }
 `;
+}
+
+function isFatalSerialError(error) {
+  const raw = [error && error.stderr, error && error.message].filter(Boolean).join("\n");
+  return /access is denied|UnauthorizedAccess|does not exist|FileNotFoundException|cannot find the (file|port)|was not found|in use or access denied/i.test(
+    raw
+  );
+}
+
+async function printNiimbotJobSerialAtBaud(comPort, job, baud) {
+  const port = normalizeComPort(comPort);
+  const { packets } = job;
+  const payloadB64 = packets.map((p) => p.toString("base64")).join("\n");
+  const timeoutMs = Math.min(180000, Math.max(45000, 12000 + packets.length * 50));
+  const ps = serialJobPowerShell(port, baud, payloadB64);
   try {
     await execFileAsync(
       "powershell.exe",
@@ -496,6 +532,21 @@ ${payloadB64}
   } catch (error) {
     throw new Error(describeSerialFailure(comPort, error));
   }
+}
+
+async function printNiimbotJobSerial(comPort, job) {
+  const bauds = [115200, 9600];
+  let lastErr;
+  for (const baud of bauds) {
+    try {
+      await printNiimbotJobSerialAtBaud(comPort, job, baud);
+      return;
+    } catch (error) {
+      lastErr = error;
+      if (isFatalSerialError(error)) throw error;
+    }
+  }
+  throw lastErr || new Error(describeSerialFailure(comPort, new Error("serial write failed")));
 }
 
 /**
@@ -512,17 +563,21 @@ function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUs
     "";
   const com = explicitCom || (resolvedCom ? String(resolvedCom).trim() : "") || "";
   const named = isNiimbotPrinterName(printerName);
+  // Selected COM (Bluetooth SPP / UART) must stay serial — never silent USB005 fallback.
+  if (explicitCom) {
+    return { mode: "com", comPort: explicitCom, usbPort: usb || null, requireCom: true };
+  }
   if (named && com) {
-    return { mode: "com", comPort: com, usbPort: usb || null };
+    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: false };
   }
   // Non-Niimbot queue (receipt/scale): keep USB-first so a guessed COM is not used.
-  if (usb && !explicitCom && !named) {
-    return { mode: "windows", comPort: null, usbPort: usb };
+  if (usb && !named) {
+    return { mode: "windows", comPort: null, usbPort: usb, requireCom: false };
   }
   if (com) {
-    return { mode: "com", comPort: com, usbPort: usb || null };
+    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: false };
   }
-  return { mode: "windows", comPort: null, usbPort: usb || null };
+  return { mode: "windows", comPort: null, usbPort: usb || null, requireCom: false };
 }
 
 async function printNiimbotViaWindowsPrinter({ printerName, packets, printWindowsPacketsFn, writeMode }) {
@@ -594,6 +649,10 @@ async function printNiimbotLabel(opts) {
 
   const printSerial = typeof printSerialFn === "function" ? printSerialFn : printNiimbotJobSerial;
 
+  if (transport.requireCom && !transport.comPort) {
+    throw new Error("Niimbot COM port was selected but could not be resolved");
+  }
+
   if (transport.mode === "com" && transport.comPort) {
     try {
       console.log(
@@ -605,7 +664,7 @@ async function printNiimbotLabel(opts) {
         ...describeJob(bitmap, job.packets, job.profile, "com", { ...job, usbWriteMode: null }),
       };
     } catch (comErr) {
-      if (!name || typeof printWindowsPacketsFn !== "function") throw comErr;
+      if (transport.requireCom || !name || typeof printWindowsPacketsFn !== "function") throw comErr;
       console.warn(
         `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows USBPRINT:`,
         comErr && comErr.message
@@ -621,13 +680,15 @@ async function printNiimbotLabel(opts) {
 
   if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.9+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.10+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
     );
   }
 
   const usbPort = transport.usbPort;
   const pathLabel = usbPort ? `usb:${usbPort}` : "spooler";
-  const writeMode = usbWriteMode === "packets" ? "packets" : "concat";
+  // USBPRINT (USB005): one WritePrinter per framed packet (1.10.0). Concat can
+  // accept setup (beep/feed) and drop the raster blob.
+  const writeMode = usbWriteMode === "concat" ? "concat" : "packets";
   console.log(
     `[print-agent] Niimbot label via Windows ${pathLabel} writeMode=${writeMode} -> '${name}' profile=${job.profile} packets=${job.packets.length} est=${estimateJobDelayMs(job.packets, "windows")}ms`
   );

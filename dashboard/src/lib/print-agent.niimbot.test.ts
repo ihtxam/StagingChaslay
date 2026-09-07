@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { formatNiimbotLabelError, MIN_NIIMBOT_AGENT_VERSION } from './print-agent';
 
-assert.equal(MIN_NIIMBOT_AGENT_VERSION, '1.10.9');
+assert.equal(MIN_NIIMBOT_AGENT_VERSION, '1.10.10');
 
 assert.match(
   formatNiimbotLabelError({

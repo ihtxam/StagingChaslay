@@ -11,10 +11,10 @@ param(
     [int]$SetupDelayMs = 50,
     [int]$EndDelayMs = 200,
 
-    # concat (default): one WritePrinter of CONNECT+wake+all frames — USBPRINT
-    # swallows/fragments small writes (win-raw-print 96-byte chunks caused beep+feed).
-    # packets: one WritePrinter per frame (COM-like pacing; diagnostic fallback).
-    [string]$WriteMode = "concat"
+    # packets (default): one WritePrinter per framed packet — USB005 USBPRINT
+    # (1.10.0 / d167824b). Concat can accept setup (beep/feed) and drop raster.
+    # concat: one WritePrinter of CONNECT+wake+all frames (diagnostic).
+    [string]$WriteMode = "packets"
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,7 +129,7 @@ foreach ($line in $packetLines) {
 }
 
 $mode = ([string]$WriteMode).Trim().ToLowerInvariant()
-if ($mode -ne "packets") { $mode = "concat" }
+if ($mode -ne "concat") { $mode = "packets" }
 
 Write-PrintLog "printer='$PrinterName' packets=$($packets.Count) writeMode=$mode"
 

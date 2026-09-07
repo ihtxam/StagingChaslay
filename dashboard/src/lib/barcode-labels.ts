@@ -146,7 +146,7 @@ export async function printLabelsViaAgentOrQueue(
       'No label printer configured. Open Settings → Receipts & printers, add your Niimbot, and enable Labels.'
     );
   }
-  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
+  const portName = labelProfile?.portName || null;
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
 
   if (useNiimbot) {

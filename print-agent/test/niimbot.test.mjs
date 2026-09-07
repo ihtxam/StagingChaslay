@@ -22,6 +22,7 @@ const {
   CONNECT_BYTES,
   WAKE_BYTES,
   alignBitmapCols,
+  padBitmapToPrinthead,
   invertBitmap,
   estimateJobDelayMs,
   packetDelayMs,
@@ -30,13 +31,13 @@ const {
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.9";
+const VERSION = "1.10.10";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.9 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.10 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -56,29 +57,35 @@ test("CONNECT packet uses 0x03 prefix per official NIIMBOT app captures", () => 
   assert.deepEqual([...WAKE_BYTES], [0x54, 0x01]);
 });
 
-test("K3 profile uses 4-byte SET_DIMENSION (rows, cols) per niimprint set_dimension", () => {
+test("K3 320x160 pads raster to 48-byte rows and SET_DIMENSION width 384", () => {
   assert.equal(detectNiimbotProfile("NIIMBOT K3", "USB005"), "k3");
   const w = 320;
   const h = 160;
   const rowBytes = Math.ceil(w / 8);
   const bitmap = Buffer.alloc(rowBytes * h, 0xff);
-  const { packets, profile, widthPx, rasterRowBytes, setDimensionBytes } = buildNiimbotJobPackets(
-    bitmap,
-    w,
-    h,
-    3,
-    { printerName: "NIIMBOT K3", transport: "windows" }
-  );
+  const { packets, profile, widthPx, rasterRowBytes, setDimensionBytes, setDimensionHex } =
+    buildNiimbotJobPackets(bitmap, w, h, 3, {
+      printerName: "NIIMBOT K3",
+      transport: "windows",
+    });
   assert.equal(profile, "k3");
-  assert.equal(widthPx, 320);
-  assert.equal(rasterRowBytes, 40);
+  assert.equal(widthPx, 384);
+  assert.equal(rasterRowBytes, 48);
   assert.equal(setDimensionBytes, 4);
+  assert.equal(setDimensionHex, "00a00180");
   const dim = packets.find((p) => p[2] === 0x13);
   assert.ok(dim);
   assert.equal(dim[3], 4);
   const dimData = dim.subarray(4, 4 + dim[3]);
   assert.equal(dimData.readUInt16BE(0), h);
-  assert.equal(dimData.readUInt16BE(2), w);
+  assert.equal(dimData.readUInt16BE(2), 384);
+  const start = packets.find((p) => p[2] === 0x01);
+  assert.equal(start[3], 1);
+  assert.equal(start[4], 1);
+  const raster = packets.find((p) => p[2] === 0x85);
+  assert.equal(raster.length, 4 + 6 + 48 + 3);
+  assert.equal(raster[6], 0);
+  assert.ok(raster[7] > 0 || raster[8] > 0);
 });
 
 test("Niimbus auto-detects b1 profile (2024 B21S print task)", () => {
@@ -145,8 +152,8 @@ test("raster lines use total-mode black counts for K3 (B21L2BPrintTask)", () => 
   assert.ok(raster[7] > 0 || raster[8] > 0);
 });
 
-test("raster packet is 48-byte row only when label width is 384px", () => {
-  const w = 384;
+test("raster packet is 48-byte row for K3 320px labels (printhead pad)", () => {
+  const w = 320;
   const h = 8;
   const bitmap = buildTestPatternBitmap(w, h);
   const { rasterRowBytes, packets } = buildNiimbotJobPackets(bitmap, w, h, 3, { profile: "k3" });
@@ -155,14 +162,15 @@ test("raster packet is 48-byte row only when label width is 384px", () => {
   assert.equal(raster.length, 4 + 6 + 48 + 3);
 });
 
-test("win-niimbot-print.ps1 concatenates CONNECT+wake+packets in one WritePrinter by default", () => {
+test("win-niimbot-print.ps1 defaults to one WritePrinter per framed packet", () => {
   const src = read("../win-niimbot-print.ps1");
   assert.match(src, /0x03,\s*0x55,\s*0x55,\s*0xc1/);
   assert.match(src, /0x54,\s*0x01/);
   assert.match(src, /WriteMode/);
+  assert.match(src, /\[string\]\$WriteMode = "packets"/);
   assert.match(src, /concatBytes=/);
   assert.match(src, /\[System\.Buffer\]::BlockCopy/);
-  assert.match(src, /no 96-byte split, no ESC\/POS trailer/);
+  assert.match(src, /Write-OnePacket -Handle \$handle -Data \$pkt/);
   assert.equal(src.includes("Get-BtCutTrailer"), false);
   assert.equal(/0x1D,\s*0x56/.test(src), false);
   assert.equal(/0x1B,\s*0x69/.test(src), false);
@@ -195,21 +203,27 @@ test("invertBitmap flips all row bytes", () => {
   }
 });
 
-test("alignBitmapCols pads to byte boundary not printhead width", () => {
-  const w = 50;
+test("padBitmapToPrinthead left-aligns 320px into 384-dot rows", () => {
+  const w = 320;
   const h = 10;
   const rowBytes = Math.ceil(w / 8);
   const bitmap = Buffer.alloc(rowBytes * h, 0xff);
-  const aligned = alignBitmapCols(bitmap, w, h);
-  assert.equal(aligned.widthPx, 56);
-  assert.equal(Math.ceil(aligned.widthPx / 8), Math.ceil(aligned.bitmap.length / h));
+  const padded = padBitmapToPrinthead(bitmap, w, h, 384);
+  assert.equal(padded.widthPx, 384);
+  assert.equal(padded.bitmap.length, 48 * h);
+  for (let y = 0; y < h; y++) {
+    assert.equal(padded.bitmap.subarray(y * 48, y * 48 + 40).every((b) => b === 0xff), true);
+    assert.equal(padded.bitmap.subarray(y * 48 + 40, y * 48 + 48).every((b) => b === 0), true);
+  }
 });
 
 test("buildOfficialPacketExpectations documents k3 vs b1 dimension sizes", () => {
   const official = buildOfficialPacketExpectations(320, 160);
   assert.equal(official.k3.setDimensionBytes, 4);
   assert.equal(official.b1.setDimensionBytes, 6);
-  assert.equal(official.k3.rasterRowBytes, 40);
+  assert.equal(official.k3.rasterRowBytes, 48);
+  assert.equal(official.k3.setDimensionHex, "00a00180");
+  assert.equal(official.k3.colsPx, 384);
 });
 
 test("Niimbus and NIIMBOT names route as Niimbot printers", () => {
@@ -226,6 +240,9 @@ test("Niimbus and NIIMBOT names route as Niimbot printers", () => {
 
 test("port extractors recognize COM and USB spooler ports", () => {
   assert.equal(extractComPort("Niimbot K3 (COM7)"), "COM7");
+  assert.equal(extractComPort("COM6"), "COM6");
+  assert.equal(extractComPort("\\\\.\\COM6"), "COM6");
+  assert.equal(extractComPort("Bluetooth (COM6)"), "COM6");
   assert.equal(extractWindowsUsbPort("USB005"), "USB005");
   assert.equal(extractWindowsUsbPort("NIIMBOT K3 on USB005"), "USB005");
 });
@@ -240,6 +257,29 @@ test("named Niimbot prefers discovered COM over USB005 (USBPRINT blank-feed)", (
   assert.equal(t.mode, "com");
   assert.equal(t.comPort, "COM7");
   assert.equal(t.usbPort, "USB005");
+  assert.equal(t.requireCom, false);
+});
+
+test("explicit COM6 in port or name requires serial and does not USB-fallback", () => {
+  const byPort = chooseNiimbotTransport({
+    printerName: "NIIMBOT K3",
+    portName: "COM6",
+    resolvedCom: "COM6",
+    resolvedUsb: "USB005",
+  });
+  assert.equal(byPort.mode, "com");
+  assert.equal(byPort.comPort, "COM6");
+  assert.equal(byPort.requireCom, true);
+
+  const byName = chooseNiimbotTransport({
+    printerName: "NIIMBOT K3 (COM6)",
+    portName: "USB005",
+    resolvedCom: null,
+    resolvedUsb: "USB005",
+  });
+  assert.equal(byName.mode, "com");
+  assert.equal(byName.comPort, "COM6");
+  assert.equal(byName.requireCom, true);
 });
 
 test("receipt/scale USB queue is not hijacked by a guessed COM port", () => {
@@ -280,7 +320,55 @@ test("printNiimbotLabel uses COM first for NIIMBOT K3 even when USB005 is listed
   assert.ok(result.packetTypeSequence.includes("PrintBitmapRow"));
 });
 
-test("printNiimbotLabel falls back to USB concat when no Niimbot COM exists", async () => {
+test("printNiimbotLabel uses COM when portName is COM6 and does not USB-fallback", async () => {
+  const bitmap = buildTestPatternBitmap(32, 16);
+  let usedCom = "";
+  let usedWindows = false;
+  const result = await printNiimbotLabel({
+    printerName: "NIIMBOT K3",
+    portName: "COM6",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 32,
+    heightPx: 16,
+    resolveComPortFn: async () => "COM6",
+    resolveWindowsUsbPortFn: async () => "USB005",
+    printSerialFn: async (port) => {
+      usedCom = port;
+    },
+    printWindowsPacketsFn: async () => {
+      usedWindows = true;
+    },
+  });
+  assert.equal(usedCom, "COM6");
+  assert.equal(usedWindows, false);
+  assert.equal(result.path, "com");
+  assert.ok(result.bitmapNonZeroBytes > 0);
+});
+
+test("printNiimbotLabel COM6 serial failure does not USB-fallback", async () => {
+  const bitmap = buildTestPatternBitmap(32, 16);
+  let usedWindows = false;
+  await assert.rejects(
+    () =>
+      printNiimbotLabel({
+        printerName: "NIIMBOT K3",
+        portName: "COM6",
+        bitmapBase64: bitmap.toString("base64"),
+        widthPx: 32,
+        heightPx: 16,
+        printSerialFn: async () => {
+          throw new Error("Niimbot COM6 is in use or access denied (close NIIMBOT.exe)");
+        },
+        printWindowsPacketsFn: async () => {
+          usedWindows = true;
+        },
+      }),
+    /COM6 is in use or access denied/
+  );
+  assert.equal(usedWindows, false);
+});
+
+test("printNiimbotLabel USB005 defaults to paced packet WritePrinter", async () => {
   const bitmap = buildTestPatternBitmap(32, 16);
   let writeMode = "";
   const result = await printNiimbotLabel({
@@ -295,9 +383,10 @@ test("printNiimbotLabel falls back to USB concat when no Niimbot COM exists", as
       writeMode = opts.writeMode;
     },
   });
-  assert.equal(writeMode, "concat");
+  assert.equal(writeMode, "packets");
   assert.equal(result.path, "usb:USB005");
-  assert.equal(result.usbWriteMode, "concat");
+  assert.equal(result.usbWriteMode, "packets");
+  assert.equal(result.rasterRowBytes, 48);
   assert.ok(result.bitmapNonZeroBytes > 0);
 });
 
@@ -308,8 +397,28 @@ test("server wires Niimbot diagnostics compare=official and invertBitmap", () =>
   assert.match(server, /invertBitmap/);
   assert.match(server, /niimbot-label\/diagnostics/);
   assert.match(server, /niimbot-com-prefer/);
+  assert.match(server, /niimbot-usb-packets/);
   assert.match(server, /usbWriteMode/);
   assert.match(server, /bitmapNonZeroBytes/);
+});
+
+test("COM serial enables DTR/RTS and retries 9600 after 115200", () => {
+  const src = read("../niimbot-client.js");
+  assert.match(src, /DtrEnable/);
+  assert.match(src, /RtsEnable/);
+  assert.match(src, /\[115200,\s*9600\]/);
+  assert.match(src, /requireCom/);
+});
+
+test("Settings Test Niimbot bars sends selected printer name and portName", () => {
+  const settings = fs.readFileSync(
+    path.join(here, "..", "..", "dashboard", "src", "pages", "merchant", "Settings.tsx"),
+    "utf8"
+  );
+  assert.match(settings, /printNiimbotLabelViaAgent/);
+  assert.match(settings, /const portName = String\(profile\.portName \|\| live\?\.portName/);
+  assert.match(settings, /shouldTestNiimbotBars/);
+  assert.match(settings, /toast\.error\(msg \|\| t\('testNiimbotBarsFailed'\)\)/);
 });
 
 test("packetDelayMs and estimateJobDelayMs stay bounded for USB jobs", () => {
