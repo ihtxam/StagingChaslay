@@ -44,7 +44,7 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
-import { labelPixelSize, shouldTestNiimbotBars } from '@/lib/niimbot-label';
+import { labelPixelSize, resolveNiimbotTestPortName, shouldTestNiimbotBars } from '@/lib/niimbot-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -66,6 +66,8 @@ import {
   printViaAgent,
   printNiimbotLabelViaAgent,
   probePrintAgentHealth,
+  printerSelectValue,
+  findPrinterBySelectValue,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
@@ -1109,7 +1111,10 @@ export default function Settings() {
   }, [printAgentManifest?.version, printBridgeManifest?.version]);
 
   const testNiimbotBars = useCallback(
-    async (profile: { id: string; name: string; portName?: string | null }) => {
+    async (
+      profile: { id: string; name: string; portName?: string | null },
+      opts?: { invert?: boolean; protocol?: string }
+    ) => {
       const name = String(profile.name || '').trim();
       if (!name) {
         toast.error(t('testPrinterNeedName'));
@@ -1120,24 +1125,29 @@ export default function Settings() {
         toast.error(t('testPrinterNeedAgent'));
         return;
       }
-      setTestingPrinterId(profile.id);
+      const invert = opts?.invert === true;
+      setTestingPrinterId(invert ? `${profile.id}:invert` : profile.id);
       try {
         const size = labelPixelSize({
           widthMm: settings?.posPrintSettings?.labelWidthMm,
           heightMm: settings?.posPrintSettings?.labelHeightMm,
         });
-        const live = agentPrinters.find((ap) => ap.name === name);
-        const portName = String(profile.portName || live?.portName || '').trim() || undefined;
+        const portName = resolveNiimbotTestPortName(profile, agentPrinters);
+        const protocol = String(opts?.protocol || 'b21').trim() || 'b21';
         const result = await printNiimbotLabelViaAgent({
           printerName: name,
           portName,
           widthPx: size.widthPx,
           heightPx: size.heightPx,
           testPattern: true,
+          profile: protocol,
+          invertBitmap: invert,
         });
         const ink = result.bitmapNonZeroBytes ?? '?';
         const pathUsed = result.path || '?';
-        const profileUsed = result.profile || '?';
+        const profileUsed = invert
+          ? `${result.profile || protocol}+invert`
+          : result.profile || protocol;
         const row = result.rasterRowBytes ?? '?';
         const dim = result.setDimensionHex || '?';
         toast.success(
@@ -4612,13 +4622,13 @@ export default function Settings() {
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={savedNameMissing ? '' : p.name}
+                          value={savedNameMissing ? '' : printerSelectValue(p)}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const picked = agentPrinters.find((ap) => ap.name === e.target.value);
+                            const picked = findPrinterBySelectValue(agentPrinters, e.target.value);
                             printers[idx] = {
                               ...p,
-                              name: e.target.value,
+                              name: picked?.name || e.target.value,
                               portName: picked?.portName || null,
                               matchHint: picked?.matchHint || picked?.driverName || null,
                             };
@@ -4632,7 +4642,7 @@ export default function Settings() {
                           {agentPrinters.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (
-                              <option key={ap.name} value={ap.name}>
+                              <option key={printerSelectValue(ap)} value={printerSelectValue(ap)}>
                                 {ap.name}
                                 {ap.portName ? ` · ${ap.portName}` : ''}
                                 {ap.isDefault ? t('webPosDefaultSuffix') : ''}
@@ -4737,15 +4747,28 @@ export default function Settings() {
                     ) : null}
                     <div className="flex flex-wrap items-center gap-3">
                       {shouldTestNiimbotBars(p) ? (
-                        <button
-                          type="button"
-                          className="btn-secondary inline-flex items-center gap-2 text-sm"
-                          disabled={!p.name?.trim() || testingPrinterId === p.id}
-                          onClick={() => void testNiimbotBars(p)}
-                        >
-                          <Printer size={14} />
-                          {testingPrinterId === p.id ? t('loading') : t('testNiimbotBars')}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="btn-secondary inline-flex items-center gap-2 text-sm"
+                            disabled={!p.name?.trim() || !!testingPrinterId}
+                            onClick={() => void testNiimbotBars(p, { protocol: 'b21' })}
+                          >
+                            <Printer size={14} />
+                            {testingPrinterId === p.id ? t('loading') : t('testNiimbotBars')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary inline-flex items-center gap-2 text-sm"
+                            disabled={!p.name?.trim() || !!testingPrinterId}
+                            onClick={() => void testNiimbotBars(p, { protocol: 'b21', invert: true })}
+                          >
+                            <Printer size={14} />
+                            {testingPrinterId === `${p.id}:invert`
+                              ? t('loading')
+                              : t('testNiimbotBarsInvert')}
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"

@@ -33,10 +33,10 @@ Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen ticke
 
 Niimbot is **not ESC/POS**. Labels go to `POST /print/niimbot-label`. A beep + paper feed with no ink usually means:
 
-1. The till is still on Print Agent older than 1.10.10, or
-2. Raster rows were 40 bytes (320 dots) instead of 48 bytes (384-dot printhead). 1.10.10 pads left-aligned to 384 and sends `SET_DIMENSION` `00a00180`. USB005 uses one WritePrinter per framed packet.
+1. The till is still on Print Agent older than 1.10.11, or
+2. The job used the K3 4-byte / 384-dot layout. 1.10.10 padded 320-wide labels to 48-byte rows (`dim=00a00180`) and still printed blank on USB005. **1.10.11 defaults USB "NIIMBOT K3" to official B21**: 2-byte `START_PRINT` `[0,1]`, 6-byte `SET_DIMENSION` height/width/copies, row width matching dim (320 ? `rowBytes=40` `dim=00a001400001`). USBPRINT sends the whole job as **one RAW document** (no 96-byte split, no ESC/POS cut).
 
-**Till fix:** reinstall Print Agent 1.10.10. Settings ? Receipts & printers ? **Test Niimbot bars** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `rowBytes=48` · `dim=00a00180`. Pick **COM6** (Bluetooth) from the dropdown to force serial — a COM failure toasts the real error (access denied / port not found) and does **not** fall back to USB005. `inkBytes=0` means empty bitmap.
+**Till fix:** reinstall Print Agent 1.10.11. Settings ? Receipts & printers ? **Test bars (B21)** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `profil=b21` · `rowBytes=40` · `dim=00a001400001`. **Test bars (inverted)** sends the same job with bits flipped (`profil=b21+invert`). Pick **COM6** (Bluetooth) from the dropdown to force serial — a COM `Open()` failure toasts the exception and does **not** fall back to USB005. `inkBytes=0` means empty bitmap.
 
 ## Dev (Node)
 

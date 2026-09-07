@@ -11,10 +11,11 @@ param(
     [int]$SetupDelayMs = 50,
     [int]$EndDelayMs = 200,
 
-    # packets (default): one WritePrinter per framed packet — USB005 USBPRINT
-    # (1.10.0 / d167824b). Concat can accept setup (beep/feed) and drop raster.
-    # concat: one WritePrinter of CONNECT+wake+all frames (diagnostic).
-    [string]$WriteMode = "packets"
+    # concat (default 1.10.11): one WritePrinter of CONNECT+wake+all frames —
+    # one RAW document, no 96-byte split, no ESC/POS trailer. USBPRINT often
+    # only commits the job on EndDoc.
+    # packets: one WritePrinter per framed packet (1.10.10 paced writes).
+    [string]$WriteMode = "concat"
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,7 +130,7 @@ foreach ($line in $packetLines) {
 }
 
 $mode = ([string]$WriteMode).Trim().ToLowerInvariant()
-if ($mode -ne "concat") { $mode = "packets" }
+if ($mode -ne "packets") { $mode = "concat" }
 
 Write-PrintLog "printer='$PrinterName' packets=$($packets.Count) writeMode=$mode"
 

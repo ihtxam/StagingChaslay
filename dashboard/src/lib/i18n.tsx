@@ -1775,7 +1775,8 @@ const en: Dict = {
   testPrinterNeedAgent: 'Print agent is offline. Start it on this PC, then try again.',
   testPrinterOk: 'Test page sent to {name}',
   testPrinterFailed: 'Test print failed',
-  testNiimbotBars: 'Test Niimbot bars',
+  testNiimbotBars: 'Test bars (B21)',
+  testNiimbotBarsInvert: 'Test bars (inverted)',
   testNiimbotBarsOk:
     'Bars sent to {name} via {path} · profile={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
   testNiimbotBarsFailed: 'Niimbot bar test failed',
@@ -5636,7 +5637,8 @@ const fr: Dict = {
   testPrinterNeedAgent: 'L’agent d’impression est hors ligne. Démarrez-le sur ce PC, puis réessayez.',
   testPrinterOk: 'Page de test envoyée à {name}',
   testPrinterFailed: 'Échec du test d’impression',
-  testNiimbotBars: 'Tester les barres Niimbot',
+  testNiimbotBars: 'Tester les barres (B21)',
+  testNiimbotBarsInvert: 'Tester les barres (inversé)',
   testNiimbotBarsOk:
     'Barres envoyées à {name} via {path} · profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
   testNiimbotBarsFailed: 'Échec du test de barres Niimbot',
@@ -9444,7 +9446,8 @@ const de: Dict = {
   testPrinterNeedAgent: 'Druckagent ist offline. Agent auf diesem PC starten und erneut versuchen.',
   testPrinterOk: 'Testseite an {name} gesendet',
   testPrinterFailed: 'Testdruck fehlgeschlagen',
-  testNiimbotBars: 'Niimbot-Balken testen',
+  testNiimbotBars: 'Balken testen (B21)',
+  testNiimbotBarsInvert: 'Balken testen (invertiert)',
   testNiimbotBarsOk:
     'Balken an {name} via {path} · Profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
   testNiimbotBarsFailed: 'Niimbot-Balkentest fehlgeschlagen',

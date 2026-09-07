@@ -19,10 +19,10 @@ const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
-const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
+const { printNiimbotLabel, extractComPort, extractWindowsUsbPort, isNiimbotPrinterName } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.10";
+const VERSION = "1.10.11";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -275,11 +275,13 @@ async function discoverNiimbotComPorts() {
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $ports = @()
-# Name tokens only — VID 1a86 (CH340) is also used by Aclas scales and must not match.
+# Name tokens or Bluetooth SPP. VID 1a86 (CH340) scales must not match alone.
 try {
   Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
     $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
-    if ($blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
+    $ch340Scale = $blob -match 'vid_1a86|ch340' -and $blob -notmatch 'niimbot|niimbus|\bk3\b|\bb21\b'
+    if ($ch340Scale) { return }
+    if ($blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b|bluetooth|bthenum') {
       $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
     }
   }
@@ -287,10 +289,12 @@ try {
 try {
   Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
     $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
-    if ($blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
-      if ($_.FriendlyName -match '(COM\\d+)') {
-        $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
-      }
+    $ch340Scale = $blob -match 'vid_1a86|ch340' -and $blob -notmatch 'niimbot|niimbus|\bk3\b|\bb21\b'
+    if ($ch340Scale) { return }
+    $named = $blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b'
+    $bt = $blob -match 'bluetooth|bthenum|serial over bluetooth'
+    if (($named -or $bt) -and $_.FriendlyName -match '(COM\\d+)') {
+      $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
     }
   }
 } catch { }
@@ -320,7 +324,7 @@ async function printNiimbotWindows({ printerName, packetsBase64, writeMode }) {
   if (!name) throw new Error("Niimbot printer name is required.");
   const lines = Array.isArray(packetsBase64) ? packetsBase64.filter(Boolean) : [];
   if (!lines.length) throw new Error("No Niimbot packets to print.");
-  const mode = String(writeMode || "packets").toLowerCase() === "concat" ? "concat" : "packets";
+  const mode = String(writeMode || "concat").toLowerCase() === "packets" ? "packets" : "concat";
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-"));
   const packetsFile = path.join(tmpDir, "packets.txt");
@@ -1052,6 +1056,7 @@ async function resolveNiimbotComPort(printerName, portName) {
 
   const discovered = await discoverNiimbotComPorts();
   if (!discovered.length) return null;
+  if (isNiimbotPrinterName(printerName) && discovered.includes("COM6")) return "COM6";
   const want = stableDeviceKey(printerName || match?.name || match?.matchHint);
   if (want) {
     const scored = discovered
@@ -1060,6 +1065,7 @@ async function resolveNiimbotComPort(printerName, portName) {
       .sort((a, b) => b.score - a.score);
     if (scored[0]) return scored[0].port;
   }
+  if (isNiimbotPrinterName(printerName)) return discovered[0];
   return discovered[0];
 }
 
@@ -1374,6 +1380,7 @@ function startServer() {
         "niimbot-com-prefer",
         "niimbot-usb-concat",
         "niimbot-usb-packets",
+        "niimbot-usb-b21-default",
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
@@ -1469,10 +1476,10 @@ function startServer() {
           widthPx,
           heightPx,
           density: body.density,
-          profile: body.profile,
+          profile: body.profile || req.query.profile,
           testPattern,
-          invertBitmap: body.invertBitmap === true,
-          usbWriteMode: body.usbWriteMode,
+          invertBitmap: body.invertBitmap === true || String(req.query.invert || "") === "1",
+          usbWriteMode: body.usbWriteMode || req.query.usbWriteMode,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printWindowsPacketsFn: printNiimbotWindows,
@@ -1518,6 +1525,7 @@ function startServer() {
         buildOfficialPacketExpectations,
         buildTestPatternBitmap,
         padBitmapToPrinthead,
+        alignBitmapCols,
         PROTOCOL_PROFILES,
         CONNECT_BYTES,
         WAKE_BYTES,
@@ -1528,12 +1536,11 @@ function startServer() {
       const profile = detectNiimbotProfile(printerName, portName, req.query.profile);
       const profileCandidates = detectNiimbotProfileCandidates(printerName, portName);
       const printheadPx = PROTOCOL_PROFILES[profile].printheadPixels;
-      const aligned = padBitmapToPrinthead(
-        buildTestPatternBitmap(widthPx, heightPx),
-        widthPx,
-        heightPx,
-        printheadPx
-      );
+      const invert = String(req.query.invert || "") === "1";
+      const rawBitmap = buildTestPatternBitmap(widthPx, heightPx);
+      const aligned = PROTOCOL_PROFILES[profile].padToPrinthead
+        ? padBitmapToPrinthead(rawBitmap, widthPx, heightPx, printheadPx)
+        : alignBitmapCols(rawBitmap, widthPx, heightPx);
       const knownUsb = extractWindowsUsbPort(portName, printerName);
       let resolvedCom = extractComPort(portName, printerName);
       if (!resolvedCom) {
@@ -1546,11 +1553,12 @@ function startServer() {
         resolvedCom,
         resolvedUsb: usbPort,
       });
-      const sample = buildNiimbotJobPackets(aligned.bitmap, aligned.widthPx, aligned.heightPx, 3, {
+      const sample = buildNiimbotJobPackets(rawBitmap, widthPx, heightPx, 3, {
         printerName,
         portName,
         profile,
         transport: transport.mode,
+        invertBitmap: invert,
       });
       const pathLabel =
         transport.mode === "com"
@@ -1563,15 +1571,15 @@ function startServer() {
       const first3 = sample.packets.slice(0, 3).map((p) =>
         p.subarray(0, Math.min(16, p.length)).toString("hex")
       );
-      const bitmapNonZeroBytes = [...aligned.bitmap].filter((b) => b !== 0).length;
+      const bitmapNonZeroBytes = [...(sample.bitmap || aligned.bitmap)].filter((b) => b !== 0).length;
       const payload = {
         ok: true,
         version: VERSION,
-        requiredAgentVersion: "1.10.10",
+        requiredAgentVersion: "1.10.11",
         profile,
         profileCandidates,
         transport: pathLabel,
-        usbWriteMode: "packets",
+        usbWriteMode: "concat",
         printheadPx,
         inputPx: { widthPx, heightPx },
         alignedPx: { widthPx: sample.widthPx, heightPx: sample.heightPx },
@@ -1583,6 +1591,8 @@ function startServer() {
         rasterPacketLen: sample.rasterPacketLen,
         rasterLines: sample.packets.filter((p) => p[2] === 0x85).length,
         bitmapNonZeroBytes,
+        startPrintBytes: sample.startPrintBytes,
+        invertBitmap: invert,
         packetCount: sample.packets.length,
         packetTypeSequence: summarizePacketTypes(sample.packets, { includePreamble: true }),
         countsMode: sample.countsMode,
@@ -1597,7 +1607,7 @@ function startServer() {
         windowsUsbPort: usbPort,
         preferredPath: pathLabel,
         hint:
-          "Blank beep+feed: health.version MUST be 1.10.10. POST testPattern=true. Expect rowBytes=48 dim=00a00180 for 320x160 K3. path=com vs usb:USB005. USB005 uses one WritePrinter per packet. Explicit COM (COM6) never USB-falls-back. bitmapNonZeroBytes=0 means empty bitmap.",
+          "Blank beep+feed: health.version MUST be 1.10.11. USB K3 defaults to B21 (2-byte START_PRINT, 6-byte dim, no 384 pad). POST testPattern=true profile=b21. Expect rowBytes=40 dim=00a001400001 for 320x160. path=com vs usb:USB005. USB005 sends one RAW document (concat, no 96-byte split, no ESC/POS cut). Explicit COM (COM6) never USB-falls-back. invertBitmap=true or ?invert=1 flips bits. bitmapNonZeroBytes=0 means empty bitmap.",
       };
       if (compareOfficial) {
         const official = buildOfficialPacketExpectations(widthPx, heightPx);

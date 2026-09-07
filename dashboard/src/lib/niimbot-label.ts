@@ -27,6 +27,39 @@ export function extractNiimbotComPort(...values: Array<string | null | undefined
   return null;
 }
 
+/**
+ * Port the Test bars POST must send. Prefer an explicit COM (COM6 in name or
+ * portName), then a live COM6 queue for a named K3, then the saved portName.
+ * Never replace a saved COM with a live USB005 match-by-name.
+ */
+export function resolveNiimbotTestPortName(
+  profile: { name?: string | null; portName?: string | null },
+  livePrinters: Array<{ name?: string | null; portName?: string | null }> = []
+): string | undefined {
+  const name = String(profile.name || '').trim();
+  const saved = String(profile.portName || '').trim();
+  const savedCom = extractNiimbotComPort(saved, name);
+  if (savedCom) return savedCom;
+
+  if (isNiimbotPrinterName(name)) {
+    const com6 = livePrinters.find((ap) => extractNiimbotComPort(ap.portName, ap.name) === 'COM6');
+    if (com6) return 'COM6';
+    const namedCom = livePrinters.find((ap) => {
+      const com = extractNiimbotComPort(ap.portName, ap.name);
+      return !!com && (ap.name === name || isNiimbotPrinterName(ap.name));
+    });
+    const fromNamed = extractNiimbotComPort(namedCom?.portName, namedCom?.name);
+    if (fromNamed) return fromNamed;
+  }
+
+  const liveExact = livePrinters.find(
+    (ap) => ap.name === name && (!saved || String(ap.portName || '') === saved)
+  );
+  const liveByName = livePrinters.find((ap) => ap.name === name);
+  const live = liveExact || liveByName;
+  return saved || String(live?.portName || '').trim() || undefined;
+}
+
 export function shouldTestNiimbotBars(profile: {
   name?: string | null;
   portName?: string | null;

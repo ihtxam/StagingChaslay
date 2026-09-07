@@ -275,16 +275,41 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
   return resolved;
 }
 
-/** Dedupe agent enumeration by exact Windows queue name. */
+/** Dedupe agent enumeration by Windows queue name + port (USB005 vs COM6). */
+export function printerSelectValue(p: { name?: string | null; portName?: string | null }): string {
+  const name = String(p.name || '').trim();
+  const port = String(p.portName || '').trim();
+  return port ? `${name}|||${port}` : name;
+}
+
+export function findPrinterBySelectValue(
+  printers: AgentPrinter[],
+  value: string
+): AgentPrinter | undefined {
+  const raw = String(value || '');
+  const sep = raw.indexOf('|||');
+  if (sep >= 0) {
+    const name = raw.slice(0, sep);
+    const port = raw.slice(sep + 3);
+    return (
+      printers.find((ap) => ap.name === name && String(ap.portName || '') === port) ||
+      printers.find((ap) => ap.name === name)
+    );
+  }
+  return printers.find((ap) => ap.name === raw);
+}
+
 export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
   const seen = new Set<string>();
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name || seen.has(name)) continue;
+    if (!name) continue;
+    const key = printerSelectValue({ name, portName: p.portName });
+    if (seen.has(key)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
-    seen.add(name);
+    seen.add(key);
     out.push({
       ...p,
       name,
@@ -435,7 +460,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.10';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.11';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
@@ -934,6 +959,9 @@ export type NiimbotPrintResult = PrintViaAgentResult & {
   packetTypeSequence?: string[];
   usbWriteMode?: string | null;
   packetCount?: number;
+  invertBitmap?: boolean;
+  serialBaud?: number | null;
+  startPrintBytes?: number | null;
 };
 
 export async function printViaAgent(opts: {
@@ -989,6 +1017,9 @@ export async function printNiimbotLabelViaAgent(opts: {
   heightPx: number;
   density?: number;
   testPattern?: boolean;
+  profile?: string | null;
+  invertBitmap?: boolean;
+  usbWriteMode?: string | null;
 }): Promise<NiimbotPrintResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
@@ -1010,6 +1041,9 @@ export async function printNiimbotLabelViaAgent(opts: {
         heightPx: opts.heightPx,
         density: opts.density,
         testPattern: opts.testPattern === true,
+        profile: opts.profile || undefined,
+        invertBitmap: opts.invertBitmap === true,
+        usbWriteMode: opts.usbWriteMode || undefined,
       }),
       signal: controller.signal,
     });

@@ -46,20 +46,25 @@ const PROTOCOL_PROFILES = {
     statusPollCount: 8,
     statusPollCountUsb: 3,
     printheadPixels: 384,
+    padToPrinthead: true,
   },
   b21: {
-    task: "B21_V1",
-    startPrint: [1],
+    // Official NIIMBOT.exe B21: 2-byte START_PRINT [0,1] + 6-byte SET_DIMENSION h/w/copies.
+    // USB005 "NIIMBOT K3" queues are B21-class — k3 4-byte 384-wide jobs beep+feed with no ink.
+    task: "B21_OFFICIAL",
+    startPrint: [0, 1],
     dimensionBytes(rowsPx, colsPx) {
-      const dim = Buffer.alloc(4);
+      const dim = Buffer.alloc(6);
       dim.writeUInt16BE(rowsPx, 0);
       dim.writeUInt16BE(colsPx, 2);
+      dim.writeUInt16BE(1, 4);
       return dim;
     },
     countsMode: "total",
     statusPollCount: 10,
     statusPollCountUsb: 4,
     printheadPixels: 384,
+    padToPrinthead: false,
   },
   b1: {
     task: "B1",
@@ -75,6 +80,7 @@ const PROTOCOL_PROFILES = {
     statusPollCount: 10,
     statusPollCountUsb: 4,
     printheadPixels: 384,
+    padToPrinthead: false,
   },
 };
 
@@ -106,13 +112,21 @@ function isNiimbotPrinterName(name) {
 
 function detectNiimbotProfile(printerName, portName, explicit) {
   const want = String(explicit || "").trim().toLowerCase();
+  if (want === "invert") return "b21";
   if (want && PROTOCOL_PROFILES[want]) return want;
   const blob = `${printerName || ""} ${portName || ""}`.toLowerCase();
   if (/\bb1\b/.test(blob)) return "b1";
   // Niimbus / B21S use the 2024 B1 print task (7-byte start + 6-byte page size).
   if (/niimbus|b21s/.test(blob)) return "b1";
   if (/\bb21\b|\bd11\b|\bd110\b/.test(blob)) return "b21";
-  if (/\bk3\b|k3w|b3s/.test(blob)) return "k3";
+  if (/\bk3\b|k3w|b3s/.test(blob)) {
+    // USBPRINT "NIIMBOT K3" (USB005) is B21-class. k3 4-byte 320- and 384-wide jobs
+    // both beep+feed with no ink on this till. COM-only K3 keeps the k3 fallback.
+    const usb = extractWindowsUsbPort(portName, printerName);
+    const com = extractComPort(portName, printerName);
+    if (usb || !com) return "b21";
+    return "k3";
+  }
   return "k3";
 }
 
@@ -120,8 +134,8 @@ function detectNiimbotProfileCandidates(printerName, portName) {
   const primary = detectNiimbotProfile(printerName, portName);
   const blob = `${printerName || ""} ${portName || ""}`.toLowerCase();
   const candidates = [primary];
-  if (/niimbus|b21s/.test(blob)) {
-    for (const p of ["b1", "b21", "k3"]) {
+  if (/niimbus|b21s/.test(blob) || /\bk3\b|k3w|b3s/.test(blob)) {
+    for (const p of ["b21", "b1", "k3"]) {
       if (!candidates.includes(p)) candidates.push(p);
     }
   }
@@ -275,7 +289,9 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options 
   if (options.invertBitmap === true) {
     working = invertBitmap(working, widthPx, heightPx);
   }
-  const aligned = padBitmapToPrinthead(working, widthPx, heightPx, profile.printheadPixels);
+  const aligned = profile.padToPrinthead
+    ? padBitmapToPrinthead(working, widthPx, heightPx, profile.printheadPixels)
+    : alignBitmapCols(working, widthPx, heightPx);
   const d = Math.min(5, Math.max(1, Number(density) || 3));
   const usbPath = options.transport === "windows" || options.transport === "usb";
   const pollCount = usbPath
@@ -317,6 +333,8 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options 
     rasterPacketLen: raster ? raster.length : 0,
     packetTypeSequence: summarizePacketTypes(packets),
     countsMode: profile.countsMode,
+    startPrintBytes: profile.startPrint.length,
+    invertBitmap: options.invertBitmap === true,
   };
 }
 
@@ -440,6 +458,9 @@ function describeJob(bitmap, packets, profile, path, extra = {}) {
     countsMode: extra.countsMode,
     packetTypeSequence: extra.packetTypeSequence,
     usbWriteMode: extra.usbWriteMode || null,
+    invertBitmap: extra.invertBitmap === true,
+    serialBaud: extra.serialBaud || null,
+    startPrintBytes: extra.startPrintBytes || null,
   };
 }
 
@@ -456,6 +477,10 @@ function describeSerialFailure(comPort, error) {
   }
   if (/does not exist|FileNotFoundException|cannot find the (file|port)/i.test(raw)) {
     return `Niimbot ${label} was not found`;
+  }
+  if (/Open\(\) failed/i.test(raw)) {
+    const openLine = raw.match(/Niimbot[^\n]*Open\(\) failed[^\n]*/i);
+    if (openLine) return openLine[0].slice(0, 220);
   }
   const useful =
     raw.match(/Niimbot[^\n]*/i) ||
@@ -477,7 +502,11 @@ $port.DtrEnable = $true
 $port.RtsEnable = $true
 $port.ReadTimeout = 500
 $port.WriteTimeout = 15000
-$port.Open()
+try {
+  $port.Open()
+} catch {
+  throw "Niimbot ${safePort} Open() failed @ ${rate} baud: \${$_.Exception.Message}"
+}
 try {
   $connect = [byte[]](0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa)
   $port.Write($connect, 0, $connect.Length)
@@ -512,7 +541,7 @@ ${payloadB64}
 
 function isFatalSerialError(error) {
   const raw = [error && error.stderr, error && error.message].filter(Boolean).join("\n");
-  return /access is denied|UnauthorizedAccess|does not exist|FileNotFoundException|cannot find the (file|port)|was not found|in use or access denied/i.test(
+  return /access is denied|UnauthorizedAccess|does not exist|FileNotFoundException|cannot find the (file|port)|was not found|in use or access denied|Open\(\) failed/i.test(
     raw
   );
 }
@@ -540,7 +569,7 @@ async function printNiimbotJobSerial(comPort, job) {
   for (const baud of bauds) {
     try {
       await printNiimbotJobSerialAtBaud(comPort, job, baud);
-      return;
+      return { baud };
     } catch (error) {
       lastErr = error;
       if (isFatalSerialError(error)) throw error;
@@ -568,7 +597,9 @@ function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUs
     return { mode: "com", comPort: explicitCom, usbPort: usb || null, requireCom: true };
   }
   if (named && com) {
-    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: false };
+    // Discovered Bluetooth/UART (COM6) for a named K3 must actually Open() —
+    // silent USB005 fallback hid Open() failures and printed blank via USBPRINT.
+    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: true };
   }
   // Non-Niimbot queue (receipt/scale): keep USB-first so a guessed COM is not used.
   if (usb && !named) {
@@ -658,10 +689,17 @@ async function printNiimbotLabel(opts) {
       console.log(
         `[print-agent] Niimbot label via COM ${transport.comPort} profile=${job.profile} packets=${job.packets.length}`
       );
-      await printSerial(transport.comPort, job);
+      const serialResult = await printSerial(transport.comPort, job);
+      const serialBaud = serialResult && serialResult.baud ? serialResult.baud : null;
       return {
         printer: transport.comPort,
-        ...describeJob(bitmap, job.packets, job.profile, "com", { ...job, usbWriteMode: null }),
+        ...describeJob(bitmap, job.packets, job.profile, "com", {
+          ...job,
+          usbWriteMode: null,
+          invertBitmap: invertBitmap === true,
+          serialBaud,
+          startPrintBytes: PROTOCOL_PROFILES[job.profile].startPrint.length,
+        }),
       };
     } catch (comErr) {
       if (transport.requireCom || !name || typeof printWindowsPacketsFn !== "function") throw comErr;
@@ -680,15 +718,16 @@ async function printNiimbotLabel(opts) {
 
   if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.10+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.11+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
     );
   }
 
   const usbPort = transport.usbPort;
   const pathLabel = usbPort ? `usb:${usbPort}` : "spooler";
-  // USBPRINT (USB005): one WritePrinter per framed packet (1.10.0). Concat can
-  // accept setup (beep/feed) and drop the raster blob.
-  const writeMode = usbWriteMode === "concat" ? "concat" : "packets";
+  // USBPRINT: one RAW document (CONNECT+wake+all frames) without 96-byte
+  // chunking and without ESC/POS cut. Some queues only commit on EndDoc.
+  // Pass usbWriteMode=packets to restore 1.10.10 paced writes.
+  const writeMode = usbWriteMode === "packets" ? "packets" : "concat";
   console.log(
     `[print-agent] Niimbot label via Windows ${pathLabel} writeMode=${writeMode} -> '${name}' profile=${job.profile} packets=${job.packets.length} est=${estimateJobDelayMs(job.packets, "windows")}ms`
   );
@@ -701,7 +740,12 @@ async function printNiimbotLabel(opts) {
   });
   return {
     printer: name,
-    ...describeJob(bitmap, job.packets, job.profile, pathLabel, { ...job, usbWriteMode: writeMode }),
+    ...describeJob(bitmap, job.packets, job.profile, pathLabel, {
+      ...job,
+      usbWriteMode: writeMode,
+      invertBitmap: invertBitmap === true,
+      startPrintBytes: PROTOCOL_PROFILES[job.profile].startPrint.length,
+    }),
   };
 }
 
