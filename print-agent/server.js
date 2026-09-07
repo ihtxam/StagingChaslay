@@ -1475,6 +1475,7 @@ function startServer() {
           density: body.density,
           profile: body.profile,
           testPattern,
+          invertBitmap: body.invertBitmap === true,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printWindowsPacketsFn: printNiimbotWindows,

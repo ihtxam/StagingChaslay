@@ -231,7 +231,7 @@ function packetDelayMs(packet) {
   return 80;
 }
 
-function describeJob(bitmap, packets, profile, path) {
+function describeJob(bitmap, packets, profile, path, rowBytes) {
   const nonZero = bitmap ? [...bitmap].filter((b) => b !== 0).length : 0;
   const first = packets[0];
   const dim = packets.find((p) => p[2] === RequestCode.SET_DIMENSION);
@@ -244,6 +244,7 @@ function describeJob(bitmap, packets, profile, path) {
     firstPacketHex: first ? first.subarray(0, Math.min(16, first.length)).toString("hex") : "",
     dimensionHex: dim ? dim.subarray(4, 4 + dim[3]).toString("hex") : "",
     rasterLines: packets.filter((p) => p[2] === 0x85).length,
+    rasterRowBytes: rowBytes,
   };
 }
 
@@ -1176,6 +1177,7 @@ async function printNiimbotLabel(opts) {
     density = 3,
     profile,
     testPattern,
+    invertBitmap,
     printWindowsPacketsFn,
     resolveComPortFn,
     resolveWindowsUsbPortFn,
@@ -1192,7 +1194,11 @@ async function printNiimbotLabel(opts) {
     bitmap = Buffer.from(bitmapBase64, "base64");
     if (!bitmap.length) throw new Error("Invalid Niimbot label payload");
   }
+  if (invertBitmap) {
+    bitmap = Buffer.from(bitmap.map((b) => b ^ 0xff));
+  }
 
+  const rowBytes = Math.ceil(w / 8);
   const job = buildNiimbotJobPackets(bitmap, w, h, density, {
     printerName,
     portName,
@@ -1224,7 +1230,7 @@ async function printNiimbotLabel(opts) {
       return {
         printer: transport.comPort,
         baud: serial && serial.baud,
-        ...describeJob(bitmap, job.packets, job.profile, "com"),
+        ...describeJob(bitmap, job.packets, job.profile, "com", rowBytes),
       };
     } catch (comErr) {
       if (!name || typeof printWindowsPacketsFn !== "function") throw comErr;
@@ -1266,7 +1272,7 @@ async function printNiimbotLabel(opts) {
       );
       return {
         printer: name,
-        ...describeJob(bitmap, job.packets, job.profile, "usbdev"),
+        ...describeJob(bitmap, job.packets, job.profile, "usbdev", rowBytes),
         devicePath: direct.devicePath,
         bytesWritten: direct.bytesWritten,
         replies: direct.replies,
@@ -1292,11 +1298,11 @@ async function printNiimbotLabel(opts) {
     packets: job.packets,
     printWindowsPacketsFn,
   });
-  const diag = describeJob(bitmap, job.packets, job.profile, pathLabel);
+  const diag = describeJob(bitmap, job.packets, job.profile, pathLabel, rowBytes);
   return {
     printer: name,
     ...diag,
-    unconfirmed: Boolean(usbPort) || pathLabel === "spooler",
+    unconfirmed: true,
     warning: describeSpoolerUncertainty(usbPort, name, diag),
   };
 }
@@ -1305,13 +1311,12 @@ async function printNiimbotLabel(opts) {
  * The Windows print queue accepts the job and reports success as soon as the
  * spooler has the bytes. It cannot tell us whether the printhead fired, and it
  * cannot read the printer's replies at all, so we must not claim the label
- * printed. Empty string when the transport can be trusted.
+ * printed — whichever queue the job went to.
  */
 function describeSpoolerUncertainty(usbPort, printerName, diag) {
-  if (!usbPort) return "";
-  const port = String(usbPort).toUpperCase();
+  const queue = usbPort ? `${String(usbPort).toUpperCase()} spooler queue` : "Windows print queue";
   return [
-    `Job sent to the ${port} spooler queue on '${printerName}' — Windows accepted it, but this queue cannot confirm the label printed.`,
+    `Job sent to the ${queue} on '${printerName}' — Windows accepted it, but this queue cannot confirm the label printed.`,
     "If nothing came out, this queue does not pass Niimbot data through. Use a Bluetooth COM port or the Android Print Bridge.",
     `Fingerprint: profile=${diag.profile} packets=${diag.packetCount} rasterLines=${diag.rasterLines} inkBytes=${diag.bitmapNonZeroBytes} dim=${diag.dimensionHex}`,
   ].join(" ");

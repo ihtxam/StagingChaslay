@@ -502,18 +502,53 @@ test("P3: a USB spooler job is reported as unconfirmed, never as success", async
   assert.match(result.warning, /dim=00a00140/);
 });
 
-test("P3: a COM job carries no warning and reports the baud that worked", () => {
-  assert.equal(describeSpoolerUncertainty(null, "NIIMBOT K3", {}), "");
-  assert.match(
-    describeSpoolerUncertainty("USB005", "NIIMBOT K3", {
-      profile: "k3",
-      packetCount: 9,
-      rasterLines: 4,
-      bitmapNonZeroBytes: 40,
-      dimensionHex: "00a00140",
-    }),
-    /Fingerprint: profile=k3 packets=9 rasterLines=4 inkBytes=40 dim=00a00140/
-  );
+test("P3: every spooler job carries the fingerprint, whichever queue it went to", () => {
+  const diag = {
+    profile: "k3",
+    packetCount: 9,
+    rasterLines: 4,
+    bitmapNonZeroBytes: 40,
+    dimensionHex: "00a00140",
+  };
+  const fingerprint = /Fingerprint: profile=k3 packets=9 rasterLines=4 inkBytes=40 dim=00a00140/;
+  assert.match(describeSpoolerUncertainty("USB005", "NIIMBOT K3", diag), fingerprint);
+  // A queue on a non-USB port is just as blind, so it must warn just as loudly.
+  const plain = describeSpoolerUncertainty(null, "NIIMBOT K3", diag);
+  assert.match(plain, /Windows print queue/);
+  assert.match(plain, /cannot confirm the label printed/i);
+  assert.match(plain, fingerprint);
+});
+
+test("P3: the bar test can invert the bitmap, and the row width is reported", async () => {
+  const bitmap = Buffer.alloc(40 * 4, 0);
+  bitmap[0] = 0x0f;
+  const seen = [];
+  const opts = {
+    printerName: "NIIMBOT K3",
+    portName: "USB005",
+    widthPx: 320,
+    heightPx: 4,
+    bitmapBase64: bitmap.toString("base64"),
+    printWindowsPacketsFn: async ({ packetsBase64 }) => {
+      seen.push(packetsBase64.map((p) => Buffer.from(p, "base64")));
+    },
+  };
+  const plain = await printNiimbotLabel(opts);
+  const inverted = await printNiimbotLabel({ ...opts, invertBitmap: true });
+
+  assert.equal(plain.rasterRowBytes, 40);
+  assert.equal(inverted.rasterRowBytes, 40);
+  // Earlier builds accepted the flag and printed the same bitmap regardless.
+  assert.equal(plain.bitmapNonZeroBytes, 1);
+  assert.equal(inverted.bitmapNonZeroBytes, bitmap.length);
+
+  // 55 55 85 LEN, then a 6-byte row header, then the 40 bytes of the row.
+  const firstRowOf = (packets) => packets.find((p) => p[2] === 0x85).subarray(10, 50);
+  const firstRow = firstRowOf(seen[0]);
+  const firstInvertedRow = firstRowOf(seen[1]);
+  for (let i = 0; i < firstRow.length; i++) {
+    assert.equal(firstInvertedRow[i], firstRow[i] ^ 0xff);
+  }
 });
 
 test("dashboard requires the agent build that can actually diagnose this", () => {
