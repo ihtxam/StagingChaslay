@@ -143,7 +143,32 @@ function buildStatusPollPackets(count) {
   return packets;
 }
 
-function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options = {}) {
+/**
+ * Reply command id for each request, per
+ * https://printers.niim.blue/interfacing/proto/. Every setup command answers,
+ * raster rows (0x85) do not. A transport that cannot read these back can never
+ * tell a printed label from a blank one, which is why the spooler queue is
+ * useless here and the serial path validates every one of them.
+ */
+const RESPONSE_CODE = {
+  [RequestCode.SET_LABEL_DENSITY]: 0x31,
+  [RequestCode.SET_LABEL_TYPE]: 0x33,
+  [RequestCode.START_PRINT]: 0x02,
+  [RequestCode.START_PAGE_PRINT]: 0x04,
+  [RequestCode.SET_DIMENSION]: 0x14,
+  [RequestCode.END_PAGE_PRINT]: 0xe4,
+  [RequestCode.END_PRINT]: 0xf4,
+  [RequestCode.GET_PRINT_STATUS]: 0xb3,
+};
+
+/** The one reply that proves a label came out: PrintEnd (0xf4) answering 01. */
+const PRINT_END_DONE = 0x01;
+
+/**
+ * The job as a sequence of steps, each with the reply the printer owes us.
+ * `buildNiimbotJobPackets` flattens this for the write-only transports.
+ */
+function buildNiimbotJobSteps(bitmap, widthPx, heightPx, density = 3, options = {}) {
   const profileName = detectNiimbotProfile(
     options.printerName,
     options.portName,
@@ -151,20 +176,41 @@ function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options 
   );
   const profile = PROTOCOL_PROFILES[profileName];
   const d = Math.min(5, Math.max(1, Number(density) || 3));
+  const step = (name, type, data, until = -1) => ({
+    name,
+    type,
+    expect: RESPONSE_CODE[type] ?? -1,
+    until,
+    packet: niimbotPacket(type, Buffer.from(data)),
+  });
+
+  const steps = [
+    step("SetDensity", RequestCode.SET_LABEL_DENSITY, [d]),
+    step("SetLabelType", RequestCode.SET_LABEL_TYPE, [1]),
+    step("PrintStart", RequestCode.START_PRINT, profile.startPrint),
+    step("PageStart", RequestCode.START_PAGE_PRINT, [1]),
+    step("SetPageSize", RequestCode.SET_DIMENSION, profile.dimensionBytes(widthPx, heightPx)),
+  ];
+  for (const packet of encodeBitmapLines(bitmap, widthPx, heightPx)) {
+    steps.push({ name: "Row", type: 0x85, expect: -1, until: -1, packet });
+  }
+  steps.push(step("PageEnd", RequestCode.END_PAGE_PRINT, [1]));
+  steps.push(step("PrintEnd", RequestCode.END_PRINT, [1], PRINT_END_DONE));
+  return { steps, profile: profileName };
+}
+
+function buildNiimbotJobPackets(bitmap, widthPx, heightPx, density = 3, options = {}) {
+  const { steps, profile } = buildNiimbotJobSteps(bitmap, widthPx, heightPx, density, options);
   const packets = [];
-  const push = (type, data) => packets.push(niimbotPacket(type, Buffer.from(data)));
-
-  push(RequestCode.SET_LABEL_DENSITY, [d]);
-  push(RequestCode.SET_LABEL_TYPE, [1]);
-  push(RequestCode.START_PRINT, profile.startPrint);
-  push(RequestCode.START_PAGE_PRINT, [1]);
-  push(RequestCode.SET_DIMENSION, profile.dimensionBytes(widthPx, heightPx));
-  packets.push(...encodeBitmapLines(bitmap, widthPx, heightPx));
-  push(RequestCode.END_PAGE_PRINT, [1]);
-  packets.push(...buildStatusPollPackets(profile.statusPollCount));
-  push(RequestCode.END_PRINT, [1]);
-
-  return { packets, profile: profileName };
+  for (const step of steps) {
+    // The write-only transports cannot read a status reply, but the polls give
+    // the printer the same pacing before END_PRINT that the official app uses.
+    if (step.type === RequestCode.END_PRINT) {
+      packets.push(...buildStatusPollPackets(PROTOCOL_PROFILES[profile].statusPollCount));
+    }
+    packets.push(step.packet);
+  }
+  return { packets, profile };
 }
 
 /** Solid horizontal bars for protocol smoke-test (verifies thermal head fires). */
@@ -261,11 +307,21 @@ const SERIAL_EXIT = {
   MISSING_PAYLOAD: 22,
 };
 
-/** Bauds tried in order. Windows Bluetooth SPP ignores the rate; USB CDC wants 115200. */
+/**
+ * Bauds tried in order. 115200 is the rate every Niimbot reference
+ * implementation uses and the only one the printer's UART is clocked for; a
+ * Windows serial print port defaults to 9600, which is why correct frames
+ * relayed by the spooler arrive as garbage (beep, feed, blank label).
+ * The others are only retried when 115200 produced no reply at all.
+ */
 const SERIAL_BAUDS = [115200, 9600, 19200];
 
+/** Tab-separated payload columns: name, expected reply id, terminator, packet. */
+const SERIAL_PAYLOAD_SEPARATOR = "\t";
+
 /**
- * PowerShell for one serial print attempt.
+ * PowerShell for one serial print attempt: writes every step and reads the
+ * reply frame the protocol owes us, so the result is proof rather than hope.
  *
  * Rules for every script in this file, enforced by
  * `print-agent/test/niimbot.test.mjs`:
@@ -277,7 +333,11 @@ function buildSerialJobScript() {
   return `param(
   [Parameter(Mandatory = $true)][string]$PortPath,
   [Parameter(Mandatory = $true)][int]$Baud,
-  [Parameter(Mandatory = $true)][string]$PayloadFile
+  [Parameter(Mandatory = $true)][string]$PayloadFile,
+  [string]$PortName = '',
+  [int]$ReadTimeoutMs = 2000,
+  [int]$EndRetries = 12,
+  [int]$RowDelayMs = 4
 )
 
 $ErrorActionPreference = 'Stop'
@@ -291,6 +351,83 @@ function Write-RawError {
   }
 }
 
+function Get-HexString {
+  param([byte[]]$Bytes)
+  if ($null -eq $Bytes -or $Bytes.Length -lt 1) { return '' }
+  return [BitConverter]::ToString($Bytes).Replace('-', '').ToLowerInvariant()
+}
+
+# 55 55 CMD LEN DATA... CHK AA AA
+function Split-NiimbotFrame {
+  param([byte[]]$Bytes)
+  if ($null -eq $Bytes) { return $null }
+  for ($i = 0; $i -lt $Bytes.Length - 6; $i++) {
+    if ($Bytes[$i] -ne 0x55 -or $Bytes[$i + 1] -ne 0x55) { continue }
+    $len = [int]$Bytes[$i + 3]
+    $last = $i + 6 + $len
+    if ($last -ge $Bytes.Length) { continue }
+    if ($Bytes[$last - 1] -ne 0xAA -or $Bytes[$last] -ne 0xAA) { continue }
+    $data = New-Object byte[] $len
+    if ($len -gt 0) { [Array]::Copy($Bytes, $i + 4, $data, 0, $len) }
+    return [PSCustomObject]@{
+      cmd = [int]$Bytes[$i + 2]
+      dataHex = Get-HexString $data
+    }
+  }
+  return $null
+}
+
+function Read-NiimbotFrame {
+  param([System.IO.Ports.SerialPort]$Port, [int]$TimeoutMs)
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+  $seen = New-Object System.Collections.Generic.List[byte]
+  while ([DateTime]::UtcNow -lt $deadline) {
+    $available = 0
+    try { $available = [int]$Port.BytesToRead } catch { $available = 0 }
+    if ($available -lt 1) {
+      Start-Sleep -Milliseconds 10
+      continue
+    }
+    $chunk = New-Object byte[] $available
+    $got = 0
+    try { $got = $Port.Read($chunk, 0, $available) } catch { $got = 0 }
+    for ($i = 0; $i -lt $got; $i++) { $seen.Add($chunk[$i]) }
+    $frame = Split-NiimbotFrame $seen.ToArray()
+    if ($null -ne $frame) {
+      $frame | Add-Member -NotePropertyName rawHex -NotePropertyValue (Get-HexString $seen.ToArray())
+      return $frame
+    }
+  }
+  return [PSCustomObject]@{
+    cmd = -1
+    dataHex = ''
+    rawHex = Get-HexString $seen.ToArray()
+  }
+}
+
+# What Windows itself would use on this port. The spooler relays bytes at this
+# rate, so a 9600 here with a 115200 printer is the whole bug in one line.
+function Get-OsConfiguredBaud {
+  param([string]$Name)
+  if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+  try {
+    $cfg = Get-CimInstance -ClassName Win32_SerialPortConfiguration -ErrorAction Stop |
+      Where-Object { [string]$_.Name -eq $Name } |
+      Select-Object -First 1
+    if ($null -ne $cfg -and $cfg.BaudRate) {
+      return ([string]$cfg.BaudRate + ' baud (Win32_SerialPortConfiguration ' + [string]$cfg.StringSelector + ')')
+    }
+  } catch { }
+  try {
+    $raw = (& cmd.exe /c ('mode ' + $Name) 2>&1) | Out-String
+    $match = [regex]::Match($raw, '(?i)(?:Baud|Bauds|Baudrate|Bits par seconde)\\D{0,40}(\\d+)')
+    if ($match.Success) { return ($match.Groups[1].Value + ' baud (mode ' + $Name + ')') }
+    $flat = ($raw -replace '\\s+', ' ').Trim()
+    if ($flat) { return $flat.Substring(0, [Math]::Min(200, $flat.Length)) }
+  } catch { }
+  return ''
+}
+
 if (-not (Test-Path -LiteralPath $PayloadFile)) {
   [Console]::Error.WriteLine('payload file missing')
   exit ${SERIAL_EXIT.MISSING_PAYLOAD}
@@ -298,36 +435,86 @@ if (-not (Test-Path -LiteralPath $PayloadFile)) {
 
 Add-Type -AssemblyName System.IO.Ports
 
+$osBaud = Get-OsConfiguredBaud $PortName
+
 $port = New-Object System.IO.Ports.SerialPort $PortPath, $Baud, 'None', 8, 'One'
-$port.ReadTimeout = 500
+$port.Handshake = 'None'
+$port.DtrEnable = $true
+$port.RtsEnable = $true
+$port.ReadTimeout = 400
 $port.WriteTimeout = 15000
 
 try {
   $port.Open()
 } catch {
   Write-RawError $_
+  [Console]::Error.WriteLine('os-configured: ' + $osBaud)
   exit ${SERIAL_EXIT.OPEN_FAILED}
 }
 
+$results = @()
+$printed = $false
+$written = 0
+
 try {
+  try { $port.DiscardInBuffer() } catch { }
+  try { $port.DiscardOutBuffer() } catch { }
   $lines = [System.IO.File]::ReadAllLines($PayloadFile) | Where-Object { $_ -and $_.Trim() }
   foreach ($line in $lines) {
-    $bytes = [Convert]::FromBase64String($line.Trim())
-    $port.Write($bytes, 0, $bytes.Length)
-    $type = if ($bytes.Length -ge 3) { [int]$bytes[2] } else { 0 }
-    $delay = 80
-    if ($type -eq 0x85) { $delay = 12 }
-    elseif ($type -eq 0xA3) { $delay = 150 }
-    elseif ($type -in 0xE3, 0xF3) { $delay = 250 }
-    Start-Sleep -Milliseconds $delay
-    if ($type -in 0xA3, 0xE3, 0xF3) {
-      $buf = New-Object byte[] 64
-      try { [void]$port.Read($buf, 0, $buf.Length) } catch { }
+    $parts = $line.Split([char]9)
+    if ($parts.Length -lt 4) { continue }
+    $name = [string]$parts[0]
+    $expect = [int]$parts[1]
+    $until = [int]$parts[2]
+    $bytes = [Convert]::FromBase64String($parts[3])
+    $tries = 1
+    if ($until -ge 0) { $tries = [Math]::Max(1, $EndRetries) }
+    $step = [PSCustomObject]@{
+      step = $name
+      request = $(if ($bytes.Length -ge 3) { [int]$bytes[2] } else { -1 })
+      expect = $expect
+      replyCmd = -1
+      replyHex = ''
+      rawHex = ''
+      attempts = 0
+      ok = $false
+      done = $false
     }
+    for ($try = 1; $try -le $tries; $try++) {
+      $step.attempts = $try
+      $port.Write($bytes, 0, $bytes.Length)
+      $written += $bytes.Length
+      if ($expect -lt 0) {
+        $step.ok = $true
+        if ($RowDelayMs -gt 0) { Start-Sleep -Milliseconds $RowDelayMs }
+        break
+      }
+      $frame = Read-NiimbotFrame -Port $port -TimeoutMs $ReadTimeoutMs
+      $step.replyCmd = [int]$frame.cmd
+      $step.replyHex = [string]$frame.dataHex
+      $step.rawHex = [string]$frame.rawHex
+      if ($step.replyCmd -eq $expect) {
+        $step.ok = $true
+        if ($until -lt 0) { break }
+        if ($step.replyHex.Length -ge 2) {
+          $first = [Convert]::ToInt32($step.replyHex.Substring(0, 2), 16)
+          if ($first -eq $until) {
+            $step.done = $true
+            $printed = $true
+            break
+          }
+        }
+        Start-Sleep -Milliseconds 300
+      } else {
+        Start-Sleep -Milliseconds 120
+      }
+    }
+    $results += $step
+    if (-not $step.ok) { break }
   }
-  Start-Sleep -Milliseconds 600
 } catch {
   Write-RawError $_
+  [Console]::Error.WriteLine('os-configured: ' + $osBaud)
   exit ${SERIAL_EXIT.WRITE_FAILED}
 } finally {
   try {
@@ -335,6 +522,16 @@ try {
     $port.Dispose()
   } catch { }
 }
+
+@{
+  portPath = $PortPath
+  portName = $PortName
+  baud = $Baud
+  osConfiguredBaud = $osBaud
+  bytesWritten = $written
+  printed = $printed
+  steps = @($results)
+} | ConvertTo-Json -Depth 5 -Compress
 
 exit 0
 `;
@@ -425,20 +622,76 @@ function describeSerialFailure(comPort, error, baud) {
   return `Niimbot ${label} failed${at}${detail}`;
 }
 
-/** One open+write attempt at one baud. Throws with the real reason attached. */
-async function printNiimbotJobSerialAtBaud(comPort, job, baud) {
+/** One line per step: name, expected reply id, terminator byte, packet. */
+function serialPayloadLines(steps) {
+  return steps
+    .map((s) =>
+      [s.name, String(s.expect), String(s.until ?? -1), s.packet.toString("base64")].join(
+        SERIAL_PAYLOAD_SEPARATOR
+      )
+    )
+    .join("\n");
+}
+
+/** Reads the handshake JSON the script prints; never guesses on parse failure. */
+function parseHandshakeOutput(stdout, comPort, baud) {
+  const raw = String(stdout || "").trim().replace(/^\uFEFF/, "");
+  const parsed = raw ? JSON.parse(raw) : {};
+  const rows = Array.isArray(parsed.steps) ? parsed.steps : parsed.steps ? [parsed.steps] : [];
+  const steps = rows.map((s) => ({
+    step: String(s.step || ""),
+    request: Number(s.request ?? -1),
+    expect: Number(s.expect ?? -1),
+    replyCmd: Number(s.replyCmd ?? -1),
+    replyHex: String(s.replyHex || ""),
+    rawHex: String(s.rawHex || ""),
+    attempts: Number(s.attempts || 0),
+    ok: Boolean(s.ok),
+    done: Boolean(s.done),
+  }));
+  return {
+    comPort: String(comPort || "").toUpperCase(),
+    portPath: String(parsed.portPath || ""),
+    baud: Number(parsed.baud || baud),
+    osConfiguredBaud: String(parsed.osConfiguredBaud || ""),
+    bytesWritten: Number(parsed.bytesWritten || 0),
+    printed: Boolean(parsed.printed),
+    steps,
+    // A reply of any kind proves the printer is on the other end of this port
+    // and is parsing 55 55 frames. Without one, the port is the wrong one.
+    answered: steps.some((s) => s.replyCmd >= 0),
+    replies: steps
+      .filter((s) => s.replyCmd >= 0)
+      .map((s) => `${s.step}=0x${s.replyCmd.toString(16).padStart(2, "0")}${s.replyHex ? `:${s.replyHex}` : ""}`),
+  };
+}
+
+/** One open+handshake attempt at one baud. Throws with the real reason attached. */
+async function runNiimbotSerialHandshake(comPort, job, baud, options = {}) {
   const portPath = normalizeComPort(comPort);
-  const { packets } = job;
-  const timeoutMs = Math.min(180000, Math.max(45000, 12000 + packets.length * 50));
+  const steps = job.steps || [];
+  const timeoutMs = Math.min(240000, Math.max(60000, 20000 + steps.length * 80));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-job-"));
   const payloadFile = path.join(dir, "packets.txt");
-  fs.writeFileSync(payloadFile, packets.map((p) => p.toString("base64")).join("\n"), "utf8");
+  fs.writeFileSync(payloadFile, serialPayloadLines(steps), "utf8");
   try {
-    await runPowerShellSource(
+    const { stdout } = await runPowerShellSource(
       buildSerialJobScript(),
-      ["-PortPath", portPath, "-Baud", String(baud), "-PayloadFile", payloadFile],
+      [
+        "-PortPath",
+        portPath,
+        "-Baud",
+        String(baud),
+        "-PayloadFile",
+        payloadFile,
+        "-PortName",
+        String(comPort || "").toUpperCase(),
+        "-ReadTimeoutMs",
+        String(options.readTimeoutMs || 2000),
+      ],
       { scriptName: "niimbot-serial.ps1", timeout: timeoutMs }
     );
+    return parseHandshakeOutput(stdout, comPort, baud);
   } catch (error) {
     const failure = new Error(describeSerialFailure(comPort, error, baud));
     failure.rawError = rawSerialError(error);
@@ -453,24 +706,72 @@ async function printNiimbotJobSerialAtBaud(comPort, job, baud) {
   }
 }
 
-/** Tries each baud in turn; reports every real failure if none open. */
-async function printNiimbotJobSerial(comPort, job) {
+/**
+ * 115200 first, always. The other rates are only worth a retry when the printer
+ * said nothing at all — once it answers, the rate is right and the answer is
+ * the result, whatever it says.
+ */
+async function printNiimbotJobSerial(comPort, job, options = {}) {
+  const bauds = Array.isArray(options.bauds) && options.bauds.length ? options.bauds : SERIAL_BAUDS;
   const failures = [];
-  for (const baud of SERIAL_BAUDS) {
+  let silent = null;
+  for (const baud of bauds) {
+    let result;
     try {
-      await printNiimbotJobSerialAtBaud(comPort, job, baud);
-      return { baud };
+      result = await runNiimbotSerialHandshake(comPort, job, baud, options);
     } catch (error) {
       failures.push(error);
       const raw = String((error && error.rawError) || "");
-      // A port that is held by another app or absent will not open at any baud.
+      // A port held by another app or absent will not open at any baud.
       if (/access to the port|access is denied|does not exist|could not find/i.test(raw)) break;
+      continue;
     }
+    if (result.printed || result.answered) return result;
+    silent = result;
   }
+  if (silent) return silent;
   const first = failures[0];
   const error = new Error(first ? first.message : `Niimbot ${comPort} serial write failed`);
   error.attempts = failures.map((f) => ({ baud: f.baud, error: f.rawError || f.message }));
   throw error;
+}
+
+/** Names the step the printer refused, with the bytes it sent back. */
+function describeHandshake(result) {
+  const port = String((result && result.comPort) || "COM").toUpperCase();
+  const at = result && result.baud ? ` at ${result.baud} baud` : "";
+  const osBaud = result && result.osConfiguredBaud ? ` Windows has this port configured at ${result.osConfiguredBaud}.` : "";
+  if (!result) return `Niimbot ${port} did not run.`;
+  if (result.printed) {
+    return `${port}${at}: the printer acknowledged every command and answered PrintEnd (0xf4) with 01 — this label physically printed.`;
+  }
+  const failed = result.steps.find((s) => !s.ok);
+  const end = result.steps.find((s) => s.step === "PrintEnd");
+  const hex = (n) => `0x${Number(n).toString(16).padStart(2, "0")}`;
+  if (!result.answered) {
+    return [
+      `Niimbot ${port} never answered${at}: ${result.bytesWritten} bytes went out and nothing came back.`,
+      `Wrong port, or the printer is not listening on it.${osBaud}`,
+      "Run \"Diagnose Niimbot ports\" and use the port it recommends.",
+    ].join(" ");
+  }
+  if (failed) {
+    const got = failed.replyCmd >= 0 ? `answered ${hex(failed.replyCmd)}` : "answered nothing";
+    const raw = failed.rawHex ? ` Raw bytes back: ${failed.rawHex}.` : "";
+    return [
+      `Niimbot ${port} refused ${failed.step}${at}: expected ${hex(failed.expect)}, ${got}.${raw}`,
+      `Replies so far: ${result.replies.join(", ") || "none"}.`,
+      "The printer is on this port and talking, so the transport is right and the command it refused is the problem.",
+    ].join(" ");
+  }
+  if (end && !end.done) {
+    return [
+      `Niimbot ${port} accepted every command${at} but PrintEnd (0xf4) never returned 01 after ${end.attempts} tries`,
+      `(last reply data: ${end.replyHex || "empty"}).`,
+      "The printer parsed the job and did not report a finished label: labels may be missing, the head may be open, or this label type/size is rejected.",
+    ].join(" ");
+  }
+  return `Niimbot ${port}${at}: handshake finished without confirming a printed label. Replies: ${result.replies.join(", ") || "none"}.`;
 }
 
 /**
@@ -514,6 +815,8 @@ function Add-PortRow {
       port = $key
       caption = ''
       pnpDeviceId = ''
+      configuredBaud = ''
+      queues = @()
       sources = @()
       opens = @()
     }
@@ -526,6 +829,28 @@ function Add-PortRow {
     $row.pnpDeviceId = $Pnp
   }
   if ($row.sources -notcontains $Source) { $row.sources += $Source }
+}
+
+# The rate Windows itself uses on the port. The spooler relays a job to a serial
+# print port at exactly this rate, so a 9600 here in front of a 115200 printer
+# turns correct frames into garbage: beep, feed, blank label.
+function Get-ConfiguredBaud {
+  param([string]$Name)
+  if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+  try {
+    $cfg = $serialConfig[$Name]
+    if ($null -ne $cfg -and $cfg.BaudRate) {
+      return ([string]$cfg.BaudRate + ' baud (' + [string]$cfg.StringSelector + ')')
+    }
+  } catch { }
+  try {
+    $raw = (& cmd.exe /c ('mode ' + $Name) 2>&1) | Out-String
+    $match = [regex]::Match($raw, '(?i)(?:Baud|Bauds|Baudrate|Bits par seconde)\\D{0,40}(\\d+)')
+    if ($match.Success) { return ($match.Groups[1].Value + ' baud (mode)') }
+    $flat = ($raw -replace '\\s+', ' ').Trim()
+    if ($flat) { return $flat.Substring(0, [Math]::Min(160, $flat.Length)) }
+  } catch { }
+  return ''
 }
 
 $errors = @()
@@ -557,6 +882,15 @@ try {
   $errors += ('Get-PnpDevice: ' + (Reason $_))
 }
 
+$serialConfig = @{}
+try {
+  Get-CimInstance -ClassName Win32_SerialPortConfiguration -ErrorAction Stop | ForEach-Object {
+    $serialConfig[([string]$_.Name).ToUpperInvariant()] = $_
+  }
+} catch {
+  $errors += ('Win32_SerialPortConfiguration: ' + (Reason $_))
+}
+
 $bauds = @()
 foreach ($b in ($Bauds -split ',')) {
   $trimmed = $b.Trim()
@@ -565,6 +899,7 @@ foreach ($b in ($Bauds -split ',')) {
 
 foreach ($key in @($ports.Keys)) {
   $row = $ports[$key]
+  $row.configuredBaud = Get-ConfiguredBaud $row.port
   $path = $row.port
   if ($path -match '^COM(\\d+)$' -and [int]$Matches[1] -ge 10) {
     $path = '\\\\.\\' + $row.port
@@ -590,19 +925,56 @@ foreach ($key in @($ports.Keys)) {
   }
 }
 
+# Installed printer drivers, so a queue whose driver is gone can be named as
+# such: that is the "Pilote indisponible" the merchant sees under K3-I527190103.
+$installedDrivers = @()
+try {
+  Get-PrinterDriver -ErrorAction Stop | ForEach-Object {
+    $installedDrivers += ([string]$_.Name).ToLowerInvariant()
+  }
+} catch {
+  try {
+    Get-CimInstance -ClassName Win32_PrinterDriver -ErrorAction Stop | ForEach-Object {
+      $installedDrivers += (([string]$_.Name) -split ',')[0].ToLowerInvariant()
+    }
+  } catch {
+    $errors += ('printer drivers: ' + (Reason $_))
+  }
+}
+
 $printers = @()
 try {
   Get-CimInstance -ClassName Win32_Printer -ErrorAction Stop | ForEach-Object {
+    $driver = [string]$_.DriverName
+    $missing = $false
+    if ([string]::IsNullOrWhiteSpace($driver)) {
+      $missing = $true
+    } elseif ($installedDrivers.Count -gt 0 -and ($installedDrivers -notcontains $driver.ToLowerInvariant())) {
+      $missing = $true
+    }
     $printers += [PSCustomObject]@{
       name = [string]$_.Name
       port = [string]$_.PortName
-      driver = [string]$_.DriverName
+      driver = $driver
+      driverMissing = $missing
       offline = [bool]$_.WorkOffline
       status = [string]$_.PrinterStatus
+      isDefault = [bool]$_.Default
     }
   }
 } catch {
   $errors += ('Win32_Printer: ' + (Reason $_))
+}
+
+# Which queue owns each COM port. Printing Niimbot frames to a port owned by a
+# receipt printer is how the merchant got a beep and no label out of COM6.
+foreach ($queue in $printers) {
+  foreach ($part in (([string]$queue.port) -split ',')) {
+    $portKey = $part.Trim().TrimEnd(':').ToUpperInvariant()
+    if (-not $ports.ContainsKey($portKey)) { continue }
+    $row = $ports[$portKey]
+    if ($row.queues -notcontains $queue.name) { $row.queues += [string]$queue.name }
+  }
 }
 
 $bluetooth = @()
@@ -838,9 +1210,21 @@ function classifyProbedPort(row) {
   const errors = opens.map((o) => String((o && o.error) || "")).filter(Boolean);
   const allErrors = errors.join(" | ");
   const isBluetooth = /bthenum|bluetooth/i.test(blob);
+  /*
+   * A Bluetooth SPP pair gives Windows two ports. The local RFCOMM server
+   * ("incoming") is published by the LOCALMFG enumerator and cannot be written
+   * to; the outgoing one carries the remote device address and is the only one
+   * that reaches the printer.
+   */
   const incoming = isBluetooth && /LOCALMFG|_LOCALMFG/i.test(String(row.pnpDeviceId || ""));
-  const looksNiimbot = NIIMBOT_NAME_RE.test(blob);
+  const outgoing =
+    isBluetooth &&
+    !incoming &&
+    /BTHENUM|BluetoothDevice_|&VID|_VID/i.test(String(row.pnpDeviceId || ""));
+  const queues = (Array.isArray(row.queues) ? row.queues : []).map(String).filter(Boolean);
+  const looksNiimbot = NIIMBOT_NAME_RE.test(`${blob} ${queues.join(" ")}`);
   const looksScale = /ch340|ch341|usb-serial ch|1a86/i.test(blob) && !looksNiimbot;
+  const foreignQueues = queues.filter((q) => !NIIMBOT_NAME_RE.test(q));
 
   let verdict;
   if (openedBauds.length) {
@@ -874,17 +1258,32 @@ function classifyProbedPort(row) {
     );
   }
   if (incoming) advice.push("Marked as a Bluetooth incoming/local port.");
+  if (outgoing) advice.push("Bluetooth outgoing port: this is the direction that can reach a printer.");
+  if (foreignQueues.length) {
+    advice.push(
+      `Bound to the print queue ${foreignQueues.join(", ")}, which is not a Niimbot. Niimbot data sent here will not print a label.`
+    );
+  }
+  if (row.configuredBaud) {
+    advice.push(
+      `Windows has this port configured at ${row.configuredBaud}. The agent opens it at 115200 regardless; a spooler job would use the configured rate.`
+    );
+  }
 
   return {
     port: row.port,
     caption: row.caption || "",
     pnpDeviceId: row.pnpDeviceId || "",
+    configuredBaud: String(row.configuredBaud || ""),
+    queues,
+    foreignQueues,
     sources: Array.isArray(row.sources) ? row.sources : [],
     opens,
     openedBauds,
     verdict,
     isBluetooth,
     bluetoothIncoming: incoming,
+    bluetoothOutgoing: outgoing,
     looksNiimbot,
     looksScale,
     advice,
@@ -918,8 +1317,10 @@ function formatComProbeReport(probe) {
       lines.push(`  ${p.port} — ${p.caption || "no name"}`);
       if (p.pnpDeviceId) lines.push(`    device: ${p.pnpDeviceId}`);
       lines.push(
-        `    looks like: ${p.looksNiimbot ? "Niimbot printer" : p.looksScale ? "CH340 scale" : "unknown device"}${p.isBluetooth ? " (bluetooth)" : ""}`
+        `    looks like: ${p.looksNiimbot ? "Niimbot printer" : p.looksScale ? "CH340 scale" : "unknown device"}${p.isBluetooth ? ` (bluetooth ${p.bluetoothIncoming ? "incoming" : p.bluetoothOutgoing ? "outgoing" : "unknown direction"})` : ""}`
       );
+      lines.push(`    owned by print queue: ${p.queues && p.queues.length ? p.queues.join(", ") : "none"}`);
+      lines.push(`    Windows baud on this port: ${p.configuredBaud || "unknown"}`);
       for (const attempt of p.opens) {
         lines.push(
           `    open @ ${attempt.baud}: ${attempt.opened ? "OK" : `FAILED — ${attempt.error || "no reason reported"}`}`
@@ -934,10 +1335,26 @@ function formatComProbeReport(probe) {
     lines.push(`PRINT QUEUES (${probe.printers.length}):`);
     for (const q of probe.printers) {
       const flag = NIIMBOT_NAME_RE.test(`${q.name} ${q.driver}`) ? "  <= label printer" : "";
-      lines.push(`  ${q.name} | port=${q.port} | driver=${q.driver}${q.offline ? " | OFFLINE" : ""}${flag}`);
+      lines.push(
+        `  ${q.name} | port=${q.port || "none"} | driver=${q.driver || "none"}${q.driverMissing ? " | DRIVER MISSING (Windows shows 'Pilote indisponible')" : ""}${q.offline ? " | OFFLINE" : ""}${q.isDefault ? " | DEFAULT" : ""}${flag}`
+      );
     }
   } else {
     lines.push("PRINT QUEUES: none reported.");
+  }
+
+  lines.push("");
+  if (probe.recommendedPort) {
+    const r = probe.recommendedPort;
+    lines.push(
+      `RECOMMENDED PORT FOR NIIMBOT: ${r.port}${r.queue ? ` (bound to queue '${r.queue}')` : ""}`
+    );
+    lines.push(`  why: ${RECOMMENDATION_REASONS[r.reason] || r.reason}`);
+  } else {
+    lines.push("RECOMMENDED PORT FOR NIIMBOT: none found on this PC.");
+    lines.push(
+      "  No print queue whose name looks like a Niimbot is bound to a COM or USB port, and no Bluetooth outgoing port names one."
+    );
   }
 
   lines.push("");
@@ -975,12 +1392,46 @@ function formatComProbeReport(probe) {
   return lines.join("\n");
 }
 
+const RECOMMENDATION_REASONS = {
+  "bound-to-queue": "this is the port the Niimbot print queue is really bound to (Win32_Printer.PortName).",
+  "bluetooth-outgoing": "no queue is bound to a COM port, but this is the Bluetooth outgoing port of a Niimbot device.",
+  "usb-queue": "the Niimbot queue is on a USB spooler port; the agent drives that port's USB printer interface directly.",
+};
+
 /** Plain-language conclusion drawn from the probed ports and queues. */
 function summarizeComProbe(ports, printers, usbDevices = []) {
   const summary = [];
   const usable = ports.filter((p) => p.verdict === "opened" && !p.looksScale);
   const niimbotQueues = printers.filter((q) => NIIMBOT_NAME_RE.test(`${q.name} ${q.driver}`));
   const usbQueues = niimbotQueues.filter((q) => /^USB\d+$/i.test(String(q.port || "")));
+  const comQueues = niimbotQueues.filter((q) => extractComPort(q.port));
+
+  for (const queue of comQueues) {
+    const port = extractComPort(queue.port);
+    const row = ports.find((p) => String(p.port || "").toUpperCase() === port);
+    summary.push(
+      `'${queue.name}' prints to ${port}, a serial port. The agent opens ${port} itself at 115200 and reads the printer's replies, so this is the transport to use.`
+    );
+    if (row && row.configuredBaud && !/115200/.test(row.configuredBaud)) {
+      summary.push(
+        `Windows has ${port} configured at ${row.configuredBaud}. Any job the spooler relays to this queue is sent at that rate, which a Niimbot cannot read — that is why a queue job feeds paper and prints nothing.`
+      );
+    }
+  }
+
+  const missingDrivers = printers.filter((q) => q.driverMissing);
+  if (missingDrivers.length) {
+    summary.push(
+      `Queue(s) with no usable driver: ${missingDrivers.map((q) => `'${q.name}'`).join(", ")}. Windows shows these as "Pilote indisponible"; they cannot print anything and should be removed.`
+    );
+  }
+
+  const foreign = ports.filter((p) => p.foreignQueues && p.foreignQueues.length);
+  if (foreign.length) {
+    summary.push(
+      `Do not select ${foreign.map((p) => `${p.port} (${p.foreignQueues.join(", ")})`).join(", ")} for labels: those ports belong to other printers and will only beep.`
+    );
+  }
 
   if (usable.length) {
     summary.push(
@@ -1030,6 +1481,7 @@ async function probeNiimbotComPorts(options = {}) {
     usbPrintDevices: [],
     usbPrintError: null,
     usbPrintGuid: USBPRINT_INTERFACE_GUID,
+    recommendedPort: null,
     warnings: [],
     summary: [],
     error: null,
@@ -1058,7 +1510,9 @@ async function probeNiimbotComPorts(options = {}) {
       name: String(q.name || ""),
       port: String(q.port || ""),
       driver: String(q.driver || ""),
+      driverMissing: Boolean(q.driverMissing),
       offline: Boolean(q.offline),
+      isDefault: Boolean(q.isDefault),
       status: String(q.status || ""),
     }));
     const btRows = Array.isArray(parsed.bluetooth)
@@ -1076,6 +1530,7 @@ async function probeNiimbotComPorts(options = {}) {
     base.usbPrintDevices = usb.devices;
     base.usbPrintError = usb.error;
     base.usbPrintGuid = USBPRINT_INTERFACE_GUID;
+    base.recommendedPort = recommendNiimbotPort(base.printers, base.ports);
     base.summary = summarizeComProbe(base.ports, base.printers, base.usbPrintDevices);
   } catch (error) {
     base.ok = false;
@@ -1087,23 +1542,104 @@ async function probeNiimbotComPorts(options = {}) {
 }
 
 /**
- * USBPRINT (USB005) K3 must not be hijacked by a guessed COM port.
- * CH340 scales share VID 1a86; only use COM when the printer/port actually names COMx.
+ * Picks the transport, in order of how much we actually know:
+ *
+ *  1. a COM port the merchant selected,
+ *  2. the port the print queue is really bound to (`Win32_Printer.PortName`),
+ *  3. a USB spooler port,
+ *  4. a COM port we merely discovered by name.
+ *
+ * (2) is the fix for eight days of blank labels: the NIIMBOT K3 queue on the
+ * merchant's till prints to COM8, while USB005 is only still *associated* with
+ * it. We wrote to USB005 and to the spooler, so the frames either went nowhere
+ * or were relayed to COM8 at Windows' own 9600 instead of the printer's 115200.
+ *
+ * A merely discovered COM port still never beats a USB port: CH340 scales share
+ * VID 1a86 and would otherwise be mistaken for the printer.
  */
-function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUsb }) {
+function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUsb, boundPort }) {
   const explicitCom = extractComPort(portName, printerName);
+  const boundCom = extractComPort(boundPort);
+  const boundUsb = extractWindowsUsbPort(boundPort);
   const usb =
     extractWindowsUsbPort(portName, printerName) ||
+    boundUsb ||
     (resolvedUsb ? String(resolvedUsb).trim() : "") ||
     "";
-  const com = explicitCom || (resolvedCom ? String(resolvedCom).trim() : "") || "";
-  if (usb && !explicitCom) {
-    return { mode: "windows", comPort: null, usbPort: usb };
+  const discoveredCom = resolvedCom ? String(resolvedCom).trim() : "";
+
+  if (explicitCom) {
+    return { mode: "com", comPort: explicitCom, usbPort: usb || null, portSource: "selected" };
   }
-  if (com) {
-    return { mode: "com", comPort: com, usbPort: usb || null };
+  if (boundCom) {
+    return { mode: "com", comPort: boundCom, usbPort: usb || null, portSource: "queue" };
   }
-  return { mode: "windows", comPort: null, usbPort: usb || null };
+  if (usb) {
+    return { mode: "windows", comPort: null, usbPort: usb, portSource: boundUsb ? "queue" : "selected" };
+  }
+  if (discoveredCom) {
+    return { mode: "com", comPort: discoveredCom, usbPort: null, portSource: "discovered" };
+  }
+  return { mode: "windows", comPort: null, usbPort: null, portSource: "none" };
+}
+
+/**
+ * Refuses a COM port that belongs to another print queue which is not a
+ * Niimbot. The merchant bound our label profile to COM6 and we happily sent
+ * Niimbot frames to POS-80C (copy 3), a receipt printer: it beeped and printed
+ * nothing, which looked exactly like every other failure and cost another day.
+ */
+function describeForeignComPort({ comPort, owners, printerName, recommended }) {
+  const port = extractComPort(comPort);
+  if (!port) return "";
+  const all = owners && typeof owners === "object" ? owners : {};
+  const bound = (all[port] || []).map(String).filter(Boolean);
+  const target = String(printerName || "").trim();
+  const targetLooksNiimbot = NIIMBOT_NAME_RE.test(target);
+  if (!bound.length) return "";
+  if (bound.some((name) => NIIMBOT_NAME_RE.test(name))) return "";
+
+  const owner = bound[0];
+  const tail = recommended
+    ? ` The Niimbot is on ${recommended.port}${recommended.queue ? ` (queue '${recommended.queue}')` : ""} — select that instead.`
+    : ' Run "Diagnose Niimbot ports" to find the right port.';
+  if (targetLooksNiimbot) {
+    return `${port} belongs to ${owner}, not to ${target}. Sending Niimbot data there will not print a label.${tail}`;
+  }
+  return `${port} belongs to ${owner}, a receipt printer. Sending Niimbot data there will not print a label — it only beeps.${tail}`;
+}
+
+/** The port to use: the one the Niimbot queue is really bound to. */
+function recommendNiimbotPort(queues = [], ports = []) {
+  const rows = Array.isArray(queues) ? queues : [];
+  const niimbot = rows.filter((q) => NIIMBOT_NAME_RE.test(`${q.name || ""} ${q.driver || q.driverName || ""}`));
+  for (const queue of niimbot) {
+    const com = extractComPort(queue.port || queue.portName);
+    if (com) {
+      return {
+        port: com,
+        queue: String(queue.name || ""),
+        reason: "bound-to-queue",
+      };
+    }
+  }
+  // No queue on a COM port: a Bluetooth outgoing port for a K3-* device is the
+  // next best candidate, since that is what SPP pairing produces.
+  const spp = (Array.isArray(ports) ? ports : []).find(
+    (p) => p && p.looksNiimbot && p.isBluetooth && !p.bluetoothIncoming
+  );
+  if (spp) {
+    return { port: String(spp.port || ""), queue: "", reason: "bluetooth-outgoing" };
+  }
+  const usbQueue = niimbot.find((q) => extractWindowsUsbPort(q.port || q.portName));
+  if (usbQueue) {
+    return {
+      port: extractWindowsUsbPort(usbQueue.port || usbQueue.portName),
+      queue: String(usbQueue.name || ""),
+      reason: "usb-queue",
+    };
+  }
+  return null;
 }
 
 /** Lists USBPRINT device interfaces and whether each one can be opened. */
@@ -1181,6 +1717,8 @@ async function printNiimbotLabel(opts) {
     printWindowsPacketsFn,
     resolveComPortFn,
     resolveWindowsUsbPortFn,
+    resolveQueuePortFn,
+    resolveComOwnersFn,
   } = opts;
   const w = Number(widthPx);
   const h = Number(heightPx);
@@ -1199,11 +1737,12 @@ async function printNiimbotLabel(opts) {
   }
 
   const rowBytes = Math.ceil(w / 8);
-  const job = buildNiimbotJobPackets(bitmap, w, h, density, {
-    printerName,
-    portName,
-    profile,
-  });
+  const jobOptions = { printerName, portName, profile };
+  const job = buildNiimbotJobPackets(bitmap, w, h, density, jobOptions);
+  const stepJob = buildNiimbotJobSteps(bitmap, w, h, density, jobOptions);
+  // The bar test reports profile=b21+invert in its headline; the fingerprint has
+  // to say the same thing or the two contradict each other in the same toast.
+  const profileLabel = invertBitmap ? `${job.profile}+invert` : job.profile;
 
   let resolvedCom = extractComPort(portName, printerName);
   if (!resolvedCom && typeof resolveComPortFn === "function") {
@@ -1213,32 +1752,102 @@ async function printNiimbotLabel(opts) {
   if (!resolvedUsb && typeof resolveWindowsUsbPortFn === "function") {
     resolvedUsb = await resolveWindowsUsbPortFn(printerName, portName);
   }
+  // What the queue is really bound to, straight from Win32_Printer.PortName.
+  let queue = null;
+  if (typeof resolveQueuePortFn === "function") {
+    queue = await resolveQueuePortFn(printerName, portName).catch(() => null);
+  }
+  const boundPort = queue && queue.portName ? String(queue.portName) : "";
   const transport = chooseNiimbotTransport({
     portName,
     printerName,
     resolvedCom,
     resolvedUsb,
+    boundPort,
   });
   const name = String(printerName || "").trim();
+  const queueInfo = queue
+    ? {
+        queueName: queue.name || name,
+        queuePort: boundPort,
+        queueDriver: queue.driverName || "",
+        queueDriverMissing: Boolean(queue.driverMissing),
+      }
+    : {};
 
   if (transport.mode === "com" && transport.comPort) {
+    let owners = null;
+    if (typeof resolveComOwnersFn === "function") {
+      owners = await resolveComOwnersFn().catch(() => null);
+    }
+    if (owners && opts.allowForeignPort !== true) {
+      const foreign = describeForeignComPort({
+        comPort: transport.comPort,
+        owners: owners.byPort || owners,
+        printerName: name,
+        recommended: owners.recommended || null,
+      });
+      if (foreign) throw new Error(foreign);
+    }
+    let serial = null;
+    let comError = null;
     try {
       console.log(
-        `[print-agent] Niimbot label via COM ${transport.comPort} profile=${job.profile} packets=${job.packets.length}`
+        `[print-agent] Niimbot label via COM ${transport.comPort} (${transport.portSource}) profile=${job.profile} steps=${stepJob.steps.length}`
       );
-      const serial = await printNiimbotJobSerial(transport.comPort, job);
-      return {
-        printer: transport.comPort,
-        baud: serial && serial.baud,
-        ...describeJob(bitmap, job.packets, job.profile, "com", rowBytes),
-      };
-    } catch (comErr) {
-      if (!name || typeof printWindowsPacketsFn !== "function") throw comErr;
-      console.warn(
-        `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows:`,
-        comErr && comErr.message
-      );
+      serial = await printNiimbotJobSerial(transport.comPort, stepJob, {
+        bauds: opts.bauds,
+        readTimeoutMs: opts.readTimeoutMs,
+      });
+    } catch (error) {
+      comError = error;
     }
+
+    if (serial) {
+      const diag = describeJob(bitmap, job.packets, profileLabel, "com", rowBytes);
+      const detail = describeHandshake(serial);
+      const result = {
+        printer: transport.comPort,
+        queue: name || undefined,
+        ...queueInfo,
+        baud: serial.baud,
+        osConfiguredBaud: serial.osConfiguredBaud,
+        portSource: transport.portSource,
+        bytesWritten: serial.bytesWritten,
+        handshake: serial.steps,
+        replies: serial.replies,
+        answered: serial.answered,
+        confirmed: serial.printed,
+        ...diag,
+      };
+      if (serial.printed) {
+        console.log(`[print-agent] Niimbot ${detail}`);
+        return { ...result, unconfirmed: false, detail };
+      }
+      // The printer talked back and did not confirm a label: that is an answer,
+      // not a reason to try a blind transport and print another hopeful toast.
+      if (serial.answered) {
+        console.warn(`[print-agent] Niimbot ${detail}`);
+        return {
+          ...result,
+          unconfirmed: true,
+          warning: `${detail} Fingerprint: profile=${diag.profile} packets=${diag.packetCount} rasterLines=${diag.rasterLines} inkBytes=${diag.bitmapNonZeroBytes} rowBytes=${diag.rasterRowBytes} dim=${diag.dimensionHex}`,
+        };
+      }
+      comError = new Error(detail);
+    }
+
+    // Nothing answered on the port. A spooler job for a queue bound to that
+    // same COM port would only repeat the write at Windows' own baud rate, so
+    // there is nothing to fall back to.
+    const boundToCom = Boolean(extractComPort(boundPort));
+    if (!name || typeof printWindowsPacketsFn !== "function" || boundToCom) {
+      throw comError;
+    }
+    console.warn(
+      `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows:`,
+      comError && comError.message
+    );
   }
 
   if (!name) {
@@ -1272,7 +1881,9 @@ async function printNiimbotLabel(opts) {
       );
       return {
         printer: name,
-        ...describeJob(bitmap, job.packets, job.profile, "usbdev", rowBytes),
+        ...queueInfo,
+        portSource: transport.portSource,
+        ...describeJob(bitmap, job.packets, profileLabel, "usbdev", rowBytes),
         devicePath: direct.devicePath,
         bytesWritten: direct.bytesWritten,
         replies: direct.replies,
@@ -1298,9 +1909,11 @@ async function printNiimbotLabel(opts) {
     packets: job.packets,
     printWindowsPacketsFn,
   });
-  const diag = describeJob(bitmap, job.packets, job.profile, pathLabel, rowBytes);
+  const diag = describeJob(bitmap, job.packets, profileLabel, pathLabel, rowBytes);
   return {
     printer: name,
+    ...queueInfo,
+    portSource: transport.portSource,
     ...diag,
     unconfirmed: true,
     warning: describeSpoolerUncertainty(usbPort, name, diag),
@@ -1329,11 +1942,15 @@ module.exports = {
   SERIAL_EXIT,
   detectNiimbotProfile,
   buildNiimbotJobPackets,
+  buildNiimbotJobSteps,
   buildTestPatternBitmap,
   buildSerialJobScript,
   buildComProbeScript,
   buildUsbDeviceScript,
   USBPRINT_INTERFACE_GUID,
+  RESPONSE_CODE,
+  PRINT_END_DONE,
+  SERIAL_PAYLOAD_SEPARATOR,
   countPixelsForLine,
   isNiimbotPrintPayload(buf) {
     return Buffer.isBuffer(buf) && buf.length >= 2 && buf[0] === 0x55 && buf[1] === 0x55;
@@ -1341,6 +1958,8 @@ module.exports = {
   extractComPort,
   extractWindowsUsbPort,
   chooseNiimbotTransport,
+  describeForeignComPort,
+  recommendNiimbotPort,
   classifyProbedPort,
   formatComProbeReport,
   summarizeComProbe,
@@ -1349,8 +1968,11 @@ module.exports = {
   printNiimbotViaUsbDevice,
   packetDelayMs,
   describeJob,
+  describeHandshake,
   describeSerialFailure,
   describeSpoolerUncertainty,
+  parseHandshakeOutput,
+  serialPayloadLines,
   rawSerialError,
   printNiimbotLabel,
 };

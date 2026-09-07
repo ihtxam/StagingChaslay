@@ -74,6 +74,79 @@ export function resolveNiimbotTestPortName(
   return saved || String(live?.portName || '').trim() || undefined;
 }
 
+/** What the Print Agent reports back about one label job. */
+export type NiimbotBarsResult = {
+  printer?: string;
+  path?: string;
+  profile?: string;
+  baud?: number | null;
+  portSource?: string;
+  bitmapNonZeroBytes?: number | null;
+  rasterRowBytes?: number | null;
+  dimensionHex?: string;
+  confirmed?: boolean;
+};
+
+/** Shown wherever the agent reported nothing. Never a bare '?'. */
+export const NIIMBOT_NOT_REPORTED = 'n/a';
+
+const PORT_SOURCE_LABEL: Record<string, string> = {
+  selected: 'port you selected',
+  queue: 'port the Windows queue is bound to',
+  discovered: 'port found by name',
+};
+
+/** e.g. `com COM8 @ 115200 baud (port the Windows queue is bound to)`. */
+export function niimbotTransportLabel(result: NiimbotBarsResult): string {
+  const path = String(result.path || '').trim();
+  if (!path) return NIIMBOT_NOT_REPORTED;
+  const parts = [path];
+  const port = String(result.printer || '').trim();
+  if (port && port.toUpperCase() !== path.toUpperCase() && /^COM\d+$/i.test(port)) {
+    parts.push(port.toUpperCase());
+  }
+  if (result.baud) parts.push(`@ ${result.baud} baud`);
+  const source = PORT_SOURCE_LABEL[String(result.portSource || '')];
+  if (source) parts.push(`(${source})`);
+  return parts.join(' ');
+}
+
+/**
+ * Fills the Test bars headline.
+ *
+ * Every value comes from the agent's reply, and anything it did not report
+ * reads `n/a` rather than `?`: for a week the merchant screenshotted
+ * `via ? · inkBytes=? · rowBytes=? · dim=?` and we could not tell a missing
+ * value from a broken template. The final sweep replaces any placeholder the
+ * template has and this function does not, so raw braces can never ship either.
+ */
+export function renderNiimbotBarsToast(
+  template: string,
+  opts: { name: string; result: NiimbotBarsResult; protocol: string; invert?: boolean }
+): string {
+  const { name, result, protocol } = opts;
+  const fallbackProfile = opts.invert ? `${protocol}+invert` : protocol;
+  const values: Record<string, string> = {
+    name: String(name || NIIMBOT_NOT_REPORTED),
+    path: niimbotTransportLabel(result),
+    profile: String(result.profile || fallbackProfile || NIIMBOT_NOT_REPORTED),
+    ink:
+      typeof result.bitmapNonZeroBytes === 'number'
+        ? String(result.bitmapNonZeroBytes)
+        : NIIMBOT_NOT_REPORTED,
+    row:
+      typeof result.rasterRowBytes === 'number'
+        ? String(result.rasterRowBytes)
+        : NIIMBOT_NOT_REPORTED,
+    dim: String(result.dimensionHex || NIIMBOT_NOT_REPORTED),
+  };
+  let text = String(template || '');
+  for (const [key, value] of Object.entries(values)) {
+    text = text.split(`{${key}}`).join(value);
+  }
+  return text.replace(/\{[a-zA-Z0-9_]+\}/g, NIIMBOT_NOT_REPORTED);
+}
+
 export function shouldTestNiimbotBars(profile: {
   name?: string | null;
   portName?: string | null;

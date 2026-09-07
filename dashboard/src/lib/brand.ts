@@ -12,13 +12,14 @@ export const APP_ADMIN_LABEL = 'Reborn Admin';
 export const APP_TAGLINE = 'Restaurant POS & online ordering';
 
 /** Apex marketing domain. */
+// import.meta.env only exists under Vite; node test runners import this file too.
 export const BRAND_DOMAIN = (
-  import.meta.env.VITE_PUBLIC_DOMAIN || 'rebornsense.com'
+  import.meta.env?.VITE_PUBLIC_DOMAIN || 'rebornsense.com'
 ).toLowerCase();
 
 /** Merchant panel + login + same-origin API (`/api`, `/v1`). */
 export const APP_ORIGIN = (
-  import.meta.env.VITE_PUBLIC_APP_URL || `https://app.${BRAND_DOMAIN}`
+  import.meta.env?.VITE_PUBLIC_APP_URL || `https://app.${BRAND_DOMAIN}`
 ).replace(/\/+$/, '');
 export const APP_HOST = APP_ORIGIN.replace(/^https?:\/\//, '');
 
@@ -65,7 +66,7 @@ export function isShopPathHubHost(hostname: string): boolean {
 
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
 export const PAY_ORIGIN = (
-  import.meta.env.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`
+  import.meta.env?.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`
 ).replace(/\/+$/, '');
 
 export const STATUS_HOST = `status.${BRAND_DOMAIN}`;

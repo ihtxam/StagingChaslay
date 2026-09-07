@@ -24,10 +24,11 @@ const {
   probeNiimbotComPorts,
   extractComPort,
   extractWindowsUsbPort,
+  recommendNiimbotPort,
 } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.13";
+const VERSION = "1.10.14";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1081,6 +1082,108 @@ async function resolveNiimbotWindowsUsbPort(printerName, portName) {
   return extractWindowsUsbPort(match?.portName);
 }
 
+/**
+ * Every print queue with the port it is really bound to.
+ *
+ * `listPrinters()` hides offline queues, which is right for a receipt printer
+ * picker and wrong here: the port a Niimbot queue is bound to is the one fact
+ * that decides how we talk to it, and `Win32_Printer.PortName` is the only
+ * authoritative source for it. A queue can keep an association with USB005 in
+ * the Ports dialog while actually printing to COM8 — which is exactly what the
+ * merchant's till does, and what we spent eight days printing blanks over.
+ */
+async function listPrintQueuePorts() {
+  if (!isWindows()) return [];
+  const ps = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$drivers = @()
+try {
+  Get-PrinterDriver -ErrorAction Stop | ForEach-Object { $drivers += ([string]$_.Name).ToLowerInvariant() }
+} catch {
+  try {
+    Get-CimInstance -ClassName Win32_PrinterDriver -ErrorAction Stop | ForEach-Object {
+      $drivers += (([string]$_.Name) -split ',')[0].ToLowerInvariant()
+    }
+  } catch { }
+}
+$items = Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue | ForEach-Object {
+  $driver = [string]$_.DriverName
+  $missing = $false
+  if ([string]::IsNullOrWhiteSpace($driver)) {
+    $missing = $true
+  } elseif ($drivers.Count -gt 0 -and ($drivers -notcontains $driver.ToLowerInvariant())) {
+    $missing = $true
+  }
+  [PSCustomObject]@{
+    name = [string]$_.Name
+    portName = [string]$_.PortName
+    driverName = $driver
+    driverMissing = $missing
+    offline = [bool]$_.WorkOffline
+  }
+}
+[Console]::Out.Write(($items | ConvertTo-Json -Compress -Depth 4))
+`;
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, maxBuffer: 4 * 1024 * 1024, encoding: "utf8", timeout: 20000 }
+    );
+    const raw = (stdout || "").trim().replace(/^\uFEFF/, "");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    return list.map((q) => ({
+      name: String(q.name || ""),
+      portName: String(q.portName || ""),
+      driverName: String(q.driverName || ""),
+      driverMissing: Boolean(q.driverMissing),
+      offline: Boolean(q.offline),
+    }));
+  } catch (error) {
+    console.warn("[print-agent] print queue port lookup failed:", error.message || error);
+    return [];
+  }
+}
+
+/** The queue row for the printer the label job targets, port included. */
+async function resolveNiimbotQueuePort(printerName, portName) {
+  const want = String(printerName || "").trim();
+  if (!want) return null;
+  const queues = await listPrintQueuePorts();
+  if (!queues.length) return null;
+  const lower = want.toLowerCase();
+  const match =
+    queues.find((q) => q.name === want) ||
+    queues.find((q) => q.name.toLowerCase() === lower) ||
+    queues.find((q) => stableDeviceKey(q.name) === stableDeviceKey(want));
+  if (!match) return null;
+  const selected = extractComPort(portName) || extractWindowsUsbPort(portName);
+  if (selected && match.portName && !String(match.portName).toUpperCase().includes(selected)) {
+    console.log(
+      `[print-agent] '${match.name}' is bound to ${match.portName}, not the selected ${selected}`
+    );
+  }
+  return match;
+}
+
+/** COM port -> the queues bound to it, plus the port the Niimbot really uses. */
+async function resolveNiimbotComOwners() {
+  const queues = await listPrintQueuePorts();
+  const byPort = {};
+  for (const queue of queues) {
+    for (const part of String(queue.portName || "").split(",")) {
+      const com = extractComPort(part);
+      if (!com) continue;
+      if (!byPort[com]) byPort[com] = [];
+      if (!byPort[com].includes(queue.name)) byPort[com].push(queue.name);
+    }
+  }
+  return { byPort, queues, recommended: recommendNiimbotPort(queues) };
+}
+
 function buildPrintErrorPayload(error, printerName) {
   const errorText = sanitizePrintAgentError(error, printerName);
   const payload = { error: errorText };
@@ -1476,16 +1579,19 @@ function startServer() {
           profile: body.profile,
           testPattern,
           invertBitmap: body.invertBitmap === true,
+          allowForeignPort: body.allowForeignPort === true,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
+          resolveQueuePortFn: resolveNiimbotQueuePort,
+          resolveComOwnersFn: resolveNiimbotComOwners,
           printWindowsPacketsFn: printNiimbotWindows,
         })
       );
       const diag = result && typeof result === "object" ? result : { printer: result };
       console.log(
-        `[print-agent] niimbot ${diag.unconfirmed ? "sent (unconfirmed)" : "ok"} path=${diag.path || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"} dim=${diag.dimensionHex || "?"}`
+        `[print-agent] niimbot ${diag.confirmed ? "PRINTED (0xf4 -> 01)" : diag.unconfirmed ? "sent (unconfirmed)" : "ok"} path=${diag.path || "?"} port=${diag.printer || "?"} source=${diag.portSource || "?"} baud=${diag.baud || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"} dim=${diag.dimensionHex || "?"} replies=${(diag.replies || []).length}`
       );
-      res.json({ ok: true, ...diag });
+      res.json({ ok: true, version: VERSION, ...diag });
     } catch (error) {
       const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
       console.error("[print-agent] niimbot label failed:", payload.error);
@@ -1498,10 +1604,19 @@ function startServer() {
     try {
       const printerName = String(req.query.printerName || "").trim();
       const portName = String(req.query.portName || "").trim();
-      const { detectNiimbotProfile } = require("./niimbot-client");
+      const { detectNiimbotProfile, chooseNiimbotTransport } = require("./niimbot-client");
       const comPorts = await discoverNiimbotComPorts();
       const resolvedCom = await resolveNiimbotComPort(printerName, portName);
       const usbPort = await resolveNiimbotWindowsUsbPort(printerName, portName);
+      const queue = await resolveNiimbotQueuePort(printerName, portName);
+      const owners = await resolveNiimbotComOwners();
+      const transport = chooseNiimbotTransport({
+        printerName,
+        portName,
+        resolvedCom,
+        resolvedUsb: usbPort,
+        boundPort: queue?.portName || "",
+      });
       res.json({
         ok: true,
         version: VERSION,
@@ -1509,7 +1624,17 @@ function startServer() {
         comPorts,
         resolvedComPort: resolvedCom,
         windowsUsbPort: usbPort,
-        preferredPath: resolvedCom ? "com" : usbPort ? `usb:${usbPort}` : "spooler",
+        // What the queue is really bound to — the fact that decides everything.
+        queueName: queue?.name || "",
+        queuePort: queue?.portName || "",
+        queueDriver: queue?.driverName || "",
+        queueDriverMissing: Boolean(queue?.driverMissing),
+        comPortOwners: owners.byPort,
+        recommendedPort: owners.recommended,
+        transport: transport.mode,
+        transportPort: transport.comPort || transport.usbPort || "",
+        portSource: transport.portSource,
+        preferredPath: transport.mode === "com" ? "com" : usbPort ? `usb:${usbPort}` : "spooler",
       });
     } catch (error) {
       res.status(500).json({ error: error.message || "diagnostics failed" });

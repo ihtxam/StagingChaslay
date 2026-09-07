@@ -460,11 +460,11 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /**
- * 1.10.13 drops the bogus 0x54 prologue bytes, stops guessing the black-pixel
- * counts, and adds the one-click COM port probe. Older builds cannot diagnose
- * a blank label at all.
+ * 1.10.14 drives the COM port the print queue is really bound to and validates
+ * every reply frame, so a result finally means something. Older builds wrote to
+ * the spooler and could not tell a printed label from a blank one.
  */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.13';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.14';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
@@ -954,6 +954,18 @@ export type PrintViaAgentResult = {
   warning?: string;
 };
 
+export type NiimbotHandshakeStep = {
+  step: string;
+  request: number;
+  expect: number;
+  replyCmd: number;
+  replyHex: string;
+  rawHex: string;
+  attempts: number;
+  ok: boolean;
+  done: boolean;
+};
+
 export type NiimbotPrintResult = PrintViaAgentResult & {
   version?: string;
   profile?: string;
@@ -962,12 +974,23 @@ export type NiimbotPrintResult = PrintViaAgentResult & {
   dimensionHex?: string;
   bitmapNonZeroBytes?: number | null;
   rasterLines?: number;
+  rasterRowBytes?: number | null;
   packetCount?: number;
   baud?: number | null;
+  /** Where the port came from: the merchant's choice, the queue, or a guess. */
+  portSource?: string;
+  osConfiguredBaud?: string;
+  queuePort?: string;
+  queueDriverMissing?: boolean;
+  /** True only when PrintEnd (0xf4) answered 01 — the one proof of a label. */
+  confirmed?: boolean;
+  answered?: boolean;
+  detail?: string;
+  handshake?: NiimbotHandshakeStep[];
   /** Set on the USBPRINT device path: the interface we opened and what it answered. */
   devicePath?: string;
   bytesWritten?: number;
-  replies?: Array<{ afterType: number; hex: string }>;
+  replies?: Array<{ afterType: number; hex: string }> | string[];
 };
 
 export async function printViaAgent(opts: {
@@ -1069,14 +1092,25 @@ export async function printNiimbotLabelViaAgent(opts: {
     console.info('[niimbot-label]', {
       version: data?.version,
       path: data?.path,
+      portSource: data?.portSource,
+      baud: data?.baud,
       profile: data?.profile,
       dimensionHex: data?.dimensionHex,
       bitmapNonZeroBytes: data?.bitmapNonZeroBytes,
       devicePath: data?.devicePath,
       replies: data?.replies?.length,
+      confirmed: data?.confirmed,
       unconfirmed: data?.unconfirmed,
     });
+    /*
+     * Everything the agent reports has to reach the caller. Returning only
+     * `{ ok, printer, unconfirmed, warning }` is what made the merchant's toast
+     * read `via ? · inkBytes=? · rowBytes=? · dim=?` — the placeholders were
+     * substituted, with values this function had already thrown away, so every
+     * diagnostic we asked them to screenshot for a week was blank.
+     */
     return {
+      ...data,
       ok: true,
       printer: data?.printer,
       unconfirmed: Boolean(data?.unconfirmed),

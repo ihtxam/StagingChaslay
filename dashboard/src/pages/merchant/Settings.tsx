@@ -44,7 +44,12 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
-import { labelPixelSize, resolveNiimbotTestPortName, shouldTestNiimbotBars } from '@/lib/niimbot-label';
+import {
+  labelPixelSize,
+  renderNiimbotBarsToast,
+  resolveNiimbotTestPortName,
+  shouldTestNiimbotBars,
+} from '@/lib/niimbot-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -1149,20 +1154,12 @@ export default function Settings() {
           profile: protocol,
           invertBitmap: invert,
         });
-        const ink = result.bitmapNonZeroBytes ?? '?';
-        const pathUsed = result.path || '?';
-        const profileUsed = invert
-          ? `${result.profile || protocol}+invert`
-          : result.profile || protocol;
-        const row = result.rasterRowBytes ?? '?';
-        const dim = result.dimensionHex || '?';
-        const fingerprint = t('testNiimbotBarsOk')
-          .replace('{name}', name)
-          .replace('{path}', String(pathUsed))
-          .replace('{profile}', String(profileUsed))
-          .replace('{ink}', String(ink))
-          .replace('{row}', String(row))
-          .replace('{dim}', String(dim));
+        const fingerprint = renderNiimbotBarsToast(t('testNiimbotBarsOk'), {
+          name,
+          result,
+          protocol,
+          invert,
+        });
         // The bytes left the PC, but only a transport that reads the printer's
         // replies can tell us the head fired. Do not claim success otherwise.
         if (result.unconfirmed) {
@@ -1171,7 +1168,8 @@ export default function Settings() {
             duration: 20000,
           });
         } else {
-          toast.success(fingerprint);
+          const proof = result.confirmed ? `\n\n${result.detail || t('testNiimbotBarsConfirmed')}` : '';
+          toast.success(`${fingerprint}${proof}`, { duration: result.confirmed ? 15000 : 6000 });
         }
       } catch (error: unknown) {
         const msg =
