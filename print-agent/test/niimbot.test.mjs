@@ -816,6 +816,50 @@ test("P0: a handshake result is only a success when 0xf4 answered 01", () => {
     steps: [{ step: "PrintEnd", expect: 0xf4, replyCmd: 0xf4, replyHex: "00", attempts: 12, ok: true, done: false }],
   });
   assert.match(unfinished, /never returned 01 after 12 tries/);
+
+  // A link that drops mid-job is a fourth outcome, and not a refusal.
+  const dropped = describeHandshake({
+    comPort: "COM8",
+    baud: 115200,
+    printed: false,
+    answered: true,
+    writeError: "The device does not recognize the command.",
+    replies: ["SetDensity=0x31:01"],
+    steps: [{ step: "SetDensity", expect: 0x31, replyCmd: 0x31, replyHex: "01", ok: true }],
+  });
+  assert.match(dropped, /answered at 115200 baud and then the port failed mid-job/);
+  assert.match(dropped, /The device does not recognize the command\./);
+  assert.match(dropped, /Replies before it dropped: SetDensity=0x31:01/);
+});
+
+test("P0: replies collected before a write failed are not lost with the exception", () => {
+  // The script prints its JSON and *then* exits non-zero, so the failure
+  // carries the answers on stdout. Those answers are the whole diagnosis.
+  const stdout = JSON.stringify({
+    portPath: "COM8",
+    baud: 115200,
+    osConfiguredBaud: "9600 baud (Win32_SerialPortConfiguration)",
+    bytesWritten: 96,
+    printed: false,
+    writeError: "The I/O operation has been aborted.",
+    steps: [{ step: "SetDensity", request: 33, expect: 49, replyCmd: 49, replyHex: "01", ok: true }],
+  });
+  const recovered = parseHandshakeOutput(stdout, "COM8", 115200);
+  assert.equal(recovered.answered, true);
+  assert.equal(recovered.printed, false);
+  assert.equal(recovered.writeError, "The I/O operation has been aborted.");
+
+  // An open failure prints nothing, so it must stay an exception.
+  const client = read("../niimbot-client.js");
+  assert.match(client, /function recoverHandshakeOutput/);
+  assert.match(client, /return parsed\.steps\.length \? parsed : null/);
+  const ps = buildSerialJobScript();
+  const jsonIdx = ps.indexOf("ConvertTo-Json -Depth 5");
+  assert.ok(jsonIdx > 0);
+  assert.ok(
+    ps.indexOf("exit 21", jsonIdx) > jsonIdx,
+    "the write-failure exit must come after the JSON is emitted"
+  );
 });
 
 test("P0: a confirmed serial print is the only result reported as printed", async () => {

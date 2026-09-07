@@ -668,6 +668,7 @@ function parseHandshakeOutput(stdout, comPort, baud) {
     osConfiguredBaud: String(parsed.osConfiguredBaud || ""),
     bytesWritten: Number(parsed.bytesWritten || 0),
     printed: Boolean(parsed.printed),
+    writeError: String(parsed.writeError || ""),
     steps,
     // A reply of any kind proves the printer is on the other end of this port
     // and is parsing 55 55 frames. Without one, the port is the wrong one.
@@ -676,6 +677,22 @@ function parseHandshakeOutput(stdout, comPort, baud) {
       .filter((s) => s.replyCmd >= 0)
       .map((s) => `${s.step}=0x${s.replyCmd.toString(16).padStart(2, "0")}${s.replyHex ? `:${s.replyHex}` : ""}`),
   };
+}
+
+/**
+ * Pulls the handshake JSON out of a failed run's stdout. Returns null unless a
+ * step was actually recorded, so an open failure (which prints nothing) still
+ * travels as an exception.
+ */
+function recoverHandshakeOutput(error, comPort, baud) {
+  const stdout = String((error && error.stdout) || "");
+  if (!stdout.includes("steps")) return null;
+  try {
+    const parsed = parseHandshakeOutput(stdout, comPort, baud);
+    return parsed.steps.length ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /** One open+handshake attempt at one baud. Throws with the real reason attached. */
@@ -705,6 +722,14 @@ async function runNiimbotSerialHandshake(comPort, job, baud, options = {}) {
     );
     return parseHandshakeOutput(stdout, comPort, baud);
   } catch (error) {
+    // A write that throws mid-job still prints its JSON, and the replies it
+    // collected first are the whole diagnosis: they say whether the printer was
+    // ever listening. Losing them to the exception is losing the answer.
+    const partial = recoverHandshakeOutput(error, comPort, baud);
+    if (partial) {
+      partial.writeError = rawSerialError(error) || String((error && error.message) || "");
+      return partial;
+    }
     const failure = new Error(describeSerialFailure(comPort, error, baud));
     failure.rawError = rawSerialError(error);
     failure.baud = baud;
@@ -760,11 +785,19 @@ function describeHandshake(result) {
   const failed = result.steps.find((s) => !s.ok);
   const end = result.steps.find((s) => s.step === "PrintEnd");
   const hex = (n) => `0x${Number(n).toString(16).padStart(2, "0")}`;
+  const dropped = result.writeError ? ` The port then failed mid-job: ${result.writeError}` : "";
   if (!result.answered) {
     return [
       `Niimbot ${port} never answered${at}: ${result.bytesWritten} bytes went out and nothing came back.`,
-      `Wrong port, or the printer is not listening on it.${osBaud}`,
+      `Wrong port, or the printer is not listening on it.${osBaud}${dropped}`,
       "Run \"Diagnose Niimbot ports\" and use the port it recommends.",
+    ].join(" ");
+  }
+  if (result.writeError) {
+    return [
+      `Niimbot ${port} answered${at} and then the port failed mid-job: ${result.writeError}`,
+      `Replies before it dropped: ${result.replies.join(", ") || "none"}.`,
+      "The printer is on this port; the link did not survive the job. A Bluetooth port that drops needs the printer reconnected in Windows.",
     ].join(" ");
   }
   if (failed) {

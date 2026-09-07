@@ -1092,8 +1092,17 @@ async function resolveNiimbotWindowsUsbPort(printerName, portName) {
  * the Ports dialog while actually printing to COM8 — which is exactly what the
  * merchant's till does, and what we spent eight days printing blanks over.
  */
+// One label job resolves the queue's port and then the COM port owners, and the
+// diagnostics route asks for both again. PowerShell costs the better part of a
+// second to start, and the answer cannot change inside one job.
+const QUEUE_PORT_CACHE_MS = 4000;
+let queuePortCache = { at: 0, rows: null };
+
 async function listPrintQueuePorts() {
   if (!isWindows()) return [];
+  if (queuePortCache.rows && Date.now() - queuePortCache.at < QUEUE_PORT_CACHE_MS) {
+    return queuePortCache.rows;
+  }
   const ps = `
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
@@ -1135,13 +1144,15 @@ $items = Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue 
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
-    return list.map((q) => ({
+    const rows = list.map((q) => ({
       name: String(q.name || ""),
       portName: String(q.portName || ""),
       driverName: String(q.driverName || ""),
       driverMissing: Boolean(q.driverMissing),
       offline: Boolean(q.offline),
     }));
+    queuePortCache = { at: Date.now(), rows };
+    return rows;
   } catch (error) {
     console.warn("[print-agent] print queue port lookup failed:", error.message || error);
     return [];
