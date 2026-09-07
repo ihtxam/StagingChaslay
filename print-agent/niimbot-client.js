@@ -377,12 +377,21 @@ async function runPowerShellSource(source, args, options = {}) {
   }
 }
 
-/** First non-empty stderr line — the raw .NET exception message, nothing else. */
+/**
+ * First non-empty stderr line — the raw .NET exception message, nothing else.
+ * PowerShell wraps exceptions thrown inside a method call as
+ * `Exception calling "Open" with "0" argument(s): "<real message>"`; the wrapper
+ * is stripped so the merchant reads the actual reason.
+ */
 function rawSerialError(error) {
   const stderr = String((error && error.stderr) || "");
   for (const line of stderr.split(/\r?\n/)) {
     const text = line.trim();
-    if (text) return text.slice(0, 300);
+    if (!text) continue;
+    const unwrapped = text.match(
+      /^Exception calling "[^"]*" with "[^"]*" argument\(s\): "(.*)"$/
+    );
+    return (unwrapped ? unwrapped[1] : text).slice(0, 300);
   }
   return "";
 }
