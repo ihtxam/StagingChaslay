@@ -132,7 +132,11 @@ export async function printLabelsViaAgentOrQueue(
   products: LabelProduct[],
   opts: LabelPrintOptions,
   settings?: PosPrintSettingsClient | null,
-  relayOpts?: { retryLocally?: boolean }
+  relayOpts?: {
+    retryLocally?: boolean;
+    /** Called once when the transport accepted the job but cannot confirm it printed. */
+    onUnconfirmed?: (warning: string) => void;
+  }
 ): Promise<'local' | 'queued' | 'browser'> {
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
@@ -150,21 +154,24 @@ export async function printLabelsViaAgentOrQueue(
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
 
   if (useNiimbot) {
+    let unconfirmed = '';
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
         const rendered = await renderNiimbotLabelPng(product, o);
-        await printNiimbotLabelViaAgent({
+        const res = await printNiimbotLabelViaAgent({
           printerName,
           portName,
           bitmapBase64: rendered.bitmapBase64,
           widthPx: rendered.widthPx,
           heightPx: rendered.heightPx,
         });
+        if (res.warning && !unconfirmed) unconfirmed = res.warning;
         if (printable.length > 1 || o.copies > 1) {
           await new Promise((r) => setTimeout(r, 400));
         }
       }
     }
+    if (unconfirmed) relayOpts?.onUnconfirmed?.(unconfirmed);
     return 'local';
   }
 
