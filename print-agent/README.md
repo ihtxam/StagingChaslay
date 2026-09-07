@@ -66,6 +66,21 @@ last one is decisive: `0xf4` returns `01` for "print finished (accepted)" and
 never finish the documented sequence and can never tell you which step the
 printer refused.
 
+### Why not WinUSB / libusb
+
+The `usb` npm package was assessed and rejected. `scripts/deploy-hetzner.sh`
+cross-compiles the agent with `npx pkg . --targets node18-win-x64` inside a
+**Linux** container, and `pkg` cannot compile native addons: it would need the
+win32-x64 prebuilt `.node` fetched separately, added to `pkg.assets`, and
+extracted to disk at startup before `require`. Even then libusb on Windows can
+only claim a device that is bound to WinUSB, and a USB printer-class device is
+owned by `usbprint.sys` -- so every till would need a manual Zadig driver swap
+that also breaks the `USBnnn` queue and the vendor app.
+
+Opening the USBPRINT device interface with `CreateFileW` reaches the same bulk
+pipes, needs no native module, no driver swap and no new dependency, and still
+builds with the existing `pkg` step.
+
 ### Protocol details that cause blank labels
 
 - **Send nothing before the first `55 55` frame.** `0x54` is `RfidSuccessTimes`
