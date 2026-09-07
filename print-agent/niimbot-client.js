@@ -342,6 +342,15 @@ function buildSerialJobScript() {
 
 $ErrorActionPreference = 'Stop'
 
+function Get-ErrorText {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  try {
+    return [string]$Record.Exception.Message
+  } catch {
+    return 'unknown serial error'
+  }
+}
+
 function Write-RawError {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
@@ -407,6 +416,8 @@ function Read-NiimbotFrame {
 
 # What Windows itself would use on this port. The spooler relays bytes at this
 # rate, so a 9600 here with a 115200 printer is the whole bug in one line.
+# WMI only: "mode COMx" opens the port, which can block for seconds on an
+# unconnected Bluetooth SPP port, and this runs on the print path.
 function Get-OsConfiguredBaud {
   param([string]$Name)
   if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
@@ -418,13 +429,6 @@ function Get-OsConfiguredBaud {
       return ([string]$cfg.BaudRate + ' baud (Win32_SerialPortConfiguration ' + [string]$cfg.StringSelector + ')')
     }
   } catch { }
-  try {
-    $raw = (& cmd.exe /c ('mode ' + $Name) 2>&1) | Out-String
-    $match = [regex]::Match($raw, '(?i)(?:Baud|Bauds|Baudrate|Bits par seconde)\\D{0,40}(\\d+)')
-    if ($match.Success) { return ($match.Groups[1].Value + ' baud (mode ' + $Name + ')') }
-    $flat = ($raw -replace '\\s+', ' ').Trim()
-    if ($flat) { return $flat.Substring(0, [Math]::Min(200, $flat.Length)) }
-  } catch { }
   return ''
 }
 
@@ -433,7 +437,10 @@ if (-not (Test-Path -LiteralPath $PayloadFile)) {
   exit ${SERIAL_EXIT.MISSING_PAYLOAD}
 }
 
-Add-Type -AssemblyName System.IO.Ports
+# PowerShell 5.1 has SerialPort in System.dll and no System.IO.Ports assembly to
+# load, so an unguarded Add-Type is a terminating error on every Windows till
+# that has not been upgraded to PowerShell 7.
+try { Add-Type -AssemblyName System.IO.Ports -ErrorAction SilentlyContinue } catch { }
 
 $osBaud = Get-OsConfiguredBaud $PortName
 
@@ -455,6 +462,7 @@ try {
 $results = @()
 $printed = $false
 $written = 0
+$writeError = ''
 
 try {
   try { $port.DiscardInBuffer() } catch { }
@@ -515,7 +523,7 @@ try {
 } catch {
   Write-RawError $_
   [Console]::Error.WriteLine('os-configured: ' + $osBaud)
-  exit ${SERIAL_EXIT.WRITE_FAILED}
+  $writeError = Get-ErrorText $_
 } finally {
   try {
     if ($port.IsOpen) { $port.Close() }
@@ -523,6 +531,8 @@ try {
   } catch { }
 }
 
+# Emitted even when a write threw, so the replies collected before the failure
+# are not lost — they are what say whether the printer was ever listening.
 @{
   portPath = $PortPath
   portName = $PortName
@@ -530,9 +540,11 @@ try {
   osConfiguredBaud = $osBaud
   bytesWritten = $written
   printed = $printed
+  writeError = $writeError
   steps = @($results)
 } | ConvertTo-Json -Depth 5 -Compress
 
+if ($writeError) { exit ${SERIAL_EXIT.WRITE_FAILED} }
 exit 0
 `;
 }
@@ -1394,6 +1406,8 @@ function formatComProbeReport(probe) {
 
 const RECOMMENDATION_REASONS = {
   "bound-to-queue": "this is the port the Niimbot print queue is really bound to (Win32_Printer.PortName).",
+  "bound-to-driverless-queue":
+    "the only Niimbot queue on a COM port has no Windows driver, but the agent opens the port itself, so the port is still usable.",
   "bluetooth-outgoing": "no queue is bound to a COM port, but this is the Bluetooth outgoing port of a Niimbot device.",
   "usb-queue": "the Niimbot queue is on a USB spooler port; the agent drives that port's USB printer interface directly.",
 };
@@ -1401,16 +1415,23 @@ const RECOMMENDATION_REASONS = {
 /** Plain-language conclusion drawn from the probed ports and queues. */
 function summarizeComProbe(ports, printers, usbDevices = []) {
   const summary = [];
-  const usable = ports.filter((p) => p.verdict === "opened" && !p.looksScale);
+  const usable = ports.filter(
+    (p) => p.verdict === "opened" && !p.looksScale && !(p.foreignQueues && p.foreignQueues.length)
+  );
   const niimbotQueues = printers.filter((q) => NIIMBOT_NAME_RE.test(`${q.name} ${q.driver}`));
   const usbQueues = niimbotQueues.filter((q) => /^USB\d+$/i.test(String(q.port || "")));
-  const comQueues = niimbotQueues.filter((q) => extractComPort(q.port));
+  const comQueues = niimbotQueues
+    .filter((q) => extractComPort(q.port))
+    .sort((a, b) => Number(Boolean(a.driverMissing)) - Number(Boolean(b.driverMissing)));
 
   for (const queue of comQueues) {
     const port = extractComPort(queue.port);
     const row = ports.find((p) => String(p.port || "").toUpperCase() === port);
+    const caveat = queue.driverMissing
+      ? " This queue has no Windows driver, so Windows itself cannot print to it; the agent does not need one."
+      : "";
     summary.push(
-      `'${queue.name}' prints to ${port}, a serial port. The agent opens ${port} itself at 115200 and reads the printer's replies, so this is the transport to use.`
+      `'${queue.name}' prints to ${port}, a serial port. The agent opens ${port} itself at 115200 and reads the printer's replies, so this is the transport to use.${caveat}`
     );
     if (row && row.configuredBaud && !/115200/.test(row.configuredBaud)) {
       summary.push(
@@ -1435,9 +1456,13 @@ function summarizeComProbe(ports, printers, usbDevices = []) {
 
   if (usable.length) {
     summary.push(
-      `COM port(s) that opened and are not the scale: ${usable.map((p) => `${p.port} @ ${p.openedBauds.join("/")}`).join(", ")}.`
+      `COM port(s) that opened, are not the scale and belong to no other printer: ${usable.map((p) => `${p.port} @ ${p.openedBauds.join("/")}`).join(", ")}.`
     );
-    summary.push("Set one of these as the Port on the Niimbot printer profile and print a test label.");
+    summary.push(
+      comQueues.length
+        ? "Use the recommended port above; these are the alternatives if it is wrong."
+        : "Set one of these as the Port on the Niimbot printer profile and print a test label."
+    );
   } else if (ports.length) {
     summary.push(
       "No COM port that could be the printer opened, so Bluetooth serial printing cannot work until the reason listed above is fixed."
@@ -1609,19 +1634,28 @@ function describeForeignComPort({ comPort, owners, printerName, recommended }) {
   return `${port} belongs to ${owner}, a receipt printer. Sending Niimbot data there will not print a label — it only beeps.${tail}`;
 }
 
-/** The port to use: the one the Niimbot queue is really bound to. */
+/**
+ * The port to use: the one the Niimbot queue is really bound to.
+ *
+ * A queue whose driver is gone ("Pilote indisponible", which is what the K3-*
+ * Bluetooth pairing shows) is ranked last but not discarded: we open the COM
+ * port ourselves, so the missing Windows driver does not stop us — it only
+ * means Windows itself can never print to it.
+ */
 function recommendNiimbotPort(queues = [], ports = []) {
   const rows = Array.isArray(queues) ? queues : [];
   const niimbot = rows.filter((q) => NIIMBOT_NAME_RE.test(`${q.name || ""} ${q.driver || q.driverName || ""}`));
-  for (const queue of niimbot) {
-    const com = extractComPort(queue.port || queue.portName);
-    if (com) {
-      return {
-        port: com,
-        queue: String(queue.name || ""),
-        reason: "bound-to-queue",
-      };
-    }
+  const comQueues = niimbot
+    .map((q) => ({ queue: q, com: extractComPort(q.port || q.portName) }))
+    .filter((x) => x.com)
+    .sort((a, b) => Number(Boolean(a.queue.driverMissing)) - Number(Boolean(b.queue.driverMissing)));
+  const best = comQueues[0];
+  if (best) {
+    return {
+      port: best.com,
+      queue: String(best.queue.name || ""),
+      reason: best.queue.driverMissing ? "bound-to-driverless-queue" : "bound-to-queue",
+    };
   }
   // No queue on a COM port: a Bluetooth outgoing port for a K3-* device is the
   // next best candidate, since that is what SPP pairing produces.
@@ -1791,11 +1825,12 @@ async function printNiimbotLabel(opts) {
     }
     let serial = null;
     let comError = null;
+    const runSerial = typeof opts.printSerialFn === "function" ? opts.printSerialFn : printNiimbotJobSerial;
     try {
       console.log(
         `[print-agent] Niimbot label via COM ${transport.comPort} (${transport.portSource}) profile=${job.profile} steps=${stepJob.steps.length}`
       );
-      serial = await printNiimbotJobSerial(transport.comPort, stepJob, {
+      serial = await runSerial(transport.comPort, stepJob, {
         bauds: opts.bauds,
         readTimeoutMs: opts.readTimeoutMs,
       });
