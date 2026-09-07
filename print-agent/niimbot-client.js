@@ -629,6 +629,204 @@ exit 0
 `;
 }
 
+/**
+ * The device interface USBPRINT.SYS publishes for every USB printer-class
+ * device. Opening it with CreateFile talks straight to the same bulk pipes the
+ * spooler uses, but without the spooler, the print processor or the vendor
+ * driver in the way — and unlike the spooler it can be read from.
+ *
+ * This is the Windows equivalent of /dev/usb/lp0, which is the transport niimgo
+ * requires for the K3: "The K3 printer exposes both a CDC-ACM serial interface
+ * and a USB printer interface. The Niimbot protocol only works over the USB
+ * printer interface."
+ *
+ * GUID from https://blog.peter.skarpetis.com/archives/2005/04/07/getting-a-handle-on-usbprintsys/
+ */
+const USBPRINT_INTERFACE_GUID = "28d78fad-5a12-11d1-ae5b-0000f803a8c2";
+
+/**
+ * Enumerates USBPRINT devices, and optionally writes packets to one and reads
+ * whatever it answers. Reads are bounded and only happen in probe mode, so a
+ * silent printer can never hang a print job.
+ */
+function buildUsbDeviceScript() {
+  return `param(
+  [string]$Mode = 'list',
+  [string]$DevicePath = '',
+  [string]$PayloadFile = '',
+  [int]$ReadTimeoutMs = 1500,
+  [int]$LineDelayMs = 8
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Write-RawError {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  try {
+    [Console]::Error.WriteLine($Record.Exception.Message)
+  } catch {
+    [Console]::Error.WriteLine('unknown usb device error')
+  }
+}
+
+$signature = @'
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+public static class NiimbotUsbDevice {
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern SafeFileHandle CreateFileW(
+    string lpFileName, uint dwDesiredAccess, uint dwShareMode, IntPtr lpSecurityAttributes,
+    uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+}
+'@
+
+try {
+  Add-Type -TypeDefinition $signature -ErrorAction Stop
+} catch {
+  Write-RawError $_
+  exit 30
+}
+
+# Build the interface path from the PnP instance id, e.g.
+# USB\\VID_3513&PID_0002\\5&abcd&0&2  ->
+# \\\\?\\usb#vid_3513&pid_0002#5&abcd&0&2#{28d78fad-...}
+function Get-InterfacePath {
+  param([string]$InstanceId)
+  $slug = $InstanceId.ToLowerInvariant().Replace('\\', '#')
+  return ('\\\\?\\' + $slug + '#{${USBPRINT_INTERFACE_GUID}}')
+}
+
+function Get-ReasonText {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  try {
+    return [string]$Record.Exception.Message
+  } catch {
+    return 'unknown error'
+  }
+}
+
+function Get-UsbPrintDevices {
+  $rows = @()
+  try {
+    Get-PnpDevice -PresentOnly -ErrorAction Stop |
+      Where-Object { $_.Service -eq 'usbprint' } |
+      ForEach-Object {
+        $rows += [PSCustomObject]@{
+          name = [string]$_.FriendlyName
+          instanceId = [string]$_.InstanceId
+          status = [string]$_.Status
+          devicePath = Get-InterfacePath ([string]$_.InstanceId)
+        }
+      }
+  } catch {
+    [Console]::Error.WriteLine((Get-ReasonText $_))
+  }
+  return $rows
+}
+
+# GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING
+function Open-UsbPrintDevice {
+  param([string]$Path)
+  $handle = [NiimbotUsbDevice]::CreateFileW($Path, 0xC0000000, 3, [IntPtr]::Zero, 3, 0x40000000, [IntPtr]::Zero)
+  if ($handle.IsInvalid) {
+    $code = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    $handle.Dispose()
+    throw (New-Object System.ComponentModel.Win32Exception $code)
+  }
+  return $handle
+}
+
+if ($Mode -eq 'list') {
+  $devices = Get-UsbPrintDevices
+  foreach ($device in $devices) {
+    $probe = [PSCustomObject]@{ opened = $false; error = '' }
+    $handle = $null
+    try {
+      $handle = Open-UsbPrintDevice $device.devicePath
+      $probe.opened = $true
+    } catch {
+      $probe.error = Get-ReasonText $_
+    } finally {
+      try { if ($handle) { $handle.Dispose() } } catch { }
+    }
+    $device | Add-Member -NotePropertyName open -NotePropertyValue $probe
+  }
+  @{ guid = '${USBPRINT_INTERFACE_GUID}'; devices = @($devices) } | ConvertTo-Json -Depth 6 -Compress
+  exit 0
+}
+
+if ([string]::IsNullOrWhiteSpace($DevicePath)) {
+  $devices = Get-UsbPrintDevices
+  if ($devices.Count -lt 1) {
+    [Console]::Error.WriteLine('no USBPRINT device interface present')
+    exit 31
+  }
+  $DevicePath = $devices[0].devicePath
+}
+
+if (-not (Test-Path -LiteralPath $PayloadFile)) {
+  [Console]::Error.WriteLine('payload file missing')
+  exit 22
+}
+
+$handle = $null
+try {
+  $handle = Open-UsbPrintDevice $DevicePath
+} catch {
+  Write-RawError $_
+  exit 32
+}
+
+$stream = $null
+$written = 0
+$replies = @()
+try {
+  $stream = New-Object System.IO.FileStream $handle, ([System.IO.FileAccess]::ReadWrite), 4096, $true
+  $lines = [System.IO.File]::ReadAllLines($PayloadFile) | Where-Object { $_ -and $_.Trim() }
+  foreach ($line in $lines) {
+    $bytes = [Convert]::FromBase64String($line.Trim())
+    $stream.Write($bytes, 0, $bytes.Length)
+    $stream.Flush()
+    $written += $bytes.Length
+    $type = if ($bytes.Length -ge 3) { [int]$bytes[2] } else { 0 }
+    if ($type -eq 0x85) {
+      Start-Sleep -Milliseconds $LineDelayMs
+    } else {
+      Start-Sleep -Milliseconds 60
+    }
+    # Bounded read only for the commands that acknowledge, so a silent printer
+    # cannot stall the job.
+    if ($type -in 0x21, 0x23, 0x01, 0x03, 0x13, 0xA3, 0xE3, 0xF3) {
+      $buffer = New-Object byte[] 64
+      try {
+        $task = $stream.ReadAsync($buffer, 0, $buffer.Length)
+        if ($task.Wait($ReadTimeoutMs)) {
+          $count = $task.Result
+          if ($count -gt 0) {
+            $hex = ($buffer[0..($count - 1)] | ForEach-Object { $_.ToString('x2') }) -join ''
+            $replies += [PSCustomObject]@{ afterType = $type; hex = $hex }
+          }
+        }
+      } catch { }
+    }
+  }
+  Start-Sleep -Milliseconds 400
+} catch {
+  Write-RawError $_
+  exit 33
+} finally {
+  try { if ($stream) { $stream.Dispose() } } catch { }
+  try { if ($handle -and -not $handle.IsClosed) { $handle.Dispose() } } catch { }
+}
+
+@{ devicePath = $DevicePath; bytesWritten = $written; replies = @($replies) } |
+  ConvertTo-Json -Depth 5 -Compress
+exit 0
+`;
+}
+
 const NIIMBOT_NAME_RE = /niimbot|niimbus|\bk3\b|k3w|\bb21\b|\bb1\b|\bb18\b|\bb31\b|\bd11\b|\bd110\b/i;
 
 /** Classifies one probed COM port and explains, in plain language, what to do. */
@@ -741,6 +939,23 @@ function formatComProbeReport(probe) {
     lines.push("PRINT QUEUES: none reported.");
   }
 
+  lines.push("");
+  const usbDevices = probe.usbPrintDevices || [];
+  if (usbDevices.length) {
+    lines.push(`USB PRINTER-CLASS INTERFACES (${usbDevices.length}):`);
+    for (const d of usbDevices) {
+      lines.push(`  ${d.name || "unnamed"} — ${d.status || "?"}`);
+      lines.push(`    ${d.devicePath}`);
+      const open = d.open || {};
+      lines.push(
+        `    direct open: ${open.opened ? "OK — the printer can be driven without the spooler" : `FAILED — ${open.error || "no reason reported"}`}`
+      );
+    }
+  } else {
+    lines.push("USB PRINTER-CLASS INTERFACES: none found.");
+    if (probe.usbPrintError) lines.push(`  probe error: ${probe.usbPrintError}`);
+  }
+
   if (probe.bluetooth.length) {
     lines.push("");
     lines.push(`BLUETOOTH DEVICES (${probe.bluetooth.length}):`);
@@ -760,7 +975,7 @@ function formatComProbeReport(probe) {
 }
 
 /** Plain-language conclusion drawn from the probed ports and queues. */
-function summarizeComProbe(ports, printers) {
+function summarizeComProbe(ports, printers, usbDevices = []) {
   const summary = [];
   const usable = ports.filter((p) => p.verdict === "opened" && !p.looksScale);
   const niimbotQueues = printers.filter((q) => NIIMBOT_NAME_RE.test(`${q.name} ${q.driver}`));
@@ -768,12 +983,13 @@ function summarizeComProbe(ports, printers) {
 
   if (usable.length) {
     summary.push(
-      `Usable COM port(s): ${usable.map((p) => `${p.port} @ ${p.openedBauds.join("/")}`).join(", ")}.`
+      `COM port(s) that opened and are not the scale: ${usable.map((p) => `${p.port} @ ${p.openedBauds.join("/")}`).join(", ")}.`
     );
     summary.push("Set one of these as the Port on the Niimbot printer profile and print a test label.");
   } else if (ports.length) {
-    summary.push("No COM port could be opened, so serial printing cannot work right now.");
-    summary.push("Fix the reason shown above for the port you expect to be the printer.");
+    summary.push(
+      "No COM port that could be the printer opened, so Bluetooth serial printing cannot work until the reason listed above is fixed."
+    );
   } else {
     summary.push("No COM port exists. Connect the printer over Bluetooth to get one.");
   }
@@ -783,7 +999,18 @@ function summarizeComProbe(ports, printers) {
       `The label printer is also installed as a Windows print queue on ${usbQueues.map((q) => q.port).join(", ")}.`
     );
     summary.push(
-      "That queue is write-only: the Niimbot protocol needs the printer's replies, so a job can be accepted and still print nothing."
+      "That queue is write-only: the standard USB port monitor is not bidirectional, so the Niimbot protocol never gets its replies and a job can be accepted in full and still print nothing."
+    );
+  }
+
+  const openable = usbDevices.filter((d) => d && d.open && d.open.opened);
+  if (openable.length) {
+    summary.push(
+      "The USB printer-class interface can be opened directly, so the agent drives the printer without the spooler and can read its replies. This is the transport the K3 reference implementation requires."
+    );
+  } else if (usbDevices.length) {
+    summary.push(
+      "The USB printer-class interface exists but could not be opened; the reason is listed above. Close NIIMBOT.exe and retry."
     );
   }
   return summary;
@@ -799,6 +1026,9 @@ async function probeNiimbotComPorts(options = {}) {
     ports: [],
     printers: [],
     bluetooth: [],
+    usbPrintDevices: [],
+    usbPrintError: null,
+    usbPrintGuid: USBPRINT_INTERFACE_GUID,
     warnings: [],
     summary: [],
     error: null,
@@ -841,7 +1071,11 @@ async function probeNiimbotComPorts(options = {}) {
       instanceId: String(b.instanceId || ""),
     }));
     base.warnings = (Array.isArray(parsed.errors) ? parsed.errors : []).map(String).filter(Boolean);
-    base.summary = summarizeComProbe(base.ports, base.printers);
+    const usb = await listUsbPrintDevices({ timeout: 30000 });
+    base.usbPrintDevices = usb.devices;
+    base.usbPrintError = usb.error;
+    base.usbPrintGuid = USBPRINT_INTERFACE_GUID;
+    base.summary = summarizeComProbe(base.ports, base.printers, base.usbPrintDevices);
   } catch (error) {
     base.ok = false;
     base.error = rawSerialError(error) || String((error && error.message) || error);
@@ -869,6 +1103,57 @@ function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUs
     return { mode: "com", comPort: com, usbPort: usb || null };
   }
   return { mode: "windows", comPort: null, usbPort: usb || null };
+}
+
+/** Lists USBPRINT device interfaces and whether each one can be opened. */
+async function listUsbPrintDevices(options = {}) {
+  if (process.platform !== "win32") return { supported: false, devices: [], error: null };
+  try {
+    const { stdout } = await runPowerShellSource(buildUsbDeviceScript(), ["-Mode", "list"], {
+      scriptName: "niimbot-usbdev.ps1",
+      timeout: options.timeout || 30000,
+    });
+    const raw = String(stdout || "").trim().replace(/^\uFEFF/, "");
+    const parsed = raw ? JSON.parse(raw) : {};
+    const rows = Array.isArray(parsed.devices) ? parsed.devices : parsed.devices ? [parsed.devices] : [];
+    return { supported: true, devices: rows, error: null };
+  } catch (error) {
+    return { supported: true, devices: [], error: rawSerialError(error) || String(error.message || error) };
+  }
+}
+
+/**
+ * Writes the job straight to the USBPRINT device interface, bypassing the
+ * spooler, and collects whatever the printer answers. Replies are the only
+ * proof we can get on Windows that the printer parsed our frames.
+ */
+async function printNiimbotViaUsbDevice(job, options = {}) {
+  const { packets } = job;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-usbdev-"));
+  const payloadFile = path.join(dir, "packets.txt");
+  fs.writeFileSync(payloadFile, packets.map((p) => p.toString("base64")).join("\n"), "utf8");
+  const timeoutMs = Math.min(180000, Math.max(45000, 15000 + packets.length * 60));
+  try {
+    const args = ["-Mode", "print", "-PayloadFile", payloadFile];
+    if (options.devicePath) args.push("-DevicePath", options.devicePath);
+    const { stdout } = await runPowerShellSource(buildUsbDeviceScript(), args, {
+      scriptName: "niimbot-usbdev.ps1",
+      timeout: timeoutMs,
+    });
+    const raw = String(stdout || "").trim().replace(/^\uFEFF/, "");
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      devicePath: String(parsed.devicePath || ""),
+      bytesWritten: Number(parsed.bytesWritten || 0),
+      replies: Array.isArray(parsed.replies) ? parsed.replies : parsed.replies ? [parsed.replies] : [],
+    };
+  } finally {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* temp dir cleanup is best effort */
+    }
+  }
 }
 
 async function printNiimbotViaWindowsPrinter({ printerName, packets, printWindowsPacketsFn }) {
@@ -964,6 +1249,40 @@ async function printNiimbotLabel(opts) {
 
   const usbPort = transport.usbPort;
   const pathLabel = usbPort ? `usb:${usbPort}` : "spooler";
+
+  /*
+   * Prefer the USBPRINT device interface over the spooler queue. It reaches the
+   * same bulk pipes without the spooler, the print processor or the vendor
+   * driver, and it is the only Windows transport that can read the printer's
+   * replies — the standard USB port monitor is not bidirectional, so a spooler
+   * job can be accepted in full and still print nothing.
+   */
+  if (usbPort && opts.directUsb !== false) {
+    try {
+      const direct = await printNiimbotViaUsbDevice(job, { devicePath: opts.usbDevicePath });
+      const acked = direct.replies.length > 0;
+      console.log(
+        `[print-agent] Niimbot label via USBPRINT device bytes=${direct.bytesWritten} replies=${direct.replies.length} path=${direct.devicePath}`
+      );
+      return {
+        printer: name,
+        ...describeJob(bitmap, job.packets, job.profile, "usbdev"),
+        devicePath: direct.devicePath,
+        bytesWritten: direct.bytesWritten,
+        replies: direct.replies,
+        unconfirmed: !acked,
+        warning: acked
+          ? ""
+          : "Bytes went straight to the printer's USB interface but it never answered. The printer is not parsing these frames — use the Android Print Bridge over Bluetooth, which is the sequence the K3 reference implementation uses.",
+      };
+    } catch (directErr) {
+      console.warn(
+        "[print-agent] Niimbot USBPRINT device path failed, falling back to spooler:",
+        directErr && directErr.message
+      );
+    }
+  }
+
   console.log(
     `[print-agent] Niimbot label via Windows ${pathLabel} -> '${name}' profile=${job.profile} packets=${job.packets.length}`
   );
@@ -1008,6 +1327,8 @@ module.exports = {
   buildTestPatternBitmap,
   buildSerialJobScript,
   buildComProbeScript,
+  buildUsbDeviceScript,
+  USBPRINT_INTERFACE_GUID,
   countPixelsForLine,
   isNiimbotPrintPayload(buf) {
     return Buffer.isBuffer(buf) && buf.length >= 2 && buf[0] === 0x55 && buf[1] === 0x55;
@@ -1019,6 +1340,8 @@ module.exports = {
   formatComProbeReport,
   summarizeComProbe,
   probeNiimbotComPorts,
+  listUsbPrintDevices,
+  printNiimbotViaUsbDevice,
   packetDelayMs,
   describeJob,
   describeSerialFailure,

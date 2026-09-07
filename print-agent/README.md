@@ -29,14 +29,49 @@ USB scales (CH340) and Bluetooth COM printers often get a **new COM number** aft
 
 Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen tickets stay paced and cut.
 
-## Niimbot / Niimbus labels
+## Niimbot label printers (K3 / B21 / D11 / B1)
 
-Niimbot is **not ESC/POS**. Labels go to `POST /print/niimbot-label`. A beep + paper feed with no ink usually means:
+Niimbot printers do not speak ESC/POS. They use a framed binary protocol
+(`55 55 TYPE LEN DATA CSUM AA AA`) and are driven over one of three transports.
+The transport matters more than the protocol variant, and getting it wrong looks
+exactly like a protocol bug: the printer beeps, feeds a label, and prints nothing.
 
-1. The till is still on Print Agent older than 1.10.12, or
-2. The job used the K3 4-byte / 384-dot layout. 1.10.10 padded 320-wide labels to 48-byte rows (`dim=00a00180`) and still printed blank on USB005. **1.10.11+ defaults USB "NIIMBOT K3" to official B21**: 2-byte `START_PRINT` `[0,1]`, 6-byte `SET_DIMENSION` height/width/copies, row width matching dim (320 ? `rowBytes=40` `dim=00a001400001`). USBPRINT sends the whole job as **one RAW document** (no 96-byte split, no ESC/POS cut).
+### Which transport actually works
 
-**Till fix:** reinstall Print Agent 1.10.12. Settings ? Receipts & printers ? **Test bars (B21)** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `path=usb:USB005` when USB005 is selected (Bluetooth COM6 is not Open()'d first). Expect `profil=b21` · `rowBytes=40` · `dim=00a001400001`. **Test bars (inverted)** sends the same job with bits flipped (`profil=b21+invert`). Pick **COM6** (Bluetooth) from the dropdown to force serial — Open() tries `COM6` and `\\.\COM6` at 115200/9600/19200 and toasts the real .NET exception (close NIIMBOT.exe on Access denied). `inkBytes=0` means empty bitmap.
+| Transport | Works | Why |
+|---|---|---|
+| USBPRINT device interface (`\\?\usb#...#{28d78fad-...}`) | Yes | Same bulk pipes as the spooler, but bidirectional and with no driver in the way. This is the Windows equivalent of `/dev/usb/lp0`, which is the transport [niimgo](https://github.com/MarkusOderSo/niimgo) requires for the K3. Agent 1.10.13+ prefers it. |
+| Bluetooth SPP (`COMx` outgoing port) | Yes | The transport [niimprint](https://github.com/AndBondStyle/niimprint) and [niimbluelib](https://github.com/MultiMote/niimbluelib) use. Bidirectional. |
+| Android Print Bridge over Bluetooth | Yes | `print-agent-android` implements the same sequence niimgo uses, and reads the replies. |
+| Windows print queue (`USBnnn` + `WritePrinter` RAW) | No | One-way only. The standard USB port monitor is not bidirectional, so the printer's acknowledgements never reach us — and every Niimbot setup command expects one. A job can be accepted in full and still print nothing. |
+
+No reference implementation prints a Niimbot through a print spooler. niimprint
+uses pyserial or Bluetooth; niimbluelib uses Web Bluetooth, Web Serial, BLE or
+node `serialport`; niimgo uses `/dev/usb/lp*` or `/dev/ttyACM*`. For the K3
+specifically, niimgo states the Niimbot protocol only answers on the USB
+printer-class interface, not on the K3's CDC-ACM serial interface.
+
+### Protocol details that cause blank labels
+
+- **Send nothing before the first `55 55` frame.** `0x54` is `RfidSuccessTimes`
+  in the [protocol reference](https://printers.niim.blue/interfacing/proto/),
+  not a wake command. Two unframed prologue bytes desynchronise the printer's
+  frame parser.
+- **Leave the three black-pixel-count bytes of `PrintBitmapRow` (0x85) at zero.**
+  The reference says the printer usually works correctly with zeros, and the
+  chunked form depends on the exact printhead width.
+- **`SetPageSize` (0x13) takes the row count first, then the column count**, and
+  the column count must not exceed the printhead width.
+- **Printhead width is per model:** K3 is 80 mm at 203 dpi = 640 dots; B21 / D11
+  are 384.
+
+### Diagnosing a blank label
+
+**Settings ? Receipts & printers ? Diagnose Niimbot ports** lists every serial
+port and print queue, tries each port at 115200/9600/19200, reports the real
+Windows exception for each attempt, and says whether the USB printer-class
+interface can be opened directly. It is also available as
+`GET /print/niimbot-label/com-probe`, always returns 200, and never throws.
 
 ## Dev (Node)
 
