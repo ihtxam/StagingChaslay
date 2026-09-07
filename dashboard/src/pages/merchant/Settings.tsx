@@ -1131,10 +1131,13 @@ export default function Settings() {
       const invert = opts?.invert === true;
       setTestingPrinterId(invert ? `${profile.id}:invert` : profile.id);
       try {
-        const size = labelPixelSize({
-          widthMm: settings?.posPrintSettings?.labelWidthMm,
-          heightMm: settings?.posPrintSettings?.labelHeightMm,
-        });
+        const size = labelPixelSize(
+          {
+            widthMm: settings?.posPrintSettings?.labelWidthMm,
+            heightMm: settings?.posPrintSettings?.labelHeightMm,
+          },
+          name
+        );
         const portName = resolveNiimbotTestPortName(profile, agentPrinters);
         const protocol = String(opts?.protocol || 'b21').trim() || 'b21';
         const result = await printNiimbotLabelViaAgent({
@@ -1152,16 +1155,24 @@ export default function Settings() {
           ? `${result.profile || protocol}+invert`
           : result.profile || protocol;
         const row = result.rasterRowBytes ?? '?';
-        const dim = result.setDimensionHex || '?';
-        toast.success(
-          t('testNiimbotBarsOk')
-            .replace('{name}', name)
-            .replace('{path}', String(pathUsed))
-            .replace('{profile}', String(profileUsed))
-            .replace('{ink}', String(ink))
-            .replace('{row}', String(row))
-            .replace('{dim}', String(dim))
-        );
+        const dim = result.dimensionHex || '?';
+        const fingerprint = t('testNiimbotBarsOk')
+          .replace('{name}', name)
+          .replace('{path}', String(pathUsed))
+          .replace('{profile}', String(profileUsed))
+          .replace('{ink}', String(ink))
+          .replace('{row}', String(row))
+          .replace('{dim}', String(dim));
+        // The bytes left the PC, but only a transport that reads the printer's
+        // replies can tell us the head fired. Do not claim success otherwise.
+        if (result.unconfirmed) {
+          toast(`${fingerprint}\n\n${result.warning || t('testNiimbotBarsUnconfirmed')}`, {
+            icon: '⚠️',
+            duration: 20000,
+          });
+        } else {
+          toast.success(fingerprint);
+        }
       } catch (error: unknown) {
         const msg =
           error && typeof error === 'object' && 'message' in error

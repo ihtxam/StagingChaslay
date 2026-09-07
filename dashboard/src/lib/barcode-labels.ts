@@ -157,7 +157,7 @@ export async function printLabelsViaAgentOrQueue(
     let unconfirmed = '';
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
-        const rendered = await renderNiimbotLabelPng(product, o);
+        const rendered = await renderNiimbotLabelPng(product, o, printerName);
         const res = await printNiimbotLabelViaAgent({
           printerName,
           portName,

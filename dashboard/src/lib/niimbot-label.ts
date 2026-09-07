@@ -5,8 +5,15 @@ import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 /** Niimbot thermal head resolution (203 dpi ≈ 8 dots/mm). */
 export const NIIMBOT_DPMM = 8;
-/** K3 / B21 / B1 printhead width. Wider canvases (58 mm) must be clamped. */
+/** B21 / D11 / B1 printhead width. Wider canvases must be clamped to the head. */
 export const NIIMBOT_PRINTHEAD_PX = 384;
+/** K3: 80 mm effective print width at 203 dpi (FCC-ID 2ARXBK3A manual) = 640 dots. */
+export const NIIMBOT_K3_PRINTHEAD_PX = 640;
+
+export function niimbotPrintheadPx(printerName?: string | null): number {
+  const n = String(printerName || '').toLowerCase();
+  return /\bk3\b|k3w|k3_w/.test(n) ? NIIMBOT_K3_PRINTHEAD_PX : NIIMBOT_PRINTHEAD_PX;
+}
 
 export function isNiimbotPrinterName(name?: string | null): boolean {
   const n = String(name || '').toLowerCase();
@@ -93,13 +100,17 @@ export function labelPrinterUsesNiimbot(
   return isNiimbotPrinterName(printerName);
 }
 
-export function labelPixelSize(opts: LabelPrintOptions): { widthPx: number; heightPx: number } {
+export function labelPixelSize(
+  opts: LabelPrintOptions,
+  printerName?: string | null
+): { widthPx: number; heightPx: number } {
   const o = normalizeLabelOptions(opts);
+  const headPx = niimbotPrintheadPx(printerName);
   let widthPx = Math.max(8, Math.round(o.widthMm * NIIMBOT_DPMM));
   let heightPx = Math.max(8, Math.round(o.heightMm * NIIMBOT_DPMM));
-  if (widthPx > NIIMBOT_PRINTHEAD_PX) {
-    const scale = NIIMBOT_PRINTHEAD_PX / widthPx;
-    widthPx = NIIMBOT_PRINTHEAD_PX;
+  if (widthPx > headPx) {
+    const scale = headPx / widthPx;
+    widthPx = headPx;
     heightPx = Math.max(8, Math.round(heightPx * scale));
   }
   return { widthPx, heightPx };
@@ -144,13 +155,14 @@ async function drawBarcodeOnCanvasAsync(
 /** Render one product label to a PNG data URL for Niimbot printing. */
 export async function renderNiimbotLabelPng(
   product: LabelProduct,
-  opts: LabelPrintOptions
+  opts: LabelPrintOptions,
+  printerName?: string | null
 ): Promise<{ imageBase64: string; bitmapBase64: string; widthPx: number; heightPx: number }> {
   if (typeof document === 'undefined') {
     throw new Error('Label rendering requires a browser');
   }
   const o = normalizeLabelOptions(opts);
-  const { widthPx, heightPx } = labelPixelSize(o);
+  const { widthPx, heightPx } = labelPixelSize(o, printerName);
   const canvas = document.createElement('canvas');
   canvas.width = widthPx;
   canvas.height = heightPx;

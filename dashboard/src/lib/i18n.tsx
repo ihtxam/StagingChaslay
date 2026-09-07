@@ -1786,6 +1786,8 @@ const en: Dict = {
   testNiimbotBarsInvert: 'Test bars (inverted)',
   testNiimbotBarsOk:
     'Bars sent to {name} via {path} · profile={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'The bytes left this PC, but this transport cannot confirm the label printed. If nothing came out, use a Bluetooth COM port or the Android Print Bridge.',
   testNiimbotBarsFailed: 'Niimbot bar test failed',
   printerLinkedCategories: 'Categories on this printer',
   printerLinkedCategoriesHint:
@@ -5655,6 +5657,8 @@ const fr: Dict = {
   testNiimbotBarsInvert: 'Tester les barres (inversé)',
   testNiimbotBarsOk:
     'Barres envoyées à {name} via {path} · profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'Les octets sont partis de ce PC, mais ce transport ne peut pas confirmer que l\'étiquette a été imprimée. Si rien ne sort, utilisez un port COM Bluetooth ou le Print Bridge Android.',
   testNiimbotBarsFailed: 'Échec du test de barres Niimbot',
   printerLinkedCategories: 'Catégories sur cette imprimante',
   printerLinkedCategoriesHint:
@@ -9471,6 +9475,8 @@ const de: Dict = {
   testNiimbotBarsInvert: 'Balken testen (invertiert)',
   testNiimbotBarsOk:
     'Balken an {name} via {path} · Profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'Die Bytes haben diesen PC verlassen, aber dieser Übertragungsweg kann nicht bestätigen, dass das Etikett gedruckt wurde. Kommt nichts heraus, nutzen Sie einen Bluetooth-COM-Port oder die Android Print Bridge.',
   testNiimbotBarsFailed: 'Niimbot-Balkentest fehlgeschlagen',
   printerLinkedCategories: 'Kategorien auf diesem Drucker',
   printerLinkedCategoriesHint:
