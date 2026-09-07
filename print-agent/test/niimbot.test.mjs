@@ -16,6 +16,7 @@ const {
   chooseNiimbotTransport,
   describeSerialFailure,
   describeSpoolerUncertainty,
+  rawSerialError,
   printNiimbotLabel,
   countPixelsForLine,
   buildSerialJobScript,
@@ -370,6 +371,16 @@ test("P0: describeSerialFailure builds the message in Node from stderr", () => {
     assert.equal(msg.includes("$_"), false);
     assert.equal(msg.includes("Exception.Message"), false);
   }
+});
+
+test("P0: the PowerShell method-invocation wrapper is stripped from the reason", () => {
+  // Real stderr captured from `$port.Open()` on a port that cannot be opened.
+  const stderr =
+    'Exception calling "Open" with "0" argument(s): "Access to the port \'COM6\' is denied."';
+  assert.equal(rawSerialError({ stderr }), "Access to the port 'COM6' is denied.");
+  const msg = describeSerialFailure("COM6", { stderr }, 19200);
+  assert.match(msg, /Access to the port 'COM6' is denied\./);
+  assert.equal(msg.includes("Exception calling"), false);
 });
 
 test("P1: com probe enumerates ports, queues and per-baud open attempts", () => {
