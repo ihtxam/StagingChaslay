@@ -1775,6 +1775,10 @@ const en: Dict = {
   testPrinterNeedAgent: 'Print agent is offline. Start it on this PC, then try again.',
   testPrinterOk: 'Test page sent to {name}',
   testPrinterFailed: 'Test print failed',
+  testNiimbotBars: 'Test Niimbot bars',
+  testNiimbotBarsOk:
+    'Bars sent to {name} via {path} · profile={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsFailed: 'Niimbot bar test failed',
   printerLinkedCategories: 'Categories on this printer',
   printerLinkedCategoriesHint:
     'Choose which menu categories print kitchen tickets here. Leave all checked (default) to print every category.',
@@ -5632,6 +5636,10 @@ const fr: Dict = {
   testPrinterNeedAgent: 'L’agent d’impression est hors ligne. Démarrez-le sur ce PC, puis réessayez.',
   testPrinterOk: 'Page de test envoyée à {name}',
   testPrinterFailed: 'Échec du test d’impression',
+  testNiimbotBars: 'Tester les barres Niimbot',
+  testNiimbotBarsOk:
+    'Barres envoyées à {name} via {path} · profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsFailed: 'Échec du test de barres Niimbot',
   printerLinkedCategories: 'Catégories sur cette imprimante',
   printerLinkedCategoriesHint:
     'Choisissez quelles catégories du menu impriment les tickets cuisine ici. Tout cocher (défaut) = toutes les catégories.',
@@ -9436,6 +9444,10 @@ const de: Dict = {
   testPrinterNeedAgent: 'Druckagent ist offline. Agent auf diesem PC starten und erneut versuchen.',
   testPrinterOk: 'Testseite an {name} gesendet',
   testPrinterFailed: 'Testdruck fehlgeschlagen',
+  testNiimbotBars: 'Niimbot-Balken testen',
+  testNiimbotBarsOk:
+    'Balken an {name} via {path} · Profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsFailed: 'Niimbot-Balkentest fehlgeschlagen',
   printerLinkedCategories: 'Kategorien auf diesem Drucker',
   printerLinkedCategoriesHint:
     'Wählen Sie, welche Menükategorien hier Küchentickets drucken. Alle aktiviert (Standard) = alle Kategorien.',

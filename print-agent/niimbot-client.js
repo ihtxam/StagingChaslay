@@ -99,6 +99,11 @@ function niimbotPacket(type, data) {
   return Buffer.concat([Buffer.from([0x55, 0x55, type, len]), buf, Buffer.from([checksum, 0xaa, 0xaa])]);
 }
 
+function isNiimbotPrinterName(name) {
+  const n = String(name || "").toLowerCase();
+  return /niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
+}
+
 function detectNiimbotProfile(printerName, portName, explicit) {
   const want = String(explicit || "").trim().toLowerCase();
   if (want && PROTOCOL_PROFILES[want]) return want;
@@ -413,6 +418,7 @@ function describeJob(bitmap, packets, profile, path, extra = {}) {
     setDimensionBytes: extra.setDimensionBytes,
     countsMode: extra.countsMode,
     packetTypeSequence: extra.packetTypeSequence,
+    usbWriteMode: extra.usbWriteMode || null,
   };
 }
 
@@ -493,8 +499,10 @@ ${payloadB64}
 }
 
 /**
- * USBPRINT (USB005) K3 must not be hijacked by a guessed COM port.
- * CH340 scales share VID 1a86; only use COM when the printer/port actually names COMx.
+ * Named Niimbot/Niimbus: prefer COM (CH340 UART) over USBPRINT.
+ * USB005 spooler often beeps+feeds while ignoring raster (see win-raw-print 96-byte
+ * chunk + ESC/POS cut). CH340 *scales* still must not steal the job: discovery only
+ * returns ports whose caption matches Niimbot tokens, never VID 1a86.
  */
 function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUsb }) {
   const explicitCom = extractComPort(portName, printerName);
@@ -503,7 +511,12 @@ function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUs
     (resolvedUsb ? String(resolvedUsb).trim() : "") ||
     "";
   const com = explicitCom || (resolvedCom ? String(resolvedCom).trim() : "") || "";
-  if (usb && !explicitCom) {
+  const named = isNiimbotPrinterName(printerName);
+  if (named && com) {
+    return { mode: "com", comPort: com, usbPort: usb || null };
+  }
+  // Non-Niimbot queue (receipt/scale): keep USB-first so a guessed COM is not used.
+  if (usb && !explicitCom && !named) {
     return { mode: "windows", comPort: null, usbPort: usb };
   }
   if (com) {
@@ -512,13 +525,14 @@ function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUs
   return { mode: "windows", comPort: null, usbPort: usb || null };
 }
 
-async function printNiimbotViaWindowsPrinter({ printerName, packets, printWindowsPacketsFn }) {
+async function printNiimbotViaWindowsPrinter({ printerName, packets, printWindowsPacketsFn, writeMode }) {
   if (typeof printWindowsPacketsFn !== "function") {
     throw new Error("Niimbot Windows print requires Print Agent 1.10.2+.");
   }
   await printWindowsPacketsFn({
     printerName,
     packetsBase64: packets.map((p) => p.toString("base64")),
+    writeMode: writeMode === "packets" ? "packets" : "concat",
   });
 }
 
@@ -533,7 +547,9 @@ async function printNiimbotLabel(opts) {
     profile,
     testPattern,
     invertBitmap,
+    usbWriteMode,
     printWindowsPacketsFn,
+    printSerialFn,
     resolveComPortFn,
     resolveWindowsUsbPortFn,
   } = opts;
@@ -552,7 +568,7 @@ async function printNiimbotLabel(opts) {
 
   const knownUsb = extractWindowsUsbPort(portName, printerName);
   let resolvedCom = extractComPort(portName, printerName);
-  if (!resolvedCom && !knownUsb && typeof resolveComPortFn === "function") {
+  if (!resolvedCom && typeof resolveComPortFn === "function") {
     resolvedCom = await resolveComPortFn(printerName, portName);
   }
   let resolvedUsb = knownUsb;
@@ -576,20 +592,22 @@ async function printNiimbotLabel(opts) {
   bitmap = job.bitmap || bitmap;
   const name = String(printerName || "").trim();
 
+  const printSerial = typeof printSerialFn === "function" ? printSerialFn : printNiimbotJobSerial;
+
   if (transport.mode === "com" && transport.comPort) {
     try {
       console.log(
         `[print-agent] Niimbot label via COM ${transport.comPort} profile=${job.profile} packets=${job.packets.length}`
       );
-      await printNiimbotJobSerial(transport.comPort, job);
+      await printSerial(transport.comPort, job);
       return {
         printer: transport.comPort,
-        ...describeJob(bitmap, job.packets, job.profile, "com", job),
+        ...describeJob(bitmap, job.packets, job.profile, "com", { ...job, usbWriteMode: null }),
       };
     } catch (comErr) {
       if (!name || typeof printWindowsPacketsFn !== "function") throw comErr;
       console.warn(
-        `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows:`,
+        `[print-agent] Niimbot COM ${transport.comPort} failed, falling back to Windows USBPRINT:`,
         comErr && comErr.message
       );
     }
@@ -603,24 +621,26 @@ async function printNiimbotLabel(opts) {
 
   if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.8+ and select NIIMBOT K3 in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.9+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
     );
   }
 
   const usbPort = transport.usbPort;
   const pathLabel = usbPort ? `usb:${usbPort}` : "spooler";
+  const writeMode = usbWriteMode === "packets" ? "packets" : "concat";
   console.log(
-    `[print-agent] Niimbot label via Windows ${pathLabel} -> '${name}' profile=${job.profile} packets=${job.packets.length} est=${estimateJobDelayMs(job.packets, "windows")}ms`
+    `[print-agent] Niimbot label via Windows ${pathLabel} writeMode=${writeMode} -> '${name}' profile=${job.profile} packets=${job.packets.length} est=${estimateJobDelayMs(job.packets, "windows")}ms`
   );
 
   await printNiimbotViaWindowsPrinter({
     printerName: name,
     packets: job.packets,
     printWindowsPacketsFn,
+    writeMode,
   });
   return {
     printer: name,
-    ...describeJob(bitmap, job.packets, job.profile, pathLabel, job),
+    ...describeJob(bitmap, job.packets, job.profile, pathLabel, { ...job, usbWriteMode: writeMode }),
   };
 }
 
@@ -629,6 +649,7 @@ module.exports = {
   CONNECT_BYTES,
   WAKE_BYTES,
   PROTOCOL_PROFILES,
+  isNiimbotPrinterName,
   detectNiimbotProfile,
   detectNiimbotProfileCandidates,
   alignBitmapCols,

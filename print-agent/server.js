@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.8";
+const VERSION = "1.10.9";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -279,7 +279,7 @@ $ports = @()
 try {
   Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
     $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
+    if ($blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
       $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
     }
   }
@@ -287,7 +287,7 @@ try {
 try {
   Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
     $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
-    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
+    if ($blob -match 'niimbot|niimbus|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
       if ($_.FriendlyName -match '(COM\\d+)') {
         $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
       }
@@ -315,11 +315,12 @@ try {
   }
 }
 
-async function printNiimbotWindows({ printerName, packetsBase64 }) {
+async function printNiimbotWindows({ printerName, packetsBase64, writeMode }) {
   const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
   if (!name) throw new Error("Niimbot printer name is required.");
   const lines = Array.isArray(packetsBase64) ? packetsBase64.filter(Boolean) : [];
   if (!lines.length) throw new Error("No Niimbot packets to print.");
+  const mode = String(writeMode || "concat").toLowerCase() === "packets" ? "packets" : "concat";
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-"));
   const packetsFile = path.join(tmpDir, "packets.txt");
@@ -331,7 +332,7 @@ async function printNiimbotWindows({ printerName, packetsBase64 }) {
     if (!fs.existsSync(scriptPath)) {
       throw new Error(`win-niimbot-print.ps1 not found at ${scriptPath}`);
     }
-    const args = ["-PacketsFile", packetsFile];
+    const args = ["-PacketsFile", packetsFile, "-WriteMode", mode];
     const bom = Buffer.from([0xef, 0xbb, 0xbf]);
     fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
     args.push("-PrinterNameFile", nameFile);
@@ -1040,7 +1041,6 @@ async function resolvePrinterName(requested) {
 async function resolveNiimbotComPort(printerName, portName) {
   const direct = extractComPort(portName, printerName);
   if (direct) return direct;
-  if (extractWindowsUsbPort(portName, printerName)) return null;
   const resolved = printerName ? await resolvePrinterName(printerName) : "";
   const printers = await listPrinters();
   const match =
@@ -1049,7 +1049,6 @@ async function resolveNiimbotComPort(printerName, portName) {
     printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
   const fromPrinter = extractComPort(match?.portName, match?.name);
   if (fromPrinter) return fromPrinter;
-  if (extractWindowsUsbPort(match?.portName, match?.name)) return null;
 
   const discovered = await discoverNiimbotComPorts();
   if (!discovered.length) return null;
@@ -1372,6 +1371,8 @@ function startServer() {
         "niimbot-label",
         "niimbot-diagnostics",
         "niimbot-test-pattern",
+        "niimbot-com-prefer",
+        "niimbot-usb-concat",
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
@@ -1470,6 +1471,7 @@ function startServer() {
           profile: body.profile,
           testPattern,
           invertBitmap: body.invertBitmap === true,
+          usbWriteMode: body.usbWriteMode,
           resolveComPortFn: resolveNiimbotComPort,
           resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
           printWindowsPacketsFn: printNiimbotWindows,
@@ -1477,11 +1479,24 @@ function startServer() {
       );
       const diag = result && typeof result === "object" ? result : { printer: result };
       console.log(
-        `[print-agent] niimbot ok path=${diag.path || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"}`
+        `[print-agent] niimbot ok version=${VERSION} path=${diag.path || "?"} profile=${diag.profile || "?"} writeMode=${diag.usbWriteMode || "com"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} rowBytes=${diag.rasterRowBytes ?? "?"} dim=${diag.setDimensionHex || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"}`
       );
-      res.json({ ok: true, ...diag });
+      res.json({
+        ok: true,
+        version: VERSION,
+        profile: diag.profile || null,
+        rasterRowBytes: diag.rasterRowBytes ?? null,
+        setDimensionBytes: diag.setDimensionBytes ?? null,
+        setDimensionHex: diag.setDimensionHex || "",
+        bitmapNonZeroBytes: diag.bitmapNonZeroBytes ?? null,
+        path: diag.path || null,
+        packetTypeSequence: diag.packetTypeSequence || [],
+        usbWriteMode: diag.usbWriteMode || null,
+        ...diag,
+      });
     } catch (error) {
       const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
+      payload.version = VERSION;
       console.error("[print-agent] niimbot label failed:", payload.error);
       res.status(500).json(payload);
     }
@@ -1519,7 +1534,7 @@ function startServer() {
       );
       const knownUsb = extractWindowsUsbPort(portName, printerName);
       let resolvedCom = extractComPort(portName, printerName);
-      if (!resolvedCom && !knownUsb) {
+      if (!resolvedCom) {
         resolvedCom = await resolveNiimbotComPort(printerName, portName);
       }
       const usbPort = knownUsb || (await resolveNiimbotWindowsUsbPort(printerName, portName));
@@ -1541,18 +1556,20 @@ function startServer() {
           : transport.usbPort
             ? `usb:${transport.usbPort}`
             : "spooler";
-      const comPorts = knownUsb ? [] : await discoverNiimbotComPorts();
+      const comPorts = await discoverNiimbotComPorts();
       const dim = sample.packets.find((p) => p[2] === 0x13);
       const first3 = sample.packets.slice(0, 3).map((p) =>
         p.subarray(0, Math.min(16, p.length)).toString("hex")
       );
+      const bitmapNonZeroBytes = [...aligned.bitmap].filter((b) => b !== 0).length;
       const payload = {
         ok: true,
         version: VERSION,
-        requiredAgentVersion: "1.10.8",
+        requiredAgentVersion: "1.10.9",
         profile,
         profileCandidates,
         transport: pathLabel,
+        usbWriteMode: "concat",
         printheadPx,
         inputPx: { widthPx, heightPx },
         alignedPx: { widthPx: sample.widthPx, heightPx: sample.heightPx },
@@ -1563,6 +1580,7 @@ function startServer() {
         rasterRowBytes: sample.rasterRowBytes,
         rasterPacketLen: sample.rasterPacketLen,
         rasterLines: sample.packets.filter((p) => p[2] === 0x85).length,
+        bitmapNonZeroBytes,
         packetCount: sample.packets.length,
         packetTypeSequence: summarizePacketTypes(sample.packets, { includePreamble: true }),
         countsMode: sample.countsMode,
@@ -1577,7 +1595,7 @@ function startServer() {
         windowsUsbPort: usbPort,
         preferredPath: pathLabel,
         hint:
-          "Blank label with beep+feed: health version MUST be 1.10.8. Niimbus: try profile=b1 (default), profile=b21, or profile=k3. POST testPattern=true. A/B: invertBitmap=true.",
+          "Blank beep+feed: health.version MUST be 1.10.9. POST testPattern=true. Response path=com vs usb:USB005 and bitmapNonZeroBytes tell the cause. USB005 often swallows raster — install as COM / disable USBPRINT. bitmapNonZeroBytes=0 means empty bitmap.",
       };
       if (compareOfficial) {
         const official = buildOfficialPacketExpectations(widthPx, heightPx);

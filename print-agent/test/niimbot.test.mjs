@@ -13,6 +13,7 @@ const {
   niimbotPacket,
   extractComPort,
   extractWindowsUsbPort,
+  isNiimbotPrinterName,
   detectNiimbotProfile,
   detectNiimbotProfileCandidates,
   chooseNiimbotTransport,
@@ -29,13 +30,13 @@ const {
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.8";
+const VERSION = "1.10.9";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.8 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.9 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -154,12 +155,17 @@ test("raster packet is 48-byte row only when label width is 384px", () => {
   assert.equal(raster.length, 4 + 6 + 48 + 3);
 });
 
-test("win-niimbot-print.ps1 sends CONNECT then wake before packets", () => {
+test("win-niimbot-print.ps1 concatenates CONNECT+wake+packets in one WritePrinter by default", () => {
   const src = read("../win-niimbot-print.ps1");
   assert.match(src, /0x03,\s*0x55,\s*0x55,\s*0xc1/);
   assert.match(src, /0x54,\s*0x01/);
-  assert.match(src, /Write-OnePacket/);
-  assert.match(src, /foreach \(\$pkt in \$packets\)/);
+  assert.match(src, /WriteMode/);
+  assert.match(src, /concatBytes=/);
+  assert.match(src, /\[System\.Buffer\]::BlockCopy/);
+  assert.match(src, /no 96-byte split, no ESC\/POS trailer/);
+  assert.equal(src.includes("Get-BtCutTrailer"), false);
+  assert.equal(/0x1D,\s*0x56/.test(src), false);
+  assert.equal(/0x1B,\s*0x69/.test(src), false);
 });
 
 test("niimbot packets are framed and raster lines use type 0x85", () => {
@@ -206,26 +212,51 @@ test("buildOfficialPacketExpectations documents k3 vs b1 dimension sizes", () =>
   assert.equal(official.k3.rasterRowBytes, 40);
 });
 
+test("Niimbus and NIIMBOT names route as Niimbot printers", () => {
+  assert.equal(isNiimbotPrinterName("Niimbus"), true);
+  assert.equal(isNiimbotPrinterName("Niimbus Label"), true);
+  assert.equal(isNiimbotPrinterName("NIIMBOT K3"), true);
+  assert.equal(isNiimbotPrinterName("XP-80"), false);
+  const dash = fs.readFileSync(
+    path.join(here, "..", "..", "dashboard", "src", "lib", "niimbot-label.ts"),
+    "utf8"
+  );
+  assert.match(dash, /niimbot\|niimbus/);
+});
+
 test("port extractors recognize COM and USB spooler ports", () => {
   assert.equal(extractComPort("Niimbot K3 (COM7)"), "COM7");
   assert.equal(extractWindowsUsbPort("USB005"), "USB005");
   assert.equal(extractWindowsUsbPort("NIIMBOT K3 on USB005"), "USB005");
 });
 
-test("USB005 K3 is not hijacked by a discovered COM port (CH340 scale)", () => {
+test("named Niimbot prefers discovered COM over USB005 (USBPRINT blank-feed)", () => {
   const t = chooseNiimbotTransport({
     printerName: "NIIMBOT K3",
     portName: "USB005",
-    resolvedCom: "COM3",
+    resolvedCom: "COM7",
     resolvedUsb: "USB005",
   });
-  assert.equal(t.mode, "windows");
-  assert.equal(t.comPort, null);
+  assert.equal(t.mode, "com");
+  assert.equal(t.comPort, "COM7");
   assert.equal(t.usbPort, "USB005");
 });
 
-test("printNiimbotLabel uses Windows when printer is USB005 even if COM is discovered", async () => {
+test("receipt/scale USB queue is not hijacked by a guessed COM port", () => {
+  const t = chooseNiimbotTransport({
+    printerName: "XP-80",
+    portName: "USB001",
+    resolvedCom: "COM3",
+    resolvedUsb: "USB001",
+  });
+  assert.equal(t.mode, "windows");
+  assert.equal(t.comPort, null);
+  assert.equal(t.usbPort, "USB001");
+});
+
+test("printNiimbotLabel uses COM first for NIIMBOT K3 even when USB005 is listed", async () => {
   const bitmap = buildTestPatternBitmap(32, 16);
+  let usedCom = "";
   let usedWindows = false;
   const result = await printNiimbotLabel({
     printerName: "NIIMBOT K3",
@@ -233,14 +264,41 @@ test("printNiimbotLabel uses Windows when printer is USB005 even if COM is disco
     bitmapBase64: bitmap.toString("base64"),
     widthPx: 32,
     heightPx: 16,
-    resolveComPortFn: async () => "COM3",
+    resolveComPortFn: async () => "COM7",
     resolveWindowsUsbPortFn: async () => "USB005",
+    printSerialFn: async (port) => {
+      usedCom = port;
+    },
     printWindowsPacketsFn: async () => {
       usedWindows = true;
     },
   });
-  assert.equal(usedWindows, true);
+  assert.equal(usedCom, "COM7");
+  assert.equal(usedWindows, false);
+  assert.equal(result.path, "com");
+  assert.ok(result.bitmapNonZeroBytes > 0);
+  assert.ok(result.packetTypeSequence.includes("PrintBitmapRow"));
+});
+
+test("printNiimbotLabel falls back to USB concat when no Niimbot COM exists", async () => {
+  const bitmap = buildTestPatternBitmap(32, 16);
+  let writeMode = "";
+  const result = await printNiimbotLabel({
+    printerName: "Niimbus",
+    portName: "USB005",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 32,
+    heightPx: 16,
+    resolveComPortFn: async () => null,
+    resolveWindowsUsbPortFn: async () => "USB005",
+    printWindowsPacketsFn: async (opts) => {
+      writeMode = opts.writeMode;
+    },
+  });
+  assert.equal(writeMode, "concat");
   assert.equal(result.path, "usb:USB005");
+  assert.equal(result.usbWriteMode, "concat");
+  assert.ok(result.bitmapNonZeroBytes > 0);
 });
 
 test("server wires Niimbot diagnostics compare=official and invertBitmap", () => {
@@ -249,6 +307,9 @@ test("server wires Niimbot diagnostics compare=official and invertBitmap", () =>
   assert.match(server, /buildOfficialPacketExpectations/);
   assert.match(server, /invertBitmap/);
   assert.match(server, /niimbot-label\/diagnostics/);
+  assert.match(server, /niimbot-com-prefer/);
+  assert.match(server, /usbWriteMode/);
+  assert.match(server, /bitmapNonZeroBytes/);
 });
 
 test("packetDelayMs and estimateJobDelayMs stay bounded for USB jobs", () => {

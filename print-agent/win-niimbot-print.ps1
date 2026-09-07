@@ -9,7 +9,12 @@ param(
 
     [int]$LineDelayMs = 12,
     [int]$SetupDelayMs = 50,
-    [int]$EndDelayMs = 200
+    [int]$EndDelayMs = 200,
+
+    # concat (default): one WritePrinter of CONNECT+wake+all frames — USBPRINT
+    # swallows/fragments small writes (win-raw-print 96-byte chunks caused beep+feed).
+    # packets: one WritePrinter per frame (COM-like pacing; diagnostic fallback).
+    [string]$WriteMode = "concat"
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,7 +128,10 @@ foreach ($line in $packetLines) {
     $packets.Add([Convert]::FromBase64String($line.Trim()))
 }
 
-Write-PrintLog "printer='$PrinterName' packets=$($packets.Count)"
+$mode = ([string]$WriteMode).Trim().ToLowerInvariant()
+if ($mode -ne "packets") { $mode = "concat" }
+
+Write-PrintLog "printer='$PrinterName' packets=$($packets.Count) writeMode=$mode"
 
 $docInfo = New-Object NiimbotRawPrinter+DOCINFO
 $docInfo.pDocName = "Reborn Niimbot Label"
@@ -149,22 +157,41 @@ try {
             throw "StartPagePrinter failed for '$PrinterName' (Win32=$err)."
         }
 
-        # Connect — official app resets firmware state machine before each job (0x03 prefix).
-        Write-OnePacket -Handle $handle -Data ([byte[]](0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa)) -Printer $PrinterName
-        Start-Sleep -Milliseconds 40
-        # Wake bytes — NIIMBOT.exe sends 0x54 0x01 after Connect.
-        Write-OnePacket -Handle $handle -Data ([byte[]](0x54, 0x01)) -Printer $PrinterName
-        Start-Sleep -Milliseconds 80
+        # Connect + wake once (not duplicated in packet file). Android USB path
+        # concatenates CONNECT+WAKE+frames into a single bulk write.
+        $connect = [byte[]](0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa)
+        $wake = [byte[]](0x54, 0x01)
 
-        foreach ($pkt in $packets) {
-            Write-OnePacket -Handle $handle -Data $pkt -Printer $PrinterName
-            $delay = Get-PacketDelayMs -Packet $pkt
-            if ($delay -gt 0) {
-                Start-Sleep -Milliseconds $delay
+        if ($mode -eq "concat") {
+            $total = $connect.Length + $wake.Length
+            foreach ($pkt in $packets) { $total += $pkt.Length }
+            $blob = New-Object byte[] $total
+            $offset = 0
+            [System.Buffer]::BlockCopy($connect, 0, $blob, $offset, $connect.Length)
+            $offset += $connect.Length
+            [System.Buffer]::BlockCopy($wake, 0, $blob, $offset, $wake.Length)
+            $offset += $wake.Length
+            foreach ($pkt in $packets) {
+                [System.Buffer]::BlockCopy($pkt, 0, $blob, $offset, $pkt.Length)
+                $offset += $pkt.Length
             }
+            Write-PrintLog "concatBytes=$($blob.Length) (no 96-byte split, no ESC/POS trailer)"
+            Write-OnePacket -Handle $handle -Data $blob -Printer $PrinterName
+            Start-Sleep -Milliseconds 350
+        } else {
+            Write-OnePacket -Handle $handle -Data $connect -Printer $PrinterName
+            Start-Sleep -Milliseconds 40
+            Write-OnePacket -Handle $handle -Data $wake -Printer $PrinterName
+            Start-Sleep -Milliseconds 80
+            foreach ($pkt in $packets) {
+                Write-OnePacket -Handle $handle -Data $pkt -Printer $PrinterName
+                $delay = Get-PacketDelayMs -Packet $pkt
+                if ($delay -gt 0) {
+                    Start-Sleep -Milliseconds $delay
+                }
+            }
+            Start-Sleep -Milliseconds 350
         }
-
-        Start-Sleep -Milliseconds 350
         [NiimbotRawPrinter]::EndPagePrinter($handle) | Out-Null
     }
     finally {

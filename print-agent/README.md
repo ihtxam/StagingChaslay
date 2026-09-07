@@ -29,6 +29,15 @@ USB scales (CH340) and Bluetooth COM printers often get a **new COM number** aft
 
 Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen tickets stay paced and cut.
 
+## Niimbot / Niimbus labels
+
+Niimbot is **not ESC/POS**. Labels go to `POST /print/niimbot-label`. A beep + paper feed with no ink usually means:
+
+1. The till is still on Print Agent older than 1.10.9, or
+2. Windows installed the printer as **USBPRINT** (`USB005`). That spooler often accepts start/end (beep+feed) and drops raster.
+
+**Till fix:** in Windows, prefer the Niimbot **COM** port (CH340 UART). Disable or do not use the USB005 queue for labels. Settings ? Receipts & printers ? **Test Niimbot bars** posts a bar pattern and the toast shows `path`, `profile`, `inkBytes` (`bitmapNonZeroBytes`). `path=usb:USB005` + blank label ? switch to COM. `inkBytes=0` ? empty bitmap, not the USB path.
+
 ## Dev (Node)
 
 ```bat

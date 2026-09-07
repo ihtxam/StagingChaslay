@@ -435,7 +435,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.8';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.9';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
@@ -922,6 +922,20 @@ export type PrintViaAgentResult = {
   printer?: string;
 };
 
+export type NiimbotPrintResult = PrintViaAgentResult & {
+  version?: string;
+  profile?: string;
+  path?: string;
+  transport?: string;
+  rasterRowBytes?: number | null;
+  setDimensionBytes?: number | null;
+  setDimensionHex?: string;
+  bitmapNonZeroBytes?: number | null;
+  packetTypeSequence?: string[];
+  usbWriteMode?: string | null;
+  packetCount?: number;
+};
+
 export async function printViaAgent(opts: {
   printerName?: string;
   dataBase64: string;
@@ -970,11 +984,12 @@ export async function printViaAgent(opts: {
 export async function printNiimbotLabelViaAgent(opts: {
   printerName?: string | null;
   portName?: string | null;
-  bitmapBase64: string;
+  bitmapBase64?: string;
   widthPx: number;
   heightPx: number;
   density?: number;
-}): Promise<PrintViaAgentResult> {
+  testPattern?: boolean;
+}): Promise<NiimbotPrintResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitableRawPrinterMessage(name));
@@ -990,10 +1005,11 @@ export async function printNiimbotLabelViaAgent(opts: {
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
         portName: opts.portName || undefined,
-        bitmapBase64: opts.bitmapBase64,
+        bitmapBase64: opts.testPattern ? undefined : opts.bitmapBase64,
         widthPx: opts.widthPx,
         heightPx: opts.heightPx,
         density: opts.density,
+        testPattern: opts.testPattern === true,
       }),
       signal: controller.signal,
     });
@@ -1009,8 +1025,19 @@ export async function printNiimbotLabelViaAgent(opts: {
         })
       );
     }
-    const data = await res.json();
-    return { ok: true, printer: data?.printer };
+    const data = (await res.json()) as NiimbotPrintResult;
+    console.info('[niimbot-label]', {
+      version: data?.version,
+      path: data?.path,
+      profile: data?.profile,
+      rasterRowBytes: data?.rasterRowBytes,
+      setDimensionBytes: data?.setDimensionBytes,
+      setDimensionHex: data?.setDimensionHex,
+      bitmapNonZeroBytes: data?.bitmapNonZeroBytes,
+      usbWriteMode: data?.usbWriteMode,
+      packetTypeSequence: data?.packetTypeSequence,
+    });
+    return { ok: true, ...data, printer: data?.printer };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
