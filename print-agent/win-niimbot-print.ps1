@@ -11,7 +11,7 @@ param(
     [int]$SetupDelayMs = 50,
     [int]$EndDelayMs = 200,
 
-    # concat (default 1.10.11): one WritePrinter of CONNECT+wake+all frames —
+    # concat (default 1.10.12): one WritePrinter of CONNECT+wake+all frames —
     # one RAW document, no 96-byte split, no ESC/POS trailer. USBPRINT often
     # only commits the job on EndDoc.
     # packets: one WritePrinter per framed packet (1.10.10 paced writes).

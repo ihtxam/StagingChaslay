@@ -13,6 +13,9 @@ const {
   niimbotPacket,
   extractComPort,
   extractWindowsUsbPort,
+  serialPortPathCandidates,
+  serialJobPowerShell,
+  SERIAL_BAUDS,
   isNiimbotPrinterName,
   detectNiimbotProfile,
   detectNiimbotProfileCandidates,
@@ -31,13 +34,13 @@ const {
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.11";
+const VERSION = "1.10.12";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.11 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.12 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -300,22 +303,22 @@ test("port extractors recognize COM and USB spooler ports", () => {
   assert.equal(extractComPort("Bluetooth (COM6)"), "COM6");
   assert.equal(extractWindowsUsbPort("USB005"), "USB005");
   assert.equal(extractWindowsUsbPort("NIIMBOT K3 on USB005"), "USB005");
+  assert.equal(extractWindowsUsbPort("USBPRINT"), "USBPRINT");
 });
 
-test("named Niimbot prefers discovered COM over USB005 (USBPRINT blank-feed)", () => {
+test("USB005 in selected portName is not hijacked by discovered COM6", () => {
   const t = chooseNiimbotTransport({
     printerName: "NIIMBOT K3",
     portName: "USB005",
-    resolvedCom: "COM7",
+    resolvedCom: "COM6",
     resolvedUsb: "USB005",
   });
-  assert.equal(t.mode, "com");
-  assert.equal(t.comPort, "COM7");
+  assert.equal(t.mode, "windows");
   assert.equal(t.usbPort, "USB005");
-  assert.equal(t.requireCom, true);
+  assert.equal(t.requireCom, false);
 });
 
-test("explicit COM6 in port or name requires serial and does not USB-fallback", () => {
+test("explicit COM6 in selected portName requires serial and does not USB-fallback", () => {
   const byPort = chooseNiimbotTransport({
     printerName: "NIIMBOT K3",
     portName: "COM6",
@@ -326,15 +329,25 @@ test("explicit COM6 in port or name requires serial and does not USB-fallback", 
   assert.equal(byPort.comPort, "COM6");
   assert.equal(byPort.requireCom, true);
 
-  const byName = chooseNiimbotTransport({
+  const usbWinsOverNameCom = chooseNiimbotTransport({
     printerName: "NIIMBOT K3 (COM6)",
     portName: "USB005",
-    resolvedCom: null,
+    resolvedCom: "COM6",
     resolvedUsb: "USB005",
   });
-  assert.equal(byName.mode, "com");
-  assert.equal(byName.comPort, "COM6");
-  assert.equal(byName.requireCom, true);
+  assert.equal(usbWinsOverNameCom.mode, "windows");
+  assert.equal(usbWinsOverNameCom.usbPort, "USB005");
+  assert.equal(usbWinsOverNameCom.requireCom, false);
+
+  const byNameOnly = chooseNiimbotTransport({
+    printerName: "NIIMBOT K3 (COM6)",
+    portName: "",
+    resolvedCom: null,
+    resolvedUsb: null,
+  });
+  assert.equal(byNameOnly.mode, "com");
+  assert.equal(byNameOnly.comPort, "COM6");
+  assert.equal(byNameOnly.requireCom, true);
 });
 
 test("receipt/scale USB queue is not hijacked by a guessed COM port", () => {
@@ -349,17 +362,21 @@ test("receipt/scale USB queue is not hijacked by a guessed COM port", () => {
   assert.equal(t.usbPort, "USB001");
 });
 
-test("printNiimbotLabel uses COM first for NIIMBOT K3 even when USB005 is listed", async () => {
+test("printNiimbotLabel uses USB005 when selected even if COM6 is discovered", async () => {
   const bitmap = buildTestPatternBitmap(32, 16);
   let usedCom = "";
   let usedWindows = false;
+  let resolvedComCalled = false;
   const result = await printNiimbotLabel({
     printerName: "NIIMBOT K3",
     portName: "USB005",
     bitmapBase64: bitmap.toString("base64"),
     widthPx: 32,
     heightPx: 16,
-    resolveComPortFn: async () => "COM7",
+    resolveComPortFn: async () => {
+      resolvedComCalled = true;
+      return "COM6";
+    },
     resolveWindowsUsbPortFn: async () => "USB005",
     printSerialFn: async (port) => {
       usedCom = port;
@@ -368,9 +385,10 @@ test("printNiimbotLabel uses COM first for NIIMBOT K3 even when USB005 is listed
       usedWindows = true;
     },
   });
-  assert.equal(usedCom, "COM7");
-  assert.equal(usedWindows, false);
-  assert.equal(result.path, "com");
+  assert.equal(usedCom, "");
+  assert.equal(usedWindows, true);
+  assert.equal(resolvedComCalled, false);
+  assert.equal(result.path, "usb:USB005");
   assert.ok(result.bitmapNonZeroBytes > 0);
   assert.ok(result.packetTypeSequence.includes("PrintBitmapRow"));
 });
@@ -445,29 +463,54 @@ test("printNiimbotLabel USB005 defaults to one RAW concat document", async () =>
   assert.ok(result.bitmapNonZeroBytes > 0);
 });
 
-test("discovered COM for named K3 does not USB-fallback on Open failure", async () => {
+test("discovered COM6 does not run when USB005 is selected even if serial would fail", async () => {
   const bitmap = buildTestPatternBitmap(32, 16);
   let usedWindows = false;
-  await assert.rejects(
-    () =>
-      printNiimbotLabel({
-        printerName: "NIIMBOT K3",
-        portName: "USB005",
-        bitmapBase64: bitmap.toString("base64"),
-        widthPx: 32,
-        heightPx: 16,
-        resolveComPortFn: async () => "COM6",
-        resolveWindowsUsbPortFn: async () => "USB005",
-        printSerialFn: async () => {
-          throw new Error("Niimbot COM6 Open() failed @ 115200 baud: Access to the port 'COM6' is denied.");
-        },
-        printWindowsPacketsFn: async () => {
-          usedWindows = true;
-        },
-      }),
-    /Open\(\) failed/
+  let usedSerial = false;
+  const result = await printNiimbotLabel({
+    printerName: "NIIMBOT K3",
+    portName: "USB005",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 32,
+    heightPx: 16,
+    resolveComPortFn: async () => "COM6",
+    resolveWindowsUsbPortFn: async () => "USB005",
+    printSerialFn: async () => {
+      usedSerial = true;
+      throw new Error("Niimbot COM6 Open() failed @ 115200 baud: ${$_.Exception.Message}");
+    },
+    printWindowsPacketsFn: async () => {
+      usedWindows = true;
+    },
+  });
+  assert.equal(usedSerial, false);
+  assert.equal(usedWindows, true);
+  assert.equal(result.path, "usb:USB005");
+});
+
+test("Open failure message interpolates Exception.Message and does not contain literal ${", () => {
+  const ps = serialJobPowerShell("COM6", 115200, "QQ==");
+  assert.equal(ps.includes("${$_.Exception.Message}"), false);
+  assert.equal(ps.includes("${$_"), false);
+  assert.match(ps, /\$_\.Exception\.Message/);
+  assert.match(ps, /DtrEnable/);
+  assert.match(ps, /RtsEnable/);
+  const openIdx = ps.indexOf("$port.Open()");
+  const dtrIdx = ps.indexOf("$port.DtrEnable");
+  assert.ok(openIdx >= 0 && dtrIdx > openIdx);
+  const msg = describeSerialFailure(
+    "COM6",
+    new Error("Niimbot COM6 Open() failed @ 115200 baud: Access to the port 'COM6' is denied.")
   );
-  assert.equal(usedWindows, false);
+  assert.equal(msg.includes("${"), false);
+  assert.match(msg, /Access to the port 'COM6' is denied/);
+  assert.match(msg, /close NIIMBOT\.exe/);
+});
+
+test("serialPortPathCandidates tries COM6 then \\\\.\\COM6", () => {
+  assert.deepEqual(serialPortPathCandidates("COM6"), ["COM6", "\\\\.\\COM6"]);
+  assert.deepEqual(serialPortPathCandidates("\\\\.\\COM6"), ["COM6", "\\\\.\\COM6"]);
+  assert.deepEqual(SERIAL_BAUDS, [115200, 9600, 19200]);
 });
 
 test("server wires Niimbot diagnostics compare=official and invertBitmap", () => {
@@ -477,19 +520,23 @@ test("server wires Niimbot diagnostics compare=official and invertBitmap", () =>
   assert.match(server, /invertBitmap/);
   assert.match(server, /niimbot-label\/diagnostics/);
   assert.match(server, /niimbot-com-prefer/);
+  assert.match(server, /niimbot-usb-selected-wins/);
+  assert.match(server, /niimbot-com-open-retry/);
   assert.match(server, /niimbot-usb-packets/);
   assert.match(server, /niimbot-usb-b21-default/);
   assert.match(server, /usbWriteMode/);
   assert.match(server, /bitmapNonZeroBytes/);
 });
 
-test("COM serial enables DTR/RTS and retries 9600 after 115200", () => {
+test("COM serial enables DTR/RTS after Open and retries 115200 then 9600 then 19200", () => {
   const src = read("../niimbot-client.js");
   assert.match(src, /DtrEnable/);
   assert.match(src, /RtsEnable/);
-  assert.match(src, /\[115200,\s*9600\]/);
+  assert.match(src, /\[115200,\s*9600,\s*19200\]/);
   assert.match(src, /requireCom/);
   assert.match(src, /Open\(\) failed/);
+  assert.match(src, /serialPortPathCandidates/);
+  assert.equal(src.includes("${$_.Exception.Message}"), false);
 });
 
 test("Settings Test Niimbot bars sends selected printer name and portName", () => {
@@ -510,6 +557,7 @@ test("Settings Test Niimbot bars sends selected printer name and portName", () =
     "utf8"
   );
   assert.match(dash, /resolveNiimbotTestPortName/);
+  assert.match(dash, /extractNiimbotUsbPort/);
   assert.match(dash, /COM6/);
 });
 

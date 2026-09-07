@@ -27,10 +27,22 @@ export function extractNiimbotComPort(...values: Array<string | null | undefined
   return null;
 }
 
+export function extractNiimbotUsbPort(...values: Array<string | null | undefined>): string | null {
+  for (const raw of values) {
+    const text = String(raw || '').trim();
+    if (!text) continue;
+    if (/^USB\d+$/i.test(text) || /^USBPRINT$/i.test(text)) return text.toUpperCase();
+    const inline = text.match(/\b(USB\d+)\b/i);
+    if (inline) return inline[1]!.toUpperCase();
+    if (/USBPRINT/i.test(text)) return 'USBPRINT';
+  }
+  return null;
+}
+
 /**
- * Port the Test bars POST must send. Prefer an explicit COM (COM6 in name or
- * portName), then a live COM6 queue for a named K3, then the saved portName.
- * Never replace a saved COM with a live USB005 match-by-name.
+ * Port the Test bars POST must send. Selected USB005 / USBPRINT wins — never
+ * rewrite it to a live Bluetooth COM6. Selected COM6 stays COM6. Only when the
+ * saved port is empty do we use the matching live queue's portName.
  */
 export function resolveNiimbotTestPortName(
   profile: { name?: string | null; portName?: string | null },
@@ -38,19 +50,14 @@ export function resolveNiimbotTestPortName(
 ): string | undefined {
   const name = String(profile.name || '').trim();
   const saved = String(profile.portName || '').trim();
-  const savedCom = extractNiimbotComPort(saved, name);
+  const savedUsb = extractNiimbotUsbPort(saved);
+  if (savedUsb) return saved;
+
+  const savedCom = extractNiimbotComPort(saved);
   if (savedCom) return savedCom;
 
-  if (isNiimbotPrinterName(name)) {
-    const com6 = livePrinters.find((ap) => extractNiimbotComPort(ap.portName, ap.name) === 'COM6');
-    if (com6) return 'COM6';
-    const namedCom = livePrinters.find((ap) => {
-      const com = extractNiimbotComPort(ap.portName, ap.name);
-      return !!com && (ap.name === name || isNiimbotPrinterName(ap.name));
-    });
-    const fromNamed = extractNiimbotComPort(namedCom?.portName, namedCom?.name);
-    if (fromNamed) return fromNamed;
-  }
+  const nameCom = extractNiimbotComPort(name);
+  if (nameCom) return nameCom;
 
   const liveExact = livePrinters.find(
     (ap) => ap.name === name && (!saved || String(ap.portName || '') === saved)

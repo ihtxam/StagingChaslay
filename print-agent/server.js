@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort, isNiimbotPrinterName } = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.11";
+const VERSION = "1.10.12";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1378,6 +1378,8 @@ function startServer() {
         "niimbot-diagnostics",
         "niimbot-test-pattern",
         "niimbot-com-prefer",
+        "niimbot-usb-selected-wins",
+        "niimbot-com-open-retry",
         "niimbot-usb-concat",
         "niimbot-usb-packets",
         "niimbot-usb-b21-default",
@@ -1575,7 +1577,7 @@ function startServer() {
       const payload = {
         ok: true,
         version: VERSION,
-        requiredAgentVersion: "1.10.11",
+        requiredAgentVersion: "1.10.12",
         profile,
         profileCandidates,
         transport: pathLabel,
@@ -1607,7 +1609,7 @@ function startServer() {
         windowsUsbPort: usbPort,
         preferredPath: pathLabel,
         hint:
-          "Blank beep+feed: health.version MUST be 1.10.11. USB K3 defaults to B21 (2-byte START_PRINT, 6-byte dim, no 384 pad). POST testPattern=true profile=b21. Expect rowBytes=40 dim=00a001400001 for 320x160. path=com vs usb:USB005. USB005 sends one RAW document (concat, no 96-byte split, no ESC/POS cut). Explicit COM (COM6) never USB-falls-back. invertBitmap=true or ?invert=1 flips bits. bitmapNonZeroBytes=0 means empty bitmap.",
+          "Blank beep+feed: health.version MUST be 1.10.12. USB K3 defaults to B21 (2-byte START_PRINT, 6-byte dim, no 384 pad). POST testPattern=true profile=b21. Expect rowBytes=40 dim=00a001400001 for 320x160. Selected USB005 → path=usb:USB005 (never Open COM6 first). Selected COM6 → serial only; Open() toasts the real .NET exception. invertBitmap=true or ?invert=1 flips bits. bitmapNonZeroBytes=0 means empty bitmap.",
       };
       if (compareOfficial) {
         const official = buildOfficialPacketExpectations(widthPx, heightPx);

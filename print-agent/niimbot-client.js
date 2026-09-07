@@ -376,7 +376,8 @@ function isComPort(name) {
 }
 
 function isWindowsUsbPort(name) {
-  return /^USB\d+$/i.test(String(name || "").trim());
+  const text = String(name || "").trim();
+  return /^USB\d+$/i.test(text) || /^USBPRINT$/i.test(text);
 }
 
 function extractComPort(...values) {
@@ -400,9 +401,22 @@ function extractWindowsUsbPort(...values) {
     if (isWindowsUsbPort(text)) return text.toUpperCase();
     const inline = text.match(/\b(USB\d+)\b/i);
     if (inline) return inline[1].toUpperCase();
+    if (/USBPRINT/i.test(text)) return "USBPRINT";
   }
   return null;
 }
+
+/** COM6 and \\.\COM6 — Bluetooth SPP often needs the extended path. */
+function serialPortPathCandidates(comPort) {
+  const extracted = extractComPort(comPort) || String(comPort || "").trim();
+  if (!extracted) return [];
+  const stripped = extracted.replace(/^\\\\\.\\/i, "").toUpperCase();
+  if (!isComPort(stripped)) return [String(comPort)];
+  const dotted = `\\\\.\\${stripped}`;
+  return stripped === dotted ? [stripped] : [stripped, dotted];
+}
+
+const SERIAL_BAUDS = [115200, 9600, 19200];
 
 function normalizeComPort(port) {
   const raw = String(port || "").trim();
@@ -464,28 +478,47 @@ function describeJob(bitmap, packets, profile, path, extra = {}) {
   };
 }
 
+function serialErrorText(error) {
+  return [error && error.stderr, error && error.message].filter(Boolean).join("\n");
+}
+
+function isAccessDeniedSerialError(error) {
+  return /denied|UnauthorizedAccess/i.test(serialErrorText(error));
+}
+
+function isPortMissingSerialError(error) {
+  return /does not exist|FileNotFoundException|cannot find the (file|port)|was not found/i.test(
+    serialErrorText(error)
+  );
+}
+
 function describeSerialFailure(comPort, error) {
-  const raw = [error && error.stderr, error && error.message]
-    .filter(Boolean)
-    .join("\n");
+  const raw = serialErrorText(error);
   const label = String(comPort || "COM").toUpperCase();
   if (error && (error.killed || error.code === "ETIMEDOUT")) {
     return `Niimbot ${label} timed out`;
   }
-  if (/access is denied|UnauthorizedAccess/i.test(raw)) {
-    return `Niimbot ${label} is in use or access denied (close NIIMBOT.exe)`;
-  }
-  if (/does not exist|FileNotFoundException|cannot find the (file|port)/i.test(raw)) {
-    return `Niimbot ${label} was not found`;
-  }
   if (/Open\(\) failed/i.test(raw)) {
     const openLine = raw.match(/Niimbot[^\n]*Open\(\) failed[^\n]*/i);
-    if (openLine) return openLine[0].slice(0, 220);
+    if (openLine) {
+      let msg = openLine[0].replace(/\$\{\$_\.Exception\.Message\}/g, "").slice(0, 220);
+      if (isAccessDeniedSerialError(error) && !/NIIMBOT\.exe/i.test(msg)) {
+        msg = `${msg} (close NIIMBOT.exe)`;
+      }
+      return msg.trim();
+    }
+  }
+  if (isAccessDeniedSerialError(error)) {
+    return `Niimbot ${label} is in use or access denied (close NIIMBOT.exe)`;
+  }
+  if (isPortMissingSerialError(error)) {
+    return `Niimbot ${label} was not found`;
   }
   const useful =
     raw.match(/Niimbot[^\n]*/i) ||
     raw.match(/Access to the port '[^']+'[^\n]*/i) ||
-    raw.match(/The port '[^']+'[^\n]*/i);
+    raw.match(/The port '[^']+'[^\n]*/i) ||
+    raw.match(/IOException[^\n]*/i);
   if (useful) return useful[0].slice(0, 180);
   return `Niimbot ${label} serial write failed`;
 }
@@ -498,15 +531,15 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Ports
 $port = New-Object System.IO.Ports.SerialPort '${safePort}',${rate},'None',8,'One'
 $port.Handshake = [System.IO.Ports.Handshake]::None
-$port.DtrEnable = $true
-$port.RtsEnable = $true
-$port.ReadTimeout = 500
-$port.WriteTimeout = 15000
+$port.ReadTimeout = 5000
+$port.WriteTimeout = 30000
 try {
   $port.Open()
 } catch {
-  throw "Niimbot ${safePort} Open() failed @ ${rate} baud: \${$_.Exception.Message}"
+  throw ("Niimbot ${safePort} Open() failed @ ${rate} baud: " + $_.Exception.Message)
 }
+$port.DtrEnable = $true
+$port.RtsEnable = $true
 try {
   $connect = [byte[]](0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa)
   $port.Write($connect, 0, $connect.Length)
@@ -539,15 +572,8 @@ ${payloadB64}
 `;
 }
 
-function isFatalSerialError(error) {
-  const raw = [error && error.stderr, error && error.message].filter(Boolean).join("\n");
-  return /access is denied|UnauthorizedAccess|does not exist|FileNotFoundException|cannot find the (file|port)|was not found|in use or access denied|Open\(\) failed/i.test(
-    raw
-  );
-}
-
 async function printNiimbotJobSerialAtBaud(comPort, job, baud) {
-  const port = normalizeComPort(comPort);
+  const port = String(comPort || "").trim();
   const { packets } = job;
   const payloadB64 = packets.map((p) => p.toString("base64")).join("\n");
   const timeoutMs = Math.min(180000, Math.max(45000, 12000 + packets.length * 50));
@@ -564,49 +590,66 @@ async function printNiimbotJobSerialAtBaud(comPort, job, baud) {
 }
 
 async function printNiimbotJobSerial(comPort, job) {
-  const bauds = [115200, 9600];
+  const paths = serialPortPathCandidates(comPort);
   let lastErr;
-  for (const baud of bauds) {
-    try {
-      await printNiimbotJobSerialAtBaud(comPort, job, baud);
-      return { baud };
-    } catch (error) {
-      lastErr = error;
-      if (isFatalSerialError(error)) throw error;
+  for (const portPath of paths) {
+    for (const baud of SERIAL_BAUDS) {
+      try {
+        await printNiimbotJobSerialAtBaud(portPath, job, baud);
+        console.log(`[print-agent] Niimbot serial Open ok port=${portPath} baud=${baud}`);
+        return { baud, port: portPath };
+      } catch (error) {
+        lastErr = error;
+        console.warn(
+          `[print-agent] Niimbot serial fail port=${portPath} baud=${baud}:`,
+          error && error.message
+        );
+        if (isAccessDeniedSerialError(error) || isPortMissingSerialError(error)) {
+          break;
+        }
+      }
     }
   }
   throw lastErr || new Error(describeSerialFailure(comPort, new Error("serial write failed")));
 }
 
 /**
- * Named Niimbot/Niimbus: prefer COM (CH340 UART) over USBPRINT.
- * USB005 spooler often beeps+feeds while ignoring raster (see win-raw-print 96-byte
- * chunk + ESC/POS cut). CH340 *scales* still must not steal the job: discovery only
- * returns ports whose caption matches Niimbot tokens, never VID 1a86.
+ * Selected port wins.
+ * USB005 / USBPRINT in portName → Windows USB immediately (discovered COM6 must
+ * not Open() first). COM6 in selected portName → serial only. CH340 *scales*
+ * still must not steal the job: a non-Niimbot USB queue never uses a guessed COM.
  */
 function chooseNiimbotTransport({ portName, printerName, resolvedCom, resolvedUsb }) {
-  const explicitCom = extractComPort(portName, printerName);
+  const selectedUsb = extractWindowsUsbPort(portName);
+  const selectedCom = extractComPort(portName);
   const usb =
-    extractWindowsUsbPort(portName, printerName) ||
+    selectedUsb ||
+    extractWindowsUsbPort(printerName) ||
     (resolvedUsb ? String(resolvedUsb).trim() : "") ||
     "";
+  const explicitCom = selectedCom || extractComPort(printerName);
   const com = explicitCom || (resolvedCom ? String(resolvedCom).trim() : "") || "";
   const named = isNiimbotPrinterName(printerName);
-  // Selected COM (Bluetooth SPP / UART) must stay serial — never silent USB005 fallback.
+
+  if (selectedUsb) {
+    return { mode: "windows", comPort: null, usbPort: selectedUsb, requireCom: false };
+  }
+  if (selectedCom) {
+    return { mode: "com", comPort: selectedCom, usbPort: usb || null, requireCom: true };
+  }
   if (explicitCom) {
     return { mode: "com", comPort: explicitCom, usbPort: usb || null, requireCom: true };
-  }
-  if (named && com) {
-    // Discovered Bluetooth/UART (COM6) for a named K3 must actually Open() —
-    // silent USB005 fallback hid Open() failures and printed blank via USBPRINT.
-    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: true };
   }
   // Non-Niimbot queue (receipt/scale): keep USB-first so a guessed COM is not used.
   if (usb && !named) {
     return { mode: "windows", comPort: null, usbPort: usb, requireCom: false };
   }
+  // Named K3 with a USB queue: USB wins over a discovered Bluetooth COM.
+  if (usb) {
+    return { mode: "windows", comPort: null, usbPort: usb, requireCom: false };
+  }
   if (com) {
-    return { mode: "com", comPort: com, usbPort: usb || null, requireCom: false };
+    return { mode: "com", comPort: com, usbPort: null, requireCom: !!named };
   }
   return { mode: "windows", comPort: null, usbPort: usb || null, requireCom: false };
 }
@@ -652,12 +695,14 @@ async function printNiimbotLabel(opts) {
     if (!bitmap.length) throw new Error("Invalid Niimbot label payload");
   }
 
-  const knownUsb = extractWindowsUsbPort(portName, printerName);
-  let resolvedCom = extractComPort(portName, printerName);
-  if (!resolvedCom && typeof resolveComPortFn === "function") {
+  const selectedUsb = extractWindowsUsbPort(portName);
+  const selectedCom = extractComPort(portName);
+  let resolvedCom = selectedCom || extractComPort(printerName);
+  // USB005 selection must not Open() a discovered Bluetooth COM first.
+  if (!selectedUsb && !resolvedCom && typeof resolveComPortFn === "function") {
     resolvedCom = await resolveComPortFn(printerName, portName);
   }
-  let resolvedUsb = knownUsb;
+  let resolvedUsb = selectedUsb || extractWindowsUsbPort(printerName);
   if (!resolvedUsb && typeof resolveWindowsUsbPortFn === "function") {
     resolvedUsb = await resolveWindowsUsbPortFn(printerName, portName);
   }
@@ -718,7 +763,7 @@ async function printNiimbotLabel(opts) {
 
   if (!printWindowsPacketsFn) {
     throw new Error(
-      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.11+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
+      "Niimbot label printer needs Print Agent on Windows. Install agent 1.10.12+ and select the Niimbot/Niimbus queue in Settings → Receipts & printers."
     );
   }
 
@@ -773,6 +818,9 @@ module.exports = {
   },
   extractComPort,
   extractWindowsUsbPort,
+  serialPortPathCandidates,
+  serialJobPowerShell,
+  SERIAL_BAUDS,
   chooseNiimbotTransport,
   describeJob,
   describeSerialFailure,

@@ -33,10 +33,10 @@ Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen ticke
 
 Niimbot is **not ESC/POS**. Labels go to `POST /print/niimbot-label`. A beep + paper feed with no ink usually means:
 
-1. The till is still on Print Agent older than 1.10.11, or
-2. The job used the K3 4-byte / 384-dot layout. 1.10.10 padded 320-wide labels to 48-byte rows (`dim=00a00180`) and still printed blank on USB005. **1.10.11 defaults USB "NIIMBOT K3" to official B21**: 2-byte `START_PRINT` `[0,1]`, 6-byte `SET_DIMENSION` height/width/copies, row width matching dim (320 ? `rowBytes=40` `dim=00a001400001`). USBPRINT sends the whole job as **one RAW document** (no 96-byte split, no ESC/POS cut).
+1. The till is still on Print Agent older than 1.10.12, or
+2. The job used the K3 4-byte / 384-dot layout. 1.10.10 padded 320-wide labels to 48-byte rows (`dim=00a00180`) and still printed blank on USB005. **1.10.11+ defaults USB "NIIMBOT K3" to official B21**: 2-byte `START_PRINT` `[0,1]`, 6-byte `SET_DIMENSION` height/width/copies, row width matching dim (320 ? `rowBytes=40` `dim=00a001400001`). USBPRINT sends the whole job as **one RAW document** (no 96-byte split, no ESC/POS cut).
 
-**Till fix:** reinstall Print Agent 1.10.11. Settings ? Receipts & printers ? **Test bars (B21)** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `profil=b21` · `rowBytes=40` · `dim=00a001400001`. **Test bars (inverted)** sends the same job with bits flipped (`profil=b21+invert`). Pick **COM6** (Bluetooth) from the dropdown to force serial — a COM `Open()` failure toasts the exception and does **not** fall back to USB005. `inkBytes=0` means empty bitmap.
+**Till fix:** reinstall Print Agent 1.10.12. Settings ? Receipts & printers ? **Test bars (B21)** toasts `path`, `profile`, `inkBytes`, `rowBytes`, `dim`. Expect `path=usb:USB005` when USB005 is selected (Bluetooth COM6 is not Open()'d first). Expect `profil=b21` · `rowBytes=40` · `dim=00a001400001`. **Test bars (inverted)** sends the same job with bits flipped (`profil=b21+invert`). Pick **COM6** (Bluetooth) from the dropdown to force serial — Open() tries `COM6` and `\\.\COM6` at 115200/9600/19200 and toasts the real .NET exception (close NIIMBOT.exe on Access denied). `inkBytes=0` means empty bitmap.
 
 ## Dev (Node)
 
