@@ -21,6 +21,8 @@ const {
   countPixelsForLine,
   buildSerialJobScript,
   buildComProbeScript,
+  buildUsbDeviceScript,
+  USBPRINT_INTERFACE_GUID,
   classifyProbedPort,
   formatComProbeReport,
   summarizeComProbe,
@@ -522,4 +524,106 @@ test("dashboard requires the agent build that can actually diagnose this", () =>
   assert.match(src, new RegExp(`MIN_NIIMBOT_AGENT_VERSION = '${VERSION}'`));
   assert.match(src, /niimbot-label\/com-probe/);
   assert.match(src, /export async function probeNiimbotComPorts/);
+});
+
+/*
+ * P2 — the USBPRINT device interface.
+ *
+ * niimgo, the only reference implementation that covers the K3, requires the USB
+ * printer-class interface (/dev/usb/lp*) and states the Niimbot protocol does
+ * not work over the K3's CDC-ACM serial interface. On Windows that interface is
+ * GUID_DEVINTERFACE_USBPRINT, which CreateFile can open for read AND write —
+ * unlike the spooler, whose standard USB port monitor is not bidirectional.
+ */
+
+test("P2: the USBPRINT device interface GUID and path shape are correct", () => {
+  assert.equal(USBPRINT_INTERFACE_GUID, "28d78fad-5a12-11d1-ae5b-0000f803a8c2");
+  const ps = buildUsbDeviceScript();
+  assert.match(ps, /CreateFileW/);
+  // GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING
+  assert.match(ps, /0xC0000000, 3, \[IntPtr\]::Zero, 3/);
+  assert.match(ps, new RegExp(`#\\{${USBPRINT_INTERFACE_GUID}\\}`));
+  assert.match(ps, /\$_\.Service -eq 'usbprint'/);
+  assert.match(ps, /ReadAsync/);
+  // Reads must be bounded so a silent printer cannot hang the job.
+  assert.match(ps, /\$task\.Wait\(\$ReadTimeoutMs\)/);
+  assertSafePowerShellSource("usb device script", ps);
+});
+
+test("P2: only the acknowledging commands are read back, never raster rows", () => {
+  const ps = buildUsbDeviceScript();
+  const guard = ps.match(/if \(\$type -in ([^)]*)\) \{\n\s*\$buffer/);
+  assert.ok(guard, "expected the reply guard to list the command types");
+  assert.equal(guard[1].includes("0x85"), false);
+  for (const cmd of ["0x21", "0x23", "0x01", "0x03", "0x13", "0xA3", "0xE3", "0xF3"]) {
+    assert.ok(guard[1].includes(cmd), `${cmd} should be read back`);
+  }
+});
+
+test("P2: probe reports whether the USB interface can be opened directly", () => {
+  const probe = {
+    ok: true,
+    supported: true,
+    platform: "win32",
+    agentVersion: VERSION,
+    generatedAt: "2026-09-07T00:00:00.000Z",
+    ports: [],
+    printers: [{ name: "NIIMBOT K3", port: "USB005", driver: "NIIMBOT K3", offline: false, status: "3" }],
+    bluetooth: [],
+    usbPrintDevices: [
+      {
+        name: "NIIMBOT K3",
+        instanceId: "USB\\VID_3513&PID_0002\\5&2a1b&0&2",
+        status: "OK",
+        devicePath: `\\\\?\\usb#vid_3513&pid_0002#5&2a1b&0&2#{${USBPRINT_INTERFACE_GUID}}`,
+        open: { opened: true, error: "" },
+      },
+    ],
+    usbPrintError: null,
+    warnings: [],
+    summary: [],
+  };
+  probe.summary = summarizeComProbe(probe.ports, probe.printers, probe.usbPrintDevices);
+  const text = formatComProbeReport(probe);
+  assert.match(text, /USB PRINTER-CLASS INTERFACES \(1\)/);
+  assert.match(text, /direct open: OK/);
+  assert.match(text, /not bidirectional/);
+  assert.match(text, /reference implementation requires/);
+
+  probe.usbPrintDevices[0].open = { opened: false, error: "Access is denied" };
+  probe.summary = summarizeComProbe(probe.ports, probe.printers, probe.usbPrintDevices);
+  const denied = formatComProbeReport(probe);
+  assert.match(denied, /direct open: FAILED — Access is denied/);
+  assert.match(denied, /Close NIIMBOT\.exe and retry/);
+});
+
+test("P2: the scale opening its own port is not reported as a usable printer port", () => {
+  const scale = classifyProbedPort({
+    port: "COM3",
+    caption: "USB-SERIAL CH340 (COM3)",
+    opens: [{ baud: 9600, opened: true, error: "" }],
+  });
+  const summary = summarizeComProbe([scale], [], []);
+  assert.match(summary.join(" "), /No COM port that could be the printer opened/);
+  assert.equal(summary.join(" ").includes("COM3 @"), false);
+});
+
+test("P2: the direct USB path is preferred over the spooler and is skippable", async () => {
+  const bitmap = buildTestPatternBitmap(320, 160);
+  let spoolerUsed = false;
+  // directUsb:false keeps the old spooler behaviour available as a fallback.
+  const viaSpooler = await printNiimbotLabel({
+    printerName: "NIIMBOT K3",
+    portName: "USB005",
+    bitmapBase64: bitmap.toString("base64"),
+    widthPx: 320,
+    heightPx: 160,
+    directUsb: false,
+    printWindowsPacketsFn: async () => {
+      spoolerUsed = true;
+    },
+  });
+  assert.equal(spoolerUsed, true);
+  assert.equal(viaSpooler.path, "usb:USB005");
+  assert.equal(viaSpooler.unconfirmed, true);
 });
