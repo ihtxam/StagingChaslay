@@ -157,10 +157,24 @@ test('every Niimbot string uses the same placeholders in EN, FR and DE', () => {
 test('the transport label names the port and where it came from', () => {
   assert.equal(
     niimbotTransportLabel({ path: 'com', printer: 'COM8', baud: 115200, portSource: 'queue' }),
-    'com COM8 @ 115200 baud (port the Windows queue is bound to)'
+    'com COM8 @ 115200 baud (port=queue-bound)'
   );
   assert.equal(niimbotTransportLabel({ path: 'usb:USB005' }), 'usb:USB005');
   assert.equal(niimbotTransportLabel({}), NIIMBOT_NOT_REPORTED);
+});
+
+test('the toast stays in one language whichever locale renders it', () => {
+  // A clause of English inside a French sentence looks like a broken template,
+  // which is exactly what this whole change set exists to stop.
+  for (const locale of ['fr', 'de'] as Locale[]) {
+    const rendered = renderNiimbotBarsToast(translate(locale, 'testNiimbotBarsOk'), {
+      name: 'NIIMBOT K3',
+      result: { path: 'com', printer: 'COM8', baud: 115200, portSource: 'queue' },
+      protocol: 'b21',
+    });
+    assert.equal(/[a-z] the [a-z]/.test(rendered), false, rendered);
+    assert.match(rendered, /port=queue-bound/);
+  }
 });
 
 test('every field the agent reports reaches the caller', async () => {

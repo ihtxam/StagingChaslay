@@ -1014,6 +1014,42 @@ test("P1: the recommended port is the one bound to the Niimbot queue", () => {
   assert.equal(recommendNiimbotPort([], []), null);
 });
 
+test("P1: a bound port the probe could not open is not the recommendation", () => {
+  // The K3-* pairing sits on the Bluetooth *incoming* port, which Windows can
+  // never send on. Recommending it would send the merchant back to a dead port.
+  const dead = classifyProbedPort({
+    port: "COM9",
+    caption: "Standard Serial over Bluetooth link (COM9)",
+    pnpDeviceId: "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG&0000",
+    queues: ["K3-I527190103"],
+    opens: [{ baud: 115200, opened: false, error: "The semaphore timeout period has expired." }],
+  });
+  const live = classifyProbedPort({
+    port: "COM4",
+    caption: "Standard Serial over Bluetooth link (COM4)",
+    pnpDeviceId: "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID&0001",
+    opens: [{ baud: 115200, opened: true, error: "" }],
+  });
+  const queues = [{ name: "K3-I527190103", port: "COM9:", driver: "", driverMissing: true }];
+
+  // With nothing else, the dead port is still named so the report says what to fix.
+  assert.deepEqual(recommendNiimbotPort(queues, [dead]), {
+    port: "COM9",
+    queue: "K3-I527190103",
+    reason: "bound-to-driverless-queue",
+  });
+  // A port that actually opens wins, even though no queue is bound to it.
+  const better = recommendNiimbotPort(queues, [dead, { ...live, looksNiimbot: true }]);
+  assert.equal(better.port, "COM4");
+  assert.equal(better.reason, "bluetooth-outgoing");
+
+  // And the summary must not call a port it could not open "the transport to use".
+  const text = summarizeComProbe([dead], queues, []).join(" ");
+  assert.match(text, /'K3-I527190103' prints to COM9, but COM9 could not be opened — nothing answered on it/);
+  assert.match(text, /Bluetooth incoming port, which Windows can never send on/);
+  assert.equal(text.includes("COM9 itself at 115200"), false);
+});
+
 /*
  * P3 — one report that is enough to configure the printer.
  *

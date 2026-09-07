@@ -90,13 +90,19 @@ export type NiimbotBarsResult = {
 /** Shown wherever the agent reported nothing. Never a bare '?'. */
 export const NIIMBOT_NOT_REPORTED = 'n/a';
 
+/*
+ * Kept as compact tokens rather than prose: this string lands inside a
+ * translated sentence the merchant screenshots, and a clause of English in the
+ * middle of a French toast reads like a bug. `port=queue` says the same thing
+ * in every locale.
+ */
 const PORT_SOURCE_LABEL: Record<string, string> = {
-  selected: 'port you selected',
-  queue: 'port the Windows queue is bound to',
-  discovered: 'port found by name',
+  selected: 'port=selected',
+  queue: 'port=queue-bound',
+  discovered: 'port=by-name',
 };
 
-/** e.g. `com COM8 @ 115200 baud (port the Windows queue is bound to)`. */
+/** e.g. `com COM8 @ 115200 baud (port=queue-bound)`. */
 export function niimbotTransportLabel(result: NiimbotBarsResult): string {
   const path = String(result.path || '').trim();
   if (!path) return NIIMBOT_NOT_REPORTED;

@@ -1247,6 +1247,15 @@ exit 0
 
 const NIIMBOT_NAME_RE = /niimbot|niimbus|\bk3\b|k3w|\bb21\b|\bb1\b|\bb18\b|\bb31\b|\bd11\b|\bd110\b/i;
 
+/** Why a port is unusable, in the words the summary needs. */
+const VERDICT_TEXT = {
+  busy: "another program is holding it",
+  missing: "Windows no longer has that port",
+  "not-connected": "nothing answered on it",
+  failed: "it would not open",
+  unknown: "it was never tried",
+};
+
 /** Classifies one probed COM port and explains, in plain language, what to do. */
 function classifyProbedPort(row) {
   const blob = `${row.port || ""} ${row.caption || ""} ${row.pnpDeviceId || ""}`;
@@ -1460,6 +1469,19 @@ function summarizeComProbe(ports, printers, usbDevices = []) {
   for (const queue of comQueues) {
     const port = extractComPort(queue.port);
     const row = ports.find((p) => String(p.port || "").toUpperCase() === port);
+    // A queue can be bound to a port that cannot be opened at all — the K3-*
+    // pairing sits on the Bluetooth *incoming* port. Calling that "the
+    // transport to use" would send the merchant straight back to a dead port.
+    if (row && row.verdict && row.verdict !== "opened") {
+      const why = VERDICT_TEXT[row.verdict] || row.verdict;
+      const fix = row.bluetoothIncoming
+        ? " That is the Bluetooth incoming port, which Windows can never send on; the printer's outgoing port is the one to use."
+        : "";
+      summary.push(
+        `'${queue.name}' prints to ${port}, but ${port} could not be opened — ${why}. This queue cannot print until that is fixed.${fix}`
+      );
+      continue;
+    }
     const caveat = queue.driverMissing
       ? " This queue has no Windows driver, so Windows itself cannot print to it; the agent does not need one."
       : "";
@@ -1673,27 +1695,39 @@ function describeForeignComPort({ comPort, owners, printerName, recommended }) {
  * A queue whose driver is gone ("Pilote indisponible", which is what the K3-*
  * Bluetooth pairing shows) is ranked last but not discarded: we open the COM
  * port ourselves, so the missing Windows driver does not stop us — it only
- * means Windows itself can never print to it.
+ * means Windows itself can never print to it. A port the probe could not open
+ * is ranked below both, because no amount of protocol gets through it.
  */
 function recommendNiimbotPort(queues = [], ports = []) {
   const rows = Array.isArray(queues) ? queues : [];
+  const portRows = Array.isArray(ports) ? ports : [];
   const niimbot = rows.filter((q) => NIIMBOT_NAME_RE.test(`${q.name || ""} ${q.driver || q.driverName || ""}`));
+  const unopenable = (com) => {
+    const row = portRows.find((p) => String((p && p.port) || "").toUpperCase() === com);
+    return Boolean(row && row.verdict && row.verdict !== "opened");
+  };
   const comQueues = niimbot
     .map((q) => ({ queue: q, com: extractComPort(q.port || q.portName) }))
     .filter((x) => x.com)
-    .sort((a, b) => Number(Boolean(a.queue.driverMissing)) - Number(Boolean(b.queue.driverMissing)));
-  const best = comQueues[0];
-  if (best) {
-    return {
-      port: best.com,
-      queue: String(best.queue.name || ""),
-      reason: best.queue.driverMissing ? "bound-to-driverless-queue" : "bound-to-queue",
-    };
-  }
-  // No queue on a COM port: a Bluetooth outgoing port for a K3-* device is the
-  // next best candidate, since that is what SPP pairing produces.
+    .map((x) => ({ ...x, dead: unopenable(x.com) }))
+    .sort(
+      (a, b) =>
+        Number(a.dead) - Number(b.dead) ||
+        Number(Boolean(a.queue.driverMissing)) - Number(Boolean(b.queue.driverMissing))
+    );
+  const asQueue = (x) => ({
+    port: x.com,
+    queue: String(x.queue.name || ""),
+    reason: x.queue.driverMissing ? "bound-to-driverless-queue" : "bound-to-queue",
+  });
+  const live = comQueues.find((x) => !x.dead);
+  if (live) return asQueue(live);
+
+  // Either no queue is on a COM port, or the only one that is cannot be opened.
+  // A Bluetooth outgoing port for a K3-* device is the next candidate, since
+  // that is what SPP pairing produces.
   const spp = (Array.isArray(ports) ? ports : []).find(
-    (p) => p && p.looksNiimbot && p.isBluetooth && !p.bluetoothIncoming
+    (p) => p && p.looksNiimbot && p.isBluetooth && !p.bluetoothIncoming && p.verdict !== "missing"
   );
   if (spp) {
     return { port: String(spp.port || ""), queue: "", reason: "bluetooth-outgoing" };
@@ -1706,7 +1740,9 @@ function recommendNiimbotPort(queues = [], ports = []) {
       reason: "usb-queue",
     };
   }
-  return null;
+  // Nothing better exists: name the bound port anyway, so the report says which
+  // port to fix rather than going silent.
+  return comQueues.length ? asQueue(comQueues[0]) : null;
 }
 
 /** Lists USBPRINT device interfaces and whether each one can be opened. */
