@@ -19,10 +19,15 @@ const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
-const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
+const {
+  printNiimbotLabel,
+  probeNiimbotComPorts,
+  extractComPort,
+  extractWindowsUsbPort,
+} = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.4";
+const VERSION = "1.10.13";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -1372,6 +1377,7 @@ function startServer() {
         "niimbot-label",
         "niimbot-diagnostics",
         "niimbot-test-pattern",
+        "niimbot-com-probe",
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
@@ -1476,7 +1482,7 @@ function startServer() {
       );
       const diag = result && typeof result === "object" ? result : { printer: result };
       console.log(
-        `[print-agent] niimbot ok path=${diag.path || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"}`
+        `[print-agent] niimbot ${diag.unconfirmed ? "sent (unconfirmed)" : "ok"} path=${diag.path || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"} dim=${diag.dimensionHex || "?"}`
       );
       res.json({ ok: true, ...diag });
     } catch (error) {
@@ -1506,6 +1512,37 @@ function startServer() {
       });
     } catch (error) {
       res.status(500).json({ error: error.message || "diagnostics failed" });
+    }
+  });
+
+  /**
+   * GET /print/niimbot-label/com-probe — one-click port diagnosis.
+   * Lists every serial port and print queue, tries to open each port at each
+   * baud, and reports the real Windows exception per attempt. Always 200: the
+   * point is to hand the merchant readable text, never another opaque failure.
+   */
+  app.get("/print/niimbot-label/com-probe", async (req, res) => {
+    try {
+      const probe = await probeNiimbotComPorts({ agentVersion: VERSION });
+      console.log(
+        `[print-agent] niimbot com-probe ports=${probe.ports.length} queues=${probe.printers.length} ok=${probe.ok}`
+      );
+      res.json({ version: VERSION, ...probe });
+    } catch (error) {
+      const message = error && error.message ? error.message : "com-probe failed";
+      console.error("[print-agent] niimbot com-probe failed:", message);
+      res.json({
+        ok: false,
+        version: VERSION,
+        supported: process.platform === "win32",
+        error: message,
+        ports: [],
+        printers: [],
+        bluetooth: [],
+        warnings: [],
+        summary: ["The diagnosis itself failed. The reason is shown above."],
+        text: `Niimbot port diagnosis failed: ${message}`,
+      });
     }
   });
 

@@ -63,6 +63,7 @@ import {
   listAgentPrinters,
   listScaleDevices,
   printViaAgent,
+  probeNiimbotComPorts,
   probePrintAgentHealth,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
@@ -643,6 +644,8 @@ export default function Settings() {
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
+  const [niimbotProbeText, setNiimbotProbeText] = useState('');
+  const [probingNiimbotPorts, setProbingNiimbotPorts] = useState(false);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
   const [scanningScalePorts, setScanningScalePorts] = useState(false);
   const [scalePortsScanned, setScalePortsScanned] = useState(false);
@@ -1142,6 +1145,21 @@ export default function Settings() {
     },
     [printAgentOk, settings?.name, t]
   );
+
+  /**
+   * One click, one screenshot: every serial port, every open attempt with the
+   * real Windows error, and every print queue, as plain text.
+   */
+  const runNiimbotPortDiagnosis = useCallback(async () => {
+    setProbingNiimbotPorts(true);
+    setNiimbotProbeText(t('niimbotProbeRunning'));
+    try {
+      const probe = await probeNiimbotComPorts();
+      setNiimbotProbeText(probe.text);
+    } finally {
+      setProbingNiimbotPorts(false);
+    }
+  }, [t]);
 
   const refreshScalePorts = useCallback(async () => {
     setScanningScalePorts(true);
@@ -4724,6 +4742,41 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
+
+                <div className="mt-4 space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
+                  <div className="text-sm font-medium">{t('niimbotProbeTitle')}</div>
+                  <p className="text-xs text-[var(--muted)]">{t('niimbotProbeHint')}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary inline-flex items-center gap-2 text-sm"
+                      disabled={probingNiimbotPorts}
+                      onClick={() => void runNiimbotPortDiagnosis()}
+                    >
+                      <Printer size={14} />
+                      {probingNiimbotPorts ? t('loading') : t('niimbotProbeRun')}
+                    </button>
+                    {niimbotProbeText && !probingNiimbotPorts ? (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        onClick={() => {
+                          void navigator.clipboard
+                            ?.writeText(niimbotProbeText)
+                            .then(() => toast.success(t('copied')))
+                            .catch(() => toast.error(t('niimbotProbeCopyFailed')));
+                        }}
+                      >
+                        {t('niimbotProbeCopy')}
+                      </button>
+                    ) : null}
+                  </div>
+                  {niimbotProbeText ? (
+                    <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-[var(--surface-2,#f5f5f5)] p-2 text-[11px] leading-snug">
+                      {niimbotProbeText}
+                    </pre>
+                  ) : null}
+                </div>
               </Section>
 
               {settings.businessCategory !== 'restaurant' ? (

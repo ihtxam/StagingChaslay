@@ -434,8 +434,12 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
-/** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.2';
+/**
+ * 1.10.13 drops the bogus 0x54 prologue bytes, stops guessing the black-pixel
+ * counts, and adds the one-click COM port probe. Older builds cannot diagnose
+ * a blank label at all.
+ */
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.13';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
@@ -920,6 +924,9 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
 export type PrintViaAgentResult = {
   ok: true;
   printer?: string;
+  /** Set when the transport accepted the bytes but cannot confirm they printed. */
+  unconfirmed?: boolean;
+  warning?: string;
 };
 
 export async function printViaAgent(opts: {
@@ -1010,7 +1017,12 @@ export async function printNiimbotLabelViaAgent(opts: {
       );
     }
     const data = await res.json();
-    return { ok: true, printer: data?.printer };
+    return {
+      ok: true,
+      printer: data?.printer,
+      unconfirmed: Boolean(data?.unconfirmed),
+      warning: typeof data?.warning === 'string' ? data.warning : undefined,
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
@@ -1018,6 +1030,57 @@ export async function printNiimbotLabelViaAgent(opts: {
       );
     }
     throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export type NiimbotComProbe = {
+  ok: boolean;
+  version?: string;
+  supported?: boolean;
+  error?: string | null;
+  text: string;
+  summary?: string[];
+};
+
+/**
+ * Runs the Print Agent's port diagnosis. Returns readable text for the merchant
+ * to screenshot; the agent itself never throws, so only transport errors surface.
+ */
+export async function probeNiimbotComPorts(): Promise<NiimbotComProbe> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label/com-probe`, {
+      signal: controller.signal,
+    });
+    if (res.status === 404) {
+      return {
+        ok: false,
+        text: `This Print Agent is too old to diagnose ports. Install v${MIN_NIIMBOT_AGENT_VERSION}+ from Settings → Receipts & printers, then run the diagnosis again.`,
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, text: `Print Agent returned HTTP ${res.status} for the port diagnosis.` };
+    }
+    const data = await res.json();
+    return {
+      ok: Boolean(data?.ok),
+      version: data?.version,
+      supported: data?.supported,
+      error: data?.error ?? null,
+      text: typeof data?.text === 'string' && data.text ? data.text : JSON.stringify(data, null, 2),
+      summary: Array.isArray(data?.summary) ? data.summary.map(String) : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { ok: false, text: 'Port diagnosis timed out after 2 minutes.' };
+    }
+    return {
+      ok: false,
+      text: `Could not reach the Print Agent at ${PRINT_AGENT_URL}. Start it on this till, then retry.`,
+    };
   } finally {
     window.clearTimeout(timer);
   }

@@ -353,6 +353,7 @@ export default function StorekeeperApp() {
         storeName: labelOpts.storeName || storeName,
         showPrice: target.price ? true : labelOpts.showPrice,
       });
+      let unconfirmed = '';
       const mode = await printLabelsViaAgentOrQueue(
         [
           {
@@ -364,11 +365,20 @@ export default function StorekeeperApp() {
         ],
         opts,
         posPrintSettings,
-        { retryLocally: false }
+        {
+          retryLocally: false,
+          onUnconfirmed: (warning) => {
+            unconfirmed = warning;
+          },
+        }
       );
-      toast.success(
-        mode === 'queued' ? t('storekeeperPrintLabelQueued') : t('barcodePrinted')
-      );
+      if (unconfirmed) {
+        toast(unconfirmed, { icon: '⚠️', duration: 15000 });
+      } else {
+        toast.success(
+          mode === 'queued' ? t('storekeeperPrintLabelQueued') : t('barcodePrinted')
+        );
+      }
       setPendingLabel(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('barcodePrintFailed');
