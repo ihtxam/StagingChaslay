@@ -7,6 +7,10 @@ import {
   getDeviceBridgeHealth,
   registerDeviceBridgeTapToPay,
 } from '@/lib/device-bridge';
+import {
+  fetchPrintBridgeManifest,
+  openPrintBridgeApkInstall,
+} from '@/lib/print-agent-platform';
 
 export const WEBPOS_TAP_TO_PAY_SETUP_KEY = 'webpos_tap_to_pay_setup_done';
 
@@ -47,6 +51,7 @@ export default function WebPosTapToPaySetupModal({
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bridgeDownloadUrl, setBridgeDownloadUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isAndroidWebPosTill()) return;
@@ -67,6 +72,9 @@ export default function WebPosTapToPaySetupModal({
   useEffect(() => {
     if (!open) return;
     void refresh();
+    void fetchPrintBridgeManifest().then((manifest) => {
+      setBridgeDownloadUrl(manifest?.url || '/downloads/reborn-print-bridge.apk');
+    });
   }, [open, refresh]);
 
   if (!open || !isAndroidWebPosTill()) return null;
@@ -150,6 +158,15 @@ export default function WebPosTapToPaySetupModal({
                   {t('tapToPayDeviceActivate')}
                 </button>
               )}
+              {bridgeOk && hasAdyenSdk === false && bridgeDownloadUrl ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+                  onClick={() => openPrintBridgeApkInstall(bridgeDownloadUrl)}
+                >
+                  {t('installPrintBridgeUpdate')}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 dark:border-stone-600 dark:text-stone-200"
