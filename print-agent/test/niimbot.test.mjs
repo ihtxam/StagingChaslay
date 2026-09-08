@@ -352,7 +352,13 @@ test("P0: the serial script reports failures on stderr with distinct exit codes"
   // The base exception, not PowerShell's localized method-invocation wrapper
   // around it — see the French-Windows test below.
   assert.match(ps, /\[Console\]::Error\.WriteLine\(\(Get-ErrorText \$Record\)\)/);
-  assert.match(ps, /\$base = \$ex\.GetBaseException\(\)/);
+  assert.match(ps, /function Get-DotNetException/);
+  // Only PowerShell's own layers are peeled. GetBaseException() keeps going and
+  // loses .NET's classification: UnauthorizedAccessException carrying
+  // "Access to the port 'COM8' is denied." reduces to "No such file or
+  // directory", which names neither the port nor the cause.
+  assert.equal(/\.GetBaseException\(\)/.test(ps), false);
+  assert.match(ps, /if \(-not \$name\.StartsWith\('System\.Management\.Automation'\)\) \{ break \}/);
   assert.match(ps, /exit 20/);
   assert.match(ps, /exit 21/);
   assert.match(ps, /exit 23/);
@@ -1376,6 +1382,24 @@ test("P0: an ArgumentException from Open names the real cause and the live ports
   );
   assert.equal(unknown.includes("Windows currently has"), false);
   assert.match(unknown, /is not a serial port on this PC/);
+
+  // A busy port reports its own .NET type, and the port-name branch must not
+  // swallow it just because a port list came along with it. This is the real
+  // stderr the shipped script produces for a port another app holds.
+  const busy = describeSerialFailure(
+    "COM8",
+    {
+      stderr: [
+        "Access to the port 'COM8' is denied.",
+        "type: System.UnauthorizedAccessException",
+        "ports: COM3,COM8",
+      ].join("\n"),
+    },
+    115200
+  );
+  assert.match(busy, /Niimbot COM8 is already open at 115200 baud/);
+  assert.match(busy, /Close NIIMBOT\.exe/);
+  assert.equal(busy.includes("is not a serial port on this PC"), false);
 
   // And a machine with no serial port at all says exactly that.
   assert.match(

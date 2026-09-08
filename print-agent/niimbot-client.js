@@ -414,17 +414,34 @@ try {
 
 # PowerShell wraps anything thrown inside a .NET method call in a
 # MethodInvocationException whose own message is the *localized*
-# 'Exception calling "Open" with "0" argument(s): "<the real reason>"'. The base
-# exception is that real reason, in every locale, with no wrapper to strip.
+# 'Exception calling "Open" with "0" argument(s): "<the real reason>"'. Peeling
+# off PowerShell's own layers leaves .NET's exception, in every locale, with no
+# wrapper to strip.
+#
+# Only PowerShell's layers: GetBaseException() would keep going and throw away
+# .NET's own classification — an UnauthorizedAccessException carrying
+# "Access to the port 'COM8' is denied." reduces to its inner
+# "No such file or directory", which names neither the port nor the cause.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
 function Get-ErrorText {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
     $ex = $Record.Exception
     if ($null -eq $ex) { return 'unknown serial error' }
-    $base = $ex
-    try { $base = $ex.GetBaseException() } catch { $base = $ex }
-    if ($null -eq $base) { $base = $ex }
-    $text = [string]$base.Message
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
     if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
     if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown serial error' }
     return $text
@@ -441,10 +458,9 @@ function Get-ErrorType {
   try {
     $ex = $Record.Exception
     if ($null -eq $ex) { return 'unknown' }
-    $base = $ex
-    try { $base = $ex.GetBaseException() } catch { $base = $ex }
-    if ($null -eq $base) { $base = $ex }
-    return [string]$base.GetType().FullName
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    return [string]$real.GetType().FullName
   } catch {
     return 'unknown'
   }
@@ -1066,17 +1082,29 @@ try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 } catch { }
 
-# The base exception, not PowerShell's localized 'Exception calling "Open" with
-# "0" argument(s): "..."' wrapper around it.
+# .NET's exception, with PowerShell's localized 'Exception calling "Open" with
+# "0" argument(s): "..."' layers peeled off — and no further, or .NET's own
+# classification is lost with them. See Get-ErrorText in the serial script.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
 function Reason {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
     $ex = $Record.Exception
     if ($null -eq $ex) { return 'unknown error' }
-    $base = $ex
-    try { $base = $ex.GetBaseException() } catch { $base = $ex }
-    if ($null -eq $base) { $base = $ex }
-    $text = [string]$base.Message
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
     if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
     if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown error' }
     return $text
@@ -1087,15 +1115,14 @@ function Reason {
 
 # The .NET type, which is the same in every locale and is what separates a name
 # Windows refuses (ArgumentException) from a port that is busy or silent.
-function Reason-Type {
+function Get-ReasonType {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
     $ex = $Record.Exception
     if ($null -eq $ex) { return '' }
-    $base = $ex
-    try { $base = $ex.GetBaseException() } catch { $base = $ex }
-    if ($null -eq $base) { $base = $ex }
-    return [string]$base.GetType().FullName
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    return [string]$real.GetType().FullName
   } catch {
     return ''
   }
@@ -1291,7 +1318,7 @@ foreach ($key in @($ports.Keys)) {
       $attempt.opened = $true
     } catch {
       $attempt.error = Reason $_
-      $attempt.errorType = Reason-Type $_
+      $attempt.errorType = Get-ReasonType $_
     } finally {
       try {
         if ($sp -and $sp.IsOpen) { $sp.Close() }
@@ -1367,16 +1394,28 @@ try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 } catch { }
 
-# The base exception, not PowerShell's localized 'Exception calling ...' wrapper.
+# .NET's exception, with PowerShell's localized 'Exception calling ...' layers
+# peeled off — and no further. See Get-ErrorText in the serial script.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
 function Get-ReasonText {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
     $ex = $Record.Exception
     if ($null -eq $ex) { return 'unknown error' }
-    $base = $ex
-    try { $base = $ex.GetBaseException() } catch { $base = $ex }
-    if ($null -eq $base) { $base = $ex }
-    $text = [string]$base.Message
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
     if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
     if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown error' }
     return $text
