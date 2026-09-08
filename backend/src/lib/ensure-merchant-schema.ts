@@ -175,6 +175,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_settings jsonb",
   vacation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vacation_settings jsonb",
   marketing_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_settings jsonb",
+  shop_logo_url: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shop_logo_url varchar(500)",
+  shop_banner_url: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shop_banner_url varchar(500)",
   reservations_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservations_enabled boolean NOT NULL DEFAULT false",
   subscription_billing_cycle:

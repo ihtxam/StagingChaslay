@@ -9,6 +9,7 @@ import ZoneMapEditor, {
   type LngLatTuple,
 } from '@/components/ZoneMapEditor';
 import { useI18n } from '@/lib/i18n';
+import { compressImageIfNeeded, ensureImageFileType } from '@/lib/compress-image';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 
 /** Reject empty / Null Island (0,0) so the map does not open in the ocean. */
@@ -206,9 +207,12 @@ export default function OnlineShop() {
   const uploadShopImage = async (file: File | null, kind: 'logo' | 'banner') => {
     if (!file) return;
     const setBusy = kind === 'logo' ? setUploadingLogo : setUploadingBanner;
+    const prevUrl =
+      kind === 'logo' ? settings?.shopLogoUrl ?? null : settings?.shopBannerUrl ?? null;
     setBusy(true);
     try {
-      const compressed = await compressImageIfNeeded(file, {
+      const normalized = ensureImageFileType(file);
+      const compressed = await compressImageIfNeeded(normalized, {
         maxBytes: 350 * 1024,
         targetBytes: 350 * 1024,
         maxWidth: kind === 'banner' ? 1600 : 800,
@@ -216,14 +220,27 @@ export default function OnlineShop() {
       const fd = new FormData();
       fd.append('file', compressed);
       const res = await api.post('/merchant/media', fd);
-      const url = res.data.url || '';
+      const url = String(res.data?.url || '').trim();
+      if (!url) {
+        throw new Error('Upload succeeded but no image URL was returned');
+      }
       const patch =
-        kind === 'logo' ? { shopLogoUrl: url || null } : { shopBannerUrl: url || null };
+        kind === 'logo' ? { shopLogoUrl: url } : { shopBannerUrl: url };
       setSettings((prev: any) => (prev ? { ...prev, ...patch } : prev));
       await api.put('/merchant/settings', patch);
       toast.success(kind === 'logo' ? 'Logo uploaded' : 'Banner uploaded');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Upload failed');
+      setSettings((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              ...(kind === 'logo'
+                ? { shopLogoUrl: prevUrl }
+                : { shopBannerUrl: prevUrl }),
+            }
+          : prev
+      );
+      toast.error(error.response?.data?.error || error.message || 'Upload failed');
     } finally {
       setBusy(false);
       if (kind === 'logo' && logoFileRef.current) logoFileRef.current.value = '';
@@ -234,11 +251,23 @@ export default function OnlineShop() {
   const clearShopImage = async (kind: 'logo' | 'banner') => {
     const patch =
       kind === 'logo' ? { shopLogoUrl: null } : { shopBannerUrl: null };
+    const prevUrl =
+      kind === 'logo' ? settings?.shopLogoUrl ?? null : settings?.shopBannerUrl ?? null;
     try {
       setSettings((prev: any) => (prev ? { ...prev, ...patch } : prev));
       await api.put('/merchant/settings', patch);
       toast.success(kind === 'logo' ? 'Logo removed' : 'Banner removed');
     } catch (error: any) {
+      setSettings((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              ...(kind === 'logo'
+                ? { shopLogoUrl: prevUrl }
+                : { shopBannerUrl: prevUrl }),
+            }
+          : prev
+      );
       toast.error(error.response?.data?.error || 'Could not remove image');
     }
   };

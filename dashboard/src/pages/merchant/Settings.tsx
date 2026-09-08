@@ -4005,9 +4005,7 @@ export default function Settings() {
                               );
                               const fd = new FormData();
                               fd.append('file', resized);
-                              const res = await api.post('/merchant/media', fd, {
-                                headers: { 'Content-Type': 'multipart/form-data' },
-                              });
+                              const res = await api.post('/merchant/media', fd);
                               const url = res.data.url as string;
                               setSettings({
                                 ...settings,

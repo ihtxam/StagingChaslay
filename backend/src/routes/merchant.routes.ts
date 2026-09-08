@@ -22,6 +22,7 @@ import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { geocodeQuery } from "@/lib/geocode";
 import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
+import path from "path";
 import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
@@ -34,11 +35,18 @@ import type { ReportPreset } from "@/services/pos-reports.service";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (isAllowedImageMime(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    const ext = path.extname(String(file.originalname || "")).toLowerCase();
+    if (IMAGE_EXTENSIONS.has(ext)) {
       cb(null, true);
       return;
     }
@@ -54,6 +62,32 @@ const POS_SAFE_SETTINGS_KEYS = new Set([
   "reservationsEnabled",
 ]);
 
+/** Online shop page — staff with MANAGE_ONLINE_SHOP may save these without full settings access. */
+const ONLINE_SHOP_SETTINGS_KEYS = new Set([
+  "shopEnabled",
+  "pickupEnabled",
+  "dineInEnabled",
+  "deliveryEnabled",
+  "deliveryMode",
+  "channelSelectMode",
+  "menuShowProductImages",
+  "menuShowCategoryBanners",
+  "cartLayout",
+  "scheduledOrdersEnabled",
+  "latitude",
+  "longitude",
+  "pickupEtaMinutes",
+  "deliveryEtaMinutes",
+  "minPreOrderDelayMinutes",
+  "deliveryMenuMarkup",
+  "categoryPricingEnabled",
+  "shopLogoUrl",
+  "shopBannerUrl",
+]);
+
+/** Domain/branding identity — requires MANAGE_SETTINGS even from the online shop form. */
+const MERCHANT_IDENTITY_SETTINGS_KEYS = new Set(["slug", "subdomain", "customDomain", "name"]);
+
 /** Staff can use POS/catalog APIs; writes to catalog/settings/billing stay permission-gated. */
 function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunction) {
   if (req.user?.role === "merchant") return next();
@@ -65,6 +99,12 @@ function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunc
   if (method === "PUT" && (path === "/settings" || path === "/settings/")) {
     const keys = Object.keys((req.body || {}) as Record<string, unknown>);
     if (keys.length && keys.every((k) => POS_SAFE_SETTINGS_KEYS.has(k))) return next();
+    if (keys.some((k) => MERCHANT_IDENTITY_SETTINGS_KEYS.has(k))) {
+      return requirePermission("MANAGE_SETTINGS")(req, res, next);
+    }
+    if (keys.length && keys.every((k) => ONLINE_SHOP_SETTINGS_KEYS.has(k))) {
+      return requirePermission("MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(req, res, next);
+    }
     return requirePermission("MANAGE_SETTINGS")(req, res, next);
   }
 
@@ -80,7 +120,11 @@ function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunc
       path === "/demo-menu-photos" ||
       path === "/media");
   if (catalogWrite) {
-    return requirePermission("MANAGE_PRODUCTS")(req, res, next);
+    return requirePermission("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(
+      req,
+      res,
+      next
+    );
   }
 
   return next();

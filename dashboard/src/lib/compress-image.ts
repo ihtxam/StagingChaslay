@@ -2,6 +2,23 @@
  * Compress an image file in the browser when it exceeds maxBytes.
  * Targets JPEG output for photos; keeps GIF untouched; falls back to original on failure.
  */
+export function ensureImageFileType(file: File): File {
+  if (file.type && file.type.startsWith('image/') && file.type !== 'image/heic' && file.type !== 'image/heif') {
+    return file;
+  }
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+  };
+  const type = map[ext];
+  if (!type) return file;
+  return new File([file], file.name, { type, lastModified: file.lastModified });
+}
+
 export async function compressImageIfNeeded(
   file: File,
   opts: { maxBytes?: number; maxWidth?: number; targetBytes?: number } = {}
