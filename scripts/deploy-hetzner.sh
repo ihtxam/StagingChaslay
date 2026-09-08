@@ -523,6 +523,26 @@ BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/b
 [[ -n "$BRIDGE_VERSION" ]] || BRIDGE_VERSION="0.0.0"
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  BRIDGE_LOCAL_PROPS="$REPO_DIR/print-agent-android/local.properties"
+  ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")"
+  ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")"
+  ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="test"
+  {
+    echo "adyenEnv=${ADYEN_SDK_ENV}"
+    if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
+      echo "adyenSdkApiKey=${ADYEN_SDK_API_KEY}"
+    fi
+    if [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      echo "adyenSdkApiKeyLive=${ADYEN_SDK_API_KEY_LIVE}"
+    fi
+  } > "$BRIDGE_LOCAL_PROPS"
+  if [[ -n "$ADYEN_SDK_API_KEY" || -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+    echo "Adyen SDK keys present — Tap to Pay APK will be built"
+  else
+    echo "WARNING: ADYEN_SDK_API_KEY not in $ENV_FILE — APK will be print-only (no Tap to Pay)"
+    echo "  Add ADYEN_SDK_API_KEY (POS Mobile SDK key from Adyen Customer Area) and redeploy."
+  fi
   if docker run --rm \
     -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
     -e "GRADLE_USER_HOME=/tmp/gradle-home" \
@@ -531,7 +551,7 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
-      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Xmx4096m -XX:MaxMetaspaceSize=512m"
       rm -rf /project/.gradle /project/app/build /tmp/gradle-home /tmp/gradle-project-cache
       mkdir -p /opt/android-sdk/.android /tmp/gradle-home /tmp/gradle-project-cache
       if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then

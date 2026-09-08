@@ -267,8 +267,17 @@ class MainActivity : AppCompatActivity() {
             serviceCard.visibility = View.VISIBLE
         } else {
             statusText.text = getString(R.string.status_starting)
-            hintText.text = getString(R.string.oem_step_bridge_pending)
-            serviceStatusText.text = getString(R.string.status_service_stopped)
+            val needsNotifications = BridgePermissions.needsNotificationPermission(this)
+            hintText.text = if (needsNotifications) {
+                getString(R.string.oem_step_bridge_notification_required)
+            } else {
+                getString(R.string.oem_step_bridge_pending)
+            }
+            serviceStatusText.text = if (needsNotifications) {
+                getString(R.string.status_service_notification_required)
+            } else {
+                getString(R.string.status_service_stopped)
+            }
             serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
             serviceCard.visibility = View.VISIBLE
             PrintBridgeLauncher.start(this)

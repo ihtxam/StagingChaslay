@@ -7,6 +7,7 @@
     <string name="status_starting">Starting Bridge Reborn…</string>
     <string name="status_service_running">Background service running</string>
     <string name="status_service_stopped">Background service not running</string>
+    <string name="status_service_notification_required">Allow notifications to run Bridge in the background</string>
     <string name="status_service_checking">Checking Bridge service…</string>
     <string name="open_webpos">Open the Reborn POS app from your home screen. If you use Chrome, choose “Open in app” when prompted.</string>
     <string name="refresh_printers">Refresh printers</string>
