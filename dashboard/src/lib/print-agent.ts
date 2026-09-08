@@ -460,11 +460,12 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /**
- * 1.10.14 drives the COM port the print queue is really bound to and validates
- * every reply frame, so a result finally means something. Older builds wrote to
- * the spooler and could not tell a printed label from a blank one.
+ * 1.10.15 hands System.IO.Ports.SerialPort the bare COMn name it actually
+ * accepts, and refuses to recommend a port Windows no longer has. 1.10.14 sent
+ * `\\.\COMnn` for every port above COM9 — which .NET rejects outright — and
+ * recommended whatever port a queue was still bound to, existing or not.
  */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.14';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.15';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;

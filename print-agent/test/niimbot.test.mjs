@@ -17,6 +17,14 @@ const {
   describeSerialFailure,
   describeSpoolerUncertainty,
   rawSerialError,
+  normalizeComPort,
+  describeComPortNameProblem,
+  bluetoothAddressOf,
+  liveComPortSet,
+  availablePortsFromError,
+  isFatalSerialFailure,
+  printNiimbotJobSerial,
+  SERIAL_EXIT,
   printNiimbotLabel,
   countPixelsForLine,
   buildSerialJobScript,
@@ -38,13 +46,13 @@ const {
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.14";
+const VERSION = "1.10.15";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.14 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.15 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -341,11 +349,15 @@ test("P0: the JS sources cannot re-introduce either shipped bug", () => {
 
 test("P0: the serial script reports failures on stderr with distinct exit codes", () => {
   const ps = buildSerialJobScript();
-  assert.match(ps, /\[Console\]::Error\.WriteLine\(\$Record\.Exception\.Message\)/);
+  // The base exception, not PowerShell's localized method-invocation wrapper
+  // around it — see the French-Windows test below.
+  assert.match(ps, /\[Console\]::Error\.WriteLine\(\(Get-ErrorText \$Record\)\)/);
+  assert.match(ps, /\$base = \$ex\.GetBaseException\(\)/);
   assert.match(ps, /exit 20/);
   assert.match(ps, /exit 21/);
+  assert.match(ps, /exit 23/);
   // Values arrive as parameters, never interpolated into the script body.
-  assert.match(ps, /\[Parameter\(Mandatory = \$true\)\]\[string\]\$PortPath/);
+  assert.match(ps, /\[Parameter\(Mandatory = \$true\)\]\[AllowEmptyString\(\)\]\[string\]\$PortPath/);
   assert.match(ps, /\[Parameter\(Mandatory = \$true\)\]\[int\]\$Baud/);
   assert.equal(ps.includes("throw ("), false);
 });
@@ -1032,11 +1044,14 @@ test("P1: a bound port the probe could not open is not the recommendation", () =
   });
   const queues = [{ name: "K3-I527190103", port: "COM9:", driver: "", driverMissing: true }];
 
-  // With nothing else, the dead port is still named so the report says what to fix.
+  // With nothing else, the dead port is still named so the report says what to
+  // fix — but only because Windows does still have COM9. `exists` is what the
+  // report reads to decide whether to offer a port at all.
   assert.deepEqual(recommendNiimbotPort(queues, [dead]), {
     port: "COM9",
     queue: "K3-I527190103",
     reason: "bound-to-driverless-queue",
+    exists: true,
   });
   // A port that actually opens wins, even though no queue is bound to it.
   const better = recommendNiimbotPort(queues, [dead, { ...live, looksNiimbot: true }]);
@@ -1164,4 +1179,435 @@ test("P2: the direct USB path is preferred over the spooler and is skippable", a
   assert.equal(spoolerUsed, true);
   assert.equal(viaSpooler.path, "usb:USB005");
   assert.equal(viaSpooler.unconfirmed, true);
+});
+
+/*
+ * P0 — the port name handed to System.IO.Ports.SerialPort.
+ *
+ * The merchant's till, on 1.10.14, French Windows, after deleting the
+ * "Pilote indisponible" K3-I527190103 queue and being told by Diagnose to use
+ * COM8:
+ *
+ *   Niimbot COM8 failed at 115200 baud — Exception lors de l'appel de «Open»
+ *   avec «0» argument(s)»: «Le nom spécifié ne démarre pas avec COM/com ou
+ *   n'est pas résolu en port série valide.
+ *
+ * That is Open() throwing ArgumentException before a single byte is written, and
+ * three separate bugs meet in it:
+ *
+ *  1. `normalizeComPort` produced `\\.\COMnn` for every port above COM9.
+ *     CreateFile needs that form; SerialPort refuses it. SerialStream's
+ *     constructor requires the name to start with "COM"
+ *     (dotnet/runtime, SerialStream.Windows.cs) and PortName rejects a leading
+ *     backslash outright, and SerialPort builds the `\\.\` prefix itself. So
+ *     COM10 and up could never open, and the probe called them all failed.
+ *  2. Nothing checked that the recommended port still existed, so a queue
+ *     bound to a port Windows had dropped was recommended anyway.
+ *  3. The English-only wrapper stripper left the French wrapper in place, so
+ *     the sentence the merchant read was PowerShell trivia and then ran out of
+ *     characters before the reason.
+ */
+
+test("P0: SerialPort is never handed a device path, whatever spelling comes in", () => {
+  // The four spellings Windows and merchants actually produce.
+  assert.equal(normalizeComPort("COM8"), "COM8");
+  assert.equal(normalizeComPort("com8"), "COM8");
+  assert.equal(normalizeComPort("COM8:"), "COM8");
+  assert.equal(normalizeComPort("\\\\.\\COM8"), "COM8");
+  assert.equal(normalizeComPort("  \\\\?\\com08:  "), "COM8");
+
+  // Above COM9 the answer is *still* the bare name. `\\.\COM12` is exactly what
+  // .NET throws the merchant's ArgumentException for.
+  for (const port of ["COM10", "COM12", "COM99", "COM256"]) {
+    assert.equal(normalizeComPort(port), port);
+    assert.equal(normalizeComPort(`\\\\.\\${port}`), port);
+    assert.equal(normalizeComPort(`${port}:`), port);
+  }
+  assert.equal(normalizeComPort("\\\\.\\COM12").startsWith("COM"), true);
+  assert.equal(normalizeComPort("COM12").includes("\\"), false);
+
+  // Anything that is not a serial port name is rejected here, not by .NET.
+  for (const bad of ["", "   ", null, undefined, "USB005", "COM", "COM0", "LPT1", "\\\\.\\pipe\\x", "COMX"]) {
+    assert.equal(normalizeComPort(bad), "");
+  }
+});
+
+test("P0: no COM port name reaches SerialPort with a device-path prefix", () => {
+  // The print path and the probe both used to build it; neither may again.
+  const client = read("../niimbot-client.js");
+  const probe = buildComProbeScript();
+  assert.equal(probe.includes("-ge 10"), false);
+  assert.equal(probe.includes("' + $row.port"), false);
+  assert.match(probe, /New-Object System\.IO\.Ports\.SerialPort \$row\.port, \$baud/);
+  assert.equal(/return num >= 10/.test(client), false);
+  assert.equal(client.includes("`\\\\\\\\.\\\\${com}`"), false);
+
+  // And the serial script refuses anything that is not a bare COMn name rather
+  // than letting .NET answer with one message for three different causes.
+  const ps = buildSerialJobScript();
+  assert.match(ps, /\$PortPath -notmatch '\^COM\\d\+\$'/);
+  assert.match(ps, new RegExp(`exit ${SERIAL_EXIT.BAD_PORT_NAME}`));
+  assert.equal(SERIAL_EXIT.BAD_PORT_NAME, 23);
+});
+
+test("P0: an empty or malformed port name is a clear message, not a .NET riddle", async () => {
+  const empty = describeComPortNameProblem("");
+  assert.match(empty, /No serial port is set for the Niimbot/);
+  assert.match(empty, /Settings → Receipts & printers/);
+  assert.equal(empty.includes("COM/com"), false);
+
+  const junk = describeComPortNameProblem("USB005");
+  assert.match(junk, /'USB005' is not a Windows serial port name/);
+  assert.match(junk, /COM1, COM2, COM3/);
+
+  /*
+   * The name is checked before PowerShell is started, so the rejection is this
+   * exact sentence. If it reached the script, the message would instead be
+   * whatever spawning powershell.exe produced — ENOENT here, and .NET's
+   * ArgumentException on a till.
+   */
+  for (const bad of ["", "   ", "USB005"]) {
+    await assert.rejects(
+      printNiimbotJobSerial(bad, { steps: [] }, { bauds: [115200, 9600, 19200] }),
+      (error) => {
+        assert.equal(error.message, describeComPortNameProblem(bad));
+        return true;
+      }
+    );
+  }
+});
+
+test("P0: the French method-invocation wrapper is stripped, exactly as reported", () => {
+  // Verbatim from the merchant's till, closing guillemet lost to truncation.
+  const reported =
+    "Exception lors de l'appel de «Open» avec «0» argument(s)»: «Le nom spécifié ne démarre pas avec COM/com ou n'est pas résolu en port série valide.";
+  const raw = rawSerialError({ stderr: reported });
+  assert.equal(
+    raw,
+    "Le nom spécifié ne démarre pas avec COM/com ou n'est pas résolu en port série valide."
+  );
+  assert.equal(raw.includes("Exception lors de"), false);
+  assert.equal(raw.includes("argument(s)"), false);
+
+  // The well-formed French form, and the English one, both unwrap too.
+  assert.equal(
+    rawSerialError({
+      stderr:
+        "Exception lors de l'appel de « Open » avec « 0 » argument(s) : « Accès au port 'COM8' refusé. »",
+    }),
+    "Accès au port 'COM8' refusé."
+  );
+  assert.equal(
+    rawSerialError({
+      stderr: 'Exception calling "Open" with "0" argument(s): "Access to the port \'COM8\' is denied."',
+    }),
+    "Access to the port 'COM8' is denied."
+  );
+
+  // A plain message is left alone rather than being mined for quotes.
+  assert.equal(
+    rawSerialError({ stderr: "The semaphore timeout period has expired." }),
+    "The semaphore timeout period has expired."
+  );
+});
+
+test("P0: the script sends UTF-8 so French text is not mojibake", () => {
+  // Node decodes the pipe as UTF-8; without this the console code page wins and
+  // 'spécifié' arrives as 'spÃ©cifiÃ©', unreadable and unmatchable.
+  for (const [label, ps] of [
+    ["serial job script", buildSerialJobScript()],
+    ["com probe script", buildComProbeScript()],
+    ["usb device script", buildUsbDeviceScript()],
+  ]) {
+    assert.match(
+      ps,
+      /\[Console\]::OutputEncoding = \[System\.Text\.UTF8Encoding\]::new\(\$false\)/,
+      `${label} must force UTF-8 output`
+    );
+  }
+  assert.match(read("../niimbot-client.js"), /encoding: "utf8"/);
+});
+
+test("P0: an ArgumentException from Open names the real cause and the live ports", () => {
+  // What 1.10.15 gets back for the merchant's failure, with the port list the
+  // script now appends. COM8 is not in it, so the port is gone.
+  const gone = describeSerialFailure(
+    "COM8",
+    {
+      stderr: [
+        "Le nom spécifié ne démarre pas avec COM/com ou n'est pas résolu en port série valide.",
+        "type: System.ArgumentException",
+        "ports: COM3,COM6",
+        "os-configured: 9600 baud (mode)",
+      ].join("\n"),
+    },
+    115200
+  );
+  assert.match(gone, /Niimbot COM8 is not a serial port on this PC at 115200 baud/);
+  assert.match(gone, /Windows currently has: COM3, COM6\./);
+  assert.match(gone, /re-pair the printer over Bluetooth, or reinstall the NIIMBOT driver/i);
+  assert.match(gone, /Le nom spécifié ne démarre pas avec COM\/com/);
+  // Never the old sentence, which blamed the baud rate for a name failure.
+  assert.equal(/failed at 115200 baud —/.test(gone), false);
+
+  // Same exception, but Windows does list the port: a leftover entry, and a
+  // different fix. The two must not read the same.
+  const ghost = describeSerialFailure(
+    "COM8",
+    {
+      stderr: [
+        "The given port name does not start with COM/com or does not resolve to a valid serial port.",
+        "type: System.ArgumentException",
+        "ports: COM3,COM6,COM8",
+      ].join("\n"),
+    },
+    115200
+  );
+  assert.match(ghost, /COM8 exists but Windows will not open it as a serial port/);
+  assert.match(ghost, /Windows currently has: COM3, COM6, COM8\./);
+  assert.match(ghost, /remove the device in Device Manager/i);
+
+  // No port list at all (older agent): say nothing about availability rather
+  // than claiming the PC has none.
+  const unknown = describeSerialFailure(
+    "COM8",
+    { stderr: "The given port name does not resolve to a valid serial port." },
+    115200
+  );
+  assert.equal(unknown.includes("Windows currently has"), false);
+  assert.match(unknown, /is not a serial port on this PC/);
+
+  // And a machine with no serial port at all says exactly that.
+  assert.match(
+    describeSerialFailure("COM8", { stderr: "x\ntype: System.ArgumentException\nports: " }, 115200),
+    /Windows currently has no serial port at all\./
+  );
+  assert.deepEqual(availablePortsFromError({ stderr: "x\nports: COM3, COM10" }), ["COM3", "COM10"]);
+  assert.equal(availablePortsFromError({ stderr: "x" }), null);
+});
+
+test("P0: a port name refusal is not retried at another baud", () => {
+  // 1.10.14 tried 115200, then 9600, then 19200 against a name .NET will never
+  // accept, so the merchant waited out three PowerShell starts for one answer
+  // and the sentence they got blamed the last baud tried.
+  assert.equal(isFatalSerialFailure({ errorType: "System.ArgumentException" }), true);
+  assert.equal(isFatalSerialFailure({ errorType: "System.ArgumentNullException" }), true);
+  assert.equal(
+    isFatalSerialFailure({
+      rawError: "Le nom spécifié ne démarre pas avec COM/com ou n'est pas résolu en port série valide.",
+    }),
+    true
+  );
+  assert.equal(isFatalSerialFailure({ fatal: true }), true);
+  assert.equal(isFatalSerialFailure({ rawError: "Access to the port 'COM8' is denied." }), true);
+
+  // Silence, though, is exactly what the other rates are for.
+  assert.equal(isFatalSerialFailure({ rawError: "The semaphore timeout period has expired." }), false);
+  assert.equal(isFatalSerialFailure({ errorType: "System.IO.IOException" }), false);
+  assert.equal(isFatalSerialFailure(null), false);
+});
+
+test("P0: a queue bound to a port Windows no longer has is not recommended", () => {
+  // The merchant's till after the K3-* pairing went away: the NIIMBOT K3 queue
+  // still prints to COM8, and Windows has COM3 and COM6. 1.10.14 recommended
+  // COM8 because no port row contradicted it, which is how the bar test came to
+  // be run against a port that cannot exist.
+  const queues = [
+    { name: "NIIMBOT K3", port: "COM8:", driver: "NIIMBOT K3", isDefault: true },
+    { name: "POS-80C (copy 3)", port: "COM6:", driver: "POS-80C" },
+  ];
+  const ports = [
+    classifyProbedPort({
+      port: "COM3",
+      caption: "USB-SERIAL CH340 (COM3)",
+      present: true,
+      opens: [{ baud: 9600, opened: true, error: "" }],
+    }),
+    classifyProbedPort({
+      port: "COM6",
+      caption: "Standard Serial over Bluetooth link (COM6)",
+      pnpDeviceId: "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID&0001",
+      present: true,
+      queues: ["POS-80C (copy 3)"],
+      opens: [{ baud: 115200, opened: true, error: "" }],
+    }),
+    // What the probe now emits for a port only a print queue points at.
+    classifyProbedPort({
+      port: "COM8",
+      caption: "",
+      present: false,
+      sources: ["Win32_Printer"],
+      queues: ["NIIMBOT K3"],
+      opens: [
+        {
+          baud: 115200,
+          opened: false,
+          error: "The given port name does not resolve to a valid serial port.",
+          errorType: "System.ArgumentException",
+        },
+      ],
+    }),
+  ];
+  const availablePorts = ["COM3", "COM6"];
+
+  const absent = ports.find((p) => p.port === "COM8");
+  assert.equal(absent.present, false);
+  assert.equal(absent.verdict, "missing");
+  assert.match(absent.advice.join(" "), /Windows does not have this port/);
+
+  const recommended = recommendNiimbotPort(queues, ports, { availablePorts });
+  assert.equal(recommended.port, "COM8");
+  assert.equal(recommended.exists, false);
+  assert.equal(recommended.reason, "bound-to-missing-port");
+
+  const summary = summarizeComProbe(ports, queues, [], { availablePorts }).join(" ");
+  assert.match(summary, /'NIIMBOT K3' prints to COM8, but COM8 not found — available ports: COM3, COM6/);
+  // And never the old claim that the agent will just open it.
+  assert.equal(summary.includes("The agent opens COM8 itself at 115200"), false);
+
+  const text = formatComProbeReport({
+    ok: true,
+    supported: true,
+    platform: "win32",
+    agentVersion: VERSION,
+    generatedAt: "2026-09-08T00:00:00.000Z",
+    availablePorts,
+    ports,
+    printers: queues,
+    bluetooth: [],
+    usbPrintDevices: [],
+    usbPrintError: null,
+    warnings: [],
+    recommendedPort: recommended,
+    summary: summarizeComProbe(ports, queues, [], { availablePorts }),
+  });
+  assert.match(text, /SERIAL PORTS WINDOWS HAS RIGHT NOW: COM3, COM6/);
+  assert.match(text, /COM8 —[\s\S]*?NOT PRESENT: Windows does not have this port/);
+  assert.match(text, /RECOMMENDED PORT FOR NIIMBOT: none — the port its queue points at does not exist/);
+  assert.match(text, /COM8 not found — available ports: COM3, COM6/);
+  assert.match(text, /Re-pair the printer over Bluetooth, or reinstall the NIIMBOT driver/);
+  // The ghost port must never appear as something to select.
+  assert.equal(/RECOMMENDED PORT FOR NIIMBOT: COM8/.test(text), false);
+});
+
+test("P0: liveComPortSet separates 'no ports' from 'we were not told'", () => {
+  assert.equal(liveComPortSet([], undefined), null);
+  assert.deepEqual([...liveComPortSet([], ["COM3", "com8:", "\\\\.\\COM12"])], [
+    "COM3",
+    "COM8",
+    "COM12",
+  ]);
+  // A row a print queue produced does not make the port exist.
+  assert.deepEqual(
+    [...liveComPortSet([{ port: "COM3", present: true }, { port: "COM8", present: false }])],
+    ["COM3"]
+  );
+  // Hand-built rows with no flag are taken at face value, so older callers and
+  // the existing fixtures keep working.
+  assert.deepEqual([...liveComPortSet([{ port: "COM6" }])], ["COM6"]);
+});
+
+test("P1: the probe recommends the SPP port of the paired printer after the queue is deleted", () => {
+  // Deleting K3-I527190103 removes the only place the printer's name appeared.
+  // The port that is left has Windows' generic Bluetooth caption, so it is the
+  // paired device's address in the PnP id that identifies it.
+  const address = "001A7DDA7113";
+  assert.equal(
+    bluetoothAddressOf(
+      `BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID&0001000f_PID&0000\\7&2fb2e3e5&0&${address}_C00000000`
+    ),
+    address
+  );
+  // The SPP service GUID carries a 12-hex run of its own; it must not win.
+  assert.equal(bluetoothAddressOf("BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG&0000"), "");
+  assert.equal(bluetoothAddressOf(`BTHENUM\\DEV_${address}\\7&2fb2e3e5&0&BLUETOOTHDEVICE_${address}`), address);
+  assert.equal(bluetoothAddressOf(""), "");
+
+  const bluetoothDevices = [
+    { name: "K3-I527190103", status: "OK", instanceId: `BTHENUM\\DEV_${address}\\7&2fb&0&BLUETOOTHDEVICE_${address}` },
+    { name: "Souris BT", status: "OK", instanceId: "BTHLE\\DEV_AABBCCDDEEFF\\8&1&0" },
+  ];
+  const spp = classifyProbedPort(
+    {
+      port: "COM4",
+      caption: "Standard Serial over Bluetooth link (COM4)",
+      pnpDeviceId: `BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID&0001000f_PID&0000\\7&2fb2e3e5&0&${address}_C00000000`,
+      present: true,
+      queues: [],
+      opens: [{ baud: 115200, opened: true, error: "" }],
+    },
+    { bluetoothDevices }
+  );
+  assert.equal(spp.bluetoothAddress, address);
+  assert.equal(spp.bluetoothDevice, "K3-I527190103");
+  assert.equal(spp.bluetoothOutgoing, true);
+  // No queue names a Niimbot any more, and it is still recognised as one.
+  assert.deepEqual(spp.queues, []);
+  assert.equal(spp.looksNiimbot, true);
+  assert.match(spp.advice.join(" "), /Paired Bluetooth device on this port: 'K3-I527190103'/);
+
+  const recommended = recommendNiimbotPort([], [spp], { availablePorts: ["COM4"] });
+  assert.equal(recommended.port, "COM4");
+  assert.equal(recommended.reason, "bluetooth-outgoing");
+  assert.equal(recommended.device, "K3-I527190103");
+
+  const summary = summarizeComProbe([spp], [], [], { availablePorts: ["COM4"] }).join(" ");
+  assert.match(summary, /COM4 is the Bluetooth outgoing port of 'K3-I527190103', which is the label printer, and it opens/);
+  assert.match(summary, /Set COM4 as the Port on the Niimbot printer profile/);
+
+  // A mouse on its own SPP port is not promoted to printer.
+  const mouse = classifyProbedPort(
+    {
+      port: "COM5",
+      caption: "Standard Serial over Bluetooth link (COM5)",
+      pnpDeviceId: "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID&01\\7&1&0&AABBCCDDEEFF_C0",
+      present: true,
+      opens: [{ baud: 115200, opened: true, error: "" }],
+    },
+    { bluetoothDevices }
+  );
+  assert.equal(mouse.bluetoothDevice, "Souris BT");
+  assert.equal(mouse.looksNiimbot, false);
+});
+
+test("P1: a port Windows will not open by name is its own verdict, not 'busy' or 'silent'", () => {
+  const row = classifyProbedPort({
+    port: "COM8",
+    caption: "Standard Serial over Bluetooth link (COM8)",
+    present: true,
+    opens: [
+      {
+        baud: 115200,
+        opened: false,
+        error: "Le nom spécifié ne démarre pas avec COM/com ou n'est pas résolu en port série valide.",
+        errorType: "System.ArgumentException",
+      },
+    ],
+  });
+  assert.equal(row.verdict, "not-a-serial-port");
+  assert.match(row.advice.join(" "), /will not open it as a serial port/);
+  assert.match(row.advice.join(" "), /Remove the device in Device Manager/);
+  // Not the advice for a port another program is holding.
+  assert.equal(row.advice.join(" ").includes("Close NIIMBOT.exe"), false);
+});
+
+test("P1: the probe reports the ports Windows has, from GetPortNames", () => {
+  const ps = buildComProbeScript();
+  assert.match(ps, /\[System\.IO\.Ports\.SerialPort\]::GetPortNames\(\)/);
+  assert.match(ps, /Win32_SerialPort/);
+  assert.match(ps, /availablePorts = @\(\$live\.Keys \| Sort-Object\)/);
+  // A queue's port becomes a row so an absent one is named, and it stays absent.
+  assert.match(ps, /Add-PortRow -Name \$portKey[^\n]*-Source 'Win32_Printer'/);
+  assert.match(ps, /if \(\$Source -eq 'GetPortNames' -or \$Source -eq 'Win32_SerialPort'\) \{ \$row\.present = \$true \}/);
+  // The queues must be known before the open loop, or a queue-only port is
+  // never tried and the report cannot say why it failed.
+  assert.ok(
+    ps.indexOf("-Source 'Win32_Printer'") < ps.indexOf("$sp.Open()"),
+    "print queues must be enumerated before the open attempts"
+  );
+  // The serial script reports the same list on every open failure.
+  assert.match(buildSerialJobScript(), /function Get-AvailablePortNames/);
+  assert.match(buildSerialJobScript(), /'ports: ' \+ \$available/);
+  assertSafePowerShellSource("com probe script", ps);
+  assertSafePowerShellSource("serial job script", buildSerialJobScript());
 });
