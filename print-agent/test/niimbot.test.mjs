@@ -1410,6 +1410,27 @@ test("P0: an ArgumentException from Open names the real cause and the live ports
   assert.equal(availablePortsFromError({ stderr: "x" }), null);
 });
 
+test("P0: a name Windows cannot accept blames the setting, not the printer", () => {
+  // The fallback label used to be the bare string "COM", so an unset port read
+  // as "Niimbot COM is not a serial port on this PC" and told the merchant to
+  // re-pair Bluetooth to fix a port that was never chosen.
+  const unset = describeSerialFailure("", { stderr: "no serial port name was given\nports: COM3" }, 115200);
+  assert.match(unset, /No serial port is set for the Niimbot/);
+  assert.equal(/Niimbot COM /.test(unset), false);
+  assert.equal(unset.includes("re-pair"), false);
+
+  // A USB queue name is a mis-set profile, not a serial port that went away.
+  const usb = describeSerialFailure("USB005", { stderr: "not a serial port name: USB005\nports: COM3" }, 115200);
+  assert.match(usb, /'USB005' is not a Windows serial port name/);
+  assert.equal(usb.includes("re-pair"), false);
+
+  // A real port still reports as one, with the trailing colon Windows adds.
+  assert.match(
+    describeSerialFailure("COM8:", { stderr: "x\ntype: System.ArgumentException\nports: COM3" }, 115200),
+    /^Niimbot COM8 is not a serial port on this PC at 115200 baud\./
+  );
+});
+
 test("P0: a port name refusal is not retried at another baud", () => {
   // 1.10.14 tried 115200, then 9600, then 19200 against a name .NET will never
   // accept, so the merchant waited out three PowerShell starts for one answer

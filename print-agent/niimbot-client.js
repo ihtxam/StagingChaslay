@@ -813,7 +813,11 @@ const NET_PORT_NAME_REFUSED =
   /does not start with COM|does not resolve to a valid serial port|not a serial port|ne commence pas par COM|ne d[ée]marre pas avec COM|port s[ée]rie valide|PortName cannot be empty|not a serial port name|no serial port name was given/i;
 
 function describeSerialFailure(comPort, error, baud) {
-  const label = normalizeComPort(comPort) || String(comPort || "COM").toUpperCase();
+  const label = normalizeComPort(comPort);
+  // A name Windows could never accept makes the setting itself the fault, so no
+  // sentence about the port can be true. This used to fall back to the literal
+  // "COM", inventing a port and sending merchants off to re-pair Bluetooth.
+  if (!label) return describeComPortNameProblem(comPort);
   const at = baud ? ` at ${baud} baud` : "";
   if (error && (error.killed || error.code === "ETIMEDOUT")) {
     return `Niimbot ${label} timed out${at}`;
