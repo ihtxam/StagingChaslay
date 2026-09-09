@@ -64,6 +64,7 @@ PY
 }
 
 report_env_file "Secrets" "$SECRETS_FILE"
+report_env_file "Sidecar" "/root/chaslay-secrets/adyen-sdk.env"
 report_env_file "Repo link" "$REPO_ENV_LINK"
 
 echo "=== .env* under /root containing ADYEN_SDK (filenames only) ==="
@@ -94,4 +95,4 @@ REMOTE
 
 echo ""
 echo "Deploy reads: ADYEN_SDK_API_KEY_TEST (or ADYEN_SDK_API_KEY), ADYEN_SDK_API_KEY_LIVE, ADYEN_SDK_ENV"
-echo "Edit on server: ${SECRETS_FILE}"
+echo "Edit on server: ${SECRETS_FILE} or /root/chaslay-secrets/adyen-sdk.env"

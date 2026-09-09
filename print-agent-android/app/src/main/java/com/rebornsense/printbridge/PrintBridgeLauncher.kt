@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.rebornsense.printbridge.boot.BootStartupActivity
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.service.PrintBridgeService
 
@@ -23,7 +24,30 @@ object PrintBridgeLauncher {
     /** Start the service when auto-start is enabled (boot, package update). */
     fun startIfEnabled(context: Context) {
         if (!PrinterPreferences.isAutoStartEnabled(context)) return
-        start(context)
+        ensureRunning(context)
+    }
+
+    /**
+     * Start the bridge after boot or when recovering from OEM kills.
+     * Launches a headless activity when notification permission is still required.
+     */
+    fun ensureRunning(context: Context) {
+        val appContext = context.applicationContext
+        PrinterPreferences.setAutoStartEnabled(appContext, true)
+        if (BridgePermissions.hasNotificationPermission(appContext)) {
+            start(appContext)
+            refreshPrinters(appContext)
+            return
+        }
+        if (shouldLaunchStartupActivity(appContext)) {
+            Log.i(TAG, "Launching BootStartupActivity for notification permission + FGS")
+            val intent = Intent(appContext, BootStartupActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(BootStartupActivity.EXTRA_FROM_BOOT, true)
+            }
+            runCatching { appContext.startActivity(intent) }
+                .onFailure { error -> Log.w(TAG, "BootStartupActivity launch failed", error) }
+        }
     }
 
     /**
@@ -35,6 +59,7 @@ object PrintBridgeLauncher {
         val appContext = context.applicationContext
         if (!BridgePermissions.hasNotificationPermission(appContext)) {
             Log.w(TAG, "Skipping FGS start — POST_NOTIFICATIONS not granted")
+            ensureRunning(appContext)
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)
@@ -64,7 +89,10 @@ object PrintBridgeLauncher {
         RETRY_DELAYS_MS.forEach { delayMs ->
             retryHandler.postDelayed({
                 if (generation != retryGeneration) return@postDelayed
-                if (!BridgePermissions.hasNotificationPermission(appContext)) return@postDelayed
+                if (!BridgePermissions.hasNotificationPermission(appContext)) {
+                    ensureRunning(appContext)
+                    return@postDelayed
+                }
                 if (BridgeHealthChecker.isHealthy()) return@postDelayed
                 runCatching { ContextCompat.startForegroundService(appContext, intent) }
                     .onFailure { Log.w(TAG, "FGS retry after ${delayMs}ms failed", it) }
@@ -72,5 +100,20 @@ object PrintBridgeLauncher {
         }
     }
 
-    private val RETRY_DELAYS_MS = longArrayOf(1_500L, 3_000L, 6_000L, 10_000L)
+    private fun shouldLaunchStartupActivity(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val last = prefs.getLong(KEY_LAST_STARTUP_ACTIVITY_MS, 0L)
+        if (now - last < STARTUP_ACTIVITY_COOLDOWN_MS) return false
+        prefs.edit().putLong(KEY_LAST_STARTUP_ACTIVITY_MS, now).apply()
+        return true
+    }
+
+    private const val PREFS = "print_bridge_launcher"
+    private const val KEY_LAST_STARTUP_ACTIVITY_MS = "last_startup_activity_ms"
+    private const val STARTUP_ACTIVITY_COOLDOWN_MS = 120_000L
+
+    private val RETRY_DELAYS_MS = longArrayOf(
+        1_500L, 3_000L, 6_000L, 10_000L, 20_000L, 45_000L, 90_000L,
+    )
 }

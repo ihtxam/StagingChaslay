@@ -133,6 +133,17 @@ resolve_adyen_sdk_config() {
 
   ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$ENV_FILE")"
   [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="$shell_env"
+
+  # Optional sidecar file for SDK keys (easier to edit on VPS without touching main env):
+  # /root/chaslay-secrets/adyen-sdk.env
+  local adyen_sidecar="${SECRETS_DIR}/adyen-sdk.env"
+  if [[ -f "$adyen_sidecar" ]]; then
+    [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY_TEST "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] || ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$adyen_sidecar")"
+  fi
+
   if [[ -z "$ADYEN_SDK_ENV" ]]; then
     if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
       ADYEN_SDK_ENV="test"

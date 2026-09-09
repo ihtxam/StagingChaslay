@@ -105,6 +105,14 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
         findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
+        findViewById<View>(R.id.serviceStatusCard).setOnClickListener {
+            if (BridgePermissions.needsNotificationPermission(this)) {
+                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            } else {
+                PrintBridgeLauncher.ensureRunning(this)
+                updateServiceStatus()
+            }
+        }
         updateOemSetupBanner()
         updateTapToPayDiagnostics()
         // Wizard waits until permission dialogs finish so USB/Bluetooth prompts are not hidden.
@@ -145,8 +153,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun needsSetupAttention(): Boolean {
         return !OemSetupPreferences.isWizardCompleted(this) ||
-            !OemSettingsNavigator.isBatteryOptimizationDisabled(this) ||
-            !BridgeHealthChecker.isHealthy()
+            !OemSettingsNavigator.isBatteryOptimizationDisabled(this)
     }
 
     private fun openOemSetupWizard() {
@@ -280,7 +287,7 @@ class MainActivity : AppCompatActivity() {
             }
             serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
             serviceCard.visibility = View.VISIBLE
-            PrintBridgeLauncher.start(this)
+            PrintBridgeLauncher.ensureRunning(this)
         }
         updateTapToPayDiagnostics()
     }
