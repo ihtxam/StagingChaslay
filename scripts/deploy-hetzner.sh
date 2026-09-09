@@ -698,6 +698,15 @@ PY
       echo "ERROR: APK versionName=$APK_VERSION but build.gradle has $BRIDGE_VERSION"
       exit 1
     fi
+    if [[ -n "$ADYEN_SDK_API_KEY" || -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      APK_BYTES="$(wc -c < "$BRIDGE_APK" | tr -d " ")"
+      if [[ "$APK_BYTES" -lt 10000000 ]]; then
+        echo "ERROR: Adyen SDK keys were set but APK is only ${APK_BYTES} bytes (expected >10MB with Tap to Pay bundled)."
+        echo "  Check print-agent-android/local.properties adyenEnv matches your key type (live vs test)."
+        exit 1
+      fi
+      echo "Tap-to-Pay APK verified: ${APK_BYTES} bytes"
+    fi
   else
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
     echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
