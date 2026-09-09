@@ -89,6 +89,84 @@ env_get() {
   grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//' || true
 }
 
+env_set_key() {
+  # env_set_key KEY VALUE file — upsert one KEY=VALUE line (preserves other lines)
+  local key="$1" value="$2" file="$3"
+  [[ -n "$key" && -n "$file" ]] || return 0
+  python3 - "$key" "$value" "$file" <<'PY'
+import os, re, sys
+key, value, path = sys.argv[1:4]
+lines = []
+if os.path.isfile(path):
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+out, seen = [], False
+for line in lines:
+    matched = re.match(r"^([A-Z0-9_]+)=", line)
+    if matched and matched.group(1) == key:
+        out.append(f"{key}={value}")
+        seen = True
+    else:
+        out.append(line)
+if not seen:
+    out.append(f"{key}={value}")
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(out).rstrip() + "\n")
+PY
+}
+
+resolve_adyen_sdk_config() {
+  # Resolve Adyen POS Mobile SDK keys from secrets file and/or shell env.
+  # ADYEN_SDK_API_KEY_TEST is accepted as an alias for the test key.
+  local shell_key="${ADYEN_SDK_API_KEY:-}"
+  local shell_test="${ADYEN_SDK_API_KEY_TEST:-}"
+  local shell_live="${ADYEN_SDK_API_KEY_LIVE:-}"
+  local shell_env="${ADYEN_SDK_ENV:-}"
+
+  ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY_TEST "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$shell_key"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$shell_test"
+
+  ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] || ADYEN_SDK_API_KEY_LIVE="$shell_live"
+
+  ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="$shell_env"
+  if [[ -z "$ADYEN_SDK_ENV" ]]; then
+    if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
+      ADYEN_SDK_ENV="test"
+    elif [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      ADYEN_SDK_ENV="live"
+    else
+      ADYEN_SDK_ENV="test"
+    fi
+  fi
+}
+
+persist_adyen_sdk_secrets() {
+  # Persist resolved keys into $ENV_FILE when supplied via shell env (one-time bootstrap).
+  [[ -f "$ENV_FILE" ]] || return 0
+  if [[ -n "$ADYEN_SDK_API_KEY" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY_TEST "$ENV_FILE")" ]]; then
+    if [[ -n "${ADYEN_SDK_API_KEY_TEST:-}" ]]; then
+      env_set_key ADYEN_SDK_API_KEY_TEST "$ADYEN_SDK_API_KEY" "$ENV_FILE"
+    else
+      env_set_key ADYEN_SDK_API_KEY "$ADYEN_SDK_API_KEY" "$ENV_FILE"
+    fi
+    echo "Persisted Adyen test SDK key to $ENV_FILE"
+  fi
+  if [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")" ]]; then
+    env_set_key ADYEN_SDK_API_KEY_LIVE "$ADYEN_SDK_API_KEY_LIVE" "$ENV_FILE"
+    echo "Persisted Adyen live SDK key to $ENV_FILE"
+  fi
+  if [[ -n "$ADYEN_SDK_ENV" ]] && [[ -z "$(env_get ADYEN_SDK_ENV "$ENV_FILE")" ]]; then
+    env_set_key ADYEN_SDK_ENV "$ADYEN_SDK_ENV" "$ENV_FILE"
+  fi
+}
+
 ensure_env_production() {
   local jwt dbpass adminpass legacy_jwt legacy_admin legacy_dburl
 
@@ -524,10 +602,8 @@ BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/b
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   BRIDGE_LOCAL_PROPS="$REPO_DIR/print-agent-android/local.properties"
-  ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")"
-  ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")"
-  ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$ENV_FILE")"
-  [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="test"
+  resolve_adyen_sdk_config
+  persist_adyen_sdk_secrets
   {
     echo "adyenEnv=${ADYEN_SDK_ENV}"
     if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
@@ -540,8 +616,8 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   if [[ -n "$ADYEN_SDK_API_KEY" || -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
     echo "Adyen SDK keys present — Tap to Pay APK will be built"
   else
-    echo "WARNING: ADYEN_SDK_API_KEY not in $ENV_FILE — APK will be print-only (no Tap to Pay)"
-    echo "  Add ADYEN_SDK_API_KEY (POS Mobile SDK key from Adyen Customer Area) and redeploy."
+    echo "WARNING: No Adyen SDK keys in $ENV_FILE (ADYEN_SDK_API_KEY / ADYEN_SDK_API_KEY_TEST / ADYEN_SDK_API_KEY_LIVE) — APK will be print-only (no Tap to Pay)"
+    echo "  Add POS Mobile SDK keys from Adyen Customer Area and redeploy."
   fi
   if docker run --rm \
     -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \

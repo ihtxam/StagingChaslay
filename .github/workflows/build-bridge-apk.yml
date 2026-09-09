@@ -18,22 +18,35 @@ jobs:
       - name: Write Adyen SDK keys when secrets exist
         env:
           ADYEN_SDK_API_KEY: ${{ secrets.ADYEN_SDK_API_KEY }}
+          ADYEN_SDK_API_KEY_TEST: ${{ secrets.ADYEN_SDK_API_KEY_TEST }}
           ADYEN_SDK_API_KEY_LIVE: ${{ secrets.ADYEN_SDK_API_KEY_LIVE }}
           ADYEN_SDK_ENV: ${{ secrets.ADYEN_SDK_ENV }}
         run: |
-          {
-            echo "adyenEnv=${ADYEN_SDK_ENV:-test}"
-            if [[ -n "${ADYEN_SDK_API_KEY:-}" ]]; then
-              echo "adyenSdkApiKey=${ADYEN_SDK_API_KEY}"
+          TEST_KEY="${ADYEN_SDK_API_KEY:-${ADYEN_SDK_API_KEY_TEST:-}}"
+          LIVE_KEY="${ADYEN_SDK_API_KEY_LIVE:-}"
+          ADYEN_ENV="${ADYEN_SDK_ENV:-}"
+          if [[ -z "$ADYEN_ENV" ]]; then
+            if [[ -n "$TEST_KEY" ]]; then
+              ADYEN_ENV="test"
+            elif [[ -n "$LIVE_KEY" ]]; then
+              ADYEN_ENV="live"
+            else
+              ADYEN_ENV="test"
             fi
-            if [[ -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
-              echo "adyenSdkApiKeyLive=${ADYEN_SDK_API_KEY_LIVE}"
+          fi
+          {
+            echo "adyenEnv=${ADYEN_ENV}"
+            if [[ -n "$TEST_KEY" ]]; then
+              echo "adyenSdkApiKey=${TEST_KEY}"
+            fi
+            if [[ -n "$LIVE_KEY" ]]; then
+              echo "adyenSdkApiKeyLive=${LIVE_KEY}"
             fi
           } >> print-agent-android/local.properties
-          if [[ -n "${ADYEN_SDK_API_KEY:-}" || -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
+          if [[ -n "$TEST_KEY" || -n "$LIVE_KEY" ]]; then
             echo "Adyen SDK keys present — Tap to Pay APK will be built"
           else
-            echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
+            echo "WARNING: No Adyen SDK keys — this will be a print-only APK"
           fi
 
       - name: Build APK in Android container

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Add Adyen POS Mobile SDK key to staging secrets and rebuild Bridge APK with Tap to Pay.
+# Add Adyen POS Mobile SDK keys to staging secrets and rebuild Bridge APK with Tap to Pay.
 #
 # Usage:
-#   ADYEN_SDK_API_KEY='your-pos-mobile-sdk-key' bash scripts/staging-bridge-adyen-deploy.sh
+#   ADYEN_SDK_API_KEY_TEST='your-test-key' ADYEN_SDK_API_KEY_LIVE='your-live-key' \
+#     bash scripts/staging-bridge-adyen-deploy.sh
+#
+# Legacy alias:
+#   ADYEN_SDK_API_KEY='your-test-key' bash scripts/staging-bridge-adyen-deploy.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,20 +19,30 @@ fi
 
 STAGING_SSH_ALIAS="${STAGING_SSH_ALIAS:-staging-chaslay}"
 STAGING_DEPLOY_PATH="${STAGING_DEPLOY_PATH:-/root/StagingChaslay}"
-KEY="${ADYEN_SDK_API_KEY:-}"
-ENV_NAME="${ADYEN_SDK_ENV:-test}"
+TEST_KEY="${ADYEN_SDK_API_KEY_TEST:-${ADYEN_SDK_API_KEY:-}}"
+LIVE_KEY="${ADYEN_SDK_API_KEY_LIVE:-}"
+ENV_NAME="${ADYEN_SDK_ENV:-}"
 
-if [[ -z "$KEY" ]]; then
-  echo "ERROR: Set ADYEN_SDK_API_KEY (POS Mobile SDK key from Adyen Customer Area)."
+if [[ -z "$TEST_KEY" && -z "$LIVE_KEY" ]]; then
+  echo "ERROR: Set ADYEN_SDK_API_KEY_TEST and/or ADYEN_SDK_API_KEY_LIVE (POS Mobile SDK keys from Adyen Customer Area)."
   exit 1
 fi
 
-PAYLOAD_B64="$(python3 - "$KEY" "$ENV_NAME" "$STAGING_DEPLOY_PATH" <<'PY' | base64 -w0
+if [[ -z "$ENV_NAME" ]]; then
+  if [[ -n "$TEST_KEY" ]]; then
+    ENV_NAME="test"
+  else
+    ENV_NAME="live"
+  fi
+fi
+
+PAYLOAD_B64="$(python3 - "$TEST_KEY" "$LIVE_KEY" "$ENV_NAME" "$STAGING_DEPLOY_PATH" <<'PY' | base64 -w0
 import json, sys
 print(json.dumps({
-    "adyen_sdk_api_key": sys.argv[1],
-    "adyen_sdk_env": sys.argv[2],
-    "deploy_path": sys.argv[3],
+    "adyen_sdk_api_key_test": sys.argv[1],
+    "adyen_sdk_api_key_live": sys.argv[2],
+    "adyen_sdk_env": sys.argv[3],
+    "deploy_path": sys.argv[4],
 }))
 PY
 )"
@@ -40,10 +54,12 @@ import base64, json, os, re, subprocess
 
 payload = json.loads(base64.b64decode(os.environ["PAYLOAD_B64"]))
 env_file = "/root/chaslay-secrets/.env.production"
-updates = {
-    "ADYEN_SDK_API_KEY": payload["adyen_sdk_api_key"],
-    "ADYEN_SDK_ENV": payload["adyen_sdk_env"],
-}
+updates = {}
+if payload["adyen_sdk_api_key_test"]:
+    updates["ADYEN_SDK_API_KEY_TEST"] = payload["adyen_sdk_api_key_test"]
+if payload["adyen_sdk_api_key_live"]:
+    updates["ADYEN_SDK_API_KEY_LIVE"] = payload["adyen_sdk_api_key_live"]
+updates["ADYEN_SDK_ENV"] = payload["adyen_sdk_env"]
 
 lines = []
 if os.path.isfile(env_file):
@@ -71,10 +87,9 @@ for name, value in updates.items():
 with open(env_file, "w", encoding="utf-8") as handle:
     handle.write("\n".join(out).rstrip() + "\n")
 
-print(
-    f"Updated secrets: ADYEN_SDK_API_KEY len={len(updates['ADYEN_SDK_API_KEY'])} "
-    f"ADYEN_SDK_ENV={updates['ADYEN_SDK_ENV']}"
-)
+for name in ("ADYEN_SDK_API_KEY_TEST", "ADYEN_SDK_API_KEY_LIVE", "ADYEN_SDK_ENV"):
+    if name in updates:
+        print(f"Updated secrets: {name} len={len(updates[name])}")
 
 deploy_path = payload["deploy_path"]
 subprocess.run(
