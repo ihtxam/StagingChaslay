@@ -1733,6 +1733,15 @@ const en: Dict = {
     'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Download Bridge Reborn (Android)',
+  printBridgeEditionHint: 'Choose the edition for this tablet. Both use the same app — installing one replaces the other.',
+  downloadPrintBridgePrintOnly: 'Print only',
+  downloadPrintBridgeTapToPay: 'Print + Tap to Pay',
+  installPrintBridgePrintOnly: 'Install print-only Bridge',
+  installPrintBridgeTapToPay: 'Install Tap to Pay Bridge',
+  printBridgePrintOnlyHint:
+    'Background printing only (~5 MB). Use on kitchen tablets or counters without contactless payments. No NFC / Adyen SDK.',
+  printBridgeTapToPayHint:
+    'Full build with NFC Tap to Pay (~150 MB). Use on POS tablets that take card payments in WebPOS.',
   installPrintBridge: 'Install Bridge Reborn',
   installPrintBridgeUpdate: 'Install update',
   printBridgeAlreadyInstalled: 'Bridge Reborn is installed on this tablet (v{version}). Open the Bridge app — do not download again unless updating.',
@@ -5589,6 +5598,16 @@ const fr: Dict = {
     'Installez Reborn Print Agent une seule fois sur le PC caisse. L’agent démarre avec Windows — plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
+  printBridgeEditionHint:
+    'Choisissez l’édition pour cette tablette. Même application — l’une remplace l’autre à l’installation.',
+  downloadPrintBridgePrintOnly: 'Impression seule',
+  downloadPrintBridgeTapToPay: 'Impression + Tap to Pay',
+  installPrintBridgePrintOnly: 'Installer Bridge impression seule',
+  installPrintBridgeTapToPay: 'Installer Bridge Tap to Pay',
+  printBridgePrintOnlyHint:
+    'Impression en arrière-plan uniquement (~5 Mo). Pour cuisine ou comptoir sans paiement sans contact.',
+  printBridgeTapToPayHint:
+    'Version complète avec Tap to Pay NFC (~150 Mo). Pour les tablettes POS avec paiement carte.',
   installPrintBridge: 'Installer Bridge Reborn',
   installPrintBridgeUpdate: 'Installer la mise à jour',
   printBridgeAlreadyInstalled:
@@ -9393,6 +9412,16 @@ const de: Dict = {
     'Reborn Print Agent einmal auf dem Kassen-PC installieren. Der Agent startet mit Windows — start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
+  printBridgeEditionHint:
+    'Edition für diese Tablette wählen. Gleiche App — Installation ersetzt die andere Edition.',
+  downloadPrintBridgePrintOnly: 'Nur Druck',
+  downloadPrintBridgeTapToPay: 'Druck + Tap to Pay',
+  installPrintBridgePrintOnly: 'Nur-Druck-Bridge installieren',
+  installPrintBridgeTapToPay: 'Tap-to-Pay-Bridge installieren',
+  printBridgePrintOnlyHint:
+    'Nur Hintergrunddruck (~5 MB). Für Küche oder Theke ohne kontaktlose Zahlung.',
+  printBridgeTapToPayHint:
+    'Voller Build mit NFC Tap to Pay (~150 MB). Für POS-Tablets mit Kartenzahlung in WebPOS.',
   installPrintBridge: 'Bridge Reborn installieren',
   installPrintBridgeUpdate: 'Update installieren',
   printBridgeAlreadyInstalled:

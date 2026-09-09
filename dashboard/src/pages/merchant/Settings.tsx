@@ -71,12 +71,14 @@ import {
 } from '@/lib/print-agent';
 import {
   fetchPrintBridgeManifest,
+  fetchPrintBridgePrintManifest,
   fetchPrintAgentManifest,
   isAndroidDevice,
   isBridgeAlreadyInstalled,
   openPrintBridgeApkInstall,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
+  printBridgePrintDownloadUrl,
   preferredPrintCompanion,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
@@ -639,6 +641,7 @@ export default function Settings() {
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
+  const [printBridgePrintManifest, setPrintBridgePrintManifest] = useState<DownloadManifest | null>(null);
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
@@ -1051,12 +1054,15 @@ export default function Settings() {
   }, [tab, loadEmailUsage]);
 
   useEffect(() => {
-    void Promise.all([fetchPrintBridgeManifest(), fetchPrintAgentManifest()]).then(
-      ([bridge, agent]) => {
-        setPrintBridgeManifest(bridge);
-        setPrintAgentManifest(agent);
-      }
-    );
+    void Promise.all([
+      fetchPrintBridgeManifest(),
+      fetchPrintBridgePrintManifest(),
+      fetchPrintAgentManifest(),
+    ]).then(([bridge, bridgePrint, agent]) => {
+      setPrintBridgeManifest(bridge);
+      setPrintBridgePrintManifest(bridgePrint);
+      setPrintAgentManifest(agent);
+    });
   }, []);
 
   const refreshPrintAgentPrinters = useCallback(async () => {
@@ -4396,52 +4402,97 @@ export default function Settings() {
                       </a>
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' ? (
-                      printBridgeManifest?.versionMismatch ? (
-                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                          {t('printBridgeApkNotPublished')
-                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
-                            .replace(
-                              '{declaredVersion}',
-                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
+                      <div className="flex w-full max-w-2xl flex-col gap-3">
+                        <p className="text-sm text-[var(--muted)] m-0">{t('printBridgeEditionHint')}</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+                            <p className="m-0 text-sm font-semibold text-[var(--text)]">
+                              {t('downloadPrintBridgePrintOnly')}
+                            </p>
+                            <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
+                              {t('printBridgePrintOnlyHint')}
+                            </p>
+                            {printBridgePrintManifest?.available === false ? (
+                              <p className="text-xs text-amber-800 m-0">{printBridgePrintManifest.message}</p>
+                            ) : isAndroidDevice() ? (
+                              <button
+                                type="button"
+                                className="btn-primary inline-flex w-full justify-center"
+                                onClick={() =>
+                                  openPrintBridgeApkInstall(
+                                    printBridgePrintManifest?.downloadUrl || printBridgePrintDownloadUrl()
+                                  )
+                                }
+                              >
+                                {t('installPrintBridgePrintOnly')}
+                              </button>
+                            ) : (
+                              <a
+                                className="btn-primary inline-flex w-full justify-center"
+                                href={
+                                  printBridgePrintManifest?.downloadUrl || printBridgePrintDownloadUrl()
+                                }
+                              >
+                                {t('downloadPrintBridgePrintOnly')}
+                              </a>
                             )}
-                        </p>
-                      ) : printBridgeManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {printBridgeManifest.message ||
-                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
-                        </p>
-                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
-                        printBridgeManifest?.version &&
-                        compareAgentVersion(
-                          String(installedPrintCompanionVersion || ''),
-                          String(printBridgeManifest.version)
-                        ) >= 0 ? (
-                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                          {t('printBridgeAlreadyInstalled').replace(
-                            '{version}',
-                            installedPrintCompanionVersion || ''
-                          )}
-                        </p>
-                      ) : isAndroidDevice() ? (
-                        <button
-                          type="button"
-                          className="btn-primary inline-flex"
-                          onClick={() =>
-                            openPrintBridgeApkInstall(
-                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                            )
-                          }
-                        >
-                          {t('installPrintBridge')}
-                        </button>
-                      ) : (
-                        <a
-                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        >
-                          {t('downloadPrintBridge')}
-                        </a>
-                      )
+                          </div>
+                          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+                            <p className="m-0 text-sm font-semibold text-[var(--text)]">
+                              {t('downloadPrintBridgeTapToPay')}
+                            </p>
+                            <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
+                              {t('printBridgeTapToPayHint')}
+                            </p>
+                            {printBridgeManifest?.versionMismatch ? (
+                              <p className="text-xs text-amber-900 m-0">
+                                {t('printBridgeApkNotPublished')
+                                  .replace('{apkVersion}', String(printBridgeManifest.version || ''))
+                                  .replace(
+                                    '{declaredVersion}',
+                                    String(
+                                      printBridgeManifest.declaredVersion ||
+                                        printBridgeManifest.version ||
+                                        ''
+                                    )
+                                  )}
+                              </p>
+                            ) : printBridgeManifest?.available === false ? (
+                              <p className="text-xs text-amber-800 m-0">
+                                {printBridgeManifest.message ||
+                                  'Tap to Pay APK is not published on this server yet.'}
+                              </p>
+                            ) : isAndroidDevice() ? (
+                              <button
+                                type="button"
+                                className="btn-secondary inline-flex w-full justify-center"
+                                onClick={() =>
+                                  openPrintBridgeApkInstall(
+                                    printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
+                                  )
+                                }
+                              >
+                                {t('installPrintBridgeTapToPay')}
+                              </button>
+                            ) : (
+                              <a
+                                className="btn-secondary inline-flex w-full justify-center"
+                                href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
+                              >
+                                {t('downloadPrintBridgeTapToPay')}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        {isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) ? (
+                          <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                            {t('printBridgeAlreadyInstalled').replace(
+                              '{version}',
+                              installedPrintCompanionVersion || ''
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                   <div className="space-y-1">

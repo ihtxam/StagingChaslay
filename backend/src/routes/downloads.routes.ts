@@ -5,8 +5,10 @@ import {
   LEGACY_PRINT_AGENT_SETUP_FILE,
   PRINT_AGENT_SETUP_FILE,
   PRINT_BRIDGE_APK_FILE,
+  PRINT_BRIDGE_PRINT_APK_FILE,
   describePrintAgentExe,
   describePrintBridgeApk,
+  describePrintBridgePrintApk,
   downloadsFilePath,
   fileMagicOk,
   readDownloadManifest,
@@ -33,6 +35,10 @@ function sendBinary(
 
 router.get("/reborn-print-bridge.json", (_req: Request, res: Response) => {
   res.json({ success: true, ...describePrintBridgeApk() });
+});
+
+router.get("/reborn-print-bridge-print.json", (_req: Request, res: Response) => {
+  res.json({ success: true, ...describePrintBridgePrintApk() });
 });
 
 router.get("/reborn-print-agent.json", (_req: Request, res: Response) => {
@@ -66,9 +72,12 @@ router.get(`/${PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
   sendPrintAgentExe(res, PRINT_AGENT_SETUP_FILE);
 });
 
-function sendPrintBridgeApk(res: Response) {
-  const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
-  const desc = describePrintBridgeApk();
+function sendBridgeApk(
+  res: Response,
+  desc: ReturnType<typeof describePrintBridgeApk>,
+  filePath: string,
+  filenamePrefix: string
+) {
   if (!fileMagicOk(filePath, "apk") || !desc.available) {
     return res
       .status(404)
@@ -78,17 +87,38 @@ function sendPrintBridgeApk(res: Response) {
           [
             "Reborn Print Bridge APK is not available on this server.",
             "",
-            "Ask your administrator to build print-agent-android/ and deploy:",
-            "  backend/public/downloads/reborn-print-bridge.apk",
+            "Ask your administrator to build print-agent-android/ and deploy the APK to downloads/.",
           ].join("\n")
       );
   }
-  const filename = `reborn-print-bridge-${desc.version || "latest"}.apk`;
+  const filename = `${filenamePrefix}-${desc.version || "latest"}.apk`;
   sendBinary(res, filePath, filename, "application/vnd.android.package-archive", "attachment");
+}
+
+function sendPrintBridgeApk(res: Response) {
+  sendBridgeApk(
+    res,
+    describePrintBridgeApk(),
+    downloadsFilePath(PRINT_BRIDGE_APK_FILE),
+    "reborn-print-bridge"
+  );
+}
+
+function sendPrintBridgePrintApk(res: Response) {
+  sendBridgeApk(
+    res,
+    describePrintBridgePrintApk(),
+    downloadsFilePath(PRINT_BRIDGE_PRINT_APK_FILE),
+    "reborn-print-bridge-print"
+  );
 }
 
 router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
   sendPrintBridgeApk(res);
+});
+
+router.get("/reborn-print-bridge-print.apk", (_req: Request, res: Response) => {
+  sendPrintBridgePrintApk(res);
 });
 
 /** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
@@ -104,6 +134,20 @@ router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) =>
       );
   }
   sendPrintBridgeApk(res);
+});
+
+router.get("/reborn-print-bridge-print-:version.apk", (req: Request, res: Response) => {
+  const desc = describePrintBridgePrintApk();
+  const requested = String(req.params.version || "").trim();
+  if (desc.version && requested && requested !== desc.version && requested !== "latest") {
+    return res
+      .status(404)
+      .type("text/plain")
+      .send(
+        `This server has Bridge Print v${desc.version}, not v${requested}. Download /downloads/reborn-print-bridge-print-${desc.version}.apk`
+      );
+  }
+  sendPrintBridgePrintApk(res);
 });
 
 router.use(

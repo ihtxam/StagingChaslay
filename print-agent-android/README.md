@@ -204,13 +204,32 @@ Tailored steps per profile:
 
 ## Distribution
 
+Two **product flavors** (same package id — installing one replaces the other):
+
+| Flavor | APK | Gradle task | Size |
+|--------|-----|-------------|------|
+| `print` | `reborn-print-bridge-print.apk` | `assemblePrintRelease` | ~5 MB — background printing only |
+| `tapToPay` | `reborn-print-bridge.apk` | `assembleTapToPayRelease` | ~150 MB — includes Adyen NFC SDK |
+
 | Channel | Path |
 |---------|------|
-| Merchant panel | Settings → Receipts & printers |
-| API | `GET /downloads/reborn-print-bridge.apk` |
-| Deploy | `backend/public/downloads/` (build in CI) |
+| Merchant panel | Settings → Receipts & printers (choose edition) |
+| API | `GET /downloads/reborn-print-bridge-print.apk` or `reborn-print-bridge.apk` |
+| Deploy | `backend/public/downloads/` (both built in CI / deploy script) |
 
-One **universal APK** for all devices (Sunmi, Feitian, generic). Drivers load at runtime based on detection.
+Both editions are **universal APKs** for all devices (Sunmi, Feitian, generic). Drivers load at runtime based on detection.
+
+### Fleet tablets (device owner vs root)
+
+You do **not** need root. For dedicated POS/kitchen tablets, provision **device owner** via ADB on a factory-reset device (no Google account):
+
+```bash
+adb shell dpm set-device-owner com.rebornsense.printbridge/.fleet.PrintBridgeDeviceAdminReceiver
+```
+
+Device owner enables lock-task kiosk mode, boot autostart, and makes it harder for staff to force-stop Bridge. Works with **either** print-only or Tap-to-Pay APK (same package id). See `docs/FLEET_TABLET_PROVISIONING.md` on the fleet-kiosk branch.
+
+Root is not required and is not recommended (security, warranty, Play integrity).
 
 ---
 
