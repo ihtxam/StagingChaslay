@@ -185,6 +185,22 @@ Tailored steps per profile:
 | Feitian | Background activity allow |
 | Generic Chinese tablets | Battery “unrestricted” + locked recent apps |
 
+### 6. Fleet kiosk mode (device owner) — v0.6.0+
+
+For dedicated POS fleets, Bridge can be provisioned as **Android device owner**:
+
+- Lock task: Chrome (WebPOS) + Bridge — staff cannot swipe away or force-stop
+- Boot → Bridge FGS → WebPOS opens automatically
+- Admin PIN to exit kiosk (Fleet kiosk setup screen)
+
+Provisioning (once per tablet, factory-reset device):
+
+```bash
+adb shell dpm set-device-owner com.rebornsense.printbridge/.fleet.PrintBridgeDeviceAdminReceiver
+```
+
+Full runbook: [`docs/FLEET_TABLET_PROVISIONING.md`](../docs/FLEET_TABLET_PROVISIONING.md)
+
 ### 5. Setup wizard
 
 1. Install APK from panel

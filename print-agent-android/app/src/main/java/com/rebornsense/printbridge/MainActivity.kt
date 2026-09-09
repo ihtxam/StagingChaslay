@@ -31,6 +31,8 @@ import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSettingsNavigator
 import com.rebornsense.printbridge.setup.OemSetupPreferences
+import com.rebornsense.printbridge.fleet.FleetSetupActivity
+import com.rebornsense.printbridge.fleet.KioskController
 import com.rebornsense.printbridge.setup.SetupWizardActivity
 import com.rebornsense.printbridge.BuildConfig
 
@@ -106,6 +108,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
         findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
+        findViewById<Button>(R.id.fleetSetupBtn).setOnClickListener {
+            startActivity(Intent(this, FleetSetupActivity::class.java))
+        }
         findViewById<View>(R.id.serviceStatusCard).setOnClickListener {
             if (BridgePermissions.needsNotificationPermission(this)) {
                 permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
@@ -115,6 +120,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updateOemSetupBanner()
+        updateFleetSetupBanner()
         updateTapToPayDiagnostics()
         // Wizard waits until permission dialogs finish so USB/Bluetooth prompts are not hidden.
     }
@@ -123,6 +129,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshPrinters()
         updateOemSetupBanner()
+        updateFleetSetupBanner()
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
@@ -174,6 +181,20 @@ class MainActivity : AppCompatActivity() {
                 DeviceProfiler.detect().displayName,
             )
         }
+    }
+
+    private fun updateFleetSetupBanner() {
+        val banner = findViewById<View>(R.id.fleetSetupBanner)
+        val isOwner = KioskController.isDeviceOwner(this)
+        banner.visibility = View.VISIBLE
+        findViewById<TextView>(R.id.fleetSetupBannerSummary).text =
+            if (isOwner) {
+                getString(
+                    R.string.fleet_setup_subtitle,
+                )
+            } else {
+                getString(R.string.fleet_setup_banner)
+            }
     }
 
     private fun updateTapToPayDiagnostics() {

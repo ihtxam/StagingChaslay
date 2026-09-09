@@ -74,6 +74,34 @@
             android:label="@string/oem_setup_title"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".fleet.FleetSetupActivity"
+            android:exported="false"
+            android:label="@string/fleet_setup_title"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".fleet.FleetKioskLauncherActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:theme="@style/Theme.RebornPrintBridge.Transparent" />
+
+        <receiver
+            android:name=".fleet.PrintBridgeDeviceAdminReceiver"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/print_bridge_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".usb.UsbAttachReceiver"
             android:exported="true">
