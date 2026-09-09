@@ -641,7 +641,7 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
-      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Xmx4096m -XX:MaxMetaspaceSize=512m"
+      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Xmx6144m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError"
       rm -rf /project/.gradle /project/app/build /tmp/gradle-home /tmp/gradle-project-cache
       mkdir -p /opt/android-sdk/.android /tmp/gradle-home /tmp/gradle-project-cache
       if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
