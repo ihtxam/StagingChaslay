@@ -7,6 +7,7 @@ import com.rebornsense.printbridge.print.NiimbotPrintClient
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
 import com.rebornsense.printbridge.payment.PaymentCoordinator
+import com.rebornsense.printbridge.payment.RegistrationCoordinator
 import com.rebornsense.printbridge.payment.TapToPayAuthParams
 import com.rebornsense.printbridge.payment.TapToPayEngines
 import com.rebornsense.printbridge.payment.TapToPaySaleParams
@@ -208,15 +209,22 @@ class BridgeHttpServer(
                     )
                 }
                 val engine = TapToPayEngines.current()
+                if (!engine.isReady()) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("message", engine.readinessMessage(appContext)),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val deferred = RegistrationCoordinator.beginRegister(
+                    appContext,
+                    TapToPayAuthParams(apiBaseUrl = apiBaseUrl, authToken = authToken),
+                )
                 val outcome = runBlocking {
-                    withTimeoutOrNull(120_000L) {
-                        engine.registerDevice(
-                            appContext,
-                            TapToPayAuthParams(apiBaseUrl = apiBaseUrl, authToken = authToken),
-                        )
-                    }
+                    withTimeoutOrNull(120_000L) { deferred.await() }
                 } ?: return jsonResponse(
-                    JSONObject().put("ok", false).put("error", "Tap to Pay setup timed out."),
+                    JSONObject().put("ok", false).put("message", "Tap to Pay setup timed out."),
                     Response.Status.REQUEST_TIMEOUT,
                 )
                 jsonResponse(

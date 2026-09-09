@@ -55,6 +55,12 @@
             android:theme="@style/Theme.RebornPrintBridge.Transparent" />
 
         <activity
+            android:name=".payment.TapToPayRegisterActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.RebornPrintBridge.Transparent" />
+
+        <activity
             android:name=".payment.PaymentActivity"
             android:exported="false"
             android:launchMode="singleTask"
