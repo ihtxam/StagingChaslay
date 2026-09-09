@@ -18,7 +18,8 @@ val localProps = Properties().apply {
 val adyenEnv = (localProps.getProperty("adyenEnv") ?: "test").lowercase()
 val hasTestKey = localProps.getProperty("adyenSdkApiKey").orEmpty().isNotBlank()
 val hasLiveKey = localProps.getProperty("adyenSdkApiKeyLive").orEmpty().isNotBlank()
-val hasAdyenSdk = (adyenEnv == "live" && hasLiveKey) || hasTestKey
+val hasAdyenSdk = hasTestKey || hasLiveKey
+val useLiveAdyenArtifacts = hasLiveKey && (adyenEnv == "live" || !hasTestKey)
 
 android {
     namespace = "com.rebornsense.printbridge"
@@ -29,8 +30,8 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.5.0"
+        versionCode = 22
+        versionName = "0.5.1"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 
@@ -84,7 +85,7 @@ dependencies {
 
     if (hasAdyenSdk) {
         val adyenPosVersion = "2.16.0"
-        if (adyenEnv == "live" && hasLiveKey) {
+        if (useLiveAdyenArtifacts) {
             implementation("com.adyen.ipp:pos-mobile-release:$adyenPosVersion")
             implementation("com.adyen.ipp:payment-tap-to-pay-release:$adyenPosVersion")
         } else {

@@ -152,6 +152,9 @@ resolve_adyen_sdk_config() {
     else
       ADYEN_SDK_ENV="test"
     fi
+  elif [[ -n "$ADYEN_SDK_API_KEY_LIVE" && -z "$ADYEN_SDK_API_KEY" && "$ADYEN_SDK_ENV" == "test" ]]; then
+    # Stale test env with live-only keys must not produce a print-only APK.
+    ADYEN_SDK_ENV="live"
   fi
 }
 
