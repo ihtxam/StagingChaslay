@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.rebornsense.printbridge.BridgeAlarmWatchdog
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.BridgePermissions
 import com.rebornsense.printbridge.BridgeServiceWatchdog
@@ -48,6 +49,7 @@ class BootStartupActivity : AppCompatActivity() {
         PrintBridgeLauncher.start(this)
         PrintBridgeLauncher.refreshPrinters(this)
         BridgeServiceWatchdog.start(applicationContext)
+        BridgeAlarmWatchdog.arm(applicationContext)
         waitForHealthyThenFinish()
     }
 

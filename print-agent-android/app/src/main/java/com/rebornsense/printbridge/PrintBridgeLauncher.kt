@@ -66,6 +66,7 @@ object PrintBridgeLauncher {
         return runCatching {
             ContextCompat.startForegroundService(appContext, intent)
             scheduleRetries(appContext, intent)
+            BridgeAlarmWatchdog.arm(appContext)
             true
         }.getOrElse { error ->
             Log.w(TAG, "FGS start failed, scheduling retry", error)
@@ -101,10 +102,12 @@ object PrintBridgeLauncher {
     }
 
     private fun shouldLaunchStartupActivity(context: Context): Boolean {
+        if (BridgeHealthChecker.isHealthy()) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val last = prefs.getLong(KEY_LAST_STARTUP_ACTIVITY_MS, 0L)
-        if (now - last < STARTUP_ACTIVITY_COOLDOWN_MS) return false
+        val cooldown = STARTUP_ACTIVITY_UNHEALTHY_COOLDOWN_MS
+        if (now - last < cooldown) return false
         prefs.edit().putLong(KEY_LAST_STARTUP_ACTIVITY_MS, now).apply()
         return true
     }
@@ -112,6 +115,7 @@ object PrintBridgeLauncher {
     private const val PREFS = "print_bridge_launcher"
     private const val KEY_LAST_STARTUP_ACTIVITY_MS = "last_startup_activity_ms"
     private const val STARTUP_ACTIVITY_COOLDOWN_MS = 120_000L
+    private const val STARTUP_ACTIVITY_UNHEALTHY_COOLDOWN_MS = 30_000L
 
     private val RETRY_DELAYS_MS = longArrayOf(
         1_500L, 3_000L, 6_000L, 10_000L, 20_000L, 45_000L, 90_000L,

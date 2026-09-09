@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
+import com.rebornsense.printbridge.BridgeAlarmWatchdog
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.device.DeviceProfiler
@@ -299,8 +300,10 @@ class MainActivity : AppCompatActivity() {
             PrinterPreferences.setAutoStartEnabled(this, isChecked)
             if (isChecked) {
                 startBridge()
+                BridgeAlarmWatchdog.arm(this)
                 Toast.makeText(this, R.string.auto_start_enabled_toast, Toast.LENGTH_SHORT).show()
             } else {
+                BridgeAlarmWatchdog.disarm(this)
                 Toast.makeText(this, R.string.auto_start_disabled_toast, Toast.LENGTH_SHORT).show()
             }
         }

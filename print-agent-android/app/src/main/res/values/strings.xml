@@ -2,11 +2,11 @@
     <string name="app_name">Bridge Reborn</string>
     <string name="notification_channel">Bridge Reborn</string>
     <string name="notification_title">Bridge Reborn running</string>
-    <string name="notification_body">WebPOS in Chrome can print and take NFC payments on http://127.0.0.1:9101</string>
+    <string name="notification_body">Printing stays on while this notification is visible. WebPOS uses http://127.0.0.1:9101 — you can close the Bridge app; do not force-stop it in Settings.</string>
     <string name="status_ready">Bridge ready on port 9101</string>
     <string name="status_starting">Starting Bridge Reborn…</string>
     <string name="status_service_running">Background service running</string>
-    <string name="status_service_stopped">Background service not running</string>
+    <string name="status_service_stopped">Background service not running — tap here to restart</string>
     <string name="status_service_notification_required">Allow notifications to run Bridge in the background</string>
     <string name="status_service_checking">Checking Bridge service…</string>
     <string name="open_webpos">Open the Reborn POS app from your home screen. If you use Chrome, choose “Open in app” when prompted.</string>
@@ -31,7 +31,7 @@
     <string name="test_print_bluetooth_permission_denied">Bluetooth permission required. Allow Nearby devices for Bridge Reborn in Android Settings, then try again.</string>
     <string name="no_printers_yet">No printers found yet. Connect USB or pair Bluetooth, or add a LAN IP.</string>
     <string name="auto_start_title">Start automatically on reboot</string>
-    <string name="auto_start_summary">Runs Bridge Reborn in the background after every restart and reconnects USB, Bluetooth, and Wi‑Fi printers.</string>
+    <string name="auto_start_summary">Keeps Bridge Reborn running after reboot and when you close the app. Complete the setup wizard once so Android does not kill it.</string>
     <string name="auto_start_enabled_toast">Bridge Reborn will start automatically after reboot</string>
     <string name="auto_start_disabled_toast">Bridge Reborn will not start after reboot until you open this app</string>
 
