@@ -2143,7 +2143,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   const period = report.label?.trim()
     ? report.label
     : report.periodFrom && report.periodTo
-      ? `${report.periodFrom} to ${report.periodTo}`
+      ? `${report.periodFrom}${L.periodRangeTo}${report.periodTo}`
       : report.label || '';
 
   let r = '';
@@ -2158,7 +2158,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   if (report.scopeStaffName?.trim()) {
     r +=
       centerLine(
-        `${L.mySales || 'My sales'}: ${report.scopeStaffName.trim()}`.slice(0, width),
+        `${L.mySales}: ${report.scopeStaffName.trim()}`.slice(0, width),
         width
       ) + '\n';
   }
@@ -2177,7 +2177,7 @@ export function generateEodReportText(report: EodReportPrint): string {
     ? report.vatRows
     : [
         {
-          label: 'Total',
+          label: L.total,
           net: Number(report.netTotal ?? brut - report.taxTotal),
           tva: report.taxTotal,
           brut,
@@ -2189,7 +2189,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   if (report.vatRows?.length) {
     r +=
       vatCols(
-        'Total',
+        L.total,
         two(report.netTotal ?? brut - report.taxTotal),
         two(report.taxTotal),
         two(brut),
@@ -2292,12 +2292,14 @@ export function generateEodReportText(report: EodReportPrint): string {
     r += thin + '\n';
     r += centerLine(L.cashDrawer, width) + '\n';
     r += thin + '\n';
+    const timeLocale =
+      report.language === 'fr' ? 'fr-CH' : report.language === 'de' ? 'de-CH' : 'en-GB';
     const movementTime = (iso?: string | null) => {
       if (!iso) return '';
       const d = new Date(iso);
       if (!Number.isFinite(d.getTime())) return '';
       try {
-        return d.toLocaleTimeString('en-GB', {
+        return d.toLocaleTimeString(timeLocale, {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
