@@ -16,20 +16,25 @@ type Props = {
 export default function TapToPayDeviceSetup({ adyenReady, tapToPayEnabled }: Props) {
   const { t } = useI18n();
   const [bridgeOk, setBridgeOk] = useState(false);
+  const [hasAdyenSdk, setHasAdyenSdk] = useState<boolean | null>(null);
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activateError, setActivateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!isAndroidWebPosTill()) return;
+    setActivateError(null);
     const agent = await probePrintAgentHealth(3);
     setBridgeOk(agent.ok);
     if (!agent.ok) {
       setRegistered(false);
+      setHasAdyenSdk(null);
       setMessage(t('tapToPayDeviceBridgeOffline'));
       return;
     }
     const health = await getDeviceBridgeHealth();
+    setHasAdyenSdk(health.hasAdyenSdk === true);
     setRegistered(health.tapToPayRegistered === true || health.tapToPayReady === true);
     setMessage(health.tapToPayMessage || null);
   }, [t]);
@@ -40,9 +45,11 @@ export default function TapToPayDeviceSetup({ adyenReady, tapToPayEnabled }: Pro
 
   if (!isAndroidWebPosTill()) return null;
 
-  const canActivate = adyenReady && tapToPayEnabled && bridgeOk && registered !== true;
+  const showActivate =
+    tapToPayEnabled && bridgeOk && hasAdyenSdk === true && registered !== true;
 
   const activate = async () => {
+    setActivateError(null);
     setBusy(true);
     try {
       const result = await registerDeviceBridgeTapToPay();
@@ -50,8 +57,17 @@ export default function TapToPayDeviceSetup({ adyenReady, tapToPayEnabled }: Pro
         toast.success(result.message || t('tapToPayDeviceActivated'));
         await refresh();
       } else {
-        toast.error(result.message || t('tapToPayDeviceActivateFailed'));
+        const err = result.message || t('tapToPayDeviceActivateFailed');
+        setActivateError(err);
+        toast.error(err);
       }
+    } catch (e: unknown) {
+      const err =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message || t('tapToPayDeviceActivateFailed'))
+          : t('tapToPayDeviceActivateFailed');
+      setActivateError(err);
+      toast.error(err);
     } finally {
       setBusy(false);
     }
@@ -70,7 +86,22 @@ export default function TapToPayDeviceSetup({ adyenReady, tapToPayEnabled }: Pro
           ? t('tapToPayDeviceRegistered')
           : message || t('tapToPayDeviceNotRegistered')}
       </p>
-      {canActivate && (
+      {!tapToPayEnabled && showActivate && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          {t('tapToPayDeviceNotEnabled')}
+        </p>
+      )}
+      {!adyenReady && showActivate && tapToPayEnabled && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          {t('tapToPayDeviceAdyenNotConfigured')}
+        </p>
+      )}
+      {activateError && (
+        <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {activateError}
+        </p>
+      )}
+      {showActivate && (
         <button
           type="button"
           className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm"

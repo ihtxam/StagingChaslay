@@ -50,11 +50,13 @@ export default function WebPosTapToPaySetupModal({
   const [hasAdyenSdk, setHasAdyenSdk] = useState<boolean | null>(null);
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activateError, setActivateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bridgeDownloadUrl, setBridgeDownloadUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isAndroidWebPosTill()) return;
+    setActivateError(null);
     const agent = await probePrintAgentHealth(4);
     setBridgeOk(agent.ok);
     if (!agent.ok) {
@@ -79,8 +81,8 @@ export default function WebPosTapToPaySetupModal({
 
   if (!open || !isAndroidWebPosTill()) return null;
 
-  const canActivate =
-    adyenReady && tapToPayEnabled && bridgeOk && hasAdyenSdk === true && registered !== true;
+  const showActivate =
+    tapToPayEnabled && bridgeOk && hasAdyenSdk === true && registered !== true;
 
   const finish = () => {
     if (registered) markWebPosTapToPaySetupDone();
@@ -88,6 +90,7 @@ export default function WebPosTapToPaySetupModal({
   };
 
   const activate = async () => {
+    setActivateError(null);
     setBusy(true);
     try {
       const result = await registerDeviceBridgeTapToPay();
@@ -98,8 +101,17 @@ export default function WebPosTapToPaySetupModal({
         await refresh();
         onClose();
       } else {
-        toast.error(result.message || t('tapToPayDeviceActivateFailed'));
+        const err = result.message || t('tapToPayDeviceActivateFailed');
+        setActivateError(err);
+        toast.error(err);
       }
+    } catch (e: unknown) {
+      const err =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message || t('tapToPayDeviceActivateFailed'))
+          : t('tapToPayDeviceActivateFailed');
+      setActivateError(err);
+      toast.error(err);
     } finally {
       setBusy(false);
     }
@@ -146,12 +158,27 @@ export default function WebPosTapToPaySetupModal({
             {message && !registered && (
               <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">{message}</p>
             )}
+            {!tapToPayEnabled && showActivate && (
+              <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+                {t('tapToPayDeviceNotEnabled')}
+              </p>
+            )}
+            {!adyenReady && showActivate && tapToPayEnabled && (
+              <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+                {t('tapToPayDeviceAdyenNotConfigured')}
+              </p>
+            )}
+            {activateError && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                {activateError}
+              </p>
+            )}
             <div className="mt-5 flex flex-wrap gap-2">
-              {canActivate && (
+              {showActivate && (
                 <button
                   type="button"
                   className="webpos-accent-btn inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold"
-                  disabled={busy}
+                  disabled={busy || !tapToPayEnabled}
                   onClick={() => void activate()}
                 >
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
