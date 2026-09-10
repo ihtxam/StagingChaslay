@@ -2707,6 +2707,7 @@ const en: Dict = {
   webPosPinTitle: 'Switch user',
   webPosPinGateTitle: 'Enter staff PIN',
   webPosPinGateHint: 'PIN unlocks this register for your shift. Enter 4–8 digits; submits automatically.',
+  webPosPinClockIn: 'Clock in with PIN',
   webPosPinHint: 'Enter 4–8 digits',
   webPosPinInvalid: 'Invalid PIN',
   webPosPinErrorTitle: 'Could not unlock register',
@@ -3196,7 +3197,7 @@ const en: Dict = {
     'Includes catalog access. End of day can be enabled for own-sales EOD from POS. Company reports stay blocked unless you grant View reports / View all sales.',
   staffRoleStorekeeper: 'Storekeeper (mobile intake)',
   staffRoleStorekeeperHint:
-    'Opens the mobile storekeeper app after PIN login — scan barcodes and receive stock. No full panel access.',
+    'Mobile stock intake after PIN login. You can also grant inventory or panel access for backend product and barcode management.',
   staffRoleKiosk: 'Kiosk operator',
   staffRoleKioskHint:
     'Opens kiosk setup only — configure sliders, payment methods, test connections, and launch customer mode. No full panel access.',
@@ -3706,6 +3707,8 @@ const en: Dict = {
   storekeeperRecent: 'Recent intakes',
   storekeeperOnlineFound: 'Product found online — review and save',
   storekeeperOnlineNotFound: 'Barcode not in your stock or online database — enter details manually',
+  storekeeperBootstrapFailed: 'Could not load storekeeper data — check your connection and try again',
+  storekeeperLookupFailed: 'Barcode lookup failed — try again or enter details manually',
   storekeeperPackageSize: 'Package: {size}',
   storekeeperCost: 'Purchase cost (CHF)',
   storekeeperSalePrice: 'Sale price (CHF)',
@@ -6577,6 +6580,7 @@ const fr: Dict = {
   webPosPinTitle: 'Changer d’utilisateur',
   webPosPinGateTitle: 'Entrez le code PIN',
   webPosPinGateHint: 'Le PIN déverrouille la caisse pour votre session. Saisissez 4 à 8 chiffres ; validation automatique.',
+  webPosPinClockIn: 'Pointer avec le PIN',
   webPosPinHint: 'Saisissez 4 à 8 chiffres',
   webPosPinInvalid: 'Code PIN invalide',
   webPosPinErrorTitle: 'Impossible de déverrouiller la caisse',
@@ -7030,7 +7034,7 @@ const fr: Dict = {
     'Inclut l’accès catalogue. Fin de journée possible pour l’EOD personnel depuis la caisse. Rapports entreprise bloqués sans Voir les rapports / toutes les ventes.',
   staffRoleStorekeeper: 'Magasinier (réception mobile)',
   staffRoleStorekeeperHint:
-    'Ouvre l’app magasinier après le PIN — scan des codes-barres et réception stock. Pas d’accès au panneau.',
+    'Réception stock mobile après PIN. Vous pouvez aussi accorder l’inventaire ou le panneau pour gérer produits et codes-barres.',
   staffRoleKiosk: 'Opérateur borne',
   staffRoleKioskHint:
     'Accès à la configuration borne uniquement — sliders, paiements, tests de connexion et lancement du mode client. Pas d’accès au panneau complet.',
@@ -7522,6 +7526,8 @@ const fr: Dict = {
   storekeeperRecent: 'Réceptions récentes',
   storekeeperOnlineFound: 'Produit trouvé en ligne — vérifiez et enregistrez',
   storekeeperOnlineNotFound: 'Code absent du stock et de la base en ligne — saisissez les détails',
+  storekeeperBootstrapFailed: 'Impossible de charger les données magasinier — vérifiez la connexion',
+  storekeeperLookupFailed: 'Recherche du code-barres échouée — réessayez ou saisissez manuellement',
   storekeeperPackageSize: 'Conditionnement : {size}',
   storekeeperCost: 'Coût d’achat (CHF)',
   storekeeperSalePrice: 'Prix de vente (CHF)',
@@ -10391,6 +10397,7 @@ const de: Dict = {
   webPosPinTitle: 'Benutzer wechseln',
   webPosPinGateTitle: 'Mitarbeiter-PIN eingeben',
   webPosPinGateHint: 'Die PIN entsperrt die Kasse für Ihre Sitzung. 4–8 Ziffern eingeben; automatische Bestätigung.',
+  webPosPinClockIn: 'Mit PIN einstempeln',
   webPosPinHint: '4–8 Ziffern eingeben',
   webPosPinInvalid: 'Ungültige PIN',
   webPosPinErrorTitle: 'Kasse konnte nicht entsperrt werden',
@@ -10844,7 +10851,7 @@ const de: Dict = {
     'Enthält Katalogzugang. Tagesabschluss für eigenen EOD an der Kasse möglich. Unternehmensberichte ohne Berichte-/Alle-Verkäufe-Recht gesperrt.',
   staffRoleStorekeeper: 'Lagerist (mobile Buchung)',
   staffRoleStorekeeperHint:
-    'Öffnet die mobile Lageristen-App nach PIN-Login — Barcodes scannen und Bestand buchen. Kein volles Panel.',
+    'Mobile Wareneingabe nach PIN. Optional Inventar- oder Panel-Zugriff für Produkte und Barcodes im Backend.',
   staffRoleKiosk: 'Kiosk-Betreiber',
   staffRoleKioskHint:
     'Nur Kiosk-Einrichtung — Slider, Zahlungsarten, Verbindungstests und Start des Kundenmodus. Kein volles Panel.',
@@ -11336,6 +11343,8 @@ const de: Dict = {
   storekeeperRecent: 'Letzte Buchungen',
   storekeeperOnlineFound: 'Produkt online gefunden — prüfen und speichern',
   storekeeperOnlineNotFound: 'Barcode weder im Bestand noch online — manuell eingeben',
+  storekeeperBootstrapFailed: 'Lageristen-Daten konnten nicht geladen werden — Verbindung prüfen',
+  storekeeperLookupFailed: 'Barcode-Suche fehlgeschlagen — erneut versuchen oder manuell eingeben',
   storekeeperPackageSize: 'Packung: {size}',
   storekeeperCost: 'Einkaufspreis (CHF)',
   storekeeperSalePrice: 'Verkaufspreis (CHF)',

@@ -92,6 +92,7 @@ import {
   isRegisterFirstStaff,
   storekeeperHomePath,
   isOrdersPanelPath,
+  isInventoryPanelPath,
   isReportsPanelPath,
   isStaffJwt,
   hasPermission,
@@ -451,6 +452,7 @@ function MerchantShell() {
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
+    if (effective.canOpenInventory && isInventoryPanelPath(location.pathname)) return;
     if (
       hasPermission(effective.permissions, 'USE_WEBPOS', false) &&
       isPosFloorPath(location.pathname)
@@ -469,6 +471,7 @@ function MerchantShell() {
     effective.canOpenCatalog,
     effective.canOpenOrders,
     effective.canOpenReports,
+    effective.canOpenInventory,
     posAppMode,
     isAllowedPinAppRoute,
     pinRestrictedHomePath,

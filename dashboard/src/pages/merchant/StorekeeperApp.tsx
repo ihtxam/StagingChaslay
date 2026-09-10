@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle, LogOut, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -95,6 +95,15 @@ type SavedLabel = {
   price?: string;
 };
 
+const FALLBACK_UNITS: Unit[] = [
+  { code: 'kg', name: 'Kilogram' },
+  { code: 'g', name: 'Gram' },
+  { code: 'L', name: 'Liter' },
+  { code: 'ml', name: 'Milliliter' },
+  { code: 'piece', name: 'Piece' },
+  { code: 'pack', name: 'Pack' },
+];
+
 export default function StorekeeperApp() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -104,8 +113,9 @@ export default function StorekeeperApp() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinMode, setPinMode] = useState<'gate' | 'switch'>('gate');
   const [licensed, setLicensed] = useState<boolean | null>(null);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [units, setUnits] = useState<Unit[]>(FALLBACK_UNITS);
   const [barcode, setBarcode] = useState('');
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('piece');
@@ -149,7 +159,15 @@ export default function StorekeeperApp() {
       hasPermission(effectivePerms, 'ACCESS_PANEL', false));
   const clockedIn = !!pinStaff || managerPanelAccess;
   const showBackToPanel = canReturnToInventoryPanel;
-  const showLogout = !showBackToPanel && user?.role === 'staff';
+  const unitOptions = units.length ? units : FALLBACK_UNITS;
+
+  const handleLogout = useCallback(() => {
+    clearWebPosStaffSession();
+    notifyWebPosStaffSessionChanged();
+    setPinStaff(null);
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const returnToPanel = useCallback(() => {
     if (pinStaff) {
@@ -172,11 +190,13 @@ export default function StorekeeperApp() {
 
   const loadBootstrap = useCallback(async () => {
     if (!clockedIn) return;
+    setBootstrapLoading(true);
     try {
       const res = await api.get('/merchant/storekeeper/bootstrap', { headers: apiHeaders });
       setLicensed(res.data.enabled !== false);
       setCategories(res.data.categories || []);
-      setUnits(res.data.units || []);
+      const loadedUnits = (res.data.units || []).length ? res.data.units : FALLBACK_UNITS;
+      setUnits(loadedUnits);
       setStoreName(String(res.data.storeName || '').trim());
       const label = res.data.labelPrint || {};
       setLabelOpts({
@@ -192,14 +212,20 @@ export default function StorekeeperApp() {
         showSku: label.showSku === true,
       });
       setPosPrintSettings(res.data.posPrintSettings || null);
-      if (res.data.units?.[0]?.code) setUnit((u) => u || res.data.units[0].code);
+      if (loadedUnits[0]?.code) setUnit((u) => u || loadedUnits[0].code);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setLicensed(
         code === 'STOREKEEPER_ADDON_REQUIRED' || code === 'INVENTORY_ADDON_REQUIRED' ? false : null
       );
+      if (code !== 'STOREKEEPER_ADDON_REQUIRED' && code !== 'INVENTORY_ADDON_REQUIRED') {
+        toast.error(message || t('storekeeperBootstrapFailed'));
+      }
+    } finally {
+      setBootstrapLoading(false);
     }
-  }, [clockedIn, apiHeaders]);
+  }, [clockedIn, apiHeaders, t]);
 
   useEffect(() => {
     void loadBootstrap();
@@ -261,6 +287,7 @@ export default function StorekeeperApp() {
       } catch {
         setExistingItem(null);
         setSuggestion(null);
+        toast.error(t('storekeeperLookupFailed'));
       } finally {
         setLookupBusy(false);
       }
@@ -471,16 +498,19 @@ export default function StorekeeperApp() {
             setPinOpen(true);
           }}
         >
-          {t('webposPinClockIn')}
+          {t('webPosPinClockIn')}
         </button>
         <WebPosPinModal
           open={pinOpen}
           mode={pinMode}
           onClose={() => setPinOpen(false)}
+          onLeave={canReturnToInventoryPanel ? () => returnToPanel() : undefined}
+          onLogout={user?.role === 'staff' ? handleLogout : undefined}
           onSuccess={(session) => {
             saveWebPosStaffSession(session);
             setPinStaff(session);
             setPinOpen(false);
+            void loadBootstrap();
           }}
         />
       </div>
@@ -534,20 +564,6 @@ export default function StorekeeperApp() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {showLogout ? (
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-muted)]"
-              onClick={() => {
-                logout();
-                navigate('/login', { replace: true });
-              }}
-              aria-label={t('logout')}
-              title={t('logout')}
-            >
-              <LogOut size={20} />
-            </button>
-          ) : null}
           <button
             type="button"
             className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm ${
@@ -713,7 +729,7 @@ export default function StorekeeperApp() {
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
             >
-              {units.map((u) => (
+              {unitOptions.map((u) => (
                 <option key={u.code} value={u.code}>
                   {u.name}
                 </option>
@@ -845,10 +861,13 @@ export default function StorekeeperApp() {
         open={pinOpen}
         mode={pinMode}
         onClose={() => setPinOpen(false)}
+        onLeave={canReturnToInventoryPanel ? () => returnToPanel() : undefined}
+        onLogout={user?.role === 'staff' ? handleLogout : undefined}
         onSuccess={(session) => {
           saveWebPosStaffSession(session);
           setPinStaff(session);
           setPinOpen(false);
+          void loadBootstrap();
         }}
       />
     </div>

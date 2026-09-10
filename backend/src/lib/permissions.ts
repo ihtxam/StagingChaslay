@@ -314,7 +314,6 @@ export function waiterBlockedPermissions(kind: WaiterSystemKind): Permission[] {
 }
 
 const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
-  "ACCESS_PANEL",
   "VIEW_REPORTS",
   "VIEW_ALL_SALES",
   "GANDOLA_PURGE",
@@ -325,8 +324,6 @@ const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
   "MANAGE_CUSTOMERS",
   "MANAGE_OFFERS",
   "MANAGE_ONLINE_SHOP",
-  "MANAGE_PRODUCTS",
-  "VIEW_ORDER_HISTORY",
   "USE_WEBPOS",
   "USE_POS",
   "PROCESS_PAYMENTS",
@@ -340,7 +337,6 @@ const STOREKEEPER_PRIVILEGED_BLOCKED: Permission[] = [
   "CANCEL_ORDERS",
   "REFUND_ORDERS",
   "END_OF_DAY",
-  "MANAGE_INVENTORY",
 ];
 
 export function storekeeperBlockedPermissions(): Permission[] {
