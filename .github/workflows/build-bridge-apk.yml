@@ -90,20 +90,6 @@ jobs:
           echo "gradle=$BRIDGE_VERSION apk=$APK_VERSION"
           test "$APK_VERSION" = "$BRIDGE_VERSION"
 
-      - name: Update download manifest
-        run: |
-          BRIDGE_VERSION="$(grep -E 'versionName\s*=' print-agent-android/app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
-          python3 - <<PY
-          import json, datetime
-          from pathlib import Path
-          manifest = Path("backend/public/downloads/reborn-print-bridge.json")
-          data = json.loads(manifest.read_text())
-          data["version"] = "$BRIDGE_VERSION"
-          data["builtAt"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-          data["signed"] = True
-          manifest.write_text(json.dumps(data, indent=2) + "\n")
-          PY
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
