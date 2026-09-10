@@ -97,16 +97,31 @@ export type PosPrintSettings = {
    * Cleared once merchants save printer profiles from the panel.
    */
   kitchenExcludedCategoryIds?: string[];
-  /** Barcode label paper width (thermal / label printer) */
-  labelWidthMm?: 40 | 58;
+  /** Barcode label paper width (thermal / label printer, including 4-inch TSPL) */
+  labelWidthMm?: 40 | 58 | 80 | 100;
   /** Barcode label height presets */
-  labelHeightMm?: 20 | 25 | 30 | 40;
+  labelHeightMm?: 20 | 25 | 30 | 40 | 50 | 80 | 150;
   labelShowStoreName?: boolean;
   labelShowProductName?: boolean;
   labelShowBarcodeNumber?: boolean;
   labelShowPrice?: boolean;
   labelShowSku?: boolean;
 };
+
+export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
+export const LABEL_HEIGHTS_MM = [20, 25, 30, 40, 50, 80, 150] as const;
+export type LabelWidthMm = (typeof LABEL_WIDTHS_MM)[number];
+export type LabelHeightMm = (typeof LABEL_HEIGHTS_MM)[number];
+
+export function parseLabelWidthMm(value: unknown): LabelWidthMm {
+  const n = Number(value);
+  return (LABEL_WIDTHS_MM as readonly number[]).includes(n) ? (n as LabelWidthMm) : 40;
+}
+
+export function parseLabelHeightMm(value: unknown): LabelHeightMm {
+  const n = Number(value);
+  return (LABEL_HEIGHTS_MM as readonly number[]).includes(n) ? (n as LabelHeightMm) : 20;
+}
 
 export const DEFAULT_POS_PRINT_SETTINGS: Required<
   Omit<PosPrintSettings, "receiptLogoUrl" | "printers" | "kitchenPrintRouting" | "kitchenExcludedCategoryIds">
@@ -228,9 +243,8 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenExcludedCategoryIds
   );
 
-  const labelWidthMm = Number(src.labelWidthMm) === 58 ? 58 : 40;
-  const rawH = Number(src.labelHeightMm);
-  const labelHeightMm = (rawH === 25 || rawH === 30 || rawH === 40 ? rawH : 20) as 20 | 25 | 30 | 40;
+  const labelWidthMm = parseLabelWidthMm(src.labelWidthMm);
+  const labelHeightMm = parseLabelHeightMm(src.labelHeightMm);
 
   const itemScale = Number(src.kitchenItemTextScale);
   const headerScale = Number(src.kitchenHeaderTextScale);

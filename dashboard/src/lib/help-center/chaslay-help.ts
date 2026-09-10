@@ -75,7 +75,7 @@ const en: HelpCategory[] = [
         id: 'barcodes',
         title: 'Barcodes & labels',
         summary: 'Generate Code128 barcodes and print labels.',
-        body: 'Open Products, generate missing barcodes, then click price or barcode to preview labels. Connect a label printer via Terminals or the print agent for bulk printing.',
+        body: 'Open Products, generate missing barcodes, then click price or barcode to preview labels. Connect a LuckyDoor (EML-400L / TSPL) or Niimbot via Settings → Receipts & printers, enable the Labels role, and print from Products or Storekeeper.',
       },
     ],
   },

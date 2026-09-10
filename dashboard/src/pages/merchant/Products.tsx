@@ -34,12 +34,12 @@ import { bulkDeleteByIds } from '@/lib/bulk-delete';
 import {
   labelMetaLine,
   normalizeLabelOptions,
+  parseLabelHeightMm,
+  parseLabelWidthMm,
   printLabelsHtml,
   printLabelsViaAgentOrQueue,
-  type LabelHeightMm,
   type LabelPrintOptions,
   type LabelProduct,
-  type LabelWidthMm,
 } from '@/lib/barcode-labels';
 import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
 import {
@@ -445,8 +445,8 @@ export default function Products() {
         setLabelOpts((prev) => ({
           ...prev,
           storeName: s?.name || '',
-          widthMm: ps.labelWidthMm === 58 ? 58 : 40,
-          heightMm: ([20, 25, 30, 40] as const).includes(ps.labelHeightMm) ? ps.labelHeightMm : 20,
+          widthMm: parseLabelWidthMm(ps.labelWidthMm),
+          heightMm: parseLabelHeightMm(ps.labelHeightMm),
           showStoreName: ps.labelShowStoreName !== false,
           showProductName: ps.labelShowProductName !== false,
           showBarcodeNumber: ps.labelShowBarcodeNumber !== false,
@@ -2596,23 +2596,28 @@ export default function Products() {
                 className="input"
                 value={labelOpts.widthMm || 40}
                 onChange={(e) =>
-                  setLabelOpts({ ...labelOpts, widthMm: Number(e.target.value) as LabelWidthMm })
+                  setLabelOpts({ ...labelOpts, widthMm: parseLabelWidthMm(e.target.value) })
                 }
               >
                 <option value={40}>40 mm</option>
                 <option value={58}>58 mm</option>
+                <option value={80}>80 mm</option>
+                <option value={100}>100 mm</option>
               </select>
               <select
                 className="input"
                 value={labelOpts.heightMm || 20}
                 onChange={(e) =>
-                  setLabelOpts({ ...labelOpts, heightMm: Number(e.target.value) as LabelHeightMm })
+                  setLabelOpts({ ...labelOpts, heightMm: parseLabelHeightMm(e.target.value) })
                 }
               >
                 <option value={20}>20 mm</option>
                 <option value={25}>25 mm</option>
                 <option value={30}>30 mm</option>
                 <option value={40}>40 mm</option>
+                <option value={50}>50 mm</option>
+                <option value={80}>80 mm</option>
+                <option value={150}>150 mm</option>
               </select>
               <input
                 className="input"
