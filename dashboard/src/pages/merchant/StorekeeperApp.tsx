@@ -527,6 +527,15 @@ export default function StorekeeperApp() {
     );
   }
 
+  if (bootstrapLoading && licensed === null) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 p-6 text-center">
+        <Package className="text-teal-700" size={40} />
+        <p className="text-sm muted">{t('loading')}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="storekeeper-app mx-auto flex min-h-[100dvh] max-w-lg flex-col gap-4 bg-[var(--bg)] p-4 pb-8 text-[var(--text)]">
       <header className="flex items-center justify-between gap-2">
