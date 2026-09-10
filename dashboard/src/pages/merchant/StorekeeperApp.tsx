@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -184,7 +184,11 @@ export default function StorekeeperApp() {
     }
   }, [pinStaff, navigate, effectivePerms, actingAsOwner]);
 
-  const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
+  const apiHeaders = useMemo(
+    () => (staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined),
+    [staffAccessToken]
+  );
+  const bootstrapToastShownRef = useRef(false);
 
   const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
 
@@ -193,6 +197,7 @@ export default function StorekeeperApp() {
     setBootstrapLoading(true);
     try {
       const res = await api.get('/merchant/storekeeper/bootstrap', { headers: apiHeaders });
+      bootstrapToastShownRef.current = false;
       setLicensed(res.data.enabled !== false);
       setCategories(res.data.categories || []);
       const loadedUnits = (res.data.units || []).length ? res.data.units : FALLBACK_UNITS;
@@ -219,7 +224,12 @@ export default function StorekeeperApp() {
       setLicensed(
         code === 'STOREKEEPER_ADDON_REQUIRED' || code === 'INVENTORY_ADDON_REQUIRED' ? false : null
       );
-      if (code !== 'STOREKEEPER_ADDON_REQUIRED' && code !== 'INVENTORY_ADDON_REQUIRED') {
+      if (
+        code !== 'STOREKEEPER_ADDON_REQUIRED' &&
+        code !== 'INVENTORY_ADDON_REQUIRED' &&
+        !bootstrapToastShownRef.current
+      ) {
+        bootstrapToastShownRef.current = true;
         toast.error(message || t('storekeeperBootstrapFailed'));
       }
     } finally {
@@ -230,6 +240,10 @@ export default function StorekeeperApp() {
   useEffect(() => {
     void loadBootstrap();
   }, [loadBootstrap]);
+
+  useEffect(() => {
+    bootstrapToastShownRef.current = false;
+  }, [staffAccessToken]);
 
   const applyBarcode = useCallback(
     async (code: string) => {
