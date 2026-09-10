@@ -26,6 +26,7 @@ USB scales (CH340) and Bluetooth COM printers often get a **new COM number** aft
 
 - **Scale:** Settings ? Print ? Scan scale lists the manufacturer/model (for example `USB-SERIAL CH340 (COM7)`). That name is saved. On the next sale the agent finds the current COM port from the name.
 - **Printer:** Pick the Windows printer by its real name. Bluetooth / virtual-COM (SPP) queues are paced automatically so multi-item kitchen tickets do not overflow the radio buffer. USB ESC/POS (USB001 / USBPRINT) is unpaced — Print Agent 1.10.3+ returns as soon as WritePrinter finishes instead of sleeping ~4–5s (`drainMs` + cut trailer) that used to apply to any queue named thermal/receipt/xprinter.
+- **LuckyDoor / EML TSPL labels:** Product labels for `EML-400L (4inch)` and similar TSPL printers are generated in the dashboard and sent as RAW TSPL on `POST /print` (same path as ESC/POS). Enable the **Labels** role on that Windows printer. Niimbot still uses `/print/niimbot-label`.
 
 Reinstall the agent after this update (v1.9.2+) so Bluetooth / COM kitchen tickets stay paced and cut.
 

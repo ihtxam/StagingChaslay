@@ -9,10 +9,10 @@ import WebPosPinModal from '@/components/WebPosPinModal';
 import BarcodeScanModal from '@/components/storekeeper/BarcodeScanModal';
 import {
   normalizeLabelOptions,
+  parseLabelHeightMm,
+  parseLabelWidthMm,
   printLabelsViaAgentOrQueue,
-  type LabelHeightMm,
   type LabelPrintOptions,
-  type LabelWidthMm,
 } from '@/lib/barcode-labels';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
@@ -181,10 +181,8 @@ export default function StorekeeperApp() {
       const label = res.data.labelPrint || {};
       setLabelOpts({
         storeName: String(res.data.storeName || '').trim(),
-        widthMm: (Number(label.widthMm) === 58 ? 58 : 40) as LabelWidthMm,
-        heightMm: ([20, 25, 30, 40] as const).includes(label.heightMm)
-          ? (label.heightMm as LabelHeightMm)
-          : 20,
+        widthMm: parseLabelWidthMm(label.widthMm),
+        heightMm: parseLabelHeightMm(label.heightMm),
         showStoreName: label.showStoreName !== false,
         showProductName: label.showProductName !== false,
         showBarcodeNumber: label.showBarcodeNumber !== false,

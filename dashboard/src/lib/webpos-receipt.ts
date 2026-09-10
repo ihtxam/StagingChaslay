@@ -289,8 +289,8 @@ export type PosPrintSettingsClient = {
   /** Android USB scale address synced from panel. */
   scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
-    labelWidthMm?: 40 | 58;
-    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelWidthMm?: 40 | 58 | 80 | 100;
+    labelHeightMm?: 20 | 25 | 30 | 40 | 50 | 80 | 150;
     labelShowStoreName?: boolean;
     labelShowProductName?: boolean;
     labelShowBarcodeNumber?: boolean;

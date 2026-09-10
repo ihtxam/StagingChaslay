@@ -7,10 +7,23 @@ import {
   labelPrinterUsesNiimbot,
   renderNiimbotLabelPng,
 } from '@/lib/niimbot-label';
+import { buildLabelTspl, labelPrinterUsesTspl } from '@/lib/tspl-label';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
-export type LabelHeightMm = 20 | 25 | 30 | 40;
-export type LabelWidthMm = 40 | 58;
+export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
+export const LABEL_HEIGHTS_MM = [20, 25, 30, 40, 50, 80, 150] as const;
+export type LabelWidthMm = (typeof LABEL_WIDTHS_MM)[number];
+export type LabelHeightMm = (typeof LABEL_HEIGHTS_MM)[number];
+
+export function parseLabelWidthMm(value: unknown): LabelWidthMm {
+  const n = Number(value);
+  return (LABEL_WIDTHS_MM as readonly number[]).includes(n) ? (n as LabelWidthMm) : 40;
+}
+
+export function parseLabelHeightMm(value: unknown): LabelHeightMm {
+  const n = Number(value);
+  return (LABEL_HEIGHTS_MM as readonly number[]).includes(n) ? (n as LabelHeightMm) : 20;
+}
 
 export type LabelPrintOptions = {
   storeName?: string;
@@ -87,11 +100,10 @@ export function normalizeLabelOptions(raw?: Partial<LabelPrintOptions> | null): 
   storeName: string;
   copies: number;
 } {
-  const h = Number(raw?.heightMm);
   return {
     storeName: String(raw?.storeName || '').trim().slice(0, 80),
-    widthMm: Number(raw?.widthMm) === 58 ? 58 : 40,
-    heightMm: (h === 25 || h === 30 || h === 40 ? h : 20) as LabelHeightMm,
+    widthMm: parseLabelWidthMm(raw?.widthMm),
+    heightMm: parseLabelHeightMm(raw?.heightMm),
     showStoreName: raw?.showStoreName !== false,
     showProductName: raw?.showProductName !== false,
     showBarcodeNumber: raw?.showBarcodeNumber !== false,
@@ -143,11 +155,28 @@ export async function printLabelsViaAgentOrQueue(
   const printerName = labelProfile?.name?.trim();
   if (!printerName) {
     throw new Error(
-      'No label printer configured. Open Settings → Receipts & printers, add your Niimbot, and enable Labels.'
+      'No label printer configured. Open Settings → Receipts & printers, add your LuckyDoor or Niimbot, and enable Labels.'
     );
   }
   const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
+  const useTspl = !useNiimbot && labelPrinterUsesTspl(settings, printerName);
+
+  if (useTspl) {
+    const chunks: Uint8Array[] = [];
+    for (const product of printable) {
+      chunks.push(buildLabelTspl(product, o));
+    }
+    const data = concatBytes(...chunks);
+    return await printViaAgentOrQueue({
+      dataBase64: toBase64(data),
+      printerName,
+      text: printable.map((p) => p.barcode).join(', '),
+      retryLocally: relayOpts?.retryLocally,
+      jobKind: 'other',
+      jobLabel: 'barcode-label-tspl',
+    });
+  }
 
   if (useNiimbot) {
     for (const product of printable) {

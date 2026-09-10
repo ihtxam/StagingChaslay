@@ -44,6 +44,8 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
+import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
+import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -296,8 +298,8 @@ interface SettingsData {
     scaleDeviceId?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
-    labelWidthMm?: 40 | 58;
-    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelWidthMm?: 40 | 58 | 80 | 100;
+    labelHeightMm?: 20 | 25 | 30 | 40 | 50 | 80 | 150;
     labelShowStoreName?: boolean;
     labelShowProductName?: boolean;
     labelShowBarcodeNumber?: boolean;
@@ -1120,15 +1122,29 @@ export default function Settings() {
       }
       setTestingPrinterId(profile.id);
       try {
-        const escpos = buildPrinterTestEscPos({
-          merchantName: settings?.name,
-          printerName: name,
-        });
-        await printViaAgent({
-          printerName: name,
-          dataBase64: uint8ToBase64(escpos),
-          text: `TEST PRINT\n${settings?.name || ''}\n${name}\n`,
-        });
+        if (isTsplLabelPrinterName(name)) {
+          const tspl = buildTsplTestLabel({
+            printerName: name,
+            storeName: settings?.name,
+            widthMm: parseLabelWidthMm(settings?.posPrintSettings?.labelWidthMm),
+            heightMm: parseLabelHeightMm(settings?.posPrintSettings?.labelHeightMm),
+          });
+          await printViaAgent({
+            printerName: name,
+            dataBase64: uint8ToBase64(tspl),
+            text: `TSPL TEST\n${settings?.name || ''}\n${name}\n`,
+          });
+        } else {
+          const escpos = buildPrinterTestEscPos({
+            merchantName: settings?.name,
+            printerName: name,
+          });
+          await printViaAgent({
+            printerName: name,
+            dataBase64: uint8ToBase64(escpos),
+            text: `TEST PRINT\n${settings?.name || ''}\n${name}\n`,
+          });
+        }
         toast.success(t('testPrinterOk').replace('{name}', name));
       } catch (error: unknown) {
         const msg =
@@ -1140,7 +1156,7 @@ export default function Settings() {
         setTestingPrinterId(null);
       }
     },
-    [printAgentOk, settings?.name, t]
+    [printAgentOk, settings?.name, settings?.posPrintSettings?.labelHeightMm, settings?.posPrintSettings?.labelWidthMm, t]
   );
 
   const refreshScalePorts = useCallback(async () => {
@@ -1427,11 +1443,8 @@ export default function Settings() {
           !!ps.scaleUsbAddress?.trim() ||
           ps.scaleEnabled === true,
         printers,
-        labelWidthMm: ps.labelWidthMm === 58 ? 58 : 40,
-        labelHeightMm:
-          ps.labelHeightMm === 25 || ps.labelHeightMm === 30 || ps.labelHeightMm === 40
-            ? ps.labelHeightMm
-            : 20,
+        labelWidthMm: parseLabelWidthMm(ps.labelWidthMm),
+        labelHeightMm: parseLabelHeightMm(ps.labelHeightMm),
         labelShowStoreName: ps.labelShowStoreName !== false,
         labelShowProductName: ps.labelShowProductName !== false,
         labelShowBarcodeNumber: ps.labelShowBarcodeNumber !== false,
@@ -4594,6 +4607,9 @@ export default function Settings() {
                     {p.name && isUnsuitableRawPrinter(p.name) ? (
                       <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
                     ) : null}
+                    {p.name && isTsplLabelPrinterName(p.name) ? (
+                      <p className="text-xs leading-snug text-[var(--muted)] m-0">{t('barcodeTsplPrinterHint')}</p>
+                    ) : null}
                     {savedNameMissing ? (
                       <div className="space-y-1.5">
                         <p className="text-xs leading-snug text-amber-800 m-0">
@@ -4739,31 +4755,33 @@ export default function Settings() {
                   <SettingsField label={t('barcodeLabelWidth')}>
                     <select
                       className="input"
-                      value={settings.posPrintSettings?.labelWidthMm === 58 ? 58 : 40}
+                      value={parseLabelWidthMm(settings.posPrintSettings?.labelWidthMm)}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            labelWidthMm: Number(e.target.value) === 58 ? 58 : 40,
+                            labelWidthMm: parseLabelWidthMm(e.target.value),
                           },
                         })
                       }
                     >
                       <option value={40}>40 mm</option>
                       <option value={58}>58 mm</option>
+                      <option value={80}>80 mm</option>
+                      <option value={100}>100 mm (4 inch)</option>
                     </select>
                   </SettingsField>
                   <SettingsField label={t('barcodeLabelHeight')}>
                     <select
                       className="input"
-                      value={settings.posPrintSettings?.labelHeightMm || 20}
+                      value={parseLabelHeightMm(settings.posPrintSettings?.labelHeightMm)}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            labelHeightMm: Number(e.target.value) as 20 | 25 | 30 | 40,
+                            labelHeightMm: parseLabelHeightMm(e.target.value),
                           },
                         })
                       }
@@ -4772,6 +4790,9 @@ export default function Settings() {
                       <option value={25}>25 mm</option>
                       <option value={30}>30 mm</option>
                       <option value={40}>40 mm</option>
+                      <option value={50}>50 mm</option>
+                      <option value={80}>80 mm</option>
+                      <option value={150}>150 mm</option>
                     </select>
                   </SettingsField>
                 </div>
