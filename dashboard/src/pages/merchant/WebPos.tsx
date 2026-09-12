@@ -6948,6 +6948,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     text: string,
     opts: {
       qrUrl?: string;
+      fiscalQrUrl?: string;
       deliveryQrUrl?: string;
       barcodeData?: string;
       /** Gift-card receipts always print QR/barcode even when receipt QR is disabled. */
@@ -6998,6 +6999,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
         }
       }
+      const fiscalQr = opts.fiscalQrUrl?.trim();
       const qr =
         opts.forceScannable ||
         (opts.role === 'receipt' && printSettings?.receiptShowQrCode !== false)
@@ -7007,6 +7009,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const lang = resolveReceiptLanguage(printSettings, locale);
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
+        fiscalQrData: fiscalQr,
         deliveryQrData: opts.deliveryQrUrl,
         language: lang,
         logoBytes: logo,
@@ -7118,10 +7121,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     receiptText: string,
     receiptUrl?: string,
     deliveryQrUrl?: string,
-    opts?: { singleTarget?: boolean; dataBase64?: string; fastQr?: boolean }
+    opts?: {
+      singleTarget?: boolean;
+      dataBase64?: string;
+      fastQr?: boolean;
+      fiscalQrUrl?: string;
+    }
   ) => {
     await printEscPosToTargets(receiptText, {
       qrUrl: receiptUrl,
+      fiscalQrUrl: opts?.fiscalQrUrl,
       deliveryQrUrl,
       role: 'receipt',
       quiet: true,
@@ -7794,8 +7803,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const offlineEligible =
       isWebPosOfflineEnabled() && canCompleteSaleOffline(method, saleLines);
-    let pushRes: { data?: { results?: Array<{ clientId?: string; orderId?: string }> } } | null =
-      null;
+    let pushRes: {
+      data?: {
+        results?: Array<{
+          clientId?: string;
+          orderId?: string;
+          fiskaly?: {
+            qrCodeData?: string | null;
+            signature?: string | null;
+            txNumber?: string | number | null;
+            txId?: string | null;
+          };
+        }>;
+      };
+    } | null = null;
     let queuedOffline = false;
 
     if (!isBrowserOnline() && offlineEligible) {
@@ -7893,6 +7914,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         giftCardRemainingBalance = Math.min(...fromPayments);
       }
     }
+    const pushFiskaly = queuedOffline
+      ? undefined
+      : pushRes?.data?.results?.find((r) => r.clientId === clientId)?.fiskaly;
     const receiptRef = queuedOffline
       ? clientId
       : backendOrderId ||
@@ -7901,6 +7925,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         })) ||
         clientId;
     const receiptUrl = buildReceiptUrl(receiptRef);
+    const fiscalQrUrl = pushFiskaly?.qrCodeData?.trim() || undefined;
     const lang = resolveReceiptLanguage(
       printSettings,
       paymentConfig?.panelLanguage || locale
@@ -7980,6 +8005,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       vatAfterDiscount,
       splitLabel: activeSale.label,
       receiptUrl,
+      fiskalySignature: pushFiskaly || undefined,
       includeQr: printSettings?.receiptShowQrCode !== false,
       deliveryDirectionsQr: printSettings?.receiptDeliveryDirectionsQr !== false,
       staffName: webposStaff?.name,
@@ -8203,6 +8229,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
               singleTarget: method === 'pay_later',
               fastQr: true,
+              fiscalQrUrl,
             });
           } catch (e: unknown) {
             notifyPrintError(e, 'webPosPrintFailed');

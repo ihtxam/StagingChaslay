@@ -30,6 +30,7 @@ import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
 import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
+import fiskalyRoutes from "@/routes/fiskaly.routes";
 import { setLocationContext } from "@/middleware/location.middleware";
 import type { ReportPreset } from "@/services/pos-reports.service";
 
@@ -3291,5 +3292,6 @@ router.use(posSessionsRoutes);
 router.use(locationsRoutes);
 router.use(hqRoutes);
 router.use("/client-errors", clientErrorsRoutes);
+router.use("/fiskaly", fiskalyRoutes);
 
 export default router;

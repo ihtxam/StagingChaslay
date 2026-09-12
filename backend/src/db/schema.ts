@@ -17,6 +17,7 @@ import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 import type { KioskSettings } from "../lib/kiosk-settings";
+import type { FiskalySettings, FiskalySignature } from "../lib/fiskaly-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -398,6 +399,11 @@ export const merchants = pgTable(
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
     deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Fiskaly fiscal compliance (SIGN DE / SIGN FR):
+     * { enabled, environment, de: { apiKey, apiSecret, tssId, clientId, ... }, fr: { ... } }
+     */
+    fiskalySettings: json("fiskaly_settings").$type<FiskalySettings | null>(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
     /** Incremented to invalidate all merchant/staff JWTs and force re-login. */
     authEpoch: integer("auth_epoch").default(0).notNull(),
@@ -1408,6 +1414,8 @@ export const orders = pgTable(
     paymentBreakdown: json("payment_breakdown").$type<
       Array<{ method: string; amount: number }> | null
     >(),
+    /** Fiskaly fiscal signature payload (DE KassenSichV QR / FR NF525). */
+    fiskalySignature: json("fiskaly_signature").$type<FiskalySignature | null>(),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),

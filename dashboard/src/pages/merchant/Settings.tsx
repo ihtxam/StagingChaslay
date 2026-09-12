@@ -26,6 +26,7 @@ import {
   Tv,
   TabletSmartphone,
   Copy,
+  FileCheck,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -97,6 +98,7 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
+import SettingsFiscalTab from './settings/SettingsFiscalTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
@@ -220,6 +222,31 @@ interface SettingsData {
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
   tapToPayEnabled?: boolean;
+  fiskalySettings?: {
+    enabled?: boolean;
+    environment?: 'test' | 'live';
+    de?: {
+      apiKeyMasked?: string | null;
+      apiKeySet?: boolean;
+      apiSecretMasked?: string | null;
+      apiSecretSet?: boolean;
+      tssId?: string | null;
+      clientId?: string | null;
+      clientSerial?: string | null;
+      adminPinSet?: boolean;
+    };
+    fr?: {
+      apiKeyMasked?: string | null;
+      apiKeySet?: boolean;
+      apiSecretMasked?: string | null;
+      apiSecretSet?: boolean;
+      unitId?: string | null;
+      systemId?: string | null;
+      taxpayerId?: string | null;
+      locationId?: string | null;
+      siren?: string | null;
+    };
+  } | null;
   emailSmtpSettings?: {
     enabled?: boolean;
     host?: string | null;
@@ -352,6 +379,7 @@ type TabId =
   | 'reservations'
   | 'pos'
   | 'payments'
+  | 'fiscal'
   | 'receipt'
   | 'kds'
   | 'ods'
@@ -372,6 +400,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'reservations',
   'pos',
   'payments',
+  'fiscal',
   'receipt',
   'kds',
   'ods',
@@ -408,6 +437,7 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'locations') return 'business';
     if (q && SETTINGS_TAB_IDS.includes(q as TabId)) return q as TabId;
     if (q === 'payments') return 'payments';
+    if (q === 'fiscal') return 'fiscal';
     if (q === 'tables') return 'tables';
     const section = params.get('section');
     if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
@@ -677,6 +707,7 @@ export default function Settings() {
         { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
+        { id: 'fiscal' as const, label: t('settingsFiscal'), navLabel: t('settingsNavFiscal'), icon: FileCheck },
         { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
@@ -742,15 +773,27 @@ export default function Settings() {
     [businessModule, jwtIsOwner, settings, user?.permissions]
   );
 
+  const showFiscalSettings = useMemo(() => {
+    const c = String(settings?.country || '').trim().toUpperCase();
+    return (
+      c === 'DE' ||
+      c === 'GERMANY' ||
+      c === 'DEUTSCHLAND' ||
+      c === 'FR' ||
+      c === 'FRANCE'
+    );
+  }, [settings?.country]);
+
   const visibleTabs = useMemo(
     () =>
       tabs.filter((item) => {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && isRetailMerchant) return false;
+        if (item.id === 'fiscal' && !showFiscalSettings) return false;
         return true;
       }),
-    [canOpenSettingsTab, isRetailMerchant, showTablesSettings, tabs]
+    [canOpenSettingsTab, isRetailMerchant, showFiscalSettings, showTablesSettings, tabs]
   );
 
   const selectTab = useCallback(
@@ -3257,6 +3300,13 @@ export default function Settings() {
                   </div>
                 </Section>
             </div>
+          )}
+
+          {tab === 'fiscal' && (
+            <SettingsFiscalTab
+              settings={settings}
+              onSettingsChange={(next) => setSettings((prev) => (prev ? { ...prev, ...next } : prev))}
+            />
           )}
 
           {tab === 'email' && (

@@ -28,6 +28,10 @@ export type ReceiptLabels = {
   postalCode: string;
   forWhen: string;
   nonFiscalTicket: string;
+  /** KassenSichV / NF525 fiscal QR block title */
+  fiscalQrTitle: string;
+  fiscalSignature: string;
+  fiscalTxNumber: string;
   thankYou: string;
   kitchen: string;
   /** Kitchen void / cancel ticket title */
@@ -127,6 +131,9 @@ const EN: ReceiptLabels = {
   postalCode: 'Postal code',
   forWhen: 'For',
   nonFiscalTicket: 'Non-fiscal ticket',
+  fiscalQrTitle: 'Fiscal receipt (TSE)',
+  fiscalSignature: 'TSE signature',
+  fiscalTxNumber: 'TSE transaction',
   thankYou: 'Thank you',
   kitchen: 'KITCHEN',
   cancelledTicket: 'CANCELLED',
@@ -222,6 +229,9 @@ const FR: ReceiptLabels = {
   postalCode: 'Code postal',
   forWhen: 'Pour',
   nonFiscalTicket: 'Ticket non fiscal',
+  fiscalQrTitle: 'Recu fiscal',
+  fiscalSignature: 'Signature fiscale',
+  fiscalTxNumber: 'Transaction fiscale',
   thankYou: 'Merci',
   kitchen: 'CUISINE',
   cancelledTicket: 'ANNULE',
@@ -317,6 +327,9 @@ const DE: ReceiptLabels = {
   postalCode: 'PLZ',
   forWhen: 'Fuer',
   nonFiscalTicket: 'Kein Fiskalbeleg',
+  fiscalQrTitle: 'Fiskalbeleg (TSE)',
+  fiscalSignature: 'TSE-Signatur',
+  fiscalTxNumber: 'TSE-Transaktion',
   thankYou: 'Danke',
   kitchen: 'KUECHE',
   cancelledTicket: 'STORNIERT',

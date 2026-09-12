@@ -183,6 +183,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS subscription_billing_cycle varchar(20)",
   adyen_recurring_detail_reference:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
+  fiskaly_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -289,6 +291,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS adyen_cashier_receipt_json text",
   orders_device_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS device_id varchar(255)",
   orders_client_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_id varchar(64)",
+  orders_fiskaly_signature: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fiskaly_signature jsonb",
   orders_synced_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at timestamptz",
   orders_delivery_zone_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_zone_id uuid",
   order_items_weight_kg: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS weight_kg numeric(12,3)",

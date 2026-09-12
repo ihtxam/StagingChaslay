@@ -41,6 +41,11 @@ import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
+import {
+  getFiskalyPublic,
+  mergeFiskalySettings,
+  type FiskalySettings,
+} from "@/lib/fiskaly-settings";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -292,6 +297,9 @@ export class MerchantSettingsService {
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
       deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
+      fiskalySettings: getFiskalyPublic(
+        (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
+      ),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
@@ -398,6 +406,7 @@ export class MerchantSettingsService {
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
+      fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
       inventoryExpiryAlertDays?: number;
@@ -686,6 +695,17 @@ export class MerchantSettingsService {
         patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
       }
     }
+    if (updates.fiskalySettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { fiskalySettings: true },
+      });
+      patch.fiskalySettings = mergeFiskalySettings(
+        (current as { fiskalySettings?: FiskalySettings | null })?.fiskalySettings,
+        updates.fiskalySettings
+      );
+    }
+
     if (updates.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
