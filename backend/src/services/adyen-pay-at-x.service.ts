@@ -447,13 +447,16 @@ export class AdyenPayAtXService {
 
     const amounts = calcSplitPaymentAmounts(cartTotal, newPaid);
     if (amounts.requestedAmount > 0 && session.saleTransactionId && session.saleTransactionTimestamp) {
-      await AdyenTerminalPoiService.sendSplitPayment(merchantId, {
+      const nextResult = await AdyenTerminalPoiService.sendSplitPayment(merchantId, {
         terminalId: poiId,
         requestedAmount: amounts.requestedAmount,
         paidAmount: amounts.paidAmount,
         saleTransactionId: session.saleTransactionId,
         saleTransactionTimestamp: session.saleTransactionTimestamp,
       });
+      if (nextResult.status !== "error") {
+        await this.handlePaymentResponse(merchantId, poiId, nextResult);
+      }
     }
   }
 
@@ -532,13 +535,16 @@ export class AdyenPayAtXService {
       sessionId = created.id;
     }
 
-    await AdyenTerminalPoiService.sendSplitPayment(merchantId, {
+    const paymentResult = await AdyenTerminalPoiService.sendSplitPayment(merchantId, {
       terminalId: poiId,
       requestedAmount: amounts.requestedAmount,
       paidAmount: amounts.paidAmount,
       saleTransactionId: saleTx.id,
       saleTransactionTimestamp: saleTx.timestamp,
     });
+    if (paymentResult.status !== "error") {
+      await this.handlePaymentResponse(merchantId, poiId, paymentResult);
+    }
 
     console.info("[pay-at-x] split payment started", {
       merchantId,
