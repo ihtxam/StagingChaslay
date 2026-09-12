@@ -441,6 +441,8 @@ import {
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
+import { parseOrderLabelBarcode } from '@/lib/order-label-barcode';
+import { printOrderLabelViaAgent } from '@/lib/order-labels';
 import {
   posSaleToNotificationOrder,
   subscribeWebPosOrderCompleted,
@@ -1662,6 +1664,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
       ];
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
+  const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   const tablesEditionOk = editionAllows('pos_tables');
@@ -8362,7 +8365,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const tabSnapshot = tabNumber;
       const tableLabelSnapshot = tableLabel;
       const ticket = ensureCartTicket();
-      await persistHeldOrder(cart, sendToKitchen, { ticket });
+      await persistHeldOrder(cartSnapshot, sendToKitchen, { ticket });
+      const heldId = resumedHeldIdRef.current;
+      if (
+        heldId &&
+        orderLabelEnabled &&
+        printSettings?.autoPrintOrderLabelOnHold !== false
+      ) {
+        void printOrderLabelForCart(heldId, cartSnapshot).catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+          toast.error(msg);
+        });
+      }
       setCart([]);
       clearCartTicket();
       setMobileCartOpen(false);
@@ -8383,6 +8397,62 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosHoldFailed'));
+    }
+  };
+
+  const printOrderLabelForCart = async (heldId: string, lines: CartLine[]) => {
+    await printOrderLabelViaAgent(
+      heldId,
+      lines.map((l) => ({
+        name: l.name,
+        lineTotal: Number(l.lineTotal) || 0,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : null,
+        isWeighed: !!l.isWeighed,
+      })),
+      printSettings,
+      { storeName: merchant?.name || merchant?.businessName || undefined }
+    );
+    toast.success(t('webPosOrderLabelPrinted'));
+  };
+
+  const printCurrentOrderLabel = async () => {
+    if (!cart.length || busy) return;
+    setBusy(true);
+    try {
+      const cartSnapshot = cart;
+      const ticket = ensureCartTicket();
+      await persistHeldOrder(cartSnapshot, false, { ticket });
+      const heldId = resumedHeldIdRef.current;
+      if (!heldId) throw new Error(t('webPosOrderLabelFailed'));
+      await printOrderLabelForCart(heldId, cartSnapshot);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || e.message || t('webPosOrderLabelFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadHeldOrderFromBarcode = async (heldId: string): Promise<boolean> => {
+    try {
+      const res = await api.get(`/merchant/pos/held/${encodeURIComponent(heldId)}`);
+      const held = res.data?.held as HeldOrderRow | undefined;
+      if (!held?.id) {
+        toast.error(t('webPosOrderLabelNotFound'));
+        return false;
+      }
+      applyHeldOrderFromRow(held);
+      const meta = parseHeldCartJson(held.cartJson);
+      const total = meta.cart.reduce((s, l) => s + (Number(l.lineTotal) || 0), 0);
+      toast.success(t('webPosOrderLabelLoaded').replace('{total}', money(total)));
+      openRegisterCheckout();
+      return true;
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        toast.error(t('webPosOrderLabelNotFound'));
+      } else {
+        toast.error(e.response?.data?.error || e.message || t('webPosOrderLabelNotFound'));
+      }
+      return false;
     }
   };
 
@@ -8918,6 +8988,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
             return;
           }
+        }
+        const orderHeldId = parseOrderLabelBarcode(code);
+        if (orderHeldId) {
+          await loadHeldOrderFromBarcode(orderHeldId);
+          return;
         }
       }
       if (onCheckout) {
@@ -9864,6 +9939,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 tablesEnabled={tablesUiEnabled}
                 requireTableForDineIn={requireTableForDineIn}
                 onHoldOrder={() => void holdCurrentOrder(false)}
+                onPrintOrderLabel={
+                  orderLabelEnabled ? () => void printCurrentOrderLabel() : undefined
+                }
                 onMoveTable={
                   tablesUiEnabled && kitchenEnabled
                     ? () => openMoveTablePicker()
