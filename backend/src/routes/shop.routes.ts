@@ -1580,7 +1580,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
 
 /**
  * POST /api/shop/:slug/vouchers/validate
- * Body: { code, subtotal }
+ * Body: { code, subtotal, orderType? } — orderType = takeaway | delivery | dine_in
  */
 router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
   try {
@@ -1588,12 +1588,18 @@ router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
     const code = String(req.body?.code || "");
     const subtotal = Number(req.body?.subtotal || 0);
+    const rawOrderType = String(req.body?.orderType || req.body?.fulfillmentChannel || "").toLowerCase();
+    const orderType =
+      rawOrderType === "takeaway" || rawOrderType === "delivery" || rawOrderType === "dine_in"
+        ? rawOrderType
+        : undefined;
     const authCustomer = optionalCustomer(req);
     const result = await VoucherService.validateForShop(
       merchant.id,
       code,
       subtotal,
-      authCustomer.customerId
+      authCustomer.customerId,
+      orderType
     );
     res.json({ success: true, ...result });
   } catch (error) {
@@ -2251,7 +2257,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           merchant.id,
           trimmedVoucher,
           voucherBase,
-          authCustomer.customerId
+          authCustomer.customerId,
+          channel
         );
         voucherDiscount = roundMoney2(Math.min(validated.discount, voucherBase));
         appliedVoucher = {

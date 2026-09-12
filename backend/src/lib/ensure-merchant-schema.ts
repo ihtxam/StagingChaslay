@@ -246,6 +246,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_discount numeric(10,2) DEFAULT 0",
   orders_points_earned: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_earned integer DEFAULT 0",
   orders_points_redeemed: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_redeemed integer DEFAULT 0",
+  vouchers_order_types:
+    "ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'",
   orders_card_fee: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS card_fee numeric(10,2) DEFAULT 0",
   orders_amount_tendered: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_tendered numeric(10,2)",
   orders_change_due: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS change_due numeric(10,2)",
@@ -385,6 +387,7 @@ const TABLE_PATCHES: string[] = [
     discount_type varchar(20) NOT NULL DEFAULT 'percent',
     discount_value numeric(10, 2) NOT NULL,
     min_order_amount numeric(10, 2) NOT NULL DEFAULT 0,
+    order_types jsonb NOT NULL DEFAULT '[]',
     valid_from timestamptz,
     valid_to timestamptz,
     is_active boolean NOT NULL DEFAULT true,
