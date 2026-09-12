@@ -158,6 +158,11 @@ import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectRead
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
+import {
+  openCustomerDisplayWindow,
+  publishCustomerDisplayState,
+  type CustomerDisplayPhase,
+} from '@/lib/customer-display-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -1817,6 +1822,57 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
   const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
+
+  const cdsToken = String(merchant?.customerDisplaySettings?.accessToken || '').trim();
+  const cdsEnabled = merchant?.customerDisplaySettings?.enabled !== false;
+
+  const cdsPhase: CustomerDisplayPhase = useMemo(() => {
+    if (posView === 'success') return 'thankyou';
+    if (paymentModalOpen) return 'payment';
+    if (activeSale.lines.length === 0) return 'idle';
+    return 'building';
+  }, [posView, paymentModalOpen, activeSale.lines.length]);
+
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    const saleTotals = activeSale.totals;
+    publishCustomerDisplayState(cdsToken, {
+      merchantName: merchant?.name || merchant?.businessName,
+      currency: 'CHF',
+      lines: activeSale.lines.map((l) => ({
+        name: repairCatalogText(l.name),
+        qty: l.quantity,
+        lineTotal: l.lineTotal,
+        modifiers: lineExtrasLabel(l) || undefined,
+      })),
+      subtotal: saleTotals.subtotal,
+      discount: saleTotals.discount ?? 0,
+      tax: saleTotals.tax,
+      total: saleTotals.total,
+      phase: cdsPhase,
+      updatedAt: Date.now(),
+    });
+  }, [
+    cdsToken,
+    cdsEnabled,
+    cdsPhase,
+    activeSale.lines,
+    activeSale.totals,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
+
+  const openCustomerDisplay = useCallback(() => {
+    if (!cdsToken || !cdsEnabled) {
+      toast.error(t('cdsNotConfigured'));
+      return;
+    }
+    setSettingsOpen(false);
+    const win = openCustomerDisplayWindow(cdsToken);
+    if (!win) {
+      toast.error(t('cdsActionFailed'));
+    }
+  }, [cdsToken, cdsEnabled, t]);
 
   const membershipCheckout = useMemo(() => {
     if (
@@ -9458,6 +9514,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               canManageOnlineShop && !isRetail
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
+            }
+            onOpenCustomerDisplay={
+              cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
             onSendLogs={() => {
               setSettingsOpen(false);

@@ -34,6 +34,7 @@ import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
+import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
@@ -355,6 +356,7 @@ type TabId =
   | 'receipt'
   | 'kds'
   | 'ods'
+  | 'customerDisplay'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -680,6 +682,12 @@ export default function Settings() {
         { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
+        {
+          id: 'customerDisplay' as const,
+          label: t('cdsSettingsTitle'),
+          navLabel: t('settingsNavCds'),
+          icon: Tv,
+        },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -4844,6 +4852,13 @@ export default function Settings() {
             <div className="space-y-5">
               <SettingsPageHeader title={t('odsSettingsTitle')} subtitle={t('odsSettingsHint')} />
               <OdsSettingsPanel />
+            </div>
+          )}
+
+          {tab === 'customerDisplay' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('cdsSettingsTitle')} subtitle={t('cdsSettingsHint')} />
+              <CdsSettingsPanel />
             </div>
           )}
 

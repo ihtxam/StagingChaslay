@@ -10,6 +10,7 @@ import {
   Moon,
   PanelLeft,
   Pencil,
+  Monitor,
   RefreshCw,
   Search,
   Sun,
@@ -559,6 +560,7 @@ export function WebPosSettingsDropdown({
   onShopEnabledChange,
   onReservationsEnabledChange,
   onSendLogs,
+  onOpenCustomerDisplay,
   terminalEnabled = false,
   terminals = [],
   selectedTerminalId = '',
@@ -596,6 +598,7 @@ export function WebPosSettingsDropdown({
   onShopEnabledChange?: (enabled: boolean) => void;
   onReservationsEnabledChange?: (enabled: boolean) => void;
   onSendLogs?: () => void;
+  onOpenCustomerDisplay?: () => void;
   terminalEnabled?: boolean;
   terminals?: Array<{ terminalId: string; terminalName: string | null }>;
   selectedTerminalId?: string;
@@ -648,6 +651,16 @@ export function WebPosSettingsDropdown({
             {t('webPosEnterFullscreen')}
           </button>
         </div>
+        {onOpenCustomerDisplay ? (
+          <button
+            type="button"
+            className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+            onClick={onOpenCustomerDisplay}
+          >
+            <Monitor size={14} />
+            {t('cdsOpenDisplay')}
+          </button>
+        ) : null}
       </div>
 
       {onLanguageChange ? (

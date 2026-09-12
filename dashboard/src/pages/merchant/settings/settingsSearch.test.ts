@@ -40,6 +40,7 @@ const allTabs = new Set(
     'receipt',
     'kds',
     'ods',
+    'customerDisplay',
     'signage',
     'kiosk',
     'email',
