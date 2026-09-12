@@ -1609,6 +1609,63 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     writeShowPosToasts(checkoutSettings.showPosToasts === true);
   }, [checkoutSettings.showPosToasts]);
+
+  const payAtXPaidRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (!checkoutSettings.payAtXEnabled) return;
+    if (posView !== 'tables' && posView !== 'register') return;
+    let cancelled = false;
+    const pollPayAtX = async () => {
+      try {
+        const res = await api.get('/merchant/pay-at-x/active');
+        const sessions = (res.data?.sessions || []) as Array<{
+          id: string;
+          tableId?: string | null;
+          ticketDisplay?: string | null;
+          paidAmount?: number;
+          cartTotal?: number;
+          status?: string;
+        }>;
+        if (cancelled) return;
+        for (const session of sessions) {
+          const prev = payAtXPaidRef.current[session.id] ?? 0;
+          const paid = Number(session.paidAmount) || 0;
+          const total = Number(session.cartTotal) || 0;
+          const matchesCurrent =
+            (tableId && session.tableId === tableId) ||
+            (ticketDisplay && session.ticketDisplay === ticketDisplay);
+          if (paid > prev && matchesCurrent && checkoutSettings.showPosToasts) {
+            const label =
+              paid >= total && total > 0
+                ? t('payAtXTerminalPaidFull').replace('{amount}', money(paid))
+                : t('payAtXTerminalPaidPartial').replace('{amount}', money(paid));
+            toast.info(label, { duration: 4000 });
+          }
+          payAtXPaidRef.current[session.id] = paid;
+          if (session.status === 'completed') {
+            delete payAtXPaidRef.current[session.id];
+            setOrdersRefreshToken((n) => n + 1);
+          }
+        }
+      } catch {
+        /* optional poll */
+      }
+    };
+    void pollPayAtX();
+    const timer = window.setInterval(() => void pollPayAtX(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    checkoutSettings.payAtXEnabled,
+    checkoutSettings.showPosToasts,
+    posView,
+    tableId,
+    ticketDisplay,
+    t,
+  ]);
+
   const loyaltyProgram = useMemo(
     () =>
       normalizeLoyaltyProgram(

@@ -3401,6 +3401,14 @@ const en: Dict = {
   adyenWebhookUrl: 'Webhook URL',
   adyenWebhookSetupHint:
     'In Adyen Customer Area, add a Standard webhook pointing to the URL above. Enable AUTHORISATION and include the HMAC key.',
+  payAtXEnabled: 'Pay at table (terminal-initiated)',
+  payAtXEnabledHint:
+    'Staff start payment on the portable terminal (Pay@Table). The till matches open bills and sends split payment requests.',
+  adyenTerminalEventWebhookUrl: 'Terminal event webhook URL',
+  payAtXSetupHint:
+    'In Adyen Customer Area → Devices → your terminal → Integrations → Terminal API, set Event URLs to the URL above. Enable Pay@Table on the terminal and map staff PINs to pinDisplay in Users.',
+  payAtXTerminalPaidPartial: 'Terminal payment received: {amount}',
+  payAtXTerminalPaidFull: 'Table paid in full via terminal: {amount}',
   tapToPaySettings: 'Tap to Pay (NFC)',
   tapToPaySettingsHint:
     'Accept contactless card and wallet payments on Android tablets (Bridge Reborn) and the Chaslay POS app. Requires merchant account and API key above.',

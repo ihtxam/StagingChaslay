@@ -27,6 +27,7 @@ import odsRoutes, { odsMerchantRoutes } from "@/routes/ods.routes";
 import signageRoutes, { signageMerchantRoutes } from "@/routes/signage.routes";
 import chaslayRoutes from "@/routes/chaslay";
 import webhooksRoutes from "@/routes/webhooks.routes";
+import adyenTerminalEventRoutes from "@/routes/adyen-terminal-event.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
 import offersRoutes from "@/routes/offers.routes";
 import vouchersRoutes from "@/routes/vouchers.routes";
@@ -263,6 +264,7 @@ app.use("/api/ods", odsRoutes);
 app.use("/api/merchant/ods", odsMerchantRoutes);
 app.use("/api/tv", signageRoutes);
 app.use("/api/merchant/signage", signageMerchantRoutes);
+app.use("/api/webhooks", adyenTerminalEventRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/webhooks", deliveryPlatformRoutes);
 /** Reborn / FoodTruck Android POS (Retrofit /v1/* contract) */
