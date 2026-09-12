@@ -53,6 +53,10 @@ import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
+import {
+  deliveryMinOrderShortfall,
+  withDeliveryMinOrderStatus,
+} from '@/lib/shop-delivery';
 
 interface Product {
   id: string;
@@ -417,6 +421,15 @@ export default function OrderingPage() {
   }, [channel, deliveryMenuMarkup, merchant, shopOffers, categoryDeliveryMap, categoryPricingEnabled]);
 
   const cartTotal = roundMoney2(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
+  const effectiveDeliveryInfo = useMemo(
+    () => withDeliveryMinOrderStatus(draft.deliveryInfo ?? deliveryInfo, cartTotal),
+    [draft.deliveryInfo, deliveryInfo, cartTotal]
+  );
+  const deliveryBelowMin =
+    channel === 'delivery' &&
+    !!effectiveDeliveryInfo?.deliverable &&
+    effectiveDeliveryInfo.meetsMinOrder === false;
+  const minOrderShortfall = deliveryMinOrderShortfall(effectiveDeliveryInfo, cartTotal);
   const channelMeta = channels[channel];
   const itemCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartLayout = merchant?.cartLayout === 'sticky_right' ? 'sticky_right' : 'hidden_slide';
@@ -748,6 +761,10 @@ export default function OrderingPage() {
 
   const goCheckout = () => {
     if (!cart.length) return;
+    if (deliveryBelowMin) {
+      setError(t('shopMinOrderAddMore').replace('{amount}', minOrderShortfall.toFixed(2)));
+      return;
+    }
     if (merchant?.acceptingOrders === false) {
       setError(t('shopNotAcceptingOrders'));
       return;
@@ -1081,6 +1098,11 @@ export default function OrderingPage() {
       </div>
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
+        {deliveryBelowMin && (
+          <p className="text-amber-800 text-sm font-medium">
+            {t('shopMinOrderAddMore').replace('{amount}', minOrderShortfall.toFixed(2))}
+          </p>
+        )}
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
         <button
@@ -1089,6 +1111,7 @@ export default function OrderingPage() {
             !cart.length ||
             vacationActive ||
             ordersPaused ||
+            deliveryBelowMin ||
             (!channelMeta?.open && !allowScheduledOrders)
           }
           onClick={goCheckout}

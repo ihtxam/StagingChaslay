@@ -2397,12 +2397,13 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         return res.status(400).json({ error: outsideMessage });
       }
       const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
-      if (subtotal < minOrder) {
+      const orderSubtotal = roundMoney2(Math.max(0, subtotal - offerDiscount));
+      if (orderSubtotal < minOrder) {
         return res.status(400).json({
           error: `Minimum order for this zone is CHF ${minOrder.toFixed(2)}`,
         });
       }
-      deliveryFee = computeEffectiveDeliveryFee(zone, subtotal);
+      deliveryFee = computeEffectiveDeliveryFee(zone, orderSubtotal);
       deliveryZoneId = zone.id;
     }
 
