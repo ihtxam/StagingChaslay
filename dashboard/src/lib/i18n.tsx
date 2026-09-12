@@ -3620,6 +3620,8 @@ const en: Dict = {
   orderLabelEnabled: 'Print order labels',
   orderLabelEnabledHint:
     'Show “Print label” on the register and optionally print when holding an order (butcher / weighed goods).',
+  orderLabelAutoPrintHint:
+    'Auto-print options (same pattern as kitchen auto-print). Requires a printer with the Labels role above.',
   autoPrintOrderLabelOnHold: 'Auto-print on hold',
   autoPrintOrderLabelOnHoldHint: 'Print an order label automatically when staff hold a cart at POS.',
   autoPrintOrderLabelOnSend: 'Print label on Send',
@@ -7443,6 +7445,8 @@ const fr: Dict = {
   orderLabelEnabled: 'Imprimer étiquettes commande',
   orderLabelEnabledHint:
     'Affiche « Imprimer étiquette » à la caisse et peut imprimer à la mise en attente (boucherie / pesée).',
+  orderLabelAutoPrintHint:
+    'Options d’impression auto (comme l’impression cuisine auto). Nécessite une imprimante avec le rôle Étiquettes ci-dessus.',
   autoPrintOrderLabelOnHold: 'Impression auto à la mise en attente',
   autoPrintOrderLabelOnHoldHint: 'Imprime une étiquette quand le panier est mis en attente au POS.',
   autoPrintOrderLabelOnSend: 'Imprimer étiquette à l’envoi',
@@ -11265,6 +11269,8 @@ const de: Dict = {
   orderLabelEnabled: 'Bestell-Etiketten drucken',
   orderLabelEnabledHint:
     'Zeigt « Etikett drucken » an der Kasse und optional beim Halten (Metzgerei / Wiegeartikel).',
+  orderLabelAutoPrintHint:
+    'Auto-Druck-Optionen (wie Küchen-Auto-Druck). Erfordert einen Drucker mit der Etiketten-Rolle oben.',
   autoPrintOrderLabelOnHold: 'Auto-Druck beim Halten',
   autoPrintOrderLabelOnHoldHint: 'Druckt automatisch ein Etikett, wenn der Warenkorb gehalten wird.',
   autoPrintOrderLabelOnSend: 'Etikett beim Senden drucken',

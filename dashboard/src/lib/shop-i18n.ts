@@ -153,7 +153,8 @@ export const shopEn: Record<string, string> = {
   shopCashPayHint: 'Pay the courier or at the counter.',
   shopCardAdyen: 'Card payment',
   shopCardReady: 'Secure online card payment via Swisspayout.',
-  shopCardNotReady: 'Online card payment - Swisspayout credentials will be used when configured.',
+  shopCardNotReady:
+    'Online card payment is not ready. In Settings → Payments, set merchant account, Checkout API key, and client key (test_… or live_… — not the API key in the client key field).',
   shopReviewOrder: 'Review order',
   shopReviewPlace: 'Review & place order',
   shopType: 'Type',
