@@ -416,6 +416,22 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/register"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug/register"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug/reservations"
             element={
               <ShopRoutes>
@@ -495,6 +511,62 @@ function App() {
                 }
               />
               <Route
+                path="/:merchantSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/:merchantSlug/reservations"
                 element={
                   <ShopRoutes>
@@ -550,6 +622,14 @@ function App() {
                   </ShopRoutes>
                 }
               />
+              <Route
+                path="*"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
             </>
           )}
 
@@ -596,6 +676,62 @@ function App() {
                 element={
                   <ShopRoutes>
                     <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
                   </ShopRoutes>
                 }
               />
@@ -701,6 +837,62 @@ function App() {
                 element={
                   <ShopRoutes>
                     <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
                   </ShopRoutes>
                 }
               />
