@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   clearCustomerToken,
   emptyDraft,
+  joinShopPath,
   loadCart,
   loadCustomerToken,
   newCartLineId,
@@ -71,7 +72,10 @@ export default function AccountPage() {
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
-  const base = shopBasePath(shopKey) || '/';
+  const { pathname } = useLocation();
+  const base = shopBasePath(shopKey) || '';
+  const homePath = base || '/';
+  const isRegister = /\/register\/?$/.test(pathname);
 
   const [loading, setLoading] = useState(true);
   const [customer, setCustomer] = useState<any>(null);
@@ -83,6 +87,12 @@ export default function AccountPage() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerFirstName, setRegisterFirstName] = useState('');
+  const [registerLastName, setRegisterLastName] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registering, setRegistering] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -173,6 +183,33 @@ export default function AccountPage() {
       setError(err.response?.data?.error || t('shopLoginFailed'));
     } finally {
       setLoggingIn(false);
+    }
+  };
+
+  const onRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!shopKey) return;
+    if (!registerEmail.trim() || registerPassword.length < 6) {
+      setError(t('shopEmailPasswordRequired'));
+      return;
+    }
+    setRegistering(true);
+    setError('');
+    try {
+      const res = await axios.post(`/api/shop/${shopKey}/auth/register`, {
+        email: registerEmail.trim(),
+        password: registerPassword,
+        firstName: registerFirstName.trim() || undefined,
+        lastName: registerLastName.trim() || undefined,
+        phone: registerPhone.trim() || undefined,
+      });
+      saveCustomerToken(shopKey, res.data.token);
+      await loadAll(res.data.token);
+      navigate(joinShopPath(base, 'account'), { replace: true });
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('shopCouldNotCreateAccount'));
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -289,7 +326,7 @@ export default function AccountPage() {
           ];
       return { ...draft, items };
     });
-    navigate(`${base}/checkout`);
+    navigate(joinShopPath(base, 'checkout'));
   };
 
   const reorder = (order: HistoryOrder) => {
@@ -344,7 +381,7 @@ export default function AccountPage() {
       }
       return { ...draft, items };
     });
-    navigate(base);
+    navigate(homePath);
   };
 
   if (loading) {
@@ -373,7 +410,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
       <header className="sticky top-0 z-20 bg-white border-b border-stone-200">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <Link to={base} className="text-sm font-semibold underline underline-offset-2">
+          <Link to={homePath} className="text-sm font-semibold underline underline-offset-2">
             ← {t('shopBackToMenu')}
           </Link>
           <div className="flex items-center gap-3">
@@ -391,37 +428,92 @@ export default function AccountPage() {
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
         {!customer ? (
           <section className="bg-white border border-stone-200 p-5 space-y-4">
-            <h1 className="text-xl font-bold">{t('shopLoginToContinue')}</h1>
-            <form onSubmit={onLogin} className="space-y-3">
-              <input
-                className="w-full border border-stone-300 px-3 py-2.5 text-sm"
-                type="email"
-                placeholder={t('shopEmail')}
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-              />
-              <input
-                className="w-full border border-stone-300 px-3 py-2.5 text-sm"
-                type="password"
-                placeholder={t('shopPassword')}
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-              />
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={loggingIn}
-                className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
-              >
-                {loggingIn ? t('shopLoading') : t('shopLogIn')}
-              </button>
-            </form>
+            <h1 className="text-xl font-bold">
+              {isRegister ? t('shopCreateAccount') : t('shopLoginToContinue')}
+            </h1>
+            {isRegister ? (
+              <form onSubmit={onRegister} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                    placeholder={t('shopFirstName')}
+                    value={registerFirstName}
+                    onChange={(e) => setRegisterFirstName(e.target.value)}
+                  />
+                  <input
+                    className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                    placeholder={t('shopLastName')}
+                    value={registerLastName}
+                    onChange={(e) => setRegisterLastName(e.target.value)}
+                  />
+                </div>
+                <input
+                  className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                  type="email"
+                  placeholder={t('shopEmail')}
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  required
+                />
+                <input
+                  className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                  type="password"
+                  placeholder={t('shopPasswordMin6')}
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <input
+                  className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                  placeholder={t('shopPhone')}
+                  value={registerPhone}
+                  onChange={(e) => setRegisterPhone(e.target.value)}
+                />
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={registering}
+                  className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
+                >
+                  {registering ? t('shopLoading') : t('shopCreateAccount')}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={onLogin} className="space-y-3">
+                <input
+                  className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                  type="email"
+                  placeholder={t('shopEmail')}
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  required
+                />
+                <input
+                  className="w-full border border-stone-300 px-3 py-2.5 text-sm"
+                  type="password"
+                  placeholder={t('shopPassword')}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                />
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={loggingIn}
+                  className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
+                >
+                  {loggingIn ? t('shopLoading') : t('shopLogIn')}
+                </button>
+              </form>
+            )}
             <p className="text-sm text-stone-500">
-              {t('shopHaveAccount')}{' '}
-              <Link to={`${base}/checkout`} className="underline font-medium text-stone-900">
-                {t('shopCreateAccount')}
+              {isRegister ? t('shopHaveAccount') : t('shopDontHaveAccount')}{' '}
+              <Link
+                to={joinShopPath(base, isRegister ? 'account' : 'register')}
+                className="underline font-medium text-stone-900"
+              >
+                {isRegister ? t('shopLogIn') : t('shopCreateAccount')}
               </Link>
             </p>
           </section>

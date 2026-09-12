@@ -322,7 +322,7 @@ export function resolveShopKey(paramSlug?: string) {
   if (label && !RESERVED_SUBDOMAINS.has(label)) return label;
   if (label === 'shop') {
     const seg = window.location.pathname.split('/').filter(Boolean)[0];
-    if (seg && !['checkout', 'order', 'account', 'menu', 'table', 'api', 'assets'].includes(seg)) return seg;
+    if (seg && !['checkout', 'order', 'account', 'register', 'menu', 'table', 'api', 'assets'].includes(seg)) return seg;
   }
   const host = window.location.hostname.toLowerCase();
   const main = publicDomain();
@@ -346,6 +346,17 @@ export function shopBasePath(shopKey: string, locationSlug?: string | null) {
   const loc = String(locationSlug || '').trim();
   if (loc) return `${base}/l/${encodeURIComponent(loc)}`;
   return base;
+}
+
+/** Join shop route segments without producing protocol-relative URLs (e.g. `//checkout`). */
+export function joinShopPath(base: string, ...segments: Array<string | null | undefined>) {
+  const parts = segments
+    .flatMap((s) => String(s || '').split('/'))
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const root = base.replace(/\/+$/, '');
+  if (!root) return `/${parts.join('/')}`;
+  return [root, ...parts].join('/');
 }
 
 /** Menu API path — per-location when locationSlug is set. */

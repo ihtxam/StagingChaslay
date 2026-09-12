@@ -380,6 +380,14 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/register"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug/reservations"
             element={
               <ShopRoutes>
@@ -452,6 +460,14 @@ function App() {
               />
               <Route
                 path="/:merchantSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/register"
                 element={
                   <ShopRoutes>
                     <AccountPage />
@@ -556,6 +572,14 @@ function App() {
                 }
               />
               <Route
+                path="/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -646,6 +670,14 @@ function App() {
               />
               <Route
                 path="/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/register"
                 element={
                   <ShopRoutes>
                     <AccountPage />
