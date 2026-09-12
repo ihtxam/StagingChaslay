@@ -532,7 +532,7 @@ export function buildSettingsSearchIndex(
     {
       id: 'order-labels',
       tab: 'receipt',
-      keywords: ['order label', 'butcher', 'weigh', 'sticker', t('orderLabelsTitle'), t('orderLabelEnabled')],
+      keywords: ['order label', 'butcher', 'weigh', 'sticker', t('orderLabelsTitle'), t('orderLabelEnabled'), t('autoPrintOrderLabelOnSend')],
     },
     {
       id: 'inventory-addon',

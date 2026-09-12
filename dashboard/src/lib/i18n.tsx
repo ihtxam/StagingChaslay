@@ -3622,6 +3622,10 @@ const en: Dict = {
     'Show “Print label” on the register and optionally print when holding an order (butcher / weighed goods).',
   autoPrintOrderLabelOnHold: 'Auto-print on hold',
   autoPrintOrderLabelOnHoldHint: 'Print an order label automatically when staff hold a cart at POS.',
+  autoPrintOrderLabelOnSend: 'Print label on Send',
+  autoPrintOrderLabelOnSendHint:
+    'Butcher workflow: on POS Send, hold the order and print a scannable label to the label printer instead of a kitchen ticket.',
+  webPosHeldOrderLabelSent: 'Order held — label sent to printer',
   webPosPrintOrderLabel: 'Print label',
   webPosOrderLabelPrinted: 'Order label sent to printer',
   webPosOrderLabelFailed: 'Could not print order label',
@@ -7441,6 +7445,10 @@ const fr: Dict = {
     'Affiche « Imprimer étiquette » à la caisse et peut imprimer à la mise en attente (boucherie / pesée).',
   autoPrintOrderLabelOnHold: 'Impression auto à la mise en attente',
   autoPrintOrderLabelOnHoldHint: 'Imprime une étiquette quand le panier est mis en attente au POS.',
+  autoPrintOrderLabelOnSend: 'Imprimer étiquette à l’envoi',
+  autoPrintOrderLabelOnSendHint:
+    'Boucherie : à l’envoi POS, mettre la commande en attente et imprimer une étiquette scannable sur l’imprimante étiquettes au lieu d’un ticket cuisine.',
+  webPosHeldOrderLabelSent: 'Commande en attente — étiquette envoyée à l’imprimante',
   webPosPrintOrderLabel: 'Imprimer étiquette',
   webPosOrderLabelPrinted: 'Étiquette commande envoyée à l’imprimante',
   webPosOrderLabelFailed: 'Impossible d’imprimer l’étiquette',
@@ -11259,6 +11267,10 @@ const de: Dict = {
     'Zeigt « Etikett drucken » an der Kasse und optional beim Halten (Metzgerei / Wiegeartikel).',
   autoPrintOrderLabelOnHold: 'Auto-Druck beim Halten',
   autoPrintOrderLabelOnHoldHint: 'Druckt automatisch ein Etikett, wenn der Warenkorb gehalten wird.',
+  autoPrintOrderLabelOnSend: 'Etikett beim Senden drucken',
+  autoPrintOrderLabelOnSendHint:
+    'Metzgerei: Beim POS-Senden Bestellung halten und scannbares Etikett auf den Etikettendrucker statt Küchenticket drucken.',
+  webPosHeldOrderLabelSent: 'Bestellung gehalten — Etikett an Drucker gesendet',
   webPosPrintOrderLabel: 'Etikett drucken',
   webPosOrderLabelPrinted: 'Bestell-Etikett an Drucker gesendet',
   webPosOrderLabelFailed: 'Etikett konnte nicht gedruckt werden',

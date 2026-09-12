@@ -1665,6 +1665,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ];
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
+  const labelOnSend =
+    orderLabelEnabled && printSettings?.autoPrintOrderLabelOnSend === true;
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   const tablesEditionOk = editionAllows('pos_tables');
@@ -4300,6 +4302,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     opts?: {
       draftActiveCourse?: number;
       ticket?: { display: string; orderNumber: string };
+      /** Held for label scan — not kitchen-sent */
+      heldForLabel?: boolean;
     }
   ) => {
     const wasTable = !!tableId;
@@ -4335,8 +4339,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderNote,
       activeCourse: draftActiveCourse,
       courseCount,
-      orderSent: true,
-      coursesBulkSent: true,
+      orderSent: opts?.heldForLabel ? false : true,
+      coursesBulkSent: opts?.heldForLabel ? false : true,
       selectedLineId: null,
       keypadBuffer: '',
       billDiscount,
@@ -4374,6 +4378,49 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!cart.length) return;
     setBusy(true);
     try {
+      if (labelOnSend) {
+        const stamped = cart.map((l) =>
+          l.courseNumber || !coursesEnabled
+            ? l
+            : { ...l, courseNumber: activeCourse }
+        );
+        const unsent = stamped.filter((l) => !l.sentToKitchen);
+        let toSend: CartLine[];
+        if (showFireCourseButton) {
+          toSend = stamped.filter(
+            (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen
+          );
+          if (!toSend.length) {
+            toast.error(t('webPosNoItemsInCourse'));
+            return;
+          }
+        } else if (coursesEnabled && courseSendMode === 'fire_per_course') {
+          const course1 = unsent.filter((l) => (l.courseNumber || 1) === 1);
+          if (course1.length) {
+            toSend = course1;
+          } else if (unsent.length) {
+            const minCourse = Math.min(...unsent.map((l) => l.courseNumber || 1));
+            toSend = unsent.filter((l) => (l.courseNumber || 1) === minCourse);
+          } else {
+            toSend = stamped;
+          }
+        } else {
+          toSend = unsent.length > 0 ? unsent : stamped;
+        }
+        const ticket = ensureCartTicket();
+        await persistHeldOrder(stamped, false, { ticket });
+        const heldId = resumedHeldIdRef.current;
+        if (heldId) {
+          void printOrderLabelForCart(heldId, toSend).catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+            toast.error(msg);
+          });
+        }
+        toast.success(t('webPosHeldOrderLabelSent'));
+        releaseOperatorAfterKitchen(stamped, { ticket, heldForLabel: true });
+        return;
+      }
+
       if (showFireCourseButton) {
         const lines = cart.filter(
           (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen

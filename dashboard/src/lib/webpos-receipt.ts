@@ -298,6 +298,7 @@ export type PosPrintSettingsClient = {
     labelShowSku?: boolean;
     orderLabelEnabled?: boolean;
     autoPrintOrderLabelOnHold?: boolean;
+    autoPrintOrderLabelOnSend?: boolean;
     printers?: Array<{
     id: string;
     name: string;

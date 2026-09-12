@@ -110,6 +110,8 @@ export type PosPrintSettings = {
   orderLabelEnabled?: boolean;
   /** Print order label automatically when holding a cart at POS. */
   autoPrintOrderLabelOnHold?: boolean;
+  /** On POS Send, hold the order and print a label instead of a kitchen ticket (butcher). */
+  autoPrintOrderLabelOnSend?: boolean;
 };
 
 export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
@@ -171,6 +173,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     labelShowSku: false,
     orderLabelEnabled: false,
     autoPrintOrderLabelOnHold: true,
+    autoPrintOrderLabelOnSend: false,
   };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -340,6 +343,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     labelShowSku: src.labelShowSku === true,
     orderLabelEnabled: src.orderLabelEnabled === true,
     autoPrintOrderLabelOnHold: src.autoPrintOrderLabelOnHold !== false,
+    autoPrintOrderLabelOnSend: src.autoPrintOrderLabelOnSend === true,
   };
 }
 

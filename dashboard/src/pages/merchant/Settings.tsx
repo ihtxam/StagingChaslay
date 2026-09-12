@@ -307,6 +307,7 @@ interface SettingsData {
     labelShowSku?: boolean;
     orderLabelEnabled?: boolean;
     autoPrintOrderLabelOnHold?: boolean;
+    autoPrintOrderLabelOnSend?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -1454,6 +1455,7 @@ export default function Settings() {
         labelShowSku: ps.labelShowSku === true,
         orderLabelEnabled: ps.orderLabelEnabled === true,
         autoPrintOrderLabelOnHold: ps.autoPrintOrderLabelOnHold !== false,
+        autoPrintOrderLabelOnSend: ps.autoPrintOrderLabelOnSend === true,
       };
     },
     []
@@ -4864,6 +4866,7 @@ export default function Settings() {
                   </span>
                 </label>
                 {settings.posPrintSettings?.orderLabelEnabled ? (
+                  <>
                   <label className="mt-3 flex items-start gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -4886,6 +4889,29 @@ export default function Settings() {
                       </span>
                     </span>
                   </label>
+                  <label className="mt-3 flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnSend: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintOrderLabelOnSend')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintOrderLabelOnSendHint')}
+                      </span>
+                    </span>
+                  </label>
+                  </>
                 ) : null}
               </Section>
 
