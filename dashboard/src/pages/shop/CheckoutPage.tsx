@@ -940,7 +940,7 @@ export default function CheckoutPage() {
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-          <Link to={`${shopBasePath(shopKey, locSlug) || '/'}`} className="font-bold tracking-tight min-w-0 truncate">
+          <Link to={`${shopBasePath(shopKey, locSlug)}/menu`} className="font-bold tracking-tight min-w-0 truncate">
             ← {merchant?.name || t('shopBackToMenu')}
           </Link>
           <div className="flex items-center gap-3 shrink-0">
