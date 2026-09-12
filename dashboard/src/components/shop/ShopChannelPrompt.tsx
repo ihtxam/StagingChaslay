@@ -62,6 +62,9 @@ function buildFullAddress(street: string, houseNumber: string, floor: string) {
   return floorTrim ? `${base}, ${floorTrim}` : base;
 }
 
+const deliveryFieldClass =
+  'w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600';
+
 function splitAddressLine(line: string): { street: string; houseNumber: string; floor: string } {
   const trimmed = line.trim();
   if (!trimmed) return { street: '', houseNumber: '', floor: '' };
@@ -396,7 +399,7 @@ export default function ShopChannelPrompt({
                 </div>
 
                 <input
-                  className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                  className={deliveryFieldClass}
                   placeholder={t('shopSearchAddress')}
                   value={street}
                   onChange={(e) => {
@@ -407,7 +410,7 @@ export default function ShopChannelPrompt({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className={deliveryFieldClass}
                     placeholder={t('shopHouseNumber')}
                     value={houseNumber}
                     onChange={(e) => {
@@ -417,7 +420,7 @@ export default function ShopChannelPrompt({
                     }}
                   />
                   <input
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className={deliveryFieldClass}
                     placeholder={t('shopFloor')}
                     value={floor}
                     onChange={(e) => {
@@ -439,8 +442,8 @@ export default function ShopChannelPrompt({
                     setCity(c);
                     setDeliveryInfo(null);
                   }}
-                  zipClassName="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl"
-                  cityClassName="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl"
+                  zipClassName={deliveryFieldClass}
+                  cityClassName={deliveryFieldClass}
                 />
                 <button
                   type="button"
