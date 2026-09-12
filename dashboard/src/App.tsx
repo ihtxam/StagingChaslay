@@ -8,6 +8,7 @@ import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from 
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
+import ShopFooter from '@/components/shop/ShopFooter';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
@@ -129,13 +130,18 @@ function ShopRoutes({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider storageKey={storageKey}>
       <ShopLocaleSync shopKey={shopKey} />
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
-        }
-      >
-        {children}
-      </Suspense>
+      <div className="flex min-h-dvh flex-col">
+        <div className="flex-1 min-h-0">
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
+            }
+          >
+            {children}
+          </Suspense>
+        </div>
+        {shopKey ? <ShopFooter shopKey={shopKey} /> : null}
+      </div>
     </I18nProvider>
   );
 }

@@ -375,6 +375,15 @@ export const shopEn: Record<string, string> = {
   shopReservationsNoSlots: 'No available slots this day - try another date.',
   shopReservationsSlotHint: 'Slots every {interval} min · book at least {hours}h ahead',
   shopReservationsBook: 'Request reservation',
+
+  shopFooterQuickLinks: 'Quick links',
+  shopFooterWelcome: 'Welcome',
+  shopFooterMenu: 'Menu',
+  shopFooterLegalNotice: 'Legal notice',
+  shopFooterPrivacyPolicy: 'Privacy Policy',
+  shopFooterAboutFallback: 'Welcome to {shopName}. Order online for pickup or delivery.',
+  shopFooterCopyright: '© {year} {shopName}. All rights reserved.',
+  shopFooterPoweredBy: 'Powered by rebornsense.com',
 };
 
 export const shopFr: Record<string, string> = {
@@ -754,6 +763,15 @@ export const shopFr: Record<string, string> = {
   shopReservationsNoSlots: 'Aucun créneau ce jour - essayez une autre date.',
   shopReservationsSlotHint: 'Créneaux toutes les {interval} min · réserver au moins {hours}h avant',
   shopReservationsBook: 'Demander une réservation',
+
+  shopFooterQuickLinks: 'Liens rapides',
+  shopFooterWelcome: 'Accueil',
+  shopFooterMenu: 'Menu',
+  shopFooterLegalNotice: 'Mentions légales',
+  shopFooterPrivacyPolicy: 'Politique de confidentialité',
+  shopFooterAboutFallback: 'Bienvenue chez {shopName}. Commandez en ligne à emporter ou en livraison.',
+  shopFooterCopyright: '© {year} {shopName}. Tous droits réservés.',
+  shopFooterPoweredBy: 'Propulsé par rebornsense.com',
 };
 
 export const shopDe: Record<string, string> = {
@@ -1133,4 +1151,13 @@ export const shopDe: Record<string, string> = {
   shopReservationsNoSlots: 'Keine Slots an diesem Tag - anderes Datum wählen.',
   shopReservationsSlotHint: 'Slots alle {interval} Min. · mindestens {hours} Std. im Voraus',
   shopReservationsBook: 'Reservation anfragen',
+
+  shopFooterQuickLinks: 'Schnelllinks',
+  shopFooterWelcome: 'Willkommen',
+  shopFooterMenu: 'Menü',
+  shopFooterLegalNotice: 'Rechtlicher Hinweis',
+  shopFooterPrivacyPolicy: 'Datenschutzerklärung',
+  shopFooterAboutFallback: 'Willkommen bei {shopName}. Online bestellen zur Abholung oder Lieferung.',
+  shopFooterCopyright: '© {year} {shopName}. Alle Rechte vorbehalten.',
+  shopFooterPoweredBy: 'Powered by rebornsense.com',
 };
