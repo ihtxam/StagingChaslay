@@ -898,7 +898,7 @@ export default function OrderingPage() {
     </button>
   );
 
-  const showProductImages = merchant?.menuShowProductImages !== false;
+  const showProductImages = merchant?.menuShowProductImages === true;
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
   const allowScheduledOrders = merchant?.scheduledOrdersEnabled !== false;
   const toggleCategory = () => {
@@ -1526,6 +1526,7 @@ export default function OrderingPage() {
             ...pendingProduct,
             price: catalogUnitPrice(pendingProduct.price, pendingProduct.categoryId ?? null),
           }}
+          showProductImages={showProductImages}
           onClose={() => {
             setPendingProduct(null);
             if (offerConfigMeta) {
@@ -1705,6 +1706,8 @@ function ProductCard({
       <span className="tabular-nums">CHF {price.toFixed(2)}</span>
     );
 
+  const withPhoto = showImage && !!product.image;
+
   return (
     <article
       role="button"
@@ -1716,49 +1719,47 @@ function ProductCard({
           onAdd();
         }
       }}
-      className="group flex flex-col rounded-md border border-stone-100 bg-white p-1.5 hover:border-stone-200 cursor-pointer"
+      className={`group flex rounded-md border border-stone-100 bg-white hover:border-stone-200 cursor-pointer ${
+        withPhoto ? 'flex-col p-1.5' : 'flex-row items-center gap-3 p-3'
+      }`}
     >
-      <div className="relative mb-1.5 aspect-[4/3] overflow-hidden rounded bg-stone-100">
-        {showImage && product.image ? (
+      {withPhoto ? (
+        <div className="relative mb-1.5 aspect-[4/3] overflow-hidden rounded bg-stone-100">
           <img
             src={product.image}
             alt=""
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-lg font-light text-stone-300">
-            {(product.name || '?').slice(0, 1).toUpperCase()}
-          </div>
-        )}
-        {offerBadge ? (
-          <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
-            {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdd();
-          }}
-          className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm active:scale-95"
-          aria-label={`${t('shopAdd')} ${product.name}`}
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
-        </button>
-        {unlocked ? (
+          {offerBadge ? (
+            <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+              {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onAddFree();
+              onAdd();
             }}
-            className="absolute left-1 bottom-1 rounded-full bg-teal-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white"
+            className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm active:scale-95"
+            aria-label={`${t('shopAdd')} ${product.name}`}
           >
-            {t('shopFree')}
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
           </button>
-        ) : null}
-      </div>
+          {unlocked ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddFree();
+              }}
+              className="absolute left-1 bottom-1 rounded-full bg-teal-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white"
+            >
+              {t('shopFree')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="min-w-0 flex-1 px-0.5 text-left">
         <p className="text-[11px] font-semibold leading-tight text-stone-900 line-clamp-2">
           {product.name}
@@ -1768,6 +1769,19 @@ function ProductCard({
           <p className="text-[10px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
         ) : null}
       </div>
+      {!withPhoto ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd();
+          }}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm active:scale-95"
+          aria-label={`${t('shopAdd')} ${product.name}`}
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+      ) : null}
     </article>
   );
 }
