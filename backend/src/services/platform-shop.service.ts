@@ -350,7 +350,6 @@ export class PlatformShopService {
         channel: 'Web',
         countryCode: 'CH',
         shopperReference: merchantId,
-        clientKey: creds.clientKey,
         metadata: {
           type: 'platform_shop',
           orderId: order!.id,
