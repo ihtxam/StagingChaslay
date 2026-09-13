@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { getDb, schema } from "@/db";
 import { roundMoney2 } from "@/lib/money";
@@ -258,6 +258,36 @@ export class InvoiceService {
       limit,
     });
 
+    const orderIds = rows.map((o) => o.id);
+    const refundsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    if (orderIds.length) {
+      try {
+        const refundRows = await db.query.orderRefunds.findMany({
+          where: and(
+            eq(schema.orderRefunds.merchantId, merchantId),
+            inArray(schema.orderRefunds.orderId, orderIds)
+          ),
+          orderBy: [desc(schema.orderRefunds.createdAt)],
+        });
+        for (const rf of refundRows) {
+          const list = refundsByOrder.get(rf.orderId) || [];
+          list.push({
+            id: rf.id,
+            kind: rf.kind,
+            amount: Number(rf.amount),
+            reason: rf.reason || null,
+            staffName: rf.staffName || null,
+            items: rf.itemsJson || [],
+            allocation: rf.allocationJson || null,
+            createdAt: rf.createdAt?.toISOString?.() ?? null,
+          });
+          refundsByOrder.set(rf.orderId, list);
+        }
+      } catch {
+        /* order_refunds may not exist on older DBs */
+      }
+    }
+
     return rows.map((o) => {
       const customerName =
         o.customerName ||
@@ -279,9 +309,14 @@ export class InvoiceService {
         total: Number(o.total),
         subtotal: Number(o.subtotal),
         taxAmount: Number(o.taxAmount),
+        taxRate:
+          Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
+            ? roundMoney2((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+            : undefined,
         discountAmount: Number(o.discountAmount || 0),
         tipAmount: Number(o.tipAmount || 0),
         refundAmount: Number(o.refundAmount || 0),
+        refundHistory: refundsByOrder.get(o.id) || [],
         customerName,
         customerPhone: o.customerPhone || o.customer?.phone || null,
         customerEmail: o.customerEmail || o.customer?.email || null,

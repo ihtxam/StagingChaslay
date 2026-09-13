@@ -27,6 +27,15 @@ export type GiftCardLineMeta = {
   deliveryMethod?: 'print' | 'email' | 'both';
 };
 
+export type MembershipSellMeta = {
+  cardNumber: string;
+  planId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  amount: number;
+};
+
 export type CartLine = {
   lineId: string;
   productId: string;
@@ -57,6 +66,8 @@ export type CartLine = {
   lineNote?: string;
   /** Gift card sell/reload  - credited after successful payment */
   giftCard?: GiftCardLineMeta;
+  /** Membership sale — registered after successful payment */
+  membershipSell?: MembershipSellMeta;
 };
 
 export type Category = { id: string; name: string; color?: string | null };
@@ -78,6 +89,7 @@ export type Product = {
   barcode?: string | null;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
+  sortOrder?: number;
   specifications?: Array<{
     id: string;
     name: string;

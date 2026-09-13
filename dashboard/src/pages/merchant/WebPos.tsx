@@ -5948,6 +5948,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     doAdd();
   };
 
+  const addMembershipLine = (
+    meta: MembershipSellMeta,
+    lineName: string
+  ) => {
+    const doAdd = () => {
+      const amount = roundMoney2(meta.amount);
+      const line: CartLine = {
+        lineId: `ms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        productId: '__membership_sell__',
+        name: lineName,
+        quantity: 1,
+        unitPrice: amount,
+        lineTotal: amount,
+        taxable: true,
+        selectedExtras: [],
+        comboSelections: [],
+        isOpenPrice: true,
+        membershipSell: { ...meta, amount },
+      };
+      setCart((prev) => [...prev, line]);
+      setSelectedLineId(line.lineId);
+      setPosTab('register');
+      setPosView('register');
+      toast.success(t('giftCardAddedToCart'));
+    };
+    void ensureShift(doAdd);
+  };
+
   const pushCustomAmountLine = (amount: number) => {
     const price = roundMoney2(amount);
     if (price <= 0) return;
@@ -6135,6 +6163,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('giftCardCreditFailed'));
+      }
+    }
+    for (const line of saleLines) {
+      if (!line.membershipSell) continue;
+      try {
+        await api.post('/gift-cards/sell-membership', {
+          cardNumber: line.membershipSell.cardNumber,
+          planId: line.membershipSell.planId,
+          name: line.membershipSell.name,
+          email: line.membershipSell.email,
+          phone: line.membershipSell.phone,
+          amount: line.membershipSell.amount,
+          orderId: orderId || undefined,
+        });
+      } catch (e: any) {
+        toast.error(e.response?.data?.error || t('membershipSellFailed'));
       }
     }
   };
@@ -7540,7 +7584,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       opts?.courseOnly != null
         ? lines.filter((l) => (l.courseNumber || 1) === opts.courseOnly)
         : lines
-    ).filter((l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_'));
+    ).filter(
+      (l) =>
+        !l.giftCard &&
+        !l.membershipSell &&
+        !String(l.productId || '').startsWith('__gift_card_') &&
+        l.productId !== '__membership_sell__'
+    );
     if (!filteredLines.length) return;
 
     const lang = resolveReceiptLanguage(printSettings, printSettings?.receiptLanguage === 'panel' ? locale : printSettings?.receiptLanguage || locale);
@@ -9254,17 +9304,36 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!splitQueue.length) return undefined;
     return splitQueue.map((part, index) => {
       const resolveLines = () => {
+        if (part.linesSnapshot && part.linesSnapshot.length > 0) {
+          return part.linesSnapshot.map((l) => ({
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+          }));
+        }
         if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
           return cart.flatMap((l) => {
             const qty = part.lineQtys![l.lineId] ?? 0;
             if (qty <= 0) return [];
-            return [{ name: l.name, quantity: qty }];
+            const unit = l.quantity > 0 ? roundMoney2(l.lineTotal / l.quantity) : l.unitPrice;
+            return [{
+              name: l.name,
+              quantity: qty,
+              unitPrice: unit,
+              lineTotal: roundMoney2(unit * qty),
+            }];
           });
         }
         if (part.lineIds.length > 0) {
           return cart
             .filter((l) => part.lineIds.includes(l.lineId))
-            .map((l) => ({ name: l.name, quantity: l.quantity }));
+            .map((l) => ({
+              name: l.name,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              lineTotal: l.lineTotal,
+            }));
         }
         return [];
       };
@@ -11135,7 +11204,46 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           splitMasterIdRef.current = crypto.randomUUID();
           splitReceiptsRef.current = [];
           setLastSplitReceipts([]);
-          setSplitQueue(parts);
+          const cartTotal = Math.max(0.001, totals.total);
+          const withSnap = parts.map((p) => {
+            if (p.linesSnapshot && p.linesSnapshot.length) return p;
+            const snapshot: NonNullable<SplitPart['linesSnapshot']> = [];
+            if (p.lineQtys && Object.keys(p.lineQtys).length > 0) {
+              for (const l of cart) {
+                const qty = p.lineQtys[l.lineId] ?? 0;
+                if (qty <= 0) continue;
+                const unit = l.quantity > 0 ? roundMoney2(l.lineTotal / l.quantity) : l.unitPrice;
+                snapshot.push({
+                  name: l.name,
+                  quantity: qty,
+                  unitPrice: unit,
+                  lineTotal: roundMoney2(unit * qty),
+                });
+              }
+            } else if (p.lineIds.length > 0) {
+              for (const l of cart) {
+                if (!p.lineIds.includes(l.lineId)) continue;
+                snapshot.push({
+                  name: l.name,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  lineTotal: l.lineTotal,
+                });
+              }
+            } else {
+              const factor = p.amount / cartTotal;
+              for (const l of cart) {
+                snapshot.push({
+                  name: l.name,
+                  quantity: l.quantity,
+                  unitPrice: roundMoney2(l.unitPrice * factor),
+                  lineTotal: roundMoney2(l.lineTotal * factor),
+                });
+              }
+            }
+            return { ...p, linesSnapshot: snapshot };
+          });
+          setSplitQueue(withSnap);
           setSplitIndex(0);
           setCheckoutSeedMethod('cash');
           setPosView('checkout');
@@ -11163,6 +11271,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         plans={(paymentConfig?.giftCardSettings as { membershipPlans?: MembershipPlan[] } | null)?.membershipPlans || []}
         onClose={() => setMembershipSellOpen(false)}
         onSold={(m) => attachMembershipCard(m)}
+        onAddToCart={(meta, lineName) => addMembershipLine(meta, lineName)}
       />
       <WebPosGiftCardModal
         open={giftCardPayOpen}

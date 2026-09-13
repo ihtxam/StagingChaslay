@@ -1,6 +1,6 @@
 import { repairCatalogText } from "@/lib/text-encoding";
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { roundMoney2, roundTo005 } from "@/lib/money";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
@@ -851,6 +851,31 @@ export class SyncService {
           await InventoryService.deductForPaidOrder(merchantId, order.id);
         } catch (invErr) {
           console.warn("[sync] inventory deduct failed:", invErr);
+        }
+        try {
+          const paidItems = await db.query.orderItems.findMany({
+            where: eq(schema.orderItems.orderId, order.id),
+            columns: { productId: true, quantity: true },
+          });
+          for (const line of paidItems) {
+            if (!line.productId) continue;
+            const qty = Number(line.quantity || 0);
+            if (!Number.isFinite(qty) || qty <= 0) continue;
+            await db
+              .update(schema.products)
+              .set({
+                stock: sql`GREATEST(0, ${schema.products.stock} - ${qty})`,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(schema.products.id, line.productId),
+                  eq(schema.products.merchantId, merchantId)
+                )
+              );
+          }
+        } catch (stockErr) {
+          console.warn("[sync] product stock deduct failed:", stockErr);
         }
         if (splitBillFullyPaid(sale)) {
           try {

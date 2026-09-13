@@ -27,6 +27,7 @@ interface GiftCard {
   pointsBalance?: number | null;
   status: string;
   membershipEnabled?: boolean;
+  membershipPlan?: MembershipPlan | null;
   holderName?: string | null;
   holderEmail?: string | null;
   holderPhone?: string | null;
@@ -444,6 +445,23 @@ export default function Loyalty() {
                           placeholder={t('membershipStampsRequired')}
                         />
                       )}
+                      <input
+                        className="input"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={plan.sellPrice ?? ''}
+                        onChange={(e) => {
+                          const next = [...(gcSettings.membershipPlans || [])];
+                          const n = Number(e.target.value);
+                          next[idx] = {
+                            ...plan,
+                            sellPrice: Number.isFinite(n) && n >= 0 ? n : 0,
+                          };
+                          setGcSettings({ ...gcSettings, membershipPlans: next });
+                        }}
+                        placeholder={t('membershipSellPrice')}
+                      />
                     </div>
                   ))}
                 </div>
@@ -693,7 +711,10 @@ export default function Loyalty() {
                           <td className="py-3 capitalize">
                             {card.cardMediaType === 'e_card' ? t('giftCardEcard') : t('giftCardPhysical')}
                           </td>
-                          <td className="py-3">CHF {Number(card.balance || 0).toFixed(2)}</td>
+                          <td className="py-3">
+                            CHF{' '}
+                            {Number(card.balance || card.membershipPlan?.sellPrice || 0).toFixed(2)}
+                          </td>
                           <td className="py-3">{memberLabel}</td>
                           <td className="py-3">{card.pointsBalance ?? 0}</td>
                           <td className="py-3 capitalize">{card.status}</td>

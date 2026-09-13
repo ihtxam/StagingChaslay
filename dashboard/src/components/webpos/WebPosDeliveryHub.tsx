@@ -121,7 +121,7 @@ function rowColorClass(order: DeliveryRow): string {
 }
 
 export default function WebPosDeliveryHub({ merchant, printSettings, onClose, onMinimize, standalone, hidden }: Props) {
-  const { t, formatTime, locale } = useI18n();
+  const { t, formatTime, formatDateTime, locale } = useI18n();
   const [tab, setTab] = useState<HubTab>('active');
   const [orders, setOrders] = useState<DeliveryRow[]>([]);
   const [completed, setCompleted] = useState<DeliveryRow[]>([]);
@@ -487,6 +487,9 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
             <div className="flex flex-wrap items-start justify-between gap-2 text-xs">
               <div className="min-w-0">
                 <p className="font-semibold text-stone-800">#{o.orderNumber}</p>
+                {o.createdAt ? (
+                  <p className="text-stone-500">{formatDateTime(o.createdAt)}</p>
+                ) : null}
                 {o.customerPhone ? <p className="text-stone-500">{o.customerPhone}</p> : null}
                 <p className="text-stone-600">{addressLine}</p>
                 {o.assignedDriverName ? (
@@ -506,6 +509,35 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
                 {o.printCount > 0 ? `×${o.printCount}` : null}
               </button>
             </div>
+
+            {(() => {
+              const itemBits = String(o.itemsPreview || '')
+                .split(/[·,;|]/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (!itemBits.length && !o.itemCount) {
+                return (
+                  <p className="text-xs text-stone-400">{t('deliveryHubEmpty')}</p>
+                );
+              }
+              return (
+                <div className="rounded-lg border border-stone-200 bg-white px-2 py-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                    {t('deliveryHubItems')}
+                    {o.itemCount ? ` (${o.itemCount})` : ''}
+                  </p>
+                  {itemBits.length ? (
+                    <ul className="mt-1 space-y-0.5 text-xs text-stone-700">
+                      {itemBits.map((name, i) => (
+                        <li key={`${o.id}-item-${i}`}>{name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-xs text-stone-400">{t('deliveryHubEmpty')}</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {showActions ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -711,9 +743,21 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
             </MapContainer>
           </div>
         ) : tab === 'completed' ? (
-          <div className="space-y-1">{completed.map((o) => renderOrderRow(o, false))}</div>
+          <div className="space-y-1">
+            {completed.length ? completed.map((o) => renderOrderRow(o, false)) : (
+              <p className="rounded-xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                {t('deliveryHubEmpty')}
+              </p>
+            )}
+          </div>
         ) : (
-          <div className="space-y-1">{orders.map((o) => renderOrderRow(o, true))}</div>
+          <div className="space-y-1">
+            {orders.length ? orders.map((o) => renderOrderRow(o, true)) : (
+              <p className="rounded-xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                {t('deliveryHubEmpty')}
+              </p>
+            )}
+          </div>
         )}
       </div>
 

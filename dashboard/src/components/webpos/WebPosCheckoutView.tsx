@@ -42,7 +42,7 @@ type Props = {
     index: number;
     label: string;
     amount: number;
-    lines: Array<{ name: string; quantity: number }>;
+    lines: Array<{ name: string; quantity: number; unitPrice?: number; lineTotal?: number }>;
     paid?: boolean;
   }>;
   splitActiveIndex?: number;
@@ -1121,6 +1121,15 @@ export default function WebPosCheckoutView({
                           <span className="min-w-0 truncate">
                             {line.quantity}x {line.name}
                           </span>
+                          {line.lineTotal != null ? (
+                            <span className="shrink-0 tabular-nums">
+                              CHF {Number(line.lineTotal).toFixed(2)}
+                            </span>
+                          ) : line.unitPrice != null ? (
+                            <span className="shrink-0 tabular-nums">
+                              CHF {Number(line.unitPrice * line.quantity).toFixed(2)}
+                            </span>
+                          ) : null}
                         </li>
                       ))}
                     </ul>

@@ -108,12 +108,7 @@ function heldToMerchantOrder(h: HeldRow): MerchantOrder {
     taxRate,
     vatIncluded
   );
-  const withDisc = applyBillDiscountToTotals(
-    merch,
-    meta.billDiscount,
-    vatIncluded,
-    0.05
-  );
+  const withDisc = applyBillDiscountToTotals(merch, meta.billDiscount, vatIncluded, 0.05);
   const ch = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
   const tabShout = meta.tabNumber ? `#${String(meta.tabNumber).replace(/^#/, '')}` : null;
   return {
