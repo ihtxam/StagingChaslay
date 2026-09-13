@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ExternalLink, X } from 'lucide-react';
 import type { PlatformTrayMessage } from '@/hooks/usePlatformMessages';
 import { useI18n } from '@/lib/i18n';
