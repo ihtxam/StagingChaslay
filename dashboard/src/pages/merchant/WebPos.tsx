@@ -175,6 +175,8 @@ import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal
 import WebPosNotificationsPanel, {
   type WebPosReservationAlert,
 } from '@/components/webpos/WebPosNotificationsPanel';
+import WebPosOffersModal from '@/components/webpos/WebPosOffersModal';
+import type { PosOffer } from '@/lib/pos-offers';
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import WebPosTopBar, {
   WebPosSettingsDropdown,
@@ -1006,6 +1008,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [reservationAlertUntil, setReservationAlertUntil] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
+  const [offersOpen, setOffersOpen] = useState(false);
+  const [posOffers, setPosOffers] = useState<PosOffer[]>([]);
   const splitMasterIdRef = useRef<string | null>(null);
   const [fulfillmentWhen, setFulfillmentWhen] = useState<FulfillmentWhen | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(() => {
@@ -1237,6 +1241,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       navigate(deliveryDriverHomePath(), { replace: true });
     }
   }, [webposStaff, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const headers: Record<string, string> = {};
+    if (webposStaff?.accessToken) {
+      headers['X-WebPos-Staff-Access'] = webposStaff.accessToken;
+    }
+    void api
+      .get('/merchant/offers/pos', { headers })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res.data?.offers) ? (res.data.offers as PosOffer[]) : [];
+        setPosOffers(list);
+        if (list.length === 0) setOffersOpen(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPosOffers([]);
+          setOffersOpen(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [webposStaff?.id, webposStaff?.accessToken]);
 
   useEffect(() => {
     if (!staffPinsKnown) return;
@@ -8997,6 +9026,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const openSwitchUserPin = () => {
     if (!staffConfigured) return;
+    setOffersOpen(false);
     setPinModalMode('switch');
     setPinModalOpen(true);
   };
@@ -9487,11 +9517,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onCloseSettings={() => setSettingsOpen(false)}
         settingsRef={settingsRef}
         onOnlineOrders={() => openOnlineOrdersInTab()}
+        offerCount={posOffers.length}
+        offersOpen={offersOpen}
+        onToggleOffers={() => {
+          setOffersOpen((open) => {
+            const next = !open;
+            if (next) {
+              if (settingsOpen) setSettingsOpen(false);
+              setNotificationsOpen(false);
+            }
+            return next;
+          });
+        }}
         notificationsOpen={notificationsOpen}
         onToggleNotifications={() => {
           setNotificationsOpen((open) => {
             const next = !open;
-            if (next && settingsOpen) setSettingsOpen(false);
+            if (next) {
+              if (settingsOpen) setSettingsOpen(false);
+              setOffersOpen(false);
+            }
             return next;
           });
         }}
@@ -10899,6 +10944,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           }}
         />
       )}
+
+      <WebPosOffersModal
+        open={offersOpen}
+        offers={posOffers}
+        categoryNames={Object.fromEntries(categories.map((c) => [c.id, c.name]))}
+        productNames={Object.fromEntries(products.map((p) => [p.id, p.name]))}
+        onClose={() => setOffersOpen(false)}
+      />
 
       <WebPosCancelModal
         open={!!cancelModal}

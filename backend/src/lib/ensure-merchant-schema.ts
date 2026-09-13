@@ -326,6 +326,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   held_orders_paid_total: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)",
   subscription_plans_max_locations:
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
+  offers_staff_ids:
+    "ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json",
 };
 
 /** subscription_plans columns added after the original packages table. */
@@ -419,6 +421,35 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_id_idx ON vouchers(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_active_idx ON vouchers(merchant_id, is_active)`,
   `CREATE INDEX IF NOT EXISTS vouchers_customer_id_idx ON vouchers(customer_id)`,
+  `CREATE TABLE IF NOT EXISTS offers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    description text,
+    offer_type varchar(40) NOT NULL,
+    rules json NOT NULL DEFAULT '{}'::json,
+    channels json NOT NULL DEFAULT '[]'::json,
+    category_ids json NOT NULL DEFAULT '[]'::json,
+    product_ids json NOT NULL DEFAULT '[]'::json,
+    staff_ids json NOT NULL DEFAULT '[]'::json,
+    schedule_mode varchar(20) NOT NULL DEFAULT 'always',
+    days_of_week json NOT NULL DEFAULT '[]'::json,
+    time_start varchar(5),
+    time_end varchar(5),
+    valid_from timestamptz,
+    valid_to timestamptz,
+    is_active boolean NOT NULL DEFAULT true,
+    featured boolean NOT NULL DEFAULT true,
+    badge_label varchar(40),
+    priority integer NOT NULL DEFAULT 0,
+    stackable boolean NOT NULL DEFAULT false,
+    sort_order integer NOT NULL DEFAULT 0,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS offers_merchant_id_idx ON offers(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS offers_merchant_active_idx ON offers(merchant_id, is_active)`,
+  `ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json`,
   `CREATE TABLE IF NOT EXISTS voucher_redemptions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
