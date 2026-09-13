@@ -1325,7 +1325,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       className="border border-stone-900 px-4 py-2 text-sm font-semibold"
-                      onClick={checkDelivery}
+                      onClick={() => void checkDelivery()}
                       disabled={checkingZone}
                     >
                       {checkingZone ? t('shopChecking') : t('shopVerifyDeliveryZone')}
@@ -1702,9 +1702,6 @@ export default function CheckoutPage() {
                     {t('shopAddDiscount')}
                   </button>
                 )}
-              </div>
-
-
             </section>
 
             {offerDiscount > 0 ? (
@@ -1864,6 +1861,14 @@ export default function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-stone-500">{t('shopCardFee')}</span>
                   <span>CHF {cardFee.toFixed(2)}</span>
+                </div>
+              )}
+              {rounding !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-stone-500">{t('shopRounding')}</span>
+                  <span>
+                    {rounding > 0 ? '+' : ''}CHF {rounding.toFixed(2)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between font-semibold text-base pt-2">

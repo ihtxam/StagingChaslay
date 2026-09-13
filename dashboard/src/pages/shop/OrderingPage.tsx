@@ -109,7 +109,6 @@ export default function OrderingPage() {
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const locSlug = resolveShopLocationSlug({ locationSlug });
-  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
@@ -124,7 +123,7 @@ export default function OrderingPage() {
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef(0);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
-  const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
+  const [, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOffer, setPendingOffer] = useState<ShopOfferForPicker | null>(null);
@@ -153,8 +152,6 @@ export default function OrderingPage() {
   const [customer, setCustomer] = useState<any>(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loyaltyRewards, setLoyaltyRewards] = useState<LoyaltyReward[]>([]);
-  const [loyaltyProgress, setLoyaltyProgress] = useState(0);
-  const [nextRewardPts, setNextRewardPts] = useState<number | null>(null);
   const [channelPromptOpen, setChannelPromptOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
@@ -201,16 +198,8 @@ export default function OrderingPage() {
         setLoyaltyRewards(loyaltyData.rewards || []);
         if (token && loyaltyData.balance != null) {
           setLoyaltyBalance(Number(loyaltyData.balance) || 0);
-          setLoyaltyProgress(Number(loyaltyData.progressPercent) || 0);
-          setNextRewardPts(
-            loyaltyData.nextReward?.loyaltyRewardPoints != null
-              ? Number(loyaltyData.nextReward.loyaltyRewardPoints)
-              : null
-          );
         } else {
           setLoyaltyBalance(0);
-          setLoyaltyProgress(0);
-          setNextRewardPts(null);
         }
 
         if (token) {
