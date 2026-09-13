@@ -1097,6 +1097,13 @@ export default function OrderingPage() {
     <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
+      <ChaslayStorefrontNavbar
+        shopKey={shopKey}
+        basePath={shopBasePath(shopKey, locSlug)}
+        locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
+        onPresence={setHasCmsNav}
+      />
+      {hasCmsNav ? null : (
       <header className="z-30 bg-white border-b border-stone-200">
         <div className="shop-page-content h-14 flex items-center justify-between gap-2">
           <Link
