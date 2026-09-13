@@ -305,6 +305,9 @@ interface SettingsData {
     labelShowBarcodeNumber?: boolean;
     labelShowPrice?: boolean;
     labelShowSku?: boolean;
+    orderLabelEnabled?: boolean;
+    autoPrintOrderLabelOnHold?: boolean;
+    autoPrintOrderLabelOnSend?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -1450,6 +1453,9 @@ export default function Settings() {
         labelShowBarcodeNumber: ps.labelShowBarcodeNumber !== false,
         labelShowPrice: ps.labelShowPrice === true,
         labelShowSku: ps.labelShowSku === true,
+        orderLabelEnabled: ps.orderLabelEnabled === true,
+        autoPrintOrderLabelOnHold: ps.autoPrintOrderLabelOnHold !== false,
+        autoPrintOrderLabelOnSend: ps.autoPrintOrderLabelOnSend === true,
       };
     },
     []
@@ -4828,6 +4834,87 @@ export default function Settings() {
                 </div>
               </Section>
               ) : null}
+
+              <Section
+                id="order-labels"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('orderLabelsTitle')}
+                description={t('orderLabelsHint')}
+                highlight={isSectionHighlight('order-labels')}
+              >
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.orderLabelEnabled === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          orderLabelEnabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('orderLabelEnabled')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('orderLabelEnabledHint')}
+                    </span>
+                  </span>
+                </label>
+                {settings.posPrintSettings?.orderLabelEnabled ? (
+                  <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                    <p className="text-xs text-[var(--text-muted)]">{t('orderLabelAutoPrintHint')}</p>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              autoPrintOrderLabelOnHold: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="font-medium">{t('autoPrintOrderLabelOnHold')}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                          {t('autoPrintOrderLabelOnHoldHint')}
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              autoPrintOrderLabelOnSend: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="font-medium">{t('autoPrintOrderLabelOnSend')}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                          {t('autoPrintOrderLabelOnSendHint')}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                ) : null}
+              </Section>
 
               <SettingsSaveBar saving={savingReceipt} />
             </form>

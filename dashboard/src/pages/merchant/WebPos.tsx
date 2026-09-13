@@ -441,6 +441,8 @@ import {
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
+import { parseOrderLabelBarcode } from '@/lib/order-label-barcode';
+import { printOrderLabelViaAgent } from '@/lib/order-labels';
 import {
   posSaleToNotificationOrder,
   subscribeWebPosOrderCompleted,
@@ -1662,6 +1664,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
       ];
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
+  const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
+  const labelOnSend =
+    orderLabelEnabled && printSettings?.autoPrintOrderLabelOnSend === true;
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   const tablesEditionOk = editionAllows('pos_tables');
@@ -4297,6 +4302,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     opts?: {
       draftActiveCourse?: number;
       ticket?: { display: string; orderNumber: string };
+      /** Held for label scan — not kitchen-sent */
+      heldForLabel?: boolean;
     }
   ) => {
     const wasTable = !!tableId;
@@ -4332,8 +4339,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderNote,
       activeCourse: draftActiveCourse,
       courseCount,
-      orderSent: true,
-      coursesBulkSent: true,
+      orderSent: opts?.heldForLabel ? false : true,
+      coursesBulkSent: opts?.heldForLabel ? false : true,
       selectedLineId: null,
       keypadBuffer: '',
       billDiscount,
@@ -4371,6 +4378,49 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!cart.length) return;
     setBusy(true);
     try {
+      if (labelOnSend) {
+        const stamped = cart.map((l) =>
+          l.courseNumber || !coursesEnabled
+            ? l
+            : { ...l, courseNumber: activeCourse }
+        );
+        const unsent = stamped.filter((l) => !l.sentToKitchen);
+        let toSend: CartLine[];
+        if (showFireCourseButton) {
+          toSend = stamped.filter(
+            (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen
+          );
+          if (!toSend.length) {
+            toast.error(t('webPosNoItemsInCourse'));
+            return;
+          }
+        } else if (coursesEnabled && courseSendMode === 'fire_per_course') {
+          const course1 = unsent.filter((l) => (l.courseNumber || 1) === 1);
+          if (course1.length) {
+            toSend = course1;
+          } else if (unsent.length) {
+            const minCourse = Math.min(...unsent.map((l) => l.courseNumber || 1));
+            toSend = unsent.filter((l) => (l.courseNumber || 1) === minCourse);
+          } else {
+            toSend = stamped;
+          }
+        } else {
+          toSend = unsent.length > 0 ? unsent : stamped;
+        }
+        const ticket = ensureCartTicket();
+        await persistHeldOrder(stamped, false, { ticket });
+        const heldId = resumedHeldIdRef.current;
+        if (heldId) {
+          void printOrderLabelForCart(heldId, toSend).catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+            toast.error(msg);
+          });
+        }
+        toast.success(t('webPosHeldOrderLabelSent'));
+        releaseOperatorAfterKitchen(stamped, { ticket, heldForLabel: true });
+        return;
+      }
+
       if (showFireCourseButton) {
         const lines = cart.filter(
           (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen
@@ -8362,7 +8412,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const tabSnapshot = tabNumber;
       const tableLabelSnapshot = tableLabel;
       const ticket = ensureCartTicket();
-      await persistHeldOrder(cart, sendToKitchen, { ticket });
+      await persistHeldOrder(cartSnapshot, sendToKitchen, { ticket });
+      const heldId = resumedHeldIdRef.current;
+      if (
+        heldId &&
+        orderLabelEnabled &&
+        printSettings?.autoPrintOrderLabelOnHold !== false
+      ) {
+        void printOrderLabelForCart(heldId, cartSnapshot).catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+          toast.error(msg);
+        });
+      }
       setCart([]);
       clearCartTicket();
       setMobileCartOpen(false);
@@ -8383,6 +8444,62 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosHoldFailed'));
+    }
+  };
+
+  const printOrderLabelForCart = async (heldId: string, lines: CartLine[]) => {
+    await printOrderLabelViaAgent(
+      heldId,
+      lines.map((l) => ({
+        name: l.name,
+        lineTotal: Number(l.lineTotal) || 0,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : null,
+        isWeighed: !!l.isWeighed,
+      })),
+      printSettings,
+      { storeName: merchant?.name || merchant?.businessName || undefined }
+    );
+    toast.success(t('webPosOrderLabelPrinted'));
+  };
+
+  const printCurrentOrderLabel = async () => {
+    if (!cart.length || busy) return;
+    setBusy(true);
+    try {
+      const cartSnapshot = cart;
+      const ticket = ensureCartTicket();
+      await persistHeldOrder(cartSnapshot, false, { ticket });
+      const heldId = resumedHeldIdRef.current;
+      if (!heldId) throw new Error(t('webPosOrderLabelFailed'));
+      await printOrderLabelForCart(heldId, cartSnapshot);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || e.message || t('webPosOrderLabelFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadHeldOrderFromBarcode = async (heldId: string): Promise<boolean> => {
+    try {
+      const res = await api.get(`/merchant/pos/held/${encodeURIComponent(heldId)}`);
+      const held = res.data?.held as HeldOrderRow | undefined;
+      if (!held?.id) {
+        toast.error(t('webPosOrderLabelNotFound'));
+        return false;
+      }
+      applyHeldOrderFromRow(held);
+      const meta = parseHeldCartJson(held.cartJson);
+      const total = meta.cart.reduce((s, l) => s + (Number(l.lineTotal) || 0), 0);
+      toast.success(t('webPosOrderLabelLoaded').replace('{total}', money(total)));
+      openRegisterCheckout();
+      return true;
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        toast.error(t('webPosOrderLabelNotFound'));
+      } else {
+        toast.error(e.response?.data?.error || e.message || t('webPosOrderLabelNotFound'));
+      }
+      return false;
     }
   };
 
@@ -8918,6 +9035,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
             return;
           }
+        }
+        const orderHeldId = parseOrderLabelBarcode(code);
+        if (orderHeldId) {
+          await loadHeldOrderFromBarcode(orderHeldId);
+          return;
         }
       }
       if (onCheckout) {
@@ -9864,6 +9986,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 tablesEnabled={tablesUiEnabled}
                 requireTableForDineIn={requireTableForDineIn}
                 onHoldOrder={() => void holdCurrentOrder(false)}
+                onPrintOrderLabel={
+                  orderLabelEnabled ? () => void printCurrentOrderLabel() : undefined
+                }
                 onMoveTable={
                   tablesUiEnabled && kitchenEnabled
                     ? () => openMoveTablePicker()

@@ -296,6 +296,9 @@ export type PosPrintSettingsClient = {
     labelShowBarcodeNumber?: boolean;
     labelShowPrice?: boolean;
     labelShowSku?: boolean;
+    orderLabelEnabled?: boolean;
+    autoPrintOrderLabelOnHold?: boolean;
+    autoPrintOrderLabelOnSend?: boolean;
     printers?: Array<{
     id: string;
     name: string;

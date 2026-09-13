@@ -530,6 +530,11 @@ export function buildSettingsSearchIndex(
       keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
     },
     {
+      id: 'order-labels',
+      tab: 'receipt',
+      keywords: ['order label', 'butcher', 'weigh', 'sticker', t('orderLabelsTitle'), t('orderLabelEnabled'), t('autoPrintOrderLabelOnSend')],
+    },
+    {
       id: 'inventory-addon',
       tab: 'pos',
       keywords: ['inventory', 'stock', 'recipe', 'supplier', t('invTitle')],
