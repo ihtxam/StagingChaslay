@@ -1769,29 +1769,6 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
-  /* Online shop: allow normal page scroll (panel-shell sets overflow:hidden globally). */
-  html.shop-shell {
-    --shop-header-height: 3.5rem; /* header h-14 */
-    --shop-category-bar-height: 3rem;
-  }
-
-  html.shop-shell,
-  html.shop-shell body {
-    height: auto;
-    min-height: 100%;
-    max-height: none;
-    /* clip — not hidden — avoids extra scroll-container pairing that breaks sticky */
-    overflow-x: clip;
-    overflow-y: auto;
-    overscroll-behavior-y: auto;
-  }
-
-  html.shop-shell #root {
-    height: auto;
-    min-height: 100%;
-    max-height: none;
-    overflow: visible;
-  }
 }
 
 @keyframes shop-cart-bump {
@@ -1849,30 +1826,157 @@ button {
   }
 }
 
+
 .shop-slide-in-right {
   animation: shop-slide-in-right 0.28s ease-out;
 }
 
-/* Shop menu: category pills stick below header once scrolled past hero/offers */
+/*
+ * Shop shell scroll + sticky (UNLAYERED on purpose).
+ *
+ * Global `html, body, #root { height/max-height: 100% }` is unlayered, so any
+ * shop-shell height overrides inside `@layer components` lose the cascade and
+ * leave a capped viewport. Separately, `overflow-x: clip` / `overflow-y: auto`
+ * on html/body creates a sticky containing block as tall as the page — sticky
+ * then never pins against the viewport. Keep overflow visible so the viewport
+ * is the only scrollport.
+ */
+html.shop-shell {
+  --shop-header-height: 3.5rem;
+  --shop-category-bar-height: 3.25rem;
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+}
+
+html.shop-shell body {
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+  overscroll-behavior-y: auto;
+}
+
+html.shop-shell #root {
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+}
+
+/*
+ * Shop content column: ~80% of the page. Heroes / CTAs / banners use
+ * `.shop-full-bleed` to stay 100% wide.
+ */
+.shop-page-content {
+  width: 80%;
+  max-width: 90rem;
+  margin-inline: auto;
+}
+
+@media (max-width: 767px) {
+  .shop-page-content {
+    width: calc(100% - 1.25rem);
+  }
+}
+
+.shop-full-bleed {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.cms-homepage .wrap {
+  width: 80%;
+  max-width: 90rem;
+  margin-inline: auto;
+}
+
+@media (max-width: 767px) {
+  .cms-homepage .wrap {
+    width: calc(100% - 1.25rem);
+  }
+}
+
+.cms-homepage .hero,
+.cms-homepage .cta,
+.cms-homepage .hero-banner,
+.cms-homepage .full-bleed {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.chaslay-storefront-page .hb-section-padding:not(.hb-hero):not(.hb-hero-split) {
+  width: 80%;
+  margin-inline: auto;
+}
+
+.chaslay-storefront-page .hb-hero,
+.chaslay-storefront-page .hb-hero-split,
+.chaslay-storefront-page .hb-navbar-classic,
+.chaslay-storefront-page .hb-navbar-modern,
+.chaslay-storefront-page .hb-navbar-centered,
+.chaslay-storefront-page .hb-navbar-minimal,
+.chaslay-storefront-page .hb-footer {
+  width: 100% !important;
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* Shop menu: category pills stick at the top once scrolled past hero */
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;
-  top: var(--shop-header-height, 3.5rem);
+  top: 0;
   left: 0;
   right: 0;
   width: 100%;
   z-index: 25;
   overflow: visible;
-  background-color: #f6f5f2;
+  background-color: var(--shop-bg-muted, #f6f5f2);
   border-bottom: 1px solid rgb(231 229 228 / 0.95);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
 .shop-sticky-category-bar__inner {
-  max-width: 80rem;
+  width: 80%;
+  max-width: 90rem;
   margin-inline: auto;
-  padding-inline: 1rem;
-  padding-block: 0.5rem;
+  padding-inline: 0;
+  padding-block: 0.55rem;
+}
+
+@media (max-width: 767px) {
+  .shop-sticky-category-bar__inner {
+    width: calc(100% - 1.25rem);
+  }
+}
+
+.shop-menu-section {
+  scroll-margin-top: calc(var(--shop-category-bar-height, 3.25rem) + 0.5rem);
+}
+
+.shop-floating-cart {
+  position: fixed;
+  right: 1rem;
+  top: 46%;
+  z-index: 40;
+  display: inline-flex;
+  height: 3.25rem;
+  width: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  background: var(--shop-accent, #e11d48);
+  color: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.shop-floating-cart:hover {
+  filter: brightness(0.95);
 }
 
 .shop-sticky-category-bar .shop-category-scroll {
