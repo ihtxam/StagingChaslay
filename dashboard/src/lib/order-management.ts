@@ -1,5 +1,9 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
+import {
+  collectedTenderMethod,
+  parsePaymentBreakdown,
+  paymentMethodLabel,
+} from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay, guestOrderNumber } from '@/lib/order-number';
 import { ticketQueryMatches } from '@/lib/webpos-held';
 
@@ -671,7 +675,8 @@ export function formatOrderPaymentDisplay(
     Number(order.total || 0)
   );
   if (tenders.length <= 1) {
-    const method = tenders[0]?.method || order.paymentMethod || 'cash';
+    const method =
+      tenders[0]?.method || collectedTenderMethod(order.paymentMethod) || 'cash';
     return paymentMethodLabel(method, t);
   }
   return tenders
@@ -691,7 +696,7 @@ export function orderPaymentLines(order: {
   );
   if (tenders.length) return tenders;
   const total = Number(order.total || 0);
-  const method = String(order.paymentMethod || 'cash');
+  const method = collectedTenderMethod(order.paymentMethod) || 'cash';
   return total > 0 ? [{ method, amount: total }] : [{ method, amount: 0 }];
 }
 

@@ -12,6 +12,7 @@ import { resolveOrderItemName } from "@/lib/order-item-name";
 import {
   parsePaymentBreakdown,
   refundDeltaGiftFirst,
+  resolveSalePaymentMethod,
 } from "@/lib/payment-breakdown";
 import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
@@ -684,6 +685,20 @@ export class PosOrdersService {
       order.paymentMethod,
       total
     );
+    const originalMethod = resolveSalePaymentMethod(
+      tenders,
+      String(order.paymentMethod || "cash")
+    );
+    const persistedMethod =
+      originalMethod && originalMethod !== "pay_later"
+        ? originalMethod
+        : String(order.paymentMethod || "cash");
+    const persistedBreakdown = tenders.length
+      ? tenders.map((t) => ({
+          method: t.method === "pay_later" ? persistedMethod : t.method,
+          amount: t.amount,
+        }))
+      : [{ method: persistedMethod, amount: roundMoney2(total) }];
     const refundDelta = refundDeltaGiftFirst(already, refund, tenders);
     const terminalRefundAmount = refundDelta.terminal;
 
@@ -799,6 +814,8 @@ export class PosOrdersService {
         refundReason: reasonText,
         status: fully ? "refunded" : "partially_refunded",
         paymentStatus: fully ? "refunded" : "partially_refunded",
+        paymentMethod: persistedMethod,
+        paymentBreakdown: persistedBreakdown,
       })
       .where(eq(schema.orders.id, orderId))
       .returning();

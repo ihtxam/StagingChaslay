@@ -62,20 +62,16 @@ export function normalizePaymentMethod(method: string): string {
   return PAYMENT_METHOD_ALIASES[raw] || raw;
 }
 
+/** Collected tender: `pay_later:cash` → cash. Bare `pay_later` stays pay_later. */
+export function collectedTenderMethod(method: string | null | undefined): string {
+  return normalizePaymentMethod(String(method || ''));
+}
+
 export function paymentMethodLabel(
   method: string,
   t: (key: string) => string
 ): string {
-  const raw = String(method || '').trim();
-  const later = raw.match(/^pay[_-]?later(?::|_|\s+)?(.*)$/i);
-  if (later) {
-    const tender = normalizePaymentMethod(later[1] || '');
-    if (tender === 'cash') return `${t('webPosPayLater')}: ${t('webPosCash')}`;
-    if (tender === 'card') return `${t('webPosPayLater')}: ${t('webPosCard')}`;
-    if (tender === 'terminal') return `${t('webPosPayLater')}: ${t('webPosTerminal')}`;
-    return t('webPosPayLater');
-  }
-  const m = normalizePaymentMethod(method);
+  const m = collectedTenderMethod(method);
   if (m === 'cash') return t('webPosCash');
   if (m === 'card') return t('webPosCard');
   if (m === 'terminal') return t('webPosTerminal');
@@ -87,28 +83,58 @@ export function paymentMethodLabel(
   return method || t('reportsEmpty');
 }
 
+function tendersFromRows(rows: PaymentTender[]): PaymentTender[] {
+  return rows.filter((t) => t.method && t.amount > 0);
+}
+
+function preferCollectedTenders(
+  tenders: PaymentTender[],
+  paymentMethod?: string | null,
+  orderTotal?: number
+): PaymentTender[] {
+  if (!tenders.length) return tenders;
+  const collected = tenders.filter((t) => t.method !== 'pay_later');
+  if (collected.length) return collected;
+  const fallback = collectedTenderMethod(paymentMethod);
+  if (fallback && fallback !== 'pay_later') {
+    const total =
+      roundMoney2(Number(orderTotal) || 0) ||
+      roundMoney2(tenders.reduce((s, t) => s + t.amount, 0));
+    if (total > 0) return [{ method: fallback, amount: total }];
+  }
+  return tenders;
+}
+
 export function parsePaymentBreakdown(
   raw: unknown,
   paymentMethod?: string | null,
   orderTotal?: number
 ): PaymentTender[] {
   if (Array.isArray(raw) && raw.length) {
-    return raw
-      .map((row) => ({
-        method: normalizePaymentMethod(String((row as PaymentTender).method || '')),
-        amount: roundMoney2(Number((row as PaymentTender).amount) || 0),
-      }))
-      .filter((t) => t.method && t.amount > 0);
+    return preferCollectedTenders(
+      tendersFromRows(
+        raw.map((row) => ({
+          method: normalizePaymentMethod(String((row as PaymentTender).method || '')),
+          amount: roundMoney2(Number((row as PaymentTender).amount) || 0),
+        }))
+      ),
+      paymentMethod,
+      orderTotal
+    );
   }
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    return Object.entries(raw as Record<string, unknown>)
-      .map(([method, amount]) => ({
-        method: normalizePaymentMethod(method),
-        amount: roundMoney2(Number(amount) || 0),
-      }))
-      .filter((t) => t.method && t.amount > 0);
+    return preferCollectedTenders(
+      tendersFromRows(
+        Object.entries(raw as Record<string, unknown>).map(([method, amount]) => ({
+          method: normalizePaymentMethod(method),
+          amount: roundMoney2(Number(amount) || 0),
+        }))
+      ),
+      paymentMethod,
+      orderTotal
+    );
   }
-  const method = normalizePaymentMethod(String(paymentMethod || ''));
+  const method = collectedTenderMethod(paymentMethod);
   const total = roundMoney2(Number(orderTotal) || 0);
   if (method && method !== 'mixed' && total > 0) {
     return [{ method, amount: total }];
