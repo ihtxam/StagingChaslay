@@ -10,7 +10,8 @@ function isPosLikePath(pathname: string): boolean {
   return (
     /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
     /^\/kds(?:\/|$)/.test(pathname) ||
-    /^\/tv(?:\/|$)/.test(pathname)
+    /^\/tv(?:\/|$)/.test(pathname) ||
+    /^\/cds(?:\/|$)/.test(pathname)
   );
 }
 

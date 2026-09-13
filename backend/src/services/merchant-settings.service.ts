@@ -38,6 +38,10 @@ import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import {
+  normalizeCustomerDisplaySettings,
+  type CustomerDisplaySettings,
+} from "@/lib/customer-display-settings";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
@@ -291,6 +295,9 @@ export class MerchantSettingsService {
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
+      customerDisplaySettings: normalizeCustomerDisplaySettings(
+        (merchant as { customerDisplaySettings?: unknown }).customerDisplaySettings
+      ),
       deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
@@ -397,6 +404,7 @@ export class MerchantSettingsService {
       posPrintSettings?: PosPrintSettings | null;
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
+      customerDisplaySettings?: CustomerDisplaySettings | Partial<CustomerDisplaySettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
@@ -685,6 +693,19 @@ export class MerchantSettingsService {
       if (updates.webposExpressEnabled === undefined) {
         patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
       }
+    }
+    if (updates.customerDisplaySettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { customerDisplaySettings: true },
+      });
+      const existing = normalizeCustomerDisplaySettings(current?.customerDisplaySettings);
+      const incoming = normalizeCustomerDisplaySettings({
+        ...existing,
+        ...(updates.customerDisplaySettings as object),
+      });
+      incoming.accessToken = existing.accessToken || incoming.accessToken;
+      patch.customerDisplaySettings = incoming;
     }
     if (updates.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
