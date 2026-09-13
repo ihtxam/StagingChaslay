@@ -2738,6 +2738,8 @@ export const offers = pgTable(
     channels: json("channels").$type<string[]>().default([]).notNull(),
     categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    /** Empty = all POS users; otherwise only these staff see the offer on POS. */
+    staffIds: json("staff_ids").$type<string[]>().default([]).notNull(),
     scheduleMode: varchar("schedule_mode", { length: 20 }).default("always").notNull(),
     daysOfWeek: json("days_of_week").$type<string[]>().default([]).notNull(),
     timeStart: varchar("time_start", { length: 5 }),
