@@ -2685,6 +2685,11 @@ const en: Dict = {
   webPosLicenseNoResellerHint:
     'No reseller is linked. Use Buy license for self-serve plans, or contact support.',
   webPosLicenseMailSubject: 'Reborn license renewal',
+  webPosLicenseContactBody:
+    'Merchant "{business}" requests license renewal / upgrade (reason: {reason}). Please contact them to renew access.',
+  webPosLicenseContactSent: 'Request sent to your reseller',
+  webPosLicenseContactFailed: 'Could not reach your reseller — try again or email them directly',
+  webPosLicenseContacting: 'Sending…',
   webPosDrawerDenied: 'You do not have permission to open the cash drawer',
   webPosDrawerOpened: 'Cash drawer opened',
   webPosDrawerFailed: 'Could not open cash drawer',
@@ -6578,6 +6583,11 @@ const fr: Dict = {
   webPosLicenseNoResellerHint:
     'Aucun revendeur lié. Utilisez Acheter une licence pour les offres en libre-service, ou contactez le support.',
   webPosLicenseMailSubject: 'Renouvellement licence Reborn',
+  webPosLicenseContactBody:
+    'Le commerçant « {business} » demande un renouvellement / une mise à niveau de licence (motif : {reason}). Merci de le contacter pour rétablir l’accès.',
+  webPosLicenseContactSent: 'Demande envoyée à votre revendeur',
+  webPosLicenseContactFailed: 'Impossible de joindre le revendeur — réessayez ou écrivez-lui directement',
+  webPosLicenseContacting: 'Envoi…',
   webPosDrawerDenied: 'Vous n’avez pas la permission d’ouvrir le tiroir-caisse',
   webPosDrawerOpened: 'Tiroir-caisse ouvert',
   webPosDrawerFailed: 'Impossible d’ouvrir le tiroir-caisse',
@@ -10383,6 +10393,11 @@ const de: Dict = {
   webPosLicenseNoResellerHint:
     'Kein Reseller verknüpft. Nutzen Sie Lizenz kaufen für Self-Serve-Pläne oder kontaktieren Sie den Support.',
   webPosLicenseMailSubject: 'Reborn-Lizenz verlängern',
+  webPosLicenseContactBody:
+    'Händler „{business}“ bittet um Lizenzverlängerung / Upgrade (Grund: {reason}). Bitte kontaktieren Sie ihn, um den Zugang wiederherzustellen.',
+  webPosLicenseContactSent: 'Anfrage an Ihren Reseller gesendet',
+  webPosLicenseContactFailed: 'Reseller nicht erreichbar — erneut versuchen oder direkt per E-Mail kontaktieren',
+  webPosLicenseContacting: 'Senden…',
   webPosDrawerDenied: 'Keine Berechtigung zum Öffnen der Kassenschublade',
   webPosDrawerOpened: 'Kassenschublade geöffnet',
   webPosDrawerFailed: 'Kassenschublade konnte nicht geöffnet werden',
