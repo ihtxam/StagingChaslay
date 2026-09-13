@@ -13,6 +13,7 @@ export type SettingsTabId =
   | 'receipt'
   | 'kds'
   | 'ods'
+  | 'customerDisplay'
   | 'signage'
   | 'kiosk'
   | 'email'

@@ -158,6 +158,13 @@ import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectRead
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
+import {
+  openCustomerDisplayWindow,
+  publishCustomerDisplayState,
+  subscribeCustomerDisplayRequests,
+  type CustomerDisplayPhase,
+  type CustomerDisplayState,
+} from '@/lib/customer-display-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -1817,6 +1824,78 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
   const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
+
+  const cdsSettings = merchant?.customerDisplaySettings;
+  const cdsToken = String(cdsSettings?.accessToken || '').trim();
+  const cdsShortCode = String(cdsSettings?.shortCode || '').trim();
+  const cdsEnabled = cdsSettings?.enabled !== false;
+
+  const cdsPhase: CustomerDisplayPhase = useMemo(() => {
+    if (posView === 'success') return 'thankyou';
+    if (paymentModalOpen) return 'payment';
+    if (activeSale.lines.length === 0) return 'idle';
+    return 'building';
+  }, [posView, paymentModalOpen, activeSale.lines.length]);
+
+  const buildCustomerDisplayState = useCallback((): CustomerDisplayState => {
+    const saleTotals = activeSale.totals;
+    return {
+      merchantName: merchant?.name || merchant?.businessName,
+      currency: 'CHF',
+      lines: activeSale.lines.map((l) => ({
+        name: repairCatalogText(l.name),
+        qty: l.quantity,
+        lineTotal: l.lineTotal,
+        modifiers: lineExtrasLabel(l) || undefined,
+      })),
+      subtotal: saleTotals.subtotal,
+      discount: saleTotals.discount ?? 0,
+      tax: saleTotals.tax,
+      total: saleTotals.total,
+      phase: cdsPhase,
+      receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
+      locale,
+      updatedAt: Date.now(),
+    };
+  }, [
+    activeSale.lines,
+    activeSale.totals,
+    cdsPhase,
+    lastReceiptUrl,
+    locale,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
+
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+  }, [cdsToken, cdsEnabled, buildCustomerDisplayState]);
+
+  /** When CDS connects (or refreshes), republish cart + locale immediately. */
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    return subscribeCustomerDisplayRequests(cdsToken, () => {
+      publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+    });
+  }, [cdsToken, cdsEnabled, buildCustomerDisplayState]);
+
+  const openCustomerDisplay = useCallback(() => {
+    if (!cdsToken || !cdsEnabled) {
+      toast.error(t('cdsNotConfigured'));
+      return;
+    }
+    setSettingsOpen(false);
+    const win = openCustomerDisplayWindow({ accessToken: cdsToken, shortCode: cdsShortCode });
+    if (!win) {
+      toast.error(t('cdsActionFailed'));
+    } else {
+      // Fresh window may miss the last BroadcastChannel publish — push again shortly.
+      window.setTimeout(() => {
+        publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+      }, 150);
+    }
+  }, [cdsToken, cdsShortCode, cdsEnabled, t, buildCustomerDisplayState]);
 
   const membershipCheckout = useMemo(() => {
     if (
@@ -9458,6 +9537,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               canManageOnlineShop && !isRetail
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
+            }
+            onOpenCustomerDisplay={
+              cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
             onSendLogs={() => {
               setSettingsOpen(false);

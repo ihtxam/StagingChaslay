@@ -17,6 +17,7 @@ import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 import type { KioskSettings } from "../lib/kiosk-settings";
+import type { CustomerDisplaySettings } from "../lib/customer-display-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -309,6 +310,11 @@ export const merchants = pgTable(
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
      */
     kioskSettings: json("kiosk_settings").$type<KioskSettings | null>(),
+    /**
+     * Customer-facing display (CDS) for dual-screen tills:
+     * { accessToken, promoSlides, slideIntervalSec, theme, enabled }
+     */
+    customerDisplaySettings: json("customer_display_settings").$type<CustomerDisplaySettings | null>(),
     /** Paid Just Eat / JET Connect order integration addon. */
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
