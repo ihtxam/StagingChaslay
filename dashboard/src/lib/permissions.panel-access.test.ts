@@ -7,6 +7,7 @@ import {
   isOrderCenterOnlyStaff,
   isOrderCenterRestrictedStaff,
   isRegisterFirstStaff,
+  normalizeRolePermissions,
   type Permission,
   type WebPosStaffSession,
 } from './permissions';
@@ -137,6 +138,13 @@ const managerPin: WebPosStaffSession = {
   const orderCenterPerms: Permission[] = ['VIEW_ORDER_HISTORY', 'END_OF_DAY'];
   assert.equal(isOrderCenterOnlyStaff(orderCenterPerms, false), true);
   assert.equal(isOrderCenterRestrictedStaff(orderCenterPerms, false), true);
+}
+
+{
+  const saved = normalizeRolePermissions('USE_POS, MANAGE_PRODUCTS, BOGUS, ACCESS_PANEL');
+  assert.deepEqual(saved, ['USE_POS', 'MANAGE_PRODUCTS', 'ACCESS_PANEL']);
+  const fromArray = normalizeRolePermissions([' USE_WEBPOS ', 'MANAGE_PRODUCTS', 'MANAGE_PRODUCTS']);
+  assert.deepEqual(fromArray, ['USE_WEBPOS', 'MANAGE_PRODUCTS']);
 }
 
 console.log('permissions.panel-access: all assertions passed');

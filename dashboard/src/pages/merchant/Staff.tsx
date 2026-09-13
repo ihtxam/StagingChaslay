@@ -4,7 +4,7 @@ import api from '@/lib/api';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
-import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, isKioskOperatorRoleName, isGandolaRoleName, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, normalizeRolePermissions, isKioskOperatorRoleName, isGandolaRoleName, type Permission } from '@/lib/permissions';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
@@ -141,14 +141,14 @@ export default function StaffPage({
 
   const openRoleEdit = (role: RoleRow) => {
     setEditingRole(role);
-    setRolePerms(role.permissions as Permission[]);
+    setRolePerms(permissionsForMerchantAddon(normalizeRolePermissions(role.permissions), kioskLicensed));
   };
 
   const saveRole = async () => {
     if (!editingRole) return;
     try {
       await api.put(`/merchant/roles/${editingRole.id}`, {
-        permissions: permissionsForMerchantAddon(rolePerms, kioskLicensed),
+        permissions: permissionsForMerchantAddon(normalizeRolePermissions(rolePerms), kioskLicensed),
       });
       toast.success(t('staffRoleUpdated'));
       setEditingRole(null);
@@ -965,6 +965,22 @@ export default function StaffPage({
               {t('staffEditRole').replace('{name}', staffRoleDisplayName(editingRole.name, t))}
             </h3>
             <p className="mb-3 text-xs text-[var(--text-muted)]">{t('staffRoleBackOfficeHint')}</p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => setRolePerms([...visiblePermissions])}
+              >
+                {t('selectAll')}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => setRolePerms([])}
+              >
+                {t('deselectAll')}
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
               {visiblePermissions.map((p) => (
                 <label key={p} className="flex items-center gap-2 text-xs">
@@ -972,9 +988,12 @@ export default function StaffPage({
                     type="checkbox"
                     checked={rolePerms.includes(p)}
                     onChange={(e) =>
-                      setRolePerms((prev) =>
-                        e.target.checked ? [...prev, p] : prev.filter((x) => x !== p)
-                      )
+                      setRolePerms((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(p);
+                        else next.delete(p);
+                        return visiblePermissions.filter((key) => next.has(key));
+                      })
                     }
                   />
                   {t(`perm_${p}`)}
