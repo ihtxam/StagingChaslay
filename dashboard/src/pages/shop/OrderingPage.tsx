@@ -35,7 +35,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { CalendarDays, ChevronDown, Info, Plus, ShoppingBag, User } from 'lucide-react';
+import { CalendarDays, Info, Plus, ShoppingBag, User } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -111,7 +111,6 @@ export default function OrderingPage() {
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const locSlug = resolveShopLocationSlug({ locationSlug });
-  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
@@ -126,9 +125,8 @@ export default function OrderingPage() {
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef(0);
-  const hasAutoOpenedCartRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
-  const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
+  const [, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOffer, setPendingOffer] = useState<ShopOfferForPicker | null>(null);
@@ -157,35 +155,9 @@ export default function OrderingPage() {
   const [customer, setCustomer] = useState<any>(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loyaltyRewards, setLoyaltyRewards] = useState<LoyaltyReward[]>([]);
-  const [loyaltyProgress, setLoyaltyProgress] = useState(0);
-  const [nextRewardPts, setNextRewardPts] = useState<number | null>(null);
   const [channelPromptOpen, setChannelPromptOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
-  /** true = every category expanded; false = headers only */
-  const [allCategoriesOpen, setAllCategoriesOpen] = useState(true);
-  const addParamConsumedRef = useRef(false);
-
-  useEffect(() => {
-    document.documentElement.classList.add('shop-shell');
-    return () => document.documentElement.classList.remove('shop-shell');
-  }, []);
-
-  useEffect(() => {
-    if (!shopKey) return;
-    const onChange = (event: Event) => {
-      const key = (event as CustomEvent)?.detail?.shopKey;
-      if (key && key !== shopKey) return;
-      const stored = loadCart(shopKey);
-      if (stored) {
-        setDraft(stored);
-        if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
-      }
-    };
-    window.addEventListener(SHOP_CART_EVENT, onChange);
-    return () => window.removeEventListener(SHOP_CART_EVENT, onChange);
-  }, [shopKey]);
-
   useEffect(() => {
     if (!shopKey) {
       setLoading(false);
@@ -212,7 +184,6 @@ export default function OrderingPage() {
         setMenu(menuRes.data.data || []);
         setShopOffers(menuRes.data.offers || []);
         setSelectedCategory('all');
-        setAllCategoriesOpen(true);
 
         try {
           if (data.deliveryMode !== 'zipcode') {
@@ -230,16 +201,8 @@ export default function OrderingPage() {
         setLoyaltyRewards(loyaltyData.rewards || []);
         if (token && loyaltyData.balance != null) {
           setLoyaltyBalance(Number(loyaltyData.balance) || 0);
-          setLoyaltyProgress(Number(loyaltyData.progressPercent) || 0);
-          setNextRewardPts(
-            loyaltyData.nextReward?.loyaltyRewardPoints != null
-              ? Number(loyaltyData.nextReward.loyaltyRewardPoints)
-              : null
-          );
         } else {
           setLoyaltyBalance(0);
-          setLoyaltyProgress(0);
-          setNextRewardPts(null);
         }
 
         if (token) {
@@ -444,35 +407,17 @@ export default function OrderingPage() {
   const cartTotal = roundMoney2(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
   const channelMeta = channels[channel];
   const itemCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const cartLayout = merchant?.cartLayout === 'sticky_right' ? 'sticky_right' : 'hidden_slide';
-  const stickyCart = cartLayout === 'sticky_right';
 
   useEffect(() => {
     const prev = prevItemCountRef.current;
     if (itemCount > prev) {
       setCartBump(true);
       const timer = window.setTimeout(() => setCartBump(false), 400);
-      if (!stickyCart && itemCount > 0 && prev === 0 && !hasAutoOpenedCartRef.current) {
-        setCartSlideOpen(true);
-        hasAutoOpenedCartRef.current = true;
-      }
       prevItemCountRef.current = itemCount;
       return () => window.clearTimeout(timer);
     }
-    if (itemCount === 0) {
-      hasAutoOpenedCartRef.current = false;
-    }
     prevItemCountRef.current = itemCount;
-  }, [itemCount, stickyCart]);
-
-  const directionsUrl =
-    merchant?.latitude && merchant?.longitude
-      ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.latitude},${merchant.longitude}`
-      : merchant?.address
-        ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-            `${merchant.address} ${merchant.city || ''}`
-          )}`
-        : null;
+  }, [itemCount]);
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
 
@@ -831,10 +776,6 @@ export default function OrderingPage() {
     return t('shopClosed');
   }, [channelMeta?.open, nextOpen, t]);
 
-  const categoriesToRender = useMemo(() => {
-    if (selectedCategory === 'all') return menu;
-    return menu.filter((c) => c.id === selectedCategory);
-  }, [menu, selectedCategory]);
 
   if (loading) {
     return (
@@ -862,10 +803,6 @@ export default function OrderingPage() {
     | 'checkout'
     | 'popup_start'
     | 'menu';
-  const showMenuChannelButtons = channelSelectMode === 'menu' && channelButtons.length > 1;
-  const channelLabel =
-    channelButtons.find((c) => c.id === channel)?.label || t('shopPickup');
-  const etaMin = channelMeta?.etaMinutes || 30;
 
   const openChannelPrompt = (prefill?: ShopChannel) => {
     if (channelButtons.length <= 1) return;
@@ -916,22 +853,20 @@ export default function OrderingPage() {
     openChannelPrompt(next);
   };
 
-  const openSideCart = () => {
-    setCartSlideOpen(true);
-  };
+  const openSideCart = () => setCartSlideOpen(true);
 
   const CartIconButton = ({ className = '' }: { className?: string }) => (
     <button
       type="button"
-      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full ${className}`}
+      className={`shop-floating-cart ${className}`}
       onClick={openSideCart}
       aria-label={`${t('shopBasketCount')} (${itemCount})`}
       title={`${t('shopBasketCount')} (${itemCount})`}
     >
-      <ShoppingBag className="h-5 w-5" strokeWidth={1.75} />
+      <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
       {itemCount > 0 ? (
         <span
-          className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-stone-900 px-1 text-[10px] font-bold text-white ${
+          className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-stone-900 ${
             cartBump ? 'shop-cart-bump' : ''
           }`}
         >
@@ -944,9 +879,6 @@ export default function OrderingPage() {
   const showProductImages = merchant?.menuShowProductImages !== false;
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
   const allowScheduledOrders = merchant?.scheduledOrdersEnabled !== false;
-  const toggleCategory = () => {
-    setAllCategoriesOpen((prev) => !prev);
-  };
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
@@ -954,6 +886,12 @@ export default function OrderingPage() {
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
+
+  const scrollToCategory = (id: string) => {
+    setSelectedCategory(id);
+    const el = document.getElementById(id === 'all' ? 'shop-menu-start' : `shop-cat-${id}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const Basket = ({
     className = 'max-h-[calc(100dvh-6rem)] min-h-[12rem] border border-stone-200',
@@ -1159,14 +1097,7 @@ export default function OrderingPage() {
     <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
-      <ChaslayStorefrontNavbar
-        shopKey={shopKey}
-        basePath={basePath}
-        locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
-        onPresence={setHasCmsNav}
-      />
-      {hasCmsNav ? null : (
-      <header className="sticky top-0 z-30 bg-white border-b border-stone-200">
+      <header className="z-30 bg-white border-b border-stone-200">
         <div className="shop-page-content h-14 flex items-center justify-between gap-2">
           <Link
             to={shopBasePath(shopKey, locSlug) || '/'}
@@ -1222,335 +1153,284 @@ export default function OrderingPage() {
         </div>
       ) : null}
 
-      <section className="bg-white border-b border-stone-100">
-        <div className="shop-page-content py-4 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight">{merchant?.name}</h1>
-              {(merchant?.address || merchant?.city) && (
-                <p className="mt-1 text-[13px] text-stone-600">
-                  {merchant?.address}
-                  {merchant?.city ? `, ${merchant.city}` : ''}
-                  {directionsUrl ? (
-                    <>
-                      {' · '}
-                      <a
-                        href={directionsUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-medium text-rose-600 hover:underline"
-                      >
-                        {t('shopGetDirections')}
-                      </a>
-                    </>
-                  ) : null}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-300 text-stone-700"
-              aria-label={t('shopStoreInfo')}
-              title={t('shopStoreInfo')}
-            >
-              <Info className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Hero / store banner (no directions overlay) */}
-          {merchant?.shopBannerUrl ? (
-            <div className="relative overflow-hidden rounded-xl bg-stone-100 aspect-[16/7] sm:aspect-[21/8]">
+      <section className="shop-full-bleed">
+        <div className="relative">
+          <div className="h-40 overflow-hidden bg-stone-200 sm:h-52 md:h-64">
+            {merchant?.shopBannerUrl ? (
               <img src={merchant.shopBannerUrl} alt="" className="h-full w-full object-cover" />
-            </div>
-          ) : null}
+            ) : (
+              <div className="h-full w-full bg-gradient-to-br from-stone-200 to-stone-300" />
+            )}
+          </div>
+          <div className="shop-page-content relative -mt-12 pb-3 sm:-mt-16">
+            <div className="rounded-2xl border border-stone-100 bg-white px-4 py-4 shadow-md sm:px-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5">
+                    {merchant?.shopLogoUrl ? (
+                      <img
+                        src={merchant.shopLogoUrl}
+                        alt=""
+                        className="h-10 w-10 rounded-full object-contain"
+                      />
+                    ) : null}
+                    <h1 className="truncate text-xl font-bold tracking-tight md:text-2xl">
+                      {merchant?.name}
+                    </h1>
+                  </div>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                    <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          channels.takeaway?.open || channels.dine_in?.open
+                            ? 'bg-emerald-500'
+                            : 'bg-stone-300'
+                        }`}
+                      />
+                      {t('shopStoreOpen')}
+                    </span>
+                    {channels.delivery?.enabled ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            channels.delivery?.open ? 'bg-emerald-500' : 'bg-stone-300'
+                          }`}
+                        />
+                        {t('shopDeliveryOpen')}
+                      </span>
+                    ) : null}
+                    <span className="text-stone-400">{statusLine}</span>
+                  </p>
+                  {(merchant?.address || merchant?.city) && (
+                    <p className="mt-1 text-[13px] text-stone-600">
+                      {merchant?.address}
+                      {merchant?.city ? `, ${merchant.city}` : ''}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  className="shrink-0 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                >
+                  {t('shopGallery')}
+                </button>
+              </div>
 
-          <p className="flex flex-wrap items-center gap-2 text-[13px]">
-            <span className="text-stone-600">
-              {(merchant?.displayHours?.todayLabel || channelMeta?.todayLabel) || t('shopHoursNotSet')}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                channelMeta?.open ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
-              }`}
-            >
-              {statusLine}
-            </span>
-          </p>
-
-          <button
-            type="button"
-            onClick={openChannelPrompt}
-            className="mx-auto flex w-full max-w-lg items-center justify-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-3 py-2 text-[12px] sm:text-[13px] text-stone-700 hover:border-stone-300"
-          >
-            <span className="font-semibold text-stone-900">{channelLabel}</span>
-            <span className="text-stone-300">|</span>
-            <span className="truncate font-medium">{merchant?.name}</span>
-            <span className="text-stone-300">|</span>
-            <span className="tabular-nums whitespace-nowrap">
-              {formatShopChannelEta(etaMin, channel, t('shopMins'))}
-            </span>
-            {channelButtons.length > 1 ? <ChevronDown className="h-3.5 w-3.5 text-stone-400 shrink-0" /> : null}
-          </button>
-
-          {showMenuChannelButtons ? (
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              {channelButtons.map((c) => {
-                const meta = channels[c.id];
-                return (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {channelButtons.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => selectChannel(c.id)}
-                    className={`rounded-xl px-2 py-2.5 text-center border min-w-0 ${
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ${
                       channel === c.id
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-white text-stone-700 border-stone-200'
+                        ? 'bg-[var(--shop-accent,#e11d48)] text-white'
+                        : 'border border-stone-200 bg-white text-stone-700'
                     }`}
                   >
-                    <span className="block text-xs sm:text-sm font-semibold truncate">{c.label}</span>
-                    <span className="block text-[10px] sm:text-[11px] font-normal opacity-70 truncate">
-                      {formatShopChannelEta(meta.etaMinutes, c.id, t('shopMins'))}
-                    </span>
+                    {c.label}
                   </button>
-                );
-              })}
+                ))}
+                {channelSelectMode === 'checkout' && channelButtons.length > 1 ? (
+                  <p className="w-full text-[12px] text-stone-500">{t('shopChannelAtCheckoutHint')}</p>
+                ) : null}
+              </div>
             </div>
-          ) : null}
-
-          {channelSelectMode === 'checkout' && channelButtons.length > 1 ? (
-            <p className="text-[12px] text-stone-500">{t('shopChannelAtCheckoutHint')}</p>
-          ) : null}
+          </div>
         </div>
       </section>
 
       <div className="shop-sticky-category-bar">
         <div className="shop-sticky-category-bar__inner">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="shop-category-scroll flex gap-1.5 pb-0.5">
+          <div className="shop-category-scroll flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => scrollToCategory('all')}
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                selectedCategory === 'all'
+                  ? 'bg-[var(--shop-accent,#e11d48)] text-white'
+                  : 'bg-white text-stone-700 border border-stone-200'
+              }`}
+            >
+              {t('shopAllCategories')}
+            </button>
+            {menu.map((cat) => (
               <button
+                key={cat.id}
                 type="button"
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setAllCategoriesOpen(true);
-                }}
+                onClick={() => scrollToCategory(cat.id)}
                 className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                  selectedCategory === 'all'
-                    ? 'bg-amber-700 text-white'
+                  selectedCategory === cat.id
+                    ? 'bg-[var(--shop-accent,#e11d48)] text-white'
                     : 'bg-white text-stone-700 border border-stone-200'
                 }`}
               >
-                {t('shopAllCategories')}
+                {cat.name}
               </button>
-              {menu.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(cat.id);
-                    setAllCategoriesOpen(true);
-                  }}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                    selectedCategory === cat.id
-                      ? 'bg-amber-700 text-white'
-                      : 'bg-white text-stone-700 border border-stone-200'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-            <CartIconButton />
+            ))}
           </div>
         </div>
       </div>
 
-      <div
-        className={`shop-page-content py-6 ${
-          stickyCart ? 'grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start' : ''
-        }`}
-      >
-        <div>
-          {shopOffers.length > 0 ? (
-            <div className="mb-5 space-y-2">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('shopOffers')}</h2>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {shopOffers.map((o) => {
-                  const clickable = isPickableDeal(o.offerType);
-                  const pct =
-                    o.offerType === 'percent_category' || o.offerType === 'percent_order'
-                      ? Number(o.rules?.percentOff) || 0
-                      : 0;
-                  return (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => {
-                        if (clickable) setPendingOffer(o);
-                      }}
-                      className={`min-w-[200px] max-w-[260px] shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left ${
-                        clickable ? 'hover:border-amber-500 active:scale-[0.99]' : ''
-                      }`}
-                    >
-                      {o.badgeLabel ? (
-                        <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-                          {o.badgeLabel}
-                        </span>
-                      ) : null}
-                      <p className="mt-1.5 font-semibold text-stone-900 text-sm">{o.name}</p>
-                      {o.description ? (
-                        <p className="mt-0.5 text-xs text-stone-600 line-clamp-3">{o.description}</p>
-                      ) : null}
-                      {clickable ? (
-                        <p className="mt-2 text-[11px] font-semibold text-amber-800">
-                          Tap to pick products →
-                        </p>
-                      ) : pct > 0 ? (
-                        <p className="mt-2 text-[11px] font-semibold text-amber-800">
-                          {pct}% off applied in cart
-                        </p>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {loyaltyEnabled && unlockedRewards.length > 0 && (
-            <div className="mb-5 space-y-2">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-stone-500">
-                {t('shopFreeRewards')}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {unlockedRewards.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-white border border-teal-200 p-3 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate">{r.name}</p>
-                      <p className="text-xs text-teal-800">
-                        {t('shopPtsBadge').replace('{n}', String(r.loyaltyRewardPoints))}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        addConfiguredItem(
-                          {
-                            id: r.id,
-                            name: r.name,
-                            price: r.price,
-                            image: r.image || undefined,
-                            loyaltyRewardPoints: r.loyaltyRewardPoints,
-                          },
-                          [],
-                          0,
-                          [],
-                          true
-                        )
-                      }
-                      className="shrink-0 text-xs font-semibold bg-teal-800 text-white px-3 py-2"
-                    >
-                      {t('shopAddFree')}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {categoriesToRender.map((cat) => {
-              const open = allCategoriesOpen;
-              const items = cat.items || [];
-              return (
-                <section key={cat.id} className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+      <div className="shop-page-content py-6" id="shop-menu-start">
+        {shopOffers.length > 0 ? (
+          <div className="mb-5 space-y-2">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('shopOffers')}</h2>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {shopOffers.map((o) => {
+                const clickable = isPickableDeal(o.offerType);
+                const pct =
+                  o.offerType === 'percent_category' || o.offerType === 'percent_order'
+                    ? Number(o.rules?.percentOff) || 0
+                    : 0;
+                return (
                   <button
+                    key={o.id}
                     type="button"
-                    onClick={() => toggleCategory()}
-                    className="flex w-full items-center justify-between gap-2 bg-stone-100 px-3 py-3 text-left"
+                    onClick={() => {
+                      if (clickable) setPendingOffer(o);
+                    }}
+                    className={`min-w-[200px] max-w-[260px] shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left ${
+                      clickable ? 'hover:border-amber-500 active:scale-[0.99]' : ''
+                    }`}
                   >
-                    <span className="text-sm font-bold uppercase tracking-wide text-stone-900">
-                      {cat.name}
-                    </span>
-                    <ChevronDown
-                      className={`h-4 w-4 text-stone-500 transition ${open ? 'rotate-180' : ''}`}
-                    />
+                    {o.badgeLabel ? (
+                      <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                        {o.badgeLabel}
+                      </span>
+                    ) : null}
+                    <p className="mt-1.5 font-semibold text-stone-900 text-sm">{o.name}</p>
+                    {o.description ? (
+                      <p className="mt-0.5 text-xs text-stone-600 line-clamp-3">{o.description}</p>
+                    ) : null}
+                    {clickable ? (
+                      <p className="mt-2 text-[11px] font-semibold text-amber-800">
+                        Tap to pick products →
+                      </p>
+                    ) : pct > 0 ? (
+                      <p className="mt-2 text-[11px] font-semibold text-amber-800">
+                        {pct}% off applied in cart
+                      </p>
+                    ) : null}
                   </button>
-                  {open ? (
-                    <div className="p-2 sm:p-3 space-y-3">
-                      {showCategoryBanners && cat.image ? (
-                        <img
-                          src={cat.image}
-                          alt=""
-                          className="w-full aspect-[21/9] object-cover rounded-md bg-stone-100"
-                        />
-                      ) : null}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {items.map((product) => {
-                          const catalog = catalogUnitPrice(product.price, product.categoryId ?? cat.id);
-                          const pctMatch = matchingPercentOffer(
-                            shopOffers,
-                            { id: product.id, categoryId: product.categoryId ?? cat.id },
-                            channel
-                          );
-                          const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
-                          return (
-                            <ProductCard
-                              key={product.id}
-                              product={product}
-                              showImage={showProductImages && !!product.image}
-                              price={catalog}
-                              salePrice={sale}
-                              offerBadge={
-                                pctMatch
-                                  ? pctMatch.offer.badgeLabel || `${pctMatch.percent}% off`
-                                  : null
-                              }
-                              onAdd={() => handleProductClick(product)}
-                              rewardPts={
-                                product.loyaltyRewardPoints != null &&
-                                Number(product.loyaltyRewardPoints) >= 1
-                                  ? Number(product.loyaltyRewardPoints)
-                                  : null
-                              }
-                              unlocked={
-                                !!(
-                                  product.loyaltyRewardPoints != null &&
-                                  customer &&
-                                  loyaltyBalance >= Number(product.loyaltyRewardPoints)
-                                )
-                              }
-                              onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
-                              t={t}
-                            />
-                          );
-                        })}
-                      </div>
-                      {items.length === 0 ? (
-                        <p className="text-sm text-stone-500 py-6 text-center">{t('shopNoProducts')}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </section>
-              );
-            })}
-            {categoriesToRender.length === 0 ? (
-              <p className="text-stone-500 py-12 text-center">{t('shopNoProducts')}</p>
-            ) : null}
-          </div>
-        </div>
-
-        {stickyCart ? (
-          <div className="shop-sticky-cart-panel hidden lg:block self-start max-h-[calc(100dvh-6.5rem)]">
-            <div className="max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-y-contain">
-              <Basket />
+                );
+              })}
             </div>
           </div>
         ) : null}
+
+        {loyaltyEnabled && unlockedRewards.length > 0 && (
+          <div className="mb-5 space-y-2">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-500">
+              {t('shopFreeRewards')}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {unlockedRewards.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-white border border-teal-200 p-3 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{r.name}</p>
+                    <p className="text-xs text-teal-800">
+                      {t('shopPtsBadge').replace('{n}', String(r.loyaltyRewardPoints))}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      addConfiguredItem(
+                        {
+                          id: r.id,
+                          name: r.name,
+                          price: r.price,
+                          image: r.image || undefined,
+                          loyaltyRewardPoints: r.loyaltyRewardPoints,
+                        },
+                        [],
+                        0,
+                        [],
+                        true
+                      )
+                    }
+                    className="shrink-0 text-xs font-semibold bg-teal-800 text-white px-3 py-2"
+                  >
+                    {t('shopAddFree')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-8">
+          {menu.map((cat) => {
+            const items = cat.items || [];
+            return (
+              <section key={cat.id} id={`shop-cat-${cat.id}`} className="shop-menu-section">
+                <h2 className="mb-3 text-lg font-bold tracking-tight text-stone-900">{cat.name}</h2>
+                {showCategoryBanners && cat.image ? (
+                  <img
+                    src={cat.image}
+                    alt=""
+                    className="mb-3 w-full aspect-[21/9] object-cover rounded-xl bg-stone-100"
+                  />
+                ) : null}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {items.map((product) => {
+                    const catalog = catalogUnitPrice(product.price, product.categoryId ?? cat.id);
+                    const pctMatch = matchingPercentOffer(
+                      shopOffers,
+                      { id: product.id, categoryId: product.categoryId ?? cat.id },
+                      channel
+                    );
+                    const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        showImage={showProductImages && !!product.image}
+                        price={catalog}
+                        salePrice={sale}
+                        offerBadge={
+                          pctMatch
+                            ? pctMatch.offer.badgeLabel || `${pctMatch.percent}% off`
+                            : null
+                        }
+                        onAdd={() => handleProductClick(product)}
+                        rewardPts={
+                          product.loyaltyRewardPoints != null &&
+                          Number(product.loyaltyRewardPoints) >= 1
+                            ? Number(product.loyaltyRewardPoints)
+                            : null
+                        }
+                        unlocked={
+                          !!(
+                            product.loyaltyRewardPoints != null &&
+                            customer &&
+                            loyaltyBalance >= Number(product.loyaltyRewardPoints)
+                          )
+                        }
+                        onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
+                        t={t}
+                      />
+                    );
+                  })}
+                </div>
+                {items.length === 0 ? (
+                  <p className="text-sm text-stone-500 py-6 text-center">{t('shopNoProducts')}</p>
+                ) : null}
+              </section>
+            );
+          })}
+          {menu.length === 0 ? (
+            <p className="text-stone-500 py-12 text-center">{t('shopNoProducts')}</p>
+          ) : null}
+        </div>
       </div>
+
+      <CartIconButton />
 
       {cartSlideOpen && (
         <div
@@ -1565,17 +1445,19 @@ export default function OrderingPage() {
             aria-modal="true"
             aria-label={t('shopBasket')}
           >
-            <div className="flex shrink-0 justify-end border-b border-stone-100 p-3">
-              <button
-                type="button"
-                className="text-sm font-semibold"
-                onClick={() => setCartSlideOpen(false)}
-              >
-                {t('shopClose')}
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <Basket className="h-full min-h-0 border-0" />
+            <div className="h-full flex flex-col">
+              <div className="flex justify-end p-3 border-b border-stone-100">
+                <button
+                  type="button"
+                  className="text-sm font-semibold"
+                  onClick={() => setCartSlideOpen(false)}
+                >
+                  {t('shopClose')}
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <Basket className="h-full min-h-0 border-0" />
+              </div>
             </div>
           </div>
         </div>
@@ -1777,9 +1659,9 @@ function ProductCard({
           onAdd();
         }
       }}
-      className="group flex flex-col rounded-md border border-stone-100 bg-white p-1.5 hover:border-stone-200 cursor-pointer"
+      className="group flex cursor-pointer gap-3 overflow-hidden rounded-xl border border-stone-100 bg-white p-2 hover:border-stone-200"
     >
-      <div className="relative mb-1.5 aspect-[4/3] overflow-hidden rounded bg-stone-100">
+      <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-28 sm:w-32">
         {showImage && product.image ? (
           <img
             src={product.image}
@@ -1796,17 +1678,6 @@ function ProductCard({
             {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
           </span>
         ) : null}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdd();
-          }}
-          className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm active:scale-95"
-          aria-label={`${t('shopAdd')} ${product.name}`}
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
-        </button>
         {unlocked ? (
           <button
             type="button"
@@ -1820,45 +1691,32 @@ function ProductCard({
           </button>
         ) : null}
       </div>
-      <div className="min-w-0 flex-1 px-0.5 text-left">
-        <p className="text-[11px] font-semibold leading-tight text-stone-900 line-clamp-2">
-          {product.name}
-        </p>
-        <p className="mt-0.5 text-[11px] font-medium text-stone-700">{priceNode}</p>
-        {rewardPts != null ? (
-          <p className="text-[10px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
+      <div className="flex min-w-0 flex-1 flex-col py-0.5 text-left">
+        <p className="text-sm font-semibold leading-tight text-stone-900 line-clamp-2">{product.name}</p>
+        {product.description ? (
+          <p className="mt-0.5 text-xs text-stone-500 line-clamp-2">{product.description}</p>
         ) : null}
+        <div className="mt-auto flex items-end justify-between gap-2 pt-1">
+          <div>
+            <p className="text-sm font-semibold text-stone-900">{priceNode}</p>
+            {rewardPts != null ? (
+              <p className="text-[10px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdd();
+            }}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--shop-accent,#e11d48)] text-white shadow-sm active:scale-95"
+            aria-label={`${t('shopAdd')} ${product.name}`}
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
     </article>
   );
 }
 
-function AccountIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden className="block">
-      <circle cx="12" cy="8" r="3.25" stroke="currentColor" strokeWidth="1.75" />
-      <path
-        d="M5.5 19.25c1.6-3.1 3.9-4.5 6.5-4.5s4.9 1.4 6.5 4.5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CartIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className="block shrink-0">
-      <path
-        d="M3.5 5.5h1.6l1.4 10.2a1.5 1.5 0 0 0 1.5 1.3h8.7a1.5 1.5 0 0 0 1.5-1.2l1.1-6.3H7"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="10" cy="19.5" r="1.1" fill="currentColor" />
-      <circle cx="16.5" cy="19.5" r="1.1" fill="currentColor" />
-    </svg>
-  );
-}

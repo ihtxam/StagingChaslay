@@ -1834,6 +1834,7 @@ button {
 /* Unified shop + CMS theme tokens (from homepage builder) */
 .shop-themed {
   color: var(--shop-text, #1c1917);
+  overflow: visible;
 }
 
 .shop-btn-primary {
@@ -1871,6 +1872,7 @@ button {
     transform: translateX(0);
   }
 }
+
 
 .shop-slide-in-right {
   animation: shop-slide-in-right 0.28s ease-out;
@@ -1975,7 +1977,7 @@ html.shop-shell #root {
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;
-  top: var(--shop-header-height, 0px);
+  top: 0;
   left: 0;
   right: 0;
   width: 100%;
