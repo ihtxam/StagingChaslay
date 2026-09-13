@@ -3348,7 +3348,7 @@ export const emailSendLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "set null" }),
-    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | sendgrid
+    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | mailco | sendgrid
     source: varchar("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
     emailType: varchar("email_type", { length: 50 }).notNull().default("general"),
     recipient: varchar("recipient", { length: 255 }).notNull(),
