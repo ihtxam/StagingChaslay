@@ -1768,30 +1768,6 @@ button {
   .webpos-pin-shake {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
-
-  /* Online shop: allow normal page scroll (panel-shell sets overflow:hidden globally). */
-  html.shop-shell {
-    --shop-header-height: 3.5rem; /* header h-14 */
-    --shop-category-bar-height: 3rem;
-  }
-
-  html.shop-shell,
-  html.shop-shell body {
-    height: auto;
-    min-height: 100%;
-    max-height: none;
-    /* clip — not hidden — avoids extra scroll-container pairing that breaks sticky */
-    overflow-x: clip;
-    overflow-y: auto;
-    overscroll-behavior-y: auto;
-  }
-
-  html.shop-shell #root {
-    height: auto;
-    min-height: 100%;
-    max-height: none;
-    overflow: visible;
-  }
 }
 
 @keyframes shop-cart-bump {
@@ -1853,7 +1829,41 @@ button {
   animation: shop-slide-in-right 0.28s ease-out;
 }
 
-/* Shop menu: category pills stick below header once scrolled past hero/offers */
+/*
+ * Shop shell scroll + sticky (UNLAYERED on purpose).
+ *
+ * Global `html, body, #root { height/max-height: 100% }` is unlayered, so any
+ * shop-shell height overrides inside `@layer components` lose the cascade and
+ * leave a capped viewport. Separately, `overflow-x: clip` / `overflow-y: auto`
+ * on html/body creates a sticky containing block as tall as the page — sticky
+ * then never pins against the viewport. Keep overflow visible so the viewport
+ * is the only scrollport.
+ */
+html.shop-shell {
+  --shop-header-height: 3.5rem; /* header h-14 */
+  --shop-category-bar-height: 3rem;
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+}
+
+html.shop-shell body {
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+  overscroll-behavior-y: auto;
+}
+
+html.shop-shell #root {
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+  overflow: visible;
+}
+
+/* Shop menu: category pills + cart stick below header once scrolled past hero */
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;
@@ -1863,7 +1873,7 @@ button {
   width: 100%;
   z-index: 25;
   overflow: visible;
-  background-color: #f6f5f2;
+  background-color: var(--shop-bg-muted, #f6f5f2);
   border-bottom: 1px solid rgb(231 229 228 / 0.95);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }

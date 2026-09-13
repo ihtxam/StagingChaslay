@@ -877,11 +877,15 @@ export default function OrderingPage() {
     openChannelPrompt(next);
   };
 
+  const openSideCart = () => {
+    setCartSlideOpen(true);
+  };
+
   const CartIconButton = ({ className = '' }: { className?: string }) => (
     <button
       type="button"
       className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full ${className}`}
-      onClick={() => setCartSlideOpen(true)}
+      onClick={openSideCart}
       aria-label={`${t('shopBasketCount')} (${itemCount})`}
       title={`${t('shopBasketCount')} (${itemCount})`}
     >
@@ -912,8 +916,12 @@ export default function OrderingPage() {
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
 
-  const Basket = (
-    <aside className="bg-white border border-stone-200 flex flex-col max-h-[calc(100dvh-6rem)] min-h-[12rem]">
+  const Basket = ({
+    className = 'max-h-[calc(100dvh-6rem)] min-h-[12rem] border border-stone-200',
+  }: {
+    className?: string;
+  }) => (
+    <aside className={`bg-white flex flex-col ${className}`}>
       <div className="px-5 py-4 border-b border-stone-200">
         <h2 className="text-xl font-bold tracking-tight">{t('shopBasket')}</h2>
         <p className="text-sm text-stone-500 mt-1">
@@ -1305,7 +1313,7 @@ export default function OrderingPage() {
                 </button>
               ))}
             </div>
-            <CartIconButton className={stickyCart ? 'lg:hidden' : ''} />
+            <CartIconButton />
           </div>
         </div>
       </div>
@@ -1490,31 +1498,37 @@ export default function OrderingPage() {
 
         {stickyCart ? (
           <div className="shop-sticky-cart-panel hidden lg:block self-start max-h-[calc(100dvh-6.5rem)]">
-            <div className="max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-y-contain">{Basket}</div>
+            <div className="max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-y-contain">
+              <Basket />
+            </div>
           </div>
         ) : null}
       </div>
 
       {cartSlideOpen && (
         <div
-          className={`fixed inset-0 z-50 bg-black/40 ${stickyCart ? 'lg:hidden' : ''}`}
+          className="fixed inset-0 z-50 bg-black/40"
           onClick={() => setCartSlideOpen(false)}
+          role="presentation"
         >
           <div
-            className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shop-slide-in-right shadow-xl"
+            className="absolute right-0 top-0 bottom-0 flex h-full w-full max-w-md flex-col bg-white shop-slide-in-right shadow-xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('shopBasket')}
           >
-            <div className="h-full flex flex-col">
-              <div className="flex justify-end p-3 border-b border-stone-100">
-                <button
-                  type="button"
-                  className="text-sm font-semibold"
-                  onClick={() => setCartSlideOpen(false)}
-                >
-                  {t('shopClose')}
-                </button>
-              </div>
-              <div className="flex-1 min-h-0">{Basket}</div>
+            <div className="flex shrink-0 justify-end border-b border-stone-100 p-3">
+              <button
+                type="button"
+                className="text-sm font-semibold"
+                onClick={() => setCartSlideOpen(false)}
+              >
+                {t('shopClose')}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <Basket className="h-full min-h-0 border-0" />
             </div>
           </div>
         </div>
