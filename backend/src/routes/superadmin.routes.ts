@@ -915,10 +915,9 @@ router.get("/licenses", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting licenses:", error);
-    res.json({
-      success: true,
-      licenses: [],
-      pagination: { page: parseInt(req.query.page as string) || 1, limit: parseInt(req.query.limit as string) || 20 },
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load licenses",
     });
   }
 });

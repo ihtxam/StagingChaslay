@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { AuthService } from "@/services/auth.service";
 import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
-import { LicenseAdminService } from "@/services/license-admin.service";
+import { attachLicenseRelations, LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
@@ -626,13 +626,13 @@ export class ResellerService {
     ];
     if (opts?.status) clauses.push(eq(schema.licenses.status, opts.status));
 
-    return db.query.licenses.findMany({
+    const licenses = await db.query.licenses.findMany({
       where: and(...clauses),
-      with: { merchant: true, device: true },
       limit,
       offset,
       orderBy: desc(schema.licenses.createdAt),
     });
+    return attachLicenseRelations(licenses);
   }
 
   /** Issue device seats from reseller pool to an owned merchant. */
@@ -725,9 +725,9 @@ export class ResellerService {
     const db = getDb();
     const license = await db.query.licenses.findFirst({
       where: eq(schema.licenses.id, licenseId),
-      with: { merchant: true },
     });
-    if (!license || license.merchant?.resellerId !== resellerId) {
+    const [attached] = license ? await attachLicenseRelations([license]) : [];
+    if (!attached || attached.merchant?.resellerId !== resellerId) {
       throw new Error("License not found");
     }
     return LicenseAdminService.revokeLicense(licenseId);
@@ -737,9 +737,9 @@ export class ResellerService {
     const db = getDb();
     const license = await db.query.licenses.findFirst({
       where: eq(schema.licenses.id, licenseId),
-      with: { merchant: true },
     });
-    if (!license || license.merchant?.resellerId !== resellerId) {
+    const [attached] = license ? await attachLicenseRelations([license]) : [];
+    if (!attached || attached.merchant?.resellerId !== resellerId) {
       throw new Error("License not found");
     }
     return LicenseAdminService.extendLicense(licenseId, additionalDays);

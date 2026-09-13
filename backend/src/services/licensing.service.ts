@@ -287,17 +287,16 @@ export class LicensingService {
       const now = new Date();
       const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
 
-      const licenses = await db.query.licenses.findMany({
-        where: and(
-          eq(schema.licenses.status, "active"),
-          lt(schema.licenses.expiresAt, thresholdDate),
-          gt(schema.licenses.expiresAt, now)
-        ),
-        with: {
-          merchant: true,
-          device: true,
-        },
-      });
+      const { attachLicenseRelations } = await import("@/services/license-admin.service");
+      const licenses = await attachLicenseRelations(
+        await db.query.licenses.findMany({
+          where: and(
+            eq(schema.licenses.status, "active"),
+            lt(schema.licenses.expiresAt, thresholdDate),
+            gt(schema.licenses.expiresAt, now)
+          ),
+        })
+      );
 
       return licenses;
     } catch (error) {
@@ -330,12 +329,12 @@ export class LicensingService {
     const db = getDb();
 
     try {
-      const licenses = await db.query.licenses.findMany({
-        where: eq(schema.licenses.merchantId, merchantId),
-        with: {
-          device: true,
-        },
-      });
+      const { attachLicenseRelations } = await import("@/services/license-admin.service");
+      const licenses = await attachLicenseRelations(
+        await db.query.licenses.findMany({
+          where: eq(schema.licenses.merchantId, merchantId),
+        })
+      );
 
       return licenses;
     } catch (error) {

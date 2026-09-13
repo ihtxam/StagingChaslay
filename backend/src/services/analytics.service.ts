@@ -220,16 +220,16 @@ export class AnalyticsService {
       const now = new Date();
       const forecastDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
-      const licenses = await db.query.licenses.findMany({
-        where: and(
-          eq(schema.licenses.status, "active"),
-          gte(schema.licenses.expiresAt, now),
-          lte(schema.licenses.expiresAt, forecastDate)
-        ),
-        with: {
-          merchant: true,
-        },
-      });
+      const { attachLicenseRelations } = await import("@/services/license-admin.service");
+      const licenses = await attachLicenseRelations(
+        await db.query.licenses.findMany({
+          where: and(
+            eq(schema.licenses.status, "active"),
+            gte(schema.licenses.expiresAt, now),
+            lte(schema.licenses.expiresAt, forecastDate)
+          ),
+        })
+      );
 
       // Group by week
       const forecast: Record<string, any[]> = {};
@@ -244,7 +244,7 @@ export class AnalyticsService {
         }
 
         forecast[weekKey].push({
-          merchant: license.merchant.name,
+          merchant: license.merchant?.name ?? "Unknown",
           expiresAt: license.expiresAt,
           licenseType: license.licenseType,
         });
