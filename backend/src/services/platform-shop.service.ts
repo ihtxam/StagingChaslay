@@ -32,10 +32,103 @@ export type PlatformShopVoucherInput = {
 
 const PLATFORM_UPLOAD_MERCHANT = 'platform';
 
+function escapeHtml(value: string) {
+  return String(value).replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      default:
+        return '&#39;';
+    }
+  });
+}
+
+/** Accept only http(s) tracking links for storage and email. */
+export function sanitizeTrackingUrl(raw?: string | null): string | null {
+  let url = String(raw || '').trim().slice(0, 500);
+  if (!url) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+    url = `https://${url}`.slice(0, 500);
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    const host = parsed.hostname.toLowerCase();
+    const looksReal =
+      host === 'localhost' ||
+      /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ||
+      host.includes('.');
+    if (!looksReal) return null;
+    return parsed.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+function adminNotifyEmail() {
+  return (
+    process.env.PLATFORM_SHOP_ADMIN_EMAIL ||
+    process.env.SUPERADMIN_EMAIL ||
+    process.env.SEED_SUPERADMIN_EMAIL ||
+    ''
+  ).trim();
+}
+
 function effectiveUnitPrice(price: number, discountPercent?: number | null) {
   const pct = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   if (!pct) return roundMoney2(price);
   return roundMoney2(price * (1 - pct / 100));
+}
+
+function platformShopStatusCopy(
+  locale: string | null | undefined,
+  status: string,
+  trackingUrl?: string | null
+) {
+  const lang = resolveTxLocale({ panelLanguage: locale });
+  const labels: Record<string, { en: string; fr: string; de: string }> = {
+    accepted: { en: "accepted", fr: "acceptée", de: "akzeptiert" },
+    processing: { en: "in processing", fr: "en cours de traitement", de: "in Bearbeitung" },
+    shipped: { en: "sent by post", fr: "expédiée par la poste", de: "per Post versendet" },
+    fulfilled: { en: "fulfilled", fr: "livrée", de: "erfüllt" },
+    cancelled: { en: "cancelled", fr: "annulée", de: "storniert" },
+    paid: { en: "paid", fr: "payée", de: "bezahlt" },
+  };
+  const label = labels[status]?.[lang] || labels[status]?.en || status;
+  const safeTrack = trackingUrl ? escapeHtml(trackingUrl) : "";
+  const showTracking = trackingUrl && ["shipped", "fulfilled"].includes(status);
+  const track = showTracking
+    ? lang === "fr"
+      ? `<p>Suivi : <a href="${safeTrack}">${safeTrack}</a></p>`
+      : lang === "de"
+        ? `<p>Sendungsverfolgung: <a href="${safeTrack}">${safeTrack}</a></p>`
+        : `<p>Tracking: <a href="${safeTrack}">${safeTrack}</a></p>`
+    : "";
+  if (lang === "fr") {
+    return {
+      subject: `Mise à jour de commande — ${label}`,
+      html: `<p>Le statut de votre commande boutique Reborn est désormais <strong>${label}</strong>.</p>${track}`,
+      text: `Statut : ${label}${trackingUrl ? ` — ${trackingUrl}` : ""}`,
+    };
+  }
+  if (lang === "de") {
+    return {
+      subject: `Bestellupdate — ${label}`,
+      html: `<p>Der Status Ihrer Reborn-Shop-Bestellung ist jetzt <strong>${label}</strong>.</p>${track}`,
+      text: `Status: ${label}${trackingUrl ? ` — ${trackingUrl}` : ""}`,
+    };
+  }
+  return {
+    subject: `Order update — ${label}`,
+    html: `<p>Your Reborn shop order is now <strong>${label}</strong>.</p>${track}`,
+    text: `Status: ${label}${trackingUrl ? ` — ${trackingUrl}` : ""}`,
+  };
 }
 
 function platformShopEmailCopy(
@@ -49,12 +142,12 @@ function platformShopEmailCopy(
     return kind === 'merchant'
       ? {
           subject: `Confirmation de commande — boutique Reborn`,
-          html: `<p>Merci ! Nous avons bien reçu votre commande de ${amount}.</p>`,
+          intro: `Merci ! Nous avons bien reçu votre commande de ${amount}.`,
           text: `Commande reçue — ${amount}`,
         }
       : {
           subject: `Nouvelle commande boutique plateforme`,
-          html: `<p>Une commande de ${amount} a été passée.</p>`,
+          intro: `Une commande de ${amount} a été passée.`,
           text: `Nouvelle commande boutique — ${amount}`,
         };
   }
@@ -62,24 +155,24 @@ function platformShopEmailCopy(
     return kind === 'merchant'
       ? {
           subject: `Bestellbestätigung — Reborn Shop`,
-          html: `<p>Vielen Dank! Wir haben Ihre Bestellung über ${amount} erhalten.</p>`,
+          intro: `Vielen Dank! Wir haben Ihre Bestellung über ${amount} erhalten.`,
           text: `Bestellung erhalten — ${amount}`,
         }
       : {
           subject: `Neue Plattform-Shop-Bestellung`,
-          html: `<p>Eine Bestellung über ${amount} wurde aufgegeben.</p>`,
+          intro: `Eine Bestellung über ${amount} wurde aufgegeben.`,
           text: `Neue Plattform-Shop-Bestellung — ${amount}`,
         };
   }
   return kind === 'merchant'
     ? {
         subject: `Order confirmation — Reborn shop`,
-        html: `<p>Thank you! We received your order for ${amount}.</p>`,
+        intro: `Thank you! We received your order for ${amount}.`,
         text: `Order received — ${amount}`,
       }
     : {
         subject: `New platform shop order`,
-        html: `<p>An order for ${amount} was placed.</p>`,
+        intro: `An order for ${amount} was placed.`,
         text: `New platform shop order — ${amount}`,
       };
 }
@@ -286,7 +379,16 @@ export class PlatformShopService {
       discountAmount = Math.min(subtotal, discountAmount);
     }
     const total = roundMoney2(subtotal - discountAmount);
-    return { lines, subtotal, discountAmount, total };
+    return { lines, subtotal, discountAmount, total, voucherCode: voucher?.code || null };
+  }
+
+  static async quote(
+    items: Array<{ productId: string; quantity: number }>,
+    voucherCode?: string
+  ) {
+    const catalog = await this.listProducts(true);
+    const voucher = voucherCode ? await this.resolveVoucher(voucherCode) : null;
+    return this.computeCart(items, catalog, voucher);
   }
 
   static async startCheckout(
@@ -329,9 +431,8 @@ export class PlatformShopService {
         .where(eq(schema.platformShopVouchers.id, voucher.id));
     }
 
-    await this.sendOrderEmails(merchant, order!, lines, total);
-
     if (total <= 0) {
+      await this.sendOrderEmails(merchant, order!, lines, total);
       return { order: order!, free: true, paymentSession: null };
     }
 
@@ -453,6 +554,15 @@ export class PlatformShopService {
       }
     }
 
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { id: true, name: true, email: true, panelLanguage: true },
+    });
+    const lines = Array.isArray(updated!.items) ? updated!.items : [];
+    if (merchant) {
+      await this.sendOrderEmails(merchant, updated!, lines, Number(updated!.total) || 0);
+    }
+
     return { order: updated! };
   }
 
@@ -462,39 +572,49 @@ export class PlatformShopService {
     lines: Array<{ name: string; quantity: number; unitPrice: number }>,
     total: number
   ) {
+    const orderRef = order.id.slice(0, 8);
     const linesHtml = lines
       .map(
         (l) =>
-          `<tr><td style="padding:4px 0">${l.name}</td><td style="padding:4px 0;text-align:right">${l.quantity} × ${l.unitPrice.toFixed(2)}</td></tr>`
+          `<tr><td style="padding:4px 0">${escapeHtml(l.name)}</td><td style="padding:4px 0;text-align:right">${l.quantity} × ${l.unitPrice.toFixed(2)}</td></tr>`
       )
       .join('');
+    const notesHtml = order.notes
+      ? `<p style="font-size:13px;color:#78716c">Notes: ${escapeHtml(order.notes)}</p>`
+      : '';
     const merchantCopy = platformShopEmailCopy(merchant.panelLanguage, 'merchant', total);
     const adminCopy = platformShopEmailCopy('en', 'admin', total);
+    const itemsTable = `<table style="width:100%;font-size:14px">${linesHtml}</table>`;
 
     try {
       if (merchant.email) {
         await EmailService.send({
           to: merchant.email,
           subject: merchantCopy.subject,
-          html: `<div style="font-family:system-ui,sans-serif">${merchantCopy.html}</div>`,
-          text: merchantCopy.text,
+          html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
+            <p>${merchantCopy.intro}</p>
+            <p>Order #${escapeHtml(orderRef)}</p>
+            ${itemsTable}
+            ${notesHtml}
+          </div>`,
+          text: `${merchantCopy.text} (#${orderRef})`,
           merchantId: merchant.id,
           emailType: "platform_shop_order",
         });
       }
-      const adminTo = process.env.PLATFORM_SHOP_ADMIN_EMAIL || process.env.SUPERADMIN_EMAIL;
+      const adminTo = adminNotifyEmail();
       if (adminTo) {
         await EmailService.send({
           to: adminTo,
           subject: `${adminCopy.subject} — ${merchant.name || 'Merchant'}`,
           html: `
             <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
-              <h1 style="font-size:18px">${adminCopy.subject}</h1>
-              <p><strong>${merchant.name}</strong> placed order #${order.id.slice(0, 8)} (${total.toFixed(2)} CHF).</p>
-              <table style="width:100%;font-size:14px">${linesHtml}</table>
-              ${order.notes ? `<p style="font-size:13px;color:#78716c">Notes: ${order.notes}</p>` : ''}
+              <h1 style="font-size:18px">${escapeHtml(adminCopy.subject)}</h1>
+              <p><strong>${escapeHtml(merchant.name || 'Merchant')}</strong> placed order #${escapeHtml(orderRef)} (${total.toFixed(2)} CHF).</p>
+              ${itemsTable}
+              ${notesHtml}
             </div>`,
-          text: `${adminCopy.text} from ${merchant.name}`,
+          text: `${adminCopy.text} from ${merchant.name || 'Merchant'} (#${orderRef})`,
           emailType: "platform_shop_order",
         });
       }
@@ -512,6 +632,15 @@ export class PlatformShopService {
     });
   }
 
+  static async getMerchantOrder(merchantId: string, orderId: string) {
+    const db = getDb();
+    const order = await db.query.platformShopOrders.findFirst({
+      where: and(eq(schema.platformShopOrders.id, orderId), eq(schema.platformShopOrders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+    return order;
+  }
+
   static async listAllOrders(limit = 100) {
     const db = getDb();
     return db.query.platformShopOrders.findMany({
@@ -521,16 +650,81 @@ export class PlatformShopService {
     });
   }
 
-  static async updateOrderStatus(orderId: string, status: string) {
+  static async updateOrderStatus(
+    orderId: string,
+    status: string,
+    trackingUrl?: string | null
+  ) {
     const db = getDb();
-    const allowed = ['pending', 'paid', 'fulfilled', 'cancelled'];
-    if (!allowed.includes(status)) throw new Error('Invalid status');
+    const allowed = ["pending", "paid", "accepted", "processing", "shipped", "fulfilled", "cancelled"];
+    if (!allowed.includes(status)) throw new Error("Invalid status");
+    const existing = await db.query.platformShopOrders.findFirst({
+      where: eq(schema.platformShopOrders.id, orderId),
+    });
+    if (!existing) throw new Error("Order not found");
+
+    const patch: Record<string, unknown> = { status, updatedAt: new Date() };
+    if (trackingUrl !== undefined) {
+      const trimmed = String(trackingUrl || "").trim();
+      if (trimmed && !sanitizeTrackingUrl(trimmed)) {
+        throw new Error("Tracking link must be a valid http(s) URL");
+      }
+      patch.trackingUrl = sanitizeTrackingUrl(trimmed);
+    }
+
     const [row] = await db
       .update(schema.platformShopOrders)
-      .set({ status, updatedAt: new Date() })
+      .set(patch)
       .where(eq(schema.platformShopOrders.id, orderId))
       .returning();
-    if (!row) throw new Error('Order not found');
+    if (!row) throw new Error("Order not found");
+
+    const statusChanged = row.status !== existing.status;
+    const trackingChanged = row.trackingUrl !== existing.trackingUrl;
+    const shouldEmail =
+      status !== "pending" &&
+      (statusChanged ||
+        (trackingChanged && ["shipped", "fulfilled"].includes(row.status)));
+    if (shouldEmail) {
+      await this.sendStatusEmails(row);
+    }
     return row;
+  }
+
+  static async sendStatusEmails(order: typeof schema.platformShopOrders.$inferSelect) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, order.merchantId),
+      columns: { id: true, name: true, email: true, panelLanguage: true },
+    });
+    const copy = platformShopStatusCopy(merchant?.panelLanguage, order.status, order.trackingUrl);
+    const orderRef = order.id.slice(0, 8);
+    try {
+      if (merchant?.email) {
+        await EmailService.send({
+          to: merchant.email,
+          subject: copy.subject,
+          html: `<div style="font-family:system-ui,sans-serif">${copy.html}<p>Order #${escapeHtml(orderRef)}</p></div>`,
+          text: copy.text,
+          merchantId: merchant.id,
+          emailType: "platform_shop_status",
+        });
+      }
+      const adminTo = adminNotifyEmail();
+      if (adminTo) {
+        const safeTrack = order.trackingUrl ? escapeHtml(order.trackingUrl) : "";
+        await EmailService.send({
+          to: adminTo,
+          subject: `${copy.subject} — ${merchant?.name || "Merchant"}`,
+          html: `<p>${escapeHtml(merchant?.name || "Merchant")} order #${escapeHtml(orderRef)} is now <strong>${escapeHtml(order.status)}</strong>.</p>${
+            safeTrack ? `<p>Tracking: <a href="${safeTrack}">${safeTrack}</a></p>` : ""
+          }`,
+          text: `${merchant?.name || "Merchant"} order ${order.status}${order.trackingUrl ? ` — ${order.trackingUrl}` : ""}`,
+          emailType: "platform_shop_status",
+        });
+      }
+    } catch (err) {
+      console.warn("[platform-shop] status email failed", err);
+    }
   }
 }

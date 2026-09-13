@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -34,9 +35,30 @@ type Order = {
   currency: string;
   createdAt: string;
   notes?: string | null;
+  trackingUrl?: string | null;
   merchant?: { name?: string | null; email?: string | null };
   items: Array<{ name: string; quantity: number; unitPrice: number }>;
 };
+
+function draftTracking(order: Order, draft: Record<string, string>) {
+  return draft[order.id] ?? order.trackingUrl ?? '';
+}
+
+/** Only send tracking on status change when the draft differs from saved (avoids accidental clears). */
+function trackingPayload(order: Order, draft: Record<string, string>): string | undefined {
+  if (!(order.id in draft)) return undefined;
+  const draftVal = draft[order.id] ?? '';
+  const saved = order.trackingUrl ?? '';
+  if (draftVal !== saved) return draftVal;
+  return undefined;
+}
+
+function statusAfterTrackingSave(currentStatus: string, trackingValue: string) {
+  const trimmed = trackingValue.trim();
+  if (!trimmed) return currentStatus;
+  if (['paid', 'accepted', 'processing'].includes(currentStatus)) return 'shipped';
+  return currentStatus;
+}
 
 const emptyProduct = {
   name: '',
@@ -63,11 +85,13 @@ export default function SuperadminPlatformShop() {
   const [products, setProducts] = useState<Product[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [viewOrderId, setViewOrderId] = useState<string | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState(emptyProduct);
   const [voucherForm, setVoucherForm] = useState(emptyVoucher);
   const [saving, setSaving] = useState(false);
+  const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadProductId, setUploadProductId] = useState<string | null>(null);
 
@@ -81,7 +105,11 @@ export default function SuperadminPlatformShop() {
       ]);
       setProducts(p.data.products || []);
       setVouchers(v.data.vouchers || []);
-      setOrders(o.data.orders || []);
+      const nextOrders: Order[] = o.data.orders || [];
+      setOrders(nextOrders);
+      setTrackingDraft(
+        Object.fromEntries(nextOrders.map((ord) => [ord.id, ord.trackingUrl || '']))
+      );
     } catch (e: unknown) {
       toast.error(
         (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Load failed'
@@ -192,9 +220,9 @@ export default function SuperadminPlatformShop() {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, status: string, trackingUrl?: string | null) => {
     try {
-      await api.patch(`/superadmin/platform-shop/orders/${orderId}`, { status });
+      await api.patch(`/superadmin/platform-shop/orders/${orderId}`, { status, trackingUrl });
       toast.success('Order updated');
       await load();
     } catch (e: unknown) {
@@ -204,14 +232,24 @@ export default function SuperadminPlatformShop() {
     }
   };
 
+  const statusOptionLabel = (s: string) => {
+    if (s === 'paid') return t('platformShopStatusPaid');
+    if (s === 'accepted') return t('platformShopStatusAccepted');
+    if (s === 'processing') return t('platformShopStatusProcessing');
+    if (s === 'shipped') return t('platformShopStatusShipped');
+    if (s === 'fulfilled') return t('platformShopStatusFulfilled');
+    if (s === 'cancelled') return t('platformShopStatusCancelled');
+    return t('platformShopStatusPending');
+  };
+
   const showProductForm = creatingProduct || editingProduct !== null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-stone-900">{t('platformShopAdminTitle')}</h1>
-          <p className="text-sm text-stone-600 mt-1">{t('platformShopAdminHint')}</p>
+          <h1 className="page-title">{t('platformShopAdminTitle')}</h1>
+          <p className="page-sub">{t('platformShopAdminHint')}</p>
         </div>
         <div className="flex gap-2">
           {(['products', 'vouchers', 'orders'] as const).map((key) => (
@@ -401,43 +439,203 @@ export default function SuperadminPlatformShop() {
       ) : null}
 
       {tab === 'orders' && !loading ? (
-        <div className="overflow-x-auto rounded-xl border border-stone-200">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
           <table className="min-w-full text-sm">
-            <thead className="bg-stone-50 text-left">
+            <thead className="bg-[var(--bg-muted)] text-left text-[var(--text-muted)]">
               <tr>
                 <th className="px-3 py-2">{t('date')}</th>
                 <th className="px-3 py-2">{t('merchant')}</th>
+                <th className="px-3 py-2">{t('items')}</th>
                 <th className="px-3 py-2">{t('total')}</th>
                 <th className="px-3 py-2">{t('status')}</th>
-                <th className="px-3 py-2" />
+                <th className="px-3 py-2">{t('platformShopTracking')}</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o.id} className="border-t border-stone-100">
-                  <td className="px-3 py-2">{new Date(o.createdAt).toLocaleString()}</td>
-                  <td className="px-3 py-2">{o.merchant?.name || '—'}</td>
-                  <td className="px-3 py-2">
+                <tr key={o.id} className="border-t border-[var(--border)] align-top">
+                  <td className="px-3 py-2 whitespace-nowrap text-[var(--text)]">
+                    <button
+                      type="button"
+                      className="text-left underline-offset-2 hover:underline"
+                      onClick={() => setViewOrderId(o.id)}
+                    >
+                      {new Date(o.createdAt).toLocaleString()}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text)]">{o.merchant?.name || '—'}</td>
+                  <td className="px-3 py-2 text-[var(--text)]">
+                    {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ')}
+                    {o.notes ? (
+                      <div className="text-xs text-[var(--text-muted)] mt-1">{o.notes}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-[var(--text)]">
                     {Number(o.total).toFixed(2)} {o.currency}
                   </td>
-                  <td className="px-3 py-2 capitalize">{o.status}</td>
                   <td className="px-3 py-2">
-                    {o.status === 'paid' ? (
+                    <select
+                      className="input text-xs py-1"
+                      value={o.status}
+                      onChange={(e) =>
+                        void updateOrderStatus(o.id, e.target.value, trackingPayload(o, trackingDraft))
+                      }
+                    >
+                      {['paid', 'accepted', 'processing', 'shipped', 'fulfilled', 'cancelled', 'pending'].map((s) => (
+                        <option key={s} value={s}>
+                          {statusOptionLabel(s)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2 min-w-[220px]">
+                    <div className="flex gap-1">
+                      <input
+                        className="input text-xs w-full"
+                        placeholder="https://"
+                        value={trackingDraft[o.id] ?? (o.trackingUrl || '')}
+                        onChange={(e) => setTrackingDraft((d) => ({ ...d, [o.id]: e.target.value }))}
+                      />
                       <button
                         type="button"
-                        className="text-xs text-blue-600"
-                        onClick={() => void updateOrderStatus(o.id, 'fulfilled')}
+                        className="btn-secondary text-xs shrink-0"
+                        onClick={() =>
+                          void updateOrderStatus(
+                            o.id,
+                            statusAfterTrackingSave(o.status, draftTracking(o, trackingDraft)),
+                            draftTracking(o, trackingDraft)
+                          )
+                        }
                       >
-                        {t('markFulfilled')}
+                        {t('save')}
                       </button>
+                    </div>
+                    {o.trackingUrl ? (
+                      <a
+                        href={o.trackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 underline mt-1 inline-block"
+                      >
+                        {t('platformShopTracking')}
+                      </a>
                     ) : null}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {!orders.length ? (
+            <p className="px-3 py-4 text-sm text-[var(--text-muted)]">{t('platformShopNoOrders')}</p>
+          ) : null}
         </div>
       ) : null}
+
+      {viewOrderId && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-3 sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setViewOrderId(null)}
+            >
+              <div
+                className="flex min-h-0 w-full max-w-lg max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-2xl bg-[var(--bg-elevated)] shadow-2xl border border-[var(--border)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {(() => {
+                  const o = orders.find((row) => row.id === viewOrderId);
+                  if (!o) return null;
+                  return (
+                    <>
+                      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
+                        <div>
+                          <h2 className="text-base font-semibold text-[var(--text)]">
+                            {t('platformShopOrderDetails')}
+                          </h2>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {o.merchant?.name || '—'} · #{o.id.slice(0, 8)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-sm font-semibold text-[var(--text-muted)] underline"
+                          onClick={() => setViewOrderId(null)}
+                        >
+                          {t('close')}
+                        </button>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+                        <p className="text-sm text-[var(--text)]">
+                          {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ')}
+                        </p>
+                        {o.notes ? (
+                          <p className="text-sm text-[var(--text-muted)] whitespace-pre-wrap">{o.notes}</p>
+                        ) : null}
+                        <p className="text-sm font-semibold text-[var(--text)]">
+                          {Number(o.total).toFixed(2)} {o.currency}
+                        </p>
+                        <label className="block text-xs text-[var(--text-muted)]">
+                          {t('status')}
+                          <select
+                            className="input mt-1 w-full text-sm"
+                            value={o.status}
+                            onChange={(e) =>
+                              void updateOrderStatus(o.id, e.target.value, trackingPayload(o, trackingDraft))
+                            }
+                          >
+                            {['paid', 'accepted', 'processing', 'shipped', 'fulfilled', 'cancelled', 'pending'].map(
+                              (s) => (
+                                <option key={s} value={s}>
+                                  {statusOptionLabel(s)}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
+                        <label className="block text-xs text-[var(--text-muted)]">
+                          {t('platformShopTracking')}
+                          <div className="mt-1 flex gap-1">
+                            <input
+                              className="input text-sm w-full"
+                              placeholder="https://"
+                              value={trackingDraft[o.id] ?? (o.trackingUrl || '')}
+                              onChange={(e) => setTrackingDraft((d) => ({ ...d, [o.id]: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs shrink-0"
+                              onClick={() =>
+                                void updateOrderStatus(
+                                  o.id,
+                                  statusAfterTrackingSave(o.status, draftTracking(o, trackingDraft)),
+                                  draftTracking(o, trackingDraft)
+                                )
+                              }
+                            >
+                              {t('save')}
+                            </button>
+                          </div>
+                        </label>
+                        {o.trackingUrl ? (
+                          <a
+                            href={o.trackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm text-blue-600 dark:text-blue-400 underline"
+                          >
+                            {t('platformShopOpenTracking')}
+                          </a>
+                        ) : null}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
