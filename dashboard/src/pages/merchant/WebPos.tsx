@@ -158,6 +158,11 @@ import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectRead
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
 import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
+import {
+  openCustomerDisplayWindow,
+  publishCustomerDisplayState,
+  type CustomerDisplayPhase,
+} from '@/lib/customer-display-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -942,6 +947,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const logoEscPosCacheRef = useRef<{ key: string; bytes: Uint8Array | null } | null>(null);
   /** Cached receipt ESC/POS (base64) from first build — success-screen reprint skips rebuild. */
   const lastReceiptEscPosBase64Ref = useRef<string>('');
+  /** In-flight ESC/POS build so success-screen Print can await prefetch instead of rebuilding. */
+  const lastReceiptEscPosPrefetchRef = useRef<Promise<string> | null>(null);
   const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
   const [sendReceiptBusy, setSendReceiptBusy] = useState(false);
   const [sendReceiptPrefillEmail, setSendReceiptPrefillEmail] = useState('');
@@ -1554,21 +1561,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setMobileCartOpen(false);
         return;
       }
-      if (appMode) {
+      // Fullscreen: exit fullscreen only. Never navigate away from POS on Escape.
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
         e.preventDefault();
-        showPanelMenus();
+        void document.exitFullscreen().catch(() => undefined);
+        return;
       }
+      // Not fullscreen: ignore Escape (modals already handled above).
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [
-    appMode,
     pendingWeighed,
     pendingProduct,
     pendingCombo,
     settingsOpen,
     mobileCartOpen,
-    showPanelMenus,
   ]);
 
   const taxRate = useMemo(() => {
@@ -1817,6 +1825,61 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
   const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
+
+  const cdsSettings = merchant?.customerDisplaySettings;
+  const cdsToken = String(cdsSettings?.accessToken || '').trim();
+  const cdsShortCode = String(cdsSettings?.shortCode || '').trim();
+  const cdsEnabled = cdsSettings?.enabled !== false;
+
+  const cdsPhase: CustomerDisplayPhase = useMemo(() => {
+    if (posView === 'success') return 'thankyou';
+    if (paymentModalOpen) return 'payment';
+    if (activeSale.lines.length === 0) return 'idle';
+    return 'building';
+  }, [posView, paymentModalOpen, activeSale.lines.length]);
+
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    const saleTotals = activeSale.totals;
+    publishCustomerDisplayState(cdsToken, {
+      merchantName: merchant?.name || merchant?.businessName,
+      currency: 'CHF',
+      lines: activeSale.lines.map((l) => ({
+        name: repairCatalogText(l.name),
+        qty: l.quantity,
+        lineTotal: l.lineTotal,
+        modifiers: lineExtrasLabel(l) || undefined,
+      })),
+      subtotal: saleTotals.subtotal,
+      discount: saleTotals.discount ?? 0,
+      tax: saleTotals.tax,
+      total: saleTotals.total,
+      phase: cdsPhase,
+      receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
+      updatedAt: Date.now(),
+    });
+  }, [
+    cdsToken,
+    cdsEnabled,
+    cdsPhase,
+    activeSale.lines,
+    activeSale.totals,
+    lastReceiptUrl,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
+
+  const openCustomerDisplay = useCallback(() => {
+    if (!cdsToken || !cdsEnabled) {
+      toast.error(t('cdsNotConfigured'));
+      return;
+    }
+    setSettingsOpen(false);
+    const win = openCustomerDisplayWindow({ accessToken: cdsToken, shortCode: cdsShortCode });
+    if (!win) {
+      toast.error(t('cdsActionFailed'));
+    }
+  }, [cdsToken, cdsShortCode, cdsEnabled, t]);
 
   const membershipCheckout = useMemo(() => {
     if (
@@ -6650,7 +6713,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.orderNumber ||
           '';
         setLastReceipt(receiptText);
-        lastReceiptEscPosBase64Ref.current = '';
+        void prefetchLastReceiptEscPos(
+          receiptText,
+          receiptPayload.receiptUrl,
+          deliveryQrUrl
+        ).catch(() => undefined);
         setLastReceiptUrl(receiptPayload.receiptUrl);
         setLastReceiptOrderId(orderId);
         setLastReceiptOrderNumber(orderNumber);
@@ -6944,6 +7011,99 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     );
   };
 
+  /** Build + cache guest-receipt ESC/POS so success-screen Print does not wait on logo/QR. */
+  const buildReceiptEscPosBase64 = async (
+    text: string,
+    opts: {
+      qrUrl?: string;
+      deliveryQrUrl?: string;
+      barcodeData?: string;
+      forceScannable?: boolean;
+      paperWidthMm?: 58 | 80;
+      fastQr?: boolean;
+    } = {}
+  ): Promise<string> => {
+    const targets = printersForRole(printSettings, 'receipt');
+    const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
+    const logoUrl =
+      printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
+    let logo: Uint8Array | null = null;
+    if (logoUrl) {
+      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+      const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
+      if (logoEscPosCacheRef.current?.key === cacheKey) {
+        logo = logoEscPosCacheRef.current.bytes;
+      } else {
+        logo = await logoUrlToEscPos(String(logoUrl), logoWidth);
+        logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
+      }
+    }
+    const qr =
+      opts.forceScannable || printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
+    const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
+    const lang = resolveReceiptLanguage(printSettings, locale);
+    const escpos = await buildReceiptEscPos(text, {
+      qrData: qr,
+      deliveryQrData: opts.deliveryQrUrl,
+      language: lang,
+      logoBytes: logo,
+      barcodeData: barcode,
+      paperWidthMm: paper,
+      fastQr: opts.fastQr !== false,
+    });
+    const dataBase64 = uint8ToBase64(escpos);
+    lastReceiptEscPosBase64Ref.current = dataBase64;
+    return dataBase64;
+  };
+
+  /** Start ESC/POS build as soon as the success receipt text is ready (even if auto-print is off). */
+  const prefetchLastReceiptEscPos = (
+    text: string,
+    qrUrl?: string,
+    deliveryQrUrl?: string
+  ) => {
+    lastReceiptEscPosBase64Ref.current = '';
+    const task = buildReceiptEscPosBase64(text, {
+      qrUrl,
+      deliveryQrUrl,
+      fastQr: true,
+    })
+      .then((b64) => {
+        if (lastReceiptEscPosPrefetchRef.current === task) {
+          lastReceiptEscPosPrefetchRef.current = null;
+        }
+        return b64;
+      })
+      .catch((err) => {
+        if (lastReceiptEscPosPrefetchRef.current === task) {
+          lastReceiptEscPosPrefetchRef.current = null;
+        }
+        throw err;
+      });
+    lastReceiptEscPosPrefetchRef.current = task;
+    return task;
+  };
+
+  const resolveLastReceiptEscPosBase64 = async (
+    text: string,
+    opts?: { qrUrl?: string; deliveryQrUrl?: string; dataBase64?: string; fastQr?: boolean }
+  ): Promise<string> => {
+    if (opts?.dataBase64) return opts.dataBase64;
+    if (lastReceiptEscPosBase64Ref.current) return lastReceiptEscPosBase64Ref.current;
+    if (lastReceiptEscPosPrefetchRef.current) {
+      try {
+        return await lastReceiptEscPosPrefetchRef.current;
+      } catch {
+        /* fall through and rebuild */
+      }
+    }
+    return buildReceiptEscPosBase64(text, {
+      qrUrl: opts?.qrUrl,
+      deliveryQrUrl: opts?.deliveryQrUrl,
+      fastQr: opts?.fastQr !== false,
+    });
+  };
+
   const printEscPosToTargets = async (
     text: string,
     opts: {
@@ -6981,6 +7141,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
 
     let dataBase64 = opts.dataBase64 || '';
+    if (!dataBase64 && opts.role === 'receipt' && !opts.forceScannable && !opts.barcodeData) {
+      dataBase64 = await resolveLastReceiptEscPosBase64(text, {
+        qrUrl: opts.qrUrl,
+        deliveryQrUrl: opts.deliveryQrUrl,
+        fastQr: opts.fastQr,
+      });
+    }
     if (!dataBase64) {
       const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
       const logoUrl =
@@ -7138,9 +7305,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     if (lastReceipt) {
       toast(t('webPosPrinting'));
-      void printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined, {
-        dataBase64: lastReceiptEscPosBase64Ref.current || undefined,
-      }).catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
+      void (async () => {
+        const dataBase64 = await resolveLastReceiptEscPosBase64(lastReceipt, {
+          qrUrl: lastReceiptUrl || undefined,
+          deliveryQrUrl: lastDeliveryQrUrl || undefined,
+          dataBase64: lastReceiptEscPosBase64Ref.current || undefined,
+          fastQr: true,
+        }).catch(() => lastReceiptEscPosBase64Ref.current || '');
+        await printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined, {
+          dataBase64: dataBase64 || undefined,
+          fastQr: true,
+        });
+      })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
       return;
     }
     toast.error(t('webPosPrintFailed'));
@@ -7997,7 +8173,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
     if (method !== 'pay_later' && method !== 'invoice') {
       setLastReceipt(receiptText);
-      lastReceiptEscPosBase64Ref.current = '';
+      void prefetchLastReceiptEscPos(receiptText, receiptUrl, deliveryQrUrl).catch(() => undefined);
       setLastReceiptUrl(receiptUrl);
       setLastDeliveryQrUrl(deliveryQrUrl || '');
       setLastReceiptOrderId(receiptRef || clientId);
@@ -9458,6 +9634,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               canManageOnlineShop && !isRetail
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
+            }
+            onOpenCustomerDisplay={
+              cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
             onSendLogs={() => {
               setSettingsOpen(false);

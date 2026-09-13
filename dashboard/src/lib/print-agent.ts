@@ -819,9 +819,11 @@ export async function isPrintAgentAvailable(): Promise<boolean> {
   if (printAgentLastOkAt > 0 && Date.now() - printAgentLastOkAt < PRINT_AGENT_OK_TTL_MS) {
     return true;
   }
+  // Single (or short) health probe — do not run probePrintAgentHealth backoff here.
+  // Multi-second retry sleeps delayed "Print" on the success screen before bytes were sent.
   const health = isAndroidTabletDevice()
     ? await getPrintAgentHealth(2)
-    : await probePrintAgentHealth(3);
+    : await getPrintAgentHealth(0);
   if (health.ok) markPrintAgentRecentSuccess();
   return health.ok;
 }
