@@ -35,7 +35,7 @@ const defaultProps: MenuModernProps = {
   accentColor: '#f59e0b',
   cardColor: '#16213e',
   buttonText: 'Explore Full Menu',
-  buttonLink: '/order',
+  buttonLink: '/menu',
 };
 
 export const MenuModern: React.FC<MenuModernProps> & {

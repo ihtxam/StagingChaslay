@@ -45,7 +45,7 @@ const defaultProps: NavbarClassicProps = {
   textColor: '#1a1a2e',
   showButton: true,
   buttonText: 'Order Now',
-  buttonLink: '/order',
+  buttonLink: '/menu',
   buttonColor: '#e94560',
   useSitePagesNav: false,
 };
@@ -75,13 +75,13 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
         className="hb-navbar-classic"
         style={{
           backgroundColor: mergedProps.backgroundColor,
-          padding: '16px 40px',
+          padding: '16px 0',
           width: '100%',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           position: 'relative',
         }}
       >
-        <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (

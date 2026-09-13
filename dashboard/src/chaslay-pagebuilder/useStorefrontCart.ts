@@ -6,8 +6,13 @@ import {
   newCartLineId,
   saveCart,
   shopBasePath,
+  SHOP_CART_EVENT,
 } from '@/lib/shop-cart';
-import { productHasModifiers } from '@/components/shop/shop-modifier-utils';
+import {
+  defaultConfiguredAdd,
+  productHasModifiers,
+  productRequiresModifierModal,
+} from '@/components/shop/shop-modifier-utils';
 import { productHasComboSlots } from '@/components/shop/ShopComboWizard';
 import type { ChaslayMenuProduct } from './menu-types';
 import { menuProductPrice } from './menu-product-utils';
@@ -30,7 +35,17 @@ export function useStorefrontCart() {
 
   useEffect(() => {
     refreshCount();
-  }, [refreshCount]);
+    const onChange = (event: Event) => {
+      const key = (event as CustomEvent)?.detail?.shopKey;
+      if (!key || key === shopKey) refreshCount();
+    };
+    window.addEventListener(SHOP_CART_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      window.removeEventListener(SHOP_CART_EVENT, onChange);
+      window.removeEventListener('storage', onChange);
+    };
+  }, [refreshCount, shopKey]);
 
   const addProduct = useCallback(
     (product: ChaslayMenuProduct) => {
@@ -51,21 +66,24 @@ export function useStorefrontCart() {
         specifications: product.specifications,
       };
 
-      if (productHasComboSlots(catalogShape) || productHasModifiers(catalogShape)) {
-        const menuPath = `${shopBasePath(shopKey)}/menu`;
-        window.location.assign(menuPath);
+      const menuPath = `${basePath || shopBasePath(shopKey)}/menu`;
+      if (productHasComboSlots(catalogShape) || productRequiresModifierModal(catalogShape)) {
+        window.location.assign(`${menuPath}?add=${encodeURIComponent(product.id)}`);
         return false;
       }
 
-      const unitPrice = menuProductPrice(product);
+      const configured = productHasModifiers(catalogShape)
+        ? defaultConfiguredAdd(catalogShape)
+        : { selectedExtras: [], unitPrice: menuProductPrice(product) };
+      const unitPrice = configured.unitPrice;
       const draft = loadCart(shopKey) || emptyDraft();
-      const existing = draft.items.find(
-        (line) =>
-          line.id === product.id &&
-          !line.loyaltyReward &&
-          !line.offerId &&
-          !(line.selectedExtras?.length || line.comboSelections?.length)
-      );
+      const extrasKey = (configured.selectedExtras || []).map((e) => e.id).sort().join(',');
+      const existing = draft.items.find((line) => {
+        if (line.id !== product.id || line.loyaltyReward || line.offerId) return false;
+        if (line.comboSelections?.length) return false;
+        const lineExtras = (line.selectedExtras || []).map((e) => e.id).sort().join(',');
+        return lineExtras === extrasKey;
+      });
       const items = existing
         ? draft.items.map((line) =>
             line.lineId === existing.lineId ? { ...line, quantity: line.quantity + 1 } : line
@@ -78,10 +96,11 @@ export function useStorefrontCart() {
               name: product.product_name,
               categoryId: product.category_id != null ? String(product.category_id) : null,
               price: unitPrice,
-              basePrice: unitPrice,
+              basePrice: menuProductPrice(product),
               quantity: 1,
               description: product.product_description || undefined,
               image: product.product_image || product.image || undefined,
+              selectedExtras: configured.selectedExtras?.length ? configured.selectedExtras : undefined,
             },
           ];
 
@@ -91,7 +110,7 @@ export function useStorefrontCart() {
       window.setTimeout(() => setCartBump(false), 350);
       return true;
     },
-    [isStorefront, shopKey, refreshCount]
+    [isStorefront, shopKey, basePath, refreshCount]
   );
 
   return {

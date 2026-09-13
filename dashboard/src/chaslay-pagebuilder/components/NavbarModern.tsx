@@ -75,12 +75,12 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
         className="hb-navbar-modern"
         style={{
           backgroundColor: mergedProps.backgroundColor,
-          padding: '18px 40px',
+          padding: '18px 0',
           width: '100%',
           position: 'relative',
         }}
       >
-        <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (

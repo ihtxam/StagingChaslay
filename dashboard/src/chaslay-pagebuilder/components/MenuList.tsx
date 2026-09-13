@@ -35,7 +35,7 @@ const defaultProps: MenuListProps = {
   accentColor: '#b91c1c',
   dividerColor: '#e7e5e4',
   buttonText: 'Order Online',
-  buttonLink: '/order',
+  buttonLink: '/menu',
 };
 
 export const MenuList: React.FC<MenuListProps> & {

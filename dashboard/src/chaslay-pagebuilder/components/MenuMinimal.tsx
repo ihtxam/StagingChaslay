@@ -30,7 +30,7 @@ const defaultProps: MenuMinimalProps = {
   textColor: '#1c1917',
   accentColor: '#dc2626',
   buttonText: 'View Full Menu',
-  buttonLink: '/order',
+  buttonLink: '/menu',
 };
 
 export const MenuMinimal: React.FC<MenuMinimalProps> & {
