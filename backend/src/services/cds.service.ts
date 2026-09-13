@@ -8,6 +8,7 @@ import {
   normalizeCustomerDisplaySettings,
   type CustomerDisplaySettings,
 } from "@/lib/customer-display-settings";
+import { allocateDisplayShortCode } from "@/lib/display-short-code";
 
 type MerchantRow = {
   id: string;
@@ -19,30 +20,54 @@ type MerchantRow = {
   customerDisplaySettings?: unknown;
 };
 
-async function loadMerchantByToken(token: string): Promise<{
+async function ensureCdsShortCode(
+  merchantId: string,
+  settings: CustomerDisplaySettings
+): Promise<CustomerDisplaySettings> {
+  if (settings.shortCode) return settings;
+  const db = getDb();
+  const shortCode = await allocateDisplayShortCode(db);
+  const next = { ...settings, shortCode };
+  await db
+    .update(schema.merchants)
+    .set({ customerDisplaySettings: next, updatedAt: new Date() })
+    .where(eq(schema.merchants.id, merchantId));
+  return next;
+}
+
+async function loadMerchantByAccessKey(accessKey: string): Promise<{
   merchant: MerchantRow;
   settings: CustomerDisplaySettings;
 }> {
   await ensureCustomerDisplaySettingsColumn();
+  const trimmed = String(accessKey || "").trim();
+  if (!trimmed) throw new Error("Customer display not found");
+
   const rows = await queryRaw<MerchantRow>(
     `SELECT id, name, slug, shop_logo_url, customer_display_settings
      FROM merchants
      WHERE customer_display_settings IS NOT NULL
-       AND customer_display_settings->>'accessToken' = $1
+       AND (
+         customer_display_settings->>'accessToken' = $1
+         OR customer_display_settings->>'shortCode' = $1
+       )
      LIMIT 1`,
-    [token]
+    [trimmed]
   );
   const merchant = rows[0];
   if (!merchant) throw new Error("Customer display not found");
-  const settings = normalizeCustomerDisplaySettings(merchant.customer_display_settings);
-  if (settings.accessToken !== token) throw new Error("Customer display not found");
+  let settings = normalizeCustomerDisplaySettings(merchant.customer_display_settings);
+  const matches =
+    settings.accessToken === trimmed || settings.shortCode === trimmed;
+  if (!matches) throw new Error("Customer display not found");
   if (!settings.enabled) throw new Error("Customer display is disabled");
+  settings = await ensureCdsShortCode(merchant.id, settings);
   return { merchant, settings };
 }
 
 export class CdsService {
-  static async configForToken(token: string) {
-    const { merchant, settings } = await loadMerchantByToken(token);
+  static async configForToken(accessKey: string) {
+    const { merchant, settings } = await loadMerchantByAccessKey(accessKey);
     const logoUrl = merchant.shop_logo_url ?? merchant.shopLogoUrl ?? null;
     return {
       merchant: {
@@ -55,6 +80,8 @@ export class CdsService {
         promoSlides: settings.promoSlides || [],
         slideIntervalSec: settings.slideIntervalSec ?? 8,
         theme: settings.theme === "dark" ? "dark" : "light",
+        shortCode: settings.shortCode || null,
+        syncToken: settings.accessToken,
       },
     };
   }
@@ -67,14 +94,16 @@ export class CdsService {
     );
     if (rows[0]?.customer_display_settings == null) {
       const defaults = normalizeCustomerDisplaySettings(null);
+      const withCode = await ensureCdsShortCode(merchantId, defaults);
       const db = getDb();
       await db
         .update(schema.merchants)
-        .set({ customerDisplaySettings: defaults, updatedAt: new Date() })
+        .set({ customerDisplaySettings: withCode, updatedAt: new Date() })
         .where(eq(schema.merchants.id, merchantId));
-      return defaults;
+      return withCode;
     }
-    return normalizeCustomerDisplaySettings(rows[0]?.customer_display_settings);
+    const settings = normalizeCustomerDisplaySettings(rows[0]?.customer_display_settings);
+    return ensureCdsShortCode(merchantId, settings);
   }
 
   static async updateSettings(
@@ -85,6 +114,7 @@ export class CdsService {
     const existing = await this.getSettings(merchantId);
     const incoming = normalizeCustomerDisplaySettings({ ...existing, ...(raw as object) });
     incoming.accessToken = existing.accessToken || incoming.accessToken;
+    incoming.shortCode = existing.shortCode || incoming.shortCode;
     const db = getDb();
     await db
       .update(schema.merchants)

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -16,7 +16,7 @@ export async function allocateDisplayShortCode(db: Db): Promise<string> {
 }
 
 async function isDisplayShortCodeTaken(db: Db, code: string): Promise<boolean> {
-  const [kds, ods, signage] = await Promise.all([
+  const [kds, ods, signage, cds] = await Promise.all([
     db.query.kdsStations.findFirst({
       where: eq(schema.kdsStations.shortCode, code),
       columns: { id: true },
@@ -29,8 +29,12 @@ async function isDisplayShortCodeTaken(db: Db, code: string): Promise<boolean> {
       where: eq(schema.signageScreens.shortCode, code),
       columns: { id: true },
     }),
+    db.query.merchants.findFirst({
+      where: sql`${schema.merchants.customerDisplaySettings}->>'shortCode' = ${code}`,
+      columns: { id: true },
+    }),
   ]);
-  return !!(kds || ods || signage);
+  return !!(kds || ods || signage || cds);
 }
 
 export async function ensureKdsStationShortCodes(db: Db, merchantId: string) {

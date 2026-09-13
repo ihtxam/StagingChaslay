@@ -3,11 +3,16 @@ import { useParams } from 'react-router-dom';
 import { publicApi } from '@/lib/api';
 import CdsPromoSlider from '@/components/customer-display/CdsPromoSlider';
 import {
+  isCustomerDisplayLocale,
+  persistCdsLocale,
+  requestCustomerDisplayState,
   subscribeCustomerDisplayState,
   type CustomerDisplayState,
 } from '@/lib/customer-display-sync';
 import type { KioskPromoSlide } from '@/lib/kiosk-api';
+import { useI18n } from '@/lib/i18n';
 import { formatCHF } from '@/lib/money';
+import { qrImageUrl } from '@/lib/qr';
 
 type CdsConfig = {
   merchant: { name: string; logoUrl?: string | null };
@@ -15,6 +20,7 @@ type CdsConfig = {
     promoSlides: KioskPromoSlide[];
     slideIntervalSec: number;
     theme: 'light' | 'dark';
+    syncToken?: string;
   };
 };
 
@@ -36,9 +42,24 @@ function money(currency: string, amount: number): string {
 
 export default function CustomerDisplayPage() {
   const { token = '' } = useParams();
+  const { t, locale, setLocale } = useI18n();
   const [config, setConfig] = useState<CdsConfig | null>(null);
+  const [syncToken, setSyncToken] = useState('');
   const [error, setError] = useState('');
   const [cart, setCart] = useState<CustomerDisplayState>(IDLE_STATE);
+
+  const applyPosLocale = useCallback(
+    (next: unknown) => {
+      if (!isCustomerDisplayLocale(next)) return;
+      if (next === locale) {
+        persistCdsLocale(next);
+        return;
+      }
+      setLocale(next);
+      persistCdsLocale(next);
+    },
+    [locale, setLocale]
+  );
 
   const loadConfig = useCallback(async () => {
     if (!token) return;
@@ -48,28 +69,39 @@ export default function CustomerDisplayPage() {
         merchant: res.data.merchant,
         settings: res.data.settings,
       });
+      setSyncToken(String(res.data.settings?.syncToken || token).trim());
       setError('');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
-      setError(err.response?.data?.error || 'Customer display not available');
+      setError(err.response?.data?.error || t('cdsLoadFailed'));
     }
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!token) return;
-    return subscribeCustomerDisplayState(token, (state) => {
+    const channelToken = syncToken || token;
+    if (!channelToken) return;
+    const unsubscribe = subscribeCustomerDisplayState(channelToken, (state) => {
       setCart(state);
+      applyPosLocale(state.locale);
     });
-  }, [token]);
+    // Ask POS for the latest cart + locale on connect / refresh.
+    requestCustomerDisplayState(channelToken);
+    const retry = window.setTimeout(() => requestCustomerDisplayState(channelToken), 400);
+    return () => {
+      unsubscribe();
+      window.clearTimeout(retry);
+    };
+  }, [syncToken, token, applyPosLocale]);
 
   const theme = config?.settings.theme === 'dark' ? 'dark' : 'light';
   const hasLines = cart.lines.length > 0;
   const phase = cart.phase;
   const merchantName = cart.merchantName || config?.merchant.name || '';
+  const showThankYou = phase === 'thankyou';
 
   const pageClass =
     theme === 'dark'
@@ -84,16 +116,52 @@ export default function CustomerDisplayPage() {
   const slides = config?.settings.promoSlides || [];
 
   const headline = useMemo(() => {
-    if (phase === 'thankyou') return 'Thank you!';
-    if (phase === 'payment') return 'Please complete payment';
-    if (hasLines) return 'Your order';
+    if (showThankYou) return t('cdsThankYouTitle');
+    if (phase === 'payment') return t('cdsPaymentTitle');
+    if (hasLines) return t('cdsYourOrder');
     return merchantName;
-  }, [phase, hasLines, merchantName]);
+  }, [showThankYou, phase, hasLines, merchantName, t]);
 
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 p-8 text-center text-white">
         <p className="text-xl font-semibold">{error}</p>
+      </div>
+    );
+  }
+
+  if (showThankYou) {
+    const receiptUrl = cart.receiptUrl?.trim();
+    return (
+      <div className={`flex min-h-screen flex-col items-center justify-center p-6 md:p-10 ${pageClass}`}>
+        {config?.merchant.logoUrl ? (
+          <img
+            src={config.merchant.logoUrl}
+            alt=""
+            className="mb-6 h-14 w-auto object-contain"
+          />
+        ) : null}
+        <div className={`w-full max-w-lg rounded-2xl border p-8 text-center shadow-sm ${cardClass}`}>
+          <h1 className="text-3xl font-bold md:text-4xl">{headline}</h1>
+          <p className="mt-2 text-lg opacity-80">{t('cdsThankYouSubtitle')}</p>
+          {receiptUrl ? (
+            <div className="mt-8 flex flex-col items-center gap-4">
+              <img
+                src={qrImageUrl(receiptUrl, 220)}
+                alt=""
+                className="rounded-xl border border-inherit bg-white p-3"
+                width={220}
+                height={220}
+              />
+              <p className="text-sm opacity-70">{t('cdsReceiptQrHint')}</p>
+            </div>
+          ) : null}
+          {cart.total > 0 ? (
+            <p className="mt-6 text-2xl font-black tabular-nums text-teal-600">
+              {money(cart.currency, cart.total)}
+            </p>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -120,14 +188,11 @@ export default function CustomerDisplayPage() {
           />
         </section>
 
-        {hasLines || phase === 'payment' || phase === 'thankyou' ? (
+        {hasLines || phase === 'payment' ? (
           <section className="flex min-h-0 flex-1 flex-col lg:w-[65%]">
             <div className={`flex h-full flex-col rounded-2xl border shadow-sm ${cardClass}`}>
               <header className="border-b border-inherit px-6 py-5">
                 <h1 className="text-2xl font-bold md:text-3xl">{headline}</h1>
-                {phase === 'thankyou' ? (
-                  <p className="mt-1 text-base opacity-80">See you again soon</p>
-                ) : null}
               </header>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -158,23 +223,23 @@ export default function CustomerDisplayPage() {
                 <div className="space-y-1 text-base md:text-lg">
                   {cart.discount > 0 ? (
                     <div className="flex justify-between opacity-80">
-                      <span>Discount</span>
+                      <span>{t('cdsDiscount')}</span>
                       <span className="tabular-nums">−{money(cart.currency, cart.discount)}</span>
                     </div>
                   ) : null}
                   <div className="flex justify-between opacity-80">
-                    <span>Subtotal</span>
+                    <span>{t('cdsSubtotal')}</span>
                     <span className="tabular-nums">{money(cart.currency, cart.subtotal)}</span>
                   </div>
                   {cart.tax > 0 ? (
                     <div className="flex justify-between opacity-80">
-                      <span>Tax</span>
+                      <span>{t('cdsTax')}</span>
                       <span className="tabular-nums">{money(cart.currency, cart.tax)}</span>
                     </div>
                   ) : null}
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-inherit pt-4">
-                  <span className="text-xl font-bold md:text-2xl">Total</span>
+                  <span className="text-xl font-bold md:text-2xl">{t('cdsTotal')}</span>
                   <span className="text-3xl font-black tabular-nums text-teal-600 md:text-4xl">
                     {money(cart.currency, cart.total)}
                   </span>

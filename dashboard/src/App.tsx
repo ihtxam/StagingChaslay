@@ -5,6 +5,7 @@ import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
 import { isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
+import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
@@ -324,7 +325,7 @@ function App() {
           <Route
             path="/cds/:token"
             element={
-              <I18nProvider storageKey={PANEL_LANG_KEY}>
+              <I18nProvider storageKey={CDS_LANG_KEY}>
                 <CustomerDisplayPage />
               </I18nProvider>
             }

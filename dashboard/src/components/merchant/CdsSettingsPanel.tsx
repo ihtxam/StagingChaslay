@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 
 type CdsSettings = {
   accessToken?: string;
+  shortCode?: string | null;
   enabled?: boolean;
   promoSlides?: KioskPromoSlide[];
   slideIntervalSec?: number;
@@ -69,9 +70,8 @@ export default function CdsSettingsPanel() {
   };
 
   const copyUrl = async () => {
-    const token = settings?.accessToken || '';
-    if (!token) return;
-    const url = cdsPublicUrl(token);
+    if (!settings?.accessToken && !settings?.shortCode) return;
+    const url = cdsPublicUrl(settings);
     try {
       await navigator.clipboard.writeText(url);
       toast.success(t('cdsUrlCopied'));
@@ -120,7 +120,7 @@ export default function CdsSettingsPanel() {
           <p className="text-sm font-medium">{t('cdsDisplayUrl')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="flex-1 break-all rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2 text-xs">
-              {settings.accessToken ? cdsPublicUrl(settings.accessToken) : '—'}
+              {settings.accessToken || settings.shortCode ? cdsPublicUrl(settings) : '—'}
             </code>
             <button
               type="button"

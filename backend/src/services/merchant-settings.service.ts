@@ -705,6 +705,7 @@ export class MerchantSettingsService {
         ...(updates.customerDisplaySettings as object),
       });
       incoming.accessToken = existing.accessToken || incoming.accessToken;
+      incoming.shortCode = existing.shortCode || incoming.shortCode;
       patch.customerDisplaySettings = incoming;
     }
     if (updates.deliveryPlatformSettings !== undefined) {

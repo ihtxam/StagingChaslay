@@ -161,7 +161,9 @@ import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
 import {
   openCustomerDisplayWindow,
   publishCustomerDisplayState,
+  subscribeCustomerDisplayRequests,
   type CustomerDisplayPhase,
+  type CustomerDisplayState,
 } from '@/lib/customer-display-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
@@ -1823,8 +1825,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Payable cart totals for sidebar / pay buttons (includes bill discount). */
   const totals = splitQueue.length > 0 ? activeSale.totals : payableFullTotals;
 
-  const cdsToken = String(merchant?.customerDisplaySettings?.accessToken || '').trim();
-  const cdsEnabled = merchant?.customerDisplaySettings?.enabled !== false;
+  const cdsSettings = merchant?.customerDisplaySettings;
+  const cdsToken = String(cdsSettings?.accessToken || '').trim();
+  const cdsShortCode = String(cdsSettings?.shortCode || '').trim();
+  const cdsEnabled = cdsSettings?.enabled !== false;
 
   const cdsPhase: CustomerDisplayPhase = useMemo(() => {
     if (posView === 'success') return 'thankyou';
@@ -1833,10 +1837,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return 'building';
   }, [posView, paymentModalOpen, activeSale.lines.length]);
 
-  useEffect(() => {
-    if (!cdsToken || !cdsEnabled) return;
+  const buildCustomerDisplayState = useCallback((): CustomerDisplayState => {
     const saleTotals = activeSale.totals;
-    publishCustomerDisplayState(cdsToken, {
+    return {
       merchantName: merchant?.name || merchant?.businessName,
       currency: 'CHF',
       lines: activeSale.lines.map((l) => ({
@@ -1850,17 +1853,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       tax: saleTotals.tax,
       total: saleTotals.total,
       phase: cdsPhase,
+      receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
+      locale,
       updatedAt: Date.now(),
-    });
+    };
   }, [
-    cdsToken,
-    cdsEnabled,
-    cdsPhase,
     activeSale.lines,
     activeSale.totals,
+    cdsPhase,
+    lastReceiptUrl,
+    locale,
     merchant?.name,
     merchant?.businessName,
   ]);
+
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+  }, [cdsToken, cdsEnabled, buildCustomerDisplayState]);
+
+  /** When CDS connects (or refreshes), republish cart + locale immediately. */
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    return subscribeCustomerDisplayRequests(cdsToken, () => {
+      publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+    });
+  }, [cdsToken, cdsEnabled, buildCustomerDisplayState]);
 
   const openCustomerDisplay = useCallback(() => {
     if (!cdsToken || !cdsEnabled) {
@@ -1868,11 +1886,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     setSettingsOpen(false);
-    const win = openCustomerDisplayWindow(cdsToken);
+    const win = openCustomerDisplayWindow({ accessToken: cdsToken, shortCode: cdsShortCode });
     if (!win) {
       toast.error(t('cdsActionFailed'));
+    } else {
+      // Fresh window may miss the last BroadcastChannel publish — push again shortly.
+      window.setTimeout(() => {
+        publishCustomerDisplayState(cdsToken, buildCustomerDisplayState());
+      }, 150);
     }
-  }, [cdsToken, cdsEnabled, t]);
+  }, [cdsToken, cdsShortCode, cdsEnabled, t, buildCustomerDisplayState]);
 
   const membershipCheckout = useMemo(() => {
     if (

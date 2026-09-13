@@ -5,6 +5,8 @@ export type CdsTheme = "light" | "dark";
 
 export type CustomerDisplaySettings = {
   accessToken?: string;
+  /** Short numeric code for /cds/:code URLs (easier to type on a second device). */
+  shortCode?: string;
   enabled?: boolean;
   promoSlides?: KioskPromoSlide[];
   slideIntervalSec?: number;
@@ -49,6 +51,8 @@ export function normalizeCustomerDisplaySettings(raw: unknown): CustomerDisplayS
   let accessToken = String(src.accessToken || "").trim();
   if (!accessToken) accessToken = generateCdsToken();
 
+  const shortCode = String(src.shortCode || "").trim() || undefined;
+
   const themeRaw = String(src.theme || "light").toLowerCase();
   const theme: CdsTheme = themeRaw === "dark" ? "dark" : "light";
 
@@ -59,6 +63,7 @@ export function normalizeCustomerDisplaySettings(raw: unknown): CustomerDisplayS
 
   return {
     accessToken,
+    shortCode,
     enabled: src.enabled !== false,
     promoSlides,
     slideIntervalSec,
