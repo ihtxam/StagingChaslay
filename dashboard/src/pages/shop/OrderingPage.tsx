@@ -15,6 +15,7 @@ import {
   saveCart,
   shopBasePath,
   shopMenuApiPath,
+  SHOP_CART_EVENT,
   type ShopCartItem,
   type ShopChannel,
   type ShopCheckoutDraft,
@@ -43,6 +44,7 @@ import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/compone
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavbar';
 import ShopOfferPicker, {
   type ShopOfferForPicker,
   type ShopOfferProduct,
@@ -119,6 +121,7 @@ export default function OrderingPage() {
   const [draft, setDraft] = useState<ShopCheckoutDraft>(emptyDraft());
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [hasCmsNav, setHasCmsNav] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
@@ -161,6 +164,28 @@ export default function OrderingPage() {
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   /** true = every category expanded; false = headers only */
   const [allCategoriesOpen, setAllCategoriesOpen] = useState(true);
+  const addParamConsumedRef = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.classList.add('shop-shell');
+    return () => document.documentElement.classList.remove('shop-shell');
+  }, []);
+
+  useEffect(() => {
+    if (!shopKey) return;
+    const onChange = (event: Event) => {
+      const key = (event as CustomEvent)?.detail?.shopKey;
+      if (key && key !== shopKey) return;
+      const stored = loadCart(shopKey);
+      if (stored) {
+        setDraft(stored);
+        if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
+      }
+    };
+    window.addEventListener(SHOP_CART_EVENT, onChange);
+    return () => window.removeEventListener(SHOP_CART_EVENT, onChange);
+  }, [shopKey]);
+
   useEffect(() => {
     if (!shopKey) {
       setLoading(false);
@@ -716,6 +741,20 @@ export default function OrderingPage() {
     addConfiguredItem(product);
   };
 
+  useEffect(() => {
+    if (!menu.length || addParamConsumedRef.current) return;
+    const addId = searchParams.get('add');
+    if (!addId) return;
+    const product = findMenuProduct(addId);
+    if (!product) return;
+    addParamConsumedRef.current = true;
+    handleProductClick(product);
+    const next = new URLSearchParams(searchParams);
+    next.delete('add');
+    const qs = next.toString();
+    navigate({ pathname: `${basePath}/menu`, search: qs ? `?${qs}` : '' }, { replace: true });
+  }, [menu, searchParams, basePath, navigate]);
+
   const updateQuantity = (lineId: string, quantity: number) => {
     setDraft((prev) => {
       const target = prev.items.find((item) => item.lineId === lineId);
@@ -1120,8 +1159,15 @@ export default function OrderingPage() {
     <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
+      <ChaslayStorefrontNavbar
+        shopKey={shopKey}
+        basePath={basePath}
+        locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
+        onPresence={setHasCmsNav}
+      />
+      {hasCmsNav ? null : (
       <header className="sticky top-0 z-30 bg-white border-b border-stone-200">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+        <div className="shop-page-content h-14 flex items-center justify-between gap-2">
           <Link
             to={shopBasePath(shopKey, locSlug) || '/'}
             className="flex items-center gap-2.5 min-w-0 shrink"
@@ -1168,15 +1214,16 @@ export default function OrderingPage() {
           </div>
         </div>
       </header>
+      )}
 
       {ordersPaused ? (
-        <div className="max-w-7xl mx-auto px-4 pt-4">
+        <div className="shop-page-content pt-4">
           <ShopNotAcceptingBanner kind="orders" phone={merchant?.phone} />
         </div>
       ) : null}
 
       <section className="bg-white border-b border-stone-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
+        <div className="shop-page-content py-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-xl md:text-2xl font-bold tracking-tight">{merchant?.name}</h1>
@@ -1319,7 +1366,7 @@ export default function OrderingPage() {
       </div>
 
       <div
-        className={`max-w-7xl mx-auto px-4 py-6 ${
+        className={`shop-page-content py-6 ${
           stickyCart ? 'grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start' : ''
         }`}
       >

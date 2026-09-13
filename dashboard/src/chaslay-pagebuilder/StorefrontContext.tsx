@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext } from 'react';
-import { resolveStorefrontHref } from './storefront-href';
+import { resolveStorefrontHref, type StorefrontSurface } from './storefront-href';
 
 export type SitePageLink = {
   title: string;
@@ -27,6 +27,7 @@ export type StorefrontContextValue = {
   defaultLanguage: string;
   sitePages: SitePageLink[];
   contact: MerchantContact | null;
+  surface: StorefrontSurface;
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
 };
@@ -41,6 +42,7 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   defaultLanguage: 'en',
   sitePages: [],
   contact: null,
+  surface: 'home',
   shopHref: defaultShopHref,
   pageHref: () => '#',
 });
@@ -52,6 +54,7 @@ export function StorefrontProvider({
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
+  surface = 'home',
   children,
 }: {
   shopKey: string;
@@ -60,11 +63,12 @@ export function StorefrontProvider({
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
+  surface?: StorefrontSurface;
   children: React.ReactNode;
 }) {
   const shopHref = useCallback(
-    (link?: string | null) => resolveStorefrontHref(link, basePath, true),
-    [basePath]
+    (link?: string | null) => resolveStorefrontHref(link, basePath, true, { surface }),
+    [basePath, surface]
   );
   const pageHref = useCallback(
     (slug: string, isHomepage?: boolean) => {
@@ -83,6 +87,7 @@ export function StorefrontProvider({
         defaultLanguage,
         sitePages,
         contact,
+        surface,
         shopHref,
         pageHref,
       }}

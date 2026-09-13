@@ -36,7 +36,7 @@ const defaultProps: MenuGridProps = {
   textColor: '#1a1a2e',
   accentColor: '#e94560',
   buttonText: 'View Full Menu',
-  buttonLink: '/order',
+  buttonLink: '/menu',
   buttonColor: '#1a1a2e',
   buttonTextColor: '#ffffff',
 };

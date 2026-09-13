@@ -69,7 +69,7 @@ export function CmsMenuBlock({
   if (!products.length) {
     return (
       <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
-        <div className="mx-auto max-w-7xl text-center text-sm" style={{ color: 'var(--color-text-2)' }}>
+        <div className="shop-page-content text-center text-sm" style={{ color: 'var(--color-text-2)' }}>
           {t('shopNoItems')}
         </div>
       </section>
@@ -79,7 +79,7 @@ export function CmsMenuBlock({
   if (mode === 'full') {
     return (
       <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
-        <div className="mx-auto max-w-7xl space-y-10">
+        <div className="shop-page-content space-y-10">
           {categories
             .filter((c) => !catFilter.size || catFilter.has(c.id))
             .map((cat) => {
@@ -149,7 +149,7 @@ export function CmsMenuBlock({
 
   return (
     <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
-      <div className="mx-auto max-w-7xl">
+      <div className="shop-page-content">
         <div className="mb-6 flex items-center justify-between gap-4">
           <h2
             className="text-xl font-semibold tracking-tight md:text-2xl"

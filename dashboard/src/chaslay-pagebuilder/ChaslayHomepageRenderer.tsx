@@ -100,6 +100,7 @@ export default function ChaslayHomepageRenderer({
       defaultLanguage={defaultLanguage}
       sitePages={navPages}
       contact={contact}
+      surface="home"
     >
       <BuilderLanguageProvider locale={locale} defaultLanguage={defaultLanguage}>
         <MenuDataProvider>

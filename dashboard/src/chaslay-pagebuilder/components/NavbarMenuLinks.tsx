@@ -4,6 +4,8 @@
 import React, { useState } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
+import { isHomeNavLink } from '../storefront-href';
+import { StorefrontNavCart } from '../StorefrontNavCart';
 import {
   DEFAULT_SMOOTH_SCROLL_MENU,
   type NavbarMenuItem,
@@ -19,25 +21,20 @@ type Props = {
 };
 
 export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Props) {
-  const { shopHref, basePath, isStorefront } = useStorefront();
+  const { shopHref, isStorefront, surface } = useStorefront();
 
   const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
     const resolved = shopHref(link);
-    if (isStorefront && (link === '/' || link === '' || resolved === basePath)) {
+    if (isStorefront && isHomeNavLink(link) && surface === 'home') {
       e.preventDefault();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      try {
-        history.replaceState(null, '', basePath || '/');
-      } catch {
-        /* ignore */
-      }
       return;
     }
     handleStorefrontNavClick(e, resolved);
   };
 
   return (
-    <div className={className} style={{ display: 'flex', gap: '24px' }}>
+    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
       {menuItems?.map((item, i) => (
         <a
           key={`${item.label}-${i}`}
@@ -48,6 +45,7 @@ export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Pro
           {item.label}
         </a>
       ))}
+      <StorefrontNavCart color={textColor} />
     </div>
   );
 }
@@ -67,19 +65,14 @@ export function NavbarMobileMenu({
   buttonColor?: string;
   showButton?: boolean;
 }) {
-  const { shopHref, basePath, isStorefront } = useStorefront();
+  const { shopHref, isStorefront, surface } = useStorefront();
   const [open, setOpen] = useState(false);
 
   const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
     const resolved = shopHref(link);
-    if (isStorefront && (link === '/' || link === '' || resolved === basePath)) {
+    if (isStorefront && isHomeNavLink(link) && surface === 'home') {
       e.preventDefault();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      try {
-        history.replaceState(null, '', basePath || '/');
-      } catch {
-        /* ignore */
-      }
       setOpen(false);
       return;
     }
