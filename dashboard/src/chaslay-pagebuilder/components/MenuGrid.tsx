@@ -146,7 +146,7 @@ export const MenuGrid: React.FC<MenuGridProps> & {
 
         {tr('buttonText') && (
           <div style={{ textAlign: 'center', marginTop: '48px' }}>
-            <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.buttonColor, color: tr('buttonText')Color, padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontSize: '16px', fontWeight: 600, transition: 'opacity 0.2s' }}>
+            <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontSize: '16px', fontWeight: 600, transition: 'opacity 0.2s' }}>
               {tr('buttonText')}
             </a>
           </div>

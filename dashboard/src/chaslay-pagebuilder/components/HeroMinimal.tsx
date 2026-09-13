@@ -89,9 +89,9 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
       >
         <h1
           style={{
-            fontSize: `${tr('title')FontSize}px`,
-            fontWeight: fontWeightMap[tr('title')FontWeight || 'normal'],
-            fontStyle: tr('title')FontStyle || 'normal',
+            fontSize: `${mergedProps.titleFontSize}px`,
+            fontWeight: fontWeightMap[mergedProps.titleFontWeight || 'normal'],
+            fontStyle: mergedProps.titleFontStyle || 'normal',
             color: mergedProps.textColor,
             lineHeight: 1.2,
             marginBottom: '24px',
@@ -116,7 +116,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
         {tr('subtitle') && (
           <p
             style={{
-              fontSize: `${tr('subtitle')FontSize}px`,
+              fontSize: `${mergedProps.subtitleFontSize}px`,
               color: mergedProps.textColor,
               opacity: 0.7,
               fontWeight: 400,
