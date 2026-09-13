@@ -1418,7 +1418,11 @@ router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
 router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Response) => {
   try {
     const { PlatformShopService } = await import("@/services/platform-shop.service");
-    const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
+    const order = await PlatformShopService.updateOrderStatus(
+      req.params.orderId,
+      req.body?.status,
+      req.body?.trackingUrl
+    );
     res.json({ success: true, order });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update order" });

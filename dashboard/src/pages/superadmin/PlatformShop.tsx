@@ -34,6 +34,7 @@ type Order = {
   currency: string;
   createdAt: string;
   notes?: string | null;
+  trackingUrl?: string | null;
   merchant?: { name?: string | null; email?: string | null };
   items: Array<{ name: string; quantity: number; unitPrice: number }>;
 };
@@ -68,6 +69,7 @@ export default function SuperadminPlatformShop() {
   const [productForm, setProductForm] = useState(emptyProduct);
   const [voucherForm, setVoucherForm] = useState(emptyVoucher);
   const [saving, setSaving] = useState(false);
+  const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadProductId, setUploadProductId] = useState<string | null>(null);
 
@@ -81,7 +83,11 @@ export default function SuperadminPlatformShop() {
       ]);
       setProducts(p.data.products || []);
       setVouchers(v.data.vouchers || []);
-      setOrders(o.data.orders || []);
+      const nextOrders: Order[] = o.data.orders || [];
+      setOrders(nextOrders);
+      setTrackingDraft(
+        Object.fromEntries(nextOrders.map((ord) => [ord.id, ord.trackingUrl || '']))
+      );
     } catch (e: unknown) {
       toast.error(
         (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Load failed'
@@ -192,9 +198,9 @@ export default function SuperadminPlatformShop() {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, status: string, trackingUrl?: string | null) => {
     try {
-      await api.patch(`/superadmin/platform-shop/orders/${orderId}`, { status });
+      await api.patch(`/superadmin/platform-shop/orders/${orderId}`, { status, trackingUrl });
       toast.success('Order updated');
       await load();
     } catch (e: unknown) {
@@ -204,14 +210,24 @@ export default function SuperadminPlatformShop() {
     }
   };
 
+  const statusOptionLabel = (s: string) => {
+    if (s === 'paid') return t('platformShopStatusPaid');
+    if (s === 'accepted') return t('platformShopStatusAccepted');
+    if (s === 'processing') return t('platformShopStatusProcessing');
+    if (s === 'shipped') return t('platformShopStatusShipped');
+    if (s === 'fulfilled') return t('platformShopStatusFulfilled');
+    if (s === 'cancelled') return t('platformShopStatusCancelled');
+    return t('platformShopStatusPending');
+  };
+
   const showProductForm = creatingProduct || editingProduct !== null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-stone-900">{t('platformShopAdminTitle')}</h1>
-          <p className="text-sm text-stone-600 mt-1">{t('platformShopAdminHint')}</p>
+          <h1 className="page-title">{t('platformShopAdminTitle')}</h1>
+          <p className="page-sub">{t('platformShopAdminHint')}</p>
         </div>
         <div className="flex gap-2">
           {(['products', 'vouchers', 'orders'] as const).map((key) => (
@@ -401,41 +417,89 @@ export default function SuperadminPlatformShop() {
       ) : null}
 
       {tab === 'orders' && !loading ? (
-        <div className="overflow-x-auto rounded-xl border border-stone-200">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
           <table className="min-w-full text-sm">
-            <thead className="bg-stone-50 text-left">
+            <thead className="bg-[var(--bg-muted)] text-left text-[var(--text-muted)]">
               <tr>
                 <th className="px-3 py-2">{t('date')}</th>
                 <th className="px-3 py-2">{t('merchant')}</th>
+                <th className="px-3 py-2">{t('items')}</th>
                 <th className="px-3 py-2">{t('total')}</th>
                 <th className="px-3 py-2">{t('status')}</th>
-                <th className="px-3 py-2" />
+                <th className="px-3 py-2">{t('platformShopTracking')}</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o.id} className="border-t border-stone-100">
-                  <td className="px-3 py-2">{new Date(o.createdAt).toLocaleString()}</td>
-                  <td className="px-3 py-2">{o.merchant?.name || '—'}</td>
-                  <td className="px-3 py-2">
+                <tr key={o.id} className="border-t border-[var(--border)] align-top">
+                  <td className="px-3 py-2 whitespace-nowrap text-[var(--text)]">
+                    {new Date(o.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text)]">{o.merchant?.name || '—'}</td>
+                  <td className="px-3 py-2 text-[var(--text)]">
+                    {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ')}
+                    {o.notes ? (
+                      <div className="text-xs text-[var(--text-muted)] mt-1">{o.notes}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-[var(--text)]">
                     {Number(o.total).toFixed(2)} {o.currency}
                   </td>
-                  <td className="px-3 py-2 capitalize">{o.status}</td>
                   <td className="px-3 py-2">
-                    {o.status === 'paid' ? (
+                    <select
+                      className="input text-xs py-1"
+                      value={o.status}
+                      onChange={(e) => void updateOrderStatus(o.id, e.target.value, trackingDraft[o.id] ?? o.trackingUrl)}
+                    >
+                      {['paid', 'accepted', 'processing', 'shipped', 'fulfilled', 'cancelled', 'pending'].map((s) => (
+                        <option key={s} value={s}>
+                          {statusOptionLabel(s)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2 min-w-[220px]">
+                    <div className="flex gap-1">
+                      <input
+                        className="input text-xs w-full"
+                        placeholder="https://"
+                        value={trackingDraft[o.id] ?? (o.trackingUrl || '')}
+                        onChange={(e) => setTrackingDraft((d) => ({ ...d, [o.id]: e.target.value }))}
+                      />
                       <button
                         type="button"
-                        className="text-xs text-blue-600"
-                        onClick={() => void updateOrderStatus(o.id, 'fulfilled')}
+                        className="btn-secondary text-xs shrink-0"
+                        onClick={() =>
+                          void updateOrderStatus(
+                            o.id,
+                            o.status === 'paid' && (trackingDraft[o.id] || '').trim()
+                              ? 'shipped'
+                              : o.status,
+                            trackingDraft[o.id] ?? ''
+                          )
+                        }
                       >
-                        {t('markFulfilled')}
+                        {t('save')}
                       </button>
+                    </div>
+                    {o.trackingUrl ? (
+                      <a
+                        href={o.trackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 underline mt-1 inline-block"
+                      >
+                        {t('platformShopTracking')}
+                      </a>
                     ) : null}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {!orders.length ? (
+            <p className="px-3 py-4 text-sm text-[var(--text-muted)]">{t('platformShopNoOrders')}</p>
+          ) : null}
         </div>
       ) : null}
     </div>

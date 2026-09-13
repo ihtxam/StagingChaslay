@@ -3219,6 +3219,21 @@ router.get("/platform-shop/orders", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/platform-shop/quote", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const quote = await PlatformShopService.quote(items, req.body?.voucherCode);
+    res.json({ success: true, quote });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Could not apply voucher",
+    });
+  }
+});
+
 router.post("/platform-shop/checkout", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
