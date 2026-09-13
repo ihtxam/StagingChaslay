@@ -17,4 +17,7 @@ assert.ok(https?.startsWith("https://www.post.ch/track/ABC123"));
 const http = sanitizeTrackingUrl("http://example.com/t");
 assert.ok(http?.startsWith("http://example.com/t"));
 
+const schemeLess = sanitizeTrackingUrl("www.post.ch/track/ABC123");
+assert.ok(schemeLess?.startsWith("https://www.post.ch/track/ABC123"));
+
 console.log("platform-shop tracking tests passed");

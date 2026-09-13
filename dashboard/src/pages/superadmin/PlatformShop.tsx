@@ -40,6 +40,26 @@ type Order = {
   items: Array<{ name: string; quantity: number; unitPrice: number }>;
 };
 
+function draftTracking(order: Order, draft: Record<string, string>) {
+  return draft[order.id] ?? order.trackingUrl ?? '';
+}
+
+/** Only send tracking on status change when the draft differs from saved (avoids accidental clears). */
+function trackingPayload(order: Order, draft: Record<string, string>): string | undefined {
+  if (!(order.id in draft)) return undefined;
+  const draftVal = draft[order.id] ?? '';
+  const saved = order.trackingUrl ?? '';
+  if (draftVal !== saved) return draftVal;
+  return undefined;
+}
+
+function statusAfterTrackingSave(currentStatus: string, trackingValue: string) {
+  const trimmed = trackingValue.trim();
+  if (!trimmed) return currentStatus;
+  if (['paid', 'accepted', 'processing'].includes(currentStatus)) return 'shipped';
+  return currentStatus;
+}
+
 const emptyProduct = {
   name: '',
   description: '',
@@ -457,7 +477,9 @@ export default function SuperadminPlatformShop() {
                     <select
                       className="input text-xs py-1"
                       value={o.status}
-                      onChange={(e) => void updateOrderStatus(o.id, e.target.value, trackingDraft[o.id] ?? o.trackingUrl)}
+                      onChange={(e) =>
+                        void updateOrderStatus(o.id, e.target.value, trackingPayload(o, trackingDraft))
+                      }
                     >
                       {['paid', 'accepted', 'processing', 'shipped', 'fulfilled', 'cancelled', 'pending'].map((s) => (
                         <option key={s} value={s}>
@@ -480,10 +502,8 @@ export default function SuperadminPlatformShop() {
                         onClick={() =>
                           void updateOrderStatus(
                             o.id,
-                            o.status === 'paid' && (trackingDraft[o.id] || '').trim()
-                              ? 'shipped'
-                              : o.status,
-                            trackingDraft[o.id] ?? ''
+                            statusAfterTrackingSave(o.status, draftTracking(o, trackingDraft)),
+                            draftTracking(o, trackingDraft)
                           )
                         }
                       >
@@ -561,7 +581,7 @@ export default function SuperadminPlatformShop() {
                             className="input mt-1 w-full text-sm"
                             value={o.status}
                             onChange={(e) =>
-                              void updateOrderStatus(o.id, e.target.value, trackingDraft[o.id] ?? o.trackingUrl)
+                              void updateOrderStatus(o.id, e.target.value, trackingPayload(o, trackingDraft))
                             }
                           >
                             {['paid', 'accepted', 'processing', 'shipped', 'fulfilled', 'cancelled', 'pending'].map(
@@ -588,10 +608,8 @@ export default function SuperadminPlatformShop() {
                               onClick={() =>
                                 void updateOrderStatus(
                                   o.id,
-                                  o.status === 'paid' && (trackingDraft[o.id] || '').trim()
-                                    ? 'shipped'
-                                    : o.status,
-                                  trackingDraft[o.id] ?? ''
+                                  statusAfterTrackingSave(o.status, draftTracking(o, trackingDraft)),
+                                  draftTracking(o, trackingDraft)
                                 )
                               }
                             >

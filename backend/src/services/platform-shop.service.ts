@@ -51,11 +51,20 @@ function escapeHtml(value: string) {
 
 /** Accept only http(s) tracking links for storage and email. */
 export function sanitizeTrackingUrl(raw?: string | null): string | null {
-  const url = String(raw || '').trim().slice(0, 500);
+  let url = String(raw || '').trim().slice(0, 500);
   if (!url) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+    url = `https://${url}`.slice(0, 500);
+  }
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    const host = parsed.hostname.toLowerCase();
+    const looksReal =
+      host === 'localhost' ||
+      /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ||
+      host.includes('.');
+    if (!looksReal) return null;
     return parsed.toString().slice(0, 500);
   } catch {
     return null;
@@ -93,14 +102,14 @@ function platformShopStatusCopy(
   };
   const label = labels[status]?.[lang] || labels[status]?.en || status;
   const safeTrack = trackingUrl ? escapeHtml(trackingUrl) : "";
-  const track =
-    trackingUrl && status === "shipped"
-      ? lang === "fr"
-        ? `<p>Suivi : <a href="${safeTrack}">${safeTrack}</a></p>`
-        : lang === "de"
-          ? `<p>Sendungsverfolgung: <a href="${safeTrack}">${safeTrack}</a></p>`
-          : `<p>Tracking: <a href="${safeTrack}">${safeTrack}</a></p>`
-      : "";
+  const showTracking = trackingUrl && ["shipped", "fulfilled"].includes(status);
+  const track = showTracking
+    ? lang === "fr"
+      ? `<p>Suivi : <a href="${safeTrack}">${safeTrack}</a></p>`
+      : lang === "de"
+        ? `<p>Sendungsverfolgung: <a href="${safeTrack}">${safeTrack}</a></p>`
+        : `<p>Tracking: <a href="${safeTrack}">${safeTrack}</a></p>`
+    : "";
   if (lang === "fr") {
     return {
       subject: `Mise à jour de commande — ${label}`,
@@ -674,7 +683,8 @@ export class PlatformShopService {
     const trackingChanged = row.trackingUrl !== existing.trackingUrl;
     const shouldEmail =
       status !== "pending" &&
-      (statusChanged || (trackingChanged && row.status === "shipped"));
+      (statusChanged ||
+        (trackingChanged && ["shipped", "fulfilled"].includes(row.status)));
     if (shouldEmail) {
       await this.sendStatusEmails(row);
     }
