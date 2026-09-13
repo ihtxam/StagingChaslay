@@ -6,7 +6,9 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { useStorefront } from '../StorefrontContext';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
@@ -48,6 +50,7 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
 
@@ -68,14 +71,14 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         {/* Logo */}
         {mergedProps.logoImageUrl ? (
-          <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ height: '40px', objectFit: 'contain', margin: '0 auto 20px' }} />
+          <BuilderImage src={mergedProps.logoImageUrl} alt={tr('logoText')} style={{ height: '40px', objectFit: 'contain', margin: '0 auto 20px' }} />
         ) : (
-          <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '20px' }}>{mergedProps.logoText}</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '20px' }}>{tr('logoText')}</div>
         )}
 
         {/* Menu Links */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', marginBottom: '24px', flexWrap: 'wrap' }}>
-          {mergedProps.menuItems?.map((item, i) => (
+          {trList('menuItems', mergedProps.menuItems)?.map((item, i) => (
             <a key={i} href={shopHref(item.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
               {item.label}
             </a>
@@ -83,7 +86,7 @@ export const FooterCentered: React.FC<FooterCenteredProps> & {
         </div>
 
         {/* Copyright */}
-        <p style={{ fontSize: '13px', opacity: 0.6 }}>{mergedProps.copyrightText}</p>
+        <p style={{ fontSize: '13px', opacity: 0.6 }}>{tr('copyrightText')}</p>
       </div>
     </footer>
   );

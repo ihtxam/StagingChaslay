@@ -7,7 +7,9 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsClassicProps {
@@ -35,6 +37,7 @@ export const AboutUsClassic: React.FC<AboutUsClassicProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -53,7 +56,7 @@ export const AboutUsClassic: React.FC<AboutUsClassicProps> & {
       <div className="hb-split" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center' }}>
         <div>
           {mergedProps.image ? (
-            <img src={mergedProps.image} alt="About us" style={{ width: '100%', height: '450px', objectFit: 'cover', borderRadius: '12px' }} />
+            <BuilderImage src={mergedProps.image} alt="About us" style={{ width: '100%', height: '450px', objectFit: 'cover', borderRadius: '12px' }} />
           ) : (
             <div style={{ width: '100%', height: '450px', backgroundColor: '#e9ecef', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6c757d' }}>
               Image Placeholder
@@ -61,8 +64,8 @@ export const AboutUsClassic: React.FC<AboutUsClassicProps> & {
           )}
         </div>
         <div>
-          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>{mergedProps.title}</h2>
-          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.85 }}>{mergedProps.content}</p>
+          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>{tr('title')}</h2>
+          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.85 }}>{tr('content')}</p>
         </div>
       </div>
     </section>

@@ -31,6 +31,7 @@ import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
 import { PANEL_NAV_HIDE_OPTIONS } from '@/lib/panel-nav-hidden';
 import SupportInbox from '../shared/SupportInbox';
+import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
 
 function Overview() {
@@ -1999,6 +2000,7 @@ function ResellerShell() {
             <Route path="editions" element={<EditionsPage />} />
             <Route path="packages" element={<ResellerPackages />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
+            <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>
         </main>
       </div>

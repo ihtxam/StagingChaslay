@@ -473,7 +473,12 @@ export class ChaslayCompatService {
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-    const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+    const posCheckoutSettings = normalizePosCheckoutSettings({
+      ...(merchant.posCheckoutSettings && typeof merchant.posCheckoutSettings === "object"
+        ? (merchant.posCheckoutSettings as Record<string, unknown>)
+        : {}),
+      webposExpressEnabled: merchant.webposExpressEnabled,
+    });
 
     return {
       adyen: {

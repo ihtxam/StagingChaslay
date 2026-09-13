@@ -223,6 +223,36 @@ router.put("/platform-settings/brevo", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/platform-settings/mailco
+ */
+router.get("/platform-settings/mailco", async (_req: Request, res: Response) => {
+  try {
+    const mailco = await PlatformSettingsService.getMailcoSettingsPublic();
+    res.json({ success: true, mailco });
+  } catch (error) {
+    console.error("Error getting platform mailco settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load mailco settings",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/mailco
+ */
+router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
+  try {
+    const mailco = await PlatformSettingsService.updateMailcoSettings(req.body || {});
+    res.json({ success: true, mailco });
+  } catch (error) {
+    console.error("Error updating platform mailco settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save mailco settings",
+    });
+  }
+});
+
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req: Request, res: Response) => {
@@ -239,23 +269,24 @@ router.get("/email/usage", async (_req: Request, res: Response) => {
 });
 
 /**
- * POST /api/superadmin/email/test — send a test email via platform Brevo
+ * POST /api/superadmin/email/test — send a test email via platform mailco or Brevo
+ * Body: { to, provider?: "mailco" | "brevo" } (defaults to mailco)
  */
 router.post("/email/test", async (req: Request, res: Response) => {
   try {
     const to = String(req.body?.to || "").trim();
-    if (!to) {
-      res.status(400).json({ error: "Recipient email is required" });
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.status(400).json({ error: "Valid recipient email is required" });
       return;
     }
+    const providerRaw = String(req.body?.provider || "mailco").toLowerCase();
+    const provider = providerRaw === "brevo" ? "brevo" : "mailco";
     const { EmailService } = await import("@/services/email.service");
-    await EmailService.send({
-      to,
-      subject: "Reborn platform email test",
-      html: "<p>This is a test email from Reborn platform Brevo.</p>",
-      emailType: "marketing_test",
+    await EmailService.sendPlatformTest(to, provider);
+    res.json({
+      success: true,
+      provider,
     });
-    res.json({ success: true });
   } catch (error) {
     console.error("Error sending platform test email:", error);
     res.status(400).json({
@@ -1418,11 +1449,7 @@ router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
 router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Response) => {
   try {
     const { PlatformShopService } = await import("@/services/platform-shop.service");
-    const order = await PlatformShopService.updateOrderStatus(
-      req.params.orderId,
-      req.body?.status,
-      req.body?.trackingUrl
-    );
+    const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
     res.json({ success: true, order });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update order" });

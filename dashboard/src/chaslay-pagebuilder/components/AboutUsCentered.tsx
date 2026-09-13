@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsCenteredProps {
@@ -39,6 +40,7 @@ export const AboutUsCentered: React.FC<AboutUsCenteredProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -61,7 +63,7 @@ export const AboutUsCentered: React.FC<AboutUsCenteredProps> & {
             {mergedProps.subtitle}
           </p>
         )}
-        <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '32px', lineHeight: 1.2 }}>{mergedProps.title}</h2>
+        <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '32px', lineHeight: 1.2 }}>{tr('title')}</h2>
 
         {mergedProps.image ? (
           <img src={mergedProps.image} alt="About us" style={{ width: '100%', height: '400px', objectFit: 'cover', borderRadius: '16px', marginBottom: '32px' }} />
@@ -71,7 +73,7 @@ export const AboutUsCentered: React.FC<AboutUsCenteredProps> & {
           </div>
         )}
 
-        <p style={{ fontSize: '18px', lineHeight: 1.9, opacity: 0.85 }}>{mergedProps.content}</p>
+        <p style={{ fontSize: '18px', lineHeight: 1.9, opacity: 0.85 }}>{tr('content')}</p>
       </div>
     </section>
   );

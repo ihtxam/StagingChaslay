@@ -9,6 +9,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroMinimalProps {
@@ -57,6 +58,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const {
     connectors: { connect, drag },
   } = useNode();
@@ -96,7 +98,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
             letterSpacing: '-1px',
           }}
         >
-          {mergedProps.title}
+          {tr('title')}
         </h1>
 
         {mergedProps.showDivider && (
@@ -111,7 +113,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
           />
         )}
 
-        {mergedProps.subtitle && (
+        {tr('subtitle') && (
           <p
             style={{
               fontSize: `${mergedProps.subtitleFontSize}px`,
@@ -121,7 +123,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
               lineHeight: 1.6,
             }}
           >
-            {mergedProps.subtitle}
+            {tr('subtitle')}
           </p>
         )}
       </div>

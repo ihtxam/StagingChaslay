@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsModernProps {
@@ -49,6 +50,7 @@ export const AboutUsModern: React.FC<AboutUsModernProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   const stats = [
@@ -72,8 +74,8 @@ export const AboutUsModern: React.FC<AboutUsModernProps> & {
     >
       <div className="hb-split" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '40px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>{mergedProps.title}</h2>
-          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.8, marginBottom: '48px' }}>{mergedProps.content}</p>
+          <h2 style={{ fontSize: '40px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>{tr('title')}</h2>
+          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.8, marginBottom: '48px' }}>{tr('content')}</p>
 
           {stats.length > 0 && (
             <div style={{ display: 'flex', gap: '48px' }}>

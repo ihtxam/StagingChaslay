@@ -6,6 +6,7 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursMinimalProps {
@@ -37,6 +38,7 @@ export const HoursMinimal: React.FC<HoursMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -54,13 +56,13 @@ export const HoursMinimal: React.FC<HoursMinimalProps> & {
       }}
     >
       <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 400, letterSpacing: '4px', marginBottom: '40px', opacity: 0.6 }}>{mergedProps.title}</h2>
+        <h2 style={{ fontSize: '14px', fontWeight: 400, letterSpacing: '4px', marginBottom: '40px', opacity: 0.6 }}>{tr('title')}</h2>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {hours.map((item, i) => (
             <div key={i}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{item.days}</div>
-              <div style={{ fontSize: '24px', fontWeight: 300, color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{item.time}</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{trText(item.days)}</div>
+              <div style={{ fontSize: '24px', fontWeight: 300, color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{trText(item.time)}</div>
             </div>
           ))}
         </div>

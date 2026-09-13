@@ -6,7 +6,9 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursSplitProps {
@@ -42,6 +44,7 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -56,14 +59,14 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
     >
       <div className="hb-split" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '500px' }}>
         <div style={{ padding: '80px 60px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '12px' }}>{mergedProps.title}</h2>
-          <p style={{ fontSize: '18px', opacity: 0.7, marginBottom: '40px' }}>{mergedProps.subtitle}</p>
+          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '12px' }}>{tr('title')}</h2>
+          <p style={{ fontSize: '18px', opacity: 0.7, marginBottom: '40px' }}>{tr('subtitle')}</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {hours.map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: i < hours.length - 1 ? `1px solid ${mergedProps.textColor}20` : 'none' }}>
-                <span style={{ fontWeight: 600 }}>{item.days}</span>
-                <span style={{ color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{item.time}</span>
+                <span style={{ fontWeight: 600 }}>{trText(item.days)}</span>
+                <span style={{ color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{trText(item.time)}</span>
               </div>
             ))}
           </div>
@@ -71,7 +74,7 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
 
         <div style={{ backgroundColor: '#e9ecef' }}>
           {mergedProps.image ? (
-            <img src={mergedProps.image} alt="Restaurant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <BuilderImage src={mergedProps.image} alt="Restaurant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6c757d' }}>Image Placeholder</div>
           )}

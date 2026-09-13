@@ -11,7 +11,7 @@ import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
-import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroGradientProps {
@@ -78,16 +78,11 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
   const {
     connectors: { connect, drag },
   } = useNode();
-  const { shopHref, locale, defaultLanguage } = useStorefront();
-  const title =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
-    mergedProps.title;
-  const subtitle =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'subtitle', locale, defaultLanguage) ||
-    mergedProps.subtitle;
-  const buttonText =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'buttonText', locale, defaultLanguage) ||
-    mergedProps.buttonText;
+  const { shopHref } = useStorefront();
+  const { tr } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const title = tr('title');
+  const subtitle = tr('subtitle');
+  const buttonText = tr('buttonText');
 
   const gradientStyle = `linear-gradient(${gradientDirections[mergedProps.gradientDirection || 'to-br']}, ${mergedProps.gradientFrom}, ${mergedProps.gradientTo})`;
 
@@ -143,12 +138,13 @@ export const HeroGradient: React.FC<HeroGradientProps> & {
         {buttonText && (
           <a
             href={shopHref(mergedProps.buttonLink || '/menu')}
+            className="hb-hero-cta"
             style={{
               display: 'inline-block',
               backgroundColor: mergedProps.buttonStyle === 'solid' ? mergedProps.textColor : 'transparent',
               color: mergedProps.buttonStyle === 'solid' ? mergedProps.gradientFrom : mergedProps.textColor,
-              padding: '16px 40px',
-              fontSize: '16px',
+              padding: '10px 22px',
+              fontSize: '14px',
               fontWeight: 600,
               border: mergedProps.buttonStyle === 'outline' ? `2px solid ${mergedProps.textColor}` : 'none',
               borderRadius: '50px',

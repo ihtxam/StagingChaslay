@@ -28,6 +28,12 @@ type EmailSettings = {
   usingEnvFallback?: boolean;
 };
 
+type MailcoSettings = EmailSettings & {
+  apiBase?: string;
+  templateSlug?: string;
+  emailPrimary?: 'mailco' | 'brevo';
+};
+
 type EmailUsageSummary = {
   period?: { day?: string; month?: string };
   today?: number;
@@ -36,6 +42,8 @@ type EmailUsageSummary = {
   byType?: Array<{ emailType: string; count: number }>;
   byMerchant?: Array<{ merchantId: string | null; merchantName: string; count: number }>;
   brevo?: EmailSettings;
+  mailco?: MailcoSettings;
+  platformEmailPrimary?: 'mailco' | 'brevo';
   account?: {
     email?: string;
     companyName?: string;
@@ -70,17 +78,29 @@ export default function Settings() {
     apiKey: '',
   });
   const [savingBrevo, setSavingBrevo] = useState(false);
+  const [mailco, setMailco] = useState<MailcoSettings | null>(null);
+  const [mailcoForm, setMailcoForm] = useState({
+    fromEmail: '',
+    fromName: 'Reborn',
+    apiKey: '',
+    apiBase: 'https://ees.mailco.ch/api/v1',
+    templateSlug: 'platform-transactional',
+    emailPrimary: 'mailco' as 'mailco' | 'brevo',
+  });
+  const [savingMailco, setSavingMailco] = useState(false);
   const [emailUsage, setEmailUsage] = useState<EmailUsageSummary | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
-  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [sendingMailcoTestEmail, setSendingMailcoTestEmail] = useState(false);
+  const [sendingBrevoTestEmail, setSendingBrevoTestEmail] = useState(false);
 
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
+        api.get('/superadmin/platform-settings/mailco'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -97,6 +117,16 @@ export default function Settings() {
         fromEmail: b.fromEmail || '',
         fromName: b.fromName || 'Reborn',
         apiKey: '',
+      });
+      const m = mailcoRes.data.mailco as MailcoSettings;
+      setMailco(m);
+      setMailcoForm({
+        fromEmail: m.fromEmail || '',
+        fromName: m.fromName || 'Reborn',
+        apiKey: '',
+        apiBase: m.apiBase || 'https://ees.mailco.ch/api/v1',
+        templateSlug: m.templateSlug || 'platform-transactional',
+        emailPrimary: m.emailPrimary === 'brevo' ? 'brevo' : 'mailco',
       });
       await refreshEmailUsage();
     } catch {
@@ -168,6 +198,29 @@ export default function Settings() {
     }
   };
 
+  const saveMailco = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingMailco(true);
+    try {
+      const res = await api.put('/superadmin/platform-settings/mailco', {
+        fromEmail: mailcoForm.fromEmail,
+        fromName: mailcoForm.fromName,
+        apiBase: mailcoForm.apiBase,
+        templateSlug: mailcoForm.templateSlug,
+        emailPrimary: mailcoForm.emailPrimary,
+        apiKey: mailcoForm.apiKey || undefined,
+      });
+      setMailco(res.data.mailco);
+      setMailcoForm((f) => ({ ...f, apiKey: '' }));
+      toast.success('Platform mailco settings saved');
+      await refreshEmailUsage();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to save mailco settings');
+    } finally {
+      setSavingMailco(false);
+    }
+  };
+
   const saveBrevo = async (e: FormEvent) => {
     e.preventDefault();
     setSavingBrevo(true);
@@ -188,21 +241,23 @@ export default function Settings() {
     }
   };
 
-  const sendPlatformTestEmail = async () => {
+  const sendPlatformTestEmail = async (provider: 'mailco' | 'brevo') => {
     const to = testEmailTo.trim();
     if (!to.includes('@')) {
-      toast.error('Enter a valid email address');
+      toast.error(t('loginEmailInvalid'));
       return;
     }
-    setSendingTestEmail(true);
+    const setSending =
+      provider === 'mailco' ? setSendingMailcoTestEmail : setSendingBrevoTestEmail;
+    setSending(true);
     try {
-      await api.post('/superadmin/email/test', { to });
-      toast.success('Test email sent');
+      await api.post('/superadmin/email/test', { to, provider });
+      toast.success(t('smtpTestSent'));
       await refreshEmailUsage();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Test email failed');
+      toast.error(err.response?.data?.error || t('smtpTestFailed'));
     } finally {
-      setSendingTestEmail(false);
+      setSending(false);
     }
   };
 
@@ -366,11 +421,20 @@ export default function Settings() {
           <div>
             <h2 className="text-xl font-bold inline-flex items-center gap-2">
               <Mail className="h-5 w-5" aria-hidden />
-              Platform email (Brevo)
+              Platform email (mailco + Brevo)
             </h2>
             <p className="text-gray-600 mt-1">
-              All merchant emails use this Brevo account when they choose &quot;Use platform email&quot; —
-              newsletters, reservation confirmations, receipts, alerts, EOD reports, and more.
+              All merchants using &quot;Use platform email&quot; send through mailco by default (Swiss
+              relay at{' '}
+              <a
+                className="text-blue-700 underline"
+                href="https://mailco.ch/docs/#domains"
+                target="_blank"
+                rel="noreferrer"
+              >
+                mailco.ch
+              </a>
+              ). Brevo remains configured as fallback and for merchants on their own Brevo account.
             </p>
           </div>
           <button
@@ -384,9 +448,25 @@ export default function Settings() {
           </button>
         </div>
 
+        {mailco && (
+          <p className="text-sm mb-2">
+            mailco:{' '}
+            <span className={mailco.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
+              {mailco.configured ? 'Configured' : 'Not configured'}
+            </span>
+            {mailco.usingEnvFallback ? ' (using environment variables)' : null}
+            {mailco.fromEmail ? (
+              <>
+                {' '}
+                · From <code>{mailco.fromEmail}</code>
+              </>
+            ) : null}
+          </p>
+        )}
+
         {brevo && (
           <p className="text-sm mb-4">
-            Status:{' '}
+            Brevo (fallback):{' '}
             <span className={brevo.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
               {brevo.configured ? 'Configured' : 'Not configured'}
             </span>
@@ -395,6 +475,12 @@ export default function Settings() {
               <>
                 {' '}
                 · From <code>{brevo.fromEmail}</code>
+              </>
+            ) : null}
+            {emailUsage?.platformEmailPrimary ? (
+              <>
+                {' '}
+                · Primary provider: <strong>{emailUsage.platformEmailPrimary}</strong>
               </>
             ) : null}
           </p>
@@ -471,7 +557,110 @@ export default function Settings() {
           </div>
         ) : null}
 
+        <form onSubmit={saveMailco} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8 pb-8 border-b border-gray-200">
+          <h3 className="md:col-span-2 text-lg font-semibold">mailco (primary)</h3>
+          <p className="md:col-span-2 text-sm text-gray-600">
+            Create a template in{' '}
+            <a className="text-blue-700 underline" href="https://ees.mailco.ch" target="_blank" rel="noreferrer">
+              ees.mailco.ch
+            </a>{' '}
+            with slug <code>platform-transactional</code> (or your custom slug below). Use subject{' '}
+            <code>{'{{subject}}'}</code> and HTML body <code>{'{{{html}}}'}</code> with variables{' '}
+            <code>subject</code>, <code>html</code>, <code>text</code>.
+          </p>
+          <label className="block">
+            <span className="text-sm font-medium">Primary provider</span>
+            <select
+              className="input mt-1"
+              value={mailcoForm.emailPrimary}
+              onChange={(e) =>
+                setMailcoForm({
+                  ...mailcoForm,
+                  emailPrimary: e.target.value === 'brevo' ? 'brevo' : 'mailco',
+                })
+              }
+            >
+              <option value="mailco">mailco (default)</option>
+              <option value="brevo">Brevo</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Template slug</span>
+            <input
+              className="input mt-1"
+              value={mailcoForm.templateSlug}
+              onChange={(e) => setMailcoForm({ ...mailcoForm, templateSlug: e.target.value })}
+              placeholder="platform-transactional"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">From email</span>
+            <input
+              className="input mt-1"
+              type="email"
+              value={mailcoForm.fromEmail}
+              onChange={(e) => setMailcoForm({ ...mailcoForm, fromEmail: e.target.value })}
+              placeholder="noreply@yourdomain.com"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">From name</span>
+            <input
+              className="input mt-1"
+              value={mailcoForm.fromName}
+              onChange={(e) => setMailcoForm({ ...mailcoForm, fromName: e.target.value })}
+              placeholder="Reborn"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">API base URL</span>
+            <input
+              className="input mt-1"
+              value={mailcoForm.apiBase}
+              onChange={(e) => setMailcoForm({ ...mailcoForm, apiBase: e.target.value })}
+              placeholder="https://ees.mailco.ch/api/v1"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">
+              mailco API key {mailco?.apiKeySet ? `(set: ${mailco.apiKeyMasked})` : '(not set)'}
+            </span>
+            <input
+              className="input mt-1"
+              type="password"
+              autoComplete="new-password"
+              value={mailcoForm.apiKey}
+              onChange={(e) => setMailcoForm({ ...mailcoForm, apiKey: e.target.value })}
+              placeholder={mailco?.apiKeySet ? 'Leave blank to keep current' : 'mail_live_…'}
+            />
+          </label>
+          <div className="md:col-span-2 flex flex-wrap items-end gap-3">
+            <button type="submit" className="btn btn-primary" disabled={savingMailco}>
+              {savingMailco ? t('saving') : 'Save mailco settings'}
+            </button>
+            <label className="flex-1 min-w-[200px]">
+              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
+              <input
+                className="input mt-1"
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={sendingMailcoTestEmail}
+              onClick={() => sendPlatformTestEmail('mailco')}
+            >
+              {sendingMailcoTestEmail ? t('saving') : t('smtpSendTest')}
+            </button>
+          </div>
+        </form>
+
         <form onSubmit={saveBrevo} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+          <h3 className="md:col-span-2 text-lg font-semibold">Brevo (fallback)</h3>
           <label className="block">
             <span className="text-sm font-medium">From email</span>
             <input
@@ -510,7 +699,7 @@ export default function Settings() {
               {savingBrevo ? 'Saving…' : 'Save Brevo settings'}
             </button>
             <label className="flex-1 min-w-[200px]">
-              <span className="text-sm font-medium">Send test to</span>
+              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
               <input
                 className="input mt-1"
                 type="email"
@@ -522,10 +711,10 @@ export default function Settings() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={sendingTestEmail}
-              onClick={sendPlatformTestEmail}
+              disabled={sendingBrevoTestEmail}
+              onClick={() => sendPlatformTestEmail('brevo')}
             >
-              {sendingTestEmail ? 'Sending…' : 'Send test'}
+              {sendingBrevoTestEmail ? t('saving') : t('smtpSendTest')}
             </button>
           </div>
         </form>

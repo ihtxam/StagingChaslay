@@ -6,7 +6,9 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface SocialLink {
@@ -68,6 +70,7 @@ export const FooterModern: React.FC<FooterModernProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -87,9 +90,9 @@ export const FooterModern: React.FC<FooterModernProps> & {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           {/* Logo */}
           {mergedProps.logoImageUrl ? (
-            <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ height: '36px', objectFit: 'contain' }} />
+            <BuilderImage src={mergedProps.logoImageUrl} alt={tr('logoText')} style={{ height: '36px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '28px', fontWeight: 700, fontStyle: 'italic' }}>{mergedProps.logoText}</span>
+            <span style={{ fontSize: '28px', fontWeight: 700, fontStyle: 'italic' }}>{tr('logoText')}</span>
           )}
 
           {/* Social Links */}
@@ -106,7 +109,7 @@ export const FooterModern: React.FC<FooterModernProps> & {
         <div style={{ height: '1px', backgroundColor: `${mergedProps.textColor}20`, marginBottom: '20px' }} />
 
         {/* Copyright */}
-        <p style={{ fontSize: '13px', opacity: 0.6, textAlign: 'center' }}>{mergedProps.copyrightText}</p>
+        <p style={{ fontSize: '13px', opacity: 0.6, textAlign: 'center' }}>{tr('copyrightText')}</p>
       </div>
     </footer>
   );

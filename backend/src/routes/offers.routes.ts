@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
-import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
+import { verifyToken, requireMerchant, setMerchantContext, requirePermission } from "@/middleware/auth.middleware";
 import { OffersService } from "@/services/offers.service";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
+import { resolveReportActor } from "@/lib/report-sales-scope";
 
 const router = Router();
 
@@ -18,7 +19,24 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", async (req: Request, res: Response) => {
+/** POS top-bar: waiters / delivery / POS users — no MANAGE_OFFERS required. */
+router.get("/pos", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const actor = resolveReportActor(req);
+    const offers = await OffersService.listForPos(
+      merchantId,
+      actor.staffId,
+      new Date(),
+      actor.kind === "owner"
+    );
+    res.json({ success: true, offers });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list POS offers" });
+  }
+});
+
+router.post("/", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     if (!req.body?.name) return res.status(400).json({ error: "Name is required" });
@@ -29,7 +47,7 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/ensure-category", async (req: Request, res: Response) => {
+router.post("/ensure-category", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const category = await OffersService.ensureOffersCategory(merchantId);
@@ -39,7 +57,7 @@ router.post("/ensure-category", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/seed-demos", async (req: Request, res: Response) => {
+router.post("/seed-demos", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const db = getDb();
@@ -54,7 +72,7 @@ router.post("/seed-demos", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:offerId", async (req: Request, res: Response) => {
+router.put("/:offerId", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const offer = await OffersService.update(merchantId, req.params.offerId, req.body || {});
@@ -64,7 +82,7 @@ router.put("/:offerId", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:offerId", async (req: Request, res: Response) => {
+router.delete("/:offerId", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     await OffersService.remove(merchantId, req.params.offerId);

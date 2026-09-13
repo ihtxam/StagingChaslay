@@ -8,6 +8,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Upload, X, Link as LinkIcon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
 import { uploadPageBuilderImage } from '@/lib/chaslay-pagebuilder/upload-image';
+import { normalizeMediaUrl } from '../utils/media-url';
 
 interface MultiImageUploadProps {
   label?: string;
@@ -84,10 +85,11 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   };
 
   const handleAddUrl = () => {
-    const url = urlInput.trim();
+    const url = normalizeMediaUrl(urlInput);
     if (!url) return;
     onChange([...images, url]);
     setUrlInput('');
+    setIsUrlMode(false);
   };
 
   const removeAt = (i: number) => {
@@ -112,11 +114,12 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
             <div key={`${i}-${src.slice(0, 32)}`} className="relative group rounded-md overflow-hidden border bg-muted aspect-square">
               {src ? (
                 <img
-                  src={src}
+                  src={normalizeMediaUrl(src)}
                   alt={`Image ${i + 1}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Empty</div>

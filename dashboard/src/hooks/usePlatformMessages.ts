@@ -14,13 +14,18 @@ export type PlatformMessage = {
   showInBanner: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Present on tray rows from GET /panel/messages */
+  unread?: boolean;
 };
+
+export type PlatformTrayMessage = PlatformMessage & { unread: boolean };
 
 type MessagesState = {
   messages: PlatformMessage[];
   banner: PlatformMessage[];
   loginPopup: PlatformMessage[];
   whatsNew: PlatformMessage[];
+  tray: PlatformTrayMessage[];
   unreadCount: number;
 };
 
@@ -29,8 +34,20 @@ const empty: MessagesState = {
   banner: [],
   loginPopup: [],
   whatsNew: [],
+  tray: [],
   unreadCount: 0,
 };
+
+function normalizeTray(
+  tray: PlatformMessage[] | undefined,
+  fallback: PlatformMessage[]
+): PlatformTrayMessage[] {
+  const source = Array.isArray(tray) && tray.length ? tray : fallback;
+  return source.map((m) => ({
+    ...m,
+    unread: m.unread !== false,
+  }));
+}
 
 export function usePlatformMessages(enabled = true) {
   const [data, setData] = useState<MessagesState>(empty);
@@ -41,11 +58,14 @@ export function usePlatformMessages(enabled = true) {
     setLoading(true);
     try {
       const res = await api.get('/panel/messages');
+      const messages: PlatformMessage[] = res.data.messages || [];
+      const whatsNew: PlatformMessage[] = res.data.whatsNew || messages;
       setData({
-        messages: res.data.messages || [],
+        messages,
         banner: res.data.banner || [],
         loginPopup: res.data.loginPopup || [],
-        whatsNew: res.data.whatsNew || res.data.messages || [],
+        whatsNew,
+        tray: normalizeTray(res.data.tray, whatsNew.length ? whatsNew : messages),
         unreadCount: Number(res.data.unreadCount) || 0,
       });
     } catch {
@@ -69,12 +89,14 @@ export function usePlatformMessages(enabled = true) {
 
   const dismissAll = useCallback(
     async (messageIds?: string[]) => {
-      const ids = messageIds?.length ? messageIds : data.messages.map((m) => m.id);
+      const unreadIds = data.tray.filter((m) => m.unread).map((m) => m.id);
+      const ids =
+        messageIds?.length ? messageIds : unreadIds.length ? unreadIds : data.messages.map((m) => m.id);
       if (!ids.length) return;
       await api.post('/panel/messages/dismiss-all', { messageIds: ids });
       await refresh();
     },
-    [data.messages, refresh]
+    [data.messages, data.tray, refresh]
   );
 
   return { ...data, loading, refresh, dismiss, dismissAll };

@@ -181,12 +181,12 @@ export default function WebPosNumericKeypad({
           ) : (
             <>
               {onAdjust ? (
-                <div className={`grid grid-cols-2 ${compact ? 'gap-0.5' : 'gap-1'}`}>
+                <div className={`grid grid-cols-2 ${compact ? 'gap-2' : 'gap-1.5'}`}>
                   <button
                     type="button"
                     disabled={disabled}
                     onClick={() => onAdjust(-1)}
-                    className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
+                    className={`${keyClass} min-w-[2.5rem] bg-amber-50 text-amber-900 ring-amber-200`}
                     aria-label="-"
                   >
                     -
@@ -195,7 +195,7 @@ export default function WebPosNumericKeypad({
                     type="button"
                     disabled={disabled}
                     onClick={() => onAdjust(1)}
-                    className={`${keyClass} bg-amber-50 text-amber-900 ring-amber-200`}
+                    className={`${keyClass} min-w-[2.5rem] bg-amber-50 text-amber-900 ring-amber-200`}
                     aria-label="+"
                   >
                     +

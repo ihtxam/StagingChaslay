@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { usePlatformMessages, type PlatformMessage } from '@/hooks/usePlatformMessages';
+import { usePlatformMessages, type PlatformMessage, type PlatformTrayMessage } from '@/hooks/usePlatformMessages';
 import PlatformStatusBanner from '@/components/platform/PlatformStatusBanner';
 import PlatformWhatsNewModal from '@/components/platform/PlatformWhatsNewModal';
 import PlatformBellButton from '@/components/platform/PlatformBellButton';
@@ -34,6 +34,23 @@ export function PlatformStatusBannerSlot() {
 
 const LOGIN_POPUP_KEY = 'platform_whats_new_shown';
 
+function buildModalTray(
+  tray: PlatformTrayMessage[],
+  whatsNew: PlatformMessage[],
+  messages: PlatformMessage[]
+): PlatformTrayMessage[] {
+  if (tray.length) return tray;
+  const merged = [...whatsNew, ...messages.filter((m) => m.kind === 'incident')];
+  const seen = new Set<string>();
+  return merged
+    .filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    })
+    .map((m) => ({ ...m, unread: true }));
+}
+
 export default function PlatformMessagesProvider({
   children,
   enabled = true,
@@ -41,19 +58,14 @@ export default function PlatformMessagesProvider({
   children: React.ReactNode;
   enabled?: boolean;
 }) {
-  const { messages, banner, loginPopup, whatsNew, unreadCount, dismiss, dismissAll } =
+  const { messages, banner, loginPopup, whatsNew, tray, unreadCount, loading, dismiss, dismissAll } =
     usePlatformMessages(enabled);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const modalMessages = useMemo(() => {
-    const merged = [...whatsNew, ...messages.filter((m) => m.kind === 'incident')];
-    const seen = new Set<string>();
-    return merged.filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    });
-  }, [whatsNew, messages]);
+  const modalMessages = useMemo(
+    () => buildModalTray(tray, whatsNew, messages),
+    [tray, whatsNew, messages]
+  );
 
   useEffect(() => {
     if (!enabled || !loginPopup.length) return;
@@ -72,8 +84,8 @@ export default function PlatformMessagesProvider({
   );
 
   const handleDismissAll = useCallback(async () => {
-    await dismissAll(messages.map((m) => m.id));
-  }, [dismissAll, messages]);
+    await dismissAll();
+  }, [dismissAll]);
 
   const openWhatsNew = useCallback(() => setModalOpen(true), []);
 
@@ -107,6 +119,7 @@ export default function PlatformMessagesProvider({
       <PlatformWhatsNewModal
         open={modalOpen}
         messages={modalMessages}
+        loading={loading}
         onClose={() => setModalOpen(false)}
         onDismiss={handleDismiss}
         onDismissAll={handleDismissAll}

@@ -39,4 +39,24 @@ assert.ok(Math.abs(bucketSum - 100) < 0.02, `expected bucket sum 100, got ${buck
 const cashOnly = netPaymentBucketsAfterRefund(110, 20, [{ method: "cash", amount: 110 }], "cash");
 assert.equal(cashOnly.get("cash"), 90);
 
+// Leftover pay_later breakdown after cash/card collect must surface the collected tender.
+const leftoverLater = parsePaymentBreakdown(
+  [{ method: "pay_later", amount: 25 }],
+  "cash",
+  25
+);
+assert.equal(leftoverLater.length, 1);
+assert.equal(leftoverLater[0]!.method, "cash");
+
+const laterColon = parsePaymentBreakdown(null, "pay_later:card", 40);
+assert.equal(laterColon.length, 1);
+assert.equal(laterColon[0]!.method, "card");
+
+const unpaidLater = parsePaymentBreakdown(
+  [{ method: "pay_later", amount: 12 }],
+  "pay_later",
+  12
+);
+assert.equal(unpaidLater[0]!.method, "pay_later");
+
 console.log("payment-breakdown.test.ts: ok");

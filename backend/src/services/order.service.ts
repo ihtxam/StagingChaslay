@@ -110,9 +110,8 @@ function resolveCollectPaymentMethod(
     || (wasPayLater ? "cash" : "")
     || (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw) ? existingRaw : "")
     || "cash";
-  if (wasPayLater && tender !== "bank_transfer") {
-    return `pay_later:${tender}`;
-  }
+  // Persist the collected tender (cash/card/terminal), not pay_later:cash —
+  // refund/cancel history must keep showing Cash/Card.
   return tender;
 }
 
@@ -724,15 +723,11 @@ export class OrderService {
           const updated = await set({
             paymentStatus: "completed",
             paymentMethod: method,
+            paymentBreakdown: [
+              { method, amount: roundMoney2(Number(order.total) || 0) },
+            ],
             ...(closeInternal
               ? { status: "completed", completedAt: new Date() }
-              : {}),
-            ...(invoiceOrder
-              ? {
-                  paymentBreakdown: [
-                    { method, amount: roundMoney2(Number(order.total) || 0) },
-                  ],
-                }
               : {}),
           });
           try {
@@ -787,13 +782,11 @@ export class OrderService {
         {
           const invoiceOrder = isInvoiceOrderRecord(order);
           const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
-          const invoiceBreakdown = invoiceOrder
-            ? {
-                paymentBreakdown: [
-                  { method, amount: roundMoney2(Number(order.total) || 0) },
-                ],
-              }
-            : {};
+          const collectedBreakdown = {
+            paymentBreakdown: [
+              { method, amount: roundMoney2(Number(order.total) || 0) },
+            ],
+          };
           const closeNow = readyToHandoff || !usesExternalKitchenLifecycle(order);
           const updated = await set(
             closeNow
@@ -802,12 +795,12 @@ export class OrderService {
                   paymentStatus: "completed",
                   paymentMethod: method,
                   completedAt: new Date(),
-                  ...invoiceBreakdown,
+                  ...collectedBreakdown,
                 }
               : {
                   paymentStatus: "completed",
                   paymentMethod: method,
-                  ...invoiceBreakdown,
+                  ...collectedBreakdown,
                 }
           );
           try {
@@ -831,11 +824,13 @@ export class OrderService {
         }
       }
       case "reject":
-      case "cancel": {
+      case "cancel":
+      case "archive": {
         if (status === "completed") throw new Error("Cannot cancel a completed order");
         const reasonText = resolvePosCancelReason(String(opts?.rejectReason || ""));
         const updated = await set({
           status: "cancelled",
+          paymentStatus: "cancelled",
           cancelReason: reasonText || null,
           cancelledAt: new Date(),
         });
@@ -1030,7 +1025,7 @@ export class OrderService {
       // Update order status
       const updatedOrder = await db
         .update(schema.orders)
-        .set({ status: "cancelled" })
+        .set({ status: "cancelled", paymentStatus: "cancelled" })
         .where(eq(schema.orders.id, orderId))
         .returning();
 

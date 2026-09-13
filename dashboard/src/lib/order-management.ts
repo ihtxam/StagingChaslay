@@ -1,5 +1,9 @@
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
-import { parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
+import {
+  collectedTenderMethod,
+  parsePaymentBreakdown,
+  paymentMethodLabel,
+} from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay, guestOrderNumber } from '@/lib/order-number';
 import { ticketQueryMatches } from '@/lib/webpos-held';
 
@@ -62,11 +66,19 @@ export function orderChannel(o: MerchantOrder): string {
 }
 
 /** Delivery fulfillment (POS or online shop). */
+export function isDeliveryFulfillmentChannel(channel?: string | null): boolean {
+  const s = String(channel || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return s === 'delivery' || s === 'deliver' || s.startsWith('delivery');
+}
+
 export function isDeliveryOrder(o: {
   channel?: string | null;
   fulfillmentChannel?: string | null;
 }): boolean {
-  return orderChannel(o as MerchantOrder) === 'delivery';
+  return isDeliveryFulfillmentChannel(orderChannel(o as MerchantOrder));
 }
 
 /** Takeaway / delivery channels used by in-store POS (not JustEat / Uber). */
@@ -295,6 +307,7 @@ export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase().replace(/-/g, '_');
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   // Invoice / pay-later stay collectable even when fulfillment status is completed.
   if (isInvoiceOrder(o) || pay === 'awaiting_payment') return true;
@@ -354,14 +367,21 @@ export function canCancelPosAwaitingOrder(o: MerchantOrder): boolean {
   return true;
 }
 
-/** Primary label for order lists — kitchen ticket / tab over opaque WP-/DI- ids. */
+/** Primary label for order lists — WEB/TX numbers stay full; shout is secondary. */
 export function orderListPrimaryLabel(o: MerchantOrder): string {
   const refs = orderPublicRefs(o);
+  const formatted = formatOrderNumberDisplay(o.orderNumber);
   const guest = guestOrderNumber({
     orderNumber: o.orderNumber,
     orderDisplay: refs.ticketDisplay || undefined,
     tabNumber: refs.tabNumber || undefined,
   });
+  if (/^(WEB|TX)-/i.test(String(o.orderNumber || '')) && formatted) {
+    if (guest && guest !== formatted && !formatted.endsWith(guest.replace(/^#/, ''))) {
+      return `${formatted} · ${guest}`;
+    }
+    return formatted;
+  }
   if (guest) return guest;
   const parts = [
     refs.ticketDisplay,
@@ -370,7 +390,7 @@ export function orderListPrimaryLabel(o: MerchantOrder): string {
     resolveOrderCustomerDisplay(o),
   ].filter(Boolean);
   if (parts.length) return parts.join(' · ');
-  return formatOrderNumberDisplay(o.orderNumber) || o.orderNumber || o.id.slice(0, 8);
+  return formatted || o.orderNumber || o.id.slice(0, 8);
 }
 
 export function canRefundOrder(o: MerchantOrder): boolean {
@@ -422,6 +442,7 @@ export function canAdminCollectPayment(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (pay === 'awaiting_payment') return true;
@@ -456,6 +477,7 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (!isReadyForPaymentCollection(o)) return false;
@@ -671,7 +693,8 @@ export function formatOrderPaymentDisplay(
     Number(order.total || 0)
   );
   if (tenders.length <= 1) {
-    const method = tenders[0]?.method || order.paymentMethod || 'cash';
+    const method =
+      tenders[0]?.method || collectedTenderMethod(order.paymentMethod) || 'cash';
     return paymentMethodLabel(method, t);
   }
   return tenders
@@ -691,7 +714,7 @@ export function orderPaymentLines(order: {
   );
   if (tenders.length) return tenders;
   const total = Number(order.total || 0);
-  const method = String(order.paymentMethod || 'cash');
+  const method = collectedTenderMethod(order.paymentMethod) || 'cash';
   return total > 0 ? [{ method, amount: total }] : [{ method, amount: 0 }];
 }
 

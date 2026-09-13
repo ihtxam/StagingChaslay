@@ -203,7 +203,7 @@ export const RootContainer: React.FC<ContainerProps> = (props) => {
       }}
       style={{
         width: '100%',
-        minHeight: '100vh',
+        minHeight: Number(props.minHeight) === 0 ? 0 : '100vh',
         background: props.background || '#ffffff',
       }}
     >

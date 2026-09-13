@@ -1692,7 +1692,12 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { normalizeGiftCardSettings } = await import("@/lib/gift-card-settings");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-    const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+    const posCheckoutSettings = normalizePosCheckoutSettings({
+      ...(merchant.posCheckoutSettings && typeof merchant.posCheckoutSettings === "object"
+        ? (merchant.posCheckoutSettings as Record<string, unknown>)
+        : {}),
+      webposExpressEnabled: merchant.webposExpressEnabled,
+    });
     const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
 
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");

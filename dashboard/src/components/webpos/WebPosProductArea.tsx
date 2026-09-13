@@ -541,7 +541,7 @@ export default function WebPosProductArea({
         const showPayRow = hasQuickPay || !!onOpenCheckout;
         if (!showPayRow) return null;
         return (
-          <div className="hidden shrink-0 border-t border-stone-200 bg-white p-3 lg:block">
+          <div className="shrink-0 border-t border-stone-200 bg-white p-3">
             <div className="flex items-stretch gap-2">
               <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
                 {hasQuickPay && showCash ? (

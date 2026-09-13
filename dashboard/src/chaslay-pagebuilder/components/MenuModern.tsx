@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
@@ -35,7 +36,7 @@ const defaultProps: MenuModernProps = {
   accentColor: '#f59e0b',
   cardColor: '#16213e',
   buttonText: 'Explore Full Menu',
-  buttonLink: '/order',
+  buttonLink: '/menu',
 };
 
 export const MenuModern: React.FC<MenuModernProps> & {
@@ -46,6 +47,7 @@ export const MenuModern: React.FC<MenuModernProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { categories, products, loading } = useMenuData();
   const { shopHref } = useStorefront();
@@ -82,8 +84,8 @@ export const MenuModern: React.FC<MenuModernProps> & {
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '16px' }}>{mergedProps.title}</h2>
-          <p style={{ fontSize: '18px', opacity: 0.7, maxWidth: '500px', margin: '0 auto' }}>{mergedProps.subtitle}</p>
+          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '16px' }}>{tr('title')}</h2>
+          <p style={{ fontSize: '18px', opacity: 0.7, maxWidth: '500px', margin: '0 auto' }}>{tr('subtitle')}</p>
         </div>
 
         {loading ? (
@@ -129,10 +131,10 @@ export const MenuModern: React.FC<MenuModernProps> & {
           </div>
         )}
 
-        {mergedProps.buttonText && (
+        {tr('buttonText') && (
           <div style={{ textAlign: 'center', marginTop: '48px' }}>
             <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.accentColor, color: '#000', padding: '16px 48px', borderRadius: '50px', textDecoration: 'none', fontSize: '16px', fontWeight: 600 }}>
-              {mergedProps.buttonText}
+              {tr('buttonText')}
             </a>
           </div>
         )}

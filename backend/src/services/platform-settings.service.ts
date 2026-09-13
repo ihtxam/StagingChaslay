@@ -15,6 +15,26 @@ export const PLATFORM_BREVO_KEYS = {
   fromName: "brevo_from_name",
 } as const;
 
+export const PLATFORM_MAILCO_KEYS = {
+  apiKey: "mailco_api_key",
+  fromEmail: "mailco_from_email",
+  fromName: "mailco_from_name",
+  apiBase: "mailco_api_base",
+  templateSlug: "mailco_template_slug",
+  emailPrimary: "platform_email_primary",
+} as const;
+
+export type PlatformEmailPrimary = "mailco" | "brevo";
+
+export type PlatformMailcoSettings = {
+  apiKey?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+  apiBase?: string | null;
+  templateSlug?: string | null;
+  emailPrimary?: PlatformEmailPrimary | string | null;
+};
+
 export type PlatformAdyenSettings = {
   apiKey?: string | null;
   merchantAccount?: string | null;
@@ -320,6 +340,155 @@ export class PlatformSettingsService {
       await this.set(PLATFORM_BREVO_KEYS.apiKey, input.apiKey.trim());
     }
     return this.getBrevoSettingsPublic();
+  }
+
+  private static envMailcoApiKey() {
+    return (process.env.MAILCO_API_KEY || "").trim();
+  }
+
+  private static envMailcoFromEmail() {
+    return (process.env.MAILCO_FROM_EMAIL || process.env.FROM_EMAIL || process.env.MAIL_FROM || "").trim();
+  }
+
+  private static envMailcoFromName() {
+    return (process.env.MAILCO_FROM_NAME || process.env.MAIL_FROM_NAME || "Reborn").trim();
+  }
+
+  private static envMailcoApiBase() {
+    return (process.env.MAILCO_API_BASE || "https://ees.mailco.ch/api/v1").trim().replace(/\/$/, "");
+  }
+
+  private static envMailcoTemplateSlug() {
+    return (process.env.MAILCO_TEMPLATE_SLUG || "platform-transactional").trim();
+  }
+
+  private static normalizeEmailPrimary(value?: string | null): PlatformEmailPrimary {
+    return String(value || "").toLowerCase() === "brevo" ? "brevo" : "mailco";
+  }
+
+  static async getMailcoSettings(): Promise<PlatformMailcoSettings> {
+    const rows = await this.getMany(Object.values(PLATFORM_MAILCO_KEYS));
+    return {
+      apiKey: rows[PLATFORM_MAILCO_KEYS.apiKey],
+      fromEmail: rows[PLATFORM_MAILCO_KEYS.fromEmail],
+      fromName: rows[PLATFORM_MAILCO_KEYS.fromName],
+      apiBase: rows[PLATFORM_MAILCO_KEYS.apiBase],
+      templateSlug: rows[PLATFORM_MAILCO_KEYS.templateSlug],
+      emailPrimary: rows[PLATFORM_MAILCO_KEYS.emailPrimary],
+    };
+  }
+
+  static async getMailcoSettingsPublic() {
+    const s = await this.getMailcoSettings();
+    const envKey = this.envMailcoApiKey();
+    const envFrom = this.envMailcoFromEmail();
+    const envName = this.envMailcoFromName();
+    const envBase = this.envMailcoApiBase();
+    const envTemplate = this.envMailcoTemplateSlug();
+    const apiKey = (s.apiKey || envKey).trim();
+    const fromEmail = (s.fromEmail || envFrom).trim();
+    const apiBase = (s.apiBase || envBase).trim().replace(/\/$/, "");
+    const templateSlug = (s.templateSlug || envTemplate).trim() || "platform-transactional";
+    const emailPrimary = this.normalizeEmailPrimary(
+      s.emailPrimary || process.env.PLATFORM_EMAIL_PRIMARY
+    );
+    return {
+      fromEmail: fromEmail || "",
+      fromName: (s.fromName || envName).trim() || "Reborn",
+      apiBase,
+      templateSlug,
+      emailPrimary,
+      apiKeyMasked: maskSecret(apiKey),
+      apiKeySet: !!apiKey,
+      usingEnvFallback: !s.apiKey && !!envKey,
+      configured: !!(apiKey && fromEmail),
+      provider: apiKey && fromEmail ? "mailco" : null,
+    };
+  }
+
+  static async updateMailcoSettings(input: {
+    apiKey?: string;
+    fromEmail?: string;
+    fromName?: string;
+    apiBase?: string;
+    templateSlug?: string;
+    emailPrimary?: string;
+  }) {
+    if (input.fromEmail !== undefined) {
+      await this.set(PLATFORM_MAILCO_KEYS.fromEmail, input.fromEmail.trim() || null);
+    }
+    if (input.fromName !== undefined) {
+      await this.set(PLATFORM_MAILCO_KEYS.fromName, input.fromName.trim() || null);
+    }
+    if (input.apiBase !== undefined) {
+      const base = input.apiBase.trim().replace(/\/$/, "");
+      await this.set(PLATFORM_MAILCO_KEYS.apiBase, base || null);
+    }
+    if (input.templateSlug !== undefined) {
+      await this.set(PLATFORM_MAILCO_KEYS.templateSlug, input.templateSlug.trim() || null);
+    }
+    if (input.emailPrimary !== undefined) {
+      await this.set(
+        PLATFORM_MAILCO_KEYS.emailPrimary,
+        this.normalizeEmailPrimary(input.emailPrimary)
+      );
+    }
+    if (input.apiKey !== undefined && input.apiKey.trim() && !input.apiKey.includes("••••")) {
+      await this.set(PLATFORM_MAILCO_KEYS.apiKey, input.apiKey.trim());
+    }
+    return this.getMailcoSettingsPublic();
+  }
+
+  static async getPlatformEmailPrimary(): Promise<PlatformEmailPrimary> {
+    const s = await this.getMailcoSettings();
+    return this.normalizeEmailPrimary(s.emailPrimary || process.env.PLATFORM_EMAIL_PRIMARY);
+  }
+
+  /** Resolved mailco credentials for platform transactional sends. */
+  static async resolveMailcoCredentials() {
+    const s = await this.getMailcoSettings();
+    const apiKey = (s.apiKey || this.envMailcoApiKey()).trim();
+    const fromEmail = (s.fromEmail || this.envMailcoFromEmail()).trim();
+    const fromName = (s.fromName || this.envMailcoFromName()).trim() || "Reborn";
+    const apiBase = (s.apiBase || this.envMailcoApiBase()).trim().replace(/\/$/, "");
+    const templateSlug =
+      (s.templateSlug || this.envMailcoTemplateSlug()).trim() || "platform-transactional";
+
+    if (!apiKey || !fromEmail) {
+      throw new Error(
+        "Platform mailco is not configured. Set it in Superadmin → Settings → Platform email (mailco)."
+      );
+    }
+
+    return { apiKey, fromEmail, fromName, apiBase, templateSlug };
+  }
+
+  /** Resolved Brevo credentials for platform sends (ignores merchant overrides). */
+  static async resolveBrevoCredentials() {
+    const s = await this.getBrevoSettings();
+    const apiKey =
+      (s.apiKey || "").trim() ||
+      (process.env.BREVO_API_KEY ||
+        process.env.SENDINBLUE_API_KEY ||
+        process.env.SIB_API_KEY ||
+        "").trim();
+    const fromEmail =
+      (s.fromEmail || "").trim() ||
+      (process.env.BREVO_FROM_EMAIL ||
+        process.env.BREVO_SENDER_EMAIL ||
+        process.env.SENDINBLUE_FROM_EMAIL ||
+        process.env.FROM_EMAIL ||
+        process.env.MAIL_FROM ||
+        "").trim();
+    const fromName =
+      (s.fromName || "").trim() ||
+      (process.env.BREVO_FROM_NAME || process.env.SENDINBLUE_FROM_NAME || "Reborn").trim();
+
+    if (!apiKey || !fromEmail) {
+      throw new Error("Platform Brevo is not configured.");
+    }
+
+    return { apiKey, fromEmail, fromName };
   }
 
   /**

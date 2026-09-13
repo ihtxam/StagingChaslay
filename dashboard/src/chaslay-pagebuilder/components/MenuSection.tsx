@@ -12,6 +12,7 @@ import { Slider } from '@/chaslay-pagebuilder/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { useStorefront } from '../StorefrontContext';
@@ -53,6 +54,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { enabled: editorEnabled } = useEditor((state) => ({
     enabled: state.options.enabled,
@@ -189,31 +191,34 @@ export const MenuSection: React.FC<MenuSectionProps> & {
     <div
       ref={(ref) => { if (ref) connect(drag(ref)); }}
       id={sectionAnchorId(mergedProps.sectionId, 'menu')}
+      className="hb-menu-section"
       style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '60px 0', width: '100%', overflow: 'hidden' }}
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
-        {mergedProps.title && (
-          <h2 style={{
-            fontSize: isGrid ? '40px' : '36px',
+        {tr('title') && (
+          <h2 className="hb-menu-title" style={{
+            fontSize: isGrid ? '32px' : '28px',
             fontWeight: isGrid ? 400 : 700,
             fontFamily: isGrid ? "'Georgia', 'Times New Roman', serif" : undefined,
             textAlign: 'center',
             marginBottom: '12px',
+            lineHeight: 1.25,
+            overflowWrap: 'anywhere',
+            padding: '0 8px',
           }}>
-            {mergedProps.title}
+            {tr('title')}
           </h2>
         )}
-        {mergedProps.subtitle && (
+        {tr('subtitle') && (
           <p style={{ fontSize: isGrid ? '15px' : '18px', textAlign: 'center', opacity: 0.6, marginBottom: '32px', maxWidth: '600px', margin: '0 auto 32px' }}>
-            {mergedProps.subtitle}
+            {tr('subtitle')}
           </p>
         )}
         {renderCategoryButtons()}
-      </div>
 
       {/* Grid Layout */}
       {isGrid ? (
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+        <>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px' }}>
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mx-auto" />
@@ -243,7 +248,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                   </div>
                 ))}
               </div>
-              {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
+              {mergedProps.showViewMenuButton && tr('viewMenuText') && (
                 <div style={{ textAlign: 'center', marginTop: '40px' }}>
                   <a
                     href={shopHref(mergedProps.viewMenuLink || '/menu')}
@@ -260,7 +265,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                       borderRadius: '4px',
                     }}
                   >
-                    {mergedProps.viewMenuText}
+                    {tr('viewMenuText')}
                   </a>
                 </div>
               )}
@@ -270,18 +275,19 @@ export const MenuSection: React.FC<MenuSectionProps> & {
               {selectedCategory ? 'No products in this category' : 'No products available. Add products in the Products section.'}
             </div>
           )}
-        </div>
+        </>
       ) : (
         /* Carousel Layout (default) */
         <div
-          style={{ position: 'relative', padding: '0 20px' }}
+          className="hb-menu-carousel-wrap"
+          style={{ position: 'relative' }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <button onClick={scrollLeft} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, backgroundColor: '#fff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+          <button type="button" aria-label="Previous" onClick={scrollLeft} style={{ position: 'absolute', left: '-8px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, backgroundColor: '#fff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
             <ChevronLeft size={24} color={mergedProps.textColor} />
           </button>
-          <button onClick={scrollRight} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, backgroundColor: '#fff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+          <button type="button" aria-label="Next" onClick={scrollRight} style={{ position: 'absolute', right: '-8px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, backgroundColor: '#fff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
             <ChevronRight size={24} color={mergedProps.textColor} />
           </button>
 
@@ -290,9 +296,9 @@ export const MenuSection: React.FC<MenuSectionProps> & {
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mx-auto" />
             </div>
           ) : displayProducts.length > 0 ? (
-            <div ref={carouselRef} style={{ display: 'flex', gap: '20px', overflowX: 'auto', scrollBehavior: 'smooth', padding: '20px 40px', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">
+            <div ref={carouselRef} style={{ display: 'flex', gap: '20px', overflowX: 'auto', overflowY: 'hidden', maxWidth: '100%', scrollBehavior: 'smooth', padding: '20px 8px', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar hb-menu-carousel">
               {displayProducts.map((product) => (
-                <div key={product.id} style={{ flex: '0 0 260px', backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', transition: 'transform 0.3s ease, box-shadow 0.3s ease', cursor: 'pointer' }} className="menu-card-hover">
+                <div key={product.id} style={{ flex: '0 0 260px', maxWidth: '260px', backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', transition: 'transform 0.3s ease, box-shadow 0.3s ease', cursor: 'pointer' }} className="menu-card-hover">
                   <div style={{ height: '180px', backgroundColor: '#f0f0f0', backgroundImage: product.product_image ? `url(${product.product_image})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
                     {!product.product_image && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '14px' }}>No Image</div>}
                   </div>
@@ -324,7 +330,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
             </div>
           )}
 
-          {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
+          {mergedProps.showViewMenuButton && tr('viewMenuText') && (
             <div style={{ textAlign: 'center', marginTop: '32px' }}>
               <a
                 href={shopHref(mergedProps.viewMenuLink || '/menu')}
@@ -338,12 +344,13 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                   fontWeight: 600,
                 }}
               >
-                {mergedProps.viewMenuText}
+                {tr('viewMenuText')}
               </a>
             </div>
           )}
         </div>
       )}
+      </div>
 
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
