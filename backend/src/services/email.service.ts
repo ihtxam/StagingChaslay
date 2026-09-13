@@ -509,6 +509,74 @@ export class EmailService {
     };
   }
 
+  /** Send a platform test email via mailco or Brevo only (no cross-provider fallback). */
+  static async sendPlatformTest(to: string, provider: "mailco" | "brevo") {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const { EmailUsageService } = await import("@/services/email-usage.service");
+
+    const input: SendEmailInput = {
+      to,
+      subject: "Reborn platform email test",
+      html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
+      emailType: "marketing_test",
+    };
+
+    let cfg: ResolvedEmailConfig;
+    if (provider === "mailco") {
+      const creds = await PlatformSettingsService.resolveMailcoCredentials();
+      cfg = {
+        provider: "mailco",
+        apiKey: creds.apiKey,
+        fromEmail: creds.fromEmail,
+        fromName: creds.fromName,
+        source: "database",
+        mailco: {
+          apiBase: creds.apiBase,
+          templateSlug: creds.templateSlug,
+        },
+      };
+    } else {
+      const creds = await PlatformSettingsService.resolveBrevoCredentials();
+      cfg = {
+        provider: "brevo",
+        apiKey: creds.apiKey,
+        fromEmail: creds.fromEmail,
+        fromName: creds.fromName,
+        source: "database",
+      };
+    }
+
+    try {
+      if (cfg.provider === "mailco") {
+        await this.sendViaMailco(cfg, input);
+      } else {
+        await this.sendViaBrevo(cfg, input);
+      }
+
+      await EmailUsageService.logSend({
+        merchantId: null,
+        provider: cfg.provider,
+        source: cfg.source,
+        emailType: input.emailType || "marketing_test",
+        recipient: input.to,
+        subject: input.subject,
+        status: "sent",
+      });
+    } catch (error: any) {
+      await EmailUsageService.logSend({
+        merchantId: null,
+        provider: cfg.provider,
+        source: cfg.source,
+        emailType: input.emailType || "marketing_test",
+        recipient: input.to,
+        subject: input.subject,
+        status: "failed",
+        error: error?.message || "Send failed",
+      });
+      throw error;
+    }
+  }
+
   static async send(input: SendEmailInput) {
     let cfg = await this.resolveConfig(input.merchantId);
     if (!cfg.provider) {

@@ -91,7 +91,8 @@ export default function Settings() {
   const [emailUsage, setEmailUsage] = useState<EmailUsageSummary | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
-  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [sendingMailcoTestEmail, setSendingMailcoTestEmail] = useState(false);
+  const [sendingBrevoTestEmail, setSendingBrevoTestEmail] = useState(false);
 
   const load = async () => {
     try {
@@ -240,21 +241,23 @@ export default function Settings() {
     }
   };
 
-  const sendPlatformTestEmail = async () => {
+  const sendPlatformTestEmail = async (provider: 'mailco' | 'brevo') => {
     const to = testEmailTo.trim();
     if (!to.includes('@')) {
-      toast.error('Enter a valid email address');
+      toast.error(t('loginEmailInvalid'));
       return;
     }
-    setSendingTestEmail(true);
+    const setSending =
+      provider === 'mailco' ? setSendingMailcoTestEmail : setSendingBrevoTestEmail;
+    setSending(true);
     try {
-      await api.post('/superadmin/email/test', { to });
-      toast.success('Test email sent');
+      await api.post('/superadmin/email/test', { to, provider });
+      toast.success(t('smtpTestSent'));
       await refreshEmailUsage();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Test email failed');
+      toast.error(err.response?.data?.error || t('smtpTestFailed'));
     } finally {
-      setSendingTestEmail(false);
+      setSending(false);
     }
   };
 
@@ -631,9 +634,27 @@ export default function Settings() {
               placeholder={mailco?.apiKeySet ? 'Leave blank to keep current' : 'mail_live_…'}
             />
           </label>
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex flex-wrap items-end gap-3">
             <button type="submit" className="btn btn-primary" disabled={savingMailco}>
-              {savingMailco ? 'Saving…' : 'Save mailco settings'}
+              {savingMailco ? t('saving') : 'Save mailco settings'}
+            </button>
+            <label className="flex-1 min-w-[200px]">
+              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
+              <input
+                className="input mt-1"
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={sendingMailcoTestEmail}
+              onClick={() => sendPlatformTestEmail('mailco')}
+            >
+              {sendingMailcoTestEmail ? t('saving') : t('smtpSendTest')}
             </button>
           </div>
         </form>
@@ -678,7 +699,7 @@ export default function Settings() {
               {savingBrevo ? 'Saving…' : 'Save Brevo settings'}
             </button>
             <label className="flex-1 min-w-[200px]">
-              <span className="text-sm font-medium">Send test to</span>
+              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
               <input
                 className="input mt-1"
                 type="email"
@@ -690,10 +711,10 @@ export default function Settings() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={sendingTestEmail}
-              onClick={sendPlatformTestEmail}
+              disabled={sendingBrevoTestEmail}
+              onClick={() => sendPlatformTestEmail('brevo')}
             >
-              {sendingTestEmail ? 'Sending…' : 'Send test'}
+              {sendingBrevoTestEmail ? t('saving') : t('smtpSendTest')}
             </button>
           </div>
         </form>
