@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildNotificationTray } from '@/services/platform-message.service';
+import { buildNotificationTray } from './platform-message.service';
 
 const visible = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 const dismissed = new Set(['b']);
