@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
@@ -91,6 +92,14 @@ export default function PlatformShop() {
   const checkoutOrderIdRef = useRef<string | null>(null);
   const checkoutFingerprint = useRef('');
   const quoteSeq = useRef(0);
+  const [popupOffset, setPopupOffset] = useState({ x: 0, y: 0 });
+  const popupDrag = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
 
   useEffect(() => {
     checkoutOrderIdRef.current = checkoutOrderId;
@@ -130,6 +139,8 @@ export default function PlatformShop() {
     setCheckoutOrderId(null);
     setPayMsg('');
     setBusy(false);
+    setPopupOffset({ x: 0, y: 0 });
+    popupDrag.current = null;
     dropinMounted.current = false;
     checkoutFingerprint.current = '';
     if (dropinEl) dropinEl.innerHTML = '';
@@ -148,6 +159,47 @@ export default function PlatformShop() {
     setPayMsg('');
     dropinMounted.current = false;
     checkoutFingerprint.current = '';
+    setPopupOffset({ x: 0, y: 0 });
+    popupDrag.current = null;
+  };
+
+  useEffect(() => {
+    if (!buyProduct) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [buyProduct]);
+
+  const onPopupHeaderPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    popupDrag.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: popupOffset.x,
+      origY: popupOffset.y,
+    };
+  };
+
+  const onPopupHeaderPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = popupDrag.current;
+    if (!drag?.active) return;
+    const maxX = Math.max(48, window.innerWidth * 0.45);
+    const maxY = Math.max(48, window.innerHeight * 0.45);
+    const x = drag.origX + (e.clientX - drag.startX);
+    const y = drag.origY + (e.clientY - drag.startY);
+    setPopupOffset({
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y)),
+    });
+  };
+
+  const onPopupHeaderPointerUp = () => {
+    if (popupDrag.current) popupDrag.current.active = false;
   };
 
   useEffect(() => {
@@ -364,35 +416,71 @@ export default function PlatformShop() {
         ) : null}
       </div>
 
-      {buyProduct ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/45 p-3 sm:p-6"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeBuy}
-        >
-          <div
-            className="w-full max-w-lg rounded-2xl bg-[var(--bg-elevated)] shadow-xl border border-[var(--border)] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
-              <div>
-                <h2 className="text-base font-semibold text-[var(--text)]">
-                  {step === 'done'
-                    ? t('platformShopSuccess')
-                    : step === 1
-                      ? t('platformShopBuyTitle')
-                      : t('platformShopPayOnline')}
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  {step === 'done' ? t('platformShopOrderPlaced') : step === 1 ? t('platformShopBuyHint') : buyProduct.name}
-                </p>
-              </div>
-              <button type="button" className="text-sm font-semibold text-[var(--text-muted)] underline" onClick={closeBuy}>
-                {step === 'done' ? t('close') : t('cancel')}
-              </button>
-            </div>
+      {buyProduct && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-3 sm:p-6"
+              style={{
+                paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+              }}
+              role="dialog"
+              aria-modal="true"
+              onClick={closeBuy}
+            >
+              <div
+                className="flex min-h-0 w-full max-w-lg max-h-full flex-col overflow-hidden rounded-2xl bg-[var(--bg-elevated)] shadow-2xl border border-[var(--border)]"
+                style={{
+                  marginLeft: popupOffset.x,
+                  marginTop: popupOffset.y,
+                  maxHeight: 'calc(100dvh - 1.5rem)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="shrink-0 border-b border-[var(--border)]">
+                  <div
+                    className="flex cursor-grab active:cursor-grabbing touch-none items-center justify-center pt-2 pb-1 select-none"
+                    onPointerDown={onPopupHeaderPointerDown}
+                    onPointerMove={onPopupHeaderPointerMove}
+                    onPointerUp={onPopupHeaderPointerUp}
+                    onPointerCancel={onPopupHeaderPointerUp}
+                  >
+                    <div className="h-1.5 w-12 rounded-full bg-[var(--border)]" aria-hidden />
+                  </div>
+                  <div
+                    className="flex cursor-grab active:cursor-grabbing items-start justify-between gap-3 px-4 pb-3 select-none"
+                    onPointerDown={onPopupHeaderPointerDown}
+                    onPointerMove={onPopupHeaderPointerMove}
+                    onPointerUp={onPopupHeaderPointerUp}
+                    onPointerCancel={onPopupHeaderPointerUp}
+                  >
+                    <div className="min-w-0">
+                      <h2 className="text-base font-semibold text-[var(--text)]">
+                        {step === 'done'
+                          ? t('platformShopSuccess')
+                          : step === 1
+                            ? t('platformShopBuyTitle')
+                            : t('platformShopPayOnline')}
+                      </h2>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                        {step === 'done'
+                          ? t('platformShopOrderPlaced')
+                          : step === 1
+                            ? t('platformShopBuyHint')
+                            : buyProduct.name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-sm font-semibold text-[var(--text-muted)] underline"
+                      onClick={closeBuy}
+                    >
+                      {step === 'done' ? t('close') : t('cancel')}
+                    </button>
+                  </div>
+                </div>
 
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {step !== 'done' ? (
               <div className="px-4 pt-3 flex gap-2 text-[11px] font-semibold">
                 <span
@@ -561,9 +649,12 @@ export default function PlatformShop() {
                 </button>
               </div>
             ) : null}
-          </div>
-        </div>
-      ) : null}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {orders.length ? (
         <section className="space-y-3">
