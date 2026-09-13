@@ -1691,6 +1691,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : editionAllows('channel_takeaway') ||
       editionAllows('channel_delivery') ||
       counterDineInEnabled;
+  const tablesEditionOk = editionAllows('pos_tables');
+  /** Fast-food can keep kitchen but hide Tables / Set table. */
+  const tablesUiEnabled =
+    !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
   const channelTabOptions: Array<'takeaway' | 'delivery' | 'dine_in'> = isRetail
     ? [
         ...(retailDineInEnabled ? (['dine_in'] as const) : []),
@@ -1704,10 +1708,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
-  const tablesEditionOk = editionAllows('pos_tables');
-  /** Fast-food can keep kitchen but hide Tables / Set table. */
-  const tablesUiEnabled =
-    !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
   /** Bookings tab + reservation alerts — restaurant only when module is on. */
   const reservationsPosUiEnabled = !isRetail && !!merchant?.reservationsEnabled;
   const giftCardsEditionOk =
