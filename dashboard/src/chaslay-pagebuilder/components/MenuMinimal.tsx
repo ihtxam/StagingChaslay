@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
@@ -41,6 +42,7 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { products, loading } = useMenuData();
   const { shopHref } = useStorefront();
@@ -70,7 +72,7 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
       }}
     >
       <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 400, letterSpacing: '6px', marginBottom: '60px', opacity: 0.6 }}>{mergedProps.title}</h2>
+        <h2 style={{ fontSize: '14px', fontWeight: 400, letterSpacing: '6px', marginBottom: '60px', opacity: 0.6 }}>{tr('title')}</h2>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -93,10 +95,10 @@ export const MenuMinimal: React.FC<MenuMinimalProps> & {
           </div>
         )}
 
-        {mergedProps.buttonText && (
+        {tr('buttonText') && (
           <div style={{ marginTop: '48px' }}>
             <a href={shopHref(mergedProps.buttonLink)} style={{ color: mergedProps.accentColor, textDecoration: 'none', fontSize: '14px', fontWeight: 500, letterSpacing: '2px', textTransform: 'uppercase', borderBottom: `1px solid ${mergedProps.accentColor}`, paddingBottom: '4px' }}>
-              {mergedProps.buttonText}
+              {tr('buttonText')}
             </a>
           </div>
         )}

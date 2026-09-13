@@ -34,13 +34,13 @@ export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Pro
   };
 
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+    <div className={className} style={{ display: 'flex', gap: '12px 16px', flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}>
       {menuItems?.map((item, i) => (
         <a
           key={`${item.label}-${i}`}
           href={shopHref(item.link)}
           onClick={(e) => onNavClick(e, item.link)}
-          style={{ color: textColor, textDecoration: 'none', fontSize: '15px', fontWeight: 500 }}
+          style={{ color: textColor, textDecoration: 'none', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap' }}
         >
           {item.label}
         </a>
@@ -140,10 +140,10 @@ export function NavbarMobileMenu({
                   marginTop: '8px',
                   backgroundColor: buttonColor,
                   color: '#fff',
-                  padding: '10px 20px',
+                  padding: '8px 14px',
                   borderRadius: '6px',
                   textDecoration: 'none',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: 600,
                   textAlign: 'center',
                 }}

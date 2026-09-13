@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
@@ -74,7 +75,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{logoText}</span>
             )}

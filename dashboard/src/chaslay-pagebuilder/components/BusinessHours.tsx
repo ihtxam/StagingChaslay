@@ -9,6 +9,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: BusinessHoursProps = {
@@ -38,6 +39,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const {
     connectors: { connect, drag },
   } = useNode();
@@ -60,7 +62,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
       }}
     >
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-        {mergedProps.title && (
+        {tr('title') && (
           <h2
             style={{
               fontSize: '36px',
@@ -74,7 +76,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
             }}
           >
             <Clock size={36} />
-            {mergedProps.title}
+            {tr('title')}
           </h2>
         )}
 
@@ -105,7 +107,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                   backgroundColor: '#ffffff',
                 }}
               />
-              {placeholderHours[todayIndex].isOpen ? 'Open Now' : 'Closed'}
+              {placeholderHours[todayIndex].isOpen ? trText('Open Now') : trText('Closed')}
             </span>
           </div>
         )}
@@ -120,7 +122,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
         >
           {placeholderHours.map((item, index) => (
             <div
-              key={item.day}
+              key={trText(item.day)}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -136,7 +138,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                   color: mergedProps.textColor,
                 }}
               >
-                {item.day}
+                {trText(item.day)}
                 {mergedProps.highlightToday && index === todayIndex && (
                   <span
                     style={{
@@ -158,7 +160,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                   fontWeight: item.isOpen ? 400 : 600,
                 }}
               >
-                {item.hours}
+                {trText(item.hours)}
               </span>
             </div>
           ))}

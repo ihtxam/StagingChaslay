@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
@@ -92,8 +93,8 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           position: 'relative',
         }}
       >
-        <div className="navbar-centered-inner navbar-centered-desktop shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '60px' }}>
-          <div className="navbar-centered-left" style={{ display: 'flex', gap: '32px' }}>
+        <div className="navbar-centered-inner navbar-centered-desktop" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', minWidth: 0 }}>
+          <div className="navbar-centered-left" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             {leftMenu.map((item, i) => (
               <a key={i} href={shopHref(item.link)} onClick={(e) => onNavClick(e, item.link)} style={linkStyle}>
                 {item.label}
@@ -102,7 +103,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           </div>
           <div style={{ textAlign: 'center' }}>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <div>
                 <span style={{ fontSize: '28px', fontWeight: 700, color: mergedProps.textColor, letterSpacing: '2px' }}>{logoText}</span>
@@ -110,7 +111,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
               </div>
             )}
           </div>
-          <div className="navbar-centered-right" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+          <div className="navbar-centered-right" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             {rightMenu.map((item, i) => (
               <a key={i} href={shopHref(item.link)} onClick={(e) => onNavClick(e, item.link)} style={linkStyle}>
                 {item.label}

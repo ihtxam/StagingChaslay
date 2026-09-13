@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface AboutUsMinimalProps {
@@ -38,6 +39,7 @@ export const AboutUsMinimal: React.FC<AboutUsMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -54,9 +56,9 @@ export const AboutUsMinimal: React.FC<AboutUsMinimalProps> & {
       }}
     >
       <div style={{ maxWidth: '700px', margin: '0 auto', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '16px', fontWeight: 400, textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '40px', opacity: 0.6 }}>{mergedProps.title}</h2>
+        <h2 style={{ fontSize: '16px', fontWeight: 400, textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '40px', opacity: 0.6 }}>{tr('title')}</h2>
 
-        <p style={{ fontSize: '24px', lineHeight: 1.8, marginBottom: '48px', fontWeight: 300 }}>{mergedProps.content}</p>
+        <p style={{ fontSize: '24px', lineHeight: 1.8, marginBottom: '48px', fontWeight: 300 }}>{tr('content')}</p>
 
         {mergedProps.quote && (
           <div style={{ borderTop: `1px solid ${mergedProps.textColor}20`, paddingTop: '40px' }}>

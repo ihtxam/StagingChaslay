@@ -9,6 +9,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HeroMinimalProps {
@@ -57,6 +58,7 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const {
     connectors: { connect, drag },
   } = useNode();
@@ -87,16 +89,16 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
       >
         <h1
           style={{
-            fontSize: `${mergedProps.titleFontSize}px`,
-            fontWeight: fontWeightMap[mergedProps.titleFontWeight || 'normal'],
-            fontStyle: mergedProps.titleFontStyle || 'normal',
+            fontSize: `${tr('title')FontSize}px`,
+            fontWeight: fontWeightMap[tr('title')FontWeight || 'normal'],
+            fontStyle: tr('title')FontStyle || 'normal',
             color: mergedProps.textColor,
             lineHeight: 1.2,
             marginBottom: '24px',
             letterSpacing: '-1px',
           }}
         >
-          {mergedProps.title}
+          {tr('title')}
         </h1>
 
         {mergedProps.showDivider && (
@@ -111,17 +113,17 @@ export const HeroMinimal: React.FC<HeroMinimalProps> & {
           />
         )}
 
-        {mergedProps.subtitle && (
+        {tr('subtitle') && (
           <p
             style={{
-              fontSize: `${mergedProps.subtitleFontSize}px`,
+              fontSize: `${tr('subtitle')FontSize}px`,
               color: mergedProps.textColor,
               opacity: 0.7,
               fontWeight: 400,
               lineHeight: 1.6,
             }}
           >
-            {mergedProps.subtitle}
+            {tr('subtitle')}
           </p>
         )}
       </div>
