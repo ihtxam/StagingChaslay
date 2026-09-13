@@ -623,6 +623,15 @@ export class PlatformShopService {
     });
   }
 
+  static async getMerchantOrder(merchantId: string, orderId: string) {
+    const db = getDb();
+    const order = await db.query.platformShopOrders.findFirst({
+      where: and(eq(schema.platformShopOrders.id, orderId), eq(schema.platformShopOrders.merchantId, merchantId)),
+    });
+    if (!order) throw new Error("Order not found");
+    return order;
+  }
+
   static async listAllOrders(limit = 100) {
     const db = getDb();
     return db.query.platformShopOrders.findMany({
