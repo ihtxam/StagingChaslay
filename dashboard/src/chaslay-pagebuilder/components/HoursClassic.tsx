@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursClassicProps {
@@ -45,6 +46,7 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1;
@@ -66,12 +68,12 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
             <Clock size={32} />
-            <h2 style={{ fontSize: '36px', fontWeight: 700 }}>{mergedProps.title}</h2>
+            <h2 style={{ fontSize: '36px', fontWeight: 700 }}>{tr('title')}</h2>
           </div>
           {mergedProps.showStatus && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 20px', borderRadius: '24px', backgroundColor: hours[todayIndex].open ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 600 }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#fff' }} />
-              {hours[todayIndex].open ? 'Open Now' : 'Closed'}
+              {hours[todayIndex].open ? trText('Open Now') : trText('Closed')}
             </span>
           )}
         </div>
@@ -80,8 +82,8 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
           {hours.map((item, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '18px 24px', borderBottom: i < hours.length - 1 ? '1px solid #e9ecef' : 'none', backgroundColor: i === todayIndex ? `${mergedProps.accentColor}15` : 'transparent' }}>
               <span style={{ fontWeight: i === todayIndex ? 700 : 500 }}>
-                {item.day}
-                {i === todayIndex && <span style={{ marginLeft: '10px', fontSize: '12px', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '2px 10px', borderRadius: '12px' }}>Today</span>}
+                {trText(item.day)}
+                {i === todayIndex && <span style={{ marginLeft: '10px', fontSize: '12px', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '2px 10px', borderRadius: '12px' }}>{trText('Today')}</span>}
               </span>
               <span style={{ color: item.open ? mergedProps.textColor : '#ef4444', fontWeight: item.open ? 400 : 600 }}>{item.time}</span>
             </div>

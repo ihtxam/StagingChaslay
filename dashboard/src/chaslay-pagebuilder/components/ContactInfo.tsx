@@ -10,8 +10,8 @@ import { Switch } from '@/chaslay-pagebuilder/ui/switch';
 import { Phone, Mail, MapPin, Map, Clock } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { useStorefront } from '../StorefrontContext';
-import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: ContactInfoProps = {
@@ -66,14 +66,12 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const {
     connectors: { connect, drag },
   } = useNode();
-  const { locale, defaultLanguage } = useStorefront();
   const contactDetails = useContactDetails();
-  const title =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
-    mergedProps.title;
+  const title = tr('title');
 
   // 2-column layout with image
   if (mergedProps.image) {
@@ -130,7 +128,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <Clock size={18} style={{ opacity: 0.7 }} />
-                  <span style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.7 }}>Hours</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.7 }}>{trText('Hours')}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {placeholderHours.map((h, i) => (

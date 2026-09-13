@@ -9,6 +9,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import InlineReservationsWidget from '@/components/shop/InlineReservationsWidget';
 import { useStorefront } from '../StorefrontContext';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
@@ -35,6 +36,8 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const accent = mergedProps.accentColor || mergedProps.buttonColor;
   const { connectors: { connect, drag } } = useNode();
   const { isStorefront, shopKey, basePath } = useStorefront();
   const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
@@ -44,16 +47,16 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
       <section
         id={sectionAnchorId(mergedProps.sectionId, 'reservations')}
         className="hb-section px-4 py-10 md:px-10 md:py-14"
-        style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor }}
+        style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, ['--shop-accent' as any]: accent, ['--color-accent' as any]: accent }}
       >
         <div className="mx-auto max-w-2xl space-y-6">
-          {mergedProps.title ? (
-            <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">{mergedProps.title}</h2>
+          {tr('title') ? (
+            <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">{tr('title')}</h2>
           ) : null}
-          {mergedProps.subtitle ? (
-            <p className="text-center text-sm opacity-80 md:text-base">{mergedProps.subtitle}</p>
+          {tr('subtitle') ? (
+            <p className="text-center text-sm opacity-80 md:text-base">{tr('subtitle')}</p>
           ) : null}
-          <InlineReservationsWidget shopKey={shopKey} base={basePath} embedded title={mergedProps.title} />
+          <InlineReservationsWidget shopKey={shopKey} base={basePath} embedded title={tr('title')} />
         </div>
       </section>
     );
@@ -143,7 +146,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
             <button style={{
               width: '100%',
               padding: '10px 28px',
-              backgroundColor: mergedProps.buttonColor,
+              backgroundColor: accent,
               color: '#fff',
               border: 'none',
               borderRadius: '4px',
@@ -154,7 +157,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
               letterSpacing: '1px',
               whiteSpace: 'nowrap',
             }}>
-              {mergedProps.buttonText}
+              {tr('buttonText')}
             </button>
           </div>
         </div>
@@ -197,14 +200,14 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
         </div>
         {/* Form side */}
         <div style={{ order: isImageLeft ? 1 : 0, textAlign: 'center' }}>
-          {mergedProps.title && (
+          {tr('title') && (
             <h3 style={{ color: mergedProps.textColor, fontSize: '28px', fontWeight: 600, marginBottom: '12px' }}>
-              {mergedProps.title}
+              {tr('title')}
             </h3>
           )}
-          {mergedProps.subtitle && (
+          {tr('subtitle') && (
             <p style={{ color: mergedProps.textColor, opacity: 0.7, fontSize: '16px', marginBottom: '36px' }}>
-              {mergedProps.subtitle}
+              {tr('subtitle')}
             </p>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', textAlign: 'left' }}>
@@ -237,7 +240,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
             marginTop: '24px',
             width: '100%',
             padding: '14px',
-            backgroundColor: mergedProps.buttonColor,
+            backgroundColor: accent,
             color: '#fff',
             border: 'none',
             borderRadius: '8px',
@@ -245,7 +248,7 @@ export const ReservationForm: React.FC<ReservationFormProps> & {
             fontWeight: 600,
             cursor: 'pointer',
           }}>
-            {mergedProps.buttonText}
+            {tr('buttonText')}
           </button>
         </div>
       </div>

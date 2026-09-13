@@ -17,7 +17,9 @@ import { ImageUpload } from './ImageUpload';
 import { TextFormatToolbar } from './TextFormatToolbar';
 import { TranslatableInput } from './TranslatableInput';
 import { useStorefront } from '../StorefrontContext';
-import { resolveTranslatedProp } from '../utils/resolve-translated-prop';
+import { useSectionTranslations } from '../utils/use-section-translations';
+import { cssBackgroundImage } from '../utils/media-url';
+import { BuilderImage } from './BuilderImage';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: HeroBannerProps = {
@@ -65,17 +67,12 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
   const { enabled: editorEnabled } = useEditor((state) => ({
     enabled: state.options.enabled,
   }));
-  const { shopHref, locale, defaultLanguage } = useStorefront();
+  const { shopHref } = useStorefront();
+  const { tr } = useSectionTranslations(mergedProps as Record<string, unknown>);
 
-  const title =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'title', locale, defaultLanguage) ||
-    mergedProps.title;
-  const subtitle =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'subtitle', locale, defaultLanguage) ||
-    mergedProps.subtitle;
-  const buttonText =
-    resolveTranslatedProp(mergedProps as Record<string, unknown>, 'buttonText', locale, defaultLanguage) ||
-    mergedProps.buttonText;
+  const title = tr('title');
+  const subtitle = tr('subtitle');
+  const buttonText = tr('buttonText');
 
   const enableSlider = mergedProps.enableSlider || false;
   const sliderImages = mergedProps.sliderImages || [];
@@ -144,7 +141,7 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundImage: `url(${img})`,
+              backgroundImage: cssBackgroundImage(img),
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               opacity: index === currentSlide ? 1 : 0,
@@ -166,12 +163,18 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: `url(${mergedProps.backgroundImage})`,
+            backgroundImage: cssBackgroundImage(mergedProps.backgroundImage),
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             zIndex: 0,
           }}
-        />
+        >
+          <BuilderImage
+            src={mergedProps.backgroundImage}
+            alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
       ) : null}
 
       {/* Overlay */}
@@ -219,12 +222,13 @@ export const HeroBanner: React.FC<HeroBannerProps> & {
         {buttonText && (
           <a
             href={shopHref(mergedProps.buttonLink || '/menu')}
+            className="hb-hero-cta"
             style={{
               display: 'inline-block',
               backgroundColor: mergedProps.buttonColor,
               color: '#ffffff',
-              padding: '14px 32px',
-              fontSize: '16px',
+              padding: '10px 22px',
+              fontSize: '14px',
               fontWeight: 600,
               border: 'none',
               borderRadius: '8px',

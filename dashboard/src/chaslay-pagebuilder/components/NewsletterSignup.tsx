@@ -8,6 +8,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 const defaultProps: NewsletterProps = {
@@ -30,6 +31,7 @@ export const NewsletterSignup: React.FC<NewsletterProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const isHorizontal = mergedProps.layout === 'horizontal';
 
@@ -46,14 +48,14 @@ export const NewsletterSignup: React.FC<NewsletterProps> & {
       }}
     >
       <div style={{ maxWidth: '700px', margin: '0 auto', textAlign: 'center' }}>
-        {mergedProps.title && (
+        {tr('title') && (
           <h3 style={{ color: mergedProps.textColor, fontSize: '28px', fontWeight: 600, marginBottom: '12px' }}>
-            {mergedProps.title}
+            {tr('title')}
           </h3>
         )}
-        {mergedProps.subtitle && (
+        {tr('subtitle') && (
           <p style={{ color: mergedProps.textColor, opacity: 0.7, fontSize: '16px', marginBottom: '32px' }}>
-            {mergedProps.subtitle}
+            {tr('subtitle')}
           </p>
         )}
         <div style={{
@@ -87,7 +89,7 @@ export const NewsletterSignup: React.FC<NewsletterProps> & {
             cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}>
-            {mergedProps.buttonText}
+            {tr('buttonText')}
           </button>
         </div>
       </div>

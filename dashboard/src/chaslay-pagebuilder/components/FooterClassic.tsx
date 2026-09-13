@@ -7,7 +7,9 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FooterColumnsEditor } from './FooterColumnsEditor';
 import { useStorefront } from '../StorefrontContext';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
@@ -68,6 +70,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
 
@@ -88,21 +91,21 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
           {/* Logo & Description */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={mergedProps.logoText} style={{ height: '40px', objectFit: 'contain', marginBottom: '16px' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={tr('logoText')} style={{ height: '40px', objectFit: 'contain', marginBottom: '16px' }} />
             ) : (
-              <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>{mergedProps.logoText}</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>{tr('logoText')}</div>
             )}
-            <p style={{ fontSize: '14px', opacity: 0.8, lineHeight: 1.6, maxWidth: '300px' }}>{mergedProps.description}</p>
+            <p style={{ fontSize: '14px', opacity: 0.8, lineHeight: 1.6, maxWidth: '300px' }}>{tr('description')}</p>
           </div>
 
           {/* Link Columns */}
           {mergedProps.columns?.map((column, i) => (
             <div key={i}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{column.title}</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{trText(column.title)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {column.links.map((link, j) => (
                   <a key={j} href={shopHref(link.link)} style={{ color: mergedProps.textColor, textDecoration: 'none', fontSize: '14px', opacity: 0.8 }}>
-                    {link.label}
+                    {trText(link.label)}
                   </a>
                 ))}
               </div>
@@ -112,7 +115,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
 
         {/* Copyright */}
         <div style={{ borderTop: `1px solid ${mergedProps.textColor}20`, paddingTop: '20px', textAlign: 'center' }}>
-          <p style={{ fontSize: '13px', opacity: 0.6 }}>{mergedProps.copyrightText}</p>
+          <p style={{ fontSize: '13px', opacity: 0.6 }}>{tr('copyrightText')}</p>
         </div>
       </div>
     </footer>

@@ -101,3 +101,38 @@
   position: relative;
   z-index: 200;
 }
+
+
+/* Navbar: prevent menu titles overlapping the Order Now CTA */
+.hb-navbar-classic .hb-navbar-inner,
+.hb-navbar-modern > div > div,
+.hb-navbar-minimal > div > div,
+.hb-navbar-centered .navbar-centered-inner {
+  min-width: 0;
+}
+
+.navbar-classic-desktop a,
+.navbar-modern-menu a,
+.navbar-centered-left a,
+.navbar-centered-right a,
+.navbar-minimal-menu a {
+  white-space: nowrap;
+}
+
+.hb-navbar-cta,
+.hb-hero-cta {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.hb-menu-title {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.chaslay-storefront-page .hb-hero h1,
+.chaslay-pagebuilder-root .hb-hero h1,
+.chaslay-pagebuilder-root .hb-hero-split h1 {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}

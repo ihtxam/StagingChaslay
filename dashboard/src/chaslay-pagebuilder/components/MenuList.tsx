@@ -8,6 +8,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
@@ -46,6 +47,7 @@ export const MenuList: React.FC<MenuListProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { categories, products, loading } = useMenuData();
   const { shopHref } = useStorefront();
@@ -95,8 +97,8 @@ export const MenuList: React.FC<MenuListProps> & {
     >
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-          <h2 style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '3px', color: mergedProps.accentColor, marginBottom: '16px' }}>{mergedProps.subtitle}</h2>
-          <h3 style={{ fontSize: '48px', fontWeight: 700 }}>{mergedProps.title}</h3>
+          <h2 style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '3px', color: mergedProps.accentColor, marginBottom: '16px' }}>{tr('subtitle')}</h2>
+          <h3 style={{ fontSize: '48px', fontWeight: 700 }}>{tr('title')}</h3>
         </div>
 
         {loading ? (
@@ -128,10 +130,10 @@ export const MenuList: React.FC<MenuListProps> & {
           </div>
         )}
 
-        {mergedProps.buttonText && (
+        {tr('buttonText') && (
           <div style={{ textAlign: 'center', marginTop: '48px' }}>
             <a href={shopHref(mergedProps.buttonLink)} style={{ display: 'inline-block', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '16px 40px', borderRadius: '4px', textDecoration: 'none', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-              {mergedProps.buttonText}
+              {tr('buttonText')}
             </a>
           </div>
         )}

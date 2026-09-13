@@ -12,6 +12,7 @@ import { Slider } from '@/chaslay-pagebuilder/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { useMenuData } from '../MenuDataContext';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { FeaturedProductsPicker } from './FeaturedProductsPicker';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { useStorefront } from '../StorefrontContext';
@@ -53,6 +54,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { enabled: editorEnabled } = useEditor((state) => ({
     enabled: state.options.enabled,
@@ -192,20 +194,23 @@ export const MenuSection: React.FC<MenuSectionProps> & {
       style={{ backgroundColor: mergedProps.backgroundColor, color: mergedProps.textColor, padding: '60px 0', width: '100%', overflow: 'hidden' }}
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
-        {mergedProps.title && (
-          <h2 style={{
-            fontSize: isGrid ? '40px' : '36px',
+        {tr('title') && (
+          <h2 className="hb-menu-title" style={{
+            fontSize: isGrid ? '32px' : '28px',
             fontWeight: isGrid ? 400 : 700,
             fontFamily: isGrid ? "'Georgia', 'Times New Roman', serif" : undefined,
             textAlign: 'center',
             marginBottom: '12px',
+            lineHeight: 1.25,
+            overflowWrap: 'anywhere',
+            padding: '0 8px',
           }}>
-            {mergedProps.title}
+            {tr('title')}
           </h2>
         )}
-        {mergedProps.subtitle && (
+        {tr('subtitle') && (
           <p style={{ fontSize: isGrid ? '15px' : '18px', textAlign: 'center', opacity: 0.6, marginBottom: '32px', maxWidth: '600px', margin: '0 auto 32px' }}>
-            {mergedProps.subtitle}
+            {tr('subtitle')}
           </p>
         )}
         {renderCategoryButtons()}
@@ -243,7 +248,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                   </div>
                 ))}
               </div>
-              {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
+              {mergedProps.showViewMenuButton && tr('viewMenuText') && (
                 <div style={{ textAlign: 'center', marginTop: '40px' }}>
                   <a
                     href={shopHref(mergedProps.viewMenuLink || '/menu')}
@@ -251,7 +256,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                       display: 'inline-block',
                       padding: '14px 36px',
                       backgroundColor: mergedProps.viewMenuBgColor,
-                      color: mergedProps.viewMenuTextColor,
+                      color: tr('viewMenuText')Color,
                       textDecoration: 'none',
                       fontSize: '13px',
                       fontWeight: 700,
@@ -260,7 +265,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                       borderRadius: '4px',
                     }}
                   >
-                    {mergedProps.viewMenuText}
+                    {tr('viewMenuText')}
                   </a>
                 </div>
               )}
@@ -324,7 +329,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
             </div>
           )}
 
-          {mergedProps.showViewMenuButton && mergedProps.viewMenuText && (
+          {mergedProps.showViewMenuButton && tr('viewMenuText') && (
             <div style={{ textAlign: 'center', marginTop: '32px' }}>
               <a
                 href={shopHref(mergedProps.viewMenuLink || '/menu')}
@@ -332,13 +337,13 @@ export const MenuSection: React.FC<MenuSectionProps> & {
                   display: 'inline-block',
                   padding: '14px 32px',
                   backgroundColor: mergedProps.viewMenuBgColor,
-                  color: mergedProps.viewMenuTextColor,
+                  color: tr('viewMenuText')Color,
                   borderRadius: '8px',
                   textDecoration: 'none',
                   fontWeight: 600,
                 }}
               >
-                {mergedProps.viewMenuText}
+                {tr('viewMenuText')}
               </a>
             </div>
           )}

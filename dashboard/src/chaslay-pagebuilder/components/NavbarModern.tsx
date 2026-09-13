@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
@@ -84,22 +85,21 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <span style={{ fontSize: '26px', fontWeight: 700, color: mergedProps.textColor, fontStyle: 'italic' }}>{logoText}</span>
             )}
           </div>
 
-          <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+          <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
           </div>
 
           {buttonText && (
             <a
-              className="navbar-modern-button navbar-modern-desktop"
               href={shopHref(mergedProps.buttonLink)}
               onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
-              style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '12px 28px', borderRadius: '50px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}
+              className="hb-navbar-cta navbar-modern-button navbar-modern-desktop" style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '8px 14px', borderRadius: '50px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               {buttonText}
             </a>

@@ -10,6 +10,7 @@ import { Textarea } from '@/chaslay-pagebuilder/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
 import { ImageUpload } from './ImageUpload';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
@@ -38,6 +39,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const { shopHref } = useStorefront();
   const isImageLeft = mergedProps.imagePosition === 'left';
@@ -97,7 +99,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
 
           {/* Text side */}
           <div>
-            {mergedProps.title && (
+            {tr('title') && (
               <h2 style={{
                 fontSize: '40px',
                 fontWeight: 400,
@@ -105,13 +107,13 @@ export const AboutUs: React.FC<AboutUsProps> & {
                 marginBottom: '0',
                 lineHeight: 1.3,
               }}>
-                {mergedProps.title}
+                {tr('title')}
               </h2>
             )}
             <p style={{ fontSize: '16px', lineHeight: 1.8, opacity: 0.65, textAlign: 'center', maxWidth: '420px', marginTop: '24px' }}>
-              {mergedProps.content}
+              {tr('content')}
             </p>
-            {mergedProps.buttonText && (
+            {tr('buttonText') && (
               <div style={{ marginTop: '28px' }}>
                 <a
                   href={shopHref(mergedProps.buttonLink || '#')}
@@ -128,7 +130,7 @@ export const AboutUs: React.FC<AboutUsProps> & {
                     letterSpacing: '2px',
                   }}
                 >
-                  {mergedProps.buttonText}
+                  {tr('buttonText')}
                 </a>
               </div>
             )}
@@ -152,11 +154,11 @@ export const AboutUs: React.FC<AboutUsProps> & {
           </div>
         )}
         <div>
-          {mergedProps.title && <h2 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '24px' }}>{mergedProps.title}</h2>}
-          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.85 }}>{mergedProps.content}</p>
-          {mergedProps.buttonText && (
+          {tr('title') && <h2 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '24px' }}>{tr('title')}</h2>}
+          <p style={{ fontSize: '18px', lineHeight: 1.8, opacity: 0.85 }}>{tr('content')}</p>
+          {tr('buttonText') && (
             <a href={shopHref(mergedProps.buttonLink || '#')} style={{ display: 'inline-block', marginTop: '24px', padding: '12px 32px', backgroundColor: mergedProps.buttonColor || '#e94560', color: '#fff', textDecoration: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-              {mergedProps.buttonText}
+              {tr('buttonText')}
             </a>
           )}
         </div>
