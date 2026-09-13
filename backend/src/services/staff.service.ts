@@ -7,12 +7,11 @@ import {
   applyRolePermissionPolicy,
   encodePermissions,
   hasAnyPermission,
+  normalizePermissions,
   parsePermissions,
   STAFF_MERCHANT_ENTRY_PERMISSIONS,
   toAndroidPermissions,
-  waiterBlockedPermissions,
   waiterSystemKind,
-  storekeeperBlockedPermissions,
   type Permission,
 } from "@/lib/permissions";
 import {
@@ -89,7 +88,7 @@ export class StaffService {
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
     await this.ensureManagerGandolaPurge(merchantId);
-    // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
+    // Waiters: keep merchant-saved permissions; only align POS login home.
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
     await this.ensureCashierRolePermissions(merchantId);
@@ -348,26 +347,10 @@ export class StaffService {
   }
 
   /**
-   * Strip full panel / company sales from system Waiter templates.
-   * Menu, orders, and own-sales EOD (END_OF_DAY) stay as assigned on the Roles page.
+   * Align floor-waiter login home. Do not rewrite role permissions — merchants
+   * can grant extra access on Users & roles and those checkboxes must persist.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
-    const db = getDb();
-    const roles = await db.query.merchantRoles.findMany({
-      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
-    });
-    for (const role of roles) {
-      const kind = waiterSystemKind(role.name);
-      if (!kind) continue;
-      const blocked = waiterBlockedPermissions(kind);
-      const perms = parsePermissions(role.permissions);
-      const next = perms.filter((p) => !blocked.includes(p));
-      if (next.length === perms.length) continue;
-      await db
-        .update(schema.merchantRoles)
-        .set({ permissions: encodePermissions(next), updatedAt: new Date() })
-        .where(eq(schema.merchantRoles.id, role.id));
-    }
     await this.syncFloorWaiterLoginHome(merchantId);
   }
 
@@ -514,7 +497,7 @@ export class StaffService {
       patch.name = name;
     }
     if (updates.permissions !== undefined) {
-      patch.permissions = encodePermissions(updates.permissions);
+      patch.permissions = encodePermissions(normalizePermissions(updates.permissions));
     }
 
     const [row] = await db
@@ -542,7 +525,7 @@ export class StaffService {
       .values({
         merchantId,
         name: trimmed,
-        permissions: encodePermissions(permissions),
+        permissions: encodePermissions(normalizePermissions(permissions)),
         isSystem: false,
         sortOrder: 100,
       })

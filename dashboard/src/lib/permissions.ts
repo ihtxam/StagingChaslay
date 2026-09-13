@@ -46,6 +46,21 @@ export function permissionsForMerchantAddon(
   return permissions.filter((p) => p !== 'MANAGE_KIOSK');
 }
 
+/** Bind role-editor checkboxes to saved keys (array or comma-separated, trim unknown). */
+export function normalizeRolePermissions(raw: unknown): Permission[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(',')
+      : [];
+  const set = new Set(
+    list
+      .map((s) => String(s).trim())
+      .filter((p): p is Permission => ALL_PERMISSIONS.includes(p as Permission))
+  );
+  return ALL_PERMISSIONS.filter((p) => set.has(p));
+}
+
 export function isKioskOperatorRoleName(name: string): boolean {
   return name.trim().toLowerCase() === 'kiosk operator';
 }
