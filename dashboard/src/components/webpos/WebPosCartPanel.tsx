@@ -296,14 +296,8 @@ export default function WebPosCartPanel({
       }
     };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    window.addEventListener('orientationchange', close);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('orientationchange', close);
     };
   }, [moreOpen]);
 
@@ -1198,7 +1192,14 @@ export default function WebPosCartPanel({
                   {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
                 </button>
               ) : (
-                <div />
+                <button
+                  type="button"
+                  disabled={!canCancelOrder || busy}
+                  onClick={onCancelOrder}
+                  className={`${actionBtn()} bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40`}
+                >
+                  {t('webPosCancelOrder')}
+                </button>
               )}
               {kitchenEnabled && !isRetail ? (
                 <button

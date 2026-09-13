@@ -16,6 +16,8 @@ type OrderTotalsInput = Pick<
   | 'discountAmount'
   | 'tipAmount'
   | 'roundingAmount'
+  | 'deliveryFee'
+  | 'cardFee'
   | 'total'
   | 'items'
   | 'channel'
@@ -136,6 +138,20 @@ export default function OrderDetailTotals({
           label={t('rounding')}
           value={`${totals.rounding > 0 ? '+' : ''}${formatCHF(totals.rounding)}`}
           muted
+          compact={compact}
+        />
+      ) : null}
+      {Number(order.deliveryFee || 0) > 0.001 ? (
+        <TotalsRow
+          label={t('orderDeliveryFee')}
+          value={formatCHF(Number(order.deliveryFee))}
+          compact={compact}
+        />
+      ) : null}
+      {Number(order.cardFee || 0) > 0.001 ? (
+        <TotalsRow
+          label={t('orderCardFee')}
+          value={formatCHF(Number(order.cardFee))}
           compact={compact}
         />
       ) : null}

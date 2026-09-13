@@ -14,7 +14,7 @@ const posOrder = (id: string): PosOrderListRow =>
     refundAmount: 0,
     createdAt: '2026-09-03T10:00:00Z',
     items: [],
-  }) as PosOrder;
+  }) as PosOrderListRow;
 
 const onlineOrder = (id: string): OnlineOrder => ({
   id,
@@ -55,4 +55,18 @@ test('onlineOrderAsPosOrder maps fulfillment channel', () => {
   assert.equal(row.channel, 'delivery');
   assert.equal(row.orderSource, 'online_shop');
   assert.equal(row.total, 25.5);
+});
+
+test('onlineOrderAsPosOrder maps delivery and card fees into charged total fields', () => {
+  const row = onlineOrderAsPosOrder({
+    ...onlineOrder('fee'),
+    total: '31.00',
+    subtotal: '20.00',
+    taxAmount: '1.60',
+    deliveryFee: '5.00',
+    cardFee: '0.90',
+  });
+  assert.equal(row.deliveryFee, 5);
+  assert.equal(row.cardFee, 0.9);
+  assert.equal(row.total, 31);
 });

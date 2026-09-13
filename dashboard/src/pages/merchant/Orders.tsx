@@ -36,6 +36,8 @@ import {
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
+import { computeMerchandiseTotals } from '@/lib/money';
+import { applyBillDiscountToTotals } from '@/lib/webpos-bill-discount';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import { formatOrderNotesForDisplay, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
@@ -96,7 +98,22 @@ function isHeldListRow(order: MerchantOrder): boolean {
 function heldToMerchantOrder(h: HeldRow): MerchantOrder {
   const meta = parseHeldCartJson(h.cartJson);
   const lines = meta.cart || [];
-  const total = lines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
+  const taxRate = Number(meta.taxRate) || 0;
+  const vatIncluded = meta.vatIncludedInPrice !== false;
+  const merch = computeMerchandiseTotals(
+    lines.map((l) => ({
+      lineTotal: Number(l.lineTotal || 0),
+      taxable: l.taxable !== false,
+    })),
+    taxRate,
+    vatIncluded
+  );
+  const withDisc = applyBillDiscountToTotals(
+    merch,
+    meta.billDiscount,
+    vatIncluded,
+    0.05
+  );
   const ch = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
   const tabShout = meta.tabNumber ? `#${String(meta.tabNumber).replace(/^#/, '')}` : null;
   return {
@@ -110,9 +127,11 @@ function heldToMerchantOrder(h: HeldRow): MerchantOrder {
     status: h.status === 'sent_to_kitchen' ? 'preparing' : 'pending',
     paymentStatus: 'awaiting_payment',
     paymentMethod: 'pay_later',
-    total,
-    subtotal: total,
-    taxAmount: 0,
+    total: withDisc.total,
+    subtotal: withDisc.subtotal,
+    taxAmount: withDisc.tax,
+    taxRate,
+    discountAmount: withDisc.discount,
     refundAmount: 0,
     staffName: h.staffName || null,
     tableLabel: meta.tableLabel,
@@ -1153,6 +1172,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
             : orderListPrimaryLabel(order) || order.id.slice(0, 8);
           const heldKitchen = isHeldListRow(order);
           const invoicePaid = isPaidOrder(order);
+          const invoiceCancelled =
+            String(order.status || '').toLowerCase() === 'cancelled' ||
+            String(order.paymentStatus || '').toLowerCase() === 'cancelled';
           const purgeSelected = purgeMode && selectedPurgeIds.has(order.id);
           return (
             <article
@@ -1211,7 +1233,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 {isInvoiceOrder(order) ? (
                   <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-indigo-800">
                     {showingInvoices
-                      ? invoicePaid
+                      ? invoiceCancelled
+                        ? t('orderStatusCancelled')
+                        : invoicePaid
                         ? t('invoiceStatusPaid')
                         : t('invoiceStatusUnpaid')
                       : t('webPosInvoice')}

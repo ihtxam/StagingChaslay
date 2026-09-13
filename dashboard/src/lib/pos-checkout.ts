@@ -88,6 +88,12 @@ export function isRetailPosMode(raw: unknown): boolean {
   return normalizePosCheckoutSettings(raw).posMode === 'retail';
 }
 
+function resolveExpressCheckoutEnabled(src: Record<string, unknown>): boolean {
+  if (src.expressCheckoutEnabled !== undefined) return src.expressCheckoutEnabled !== false;
+  if (src.webposExpressEnabled !== undefined) return src.webposExpressEnabled !== false;
+  return true;
+}
+
 export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings {
   const src = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const tipPresets = Array.isArray(src.tipPresetsPercent)
@@ -138,7 +144,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
       src.actionButtonSize === 'sm' || src.actionButtonSize === 'lg'
         ? src.actionButtonSize
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
-    expressCheckoutEnabled: src.expressCheckoutEnabled !== false,
+    expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
     showPosToasts: src.showPosToasts === true,
   };
 }

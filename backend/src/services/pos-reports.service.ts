@@ -392,8 +392,13 @@ export class PosReportsService {
     for (const o of cancelled) {
       cancelledTotal += money(o.total);
     }
+    let refundsOutsideSales = 0;
     for (const o of refunded) {
-      if (!completed.includes(o)) refundTotal += money(o.refundAmount || o.total);
+      if (!completed.includes(o)) {
+        const amt = money(o.refundAmount || o.total);
+        refundTotal += amt;
+        refundsOutsideSales += amt;
+      }
     }
 
     const rateFor = (ch: string) => {
@@ -419,7 +424,7 @@ export class PosReportsService {
       .sort((a, b) => b.brut - a.brut);
 
     const netTotal = round2(revenue - taxTotal);
-    const grandTotal = round2(revenue + tipsTotal);
+    const grandTotal = round2(netTotal + taxTotal + tipsTotal - round2(refundsOutsideSales));
 
     const productsSold = [...products.values()]
       .sort((a, b) => b.total - a.total)
@@ -620,7 +625,7 @@ export class PosReportsService {
       tipsTotal: round2(tipsTotal),
       refundTotal: round2(refundTotal),
       cancelledTotal: round2(cancelledTotal),
-      /** Net sales + tips (money collected) */
+      /** Net (excl. VAT) + tax + tips − full refunds not already in sales */
       grandTotal,
       coversServed: covers || null,
       vatRows,
