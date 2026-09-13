@@ -37,6 +37,7 @@ import Settings from './Settings';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
+import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
@@ -113,6 +114,7 @@ import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
 import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
+import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
@@ -596,6 +598,7 @@ function MerchantShell() {
   // Storekeeper staff without full panel access — mobile intake (+ optional inventory) only.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = effective.permissions;
     if (!isStorekeeperRestrictedStaff(perms, false)) return;
     if (isStorekeeperPanelPath(location.pathname, perms)) return;
@@ -605,6 +608,7 @@ function MerchantShell() {
   // Storekeeper-only staff use the mobile intake app, not the full panel.
   useEffect(() => {
     if (jwtOwnerBypass) return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     if (!isStorekeeperOnlyStaff(effective.permissions, false)) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (path === storekeeperHomePath()) return;
@@ -622,6 +626,7 @@ function MerchantShell() {
   // Kiosk operator staff — setup panel only, not full merchant back office.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = effective.permissions;
     if (!isKioskRestrictedStaff(perms, false)) return;
     if (isKioskPanelPath(location.pathname, location.search)) return;
@@ -630,14 +635,16 @@ function MerchantShell() {
 
   useEffect(() => {
     if (jwtOwnerBypass) return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     if (!isKioskOnlyStaff(effective.permissions, false)) return;
     if (isKioskHomeLocation(location.pathname, location.search)) return;
     navigate(kioskHomePath(), { replace: true });
-  }, [jwtIsOwner, effective.permissions, location.pathname, location.search, navigate]);
+  }, [jwtOwnerBypass, effective.permissions, location.pathname, location.search, navigate]);
 
   // Order center operator — handheld PWA only, not full merchant panel.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = effective.permissions;
     if (!isOrderCenterOnlyStaff(perms, false)) return;
     if (isOrderCenterPanelPath(location.pathname)) return;
@@ -646,6 +653,7 @@ function MerchantShell() {
 
   useEffect(() => {
     if (jwtOwnerBypass) return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     if (!isOrderCenterOnlyStaff(effective.permissions, false)) return;
     if (isOrderCenterHomeLocation(location.pathname)) return;
     navigate(orderCenterHomePath(), { replace: true });
@@ -655,6 +663,7 @@ function MerchantShell() {
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenBackOffice) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (isPlatformNotificationsPath(path)) return;
     if (isStorekeeperOnlyStaff(effective.permissions, false)) {
       if (path !== storekeeperHomePath()) navigate(storekeeperHomePath(), { replace: true });
       return;
@@ -690,6 +699,7 @@ function MerchantShell() {
   // Waiter staff without full panel access — waiter app and optional menu/orders only.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = effective.permissions;
     if (!isWaiterRestrictedStaff(perms, false)) return;
     if (isWaiterPanelPath(location.pathname, perms)) return;
@@ -699,6 +709,7 @@ function MerchantShell() {
   // Floor waiters and register-first staff (cashiers) cannot browse the manager panel.
   useEffect(() => {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
+    if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = user?.permissions as Permission[] | undefined;
     const registerFirst = isRegisterFirstStaff(perms, false);
     if (!registerFirst && canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
@@ -1269,6 +1280,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/support" allow={allow}>
                   <Support />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="notifications"
+              element={
+                <PanelRouteGuard path="/merchant/notifications" allow={allow}>
+                  <PlatformNotificationsHistory />
                 </PanelRouteGuard>
               }
             />

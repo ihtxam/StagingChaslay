@@ -22,6 +22,27 @@ router.get('/messages', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/panel/messages/history
+ * Historical published messages (including dismissed), paginated.
+ */
+router.get('/messages/history', async (req: Request, res: Response) => {
+  try {
+    const viewer = PlatformMessageService.resolveViewer(req.user);
+    if (!viewer) return res.status(403).json({ error: 'Unsupported role' });
+    const data = await PlatformMessageService.getHistoryForViewer(
+      viewer,
+      req.query.offset,
+      req.query.limit
+    );
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to load notification history',
+    });
+  }
+});
+
+/**
  * POST /api/panel/messages/:messageId/dismiss
  */
 router.post('/messages/:messageId/dismiss', async (req: Request, res: Response) => {
