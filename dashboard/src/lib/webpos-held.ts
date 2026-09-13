@@ -13,6 +13,8 @@ export type HeldCartMeta = {
   kitchenTicketKey?: string | null;
   orderNote?: string | null;
   billDiscount?: { percent?: number; amount?: number } | null;
+  taxRate?: number | null;
+  vatIncludedInPrice?: boolean | null;
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -54,6 +56,8 @@ export function parseHeldCartJson(raw: unknown): HeldCartMeta {
     kitchenTicketKey: typeof o.kitchenTicketKey === 'string' ? o.kitchenTicketKey : null,
     orderNote: typeof o.orderNote === 'string' ? o.orderNote : null,
     billDiscount: o.billDiscount && typeof o.billDiscount === 'object' ? (o.billDiscount as HeldCartMeta['billDiscount']) : null,
+    taxRate: typeof o.taxRate === 'number' ? o.taxRate : Number(o.taxRate) || null,
+    vatIncludedInPrice: typeof o.vatIncludedInPrice === 'boolean' ? o.vatIncludedInPrice : null,
     customerId: typeof o.customerId === 'string' ? o.customerId : null,
     customerName: typeof o.customerName === 'string' ? o.customerName : null,
     customerPhone: typeof o.customerPhone === 'string' ? o.customerPhone : null,
@@ -79,8 +83,16 @@ export function ticketSearchTokens(value?: string | null): string[] {
 export function ticketQueryMatches(query: string, ...values: Array<string | null | undefined>): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
+  const compactQ = q.replace(/[#\s]/g, '');
+  const hayTokens = values.flatMap((v) => ticketSearchTokens(v));
+  if (/^\d+$/.test(compactQ)) {
+    return hayTokens.some((tok) => {
+      const digits = tok.replace(/[#\s]/g, '').replace(/^[a-z]+-?/i, '');
+      return digits === compactQ || tok === compactQ || tok === `#${compactQ}`;
+    });
+  }
   const qTokens = ticketSearchTokens(q);
-  const hay = values.flatMap((v) => ticketSearchTokens(v)).join(' ');
+  const hay = hayTokens.join(' ');
   if (hay.includes(q)) return true;
   return qTokens.some((tok) => tok.length >= 3 && hay.includes(tok));
 }

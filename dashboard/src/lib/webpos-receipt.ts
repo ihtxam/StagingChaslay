@@ -979,7 +979,7 @@ export function buildDigitalReceiptTotals(order: {
     total: roundMoney2(tx.total),
     grossMerchandise,
     vatIncluded,
-    showVatBreakdown: vat.taxRate > 0 && vat.taxAmount > 0,
+    showVatBreakdown: vat.taxAmount > 0,
   };
 }
 
@@ -992,6 +992,12 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   const vatIncluded = tx.vatIncludedInPrice !== false;
 
   if (rate <= 0) {
+    const storedTax = roundMoney2(Number(tx.taxAmount) || 0);
+    if (storedTax > 0.001) {
+      const sub = roundMoney2(tx.subtotal);
+      const derived = sub > 0.001 ? roundMoney2((storedTax / sub) * 100) : 0;
+      return { subtotal: sub, taxAmount: storedTax, taxRate: derived };
+    }
     return { subtotal: roundMoney2(tx.subtotal), taxAmount: 0, taxRate: rate };
   }
 

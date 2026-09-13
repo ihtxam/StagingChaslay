@@ -500,6 +500,9 @@ export class ReservationService {
 
     const reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
     if (Number.isNaN(reservedAt.getTime())) throw new Error("Invalid reservation time");
+    if (reservedAt.getTime() < Date.now() - 60_000) {
+      throw new Error("Cannot book a time in the past");
+    }
 
     if (input.source === "web" || !input.skipSlotCheck) {
       const dateYmd = formatZurichDate(reservedAt);
@@ -889,6 +892,9 @@ export class ReservationService {
       reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
       if (Number.isNaN(reservedAt.getTime())) throw new Error("Invalid reservation time");
       patch.reservedAt = reservedAt;
+    }
+    if (patch.reservedAt && new Date(reservedAt).getTime() < Date.now() - 60_000) {
+      throw new Error("Cannot book a time in the past");
     }
 
     let partySize = Number(current.partySize) || 2;

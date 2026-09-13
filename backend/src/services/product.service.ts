@@ -108,7 +108,10 @@ export class ProductService {
     search?: string,
     categoryId?: string
   ) {
-    const whereConditions: any[] = [eq(schema.products.merchantId, merchantId)];
+    const whereConditions: any[] = [
+      eq(schema.products.merchantId, merchantId),
+      eq(schema.products.isActive, true),
+    ];
     if (categoryId) {
       whereConditions.push(eq(schema.products.categoryId, categoryId));
     }
@@ -329,6 +332,25 @@ export class ProductService {
 
       return { success: true };
     } catch (error) {
+      const code =
+        (error as { code?: string })?.code ||
+        (error as { cause?: { code?: string } })?.cause?.code;
+      if (code === "23503") {
+        const deactivated = await db
+          .update(schema.products)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.products.id, productId),
+              eq(schema.products.merchantId, merchantId)
+            )
+          )
+          .returning();
+        if (deactivated.length === 0) {
+          throw new Error("Product not found");
+        }
+        return { success: true, deactivated: true };
+      }
       console.error("Error deleting product:", error);
       throw error;
     }

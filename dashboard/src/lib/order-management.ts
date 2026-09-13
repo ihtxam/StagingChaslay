@@ -295,6 +295,7 @@ export function isAwaitingPaymentOrder(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase().replace(/-/g, '_');
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   // Invoice / pay-later stay collectable even when fulfillment status is completed.
   if (isInvoiceOrder(o) || pay === 'awaiting_payment') return true;
@@ -422,6 +423,7 @@ export function canAdminCollectPayment(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (pay === 'awaiting_payment') return true;
@@ -456,6 +458,7 @@ export function canCollectPayment(o: MerchantOrder): boolean {
   const pay = (o.paymentStatus || '').toLowerCase();
   const method = (o.paymentMethod || '').toLowerCase();
   if (['cancelled', 'refunded'].includes(status)) return false;
+  if (pay === 'cancelled' || pay === 'refunded') return false;
   if (pay === 'completed' || pay === 'paid' || pay === 'partially_refunded') return false;
   if (Number(o.total || 0) <= 0.001) return false;
   if (!isReadyForPaymentCollection(o)) return false;

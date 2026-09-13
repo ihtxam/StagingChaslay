@@ -391,7 +391,9 @@ export class GiftCardService {
       throw new Error("Card reload is disabled");
     }
 
-    const check = validateGiftAmount(opts.amount, settings);
+    const check = validateGiftAmount(opts.amount, settings, {
+      allowCustomOverMax: opts.type === "sell",
+    });
     if (!check.ok) throw new Error(check.error);
     const amount = check.amount;
 
@@ -432,9 +434,10 @@ export class GiftCardService {
     assertActive(activeCard);
 
     const newBalance = money(activeCard.balance) + amount;
-    if (newBalance > settings.maxAmount) {
+    const balanceCap = Math.max(settings.maxAmount, opts.type === "sell" ? amount : 0);
+    if (newBalance > balanceCap + 0.001) {
       throw new Error(
-        `Balance cannot exceed CHF ${settings.maxAmount.toFixed(2)}`
+        `Balance cannot exceed CHF ${balanceCap.toFixed(2)}`
       );
     }
 
@@ -623,6 +626,7 @@ export class GiftCardService {
       email?: string;
       phone?: string;
       orderId?: string;
+      amount?: number;
     }
   ) {
     const settings = await this.getSettings(merchantId);
@@ -657,13 +661,19 @@ export class GiftCardService {
       parts.slice(1).join(" ") || ""
     );
 
+    const sellPrice = money(
+      input.amount != null && Number(input.amount) > 0
+        ? input.amount
+        : plan.sellPrice ?? 0
+    );
+
     const rows = await db
       .insert(schema.giftCards)
       .values({
         merchantId,
         cardNumber,
         cardMediaType: "physical",
-        balance: "0",
+        balance: sellPrice > 0 ? sellPrice.toFixed(2) : "0",
         status: "active",
         membershipEnabled: true,
         membershipPlanId: plan.id,
@@ -683,8 +693,11 @@ export class GiftCardService {
       merchantId,
       cardId: card.id,
       transactionType: "membership_issue",
+      amount: sellPrice > 0 ? sellPrice.toFixed(2) : null,
       orderId: input.orderId || null,
-      description: `Membership sold: ${plan.label}`,
+      description: sellPrice > 0
+        ? `Membership sold: ${plan.label} CHF ${sellPrice.toFixed(2)}`
+        : `Membership sold: ${plan.label}`,
     });
 
     return this.enrichCard(card as unknown as Record<string, unknown>, settings);

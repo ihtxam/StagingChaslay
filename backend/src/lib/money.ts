@@ -8,6 +8,18 @@ export function roundMoney2(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
 
+/** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */
+export function extractNetFromGross(gross: number, ratePercent: number): number {
+  if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0) return roundMoney2(gross);
+  return roundMoney2(gross / (1 + ratePercent / 100));
+}
+
+/** Extract VAT from a gross (tax-included) amount. */
+export function extractVatFromGross(gross: number, ratePercent: number): number {
+  if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0) return 0;
+  return roundMoney2(gross - extractNetFromGross(gross, ratePercent));
+}
+
 /** Round to nearest 0.05 CHF. */
 export function roundTo005(amount: number): number {
   if (!Number.isFinite(amount)) return 0;

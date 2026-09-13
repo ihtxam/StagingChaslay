@@ -836,6 +836,7 @@ export class OrderService {
         const reasonText = resolvePosCancelReason(String(opts?.rejectReason || ""));
         const updated = await set({
           status: "cancelled",
+          paymentStatus: "cancelled",
           cancelReason: reasonText || null,
           cancelledAt: new Date(),
         });
@@ -1030,7 +1031,7 @@ export class OrderService {
       // Update order status
       const updatedOrder = await db
         .update(schema.orders)
-        .set({ status: "cancelled" })
+        .set({ status: "cancelled", paymentStatus: "cancelled" })
         .where(eq(schema.orders.id, orderId))
         .returning();
 
