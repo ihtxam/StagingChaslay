@@ -1788,6 +1788,7 @@ button {
 /* Unified shop + CMS theme tokens (from homepage builder) */
 .shop-themed {
   color: var(--shop-text, #1c1917);
+  overflow: visible;
 }
 
 .shop-btn-primary {

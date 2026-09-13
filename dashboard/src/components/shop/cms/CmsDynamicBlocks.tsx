@@ -68,7 +68,7 @@ export function CmsMenuBlock({
 
   if (!products.length) {
     return (
-      <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
+      <section className="py-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
         <div className="shop-page-content text-center text-sm" style={{ color: 'var(--color-text-2)' }}>
           {t('shopNoItems')}
         </div>
@@ -78,7 +78,7 @@ export function CmsMenuBlock({
 
   if (mode === 'full') {
     return (
-      <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
+      <section className="py-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
         <div className="shop-page-content space-y-10">
           {categories
             .filter((c) => !catFilter.size || catFilter.has(c.id))
@@ -148,7 +148,7 @@ export function CmsMenuBlock({
   }
 
   return (
-    <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
+    <section className="py-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
       <div className="shop-page-content">
         <div className="mb-6 flex items-center justify-between gap-4">
           <h2
@@ -228,8 +228,8 @@ export function CmsHoursBlock({
   const openNow = channels.some((ch) => isChannelOpenAt(hours, ch, new Date()).open);
 
   return (
-    <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-1)' }}>
-      <div className="mx-auto max-w-3xl">
+    <section className="py-10 md:py-14" style={{ background: 'var(--color-bg-1)' }}>
+      <div className="shop-page-content">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-semibold md:text-2xl" style={{ color: 'var(--color-text-0)' }}>
             {props.title || t('shopOpeningHours')}
@@ -301,7 +301,8 @@ export function CmsReservationsBlock({
   if (!reservationsEnabled || !shopKey) return null;
 
   return (
-    <section className="px-6 py-10 md:px-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
+    <section className="py-10 md:py-14" style={{ background: 'var(--color-bg-0)' }}>
+      <div className="shop-page-content">
       <div
         className="mx-auto max-w-xl rounded-2xl border p-5 md:p-6 shadow-sm"
         style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-1)' }}
@@ -312,6 +313,7 @@ export function CmsReservationsBlock({
           title={props.title}
           embedded
         />
+      </div>
       </div>
     </section>
   );
