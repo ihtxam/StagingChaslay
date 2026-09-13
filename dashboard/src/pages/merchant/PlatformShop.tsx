@@ -6,6 +6,7 @@ import {
   mountAdyenDropin,
   normalizeAdyenPaymentSession,
   formatAdyenError,
+  type AdyenPaymentSession,
 } from '@/lib/adyen-checkout';
 import { useI18n } from '@/lib/i18n';
 
@@ -26,13 +27,6 @@ type Order = {
   currency: string;
   createdAt: string;
   items: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>;
-};
-
-type PaymentSession = {
-  id: string;
-  sessionData: string;
-  clientKey: string;
-  environment: string;
 };
 
 function money(amount: string | number, currency = 'CHF') {
@@ -57,11 +51,16 @@ export default function PlatformShop() {
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [checkoutOrderId, setCheckoutOrderId] = useState<string | null>(null);
-  const [session, setSession] = useState<PaymentSession | null>(null);
+  const [session, setSession] = useState<AdyenPaymentSession | null>(null);
   const [payMsg, setPayMsg] = useState('');
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
+  const checkoutOrderIdRef = useRef<string | null>(null);
   const checkoutDetailsRef = useRef({ voucherCode: '', notes: '' });
+
+  useEffect(() => {
+    checkoutOrderIdRef.current = checkoutOrderId;
+  }, [checkoutOrderId]);
 
   const clearDropin = useCallback(() => {
     if (dropinEl) dropinEl.innerHTML = '';
@@ -146,7 +145,10 @@ export default function PlatformShop() {
       return;
     }
     setBusy(true);
-    resetPayment();
+    setPayMsg('');
+    setSession(null);
+    setCheckoutOrderId(null);
+    dropinMounted.current = false;
     try {
       const items = cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty }));
       const res = await api.post('/merchant/platform-shop/checkout', {
@@ -182,25 +184,29 @@ export default function PlatformShop() {
   };
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinEl) return;
+    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
+      return;
+    }
     let cancelled = false;
-    dropinEl.innerHTML = '';
-    dropinMounted.current = false;
+
     void (async () => {
       try {
         await mountAdyenDropin({
           session,
           container: dropinEl,
           onPaymentCompleted: async (result) => {
-            if (cancelled || !checkoutOrderId) return;
+            const orderId = checkoutOrderIdRef.current;
+            if (cancelled || !orderId) return;
             setPayMsg(t('billingActivating'));
             try {
               await api.post('/merchant/platform-shop/confirm', {
-                orderId: checkoutOrderId,
+                orderId,
                 resultCode: result?.resultCode || 'Authorised',
               });
               toast.success(t('platformShopOrderPlaced'));
               setCart({});
+              setVoucherCode('');
+              setNotes('');
               resetPayment();
               await load();
             } catch (err: unknown) {
@@ -217,17 +223,17 @@ export default function PlatformShop() {
         if (!cancelled) dropinMounted.current = true;
       } catch (err) {
         if (!cancelled) {
-          setPayMsg(formatAdyenError(err, 'mount') || 'Could not load payment form');
-          resetPayment();
+          const msg = formatAdyenError(err, 'mount') || 'Could not load payment form';
+          setPayMsg(msg);
+          toast.error(msg);
         }
       }
     })();
+
     return () => {
       cancelled = true;
-      dropinEl.innerHTML = '';
-      dropinMounted.current = false;
     };
-  }, [session?.id, dropinEl, checkoutOrderId, t, load, resetPayment]);
+  }, [session, dropinEl, t, load, resetPayment]);
 
   if (loading) {
     return <div className="text-sm text-stone-500">{t('loading')}</div>;
@@ -351,24 +357,43 @@ export default function PlatformShop() {
           >
             {busy ? t('loading') : t('checkout')}
           </button>
-          {session ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-stone-600">{t('platformShopPayOnline')}</p>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-stone-600 underline"
-                  onClick={resetPayment}
-                >
-                  {t('cancel')}
-                </button>
-              </div>
-              <div key={session.id} ref={setDropinEl} />
-              {payMsg ? <p className="text-xs text-red-600">{payMsg}</p> : null}
-            </div>
-          ) : null}
         </aside>
       </div>
+
+      {session ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/45 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('platformShopPayOnline')}
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-stone-200 overflow-hidden">
+            <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-stone-100">
+              <div>
+                <h2 className="text-base font-semibold text-stone-900">{t('platformShopPayOnline')}</h2>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  {checkoutOrderId ? `#${checkoutOrderId.slice(0, 8)}` : null}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-sm font-semibold text-stone-600 underline"
+                onClick={resetPayment}
+              >
+                {t('cancel')}
+              </button>
+            </div>
+            <div className="p-4">
+              <div key={session.id} ref={setDropinEl} className="min-h-[160px]" />
+              {payMsg ? (
+                <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {payMsg}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {orders.length ? (
         <section className="space-y-3">
