@@ -446,7 +446,7 @@ import {
   type MerchantOrder,
 } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
-import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
+import { INCOMING_ONLINE_ORDER_STATUSES_PARAM, ONLINE_ORDER_HISTORY_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 import {
   posSaleToNotificationOrder,
@@ -476,6 +476,7 @@ type CollectOrderRef = {
 import type {
   BillDiscount,
   GiftCardLineMeta,
+  MembershipSellMeta,
   KeypadMode,
   OpenCartDraft,
   PosCategoryId,
@@ -538,10 +539,11 @@ type Product = {
   weightUnit?: string | null;
   stock?: number;
   productType?: string;
-  sku?: string | null;
+    sku?: string | null;
   barcode?: string | null;
   allowExtras?: boolean;
   visibility?: unknown;
+  sortOrder?: number;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
   modifierGroups?: ShopModifierGroup[];
   comboSlots?: ComboSlot[];
@@ -572,6 +574,7 @@ type CartLine = {
   kitchenPrintFailed?: boolean;
   lineNote?: string;
   giftCard?: GiftCardLineMeta;
+  membershipSell?: MembershipSellMeta;
 };
 
 function lineExtrasLabel(l: CartLine) {
@@ -1694,7 +1697,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(retailDeliveryEnabled ? (['delivery'] as const) : []),
       ]
     : [
-        ...(counterDineInEnabled ? (['dine_in'] as const) : []),
+        ...(tablesUiEnabled && counterDineInEnabled ? (['dine_in'] as const) : []),
         ...(editionAllows('channel_takeaway') ? (['takeaway'] as const) : []),
         ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
       ];
@@ -2047,7 +2050,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (gridSort === 'alpha') {
       return filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     }
-    return filtered;
+    return filtered.sort((a, b) => {
+      const sa = Number(a.sortOrder) || 0;
+      const sb = Number(b.sortOrder) || 0;
+      if (sa !== sb) return sa - sb;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
   }, [products, categories, categoryId, search, bestsellerIds, gridSort]);
 
   const visibleCategories = useMemo(
@@ -2785,11 +2793,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const pollOnlineOrders = useCallback(async () => {
     try {
-      const res = await api.get('/merchant/orders/incoming', {
-        params: { limit: 200, statuses: INCOMING_ONLINE_ORDER_STATUSES_PARAM },
-      });
-      const all = (res.data.orders || []) as OnlineOrder[];
-      const online = all.filter((o) => isOnlineShopOrder(o));
+      const [activeRes, historyRes] = await Promise.all([
+        api.get('/merchant/orders/incoming', {
+          params: { limit: 200, statuses: INCOMING_ONLINE_ORDER_STATUSES_PARAM },
+        }),
+        api.get('/merchant/orders/incoming', {
+          params: { limit: 150, statuses: ONLINE_ORDER_HISTORY_STATUSES_PARAM },
+        }),
+      ]);
+      const byId = new Map<string, OnlineOrder>();
+      for (const row of [
+        ...((activeRes.data.orders || []) as OnlineOrder[]),
+        ...((historyRes.data.orders || []) as OnlineOrder[]),
+      ]) {
+        if (isOnlineShopOrder(row)) byId.set(row.id, row);
+      }
+      const online = [...byId.values()];
       setOnlineOrders(online);
 
       const alertStatuses = onlineOrderAlertStatuses(deliveryAutoAccept);
@@ -4618,7 +4637,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setTableId(meta.tableId || table?.id || null);
       setTableLabel(meta.tableLabel || table?.label || null);
       setTabNumber(meta.tabNumber);
-      const ticketFromLabel = (held.label || '').match(/#\d{4}/)?.[0] || null;
+      const ticketFromLabel = (held.label || '').match(/#\d{1,6}/)?.[0] || null;
       const restoredTicket =
         meta.kitchenTicketKey?.trim() ||
         meta.ticketDisplay?.trim() ||
@@ -4990,6 +5009,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber: ticket.orderNumber,
       kitchenTicketKey: ticket.display,
       billDiscount,
+      taxRate,
+      vatIncludedInPrice,
       orderNote,
       customerId: selectedCustomer?.id || null,
       customerName: heldCustomerName || null,
@@ -5150,12 +5171,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('register');
   };
 
-  const startNewOrder = async (force = false) => {
+  const startNewOrder = async (force = false, opts?: { skipHold?: boolean }) => {
     if (cart.length > 0 && !force) {
       setNewOrderConfirmOpen(true);
       return;
     }
-    if (cart.length > 0) {
+    if (cart.length > 0 && !opts?.skipHold) {
       try {
         await persistHeldOrder(cart, orderSent || cart.some((l) => l.sentToKitchen));
       } catch {
@@ -5733,6 +5754,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const selectFulfillmentChannel = (ch: 'takeaway' | 'delivery' | 'dine_in') => {
+    if (ch === 'dine_in' && !tablesUiEnabled) return;
     if (ch === 'dine_in' && channel === 'dine_in') {
       leaveTableForChannel();
       if (!tableId) clearCartTicket();
@@ -5763,6 +5785,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   /** Menu: switch to dine-in (floor-plan table selection is on the Tables tab only). */
   const switchToDineIn = () => {
+    if (!tablesUiEnabled) return;
     if (channel !== 'dine_in') {
       setChannel('dine_in');
       setFulfillmentWhen(null);
@@ -5817,7 +5840,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
 
       // Persist cancellation for EOD / sales reports (reason required).
-      if (recordLines.length) {
+      // Resumed held tickets already have a row — cancel via held API to avoid a second CXL sale.
+      const heldId = scope === 'item' ? null : resumedHeldIdRef.current;
+      let recordedViaHeld = false;
+      if (heldId) {
+        try {
+          await api.post(`/merchant/pos/held/${heldId}/cancel`, {
+            reason: reasonId || reason,
+          });
+          recordedViaHeld = true;
+          resumedHeldIdRef.current = null;
+          setOrdersRefreshToken((n) => n + 1);
+        } catch {
+          /* fall through to push-sales */
+        }
+      }
+      if (!recordedViaHeld && recordLines.length) {
         const ticket = nextWebPosTicketNumber(merchant?.id);
         const cancelBase = computeMerchandiseTotals(
           recordLines,
@@ -5861,7 +5899,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (selectedLineId === lineId) setSelectedLineId(null);
         toast.success(t('webPosItemCancelled'));
       } else {
-        void startNewOrder(true);
+        void startNewOrder(true, { skipHold: true });
         toast.success(t('webPosOrderCancelled'));
       }
     } catch (e: any) {
@@ -9930,7 +9968,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               const ch = (held.channel || 'takeaway') as Channel;
               const existingTicket =
                 (!Array.isArray(data) && data?.ticketDisplay) ||
-                (held.label || '').match(/#\d{4}/)?.[0] ||
+                (held.label || '').match(/#\d{1,6}/)?.[0] ||
                 null;
               const ticketDisplay =
                 existingTicket || nextWebPosTicketNumber(merchant?.id).display;
@@ -10075,7 +10113,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 showSend={showSend}
                 hideTab={hideTab}
                 canCancelOrder={
-                  canCancelOrders && (cart.length > 0 || (!kitchenEnabled && !orderSent))
+                  canCancelOrders &&
+                  (cart.length > 0 ||
+                    !!resumedHeldIdRef.current ||
+                    (!kitchenEnabled && !orderSent))
                 }
                 canCancelItem={
                   canCancelOrders &&

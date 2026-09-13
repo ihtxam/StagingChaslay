@@ -22,6 +22,10 @@ export type OnlineOrder = {
   fulfillmentChannel?: string | null;
   status: string;
   total: string | number;
+  deliveryFee?: string | number | null;
+  cardFee?: string | number | null;
+  subtotal?: string | number | null;
+  taxAmount?: string | number | null;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
   customerName?: string | null;

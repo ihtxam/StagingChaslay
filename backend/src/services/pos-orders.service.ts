@@ -305,35 +305,35 @@ export class PosOrdersService {
 
     const q = String(opts.q || "").trim();
     const bareQ = q.replace(/^#/, "");
+    const numericQ = /^\d{3,}$/.test(bareQ);
     const searchParts = q
-      ? [
-          ilike(schema.orders.orderNumber, `%${q}%`),
-          ilike(schema.orders.clientId, `%${q}%`),
-          ilike(schema.orders.invoiceNumber, `%${q}%`),
-          ilike(schema.orders.customerName, `%${q}%`),
-          ilike(schema.orders.paymentMethod, `%${q}%`),
-          ilike(schema.orders.tableLabel, `%${q}%`),
-          ilike(schema.orders.notes, `%${q}%`),
-        ]
+      ? numericQ
+        ? [
+            eq(schema.orders.orderNumber, bareQ),
+            eq(schema.orders.orderNumber, `#${bareQ}`),
+            eq(schema.orders.invoiceNumber, bareQ),
+            eq(schema.orders.clientId, bareQ),
+            ilike(schema.orders.orderNumber, `%-${bareQ}`),
+            ilike(schema.orders.notes, `%[ticket:${bareQ}]%`),
+            ilike(schema.orders.notes, `%[tab:${bareQ}]%`),
+            ilike(schema.orders.notes, `%[ticket:#${bareQ}]%`),
+            ilike(schema.orders.notes, `%[tab:#${bareQ}]%`),
+          ]
+        : [
+            ilike(schema.orders.orderNumber, `%${q}%`),
+            ilike(schema.orders.clientId, `%${q}%`),
+            ilike(schema.orders.invoiceNumber, `%${q}%`),
+            ilike(schema.orders.customerName, `%${q}%`),
+            ilike(schema.orders.paymentMethod, `%${q}%`),
+            ilike(schema.orders.tableLabel, `%${q}%`),
+            ilike(schema.orders.notes, `%${q}%`),
+          ]
       : [];
-    if (bareQ && bareQ !== q) {
+    if (!numericQ && bareQ && bareQ !== q) {
       searchParts.push(
         ilike(schema.orders.orderNumber, `%${bareQ}%`),
         ilike(schema.orders.notes, `%${bareQ}%`)
       );
-    }
-    if (/^\d{1,6}$/.test(bareQ)) {
-      const guestNum = Number(bareQ);
-      searchParts.push(
-        ilike(schema.orders.notes, `%[ticket:${bareQ}]%`),
-        ilike(schema.orders.notes, `%[tab:${bareQ}]%`),
-        ilike(schema.orders.notes, `%[ticket:#${bareQ}]%`),
-        ilike(schema.orders.notes, `%[tab:#${bareQ}]%`),
-        ilike(schema.orders.orderNumber, `%WEB%-${bareQ}%`)
-      );
-      if (Number.isFinite(guestNum)) {
-        searchParts.push(eq(schema.orders.guestCount, guestNum));
-      }
     }
     const searchCond = searchParts.length ? or(...searchParts) : null;
 
@@ -443,6 +443,7 @@ export class PosOrdersService {
       externalOrderId: o.externalOrderId,
       status: o.status,
       channel: o.fulfillmentChannel,
+      fulfillmentChannel: o.fulfillmentChannel,
       paymentMethod: o.paymentMethod,
       paymentBreakdown: o.paymentBreakdown ?? null,
       paymentStatus: o.paymentStatus,
@@ -451,9 +452,15 @@ export class PosOrdersService {
       invoiceDueAt: (o as { invoiceDueAt?: Date | null }).invoiceDueAt || null,
       subtotal: Number(o.subtotal),
       taxAmount: Number(o.taxAmount),
+      taxRate:
+        Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
+          ? roundMoney2((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+          : undefined,
       discountAmount: Number(o.discountAmount || 0),
       tipAmount: Number(o.tipAmount || 0),
       roundingAmount: Number(o.roundingAmount || 0),
+      deliveryFee: Number(o.deliveryFee || 0),
+      cardFee: Number(o.cardFee || 0),
       total: Number(o.total),
       refundAmount: Number(o.refundAmount || 0),
       cancelReason: o.cancelReason,

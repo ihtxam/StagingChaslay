@@ -11,17 +11,16 @@ function normalizeShout(value: string): string {
   return trimmed.startsWith('#') ? trimmed : `#${trimmed.replace(/^#/, '')}`;
 }
 
-/** Display-friendly web order number — shortens legacy WEB-{timestamp}-{suffix} values. */
+/** Display-friendly web order number — keeps scoped WEB-CODE-SEQ; shortens legacy timestamps. */
 export function formatOrderNumberDisplay(orderNumber: string | null | undefined): string {
   const n = String(orderNumber || '').trim();
   if (!n) return n;
   if (SHORT_WEB_RE.test(n)) return n;
-  const scoped = n.match(SCOPED_WEB_RE);
-  if (scoped) return `WEB-${scoped[2]}`;
+  if (SCOPED_WEB_RE.test(n)) return n;
   const legacy = n.match(LEGACY_WEB_RE);
   if (legacy) {
     if (legacy[2]) return `WEB-${legacy[2]}`;
-    return `WEB-${legacy[1].slice(-4)}`;
+    return `WEB-${legacy[1].slice(-8)}`;
   }
   return n;
 }
@@ -35,6 +34,10 @@ export function guestOrderNumber(opts: {
   orderDisplay?: string | null;
   tabNumber?: string | null;
 }): string {
+  const raw = String(opts.orderNumber || '').trim();
+  if (/^(WEB|TX)-/i.test(raw)) {
+    return formatOrderNumberDisplay(raw) || raw;
+  }
   const shout = String(opts.orderDisplay || '').trim();
   if (shout && !OPAQUE_ORDER_RE.test(shout)) {
     return normalizeShout(shout);
@@ -43,9 +46,9 @@ export function guestOrderNumber(opts: {
     .trim()
     .replace(/^#/, '');
   if (tab) return `#${tab}`;
-  const raw = formatOrderNumberDisplay(opts.orderNumber);
-  if (!raw || OPAQUE_ORDER_RE.test(raw)) return '';
-  return raw;
+  const formatted = formatOrderNumberDisplay(raw);
+  if (!formatted || OPAQUE_ORDER_RE.test(formatted)) return '';
+  return formatted;
 }
 
 /** Checkout AMOUNT DUE line — same primary number as receipts; kitchen secondary when distinct. */
