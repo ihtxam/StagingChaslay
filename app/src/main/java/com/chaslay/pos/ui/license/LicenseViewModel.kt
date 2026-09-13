@@ -6,6 +6,8 @@ import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.domain.model.LicenseUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +26,7 @@ class LicenseViewModel @Inject constructor(
 
     private val _formState = MutableStateFlow(LicenseUiState())
     val formState: StateFlow<LicenseUiState> = _formState.asStateFlow()
+    private var lookupJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -46,13 +49,37 @@ class LicenseViewModel @Inject constructor(
     }
 
     fun updateActivationCode(code: String) {
-        _formState.update { it.copy(activationCode = code, errorMessage = null) }
+        lookupJob?.cancel()
+        _formState.update {
+            it.copy(
+                activationCode = code,
+                errorMessage = null,
+                lookedUpMerchantName = null,
+                isLookingUpMerchant = false
+            )
+        }
+        val trimmed = code.trim()
+        if (trimmed.length < 8) return
+        lookupJob = viewModelScope.launch {
+            delay(450)
+            _formState.update { it.copy(isLookingUpMerchant = true) }
+            licenseRepository.lookup(code)
+                .onSuccess { name ->
+                    _formState.update {
+                        it.copy(isLookingUpMerchant = false, lookedUpMerchantName = name)
+                    }
+                }
+                .onFailure {
+                    _formState.update { it.copy(isLookingUpMerchant = false) }
+                }
+        }
     }
 
     fun activate() {
         val code = _formState.value.activationCode
+        lookupJob?.cancel()
         viewModelScope.launch {
-            _formState.update { it.copy(isActivating = true, errorMessage = null) }
+            _formState.update { it.copy(isActivating = true, isLookingUpMerchant = false, errorMessage = null) }
             licenseRepository.activate(code)
                 .onSuccess {
                     _formState.update { it.copy(isActivating = false, activationCode = "", errorMessage = null) }

@@ -14,8 +14,22 @@ data class ActivateLicenseResponse(
     @SerializedName("status") val status: String,
     @SerializedName("expiresAt") val expiresAt: Long,
     @SerializedName("customerName") val customerName: String? = null,
+    @SerializedName("merchantName") val merchantName: String? = null,
     @SerializedName("planLabel") val planLabel: String? = null,
     @SerializedName("tenantSlug") val tenantSlug: String? = null
+)
+
+data class LookupLicenseRequest(
+    @SerializedName("activationCode") val activationCode: String
+)
+
+data class LookupLicenseResponse(
+    @SerializedName("merchantName") val merchantName: String? = null,
+    @SerializedName("customerName") val customerName: String? = null,
+    @SerializedName("tenantSlug") val tenantSlug: String? = null,
+    @SerializedName("planLabel") val planLabel: String? = null,
+    @SerializedName("expiresAt") val expiresAt: Long? = null,
+    @SerializedName("status") val status: String? = null
 )
 
 data class ValidateLicenseRequest(

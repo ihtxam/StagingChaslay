@@ -96,6 +96,8 @@ fun LicenseSettingsSection(
         deviceId = form.liveDeviceId.ifBlank { license.snapshot.deviceId },
         isActivating = form.isActivating,
         errorMessage = form.errorMessage,
+        merchantName = form.lookedUpMerchantName ?: license.snapshot.customerName,
+        isLookingUpMerchant = form.isLookingUpMerchant,
         onCodeChange = viewModel::updateActivationCode,
         onActivate = viewModel::activate
     )
@@ -109,7 +111,9 @@ private fun LicenseActivationForm(
     errorMessage: String?,
     onCodeChange: (String) -> Unit,
     onActivate: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    merchantName: String? = null,
+    isLookingUpMerchant: Boolean = false
 ) {
     val context = LocalContext.current
     var copiedDeviceId by remember { mutableStateOf(false) }
@@ -123,6 +127,24 @@ private fun LicenseActivationForm(
             singleLine = true,
             enabled = !isActivating
         )
+        val shopName = merchantName?.trim().orEmpty()
+        when {
+            shopName.isNotEmpty() -> {
+                Text(
+                    text = stringResource(R.string.license_merchant_label, shopName),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            isLookingUpMerchant -> {
+                Text(
+                    text = stringResource(R.string.license_looking_up_merchant),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Text(
             text = stringResource(R.string.license_device_id_label),
             style = MaterialTheme.typography.bodySmall,
@@ -217,6 +239,8 @@ fun ActivationScreen(
             deviceId = form.liveDeviceId.ifBlank { license.snapshot.deviceId },
             isActivating = form.isActivating,
             errorMessage = form.errorMessage,
+            merchantName = form.lookedUpMerchantName ?: license.snapshot.customerName,
+            isLookingUpMerchant = form.isLookingUpMerchant,
             onCodeChange = viewModel::updateActivationCode,
             onActivate = viewModel::activate
         )

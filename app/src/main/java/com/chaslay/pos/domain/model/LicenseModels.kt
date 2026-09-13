@@ -34,5 +34,7 @@ data class LicenseUiState(
     val liveDeviceId: String = "",
     val activationCode: String = "",
     val isActivating: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val lookedUpMerchantName: String? = null,
+    val isLookingUpMerchant: Boolean = false
 )

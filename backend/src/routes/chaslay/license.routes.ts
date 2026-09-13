@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { ChaslayCompatService } from "@/services/chaslay-compat.service";
-import { logPosLicenseActivation } from "@/lib/license-activation-log";
+import { logPosLicenseActivation, publicLicenseActivationError } from "@/lib/license-activation-log";
 
 const router = Router();
 
@@ -35,22 +35,41 @@ router.post("/activate", async (req: Request, res: Response) => {
       deviceId: String(deviceId),
       activationCode: String(activationCode),
       tenantSlug: result.tenantSlug,
+      merchantId: result.merchantId,
       appVersion,
       deviceModel,
     });
     res.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Activation failed";
+    const raw = error instanceof Error ? error.message : "Activation failed";
+    const message = publicLicenseActivationError(error);
     const referenceId = await logPosLicenseActivation({
       outcome: "failure",
       deviceId: String(deviceId || ""),
       activationCode: String(activationCode || ""),
-      errorMessage: message,
+      errorMessage: raw,
       tenantSlug: resolvedTenantSlug,
       appVersion,
       deviceModel,
     });
     res.status(400).json({ error: message, referenceId });
+  }
+});
+
+/** Resolve merchant/shop name for an activation code without consuming the license. */
+router.post("/lookup", async (req: Request, res: Response) => {
+  try {
+    const { activationCode } = req.body ?? {};
+    if (!activationCode || !String(activationCode).trim()) {
+      return res.status(400).json({ error: "activationCode is required" });
+    }
+    const result = await ChaslayCompatService.lookupLicense(String(activationCode));
+    if (!result) {
+      return res.status(404).json({ error: "Unknown activation code" });
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: publicLicenseActivationError(error) });
   }
 });
 

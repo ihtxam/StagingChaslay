@@ -630,6 +630,8 @@
     <string name="license_activate_button">Aktivieren</string>
     <string name="license_device_id">Geräte-ID: %1$s</string>
     <string name="license_device_id_help">Senden Sie diese Geräte-ID an den Support, wenn Sie einen Aktivierungs- oder Verlängerungscode anfordern.</string>
+    <string name="license_merchant_label">Shop: %1$s</string>
+    <string name="license_looking_up_merchant">Shop wird gesucht…</string>
     <string name="license_trial_banner">Studie: %1$d Tag(e) verbleibend</string>
     <string name="license_renewal_banner">Das Abonnement verlängert sich in %1$d Tag(en). Wenden Sie sich an den Support, um zu verlängern.</string>
     <string name="combo_add_to_order">Zur Bestellung hinzufügen</string>
