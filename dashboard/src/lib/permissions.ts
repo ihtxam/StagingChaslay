@@ -5,6 +5,7 @@ import {
 import { canAccessBusinessModuleRoute, type BusinessModule } from './business-module';
 import { isStandalonePwa } from './pwa';
 import { normalizeStaffLoginHome, type StaffLoginHome } from './staff-login-home';
+import { isPlatformNotificationsPath } from './platform-notifications';
 
 export type Permission =
   | 'USE_POS'
@@ -143,6 +144,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
+  '/merchant/notifications': [],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],
   '/merchant/inventory/home': ['MANAGE_INVENTORY'],
@@ -285,6 +287,7 @@ export function canAccessRoute(
 ): boolean {
   if (!canAccessBusinessModuleRoute(path, businessModule)) return false;
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
+  if (isPlatformNotificationsPath(path)) return true;
   if (isOrderCenterOnlyStaff(permissions, isOwner)) {
     return isOrderCenterPanelPath(path);
   }

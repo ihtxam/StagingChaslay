@@ -198,6 +198,48 @@ export class PlatformMessageService {
     };
   }
 
+  static paginateHistory<T>(items: T[], offsetRaw: unknown, limitRaw: unknown) {
+    const offset = Math.max(0, Math.floor(Number(offsetRaw) || 0));
+    const limit = Math.min(50, Math.max(1, Math.floor(Number(limitRaw) || 20)));
+    const page = items.slice(offset, offset + limit);
+    return {
+      messages: page,
+      total: items.length,
+      offset,
+      limit,
+      hasMore: offset + page.length < items.length,
+    };
+  }
+
+  /** All published messages for the viewer, including dismissed and expired entries. */
+  static async getHistoryForViewer(viewer: PanelViewer, offsetRaw?: unknown, limitRaw?: unknown) {
+    const db = getDb();
+    const now = new Date();
+    const all = await db.query.platformMessages.findMany({
+      where: and(
+        eq(schema.platformMessages.isActive, true),
+        or(isNull(schema.platformMessages.startsAt), lte(schema.platformMessages.startsAt, now))
+      ),
+      orderBy: [desc(schema.platformMessages.createdAt)],
+      limit: 500,
+    });
+
+    const visible = all.filter((m) => audienceMatches(m, viewer));
+    const ids = visible.map((m) => m.id);
+    const dismissals = ids.length
+      ? await db.query.platformMessageDismissals.findMany({
+          where: and(
+            inArray(schema.platformMessageDismissals.messageId, ids),
+            eq(schema.platformMessageDismissals.viewerRole, viewer.role),
+            eq(schema.platformMessageDismissals.viewerId, viewer.viewerId)
+          ),
+        })
+      : [];
+    const dismissed = new Set(dismissals.map((d) => d.messageId));
+    const stamped = visible.map((m) => ({ ...m, dismissed: dismissed.has(m.id) }));
+    return PlatformMessageService.paginateHistory(stamped, offsetRaw, limitRaw);
+  }
+
   static async dismiss(viewer: PanelViewer, messageId: string) {
     const db = getDb();
     const existing = await db.query.platformMessageDismissals.findFirst({

@@ -1,6 +1,8 @@
 import { ExternalLink, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import type { PlatformMessage } from '@/hooks/usePlatformMessages';
 import { useI18n } from '@/lib/i18n';
+import { platformNotificationsPath } from '@/lib/platform-notifications';
 
 function formatDate(dateStr: string) {
   return new Date(dateStr)
@@ -22,6 +24,8 @@ export default function PlatformWhatsNewModal({
   onDismissAll: () => void;
 }) {
   const { t } = useI18n();
+  const location = useLocation();
+  const historyPath = platformNotificationsPath(location.pathname);
 
   if (!open) return null;
 
@@ -38,16 +42,14 @@ export default function PlatformWhatsNewModal({
             <h2 id="platform-whats-new-title" className="text-xl font-bold text-stone-900 dark:text-stone-100">
               {t('platformWhatsNew')}
             </h2>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-              }}
+            <Link
+              to={historyPath}
+              onClick={onClose}
               className="text-sm text-red-600 hover:underline inline-flex items-center gap-1 mt-1"
             >
               {t('platformSeeAllEntries')}
               <ExternalLink className="w-3 h-3" />
-            </a>
+            </Link>
           </div>
           <button
             type="button"
