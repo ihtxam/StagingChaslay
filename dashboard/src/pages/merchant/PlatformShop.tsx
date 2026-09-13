@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
@@ -24,11 +24,17 @@ type Order = {
   id: string;
   status: string;
   paymentStatus: string;
+  subtotal?: string;
+  discountAmount?: string;
   total: string;
   currency: string;
+  voucherCode?: string | null;
+  notes?: string | null;
   createdAt: string;
+  updatedAt?: string;
+  paidAt?: string | null;
   trackingUrl?: string | null;
-  items: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  items: Array<{ name: string; quantity: number; unitPrice: number; lineTotal?: number }>;
 };
 
 type Quote = {
@@ -62,6 +68,165 @@ function statusLabel(status: string, t: (k: string) => string) {
   return map[status] || status;
 }
 
+const FOLLOW_STEPS = ['paid', 'accepted', 'processing', 'shipped'] as const;
+
+function StatusTimeline({ status, t }: { status: string; t: (k: string) => string }) {
+  if (status === 'cancelled') {
+    return (
+      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+        {statusLabel(status, t)}
+      </p>
+    );
+  }
+  const pos =
+    status === 'fulfilled'
+      ? FOLLOW_STEPS.length - 1
+      : FOLLOW_STEPS.indexOf(status as (typeof FOLLOW_STEPS)[number]);
+  return (
+    <ol className="space-y-2">
+      {FOLLOW_STEPS.map((s, i) => {
+        const reached = pos >= 0 && i <= pos;
+        const current = status === s || (status === 'fulfilled' && s === 'shipped');
+        return (
+          <li key={s} className="flex items-center gap-2 text-sm">
+            <span
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                reached ? 'bg-emerald-500' : 'bg-[var(--border)]'
+              }`}
+            />
+            <span
+              className={
+                current
+                  ? 'font-semibold text-[var(--text)]'
+                  : reached
+                    ? 'text-[var(--text)]'
+                    : 'text-[var(--text-muted)]'
+              }
+            >
+              {statusLabel(s, t)}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function DraggableSheet({
+  title,
+  subtitle,
+  onClose,
+  closeLabel,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  closeLabel: string;
+  children: ReactNode;
+}) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const drag = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: offset.x,
+      origY: offset.y,
+    };
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d?.active) return;
+    const maxX = Math.max(48, window.innerWidth * 0.45);
+    const maxY = Math.max(48, window.innerHeight * 0.45);
+    setOffset({
+      x: Math.max(-maxX, Math.min(maxX, d.origX + (e.clientX - d.startX))),
+      y: Math.max(-maxY, Math.min(maxY, d.origY + (e.clientY - d.startY))),
+    });
+  };
+  const onPointerUp = () => {
+    if (drag.current) drag.current.active = false;
+  };
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-3 sm:p-6"
+      style={{
+        paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+      }}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex min-h-0 w-full max-w-lg max-h-full flex-col overflow-hidden rounded-2xl bg-[var(--bg-elevated)] shadow-2xl border border-[var(--border)]"
+        style={{
+          marginLeft: offset.x,
+          marginTop: offset.y,
+          maxHeight: 'calc(100dvh - 1.5rem)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-[var(--border)]">
+          <div
+            className="flex cursor-grab active:cursor-grabbing touch-none items-center justify-center pt-2 pb-1 select-none"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            <div className="h-1.5 w-12 rounded-full bg-[var(--border)]" aria-hidden />
+          </div>
+          <div
+            className="flex cursor-grab active:cursor-grabbing items-start justify-between gap-3 px-4 pb-3 select-none"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-[var(--text)]">{title}</h2>
+              {subtitle ? <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p> : null}
+            </div>
+            <button type="button" className="text-sm font-semibold text-[var(--text-muted)] underline" onClick={onClose}>
+              {closeLabel}
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function adyenLocaleFor(locale: string) {
   if (locale === 'fr') return 'fr-CH';
   if (locale === 'de') return 'de-CH';
@@ -76,6 +241,7 @@ export default function PlatformShop() {
   const [orders, setOrders] = useState<Order[]>([]);
 
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
+  const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [step, setStep] = useState<1 | 2 | 'done'>(1);
   const [qty, setQty] = useState(1);
   const [voucherCode, setVoucherCode] = useState('');
@@ -162,6 +328,22 @@ export default function PlatformShop() {
     setPopupOffset({ x: 0, y: 0 });
     popupDrag.current = null;
   };
+
+  const closeOrder = useCallback(() => setViewOrder(null), []);
+
+  const openOrder = useCallback(async (order: Order) => {
+    setViewOrder(order);
+    try {
+      const res = await api.get(`/merchant/platform-shop/orders/${order.id}`);
+      const fresh = res.data.order as Order | undefined;
+      if (fresh) {
+        setViewOrder(fresh);
+        setOrders((prev) => prev.map((row) => (row.id === fresh.id ? { ...row, ...fresh } : row)));
+      }
+    } catch {
+      /* keep the list snapshot if refresh fails */
+    }
+  }, []);
 
   useEffect(() => {
     if (!buyProduct) return;
@@ -656,46 +838,139 @@ export default function PlatformShop() {
           )
         : null}
 
-      {orders.length ? (
-        <section className="space-y-3">
-          <h2 className="font-semibold text-[var(--text)]">{t('platformShopMyOrders')}</h2>
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
-            <table className="min-w-full text-sm">
-              <thead className="bg-[var(--bg-muted)] text-left text-[var(--text-muted)]">
-                <tr>
-                  <th className="px-3 py-2">{t('date')}</th>
-                  <th className="px-3 py-2">{t('items')}</th>
-                  <th className="px-3 py-2">{t('status')}</th>
-                  <th className="px-3 py-2">{t('total')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-t border-[var(--border)]">
-                    <td className="px-3 py-2 text-[var(--text)]">{new Date(o.createdAt).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-[var(--text)]">
-                      {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ')}
-                    </td>
-                    <td className="px-3 py-2 text-[var(--text)]">
-                      <div>{statusLabel(o.status, t)}</div>
-                      {o.trackingUrl ? (
-                        <a
-                          href={o.trackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-600 dark:text-blue-400 underline"
-                        >
-                          {t('platformShopTracking')}
-                        </a>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-[var(--text)]">{money(o.total, o.currency)}</td>
-                  </tr>
+      <section className="space-y-3">
+        <h2 className="font-semibold text-[var(--text)]">{t('platformShopMyOrders')}</h2>
+        {orders.length ? (
+          <ul className="space-y-2">
+            {orders.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 text-left shadow-sm hover:border-[var(--accent)]/40"
+                  onClick={() => void openOrder(o)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-[var(--text)] min-w-0">
+                      {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ') || t('items')}
+                    </p>
+                    <span className="shrink-0 font-semibold text-[var(--text)]">{money(o.total, o.currency)}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+                    <span>{new Date(o.createdAt).toLocaleString()}</span>
+                    <span className="font-semibold text-[var(--text)]">{statusLabel(o.status, t)}</span>
+                  </div>
+                  {o.trackingUrl ? (
+                    <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">{t('platformShopTracking')}</p>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)]">{t('platformShopNoOrders')}</p>
+        )}
+      </section>
+
+      {viewOrder ? (
+        <DraggableSheet
+          title={t('platformShopOrderDetails')}
+          subtitle={`${t('platformShopOrderRef')} #${viewOrder.id.slice(0, 8)}`}
+          onClose={closeOrder}
+          closeLabel={t('close')}
+        >
+          <div className="p-4 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">
+                {t('status')}
+              </p>
+              {viewOrder.paymentStatus === 'pending' && viewOrder.status === 'pending' ? (
+                <p className="mb-2 text-sm text-amber-700 dark:text-amber-300">{t('platformShopPaymentPending')}</p>
+              ) : null}
+              <StatusTimeline status={viewOrder.status} t={t} />
+            </div>
+
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t('platformShopFollowUp')}
+              </p>
+              {viewOrder.trackingUrl ? (
+                <a
+                  href={viewOrder.trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary inline-flex text-sm"
+                >
+                  {t('platformShopOpenTracking')}
+                </a>
+              ) : viewOrder.status === 'cancelled' ? null : (
+                <p className="text-sm text-[var(--text-muted)]">
+                  {['shipped', 'fulfilled'].includes(viewOrder.status)
+                    ? t('platformShopNoTrackingYet')
+                    : t('platformShopWaitingDispatch')}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">
+                {t('items')}
+              </p>
+              <ul className="space-y-1 text-sm text-[var(--text)]">
+                {(viewOrder.items || []).map((i, idx) => (
+                  <li key={`${i.name}-${idx}`} className="flex justify-between gap-3">
+                    <span>
+                      {i.quantity}× {i.name}
+                    </span>
+                    <span>{money(i.lineTotal ?? i.unitPrice * i.quantity, viewOrder.currency)}</span>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </div>
+
+            {viewOrder.notes ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1">
+                  {t('notes')}
+                </p>
+                <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{viewOrder.notes}</p>
+              </div>
+            ) : null}
+
+            <div className="text-sm space-y-1 border-t border-[var(--border)] pt-3 text-[var(--text)]">
+              {viewOrder.voucherCode ? (
+                <div className="flex justify-between">
+                  <span>{t('platformShopVoucher')}</span>
+                  <span>{viewOrder.voucherCode}</span>
+                </div>
+              ) : null}
+              {viewOrder.subtotal != null ? (
+                <div className="flex justify-between">
+                  <span>{t('subtotal')}</span>
+                  <span>{money(viewOrder.subtotal, viewOrder.currency)}</span>
+                </div>
+              ) : null}
+              {Number(viewOrder.discountAmount || 0) > 0 ? (
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                  <span>{t('discount')}</span>
+                  <span>−{money(viewOrder.discountAmount || 0, viewOrder.currency)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between font-semibold">
+                <span>{t('total')}</span>
+                <span>{money(viewOrder.total, viewOrder.currency)}</span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] pt-1">
+                {t('date')}: {new Date(viewOrder.createdAt).toLocaleString()}
+                {viewOrder.updatedAt ? (
+                  <>
+                    <br />
+                    {t('platformShopUpdated')}: {new Date(viewOrder.updatedAt).toLocaleString()}
+                  </>
+                ) : null}
+              </p>
+            </div>
           </div>
-        </section>
+        </DraggableSheet>
       ) : null}
     </div>
   );
