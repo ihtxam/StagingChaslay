@@ -949,10 +949,9 @@ router.get("/licenses", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting licenses:", error);
-    res.json({
-      success: true,
-      licenses: [],
-      pagination: { page: parseInt(req.query.page as string) || 1, limit: parseInt(req.query.limit as string) || 20 },
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load licenses",
     });
   }
 });
@@ -1436,6 +1435,28 @@ router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Respo
     res.json({ success: true, voucher });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update voucher" });
+  }
+});
+
+router.delete("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.deleteVoucher(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to delete voucher";
+    res.status(msg === "Voucher not found" ? 404 : 400).json({ error: msg });
+  }
+});
+
+router.get("/platform-shop/vouchers/:voucherId/usage", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.listVoucherUsage(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to load voucher usage";
+    res.status(msg === "Voucher not found" ? 404 : 500).json({ error: msg });
   }
 });
 

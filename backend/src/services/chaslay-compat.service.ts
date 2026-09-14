@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { repairCatalogText } from "@/lib/text-encoding";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
 import { AuthService } from "./auth.service";
 import { MerchantSettingsService } from "./merchant-settings.service";
 import { receiptPublicUrl } from "@/lib/receipt-public-url";
@@ -10,6 +11,17 @@ import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { ModifierService } from "./modifier.service";
 import { filterCatalogForChannel, isVisibleOnChannel } from "@/lib/catalog-visibility";
+import {
+  activationCodeLookupKeys,
+  canRebindLicenseDevice,
+  compactActivationCode,
+} from "@/lib/license-activation-code";
+
+export {
+  compactActivationCode,
+  formatShortActivationCode,
+  normalizeActivationCode,
+} from "@/lib/license-activation-code";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -35,15 +47,163 @@ export function deriveShortDeviceId(raw: string): string {
   return `${body.slice(0, 4)}-${body.slice(4, 8)}`;
 }
 
-export function normalizeActivationCode(code: string): string {
-  return code.trim().toUpperCase().replace(/\s+/g, "");
-}
-
 export function generateSyncApiKey(): string {
   return crypto.randomBytes(24).toString("hex");
 }
 
+export function posDeviceIdsMatch(storedExternalId: string, incomingDeviceId: string): boolean {
+  const normalized = normalizeChaslayDeviceId(incomingDeviceId);
+  const short = deriveShortDeviceId(incomingDeviceId);
+  const ext = String(storedExternalId || "").toUpperCase();
+  const compact = normalized.replace(/-/g, "");
+  return (
+    ext.includes(compact) ||
+    ext.endsWith(compact) ||
+    deriveShortDeviceId(storedExternalId) === normalized ||
+    deriveShortDeviceId(storedExternalId) === short ||
+    normalizeChaslayDeviceId(storedExternalId) === normalized
+  );
+}
+
+const LICENSE_ACTIVATE_COLUMNS = {
+  id: schema.licenses.id,
+  merchantId: schema.licenses.merchantId,
+  deviceId: schema.licenses.deviceId,
+  licenseKey: schema.licenses.licenseKey,
+  licenseType: schema.licenses.licenseType,
+  expiresAt: schema.licenses.expiresAt,
+  status: schema.licenses.status,
+};
+
+const MERCHANT_LITE_COLUMNS = {
+  id: schema.merchants.id,
+  name: schema.merchants.name,
+  slug: schema.merchants.slug,
+  status: schema.merchants.status,
+  subscriptionEndsAt: schema.merchants.subscriptionEndsAt,
+};
+
+const DEVICE_LITE_COLUMNS = {
+  id: schema.devices.id,
+  merchantId: schema.devices.merchantId,
+  deviceId: schema.devices.deviceId,
+  deviceName: schema.devices.deviceName,
+  lastSync: schema.devices.lastSync,
+  appVersion: schema.devices.appVersion,
+};
+
+type MerchantLite = {
+  id: string;
+  name: string;
+  slug: string | null;
+  status: string;
+  subscriptionEndsAt: Date | null;
+};
+
+type DeviceLite = {
+  id: string;
+  merchantId: string;
+  deviceId: string;
+  deviceName: string;
+  lastSync: Date | null;
+  appVersion: string | null;
+};
+
+async function findMerchantLiteBySlug(slug: string): Promise<MerchantLite | null> {
+  const db = getDb();
+  const rows = await db
+    .select(MERCHANT_LITE_COLUMNS)
+    .from(schema.merchants)
+    .where(eq(schema.merchants.slug, slug))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function findMerchantLiteById(merchantId: string): Promise<MerchantLite | null> {
+  const db = getDb();
+  const rows = await db
+    .select(MERCHANT_LITE_COLUMNS)
+    .from(schema.merchants)
+    .where(eq(schema.merchants.id, merchantId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function findLicenseByActivationCode(rawCode: string, merchantId?: string) {
+  return withLicenseSchemaRetry(async () => {
+    const db = getDb();
+    const compact = compactActivationCode(rawCode);
+    if (!compact) return null;
+    const keys = activationCodeLookupKeys(rawCode);
+    const keyWhere =
+      keys.length === 1
+        ? eq(schema.licenses.licenseKey, keys[0]!)
+        : inArray(schema.licenses.licenseKey, keys);
+    const exactWhere = merchantId ? and(keyWhere, eq(schema.licenses.merchantId, merchantId)) : keyWhere;
+    const exact = await db.select(LICENSE_ACTIVATE_COLUMNS).from(schema.licenses).where(exactWhere).limit(1);
+    if (exact[0]) return exact[0];
+
+    const compactSql = sql`regexp_replace(upper(${schema.licenses.licenseKey}), '[^A-Z0-9]', '', 'g') = ${compact}`;
+    const fuzzyWhere = merchantId ? and(compactSql, eq(schema.licenses.merchantId, merchantId)) : compactSql;
+    const fuzzy = await db.select(LICENSE_ACTIVATE_COLUMNS).from(schema.licenses).where(fuzzyWhere).limit(1);
+    return fuzzy[0] ?? null;
+  });
+}
+
+async function findDeviceLiteById(deviceUuid: string): Promise<DeviceLite | null> {
+  const db = getDb();
+  const rows = await db
+    .select(DEVICE_LITE_COLUMNS)
+    .from(schema.devices)
+    .where(eq(schema.devices.id, deviceUuid))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function findDeviceForPosId(incomingDeviceId: string, merchantId?: string): Promise<DeviceLite | null> {
+  const db = getDb();
+  const normalized = normalizeChaslayDeviceId(incomingDeviceId);
+  const exactWhere = merchantId
+    ? and(eq(schema.devices.deviceId, normalized), eq(schema.devices.merchantId, merchantId))
+    : eq(schema.devices.deviceId, normalized);
+  const exact = await db.select(DEVICE_LITE_COLUMNS).from(schema.devices).where(exactWhere).limit(1);
+  if (exact[0]) return exact[0];
+
+  const scoped = merchantId
+    ? await db.select(DEVICE_LITE_COLUMNS).from(schema.devices).where(eq(schema.devices.merchantId, merchantId))
+    : await db.select(DEVICE_LITE_COLUMNS).from(schema.devices);
+  return scoped.find((d) => posDeviceIdsMatch(d.deviceId, incomingDeviceId)) ?? null;
+}
+
+function planLabelForLicense(licenseType: string): string {
+  return licenseType === "trial" ? "Trial license" : `${licenseType} license`;
+}
+
+function nextSubscriptionEnd(current: Date | null | undefined, licenseExpiresAt: Date): Date {
+  if (!current || current < licenseExpiresAt) return licenseExpiresAt;
+  return current;
+}
+
 export class ChaslayCompatService {
+  static async lookupLicense(activationCode: string) {
+    if (!compactActivationCode(activationCode)) return null;
+
+    const license = await findLicenseByActivationCode(activationCode);
+    if (!license) return null;
+
+    const merchant = await findMerchantLiteById(license.merchantId);
+    if (!merchant) return null;
+
+    return {
+      merchantName: merchant.name,
+      customerName: merchant.name,
+      tenantSlug: merchant.slug,
+      planLabel: planLabelForLicense(license.licenseType),
+      expiresAt: license.expiresAt.getTime(),
+      status: license.status,
+    };
+  }
+
   static async activateLicense(input: {
     deviceId: string;
     activationCode: string;
@@ -53,48 +213,95 @@ export class ChaslayCompatService {
   }) {
     const db = getDb();
     const normalizedDeviceId = normalizeChaslayDeviceId(input.deviceId);
-    const licenseKey = normalizeActivationCode(input.activationCode);
-
-    let merchant = input.tenantSlug
-      ? await db.query.merchants.findFirst({ where: eq(schema.merchants.slug, input.tenantSlug) })
-      : null;
-
-    const license = await db.query.licenses.findFirst({
-      where: merchant
-        ? and(
-            eq(schema.licenses.licenseKey, licenseKey),
-            eq(schema.licenses.merchantId, merchant.id)
-          )
-        : eq(schema.licenses.licenseKey, licenseKey),
-      with: { merchant: true, device: true },
-    });
-
-    if (!license || !license.merchant) {
-      throw new Error("Invalid or already used activation code. Generate a fresh code in admin and try again.");
+    if (!compactActivationCode(input.activationCode)) {
+      throw new Error("Enter an activation code.");
     }
 
-    merchant = license.merchant;
+    // License keys are unique — do not scope by tenantSlug (wrong slug used to hide valid codes).
+    const license = await findLicenseByActivationCode(input.activationCode);
+    if (!license) {
+      throw new Error(
+        "Activation code not found. Hyphens and spaces are optional — check the code or ask admin for a new one."
+      );
+    }
+
+    const merchant = await findMerchantLiteById(license.merchantId);
+    if (!merchant) {
+      throw new Error(
+        "Activation code not found. Hyphens and spaces are optional — check the code or ask admin for a new one."
+      );
+    }
+
+    if (input.tenantSlug) {
+      const scoped = await findMerchantLiteBySlug(input.tenantSlug);
+      if (scoped && scoped.id !== merchant.id) {
+        throw new Error(
+          `This activation code belongs to ${merchant.name}, not ${scoped.name}. Clear the store on this device and try again.`
+        );
+      }
+    }
+
     const now = new Date();
-    if (license.expiresAt <= now || license.status !== "active") {
-      throw new Error("License expired or inactive");
+    if (license.status !== "active") {
+      throw new Error("This license is inactive. Ask admin to reissue a code.");
+    }
+    if (license.expiresAt <= now) {
+      throw new Error("This license has expired. Ask your reseller for a renewal code.");
     }
 
-    let device = license.device;
-    if (!device) {
-      const externalId = `POS-${merchant.id.substring(0, 6).toUpperCase()}-${normalizedDeviceId.replace(/-/g, "")}`;
-      const inserted = await db
-        .insert(schema.devices)
-        .values({
-          merchantId: merchant.id,
-          deviceId: externalId,
-          deviceName: input.deviceModel || `Chaslay ${normalizedDeviceId}`,
-          deviceType: "tablet",
-          osVersion: input.deviceModel,
-          appVersion: input.appVersion,
-          isActive: true,
-        })
-        .returning();
-      device = inserted[0]!;
+    let device = license.deviceId ? await findDeviceLiteById(license.deviceId) : null;
+    const matchesBound = !!(device && posDeviceIdsMatch(device.deviceId, normalizedDeviceId));
+    if (device && !canRebindLicenseDevice(device, matchesBound)) {
+      throw new Error(
+        `This license is already active on another device (${device.deviceId}). Ask support for a code for this Device ID.`
+      );
+    }
+
+    if (!device || !matchesBound) {
+      const existing = await findDeviceForPosId(normalizedDeviceId, merchant.id);
+      if (existing) {
+        device = existing;
+      } else if (device && canRebindLicenseDevice(device, false)) {
+        await db
+          .update(schema.devices)
+          .set({
+            deviceId: normalizedDeviceId,
+            deviceName: input.deviceModel || device.deviceName || `Chaslay ${normalizedDeviceId}`,
+            osVersion: input.deviceModel,
+            appVersion: input.appVersion,
+            lastSync: now,
+            isActive: true,
+          })
+          .where(eq(schema.devices.id, device.id));
+        device = {
+          ...device,
+          deviceId: normalizedDeviceId,
+          lastSync: now,
+          appVersion: input.appVersion || null,
+        };
+      } else {
+        const inserted = await db
+          .insert(schema.devices)
+          .values({
+            merchantId: merchant.id,
+            deviceId: normalizedDeviceId,
+            deviceName: input.deviceModel || `Chaslay ${normalizedDeviceId}`,
+            deviceType: "tablet",
+            osVersion: input.deviceModel,
+            appVersion: input.appVersion,
+            lastSync: now,
+            isActive: true,
+          })
+          .returning({
+            id: schema.devices.id,
+            merchantId: schema.devices.merchantId,
+            deviceId: schema.devices.deviceId,
+            deviceName: schema.devices.deviceName,
+            lastSync: schema.devices.lastSync,
+            appVersion: schema.devices.appVersion,
+          });
+        device = inserted[0]!;
+      }
       await db
         .update(schema.licenses)
         .set({ deviceId: device.id, updatedAt: now })
@@ -113,15 +320,67 @@ export class ChaslayCompatService {
 
     await db
       .update(schema.merchants)
-      .set({ status: "active", updatedAt: now })
+      .set({
+        status: "active",
+        subscriptionEndsAt: nextSubscriptionEnd(merchant.subscriptionEndsAt, license.expiresAt),
+        updatedAt: now,
+      })
       .where(eq(schema.merchants.id, merchant.id));
 
     return {
       status: "ACTIVE",
       expiresAt: license.expiresAt.getTime(),
       customerName: merchant.name,
-      planLabel: license.licenseType === "trial" ? "Trial license" : `${license.licenseType} license`,
+      merchantName: merchant.name,
+      planLabel: planLabelForLicense(license.licenseType),
       tenantSlug: merchant.slug,
+      merchantId: merchant.id,
+    };
+  }
+
+  /** Redeem a POS activation code for the logged-in merchant (WebPOS gate). Does not rebind tablets. */
+  static async redeemLicenseForMerchant(merchantId: string, activationCode: string) {
+    const license = await findLicenseByActivationCode(activationCode);
+    if (!license) {
+      throw new Error(
+        "Activation code not found. Hyphens and spaces are optional — check the code or ask admin for a new one."
+      );
+    }
+    if (license.merchantId !== merchantId) {
+      throw new Error("This activation code belongs to a different store.");
+    }
+    const now = new Date();
+    if (license.status !== "active") {
+      throw new Error("This license is inactive. Ask admin to reissue a code.");
+    }
+    if (license.expiresAt <= now) {
+      throw new Error("This license has expired. Ask your reseller for a renewal code.");
+    }
+
+    const merchant = await findMerchantLiteById(merchantId);
+    if (!merchant) {
+      throw new Error("Merchant not found");
+    }
+
+    const db = getDb();
+    await db
+      .update(schema.merchants)
+      .set({
+        status: "active",
+        subscriptionEndsAt: nextSubscriptionEnd(merchant.subscriptionEndsAt, license.expiresAt),
+        updatedAt: now,
+      })
+      .where(eq(schema.merchants.id, merchantId));
+
+    const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
+    const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
+    return {
+      success: true,
+      status: "ACTIVE" as const,
+      expiresAt: license.expiresAt.getTime(),
+      customerName: merchant.name,
+      planLabel: planLabelForLicense(license.licenseType),
+      entitlement,
     };
   }
 
@@ -131,34 +390,25 @@ export class ChaslayCompatService {
     tenantSlug?: string | null;
   }) {
     const db = getDb();
-    const normalized = normalizeChaslayDeviceId(input.deviceId);
-    const short = deriveShortDeviceId(input.deviceId);
 
-    let merchant = input.tenantSlug
-      ? await db.query.merchants.findFirst({ where: eq(schema.merchants.slug, input.tenantSlug) })
+    const scopedMerchant = input.tenantSlug
+      ? await findMerchantLiteBySlug(input.tenantSlug)
       : null;
 
-    const devices = await db.query.devices.findMany({
-      where: merchant ? eq(schema.devices.merchantId, merchant.id) : undefined,
-      with: { licenses: true, merchant: true },
-    });
-
-    const device = devices.find((d) => {
-      const ext = d.deviceId.toUpperCase();
-      return (
-        ext.includes(normalized.replace(/-/g, "")) ||
-        ext.endsWith(normalized.replace(/-/g, "")) ||
-        deriveShortDeviceId(d.deviceId) === normalized ||
-        deriveShortDeviceId(d.deviceId) === short
-      );
-    });
+    const device = await findDeviceForPosId(input.deviceId, scopedMerchant?.id);
 
     if (!device) {
       throw new Error("Device not licensed");
     }
 
-    merchant = device.merchant;
-    const license = device.licenses?.find((l) => l.status === "active");
+    const merchant = await findMerchantLiteById(device.merchantId);
+    const licenseRows = await withLicenseSchemaRetry(async () => {
+      return db
+        .select(LICENSE_ACTIVATE_COLUMNS)
+        .from(schema.licenses)
+        .where(and(eq(schema.licenses.deviceId, device.id), eq(schema.licenses.status, "active")));
+    });
+    const license = licenseRows.find((l) => l.expiresAt > new Date()) ?? licenseRows[0];
     if (!license || license.expiresAt <= new Date()) {
       throw new Error("License expired");
     }
@@ -172,6 +422,7 @@ export class ChaslayCompatService {
       status: "ACTIVE",
       expiresAt: license.expiresAt.getTime(),
       customerName: merchant?.name,
+      merchantName: merchant?.name,
       planLabel: license.licenseType,
     };
   }

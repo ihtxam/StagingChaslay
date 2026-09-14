@@ -1,0 +1,1 @@
+{"version":3,"file":"table-qr-token.d.ts","sourceRoot":"","sources":["../../src/lib/table-qr-token.ts"],"names":[],"mappings":"AAaA,oEAAoE;AACpE,wBAAgB,eAAe,CAC7B,UAAU,EAAE,MAAM,EAClB,OAAO,EAAE,MAAM,EACf,MAAM,SAAkB,GACvB,MAAM,CAMR;AAED,wBAAgB,iBAAiB,CAC/B,UAAU,EAAE,MAAM,EAClB,OAAO,EAAE,MAAM,EACf,KAAK,EAAE,MAAM,GAAG,IAAI,GAAG,SAAS,GAC/B,OAAO,CAmBT"}

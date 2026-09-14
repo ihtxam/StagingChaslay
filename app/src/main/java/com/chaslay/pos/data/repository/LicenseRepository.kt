@@ -7,6 +7,7 @@ import com.chaslay.pos.data.preferences.LicenseManager
 import com.chaslay.pos.data.remote.LicenseApi
 import com.chaslay.pos.data.remote.dto.ActivateLicenseRequest
 import com.chaslay.pos.data.remote.dto.LicenseActivationErrorRequest
+import com.chaslay.pos.data.remote.dto.LookupLicenseRequest
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.LicenseSnapshot
 import com.chaslay.pos.domain.model.LicenseStatus
@@ -74,7 +75,7 @@ class LicenseRepository @Inject constructor(
             licenseManager.saveActivation(
                 deviceId = deviceId,
                 expiresAt = response.expiresAt,
-                customerName = response.customerName,
+                customerName = response.merchantName?.takeIf { it.isNotBlank() } ?: response.customerName,
                 planLabel = response.planLabel,
                 tenantSlug = response.tenantSlug ?: tenantSlug
             )
@@ -90,6 +91,21 @@ class LicenseRepository @Inject constructor(
                 )
             }
             throw IllegalStateException(message, error)
+        }
+    }
+
+    suspend fun lookup(code: String): Result<String?> = withContext(Dispatchers.IO) {
+        val trimmed = code.trim().uppercase().replace("[^A-Z0-9-]".toRegex(), "")
+        if (trimmed.length < 8) {
+            return@withContext Result.success(null)
+        }
+        runCatching {
+            val response = licenseApi.lookup(LookupLicenseRequest(activationCode = trimmed))
+            response.merchantName?.takeIf { it.isNotBlank() }
+                ?: response.customerName?.takeIf { it.isNotBlank() }
+        }.recoverCatching { error ->
+            if (error is HttpException && error.code() == 404) return@recoverCatching null
+            throw error
         }
     }
 

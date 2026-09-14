@@ -20,6 +20,15 @@ function activationCodeHint(code: string): string {
   return `${clean.slice(0, 4)}***`;
 }
 
+/** Hide raw Drizzle/SQL failures from the Android activation screen. */
+export function publicLicenseActivationError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || "Activation failed");
+  if (/Failed query|json_build_array|does not exist|relation ["']/i.test(raw)) {
+    return "Activation failed. Please try again or contact support.";
+  }
+  return raw || "Activation failed";
+}
+
 /** Write a platform event log entry for superadmin System Logs. Returns log id as reference. */
 export async function logPosLicenseActivation(input: LicenseActivationLogInput): Promise<string> {
   const deviceId = normalizeChaslayDeviceId(input.deviceId) || input.deviceId.trim();

@@ -11,6 +11,10 @@ function formatDate(dateStr: string) {
     .toUpperCase();
 }
 
+function seeAllEntriesPath(pathname: string) {
+  return pathname.startsWith('/reseller') ? '/reseller/notifications' : '/merchant/notifications';
+}
+
 export default function PlatformWhatsNewModal({
   open,
   messages,
