@@ -3718,6 +3718,25 @@ const en: Dict = {
   cmsGoToMenu: 'Go to menu',
   cmsOrderOnline: 'Order online',
   printRoleLabels: 'Labels',
+  orderLabelsTitle: 'Order labels',
+  orderLabelsHint:
+    'Print a sticker when weighing or holding an order. Cashier scans the barcode at POS to load the total. Uses the Labels printer role.',
+  orderLabelEnabled: 'Print order labels',
+  orderLabelEnabledHint:
+    'Show “Print label” on the register and optionally print when holding an order (butcher / weighed goods).',
+  orderLabelAutoPrintHint:
+    'Same row as Auto-print kitchen ticket above. Assign the Labels role on a printer in Printers below.',
+  autoPrintOrderLabelOnHold: 'Auto-print on hold',
+  autoPrintOrderLabelOnHoldHint: 'Print an order label automatically when staff hold a cart at POS.',
+  autoPrintOrderLabelOnSend: 'Print label on Send',
+  autoPrintOrderLabelOnSendHint:
+    'Butcher workflow: on POS Send, hold the order and print a scannable label to the label printer instead of a kitchen ticket.',
+  webPosHeldOrderLabelSent: 'Order held — label sent to printer',
+  webPosPrintOrderLabel: 'Print label',
+  webPosOrderLabelPrinted: 'Order label sent to printer',
+  webPosOrderLabelFailed: 'Could not print order label',
+  webPosOrderLabelLoaded: 'Order loaded — total {total}',
+  webPosOrderLabelNotFound: 'Held order not found for barcode',
   barcodeLabelsTitle: 'Barcode labels',
   barcodeLabelsHint: 'Default size and fields for Code128 product labels. Assign a Labels printer role under printer profiles. LuckyDoor EML-400L uses TSPL via Print Agent; Niimbot K3/B21 uses the Niimbot protocol.',
   barcodeTsplPrinterHint: 'LuckyDoor / EML TSPL printer — Test print and Labels use TSPL, not ESC/POS. Set label width to match the paper (100 mm for 4-inch stock).',
@@ -7638,6 +7657,25 @@ const fr: Dict = {
   cmsGoToMenu: 'Voir le menu',
   cmsOrderOnline: 'Commander',
   printRoleLabels: 'Étiquettes',
+  orderLabelsTitle: 'Étiquettes commande',
+  orderLabelsHint:
+    'Imprimez une étiquette lors de la pesée ou de la mise en attente. Le caissier scanne le code au POS pour charger le total. Utilise le rôle Étiquettes.',
+  orderLabelEnabled: 'Imprimer les étiquettes commande',
+  orderLabelEnabledHint:
+    'Affiche « Imprimer étiquette » sur la caisse et imprime éventuellement à la mise en attente (boucherie / pesée).',
+  orderLabelAutoPrintHint:
+    'Même ligne que l’impression auto cuisine ci-dessus. Assignez le rôle Étiquettes à une imprimante ci-dessous.',
+  autoPrintOrderLabelOnHold: 'Impression auto à la mise en attente',
+  autoPrintOrderLabelOnHoldHint: 'Imprime une étiquette quand le panier est mis en attente au POS.',
+  autoPrintOrderLabelOnSend: 'Imprimer étiquette à l’envoi',
+  autoPrintOrderLabelOnSendHint:
+    'Workflow boucherie : à l’envoi POS, met en attente et imprime une étiquette scannable au lieu d’un ticket cuisine.',
+  webPosHeldOrderLabelSent: 'Commande en attente — étiquette envoyée à l’imprimante',
+  webPosPrintOrderLabel: 'Imprimer étiquette',
+  webPosOrderLabelPrinted: 'Étiquette commande envoyée à l’imprimante',
+  webPosOrderLabelFailed: 'Impossible d’imprimer l’étiquette',
+  webPosOrderLabelLoaded: 'Commande chargée — total {total}',
+  webPosOrderLabelNotFound: 'Commande en attente introuvable pour ce code',
   barcodeLabelsTitle: 'Étiquettes code-barres',
   barcodeLabelsHint: 'Taille et champs par défaut des étiquettes Code128. Assignez le rôle Étiquettes à une imprimante. LuckyDoor EML-400L utilise TSPL via l’agent d’impression ; Niimbot utilise son propre protocole.',
   barcodeTsplPrinterHint: 'Imprimante LuckyDoor / EML (TSPL) — le test et les étiquettes partent en TSPL, pas en ESC/POS. Réglez la largeur sur le papier (100 mm pour du 4 pouces).',
@@ -11557,6 +11595,25 @@ const de: Dict = {
   cmsGoToMenu: 'Zum Menü',
   cmsOrderOnline: 'Online bestellen',
   printRoleLabels: 'Etiketten',
+  orderLabelsTitle: 'Bestell-Etiketten',
+  orderLabelsHint:
+    'Etikett beim Wiegen oder Halten drucken. Kassierer scannt den Barcode am POS für den Total. Nutzt die Druckerrolle Etiketten.',
+  orderLabelEnabled: 'Bestell-Etiketten drucken',
+  orderLabelEnabledHint:
+    'Zeigt «Etikett drucken» an der Kasse und druckt optional beim Halten (Metzgerei / Wiegeartikel).',
+  orderLabelAutoPrintHint:
+    'Gleiche Zeile wie Küchendruck auto oben. Weisen Sie einer Druckerrolle Etiketten zu.',
+  autoPrintOrderLabelOnHold: 'Auto-Druck beim Halten',
+  autoPrintOrderLabelOnHoldHint: 'Druckt automatisch ein Etikett, wenn der Warenkorb gehalten wird.',
+  autoPrintOrderLabelOnSend: 'Etikett beim Senden drucken',
+  autoPrintOrderLabelOnSendHint:
+    'Metzgerei-Workflow: beim POS-Senden halten und scannbares Etikett statt Küchenticket drucken.',
+  webPosHeldOrderLabelSent: 'Bestellung gehalten — Etikett an Drucker gesendet',
+  webPosPrintOrderLabel: 'Etikett drucken',
+  webPosOrderLabelPrinted: 'Bestell-Etikett an Drucker gesendet',
+  webPosOrderLabelFailed: 'Bestell-Etikett konnte nicht gedruckt werden',
+  webPosOrderLabelLoaded: 'Bestellung geladen — Total {total}',
+  webPosOrderLabelNotFound: 'Gehaltene Bestellung für Barcode nicht gefunden',
   barcodeLabelsTitle: 'Barcode-Etiketten',
   barcodeLabelsHint: 'Standardgrösse und Felder für Code128-Etiketten. Weisen Sie einer Druckerrolle «Etiketten» zu. LuckyDoor EML-400L nutzt TSPL über den Druckagenten; Niimbot hat ein eigenes Protokoll.',
   barcodeTsplPrinterHint: 'LuckyDoor-/EML-TSPL-Drucker — Testdruck und Etiketten gehen als TSPL, nicht ESC/POS. Etikettenbreite an das Papier anpassen (100 mm für 4-Zoll).',

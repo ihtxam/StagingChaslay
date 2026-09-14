@@ -105,6 +105,7 @@ import {
   shouldAutoPrintReceipt,
   cacheMerchantAutoPrintSettings,
 } from '@/lib/webpos-print-relay';
+import { printOrderLabelViaAgent } from '@/lib/order-labels';
 import {
   buildPrinterProfileUpdate,
   evaluateBridgeSetupMode,
@@ -1707,6 +1708,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
       ];
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
+  const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
+  const labelOnSend =
+    orderLabelEnabled && printSettings?.autoPrintOrderLabelOnSend === true;
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   /** Bookings tab + reservation alerts — restaurant only when module is on. */
@@ -4479,10 +4483,68 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const printOrderLabelForCart = async (heldId: string, lines: CartLine[]) => {
+    await printOrderLabelViaAgent(
+      heldId,
+      lines.map((l) => ({
+        name: l.name,
+        lineTotal: Number(l.lineTotal) || 0,
+        weightKg: l.isWeighed ? l.weightKg ?? l.quantity : null,
+        isWeighed: !!l.isWeighed,
+      })),
+      printSettings,
+      { storeName: merchant?.name || merchant?.businessName || undefined }
+    );
+    toast.success(t('webPosOrderLabelPrinted'));
+  };
+
   const sendCoursesToKitchen = async () => {
     if (!cart.length) return;
     setBusy(true);
     try {
+      if (labelOnSend) {
+        const stamped = cart.map((l) =>
+          l.courseNumber || !coursesEnabled
+            ? l
+            : { ...l, courseNumber: activeCourse }
+        );
+        const unsent = stamped.filter((l) => !l.sentToKitchen);
+        let toSend: CartLine[];
+        if (showFireCourseButton) {
+          toSend = stamped.filter(
+            (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen
+          );
+          if (!toSend.length) {
+            toast.error(t('webPosNoItemsInCourse'));
+            return;
+          }
+        } else if (coursesEnabled && courseSendMode === 'fire_per_course') {
+          const course1 = unsent.filter((l) => (l.courseNumber || 1) === 1);
+          if (course1.length) {
+            toSend = course1;
+          } else if (unsent.length) {
+            const minCourse = Math.min(...unsent.map((l) => l.courseNumber || 1));
+            toSend = unsent.filter((l) => (l.courseNumber || 1) === minCourse);
+          } else {
+            toSend = stamped;
+          }
+        } else {
+          toSend = unsent.length > 0 ? unsent : stamped;
+        }
+        const ticket = ensureCartTicket();
+        await persistHeldOrder(stamped, false, { ticket });
+        const heldId = resumedHeldIdRef.current;
+        if (heldId) {
+          void printOrderLabelForCart(heldId, toSend).catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+            toast.error(msg);
+          });
+        }
+        toast.success(t('webPosHeldOrderLabelSent'));
+        releaseOperatorAfterKitchen(stamped, { ticket });
+        return;
+      }
+
       if (showFireCourseButton) {
         const lines = cart.filter(
           (l) => (l.courseNumber || 1) === activeCourse && !l.sentToKitchen
@@ -8657,6 +8719,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const tableLabelSnapshot = tableLabel;
       const ticket = ensureCartTicket();
       await persistHeldOrder(cart, sendToKitchen, { ticket });
+      const heldId = resumedHeldIdRef.current;
+      if (
+        heldId &&
+        orderLabelEnabled &&
+        printSettings?.autoPrintOrderLabelOnHold !== false
+      ) {
+        void printOrderLabelForCart(heldId, cartSnapshot).catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+          toast.error(msg);
+        });
+      }
       setCart([]);
       clearCartTicket();
       setMobileCartOpen(false);
