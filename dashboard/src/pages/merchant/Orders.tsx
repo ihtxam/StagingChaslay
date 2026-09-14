@@ -1175,6 +1175,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </p>
                 ) : null}
                 {isDeliveryOrder(selected) &&
+                !isHeldListRow(selected) &&
                 !['cancelled', 'refunded', 'completed'].includes(selected.status) ? (
                   <OrderDeliveryPanel
                     order={selected}
@@ -1195,6 +1196,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                       void load();
                     }}
                   />
+                ) : null}
+                {isDeliveryOrder(selected) && isHeldListRow(selected) ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                    {t('deliveryAssignHeldHint')}
+                  </p>
                 ) : null}
                 {isInvoiceOrder(selected) ? (
                   <p>

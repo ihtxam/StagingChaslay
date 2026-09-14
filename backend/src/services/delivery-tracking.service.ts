@@ -4,6 +4,23 @@ import { ensureMerchantTables } from "@/lib/ensure-merchant-schema";
 
 const STALE_MS = 3 * 60 * 1000;
 
+const ORDER_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Reject held-cart list ids (held:uuid) and other non-order identifiers before DB lookup. */
+function assertPersistedOrderId(orderId: string): void {
+  const id = String(orderId || "").trim();
+  if (!id) throw new Error("Order ID is required");
+  if (id.startsWith("held:")) {
+    throw new Error(
+      "Held tickets are not orders yet — submit or pay in POS before assigning a driver"
+    );
+  }
+  if (!ORDER_UUID_RE.test(id)) {
+    throw new Error("Invalid order ID");
+  }
+}
+
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
@@ -287,6 +304,7 @@ export class DeliveryTrackingService {
 
   /** Ensure delivery orders have a tracking / driver-scan token. */
   static async ensureDeliveryTrackingToken(merchantId: string, orderId: string): Promise<string> {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -308,6 +326,7 @@ export class DeliveryTrackingService {
   }
 
   static async assignDriver(merchantId: string, orderId: string, staffId: string | null) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -346,6 +365,7 @@ export class DeliveryTrackingService {
     orderId: string,
     token: string
   ) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -414,6 +434,7 @@ export class DeliveryTrackingService {
     orderId: string,
     token: string
   ) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -505,6 +526,7 @@ export class DeliveryTrackingService {
 
   /** Driver marks assigned delivery complete. */
   static async completeDeliveryAsDriver(merchantId: string, staffId: string, orderId: string) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -531,6 +553,7 @@ export class DeliveryTrackingService {
 
   /** Driver starts delivery — mark ready (if needed) and out for delivery. */
   static async startDeliveryAsDriver(merchantId: string, staffId: string, orderId: string) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -555,6 +578,7 @@ export class DeliveryTrackingService {
    * Pending orders must be accepted at the till first (unless auto-accepted).
    */
   static async advanceDeliveryForDriver(merchantId: string, orderId: string) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const { OrderService } = await import("@/services/order.service");
@@ -593,6 +617,7 @@ export class DeliveryTrackingService {
 
   /** Latest driver ping for an order (merchant orders board). */
   static async getDriverPingForOrder(merchantId: string, orderId: string) {
+    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
