@@ -1467,21 +1467,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setMobileCartOpen(false);
         return;
       }
-      if (appMode) {
+      // Fullscreen: exit fullscreen only. Never navigate away from POS on Escape.
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
         e.preventDefault();
-        showPanelMenus();
+        void document.exitFullscreen().catch(() => undefined);
+        return;
       }
+      // Not fullscreen: ignore Escape (modals already handled above).
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [
-    appMode,
     pendingWeighed,
     pendingProduct,
     pendingCombo,
     settingsOpen,
     mobileCartOpen,
-    showPanelMenus,
   ]);
 
   const taxRate = useMemo(() => {
