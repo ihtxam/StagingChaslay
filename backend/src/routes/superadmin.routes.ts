@@ -1404,6 +1404,28 @@ router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Respo
   }
 });
 
+router.delete("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.deleteVoucher(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to delete voucher";
+    res.status(msg === "Voucher not found" ? 404 : 400).json({ error: msg });
+  }
+});
+
+router.get("/platform-shop/vouchers/:voucherId/usage", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.listVoucherUsage(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to load voucher usage";
+    res.status(msg === "Voucher not found" ? 404 : 500).json({ error: msg });
+  }
+});
+
 router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
   try {
     const { PlatformShopService } = await import("@/services/platform-shop.service");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -25,6 +25,16 @@ type Voucher = {
   maxUses?: number | null;
   usedCount: number;
   expiresAt?: string | null;
+};
+
+type VoucherUsageOrder = {
+  id: string;
+  total: string;
+  currency: string;
+  status: string;
+  paymentStatus: string;
+  createdAt: string;
+  merchant?: { name?: string | null; email?: string | null };
 };
 
 type Order = {
@@ -75,6 +85,7 @@ const emptyVoucher = {
   discountPercent: '',
   discountAmount: '',
   maxUses: '',
+  expiresAt: '',
   isActive: true,
 };
 
@@ -90,6 +101,9 @@ export default function SuperadminPlatformShop() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState(emptyProduct);
   const [voucherForm, setVoucherForm] = useState(emptyVoucher);
+  const [usageVoucherId, setUsageVoucherId] = useState<string | null>(null);
+  const [usageOrders, setUsageOrders] = useState<VoucherUsageOrder[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
@@ -198,6 +212,10 @@ export default function SuperadminPlatformShop() {
       toast.error('Code is required');
       return;
     }
+    if (!voucherForm.discountPercent && !voucherForm.discountAmount) {
+      toast.error('Set a discount % or CHF amount');
+      return;
+    }
     setSaving(true);
     try {
       await api.post('/superadmin/platform-shop/vouchers', {
@@ -206,6 +224,7 @@ export default function SuperadminPlatformShop() {
         discountPercent: voucherForm.discountPercent ? Number(voucherForm.discountPercent) : null,
         discountAmount: voucherForm.discountAmount ? Number(voucherForm.discountAmount) : null,
         maxUses: voucherForm.maxUses ? Number(voucherForm.maxUses) : null,
+        expiresAt: voucherForm.expiresAt || null,
         isActive: voucherForm.isActive,
       });
       toast.success('Voucher created');
@@ -218,6 +237,65 @@ export default function SuperadminPlatformShop() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleVoucherActive = async (voucher: Voucher) => {
+    try {
+      await api.put(`/superadmin/platform-shop/vouchers/${voucher.id}`, {
+        isActive: !voucher.isActive,
+      });
+      toast.success(voucher.isActive ? t('platformShopVoucherDeactivate') : t('platformShopVoucherActivate'));
+      await load();
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Update failed'
+      );
+    }
+  };
+
+  const deleteVoucher = async (voucher: Voucher) => {
+    const msg = t('platformShopVoucherDeleteConfirm').replace('{code}', voucher.code);
+    if (!confirm(msg)) return;
+    try {
+      await api.delete(`/superadmin/platform-shop/vouchers/${voucher.id}`);
+      toast.success(t('platformShopVoucherDelete'));
+      if (usageVoucherId === voucher.id) {
+        setUsageVoucherId(null);
+        setUsageOrders([]);
+      }
+      await load();
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Delete failed'
+      );
+    }
+  };
+
+  const loadVoucherUsage = async (voucherId: string) => {
+    if (usageVoucherId === voucherId) {
+      setUsageVoucherId(null);
+      setUsageOrders([]);
+      return;
+    }
+    setUsageLoading(true);
+    setUsageVoucherId(voucherId);
+    try {
+      const res = await api.get(`/superadmin/platform-shop/vouchers/${voucherId}/usage`);
+      setUsageOrders(res.data.orders || []);
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Load failed'
+      );
+      setUsageVoucherId(null);
+      setUsageOrders([]);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  const formatMaxUses = (maxUses?: number | null) => {
+    if (maxUses == null) return t('platformShopVoucherUnlimited');
+    return String(maxUses);
   };
 
   const updateOrderStatus = async (orderId: string, status: string, trackingUrl?: string | null) => {
@@ -416,25 +494,130 @@ export default function SuperadminPlatformShop() {
                 value={voucherForm.discountAmount}
                 onChange={(e) => setVoucherForm({ ...voucherForm, discountAmount: e.target.value })}
               />
+              <input
+                className="input"
+                type="number"
+                min={1}
+                placeholder={t('platformShopVoucherMaxUses')}
+                value={voucherForm.maxUses}
+                onChange={(e) => setVoucherForm({ ...voucherForm, maxUses: e.target.value })}
+              />
+              <input
+                className="input"
+                type="date"
+                aria-label={t('platformShopVoucherExpires')}
+                value={voucherForm.expiresAt}
+                onChange={(e) => setVoucherForm({ ...voucherForm, expiresAt: e.target.value })}
+              />
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={voucherForm.isActive}
+                onChange={(e) => setVoucherForm({ ...voucherForm, isActive: e.target.checked })}
+              />
+              {t('active')}
+            </label>
             <button type="button" className="btn-primary text-sm" disabled={saving} onClick={() => void saveVoucher()}>
               {t('save')}
             </button>
           </div>
-          <ul className="space-y-2 text-sm">
-            {vouchers.map((v) => (
-              <li key={v.id} className="rounded-lg border border-stone-200 bg-white px-3 py-2 flex justify-between">
-                <span>
-                  <strong>{v.code}</strong>
-                  {v.label ? ` — ${v.label}` : ''}
-                  {!v.isActive ? ` (${t('inactive')})` : ''}
-                </span>
-                <span className="text-stone-500">
-                  {v.discountPercent ? `${v.discountPercent}%` : v.discountAmount ? `${v.discountAmount} CHF` : '—'}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+            <table className="min-w-full text-sm">
+              <thead className="bg-stone-50 text-left text-stone-500">
+                <tr>
+                  <th className="px-3 py-2">{t('code')}</th>
+                  <th className="px-3 py-2">{t('discount')}</th>
+                  <th className="px-3 py-2">{t('platformShopVoucherUsedCount')}</th>
+                  <th className="px-3 py-2">{t('status')}</th>
+                  <th className="px-3 py-2">{t('platformShopVoucherExpires')}</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {vouchers.map((v) => (
+                  <Fragment key={v.id}>
+                    <tr className="border-t border-stone-100 align-top">
+                      <td className="px-3 py-2">
+                        <strong>{v.code}</strong>
+                        {v.label ? <div className="text-xs text-stone-500">{v.label}</div> : null}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {v.discountPercent ? `${v.discountPercent}%` : v.discountAmount ? `${v.discountAmount} CHF` : '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {v.usedCount || 0} / {formatMaxUses(v.maxUses)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {v.isActive ? (
+                          <span className="text-emerald-700">{t('active')}</span>
+                        ) : (
+                          <span className="text-red-600">{t('inactive')}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-stone-500">
+                        {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600"
+                            onClick={() => void loadVoucherUsage(v.id)}
+                          >
+                            {usageVoucherId === v.id ? t('close') : t('platformShopVoucherUsageHistory')}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs text-amber-700"
+                            onClick={() => void toggleVoucherActive(v)}
+                          >
+                            {v.isActive ? t('platformShopVoucherDeactivate') : t('platformShopVoucherActivate')}
+                          </button>
+                          {(v.usedCount || 0) === 0 ? (
+                            <button
+                              type="button"
+                              className="text-xs text-red-600"
+                              onClick={() => void deleteVoucher(v)}
+                            >
+                              {t('platformShopVoucherDelete')}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                    {usageVoucherId === v.id ? (
+                      <tr className="border-t border-stone-100 bg-stone-50">
+                        <td colSpan={6} className="px-3 py-3">
+                          {usageLoading ? (
+                            <p className="text-stone-500">{t('loading')}</p>
+                          ) : usageOrders.length ? (
+                            <ul className="space-y-1 text-xs">
+                              {usageOrders.map((o) => (
+                                <li key={o.id} className="flex flex-wrap gap-x-3 gap-y-1">
+                                  <span>{new Date(o.createdAt).toLocaleString()}</span>
+                                  <span>{o.merchant?.name || '—'}</span>
+                                  <span>
+                                    {Number(o.total).toFixed(2)} {o.currency}
+                                  </span>
+                                  <span className="text-stone-500">{o.paymentStatus}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-stone-500">{t('platformShopVoucherNoUsage')}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+            {!vouchers.length ? (
+              <p className="px-3 py-4 text-sm text-stone-500">{t('platformShopNoProducts')}</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

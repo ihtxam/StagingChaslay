@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDb, schema } from '@/db';
 import { roundMoney2 } from '@/lib/money';
 import { resolveTxLocale } from '@/lib/transactional-email-labels';
@@ -282,6 +282,37 @@ export class PlatformShopService {
     return row!;
   }
 
+  static async deleteVoucher(id: string) {
+    const db = getDb();
+    const voucher = await db.query.platformShopVouchers.findFirst({
+      where: eq(schema.platformShopVouchers.id, id),
+    });
+    if (!voucher) throw new Error('Voucher not found');
+    if ((voucher.usedCount || 0) > 0) {
+      throw new Error('Cannot delete a voucher that has been used — deactivate it instead');
+    }
+    await db.delete(schema.platformShopVouchers).where(eq(schema.platformShopVouchers.id, id));
+    return { deleted: true };
+  }
+
+  static async listVoucherUsage(voucherId: string, limit = 50) {
+    const db = getDb();
+    const voucher = await db.query.platformShopVouchers.findFirst({
+      where: eq(schema.platformShopVouchers.id, voucherId),
+    });
+    if (!voucher) throw new Error('Voucher not found');
+    const orders = await db.query.platformShopOrders.findMany({
+      where: and(
+        eq(schema.platformShopOrders.voucherCode, voucher.code),
+        isNotNull(schema.platformShopOrders.voucherCode)
+      ),
+      orderBy: [desc(schema.platformShopOrders.createdAt)],
+      limit,
+      with: { merchant: { columns: { id: true, name: true, email: true } } },
+    });
+    return { voucher, orders };
+  }
+
   static async updateVoucher(id: string, input: Partial<PlatformShopVoucherInput>) {
     const db = getDb();
     const patch: Record<string, unknown> = { updatedAt: new Date() };
@@ -371,10 +402,15 @@ export class PlatformShopService {
 
     let discountAmount = 0;
     if (voucher) {
-      if (voucher.discountPercent) {
-        discountAmount = roundMoney2(subtotal * (Number(voucher.discountPercent) / 100));
-      } else if (voucher.discountAmount) {
-        discountAmount = roundMoney2(Number(voucher.discountAmount));
+      const pct = voucher.discountPercent != null ? Number(voucher.discountPercent) : 0;
+      const fixed =
+        voucher.discountAmount != null && voucher.discountAmount !== ''
+          ? Number(voucher.discountAmount)
+          : 0;
+      if (pct > 0) {
+        discountAmount = roundMoney2(subtotal * (pct / 100));
+      } else if (fixed > 0) {
+        discountAmount = roundMoney2(fixed);
       }
       discountAmount = Math.min(subtotal, discountAmount);
     }
@@ -451,7 +487,6 @@ export class PlatformShopService {
         channel: 'Web',
         countryCode: 'CH',
         shopperReference: merchantId,
-        clientKey: creds.clientKey,
         metadata: {
           type: 'platform_shop',
           orderId: order!.id,
