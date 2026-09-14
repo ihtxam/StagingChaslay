@@ -111,6 +111,7 @@ export default function OrderingPage() {
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const locSlug = resolveShopLocationSlug({ locationSlug });
+  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const cmsTheme = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
