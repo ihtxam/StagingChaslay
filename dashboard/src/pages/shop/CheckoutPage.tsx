@@ -20,6 +20,7 @@ import {
 } from '@/lib/shop-cart';
 import {
   buildScheduleDays,
+  buildScheduleDayForDate,
   isChannelOpenAt,
   localDateTimeToIso,
   type StoreHours,
@@ -35,6 +36,7 @@ import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
+import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { ShoppingBag } from 'lucide-react';
 import {
@@ -85,6 +87,18 @@ export default function CheckoutPage() {
   const [loginPassword, setLoginPassword] = useState('');
   const [whenMode, setWhenMode] = useState<WhenMode>('asap');
   const [scheduleDayOffset, setScheduleDayOffset] = useState(0);
+  const [showAllScheduleSlots, setShowAllScheduleSlots] = useState(false);
+  const [chooseScheduleDateOpen, setChooseScheduleDateOpen] = useState(false);
+  const [scheduleCalendarDate, setScheduleCalendarDate] = useState('');
+  const [customScheduleDay, setCustomScheduleDay] = useState<
+    ReturnType<typeof buildScheduleDayForDate>
+  >(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentOrderId, setPaymentOrderId] = useState('');
+  const [paymentSession, setPaymentSession] = useState<any>(null);
+  const [paymentTotal, setPaymentTotal] = useState(0);
+  const [paymentDemoMode, setPaymentDemoMode] = useState(false);
+  const [paymentDemoError, setPaymentDemoError] = useState('');
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [redeemRate, setRedeemRate] = useState(100);
   /** Explicit "Pay with points" option on the payment step */
@@ -362,7 +376,7 @@ export default function CheckoutPage() {
       channel: draft.channel as ShopChannel,
       leadMinutes,
       intervalMinutes: 15,
-      horizonDays: 3,
+      horizonDays: 14,
       locale: shopLocale,
     });
   }, [merchant, draft.channel, leadMinutes, shopLocale]);
@@ -375,12 +389,53 @@ export default function CheckoutPage() {
   };
 
   const activeScheduleDay = useMemo(() => {
+    if (customScheduleDay) return customScheduleDay;
     if (!scheduleDays.length) return null;
     return (
       scheduleDays.find((d) => d.offset === scheduleDayOffset) ||
       scheduleDays[0]
     );
-  }, [scheduleDays, scheduleDayOffset]);
+  }, [customScheduleDay, scheduleDays, scheduleDayOffset]);
+
+  const sortedScheduleSlots = useMemo(() => {
+    const slots = [...(activeScheduleDay?.slots || [])];
+    slots.sort((a, b) => a.value.localeCompare(b.value));
+    return slots;
+  }, [activeScheduleDay]);
+
+  const visibleScheduleSlots = showAllScheduleSlots
+    ? sortedScheduleSlots
+    : sortedScheduleSlots.slice(0, 8);
+  const hiddenScheduleSlotCount = Math.max(0, sortedScheduleSlots.length - visibleScheduleSlots.length);
+
+  const scheduleCalendarMin = new Date().toISOString().slice(0, 10);
+  const scheduleCalendarMaxDate = new Date();
+  scheduleCalendarMaxDate.setDate(scheduleCalendarMaxDate.getDate() + 60);
+  const scheduleCalendarMax = scheduleCalendarMaxDate.toISOString().slice(0, 10);
+
+  const onScheduleCalendarPick = (ymd: string) => {
+    setScheduleCalendarDate(ymd);
+    setShowAllScheduleSlots(false);
+    if (!ymd || !merchant) {
+      setCustomScheduleDay(null);
+      return;
+    }
+    const [y, m, d] = ymd.split('-').map(Number);
+    const day = buildScheduleDayForDate({
+      storeHours: merchant.storeHours as StoreHours,
+      channel: draft.channel as ShopChannel,
+      year: y,
+      month: m,
+      day: d,
+      leadMinutes,
+      intervalMinutes: 15,
+      locale: shopLocale,
+    });
+    setCustomScheduleDay(day);
+    if (day?.slots[0]) {
+      patch({ scheduledFor: day.slots[0].value });
+    }
+  };
 
   // When closed (or ASAP unavailable), force "later" and auto-pick first slot - only if scheduled orders are allowed.
   useEffect(() => {
@@ -875,18 +930,26 @@ export default function CheckoutPage() {
       );
 
       const order = res.data.order;
-      clearCart(shopKey);
 
       const payCard = !pointsCoverFullOrder && draft.paymentMethod === 'card';
       if (payCard) {
         const session = res.data.paymentSession;
+        setPaymentOrderId(order.id);
+        setPaymentTotal(Number(order.total) || total);
         if (session?.sessionData && session?.clientKey) {
-          sessionStorage.setItem(`manupos_pay_${order.id}`, JSON.stringify(session));
+          setPaymentSession(session);
+          setPaymentDemoMode(false);
+          setPaymentDemoError('');
+        } else {
+          setPaymentSession(null);
+          setPaymentDemoMode(true);
+          setPaymentDemoError(t('shopCardNotConfigured'));
         }
-        navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}?pay=1`);
+        setPaymentModalOpen(true);
         return;
       }
 
+      clearCart(shopKey);
       navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}`);
     } catch (err: any) {
       setError(err.response?.data?.error || t('shopCheckoutFailed'));
@@ -1101,38 +1164,65 @@ export default function CheckoutPage() {
 
                     {whenMode === 'later' && (
                       <div className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                        {scheduleDays.length === 0 ? (
+                        {scheduleDays.length === 0 && !customScheduleDay ? (
                           <p className="text-sm text-red-600">{t('shopNoOpenHours')}</p>
                         ) : (
                           <>
-                            <div className="grid grid-cols-3 gap-2">
-                              {scheduleDays.map((day) => (
-                                <button
-                                  key={day.offset}
-                                  type="button"
-                                  className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
-                                    activeScheduleDay?.offset === day.offset
-                                      ? 'bg-stone-900 text-white border-stone-900'
-                                      : 'bg-white border-stone-300'
-                                  }`}
-                                  onClick={() => {
-                                    setScheduleDayOffset(day.offset);
-                                    patch({ scheduledFor: day.slots[0]?.value || '' });
-                                  }}
-                                >
-                                  <span className="font-semibold block text-xs sm:text-sm leading-tight">
-                                    {scheduleDayTitle(day.offset)}
-                                  </span>
-                                  <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
-                                    {day.weekday} {day.dateLabel}
-                                  </span>
-                                </button>
-                              ))}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                className={`rounded-full border px-3 py-1.5 text-sm ${
+                                  chooseScheduleDateOpen
+                                    ? 'border-stone-900 bg-stone-900 text-white'
+                                    : 'border-stone-300 bg-white'
+                                }`}
+                                onClick={() => setChooseScheduleDateOpen((v) => !v)}
+                              >
+                                {t('shopChooseDate')}
+                              </button>
+                              {chooseScheduleDateOpen ? (
+                                <input
+                                  type="date"
+                                  className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm"
+                                  min={scheduleCalendarMin}
+                                  max={scheduleCalendarMax}
+                                  value={scheduleCalendarDate}
+                                  onChange={(e) => onScheduleCalendarPick(e.target.value)}
+                                />
+                              ) : null}
                             </div>
+                            {!customScheduleDay ? (
+                              <div className="grid grid-cols-3 gap-2">
+                                {scheduleDays.map((day) => (
+                                  <button
+                                    key={day.offset}
+                                    type="button"
+                                    className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
+                                      activeScheduleDay?.offset === day.offset
+                                        ? 'bg-stone-900 text-white border-stone-900'
+                                        : 'bg-white border-stone-300'
+                                    }`}
+                                    onClick={() => {
+                                      setScheduleDayOffset(day.offset);
+                                      setCustomScheduleDay(null);
+                                      setShowAllScheduleSlots(false);
+                                      patch({ scheduledFor: day.slots[0]?.value || '' });
+                                    }}
+                                  >
+                                    <span className="font-semibold block text-xs sm:text-sm leading-tight">
+                                      {scheduleDayTitle(day.offset)}
+                                    </span>
+                                    <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
+                                      {day.weekday} {day.dateLabel}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
                             <div>
                               <p className="text-xs text-stone-500 mb-2">{t('shopTimeSlotsHint')}</p>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                                {(activeScheduleDay?.slots || []).map((slot) => (
+                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {visibleScheduleSlots.map((slot) => (
                                   <button
                                     key={slot.value}
                                     type="button"
@@ -1147,6 +1237,15 @@ export default function CheckoutPage() {
                                   </button>
                                 ))}
                               </div>
+                              {hiddenScheduleSlotCount > 0 && !showAllScheduleSlots ? (
+                                <button
+                                  type="button"
+                                  className="mt-2 text-sm font-medium text-stone-700 underline underline-offset-2"
+                                  onClick={() => setShowAllScheduleSlots(true)}
+                                >
+                                  {t('shopMoreSlots').replace('{n}', String(hiddenScheduleSlotCount))}
+                                </button>
+                              ) : null}
                             </div>
                           </>
                         )}
@@ -1931,6 +2030,23 @@ export default function CheckoutPage() {
           setError(null);
           setWhenMode('asap');
           setScheduleDayOffset(0);
+        }}
+      />
+      <ShopPaymentModal
+        open={paymentModalOpen}
+        shopKey={shopKey || ''}
+        orderId={paymentOrderId}
+        total={paymentTotal}
+        session={paymentSession}
+        demoMode={paymentDemoMode}
+        demoError={paymentDemoError}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}?pay=1`);
+        }}
+        onPaid={() => {
+          setPaymentModalOpen(false);
+          navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}`);
         }}
       />
     </div>

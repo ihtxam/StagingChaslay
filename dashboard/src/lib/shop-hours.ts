@@ -180,6 +180,8 @@ export function buildScheduleDays(opts: {
 
     if (!slots.length) continue;
 
+    slots.sort((a, b) => a.value.localeCompare(b.value));
+
     days.push({
       offset,
       label: dayLabel(offset),
@@ -190,6 +192,63 @@ export function buildScheduleDays(opts: {
   }
 
   return days;
+}
+
+/** Build schedule slots for one calendar day (used by date picker). */
+export function buildScheduleDayForDate(opts: {
+  storeHours: StoreHours | null | undefined;
+  channel: ShopChannel;
+  year: number;
+  month: number;
+  day: number;
+  now?: Date;
+  leadMinutes?: number;
+  intervalMinutes?: number;
+  locale?: string;
+}): ScheduleDayOption | null {
+  const now = opts.now || new Date();
+  const lead = opts.leadMinutes ?? 30;
+  const interval = opts.intervalMinutes ?? 15;
+  const locale = opts.locale || 'en-CH';
+  const channelHours = opts.storeHours?.[opts.channel] || {};
+  const earliest = new Date(now.getTime() + lead * 60_000);
+  const noon = zonedLocalDate(opts.year, opts.month, opts.day, 12, 0);
+  const dayKey = zonedParts(noon).day;
+  const ranges = channelHours[dayKey] || [];
+  if (!ranges.length) return null;
+
+  const todayParts = zonedParts(now);
+  const offset =
+    Math.round(
+      (Date.UTC(opts.year, opts.month - 1, opts.day) -
+        Date.UTC(todayParts.year, todayParts.month - 1, todayParts.dayOfMonth)) /
+        (24 * 60 * 60 * 1000)
+    ) || 0;
+
+  const slots: Array<{ value: string; label: string }> = [];
+  for (const range of ranges) {
+    const openMin = parseHm(range.open);
+    const closeMin = parseHm(range.close);
+    if (!Number.isFinite(openMin) || !Number.isFinite(closeMin) || closeMin <= openMin) continue;
+    for (let m = openMin; m + interval <= closeMin; m += interval) {
+      const slot = zonedLocalDate(opts.year, opts.month, opts.day, Math.floor(m / 60), m % 60);
+      if (slot < earliest) continue;
+      slots.push({
+        value: toZurichDateTimeValue(slot),
+        label: `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`,
+      });
+    }
+  }
+  if (!slots.length) return null;
+  slots.sort((a, b) => a.value.localeCompare(b.value));
+
+  return {
+    offset,
+    label: dayLabel(offset),
+    weekday: noon.toLocaleDateString(locale, { weekday: 'short', timeZone: MERCHANT_TZ }),
+    dateLabel: noon.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: MERCHANT_TZ }),
+    slots,
+  };
 }
 
 /** Find the next opening time after `at` when the channel is currently closed. */

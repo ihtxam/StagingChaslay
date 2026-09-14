@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import axios from 'axios';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
-import { buildScheduleDays, type StoreHours } from '@/lib/shop-hours';
+import { buildScheduleDays, buildScheduleDayForDate, type StoreHours } from '@/lib/shop-hours';
 import { useI18n } from '@/lib/i18n';
 
 type ChannelOption = {
@@ -112,6 +113,9 @@ export default function ShopChannelPrompt({
   const [dayOffset, setDayOffset] = useState(0);
   const [slotValue, setSlotValue] = useState<string | null>(null);
   const [chooseDateOpen, setChooseDateOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState('');
+  const [customDay, setCustomDay] = useState<ReturnType<typeof buildScheduleDayForDate>>(null);
+  const [showAllSlots, setShowAllSlots] = useState(false);
 
   const parsed = useMemo(() => splitAddressLine(initialAddress), [initialAddress]);
   const [street, setStreet] = useState(parsed.street);
@@ -143,7 +147,7 @@ export default function ShopChannelPrompt({
       channel: selected,
       leadMinutes: Math.max(15, eta, minPreOrderDelayMinutes ?? 0),
       intervalMinutes: 15,
-      horizonDays: 3,
+      horizonDays: 14,
       locale: shopLocale,
     });
   }, [withSchedule, addressOnly, storeHours, selected, eta, shopLocale, minPreOrderDelayMinutes]);
@@ -161,6 +165,9 @@ export default function ShopChannelPrompt({
     setLat(undefined);
     setLng(undefined);
     setChooseDateOpen(false);
+    setCalendarDate('');
+    setCustomDay(null);
+    setShowAllSlots(false);
   }, [open, initialAddress, initialZip, initialCity]);
 
   useEffect(() => {
@@ -250,12 +257,51 @@ export default function ShopChannelPrompt({
     });
   };
 
+  const calendarMin = new Date().toISOString().slice(0, 10);
+  const calendarMaxDate = new Date();
+  calendarMaxDate.setDate(calendarMaxDate.getDate() + 60);
+  const calendarMax = calendarMaxDate.toISOString().slice(0, 10);
+
+  const onCalendarPick = (ymd: string) => {
+    setCalendarDate(ymd);
+    if (!ymd) {
+      setCustomDay(null);
+      return;
+    }
+    const [y, m, day] = ymd.split('-').map(Number);
+    const built = buildScheduleDayForDate({
+      storeHours: storeHours || null,
+      channel: selected,
+      year: y,
+      month: m,
+      day,
+      leadMinutes: Math.max(15, eta, minPreOrderDelayMinutes ?? 0),
+      intervalMinutes: 15,
+      locale: shopLocale,
+    });
+    setCustomDay(built);
+    if (built) {
+      setDayOffset(built.offset);
+      setSlotValue(built.slots[0]?.value || null);
+      setShowAllSlots(false);
+    } else {
+      setSlotValue(null);
+    }
+  };
+
   if (!open) return null;
 
-  const activeDay = scheduleDays.find((d) => d.offset === dayOffset) || scheduleDays[0];
+  const activeDay =
+    customDay ||
+    scheduleDays.find((d) => d.offset === dayOffset) ||
+    scheduleDays[0];
+  const sortedSlots = [...(activeDay?.slots || [])].sort((a, b) => a.value.localeCompare(b.value));
+  const slotPreviewLimit = 8;
+  const hiddenSlotCount = Math.max(0, sortedSlots.length - slotPreviewLimit);
+  const visibleSlots = showAllSlots ? sortedSlots : sortedSlots.slice(0, slotPreviewLimit);
   const laterDays = scheduleDays.filter((d) => d.offset >= 2);
   const dayTab =
-    dayOffset === 0 ? 'today' : dayOffset === 1 ? 'tomorrow' : 'choose';
+    customDay ? 'choose' : dayOffset === 0 ? 'today' : dayOffset === 1 ? 'tomorrow' : 'choose';
 
   const minBadge =
     effectiveDeliveryInfo?.deliverable && effectiveDeliveryInfo.zone?.minOrderAmount > 0
@@ -297,9 +343,7 @@ export default function ShopChannelPrompt({
         type="button"
         className="absolute inset-0 bg-stone-900/55 backdrop-blur-[2px]"
         aria-label={t('shopClose')}
-        onClick={() => {
-          if (dismissible) onClose?.();
-        }}
+        onClick={() => onClose?.()}
       />
       <div
         role="dialog"
@@ -334,14 +378,14 @@ export default function ShopChannelPrompt({
 
         <div className="flex flex-1 flex-col min-h-0 max-h-[96dvh]">
           <div className="relative shrink-0 px-5 pt-4 pb-3 border-b border-stone-100">
-            {dismissible && onClose ? (
+            {onClose ? (
               <button
                 type="button"
                 onClick={onClose}
-                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 text-lg font-bold hover:bg-stone-200"
+                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200"
                 aria-label={t('shopClose')}
               >
-                ×
+                <X className="h-4 w-4" strokeWidth={2.5} />
               </button>
             ) : null}
             <h2 className="text-lg font-bold tracking-tight text-stone-900 pr-10">{resolvedTitle}</h2>
@@ -516,9 +560,12 @@ export default function ShopChannelPrompt({
                       type="button"
                       onClick={() => {
                         setChooseDateOpen(true);
+                        setCustomDay(null);
                         const first = laterDays[0];
-                        setDayOffset(first.offset);
-                        setSlotValue(first.slots[0]?.value || null);
+                        if (first && !calendarDate) {
+                          setDayOffset(first.offset);
+                          setSlotValue(first.slots[0]?.value || null);
+                        }
                       }}
                       className={`rounded-xl px-2 py-2.5 text-center text-sm font-medium border transition ${
                         dayTab === 'choose'
@@ -531,25 +578,42 @@ export default function ShopChannelPrompt({
                   ) : null}
                 </div>
 
-                {chooseDateOpen && laterDays.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {laterDays.map((d) => (
-                      <button
-                        key={d.offset}
-                        type="button"
-                        onClick={() => {
-                          setDayOffset(d.offset);
-                          setSlotValue(d.slots[0]?.value || null);
-                        }}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium border ${
-                          dayOffset === d.offset
-                            ? 'bg-amber-100 border-amber-400 text-amber-900'
-                            : 'border-stone-200 text-stone-600'
-                        }`}
-                      >
-                        {d.dateLabel} · {d.weekday}
-                      </button>
-                    ))}
+                {chooseDateOpen ? (
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      {t('shopChooseDate')}
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm"
+                      min={calendarMin}
+                      max={calendarMax}
+                      value={calendarDate}
+                      onChange={(e) => onCalendarPick(e.target.value)}
+                    />
+                    {laterDays.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {laterDays.map((d) => (
+                          <button
+                            key={d.offset}
+                            type="button"
+                            onClick={() => {
+                              setCustomDay(null);
+                              setDayOffset(d.offset);
+                              setSlotValue(d.slots[0]?.value || null);
+                              setShowAllSlots(false);
+                            }}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-medium border ${
+                              !customDay && dayOffset === d.offset
+                                ? 'bg-amber-100 border-amber-400 text-amber-900'
+                                : 'border-stone-200 text-stone-600'
+                            }`}
+                          >
+                            {d.dateLabel} · {d.weekday}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -575,23 +639,34 @@ export default function ShopChannelPrompt({
                   <p className="text-sm font-medium text-rose-600">{t('shopClosedThisDay')}</p>
                 ) : null}
 
-                {(activeDay?.slots.length || 0) > 0 ? (
-                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                    {activeDay?.slots.map((s) => (
+                {(visibleSlots.length || 0) > 0 ? (
+                  <>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                      {visibleSlots.map((s) => (
+                        <button
+                          key={s.value}
+                          type="button"
+                          onClick={() => setSlotValue(s.value)}
+                          className={`rounded-xl border py-2 text-sm font-semibold tabular-nums transition ${
+                            slotValue === s.value
+                              ? 'bg-amber-700 text-white border-amber-700'
+                              : 'bg-white text-stone-800 border-stone-200 hover:border-amber-300'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                    {hiddenSlotCount > 0 && !showAllSlots ? (
                       <button
-                        key={s.value}
                         type="button"
-                        onClick={() => setSlotValue(s.value)}
-                        className={`rounded-xl border py-2 text-sm font-semibold tabular-nums transition ${
-                          slotValue === s.value
-                            ? 'bg-amber-700 text-white border-amber-700'
-                            : 'bg-white text-stone-800 border-stone-200 hover:border-amber-300'
-                        }`}
+                        onClick={() => setShowAllSlots(true)}
+                        className="text-sm font-semibold text-amber-800 underline underline-offset-2"
                       >
-                        {s.label}
+                        {t('shopMoreSlots').replace('{n}', String(hiddenSlotCount))}
                       </button>
-                    ))}
-                  </div>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             ) : null}

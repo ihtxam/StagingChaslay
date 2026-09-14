@@ -1464,6 +1464,20 @@ router.post("/:slug/auth/login", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/shop/:slug/auth/forgot-password
+ */
+router.post("/:slug/auth/forgot-password", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    await ShopCustomerService.requestPasswordReset(merchant.id, String(req.body?.email || ""));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Reset failed" });
+  }
+});
+
+/**
  * GET /api/shop/:slug/auth/me
  */
 router.get("/:slug/auth/me", async (req: Request, res: Response) => {

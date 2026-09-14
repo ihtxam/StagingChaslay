@@ -43,6 +43,8 @@ import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import ShopFreeDeliveryProgress from '@/components/shop/ShopFreeDeliveryProgress';
+import ShopProductDetailModal from '@/components/shop/ShopProductDetailModal';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavbar';
 import ShopOfferPicker, {
@@ -129,6 +131,7 @@ export default function OrderingPage() {
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
+  const [pendingDetail, setPendingDetail] = useState<Product | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
   const [pendingOffer, setPendingOffer] = useState<ShopOfferForPicker | null>(null);
   /** After picking a 2+1 deal, configure combo/modifier products one-by-one */
@@ -422,6 +425,28 @@ export default function OrderingPage() {
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
 
+  const freeDeliveryThreshold = useMemo(() => {
+    if (channel !== 'delivery') return 0;
+    const fromDraft = Number(draft.deliveryInfo?.zone?.freeDeliveryMinOrder || 0);
+    if (fromDraft > 0) return fromDraft;
+    const mins = deliveryZones
+      .map((z) => Number(z.freeDeliveryMinOrder || 0))
+      .filter((n) => n > 0);
+    return mins.length ? Math.min(...mins) : 0;
+  }, [channel, draft.deliveryInfo, deliveryZones]);
+
+  const popularProducts = useMemo(() => {
+    const list: Product[] = [];
+    for (const cat of menu) {
+      for (const p of cat.items || []) {
+        if (list.length >= 8) break;
+        list.push(p);
+      }
+      if (list.length >= 8) break;
+    }
+    return list;
+  }, [menu]);
+
   const addConfiguredItem = (
     product: Product | ShopProductForModifiers | ShopComboProduct,
     extras: ShopSelectedExtra[] = [],
@@ -684,7 +709,7 @@ export default function OrderingPage() {
       setPendingProduct(product);
       return;
     }
-    addConfiguredItem(product);
+    setPendingDetail(product);
   };
 
   useEffect(() => {
@@ -896,17 +921,21 @@ export default function OrderingPage() {
 
   const Basket = ({
     className = 'max-h-[calc(100dvh-6rem)] min-h-[12rem] border border-stone-200',
+    hideHeader = false,
   }: {
     className?: string;
+    hideHeader?: boolean;
   }) => (
     <aside className={`bg-white flex flex-col ${className}`}>
-      <div className="px-5 py-4 border-b border-stone-200">
-        <h2 className="text-xl font-bold tracking-tight">{t('shopBasket')}</h2>
-        <p className="text-sm text-stone-500 mt-1">
-          {channelButtons.find((c) => c.id === channel)?.label} ·{' '}
-          {formatShopChannelEta(channelMeta?.etaMinutes || 30, channel, t('shopMins'))}
-        </p>
-      </div>
+      {!hideHeader ? (
+        <div className="px-5 py-4 border-b border-stone-200">
+          <h2 className="text-xl font-bold tracking-tight">{t('shopBasket')}</h2>
+          <p className="text-sm text-stone-500 mt-1">
+            {channelButtons.find((c) => c.id === channel)?.label} ·{' '}
+            {formatShopChannelEta(channelMeta?.etaMinutes || 30, channel, t('shopMins'))}
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {cart.length === 0 ? (
@@ -995,20 +1024,27 @@ export default function OrderingPage() {
               const item = block.item;
               return (
                 <li key={item.lineId} className="flex gap-3 text-sm">
+                  {showProductImages && item.image ? (
+                    <img
+                      src={item.image}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-full object-cover bg-stone-100"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 shrink-0 rounded-full bg-stone-100" />
+                  )}
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-stone-900">
-                      {item.name}
-                      {item.loyaltyReward && (
-                        <span className="ml-2 text-xs font-semibold text-teal-800">{t('shopFree')}</span>
-                      )}
-                      {item.offerBadge ? (
-                        <span className="ml-2 text-[10px] font-bold uppercase text-amber-700">
-                          {item.offerBadge.toLowerCase() === 'free'
-                            ? t('shopFree')
-                            : item.offerBadge}
-                        </span>
-                      ) : null}
-                    </div>
+                    <div className="font-semibold text-stone-900">{item.name}</div>
+                    {item.loyaltyReward && (
+                      <span className="text-xs font-semibold text-teal-800">{t('shopFree')}</span>
+                    )}
+                    {item.offerBadge ? (
+                      <span className="ml-2 text-[10px] font-bold uppercase text-amber-700">
+                        {item.offerBadge.toLowerCase() === 'free'
+                          ? t('shopFree')
+                          : item.offerBadge}
+                      </span>
+                    ) : null}
                     {!!item.comboSelections?.length && (
                       <p className="text-xs text-stone-500 mt-0.5 leading-snug">
                         {item.comboSelections
@@ -1025,11 +1061,11 @@ export default function OrderingPage() {
                         {item.selectedExtras.map((e) => e.name).join(', ')}
                       </p>
                     )}
-                    <div className="text-stone-500">
+                    <div className="text-stone-600 mt-1 tabular-nums">
                       {item.loyaltyReward
                         ? t('shopPtsBadge').replace('{n}', String(item.rewardPointsCost || 0))
                         : item.catalogPrice != null && item.catalogPrice > item.price ? (
-                            <span className="tabular-nums">
+                            <span>
                               <span className="line-through text-stone-400 mr-1">
                                 CHF {item.catalogPrice.toFixed(2)}
                               </span>
@@ -1038,25 +1074,34 @@ export default function OrderingPage() {
                               </span>
                             </span>
                           ) : (
-                            `CHF ${item.price.toFixed(2)}`
+                            `CHF ${(item.price * item.quantity).toFixed(2)}`
                           )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="h-7 w-7 rounded-full border border-stone-300 text-stone-700"
+                        onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                      >
+                        -
+                      </button>
+                      <span className="w-5 text-center font-semibold">{item.quantity}</span>
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-900 text-sm font-bold text-white"
+                        onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      className="w-7 h-7 border border-stone-300"
-                      onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                      className="text-xs font-semibold text-[var(--shop-accent,#e11d48)]"
+                      onClick={() => updateQuantity(item.lineId, 0)}
                     >
-                      -
-                    </button>
-                    <span className="w-5 text-center font-semibold">{item.quantity}</span>
-                    <button
-                      type="button"
-                      className="w-7 h-7 border border-stone-300"
-                      onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                    >
-                      +
+                      {t('shopRemove')}
                     </button>
                   </div>
                 </li>
@@ -1067,29 +1112,33 @@ export default function OrderingPage() {
       </div>
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
+        {channel === 'delivery' && freeDeliveryThreshold > 0 ? (
+          <ShopFreeDeliveryProgress subtotal={cartTotal} threshold={freeDeliveryThreshold} />
+        ) : null}
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
-        <button
-          type="button"
-          disabled={
-            !cart.length ||
-            vacationActive ||
-            ordersPaused ||
-            (!channelMeta?.open && !allowScheduledOrders)
-          }
-          onClick={goCheckout}
-          className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
-        >
-          {ordersPaused
-            ? t('shopNotAcceptingOrders')
-            : vacationActive
-            ? t('shopVacationTitle')
-            : !channelMeta?.open && !allowScheduledOrders
-              ? t('shopComeBackWhenOpen')
-              : channelMeta?.open
-                ? t('shopGoCheckout')
-                : t('shopScheduleCheckout')}
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="text-sm font-semibold text-stone-700 underline underline-offset-2"
+            onClick={() => setCartSlideOpen(false)}
+          >
+            {t('shopContinueShopping')}
+          </button>
+          <button
+            type="button"
+            disabled={
+              !cart.length ||
+              vacationActive ||
+              ordersPaused ||
+              (!channelMeta?.open && !allowScheduledOrders)
+            }
+            onClick={goCheckout}
+            className="rounded-xl bg-[var(--shop-accent,#e11d48)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
+          </button>
+        </div>
       </div>
     </aside>
   );
@@ -1282,6 +1331,31 @@ export default function OrderingPage() {
       </div>
 
       <div className="shop-page-content py-6" id="shop-menu-start">
+        {popularProducts.length > 0 ? (
+          <div className="mb-8 space-y-3">
+            <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
+            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+              {popularProducts.map((product) => {
+                const catalog = catalogUnitPrice(product.price, product.categoryId ?? null);
+                return (
+                  <div key={`pop-${product.id}`} className="min-w-[280px] max-w-[320px] shrink-0 snap-start">
+                    <ProductCard
+                      product={product}
+                      showImage={showProductImages && !!product.image}
+                      price={catalog}
+                      onAdd={() => handleProductClick(product)}
+                      rewardPts={null}
+                      unlocked={false}
+                      onAddFree={() => undefined}
+                      t={t}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {shopOffers.length > 0 ? (
           <div className="mb-5 space-y-2">
             <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('shopOffers')}</h2>
@@ -1454,21 +1528,36 @@ export default function OrderingPage() {
             aria-label={t('shopBasket')}
           >
             <div className="h-full flex flex-col">
-              <div className="flex justify-end p-3 border-b border-stone-100">
+              <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+                <h2 className="text-lg font-bold">{t('shopYourCart')}</h2>
                 <button
                   type="button"
-                  className="text-sm font-semibold"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
                   onClick={() => setCartSlideOpen(false)}
+                  aria-label={t('shopClose')}
                 >
-                  {t('shopClose')}
+                  ×
                 </button>
               </div>
               <div className="flex-1 min-h-0">
-                <Basket className="h-full min-h-0 border-0" />
+                <Basket className="h-full min-h-0 border-0" hideHeader />
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {pendingDetail && (
+        <ShopProductDetailModal
+          product={pendingDetail}
+          displayPrice={catalogUnitPrice(pendingDetail.price, pendingDetail.categoryId ?? null)}
+          showImage={showProductImages && !!pendingDetail.image}
+          onClose={() => setPendingDetail(null)}
+          onAdd={(qty) => {
+            for (let i = 0; i < qty; i++) addConfiguredItem(pendingDetail);
+            setCartSlideOpen(true);
+          }}
+        />
       )}
 
       {pendingProduct && (
@@ -1562,16 +1651,6 @@ export default function OrderingPage() {
         />
       )}
 
-      {pendingOffer && (
-        <ShopOfferPicker
-          offer={pendingOffer}
-          products={allMenuProducts}
-          priceOf={(p) => catalogUnitPrice(p.price)}
-          onClose={() => setPendingOffer(null)}
-          onConfirm={addOfferDealToCart}
-        />
-      )}
-
       <ShopChannelPrompt
         open={channelPromptOpen}
         title={t('shopChooseHow')}
@@ -1589,7 +1668,7 @@ export default function OrderingPage() {
         }))}
         selected={channel}
         confirmLabel={t('shopContinue')}
-        dismissible={channelSelectMode !== 'popup_start'}
+        dismissible
         withSchedule={allowScheduledOrders}
         storeHours={merchant?.storeHours}
         scheduledFor={draft.scheduledFor || null}
