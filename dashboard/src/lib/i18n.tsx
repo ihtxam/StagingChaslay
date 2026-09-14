@@ -2719,6 +2719,14 @@ const en: Dict = {
   webPosLicenseNoResellerHint:
     'No reseller is linked. Use Buy license for self-serve plans, or contact support.',
   webPosLicenseMailSubject: 'Reborn license renewal',
+  webPosLicenseActivateTitle: 'Have an activation code?',
+  webPosLicenseActivateHint:
+    'Enter the code from admin (hyphens optional), for example 1758-D6DD-EF5A.',
+  webPosLicenseActivatePlaceholder: '1758-D6DD-EF5A',
+  webPosLicenseActivateButton: 'Activate POS',
+  webPosLicenseActivating: 'Activating…',
+  webPosLicenseActivateSuccess: 'POS license activated',
+  webPosLicenseActivateFailed: 'Could not activate this code',
   webPosDrawerDenied: 'You do not have permission to open the cash drawer',
   webPosDrawerOpened: 'Cash drawer opened',
   webPosDrawerFailed: 'Could not open cash drawer',
@@ -6614,6 +6622,14 @@ const fr: Dict = {
   webPosLicenseNoResellerHint:
     'Aucun revendeur lié. Utilisez Acheter une licence pour les offres en libre-service, ou contactez le support.',
   webPosLicenseMailSubject: 'Renouvellement licence Reborn',
+  webPosLicenseActivateTitle: 'Vous avez un code d’activation ?',
+  webPosLicenseActivateHint:
+    'Saisissez le code admin (tirets facultatifs), par exemple 1758-D6DD-EF5A.',
+  webPosLicenseActivatePlaceholder: '1758-D6DD-EF5A',
+  webPosLicenseActivateButton: 'Activer le POS',
+  webPosLicenseActivating: 'Activation…',
+  webPosLicenseActivateSuccess: 'Licence POS activée',
+  webPosLicenseActivateFailed: 'Impossible d’activer ce code',
   webPosDrawerDenied: 'Vous n’avez pas la permission d’ouvrir le tiroir-caisse',
   webPosDrawerOpened: 'Tiroir-caisse ouvert',
   webPosDrawerFailed: 'Impossible d’ouvrir le tiroir-caisse',
@@ -10454,6 +10470,14 @@ const de: Dict = {
   webPosLicenseNoResellerHint:
     'Kein Reseller verknüpft. Nutzen Sie Lizenz kaufen für Self-Serve-Pläne oder kontaktieren Sie den Support.',
   webPosLicenseMailSubject: 'Reborn-Lizenz verlängern',
+  webPosLicenseActivateTitle: 'Haben Sie einen Aktivierungscode?',
+  webPosLicenseActivateHint:
+    'Code aus dem Admin eingeben (Bindestriche optional), z. B. 1758-D6DD-EF5A.',
+  webPosLicenseActivatePlaceholder: '1758-D6DD-EF5A',
+  webPosLicenseActivateButton: 'POS aktivieren',
+  webPosLicenseActivating: 'Wird aktiviert…',
+  webPosLicenseActivateSuccess: 'POS-Lizenz aktiviert',
+  webPosLicenseActivateFailed: 'Code konnte nicht aktiviert werden',
   webPosDrawerDenied: 'Keine Berechtigung zum Öffnen der Kassenschublade',
   webPosDrawerOpened: 'Kassenschublade geöffnet',
   webPosDrawerFailed: 'Kassenschublade konnte nicht geöffnet werden',

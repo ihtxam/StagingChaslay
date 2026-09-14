@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDb, schema } from "@/db";
-import { eq, and, lt, gt } from "drizzle-orm";
+import { eq, and, lt, gt, inArray, sql } from "drizzle-orm";
+import { activationCodeLookupKeys, compactActivationCode } from "@/lib/license-activation-code";
 
 export class LicensingService {
   /**
@@ -108,14 +109,24 @@ export class LicensingService {
     const db = getDb();
 
     try {
-      // Find the license by code
-      const license = await db.query.licenses.findFirst({
-        where: and(
-          eq(schema.licenses.licenseKey, licenseCode),
-          eq(schema.licenses.merchantId, merchantId),
-          eq(schema.licenses.status, "active")
-        ),
+      const keys = activationCodeLookupKeys(licenseCode);
+      const compact = compactActivationCode(licenseCode);
+      const keyWhere =
+        keys.length === 1
+          ? eq(schema.licenses.licenseKey, keys[0]!)
+          : inArray(schema.licenses.licenseKey, keys);
+      let license = await db.query.licenses.findFirst({
+        where: and(keyWhere, eq(schema.licenses.merchantId, merchantId), eq(schema.licenses.status, "active")),
       });
+      if (!license && compact) {
+        license = await db.query.licenses.findFirst({
+          where: and(
+            sql`regexp_replace(upper(${schema.licenses.licenseKey}), '[^A-Z0-9]', '', 'g') = ${compact}`,
+            eq(schema.licenses.merchantId, merchantId),
+            eq(schema.licenses.status, "active")
+          ),
+        });
+      }
 
       if (!license) {
         throw new Error("Invalid or expired license code");
