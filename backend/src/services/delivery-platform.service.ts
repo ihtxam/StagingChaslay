@@ -591,6 +591,8 @@ export class DeliveryPlatformService {
       printReceipt?: boolean;
       printDeliveryReceipt?: boolean;
       printNotification?: boolean;
+      /** Online shop arrival — bypass master receipt/kitchen auto-print toggles */
+      independentOfMasterAutoPrint?: boolean;
     }
   ) {
     const db = getDb();
@@ -601,12 +603,13 @@ export class DeliveryPlatformService {
     if (!merchant) return;
 
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
+    const bypass = opts?.independentOfMasterAutoPrint === true;
     const printKitchen =
       opts?.printKitchen === true &&
       !isRetailPosMode(merchant.posCheckoutSettings) &&
-      printSettings.autoPrintKitchen !== false;
+      (bypass || printSettings.autoPrintKitchen !== false);
     const printReceipt =
-      opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
+      opts?.printReceipt === true && (bypass || printSettings.autoPrintReceipt !== false);
     const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
     const printNotification = opts?.printNotification === true;
     if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification) return;
@@ -618,6 +621,7 @@ export class DeliveryPlatformService {
         printNotification,
         printDeliveryReceipt,
         orderSource,
+        independentOfMasterAutoPrint: bypass,
       });
       if (printReceipt && !printNotification && !printDeliveryReceipt) {
         await ChaslayFloorService.createPrintJob(merchantId, {
@@ -650,6 +654,7 @@ export class DeliveryPlatformService {
         printDeliveryReceipt,
         printNotification,
         orderSource,
+        force: bypass,
       },
       orderId,
       sourceDeviceId: "delivery-platform",

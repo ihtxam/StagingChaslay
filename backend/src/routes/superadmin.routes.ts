@@ -303,6 +303,20 @@ router.post("/email/test", async (req: Request, res: Response) => {
 // ============================================================================
 
 /**
+ * POST /api/superadmin/merchants/backfill-support-codes
+ * Assign CH-001 / UK-001 style codes to merchants missing one.
+ */
+router.post("/merchants/backfill-support-codes", async (_req: Request, res: Response) => {
+  try {
+    const result = await MerchantService.backfillSupportCodes();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error backfilling support codes:", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Backfill failed" });
+  }
+});
+
+/**
  * GET /api/superadmin/merchants
  * Get all merchants with pagination
  */

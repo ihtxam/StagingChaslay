@@ -117,6 +117,8 @@ export const merchants = pgTable(
     address: text("address"),
     city: varchar("city", { length: 100 }),
     country: varchar("country", { length: 100 }),
+    /** Human support reference for DB lookup — e.g. CH-001, UK-042 */
+    supportCode: varchar("support_code", { length: 16 }),
     vatNumber: varchar("vat_number", { length: 50 }),
     vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("0"),
     // Channel-specific tax rates (%). Fall back to vatRate when null/0 unused.
@@ -441,6 +443,7 @@ export const merchants = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("merchants_email_idx").on(table.email),
+    supportCodeIdx: uniqueIndex("merchants_support_code_idx").on(table.supportCode),
     statusIdx: index("merchants_status_idx").on(table.status),
     slugIdx: uniqueIndex("merchants_slug_idx").on(table.slug),
     subdomainIdx: uniqueIndex("merchants_subdomain_idx").on(table.subdomain),

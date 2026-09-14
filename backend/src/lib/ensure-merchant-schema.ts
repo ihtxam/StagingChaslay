@@ -185,6 +185,7 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS subscription_billing_cycle varchar(20)",
   adyen_recurring_detail_reference:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
+  support_code: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS support_code varchar(16)",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */

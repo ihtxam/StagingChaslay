@@ -504,6 +504,7 @@ import {
   onlineShopOrderSpeechLine,
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
+import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import { isMainTillRegister, shouldRingWaiterTillBell } from '@/lib/waiter-till-bell';
 import {
   backOfficeHomePath,
@@ -992,6 +993,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [deliveryAutoAccept, setDeliveryAutoAccept] = useState(false);
   const [deliverySettingsReady, setDeliverySettingsReady] = useState(false);
   const deliveryAutoAcceptRef = useRef(deliveryAutoAccept);
+  const merchantSettingsRef = useRef<Record<string, unknown>>({});
   const [alertRejectOrder, setAlertRejectOrder] = useState<OnlineOrder | null>(null);
   const [alertActionBusy, setAlertActionBusy] = useState(false);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
@@ -2782,6 +2784,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .get('/merchant/settings')
       .then((res) => {
         const s = res.data?.settings || res.data || {};
+        merchantSettingsRef.current = s;
         setDeliveryAutoAccept(readDeliveryAutoAccept(s));
       })
       .catch(() => {})
@@ -2870,6 +2873,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
         for (const o of queueOrders) {
           unactionedOrderIdsRef.current.add(o.id);
+          void maybePrintOnlineOrderOnArrival(o, merchantSettingsRef.current);
           const zip = extractZipFromAddress(o.shippingAddress);
           speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
         }

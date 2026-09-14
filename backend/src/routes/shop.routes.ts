@@ -2872,6 +2872,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
           printKitchen: kitchenOnArrival,
           printReceipt: false,
+          independentOfMasterAutoPrint: kitchenOnArrival,
         });
       }
     } catch (printErr) {
