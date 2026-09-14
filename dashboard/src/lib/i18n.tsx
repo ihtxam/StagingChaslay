@@ -307,7 +307,7 @@ const en: Dict = {
   settingsNavOds: 'ODS',
   settingsNavSignage: 'Signage',
   settingsNavKiosk: 'Kiosk',
-  settingsNavReceipt: 'Receipts',
+  settingsNavReceipt: 'Receipts & printers',
   settingsNavPrinters: 'Printers',
   settingsNavDelivery: 'Delivery',
   settingsNavDeliveryMap: 'Map',
@@ -1690,7 +1690,8 @@ const en: Dict = {
   settingsOperations: 'Operations',
   settingsPayments: 'Payments',
   settingsReceipt: 'Receipts & printers',
-  settingsReceiptHint: 'Receipt layout, kitchen tickets, paper width, and Windows printer roles for Reborn.',
+  settingsReceiptHint:
+    'Receipt layout, kitchen tickets, paper width, Windows printer roles, and order labels (Print label on Send).',
   receiptLanguage: 'Receipt language',
   receiptLangPanel: 'Follow panel language',
   receiptPaperWidth: 'Paper width',
@@ -3692,7 +3693,7 @@ const en: Dict = {
   orderLabelEnabledHint:
     'Show “Print label” on the register and optionally print when holding an order (butcher / weighed goods).',
   orderLabelAutoPrintHint:
-    'Auto-print options (same pattern as kitchen auto-print). Requires a printer with the Labels role above.',
+    'Same row as Auto-print kitchen ticket above. Assign the Labels role on a printer in Printers below.',
   autoPrintOrderLabelOnHold: 'Auto-print on hold',
   autoPrintOrderLabelOnHoldHint: 'Print an order label automatically when staff hold a cart at POS.',
   autoPrintOrderLabelOnSend: 'Print label on Send',
@@ -4370,7 +4371,7 @@ const fr: Dict = {
   settingsNavOds: 'ODS',
   settingsNavSignage: 'Signage',
   settingsNavKiosk: 'Kiosk',
-  settingsNavReceipt: 'Reçus',
+  settingsNavReceipt: 'Reçus & imprimantes',
   settingsNavPrinters: 'Imprimantes',
   settingsNavDelivery: 'Livraison',
   settingsNavDeliveryMap: 'Carte',
@@ -5640,7 +5641,8 @@ const fr: Dict = {
   settingsOperations: 'Opérations',
   settingsPayments: 'Paiements',
   settingsReceipt: 'Reçus & imprimantes',
-  settingsReceiptHint: 'Mise en page des reçus, tickets cuisine, largeur papier et rôles imprimante Reborn.',
+  settingsReceiptHint:
+    'Mise en page des reçus, tickets cuisine, largeur papier, rôles imprimante et étiquettes commande (imprimer à l’envoi).',
   receiptLanguage: 'Langue du reçu',
   receiptLangPanel: 'Suivre la langue du panneau',
   receiptPaperWidth: 'Largeur papier',
@@ -7594,7 +7596,7 @@ const fr: Dict = {
   orderLabelEnabledHint:
     'Affiche « Imprimer étiquette » à la caisse et peut imprimer à la mise en attente (boucherie / pesée).',
   orderLabelAutoPrintHint:
-    'Options d’impression auto (comme l’impression cuisine auto). Nécessite une imprimante avec le rôle Étiquettes ci-dessus.',
+    'Même zone que l’impression auto cuisine ci-dessus. Attribuez le rôle Étiquettes à une imprimante dans Imprimantes plus bas.',
   autoPrintOrderLabelOnHold: 'Impression auto à la mise en attente',
   autoPrintOrderLabelOnHoldHint: 'Imprime une étiquette quand le panier est mis en attente au POS.',
   autoPrintOrderLabelOnSend: 'Imprimer étiquette à l’envoi',
@@ -8271,7 +8273,7 @@ const de: Dict = {
   settingsNavOds: 'ODS',
   settingsNavSignage: 'Signage',
   settingsNavKiosk: 'Kiosk',
-  settingsNavReceipt: 'Belege',
+  settingsNavReceipt: 'Belege & Drucker',
   settingsNavPrinters: 'Drucker',
   settingsNavDelivery: 'Lieferung',
   settingsNavDeliveryMap: 'Karte',
@@ -9541,7 +9543,8 @@ const de: Dict = {
   settingsOperations: 'Ablauf',
   settingsPayments: 'Zahlungen',
   settingsReceipt: 'Belege & Drucker',
-  settingsReceiptHint: 'Beleglayout, Küchentickets, Papierbreite und Windows-Druckerrollen für Reborn.',
+  settingsReceiptHint:
+    'Beleglayout, Küchentickets, Papierbreite, Windows-Druckerrollen und Bestell-Etiketten (Etikett beim Senden).',
   receiptLanguage: 'Belegsprache',
   receiptLangPanel: 'Panel-Sprache folgen',
   receiptPaperWidth: 'Papierbreite',
@@ -11495,7 +11498,7 @@ const de: Dict = {
   orderLabelEnabledHint:
     'Zeigt « Etikett drucken » an der Kasse und optional beim Halten (Metzgerei / Wiegeartikel).',
   orderLabelAutoPrintHint:
-    'Auto-Druck-Optionen (wie Küchen-Auto-Druck). Erfordert einen Drucker mit der Etiketten-Rolle oben.',
+    'Gleicher Bereich wie Küchen-Auto-Druck oben. Weisen Sie einem Drucker unten die Etiketten-Rolle zu.',
   autoPrintOrderLabelOnHold: 'Auto-Druck beim Halten',
   autoPrintOrderLabelOnHoldHint: 'Druckt automatisch ein Etikett, wenn der Warenkorb gehalten wird.',
   autoPrintOrderLabelOnSend: 'Etikett beim Senden drucken',

@@ -88,6 +88,31 @@ test('matchSettingsSearch two words matches across separate keywords (not phrase
   assert.ok(matches.some((entry) => entry.id === 'receipt-print'));
 });
 
+test('order labels search finds dedicated receipt section (not hidden / gated)', () => {
+  const index = buildSettingsSearchIndex(t);
+  const orderLabels = index.find((entry) => entry.id === 'order-labels');
+  assert.equal(orderLabels?.tab, 'receipt');
+  for (const query of [
+    'order labels',
+    'print label on send',
+    'print order labels',
+    'étiquette',
+    'etikett',
+    'butcher',
+  ]) {
+    const matches = matchSettingsSearch(index, query);
+    assert.ok(
+      matches.some((entry) => entry.id === 'order-labels'),
+      `expected order-labels for "${query}"`
+    );
+  }
+  const filtered = filterAccessibleSettingsSearch(
+    matchSettingsSearch(index, 'order labels'),
+    openContext()
+  );
+  assert.ok(filtered.some((entry) => entry.id === 'order-labels'));
+});
+
 test('matchSettingsSearch trailing space and empty second token still returns first-word hits', () => {
   const index = buildSettingsSearchIndex(t);
   const withSpace = matchSettingsSearch(index, 'express ');
