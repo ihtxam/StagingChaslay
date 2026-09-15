@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { Gift } from 'lucide-react';
+import { Gift, Mail, Package } from 'lucide-react';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -9,11 +9,15 @@ import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 
 type GiftSettings = {
   enabled: boolean;
+  digitalVoucherEnabled?: boolean;
+  physicalPostEnabled?: boolean;
   presetDenominations: number[];
   minAmount: number;
   maxAmount: number;
   customAmountEnabled: boolean;
 };
+
+type DeliveryType = 'digital' | 'physical';
 
 type PaymentSession = {
   id: string;
@@ -34,6 +38,7 @@ export default function GiftCardsPage() {
   const [settings, setSettings] = useState<GiftSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>('digital');
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -41,6 +46,9 @@ export default function GiftCardsPage() {
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [shippingZip, setShippingZip] = useState('');
+  const [shippingCity, setShippingCity] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const [session, setSession] = useState<PaymentSession | null>(null);
@@ -58,9 +66,13 @@ export default function GiftCardsPage() {
           axios.get(`/api/shop/${shopKey}/gift-cards/settings`),
         ]);
         setMerchant(shopRes.data?.data);
-        setSettings(gcRes.data?.settings);
-        const presets = gcRes.data?.settings?.presetDenominations || [];
+        const s = gcRes.data?.settings as GiftSettings;
+        setSettings(s);
+        const presets = s?.presetDenominations || [];
         if (presets.length) setAmount(Number(presets[0]));
+        if (s?.digitalVoucherEnabled === false && s?.physicalPostEnabled) {
+          setDeliveryType('physical');
+        }
       } catch {
         setError(t('loadFailed'));
       } finally {
@@ -77,6 +89,9 @@ export default function GiftCardsPage() {
     return amount || 0;
   }, [amount, customAmount]);
 
+  const showDigital = settings?.digitalVoucherEnabled !== false;
+  const showPhysical = settings?.physicalPostEnabled === true;
+
   const startPurchase = async (e: FormEvent) => {
     e.preventDefault();
     if (!shopKey || !settings?.enabled) return;
@@ -86,11 +101,16 @@ export default function GiftCardsPage() {
     try {
       const res = await axios.post(`/api/shop/${shopKey}/gift-cards/purchase`, {
         amount: resolvedAmount,
+        deliveryType,
         recipientEmail,
         recipientName: recipientName || undefined,
         senderName: senderName || undefined,
         senderEmail: senderEmail || undefined,
         message: message || undefined,
+        shippingAddress: deliveryType === 'physical' ? shippingAddress : undefined,
+        shippingZip: deliveryType === 'physical' ? shippingZip : undefined,
+        shippingCity: deliveryType === 'physical' ? shippingCity : undefined,
+        shippingCountry: deliveryType === 'physical' ? 'CH' : undefined,
       });
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
@@ -155,7 +175,7 @@ export default function GiftCardsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-500">
+      <div className="min-h-screen flex items-center justify-center bg-[#faf8f5] text-stone-500">
         …
       </div>
     );
@@ -163,7 +183,7 @@ export default function GiftCardsPage() {
 
   if (!settings?.enabled) {
     return (
-      <div className="min-h-screen bg-stone-50 px-4 py-12">
+      <div className="min-h-screen bg-[#faf8f5] px-4 py-12">
         <div className="max-w-lg mx-auto text-center">
           <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
           <Link to={base || '/'} className="mt-4 inline-block text-stone-900 underline">
@@ -175,7 +195,7 @@ export default function GiftCardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
+    <div className="min-h-screen bg-[#faf8f5] text-stone-900">
       <header className="border-b border-stone-200 bg-white">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <Link to={base || '/'} className="font-semibold tracking-tight truncate">
@@ -200,13 +220,55 @@ export default function GiftCardsPage() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{t('shopGiftCardTitle')}</h1>
         </div>
-        <p className="text-stone-600 mb-8">{t('shopGiftCardSubtitle')}</p>
+        <p className="text-stone-600 mb-8">{t('shopGiftCardSubtitleFull')}</p>
 
         {!purchaseId ? (
           <form
             onSubmit={startPurchase}
             className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6"
           >
+            {showDigital && showPhysical ? (
+              <div>
+                <p className="text-sm font-medium mb-3">{t('shopGiftCardDeliveryType')}</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('digital')}
+                    className={`rounded-xl border p-4 text-left transition-colors ${
+                      deliveryType === 'digital'
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    <Mail className="mb-2 h-5 w-5" />
+                    <p className="font-semibold">{t('shopGiftCardDigital')}</p>
+                    <p
+                      className={`text-xs mt-1 ${deliveryType === 'digital' ? 'text-stone-200' : 'text-stone-500'}`}
+                    >
+                      {t('shopGiftCardDigitalHint')}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('physical')}
+                    className={`rounded-xl border p-4 text-left transition-colors ${
+                      deliveryType === 'physical'
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    <Package className="mb-2 h-5 w-5" />
+                    <p className="font-semibold">{t('shopGiftCardPhysical')}</p>
+                    <p
+                      className={`text-xs mt-1 ${deliveryType === 'physical' ? 'text-stone-200' : 'text-stone-500'}`}
+                    >
+                      {t('shopGiftCardPhysicalHint')}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div>
               <p className="text-sm font-medium mb-3">{t('shopGiftCardChooseAmount')}</p>
               <div className="flex flex-wrap gap-2">
@@ -254,7 +316,7 @@ export default function GiftCardsPage() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
-              <label className="block">
+              <label className="block sm:col-span-2">
                 <span className="text-sm font-medium">{t('shopGiftCardRecipientEmail')}</span>
                 <input
                   type="email"
@@ -282,7 +344,7 @@ export default function GiftCardsPage() {
                   className="mt-1 w-full rounded-xl border border-stone-300 px-4 py-3"
                 />
               </label>
-              <label className="block">
+              <label className="block sm:col-span-2">
                 <span className="text-sm font-medium">{t('shopGiftCardSenderEmail')}</span>
                 <input
                   type="email"
@@ -292,6 +354,35 @@ export default function GiftCardsPage() {
                 />
               </label>
             </div>
+
+            {deliveryType === 'physical' ? (
+              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 space-y-3">
+                <p className="text-sm font-semibold">{t('shopGiftCardShippingAddress')}</p>
+                <input
+                  className="w-full rounded-xl border border-stone-300 px-4 py-3 text-sm"
+                  placeholder={t('shopStreetAddress')}
+                  value={shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
+                  required
+                />
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <input
+                    className="w-full rounded-xl border border-stone-300 px-4 py-3 text-sm"
+                    placeholder={t('shopZip')}
+                    value={shippingZip}
+                    onChange={(e) => setShippingZip(e.target.value)}
+                    required
+                  />
+                  <input
+                    className="w-full rounded-xl border border-stone-300 px-4 py-3 text-sm"
+                    placeholder={t('shopCity')}
+                    value={shippingCity}
+                    onChange={(e) => setShippingCity(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            ) : null}
 
             <label className="block">
               <span className="text-sm font-medium">{t('shopGiftCardMessage')}</span>
@@ -309,7 +400,7 @@ export default function GiftCardsPage() {
             <button
               type="submit"
               disabled={submitting || resolvedAmount <= 0}
-              className="w-full py-3.5 rounded-full bg-stone-900 text-white font-semibold disabled:opacity-50"
+              className="w-full py-3.5 rounded-full bg-[var(--shop-accent,#e11d48)] text-white font-semibold disabled:opacity-50"
             >
               {submitting
                 ? '…'
@@ -320,7 +411,8 @@ export default function GiftCardsPage() {
           <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-2">{t('shopGiftCardPayment')}</h2>
             <p className="text-stone-600 text-sm mb-4">
-              CHF {resolvedAmount.toFixed(2)} → {recipientEmail}
+              CHF {resolvedAmount.toFixed(2)} ·{' '}
+              {deliveryType === 'physical' ? t('shopGiftCardPhysical') : t('shopGiftCardDigital')}
             </p>
             {payMsg && <p className="text-amber-700 text-sm mb-3">{payMsg}</p>}
             {session?.demoConfirmAvailable && !session?.id && (

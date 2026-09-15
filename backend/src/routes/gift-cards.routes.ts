@@ -6,6 +6,7 @@ import {
 } from "@/middleware/auth.middleware";
 import { requireEditionFeature } from "@/middleware/edition.middleware";
 import { GiftCardService } from "@/services/gift-card.service";
+import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.put("/settings", async (req: Request, res: Response) => {
       reloadEnabled: body.reloadEnabled,
       customAmountEnabled: body.customAmountEnabled,
       onlinePurchaseEnabled: body.onlinePurchaseEnabled,
+      digitalVoucherEnabled: body.digitalVoucherEnabled,
+      physicalPostEnabled: body.physicalPostEnabled,
       membershipEnabled: body.membershipEnabled,
       membershipPlans: body.membershipPlans,
     });
@@ -441,6 +444,37 @@ router.post("/:cardId/points/redeem", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to redeem points",
+    });
+  }
+});
+
+/**
+ * GET /api/gift-cards/online-purchases/pending-shipment
+ */
+router.get("/online-purchases/pending-shipment", async (req: Request, res: Response) => {
+  try {
+    const rows = await ShopGiftCardService.listPendingShipments(req.merchantId!);
+    res.json({ success: true, purchases: rows });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list pending shipments",
+    });
+  }
+});
+
+/**
+ * POST /api/gift-cards/online-purchases/:purchaseId/mark-shipped
+ */
+router.post("/online-purchases/:purchaseId/mark-shipped", async (req: Request, res: Response) => {
+  try {
+    const purchase = await ShopGiftCardService.markPurchaseShipped(
+      req.merchantId!,
+      req.params.purchaseId
+    );
+    res.json({ success: true, purchase });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to mark shipped",
     });
   }
 });

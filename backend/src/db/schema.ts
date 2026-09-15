@@ -2603,6 +2603,15 @@ export const giftCardPurchases = pgTable(
     message: text("message"),
     paymentMethod: varchar("payment_method", { length: 20 }).default("card").notNull(),
     paymentStatus: varchar("payment_status", { length: 30 }).default("awaiting_payment").notNull(),
+    /** digital = email voucher with QR/barcode; physical = card shipped by post */
+    deliveryType: varchar("delivery_type", { length: 20 }).default("digital").notNull(),
+    shippingAddress: text("shipping_address"),
+    shippingZip: varchar("shipping_zip", { length: 20 }),
+    shippingCity: varchar("shipping_city", { length: 120 }),
+    shippingCountry: varchar("shipping_country", { length: 2 }).default("CH"),
+    /** pending_shipment | shipped | digital_sent */
+    fulfillmentStatus: varchar("fulfillment_status", { length: 30 }),
+    shippedAt: timestamp("shipped_at"),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     cardId: uuid("card_id").references(() => giftCards.id, { onDelete: "set null" }),
     fulfilledAt: timestamp("fulfilled_at"),

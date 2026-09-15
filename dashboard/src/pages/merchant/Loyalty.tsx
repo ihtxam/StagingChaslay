@@ -15,9 +15,22 @@ interface GiftCardSettings {
   reloadEnabled: boolean;
   customAmountEnabled: boolean;
   onlinePurchaseEnabled?: boolean;
+  digitalVoucherEnabled?: boolean;
+  physicalPostEnabled?: boolean;
   membershipEnabled?: boolean;
   membershipPlans?: MembershipPlan[];
 }
+
+type PendingPurchase = {
+  id: string;
+  amount: string;
+  recipientName?: string | null;
+  recipientEmail: string;
+  shippingAddress?: string | null;
+  shippingZip?: string | null;
+  shippingCity?: string | null;
+  createdAt: string;
+};
 
 interface GiftCard {
   id: string;
@@ -65,6 +78,8 @@ const DEFAULT_GC: GiftCardSettings = {
   reloadEnabled: true,
   customAmountEnabled: true,
   onlinePurchaseEnabled: true,
+  digitalVoucherEnabled: true,
+  physicalPostEnabled: false,
   membershipEnabled: false,
   membershipPlans: [],
 };
@@ -111,6 +126,7 @@ export default function Loyalty() {
   const [giftTab, setGiftTab] = useState<GiftTab>('settings');
   const [gcSettings, setGcSettings] = useState<GiftCardSettings>(DEFAULT_GC);
   const [cards, setCards] = useState<GiftCard[]>([]);
+  const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
   const [readers, setReaders] = useState<RfidReader[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -148,6 +164,12 @@ export default function Loyalty() {
       ]);
       if (settingsRes.data.settings) setGcSettings(settingsRes.data.settings);
       setCards(cardsRes.data.cards || []);
+      try {
+        const pendingRes = await api.get('/gift-cards/online-purchases/pending-shipment');
+        setPendingPurchases(pendingRes.data.purchases || []);
+      } catch {
+        setPendingPurchases([]);
+      }
       setReaders(readersRes.data.readers || []);
       if (programRes.data.program) {
         setProgram({
@@ -178,6 +200,16 @@ export default function Loyalty() {
       toast.error(error.response?.data?.error || t('giftCardSettingsSaveFailed'));
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const markPurchaseShipped = async (purchaseId: string) => {
+    try {
+      await api.post(`/gift-cards/online-purchases/${purchaseId}/mark-shipped`);
+      setPendingPurchases((prev) => prev.filter((p) => p.id !== purchaseId));
+      toast.success(t('giftCardShipped'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('actionFailed'));
     }
   };
 
@@ -603,6 +635,18 @@ export default function Loyalty() {
                 label={t('giftCardOnlinePurchase')}
                 hint={t('giftCardOnlinePurchaseHint')}
               />
+              <Toggle
+                checked={gcSettings.digitalVoucherEnabled !== false}
+                onChange={(v) => setGcSettings({ ...gcSettings, digitalVoucherEnabled: v })}
+                label={t('giftCardDigitalVoucher')}
+                hint={t('giftCardDigitalVoucherHint')}
+              />
+              <Toggle
+                checked={gcSettings.physicalPostEnabled === true}
+                onChange={(v) => setGcSettings({ ...gcSettings, physicalPostEnabled: v })}
+                label={t('giftCardPhysicalPost')}
+                hint={t('giftCardPhysicalPostHint')}
+              />
 
               <div className="pt-4">
                 <button
@@ -619,6 +663,35 @@ export default function Loyalty() {
 
           {giftTab === 'cards' && (
             <div className="space-y-6">
+              {pendingPurchases.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                  <h2 className="font-semibold text-slate-900">{t('giftCardPendingShipment')}</h2>
+                  <ul className="space-y-2">
+                    {pendingPurchases.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-100 bg-white p-3 text-sm"
+                      >
+                        <div>
+                          <p className="font-semibold">
+                            CHF {Number(p.amount).toFixed(2)} · {p.recipientName || p.recipientEmail}
+                          </p>
+                          <p className="text-slate-600">
+                            {p.shippingAddress}, {p.shippingZip} {p.shippingCity}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-primary text-xs py-1.5 px-3"
+                          onClick={() => void markPurchaseShipped(p.id)}
+                        >
+                          {t('giftCardMarkShipped')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <form onSubmit={onIssueCard} className="space-y-3 rounded-xl border border-slate-200 p-4">
                 <h2 className="font-semibold text-slate-900">{t('giftCardIssue')}</h2>
                 <p className="text-sm text-slate-500">{t('giftCardIssueHint')}</p>
