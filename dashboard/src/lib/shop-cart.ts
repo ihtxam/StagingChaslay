@@ -70,6 +70,8 @@ export type ShopDeliveryInfo = {
     name?: string;
     minOrderAmount?: number | string | null;
     deliveryFee?: number | string | null;
+    baseDeliveryFee?: number | string | null;
+    freeDeliveryMinOrder?: number | string | null;
   };
 };
 

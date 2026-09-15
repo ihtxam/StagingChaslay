@@ -154,6 +154,11 @@ function mapShopProduct(
     comboSlots: isCombo ? comboSlots : [],
     loyaltyRewardPoints:
       rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
+    similarProductIds: Array.isArray((p as { similarProductIds?: string[] }).similarProductIds)
+      ? (p as { similarProductIds?: string[] }).similarProductIds!.filter(
+          (id) => typeof id === "string" && id.trim()
+        )
+      : [],
   };
 }
 
@@ -1407,6 +1412,7 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
     }
 
     const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
+    const baseFee = parseFloat(zone.deliveryFee?.toString() || "0");
     const fee = computeEffectiveDeliveryFee(zone, subtotal);
     const meetsMin = subtotal >= minOrder;
 
@@ -1420,6 +1426,7 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
         name: zone.name,
         minOrderAmount: minOrder,
         deliveryFee: fee,
+        baseDeliveryFee: baseFee,
         freeDeliveryMinOrder: parseFloat(zone.freeDeliveryMinOrder?.toString() || "0"),
         estimatedMinutes: zone.estimatedMinutes,
       },

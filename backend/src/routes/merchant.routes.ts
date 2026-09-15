@@ -569,6 +569,7 @@ router.post("/products", async (req: Request, res: Response) => {
       loyaltyRewardPoints,
       modifierGroupIds,
       visibility,
+      similarProductIds,
     } = req.body;
 
     if (!merchantId) {
@@ -669,10 +670,20 @@ router.post("/products", async (req: Request, res: Response) => {
       );
     }
 
-    if (visibility !== undefined) {
-      await ProductService.updateProduct(merchantId, product.id, {
-        visibility: normalizeCatalogVisibility(visibility),
-      });
+    if (visibility !== undefined || similarProductIds !== undefined) {
+      const patch: Partial<typeof schema.products.$inferInsert> = {};
+      if (visibility !== undefined) {
+        patch.visibility = normalizeCatalogVisibility(visibility);
+      }
+      if (similarProductIds !== undefined) {
+        patch.similarProductIds = Array.isArray(similarProductIds)
+          ? similarProductIds
+              .filter((id: unknown) => typeof id === "string" && String(id).trim())
+              .map((id: string) => String(id).trim())
+              .slice(0, 12)
+          : [];
+      }
+      await ProductService.updateProduct(merchantId, product.id, patch);
     }
 
     const saved = await ProductService.getProductById(merchantId, product.id);
@@ -754,6 +765,15 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
 
     if (updates.visibility !== undefined) {
       updates.visibility = normalizeCatalogVisibility(updates.visibility);
+    }
+
+    if (updates.similarProductIds !== undefined) {
+      updates.similarProductIds = Array.isArray(updates.similarProductIds)
+        ? updates.similarProductIds
+            .filter((id: unknown) => typeof id === "string" && String(id).trim())
+            .map((id: string) => String(id).trim())
+            .slice(0, 12)
+        : [];
     }
 
     const product = await ProductService.updateProduct(merchantId, productId, updates);

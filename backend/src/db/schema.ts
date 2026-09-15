@@ -1146,6 +1146,8 @@ export const products = pgTable(
       .$type<{ channels: string[] }>()
       .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
+    /** Product IDs suggested in online shop cart upsell slider */
+    similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
