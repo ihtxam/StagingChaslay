@@ -13,6 +13,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultTestimonials: TestimonialItem[] = [
   { text: 'An extraordinary culinary journey. Every visit reveals new flavors and the attention to detail is simply unmatched. This restaurant has become our family tradition for special occasions.', author: 'Robert & Maria Garcia', rating: 5, role: 'Loyal Patrons since 2019', photo: '' },
@@ -38,9 +39,10 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
-  const testimonial = (mergedProps.testimonials || [])[0];
+  const testimonial = trTestimonials(mergedProps.testimonials)[0];
   if (!testimonial) return null;
 
   return (
@@ -57,7 +59,7 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
       }}
     >
       <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-        {mergedProps.title && (
+        {tr('title') && (
           <h3 style={{
             color: mergedProps.textColor,
             fontSize: '14px',
@@ -67,7 +69,7 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
             marginBottom: '32px',
             opacity: 0.7,
           }}>
-            {mergedProps.title}
+            {tr('title')}
           </h3>
         )}
 

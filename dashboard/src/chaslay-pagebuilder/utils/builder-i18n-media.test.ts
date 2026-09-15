@@ -37,4 +37,15 @@ assert.equal(resolveTranslatedProp(props, 'title', 'fr'), 'La carte');
 assert.equal(resolveTranslatedProp(props, 'buttonText', 'fr'), 'Order Now');
 assert.equal(resolveTranslatedProp(props, 'title', 'en'), 'Our Menu');
 
+assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
+assert.equal(translateSectionCopy('What Our Guests Say', 'de'), 'Was unsere Gäste sagen');
+assert.equal(
+  resolveTranslatedProp(
+    { testimonials_0_text: 'Great food', testimonials_0_text_fr: 'Excellente cuisine' },
+    'testimonials_0_text',
+    'fr'
+  ),
+  'Excellente cuisine'
+);
+
 console.log('builder-i18n-media tests passed');

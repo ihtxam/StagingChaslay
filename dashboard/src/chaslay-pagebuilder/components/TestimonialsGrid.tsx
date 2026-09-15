@@ -13,6 +13,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultTestimonials: TestimonialItem[] = [
   { text: 'The food was absolutely amazing! Best dining experience we have had in years.', author: 'Sarah Johnson', rating: 5, role: 'Food Critic', photo: '' },
@@ -40,6 +41,8 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const testimonials = trTestimonials(mergedProps.testimonials);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -54,7 +57,7 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
         padding: '64px 20px',
       }}
     >
-      {mergedProps.title && (
+      {tr('title') && (
         <h3 style={{
           color: mergedProps.textColor,
           fontSize: '28px',
@@ -62,20 +65,20 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
           textAlign: 'center',
           marginBottom: '48px',
         }}>
-          {mergedProps.title}
+          {tr('title')}
         </h3>
       )}
       <div
         className="hb-testimonials-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min((mergedProps.testimonials || []).length, 3)}, 1fr)`,
+          gridTemplateColumns: `repeat(${Math.min(testimonials.length, 3)}, 1fr)`,
           gap: '24px',
           maxWidth: '1100px',
           margin: '0 auto',
         }}
       >
-        {(mergedProps.testimonials || []).map((t, i) => (
+        {testimonials.map((t, i) => (
           <div
             key={i}
             style={{

@@ -13,6 +13,7 @@ import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultTestimonials: TestimonialItem[] = [
   { text: 'The food was absolutely amazing! Best dining experience we have had in years.', author: 'Sarah Johnson', rating: 5, role: 'Food Critic', photo: '' },
@@ -41,6 +42,8 @@ export const TestimonialsCarousel: React.FC<TestimonialsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const testimonials = trTestimonials(mergedProps.testimonials);
   const { connectors: { connect, drag } } = useNode();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +65,7 @@ export const TestimonialsCarousel: React.FC<TestimonialsProps> & {
         padding: '64px 20px',
       }}
     >
-      {mergedProps.title && (
+      {tr('title') && (
         <h3 style={{
           color: mergedProps.textColor,
           fontSize: '28px',
@@ -70,7 +73,7 @@ export const TestimonialsCarousel: React.FC<TestimonialsProps> & {
           textAlign: 'center',
           marginBottom: '48px',
         }}>
-          {mergedProps.title}
+          {tr('title')}
         </h3>
       )}
       <div style={{ position: 'relative', maxWidth: '1100px', margin: '0 auto' }}>
@@ -109,7 +112,7 @@ export const TestimonialsCarousel: React.FC<TestimonialsProps> & {
             padding: '4px 0',
           }}
         >
-          {(mergedProps.testimonials || []).map((t, i) => (
+          {testimonials.map((t, i) => (
             <div
               key={i}
               style={{

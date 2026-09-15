@@ -26,8 +26,30 @@ export function useSectionTranslations(props: Record<string, unknown>) {
     (items || []).map((item, i) => {
       const key = `${arrayKey}_${i}_label`;
       const fromProp = resolveTranslatedProp(props, key, locale, defaultLanguage);
-      const label = fromProp || trText(item.label || '');
+      const label = hasLocaleOverride(props, key, locale, defaultLanguage)
+        ? fromProp || String(item.label || '')
+        : fromProp || trText(item.label || '');
       return { ...item, label };
     });
-  return { tr, trText, trList, locale, defaultLanguage };
+  const trArrayField = (arrayKey: string, index: number, field: string, baseValue: string | undefined | null) => {
+    const key = `${arrayKey}_${index}_${field}`;
+    const resolved = resolveTranslatedProp(props, key, locale, defaultLanguage);
+    const base = String(baseValue || '');
+    const value = resolved || base;
+    if (hasLocaleOverride(props, key, locale, defaultLanguage)) return value;
+    return translateSectionCopy(value, locale, defaultLanguage);
+  };
+  const trTestimonials = <
+    T extends { text?: string; author?: string; role?: string; rating?: number; photo?: string },
+  >(
+    items: T[] | undefined,
+    arrayKey = 'testimonials'
+  ): T[] =>
+    (items || []).map((item, i) => ({
+      ...item,
+      text: trArrayField(arrayKey, i, 'text', item.text),
+      author: trArrayField(arrayKey, i, 'author', item.author),
+      role: item.role ? trArrayField(arrayKey, i, 'role', item.role) : item.role,
+    }));
+  return { tr, trText, trList, trArrayField, trTestimonials, locale, defaultLanguage };
 }
