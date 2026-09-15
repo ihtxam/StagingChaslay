@@ -15,6 +15,7 @@ import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
+import ShopNavActions from '@/components/shop/ShopNavActions';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
@@ -61,7 +62,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref, surface } = useStorefront();
+  const { shopHref, surface, isStorefront, accountPath } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -98,6 +99,9 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 
           <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
+            {isStorefront && accountPath ? (
+              <ShopNavActions accountPath={accountPath} className="navbar-desktop-actions" />
+            ) : null}
           </div>
 
           {showNavCta ? (

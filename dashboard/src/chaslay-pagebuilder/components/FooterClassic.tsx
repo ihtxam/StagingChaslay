@@ -72,7 +72,7 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref } = useStorefront();
+  const { isStorefront, shopHref } = useStorefront();
 
   return (
     <>
@@ -116,6 +116,9 @@ export const FooterClassic: React.FC<FooterClassicProps> & {
         {/* Copyright */}
         <div style={{ borderTop: `1px solid ${mergedProps.textColor}20`, paddingTop: '20px', textAlign: 'center' }}>
           <p style={{ fontSize: '13px', opacity: 0.6 }}>{tr('copyrightText')}</p>
+          {isStorefront ? (
+            <p style={{ fontSize: '11px', opacity: 0.45, marginTop: '10px' }}>Powered by rebornPOS</p>
+          ) : null}
         </div>
       </div>
     </footer>

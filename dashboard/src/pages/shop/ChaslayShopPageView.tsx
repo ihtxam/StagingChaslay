@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { User } from 'lucide-react';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -10,13 +9,13 @@ import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRenderer';
 import type { SitePageLink, MerchantContact } from '@/chaslay-pagebuilder/StorefrontContext';
 import { BuilderLanguageProvider } from '@/chaslay-pagebuilder/BuilderLanguageContext';
-import ChaslayLangSwitcher from '@/chaslay-pagebuilder/components/ChaslayLangSwitcher';
-import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 
 type MerchantInfo = {
   name?: string;
+  shopLogoUrl?: string | null;
+  storeHours?: import('@/lib/shop-hours').StoreHours | null;
   reservationsEnabled?: boolean;
   language?: string;
   phone?: string | null;
@@ -56,7 +55,7 @@ type Props = {
  * Shared shell for Chaslay builder pages on the public shop (home + extra pages).
  */
 export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }: Props) {
-  const { t, setLocale } = useI18n();
+  const { t, setLocale, locale } = useI18n();
   const { theme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
@@ -158,18 +157,15 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     return () => document.documentElement.classList.remove('shop-shell');
   }, [chaslayLocale]);
 
-  const handleChaslayLocaleChange = (code: ChaslayLocale) => {
-    setChaslayLocale(code);
+  useEffect(() => {
+    const next = normalizeChaslayLocale(locale, defaultLanguage);
+    setChaslayLocale(next);
     try {
-      localStorage.setItem(chaslayLangStorageKey(shopKey), code);
-      if (code === 'en' || code === 'fr' || code === 'de') {
-        localStorage.setItem(shopLangStorageKey(shopKey), code);
-        setLocale(code);
-      }
+      localStorage.setItem(chaslayLangStorageKey(shopKey), next);
     } catch {
       /* ignore */
     }
-  };
+  }, [locale, defaultLanguage, shopKey]);
 
   const showReservationsNav = Boolean(merchant?.reservationsEnabled);
 
@@ -197,25 +193,9 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   return (
     <BuilderLanguageProvider locale={chaslayLocale} defaultLanguage={defaultLanguage}>
-      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
+      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
         <ShopVacationPopup shopKey={shopKey} />
-        <ShopTopShell>
-          <ShopUtilityTopBar>
-            <ChaslayLangSwitcher
-              locale={chaslayLocale}
-              onLocaleChange={handleChaslayLocaleChange}
-            />
-            <Link
-              to={`${base}/account`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
-              aria-label={t('shopLogIn')}
-            >
-              <User className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span>{t('shopLogIn')}</span>
-            </Link>
-          </ShopUtilityTopBar>
-        </ShopTopShell>
-        <div className="cms-homepage pb-24">
+        <div className="cms-homepage flex flex-1 flex-col pb-6">
           <ChaslayHomepageRenderer
             key={`${pageSlug}-${chaslayLocale}`}
             editorState={editorState}
@@ -225,6 +205,8 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
             defaultLanguage={defaultLanguage}
             sitePages={sitePages}
             contact={contact}
+            merchantDisplayName={merchant?.name || null}
+            storeHours={merchant?.storeHours || null}
           />
         </div>
         <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
