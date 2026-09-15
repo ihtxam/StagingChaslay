@@ -440,7 +440,7 @@ export default function ShopChannelPrompt({
                 </div>
 
                 <input
-                  className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                  className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                   placeholder={t('shopSearchAddress')}
                   value={street}
                   onChange={(e) => {
@@ -451,7 +451,7 @@ export default function ShopChannelPrompt({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                     placeholder={t('shopHouseNumber')}
                     value={houseNumber}
                     onChange={(e) => {
@@ -461,7 +461,7 @@ export default function ShopChannelPrompt({
                     }}
                   />
                   <input
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                     placeholder={t('shopFloor')}
                     value={floor}
                     onChange={(e) => {
@@ -483,13 +483,13 @@ export default function ShopChannelPrompt({
                     setCity(c);
                     setDeliveryInfo(null);
                   }}
-                  zipClassName="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl"
-                  cityClassName="w-full border border-stone-200 px-3 py-2.5 text-sm rounded-xl"
+                  zipClassName="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl"
+                  cityClassName="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl"
                 />
                 <button
                   type="button"
                   onClick={() => void verifyDelivery()}
-                  className="w-full border border-stone-800 text-sm font-semibold py-2.5 rounded-xl hover:bg-stone-50"
+                  className="w-full border border-stone-800 bg-white text-stone-900 text-sm font-semibold py-2.5 rounded-xl hover:bg-stone-50"
                   disabled={checking}
                 >
                   {checking ? t('shopChecking') : t('shopCheckDeliveryZone')}

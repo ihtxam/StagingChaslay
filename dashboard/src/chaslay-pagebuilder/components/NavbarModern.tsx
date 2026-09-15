@@ -14,6 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
@@ -85,11 +86,14 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
         <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
           <div>
-            {mergedProps.logoImageUrl ? (
-              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
-            ) : (
-              <span style={{ fontSize: '26px', fontWeight: 700, color: mergedProps.textColor, fontStyle: 'italic' }}>{logoText}</span>
-            )}
+            <ShopNavbarLogoRow
+              logoImageUrl={mergedProps.logoImageUrl}
+              logoText={logoText}
+              logoWidth={mergedProps.logoWidth}
+              logoHeight={mergedProps.logoHeight}
+              textColor={mergedProps.textColor}
+              logoTextStyle={{ fontSize: '26px', fontStyle: 'italic' }}
+            />
           </div>
 
           <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

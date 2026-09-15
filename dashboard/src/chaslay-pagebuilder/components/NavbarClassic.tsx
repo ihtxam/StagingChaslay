@@ -14,6 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 
 interface MenuItem {
@@ -86,11 +87,13 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
         <div className="hb-navbar-inner" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', minWidth: 0 }}>
           {/* Logo */}
           <div>
-            {mergedProps.logoImageUrl ? (
-              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
-            ) : (
-              <span style={{ fontSize: '24px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>
-            )}
+            <ShopNavbarLogoRow
+              logoImageUrl={mergedProps.logoImageUrl}
+              logoText={logoText}
+              logoWidth={mergedProps.logoWidth}
+              logoHeight={mergedProps.logoHeight}
+              textColor={mergedProps.textColor}
+            />
           </div>
 
           {/* Desktop Menu + Button */}

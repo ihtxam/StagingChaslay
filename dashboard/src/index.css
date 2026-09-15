@@ -2029,6 +2029,147 @@ html.shop-shell #root {
   filter: brightness(0.95);
 }
 
+.shop-mobile-cart-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-top: 1px solid rgb(231 229 228);
+  background: #fff;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.08);
+}
+
+.shop-mobile-cart-bar__icon {
+  position: relative;
+  display: inline-flex;
+  height: 3rem;
+  width: 3rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(231 229 228);
+  border-radius: 0.75rem;
+  background: #fff;
+  color: rgb(28 25 23);
+}
+
+.shop-mobile-cart-bar__badge {
+  position: absolute;
+  right: -0.35rem;
+  top: -0.35rem;
+  display: flex;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgb(28 25 23);
+  padding-inline: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.shop-mobile-cart-bar__cta {
+  flex: 1 1 0%;
+  min-width: 0;
+  border-radius: 9999px;
+  background: var(--shop-accent, #e11d48);
+  padding: 0.85rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.shop-mobile-cart-bar__cta:disabled {
+  opacity: 0.45;
+}
+
+.shop-checkout-sticky-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-top: 1px solid rgb(231 229 228);
+  background: #fff;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.08);
+}
+
+.shop-checkout-sticky-bar__cart {
+  position: relative;
+  display: inline-flex;
+  height: 3rem;
+  width: 3rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(231 229 228);
+  border-radius: 0.75rem;
+  background: #fff;
+  color: rgb(28 25 23);
+}
+
+.shop-checkout-sticky-bar__badge {
+  position: absolute;
+  right: -0.35rem;
+  top: -0.35rem;
+  display: flex;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgb(28 25 23);
+  padding-inline: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.shop-checkout-sticky-bar__order {
+  flex: 1 1 0%;
+  min-width: 0;
+  border-radius: 9999px;
+  padding: 0.85rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fff;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.shop-checkout-sticky-bar__order.is-ready {
+  background: rgb(5 150 105);
+}
+
+.shop-checkout-sticky-bar__order.is-pending {
+  background: rgb(251 113 133);
+  opacity: 0.55;
+}
+
+.shop-checkout-sticky-bar__order:disabled {
+  opacity: 0.45;
+}
+
+html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+html.shop-shell textarea,
+html.shop-shell select {
+  background-color: #fff;
+  color: rgb(28 25 23);
+}
+
+html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden'])::placeholder,
+html.shop-shell textarea::placeholder {
+  color: rgb(120 113 108);
+}
+
 .shop-sticky-category-bar .shop-category-scroll {
   flex: 1 1 0%;
   min-width: 0;

@@ -10,8 +10,8 @@ export default function ZipCityFields({
   city,
   onZipChange,
   onCityChange,
-  zipClassName = 'border border-stone-300 px-3 py-2.5 text-sm w-full',
-  cityClassName = 'border border-stone-300 px-3 py-2.5 text-sm w-full',
+  zipClassName = 'border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 w-full',
+  cityClassName = 'border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 w-full',
 }: {
   shopKey: string;
   zipCode: string;
