@@ -60,7 +60,38 @@ export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
 /** True when the hostname serves path-based shops at /{slug} (shop.chaslay.com, order.rebornsense.com, …). */
 export function isShopPathHubHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  return host === SHOP_HOST.toLowerCase() || host.startsWith('shop.');
+  if (host === SHOP_HOST.toLowerCase() || host.startsWith('shop.')) return true;
+  // Runtime fallback when the bundle was built with the wrong VITE_PUBLIC_DOMAIN.
+  if (host === 'order.rebornsense.com') return true;
+  if (host === 'shop.chaslay.com') return true;
+  return false;
+}
+
+/** Merchant panel hosts (app.* / admin.*) — never treat as a customer shop custom domain. */
+export function isPanelAppHost(hostname: string): boolean {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  return host.startsWith('app.') || host.startsWith('admin.');
+}
+
+/**
+ * Panel login / merchant dashboard origin.
+ * Prefer the current host on app.* so stale build-time env cannot break app.chaslay.com.
+ */
+export function resolvePanelAppOrigin(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    if (isPanelAppHost(host)) {
+      return window.location.origin.replace(/\/+$/, '');
+    }
+    if (host.endsWith('.chaslay.com') || host === 'chaslay.com') {
+      return 'https://app.chaslay.com';
+    }
+    if (host.endsWith('.rebornsense.com') || host === 'rebornsense.com') {
+      return 'https://app.rebornsense.com';
+    }
+  }
+  return APP_ORIGIN;
 }
 
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
