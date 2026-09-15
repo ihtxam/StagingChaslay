@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
-import { StorefrontNavCart } from '../StorefrontNavCart';
 import {
   DEFAULT_SMOOTH_SCROLL_MENU,
   type NavbarMenuItem,
@@ -45,7 +44,6 @@ export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Pro
           {item.label}
         </a>
       ))}
-      <StorefrontNavCart color={textColor} />
     </div>
   );
 }

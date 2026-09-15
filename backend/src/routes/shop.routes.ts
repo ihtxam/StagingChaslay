@@ -38,6 +38,7 @@ import { verifyTableAccess } from "@/lib/table-qr-token";
 import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
 import { TableSessionService } from "@/services/table-session.service";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
+import { normalizeShopSiteSettings } from "@/lib/shop-site-settings";
 
 const router = Router();
 
@@ -49,6 +50,16 @@ type ShopComboSelectionInput = {
   productId: string;
   selectedExtras?: ShopExtraSelection[];
 };
+
+function publicShopSite(req: Request, merchant: { shopSiteSettings?: unknown }) {
+  const s = normalizeShopSiteSettings(merchant.shopSiteSettings);
+  return {
+    ...s,
+    faviconUrl: s.faviconUrl
+      ? resolvePublicAssetUrl(req, s.faviconUrl) || s.faviconUrl
+      : null,
+  };
+}
 
 function serializeShopModifierGroup(g: any) {
   const pricingType = g.pricingType || "fixed";
@@ -650,6 +661,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         longitude: merchant.longitude,
         shopLogoUrl: resolvePublicAssetUrl(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
         shopBannerUrl: resolvePublicAssetUrl(req, merchant.shopBannerUrl) || merchant.shopBannerUrl,
+        site: publicShopSite(req, merchant),
         taxTakeawayRate: merchant.taxTakeawayRate,
         taxDineInRate: merchant.taxDineInRate,
         taxDeliveryRate: merchant.taxDeliveryRate,
@@ -783,6 +795,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
           customDomain: merchant.customDomain,
           shopLogoUrl: merchant.shopLogoUrl,
           shopBannerUrl: merchant.shopBannerUrl,
+          site: publicShopSite(req, merchant),
           storeHours: merchant.storeHours || {},
           address: merchant.address,
           city: merchant.city,

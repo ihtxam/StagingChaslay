@@ -189,6 +189,11 @@ export const merchants = pgTable(
     storeHours: json("store_hours").$type<Record<string, Record<string, Array<{ open: string; close: string }>>>>().default({}),
     shopLogoUrl: varchar("shop_logo_url", { length: 500 }),
     shopBannerUrl: varchar("shop_banner_url", { length: 500 }),
+    /**
+     * Global online-shop appearance / SEO:
+     * { brandColor, metaTitle: {en,fr,de,it}, metaDescription, gaMeasurementId, faviconUrl }
+     */
+    shopSiteSettings: json("shop_site_settings").$type<Record<string, unknown> | null>(),
     latitude: decimal("latitude", { precision: 10, scale: 7 }),
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     pickupEtaMinutes: integer("pickup_eta_minutes").default(25),

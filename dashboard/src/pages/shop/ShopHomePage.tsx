@@ -24,6 +24,7 @@ import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { CmsDynamicBlock, fetchCmsMenuCatalog } from '@/components/shop/cms/CmsDynamicBlocks';
 import { useCmsTailwindCdn } from '@/hooks/useCmsTailwindCdn';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 
 /**
  * Public CMS homepage — static OpenPage HTML + live menu/hours/reservation blocks.
@@ -32,6 +33,7 @@ export default function ShopHomePage() {
   const { t, locale, setLocale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const { site: shopSite } = useShopCmsTheme(shopKey);
   const base = shopBasePath(shopKey);
 
   const [loading, setLoading] = useState(true);
@@ -168,7 +170,7 @@ export default function ShopHomePage() {
   }
 
   return (
-    <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
+    <ShopThemeShell theme={theme} site={shopSite} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
       <ShopTopShell>
         <ShopUtilityTopBar>

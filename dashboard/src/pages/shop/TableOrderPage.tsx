@@ -65,7 +65,7 @@ export default function TableOrderPage() {
     searchParams.get('location')?.trim() ||
     null;
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
-  const cmsTheme = useShopCmsTheme(shopKey);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -287,7 +287,7 @@ export default function TableOrderPage() {
   }
 
   return (
-    <ShopThemeShell shopKey={shopKey} cmsTheme={cmsTheme}>
+    <ShopThemeShell theme={cmsTheme} site={shopSite}>
       <div className="mx-auto max-w-lg min-h-screen bg-white pb-28">
         <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">

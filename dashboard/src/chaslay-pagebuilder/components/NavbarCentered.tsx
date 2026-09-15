@@ -16,7 +16,6 @@ import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
-import { StorefrontNavCart } from '../StorefrontNavCart';
 
 interface MenuItem {
   label: string;
@@ -117,7 +116,6 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
                 {item.label}
               </a>
             ))}
-            <StorefrontNavCart color={mergedProps.textColor || '#1a1a2e'} />
           </div>
         </div>
         <div className="navbar-centered-mobile-row shop-page-content" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between' }}>

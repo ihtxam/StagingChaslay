@@ -57,7 +57,7 @@ type Props = {
  */
 export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }: Props) {
   const { t, setLocale } = useI18n();
-  const theme = useShopCmsTheme(shopKey);
+  const { theme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +197,7 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   return (
     <BuilderLanguageProvider locale={chaslayLocale} defaultLanguage={defaultLanguage}>
-      <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
+      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
         <ShopVacationPopup shopKey={shopKey} />
         <ShopTopShell>
           <ShopUtilityTopBar>

@@ -117,7 +117,7 @@ export default function OrderingPage() {
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const locSlug = resolveShopLocationSlug({ locationSlug });
   const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
-  const cmsTheme = useShopCmsTheme(shopKey);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
   const [merchant, setMerchant] = useState<any>(null);
@@ -130,7 +130,7 @@ export default function OrderingPage() {
   const [error, setError] = useState<string | null>(null);
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
-  const prevItemCountRef = useRef(0);
+  const prevItemCountRef = useRef<number | null>(null);
   const addParamConsumedRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [, setDeliveryInfo] = useState<any>(null);
@@ -418,8 +418,13 @@ export default function OrderingPage() {
 
   useEffect(() => {
     const prev = prevItemCountRef.current;
+    if (prev === null) {
+      prevItemCountRef.current = itemCount;
+      return;
+    }
     if (itemCount > prev) {
       setCartBump(true);
+      if (prev === 0 && itemCount > 0) setCartSlideOpen(true);
       const timer = window.setTimeout(() => setCartBump(false), 400);
       prevItemCountRef.current = itemCount;
       return () => window.clearTimeout(timer);
@@ -1149,7 +1154,7 @@ export default function OrderingPage() {
   );
 
   return (
-    <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
+    <ShopThemeShell theme={cmsTheme} site={shopSite} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>
@@ -1557,7 +1562,6 @@ export default function OrderingPage() {
           onClose={() => setPendingDetail(null)}
           onAdd={(qty) => {
             for (let i = 0; i < qty; i++) addConfiguredItem(pendingDetail);
-            setCartSlideOpen(true);
           }}
         />
       )}
