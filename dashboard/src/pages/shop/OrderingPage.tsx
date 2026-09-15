@@ -35,7 +35,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { Gift, Info, Plus, ShoppingBag } from 'lucide-react';
+import { Gift, Info, LayoutGrid, Plus, Rows3, ShoppingBag } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
 import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
@@ -48,6 +48,7 @@ import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopFreeDeliveryProgress from '@/components/shop/ShopFreeDeliveryProgress';
 import ShopProductDetailModal from '@/components/shop/ShopProductDetailModal';
+import ShopHorizontalScroll from '@/components/shop/ShopHorizontalScroll';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavbar';
 import ShopOfferPicker, {
@@ -110,6 +111,12 @@ interface ChannelInfo {
   etaMinutes: number;
 }
 
+type ShopProductView = 'list' | 'grid';
+
+function shopProductViewKey(shopKey: string) {
+  return `shop_product_view:${shopKey}`;
+}
+
 export default function OrderingPage() {
   const { t, setLocale, locale } = useI18n();
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
@@ -166,6 +173,25 @@ export default function OrderingPage() {
   const [channelPromptOpen, setChannelPromptOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
+  const [productView, setProductView] = useState<ShopProductView>('list');
+  useEffect(() => {
+    if (!shopKey) return;
+    try {
+      const stored = localStorage.getItem(shopProductViewKey(shopKey));
+      if (stored === 'grid' || stored === 'list') setProductView(stored);
+    } catch {
+      /* ignore */
+    }
+  }, [shopKey]);
+
+  useEffect(() => {
+    if (!shopKey) return;
+    try {
+      localStorage.setItem(shopProductViewKey(shopKey), productView);
+    } catch {
+      /* ignore */
+    }
+  }, [shopKey, productView]);
   useEffect(() => {
     if (!shopKey) {
       setLoading(false);
@@ -455,6 +481,12 @@ export default function OrderingPage() {
     }
     return list;
   }, [menu]);
+
+  /** Hide backend "Offers" catalog bucket — promos live in the shopOffers shelf. */
+  const visibleMenuCategories = useMemo(
+    () => menu.filter((cat) => !cat.isOffersCategory && (cat.items?.length ?? 0) > 0),
+    [menu]
+  );
 
   const addConfiguredItem = (
     product: Product | ShopProductForModifiers | ShopComboProduct,
@@ -1319,7 +1351,7 @@ export default function OrderingPage() {
             >
               {t('shopAllCategories')}
             </button>
-            {menu.map((cat) => (
+            {visibleMenuCategories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
@@ -1334,6 +1366,28 @@ export default function OrderingPage() {
               </button>
             ))}
           </div>
+          {visibleMenuCategories.length > 0 ? (
+            <div className="shop-product-view-toggle shrink-0" role="group" aria-label={t('shopProductViewLabel')}>
+              <button
+                type="button"
+                className={productView === 'list' ? 'is-active' : ''}
+                onClick={() => setProductView('list')}
+                aria-label={t('shopProductViewList')}
+                title={t('shopProductViewList')}
+              >
+                <Rows3 className="h-4 w-4" strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className={productView === 'grid' ? 'is-active' : ''}
+                onClick={() => setProductView('grid')}
+                aria-label={t('shopProductViewGrid')}
+                title={t('shopProductViewGrid')}
+              >
+                <LayoutGrid className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1341,13 +1395,14 @@ export default function OrderingPage() {
         {popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
-            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+            <ShopHorizontalScroll>
               {popularProducts.map((product) => {
                 const catalog = catalogUnitPrice(product.price, product.categoryId ?? null);
                 return (
                   <div key={`pop-${product.id}`} className="min-w-[280px] max-w-[320px] shrink-0 snap-start">
                     <ProductCard
                       product={product}
+                      layout="list"
                       showImage={showProductImages && !!product.image}
                       price={catalog}
                       onAdd={() => handleProductClick(product)}
@@ -1359,7 +1414,7 @@ export default function OrderingPage() {
                   </div>
                 );
               })}
-            </div>
+            </ShopHorizontalScroll>
           </div>
         ) : null}
 
@@ -1454,7 +1509,7 @@ export default function OrderingPage() {
         )}
 
         <div className="space-y-8">
-          {menu.map((cat) => {
+          {visibleMenuCategories.map((cat) => {
             const items = cat.items || [];
             return (
               <section key={cat.id} id={`shop-cat-${cat.id}`} className="shop-menu-section">
@@ -1466,7 +1521,13 @@ export default function OrderingPage() {
                     className="mb-3 w-full aspect-[21/9] object-cover rounded-xl bg-stone-100"
                   />
                 ) : null}
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div
+                  className={
+                    productView === 'grid'
+                      ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'
+                      : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3'
+                  }
+                >
                   {items.map((product) => {
                     const catalog = catalogUnitPrice(product.price, product.categoryId ?? cat.id);
                     const pctMatch = matchingPercentOffer(
@@ -1479,6 +1540,7 @@ export default function OrderingPage() {
                       <ProductCard
                         key={product.id}
                         product={product}
+                        layout={productView}
                         showImage={showProductImages && !!product.image}
                         price={catalog}
                         salePrice={sale}
@@ -1507,13 +1569,10 @@ export default function OrderingPage() {
                     );
                   })}
                 </div>
-                {items.length === 0 ? (
-                  <p className="text-sm text-stone-500 py-6 text-center">{t('shopNoProducts')}</p>
-                ) : null}
               </section>
             );
           })}
-          {menu.length === 0 ? (
+          {visibleMenuCategories.length === 0 ? (
             <p className="text-stone-500 py-12 text-center">{t('shopNoProducts')}</p>
           ) : null}
         </div>
@@ -1710,6 +1769,7 @@ export default function OrderingPage() {
 
 function ProductCard({
   product,
+  layout = 'list',
   showImage,
   price,
   salePrice,
@@ -1721,6 +1781,7 @@ function ProductCard({
   t,
 }: {
   product: Product;
+  layout?: ShopProductView;
   showImage: boolean;
   price: number;
   salePrice?: number | null;
@@ -1741,6 +1802,42 @@ function ProductCard({
       <span className="tabular-nums">CHF {price.toFixed(2)}</span>
     );
 
+  const hasPhoto = showImage && !!product.image;
+  const isGrid = layout === 'grid';
+
+  const imageBlock = hasPhoto ? (
+    <div
+      className={
+        isGrid
+          ? 'relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-stone-100'
+          : 'relative h-24 w-28 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-28 sm:w-32'
+      }
+    >
+      <img
+        src={product.image}
+        alt=""
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+      />
+      {offerBadge ? (
+        <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+          {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
+        </span>
+      ) : null}
+      {unlocked ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddFree();
+          }}
+          className="absolute left-1 bottom-1 rounded-full bg-teal-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white"
+        >
+          {t('shopFree')}
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <article
       role="button"
@@ -1752,39 +1849,17 @@ function ProductCard({
           onAdd();
         }
       }}
-      className="group flex cursor-pointer gap-3 overflow-hidden rounded-xl border border-stone-100 bg-white p-2 hover:border-stone-200"
+      className={`group cursor-pointer overflow-hidden rounded-xl border border-stone-100 bg-white hover:border-stone-200 ${
+        isGrid ? 'flex flex-col p-2' : 'flex gap-3 p-2'
+      }`}
     >
-      <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-28 sm:w-32">
-        {showImage && product.image ? (
-          <img
-            src={product.image}
-            alt=""
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-lg font-light text-stone-300">
-            {(product.name || '?').slice(0, 1).toUpperCase()}
-          </div>
-        )}
-        {offerBadge ? (
-          <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+      {imageBlock}
+      <div className={`flex min-w-0 flex-1 flex-col text-left ${isGrid ? 'pt-1' : 'py-0.5'}`}>
+        {!hasPhoto && offerBadge ? (
+          <span className="mb-1 inline-flex w-fit rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
             {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
           </span>
         ) : null}
-        {unlocked ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddFree();
-            }}
-            className="absolute left-1 bottom-1 rounded-full bg-teal-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white"
-          >
-            {t('shopFree')}
-          </button>
-        ) : null}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col py-0.5 text-left">
         <p className="text-sm font-semibold leading-tight text-stone-900 line-clamp-2">{product.name}</p>
         {product.description ? (
           <p className="mt-0.5 text-xs text-stone-500 line-clamp-2">{product.description}</p>
@@ -1795,6 +1870,18 @@ function ProductCard({
             {rewardPts != null ? (
               <p className="text-[10px] text-amber-800">{t('shopPtsBadge').replace('{n}', String(rewardPts))}</p>
             ) : null}
+            {!hasPhoto && unlocked ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddFree();
+                }}
+                className="mt-1 rounded-full bg-teal-800 px-2 py-0.5 text-[9px] font-bold uppercase text-white"
+              >
+                {t('shopFree')}
+              </button>
+            ) : null}
           </div>
           <button
             type="button"
@@ -1802,7 +1889,7 @@ function ProductCard({
               e.stopPropagation();
               onAdd();
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--shop-accent,#e11d48)] text-white shadow-sm active:scale-95"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--shop-accent,#e11d48)] text-white shadow-sm active:scale-95"
             aria-label={`${t('shopAdd')} ${product.name}`}
           >
             <Plus className="h-4 w-4" strokeWidth={2.5} />

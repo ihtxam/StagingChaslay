@@ -2045,6 +2045,89 @@ html.shop-shell #root {
   display: none;
 }
 
+.shop-horizontal-scroll {
+  position: relative;
+}
+
+.shop-horizontal-scroll__track {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  padding: 0.125rem 0;
+}
+
+.shop-horizontal-scroll__track::-webkit-scrollbar {
+  display: none;
+}
+
+.shop-horizontal-scroll__btn {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: none;
+  background: #fff;
+  color: #292524;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.shop-horizontal-scroll__btn.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.shop-horizontal-scroll__btn--left {
+  left: -0.35rem;
+}
+
+.shop-horizontal-scroll__btn--right {
+  right: -0.35rem;
+}
+
+.shop-horizontal-scroll__btn:hover {
+  transform: translateY(-50%) scale(1.04);
+}
+
+.shop-product-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(231 229 228);
+  background: #fff;
+  padding: 0.125rem;
+}
+
+.shop-product-view-toggle button {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: rgb(120 113 108);
+}
+
+.shop-product-view-toggle button.is-active {
+  background: rgb(245 245 244);
+  color: rgb(28 25 23);
+}
+
 .shop-sticky-cart-panel {
   position: -webkit-sticky;
   position: sticky;
