@@ -37,7 +37,7 @@ import ShopComboWizard, {
 } from '@/components/shop/ShopComboWizard';
 import { Gift, Info, LayoutGrid, Plus, Rows3, ShoppingBag } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
-import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
+import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
 import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
@@ -925,7 +925,7 @@ export default function OrderingPage() {
   const CartIconButton = ({ className = '' }: { className?: string }) => (
     <button
       type="button"
-      className={`shop-floating-cart ${className}`}
+      className={`shop-floating-cart hidden md:inline-flex ${className}`}
       onClick={openSideCart}
       aria-label={`${t('shopBasketCount')} (${itemCount})`}
       title={`${t('shopBasketCount')} (${itemCount})`}
@@ -1190,8 +1190,8 @@ export default function OrderingPage() {
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>
-        <ShopUtilityTopBar>
-          {showGiftCards ? (
+        {!hasCmsNav && showGiftCards ? (
+          <ShopUtilityTopBar>
             <Link
               to={giftCardsPath}
               className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
@@ -1200,9 +1200,8 @@ export default function OrderingPage() {
               <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} />
               <span className="hidden sm:inline">{t('shopGiftCardTitle')}</span>
             </Link>
-          ) : null}
-          <ShopTopBarActions accountPath={accountPath} />
-        </ShopUtilityTopBar>
+          </ShopUtilityTopBar>
+        ) : null}
         <ChaslayStorefrontNavbar
           key={`nav-${locale}`}
           shopKey={shopKey}
@@ -1212,7 +1211,7 @@ export default function OrderingPage() {
           onPresence={setHasCmsNav}
         />
         {hasCmsNav ? null : (
-          <header className="border-b border-stone-200 bg-white">
+          <header className="relative border-b border-stone-200 bg-white">
             <div className="shop-page-content flex h-14 items-center justify-between gap-2">
               <Link
                 to={shopBasePath(shopKey, locSlug) || '/'}
@@ -1226,17 +1225,17 @@ export default function OrderingPage() {
                     {(merchant?.name || 'M').slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <span className="hidden truncate font-bold tracking-tight sm:inline">{merchant?.name}</span>
+                <span className="truncate font-bold tracking-tight">{merchant?.name}</span>
               </Link>
-              <button
-                type="button"
-                onClick={() => setInfoOpen(true)}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100"
-                aria-label={t('shopStoreInfo')}
-                title={t('shopStoreInfo')}
-              >
-                <Info className="h-5 w-5" strokeWidth={1.75} />
-              </button>
+              <ShopMobileNavMenu
+                accountPath={accountPath}
+                links={[
+                  ...(showGiftCards
+                    ? [{ label: t('shopGiftCardTitle'), to: giftCardsPath }]
+                    : []),
+                  { label: t('shopStoreInfo'), onClick: () => setInfoOpen(true) },
+                ]}
+              />
             </div>
           </header>
         )}
@@ -1391,7 +1390,7 @@ export default function OrderingPage() {
         </div>
       </div>
 
-      <div className="shop-page-content py-6" id="shop-menu-start">
+      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-28 md:pb-6' : ''}`} id="shop-menu-start">
         {popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
@@ -1524,7 +1523,7 @@ export default function OrderingPage() {
                 <div
                   className={
                     productView === 'grid'
-                      ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'
+                      ? 'grid grid-cols-2 gap-3 xl:grid-cols-3'
                       : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3'
                   }
                 >
@@ -1579,6 +1578,33 @@ export default function OrderingPage() {
       </div>
 
       <CartIconButton />
+
+      {itemCount > 0 ? (
+        <div className="shop-mobile-cart-bar md:hidden">
+          <button
+            type="button"
+            className="shop-mobile-cart-bar__icon"
+            onClick={openSideCart}
+            aria-label={`${t('shopBasketCount')} (${itemCount})`}
+          >
+            <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
+            <span className="shop-mobile-cart-bar__badge">{itemCount > 99 ? '99+' : itemCount}</span>
+          </button>
+          <button
+            type="button"
+            disabled={
+              !cart.length ||
+              vacationActive ||
+              ordersPaused ||
+              (!channelMeta?.open && !allowScheduledOrders)
+            }
+            onClick={goCheckout}
+            className="shop-mobile-cart-bar__cta"
+          >
+            {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
+          </button>
+        </div>
+      ) : null}
 
       {cartSlideOpen && (
         <div

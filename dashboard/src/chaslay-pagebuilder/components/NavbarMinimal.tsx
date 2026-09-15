@@ -14,6 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
 
 interface MenuItem {
   label: string;
@@ -74,11 +75,14 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
         <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
           <div>
-            {mergedProps.logoImageUrl ? (
-              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
-            ) : (
-              <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{logoText}</span>
-            )}
+            <ShopNavbarLogoRow
+              logoImageUrl={mergedProps.logoImageUrl}
+              logoText={logoText}
+              logoWidth={mergedProps.logoWidth}
+              logoHeight={mergedProps.logoHeight}
+              textColor={mergedProps.textColor}
+              logoTextStyle={{ fontSize: '18px', fontWeight: 400, letterSpacing: '4px' }}
+            />
           </div>
 
           <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '40px' }}>

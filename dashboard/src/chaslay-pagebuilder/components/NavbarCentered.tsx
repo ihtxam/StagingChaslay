@@ -14,6 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
 
@@ -101,14 +102,17 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
             ))}
           </div>
           <div style={{ textAlign: 'center' }}>
-            {mergedProps.logoImageUrl ? (
-              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
-            ) : (
-              <div>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: mergedProps.textColor, letterSpacing: '2px' }}>{logoText}</span>
-                <div style={{ width: '40px', height: '2px', backgroundColor: mergedProps.accentColor, margin: '8px auto 0' }} />
-              </div>
-            )}
+            <ShopNavbarLogoRow
+              logoImageUrl={mergedProps.logoImageUrl}
+              logoText={logoText}
+              logoWidth={mergedProps.logoWidth}
+              logoHeight={mergedProps.logoHeight}
+              textColor={mergedProps.textColor}
+              logoTextStyle={{ fontSize: '28px', fontWeight: 700, letterSpacing: '2px' }}
+            />
+            {!mergedProps.logoImageUrl ? (
+              <div style={{ width: '40px', height: '2px', backgroundColor: mergedProps.accentColor, margin: '8px auto 0' }} />
+            ) : null}
           </div>
           <div className="navbar-centered-right" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             {rightMenu.map((item, i) => (
@@ -118,8 +122,15 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
             ))}
           </div>
         </div>
-        <div className="navbar-centered-mobile-row shop-page-content" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>{mergedProps.logoImageUrl ? null : <span style={{ fontSize: '18px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>}</div>
+        <div className="navbar-centered-mobile-row shop-page-content" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <ShopNavbarLogoRow
+            logoImageUrl={mergedProps.logoImageUrl}
+            logoText={logoText}
+            logoWidth={Math.min(mergedProps.logoWidth, 100)}
+            logoHeight={Math.min(mergedProps.logoHeight, 36)}
+            textColor={mergedProps.textColor}
+            logoTextStyle={{ fontSize: '18px', fontWeight: 700 }}
+          />
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}

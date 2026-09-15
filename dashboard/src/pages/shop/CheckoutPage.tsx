@@ -45,7 +45,18 @@ import {
 } from '@/lib/shop-delivery-pricing';
 
 type WhenMode = 'asap' | 'later';
-type FieldErrors = { customerName?: string; customerEmail?: string; customerPhone?: string };
+type FieldErrors = {
+  customerName?: string;
+  customerFirstName?: string;
+  customerLastName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+};
+
+function splitCustomerName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return { first: parts[0] || '', last: parts.slice(1).join(' ') || '' };
+}
 
 type SavedAddress = {
   id: string;
@@ -117,6 +128,9 @@ export default function CheckoutPage() {
   const [voucherInputOpen, setVoucherInputOpen] = useState(false);
   const [voucherInput, setVoucherInput] = useState('');
   const [applyingVoucher, setApplyingVoucher] = useState(false);
+  const [cartPopupOpen, setCartPopupOpen] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   useEffect(() => {
     if (!shopKey) return;
@@ -126,6 +140,9 @@ export default function CheckoutPage() {
       return;
     }
     setDraft(stored);
+    const storedNames = splitCustomerName(stored.customerName || '');
+    setFirstName(storedNames.first);
+    setLastName(storedNames.last);
     if (stored.scheduledFor) setWhenMode('later');
     if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
 
@@ -170,10 +187,14 @@ export default function CheckoutPage() {
             setSelectedAddressId(preferred?.id || null);
             setLoyaltyBalance(Number(loyaltyRes.data.balance) || 0);
             setRedeemRate(Number(loyaltyRes.data.program?.redeemPointsPerChf) || 100);
+            const loggedInName = me.data.customer.name || '';
+            const loggedInNames = splitCustomerName(loggedInName);
+            setFirstName(loggedInNames.first);
+            setLastName(loggedInNames.last);
             setDraft((d) => ({
               ...d,
               authMode: 'login',
-              customerName: me.data.customer.name || d.customerName,
+              customerName: loggedInName || d.customerName,
               customerEmail: me.data.customer.email || d.customerEmail,
               customerPhone: me.data.customer.phone || d.customerPhone,
               address: preferred?.address || me.data.customer.defaultAddress || d.address,
@@ -529,6 +550,39 @@ export default function CheckoutPage() {
   const rawTotal = preCardTotal + cardFee;
   const rounding = roundingAdjustment(rawTotal);
   const total = roundTo005(rawTotal);
+  const itemCount = draft.items.reduce((sum, item) => sum + item.quantity, 0);
+  const checkoutReady = useMemo(() => {
+    if (merchant?.acceptingOrders === false || merchant?.vacation?.active) return false;
+    if (!firstName.trim() || !lastName.trim() || !draft.customerPhone.trim()) return false;
+    if (wantCreateAccount && !draft.customerEmail.trim()) return false;
+    if (whenMode === 'asap' && !channelOpen) return false;
+    if (whenMode === 'later') {
+      if (merchant?.scheduledOrdersEnabled === false) return false;
+      if (!draft.scheduledFor || scheduleDays.length === 0) return false;
+    }
+    if (draft.channel === 'delivery') {
+      if (!draft.address.trim() || !draft.zipCode.trim() || !draft.city.trim()) return false;
+      if (!effectiveDeliveryInfo?.deliverable || !effectiveDeliveryInfo?.meetsMinOrder) return false;
+    }
+    return draft.items.length > 0;
+  }, [
+    merchant,
+    firstName,
+    lastName,
+    draft.items.length,
+    draft.customerPhone,
+    draft.customerEmail,
+    draft.channel,
+    draft.address,
+    draft.zipCode,
+    draft.city,
+    draft.scheduledFor,
+    wantCreateAccount,
+    whenMode,
+    channelOpen,
+    effectiveDeliveryInfo,
+    scheduleDays.length,
+  ]);
   const pointsCoverFullOrder = payWithPoints && pointsDiscount > 0 && total <= 0.001;
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
@@ -793,12 +847,11 @@ export default function CheckoutPage() {
       return false;
     }
     try {
-      const names = draft.customerName.trim().split(/\s+/);
       const res = await axios.post(`/api/shop/${shopKey}/auth/register`, {
         email: draft.customerEmail,
         password,
-        firstName: names[0],
-        lastName: names.slice(1).join(' ') || undefined,
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || undefined,
         phone: draft.customerPhone,
       });
       saveCustomerToken(shopKey, res.data.token);
@@ -816,7 +869,9 @@ export default function CheckoutPage() {
 
   const goPayment = async (): Promise<boolean> => {
     setError(null);
-    if (!draft.customerName.trim() || !draft.customerPhone.trim()) {
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    patch({ customerName: fullName });
+    if (!fullName || !draft.customerPhone.trim()) {
       return false;
     }
     if (!customer && wantCreateAccount) {
@@ -854,13 +909,17 @@ export default function CheckoutPage() {
 
   const submitCheckout = async () => {
     const next: FieldErrors = {};
-    if (!draft.customerName.trim()) next.customerName = t('shopFullNameFieldRequired');
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    if (!firstName.trim()) next.customerFirstName = t('shopFirstNameRequired');
+    if (!lastName.trim()) next.customerLastName = t('shopLastNameRequired');
+    if (!fullName) next.customerName = t('shopFullNameFieldRequired');
     if (!draft.customerPhone.trim()) next.customerPhone = t('shopPhoneFieldRequired');
     if (wantCreateAccount && !draft.customerEmail.trim()) {
       next.customerEmail = t('shopEmailFieldRequired');
     }
     setFieldErrors(next);
     if (Object.keys(next).length) return;
+    patch({ customerName: fullName });
     const ok = await goPayment();
     if (!ok) return;
     await placeOrder();
@@ -1035,7 +1094,7 @@ export default function CheckoutPage() {
         </div>
       </header>
 
-      <div className="shop-page-content py-8">
+      <div className="shop-page-content py-8 pb-32">
         <div className="mb-6 flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight">{t('shopCheckoutTitle')}</h1>
           <Link
@@ -1050,8 +1109,15 @@ export default function CheckoutPage() {
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] items-start">
-          <div className="min-w-0 space-y-8">
+        <button
+          type="button"
+          onClick={() => setCartPopupOpen(true)}
+          className="mb-6 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto sm:min-w-[14rem]"
+        >
+          {t('shopViewYourCart')}
+        </button>
+
+        <div className="max-w-2xl space-y-8">
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">
                 {draft.channel === 'delivery'
@@ -1399,7 +1465,7 @@ export default function CheckoutPage() {
                     ) : null}
 
                     <input
-                      className="w-full border border-stone-300 px-3 py-2 text-sm"
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
                       placeholder={t('shopStreetAddressRequired')}
                       value={draft.address}
                       onChange={(e) => {
@@ -1419,12 +1485,12 @@ export default function CheckoutPage() {
                         setSelectedAddressId(null);
                         patch({ city, lat: undefined, lng: undefined });
                       }}
-                      zipClassName="border border-stone-300 px-3 py-2 text-sm w-full"
-                      cityClassName="border border-stone-300 px-3 py-2 text-sm w-full"
+                      zipClassName="border border-stone-300 bg-white px-3 py-2 text-sm w-full rounded-md"
+                      cityClassName="border border-stone-300 bg-white px-3 py-2 text-sm w-full rounded-md"
                     />
                     <button
                       type="button"
-                      className="border border-stone-900 px-4 py-2 text-sm font-semibold"
+                      className="rounded-md border border-stone-900 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
                       onClick={() => void checkDelivery()}
                       disabled={checkingZone}
                     >
@@ -1479,25 +1545,64 @@ export default function CheckoutPage() {
                 <h2 className="text-sm font-semibold text-stone-900">{t('shopPersonalInfo')}</h2>
                 <span className="text-xs text-rose-500">{t('shopAllFieldsRequired')}</span>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <input
+                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
+                      fieldErrors.customerFirstName || fieldErrors.customerName
+                        ? 'border-rose-500'
+                        : 'border-stone-300'
+                    }`}
+                    placeholder={t('shopFirstName')}
+                    value={firstName}
+                    onChange={(e) => {
+                      setFirstName(e.target.value);
+                      if (fieldErrors.customerFirstName || fieldErrors.customerName) {
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          customerFirstName: undefined,
+                          customerName: undefined,
+                        }));
+                      }
+                    }}
+                    autoComplete="given-name"
+                  />
+                  {fieldErrors.customerFirstName ? (
+                    <p className="text-sm text-rose-600">{fieldErrors.customerFirstName}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-1">
+                  <input
+                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
+                      fieldErrors.customerLastName || fieldErrors.customerName
+                        ? 'border-rose-500'
+                        : 'border-stone-300'
+                    }`}
+                    placeholder={t('shopLastName')}
+                    value={lastName}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      if (fieldErrors.customerLastName || fieldErrors.customerName) {
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          customerLastName: undefined,
+                          customerName: undefined,
+                        }));
+                      }
+                    }}
+                    autoComplete="family-name"
+                  />
+                  {fieldErrors.customerLastName ? (
+                    <p className="text-sm text-rose-600">{fieldErrors.customerLastName}</p>
+                  ) : null}
+                </div>
+              </div>
+              {fieldErrors.customerName ? (
+                <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
+              ) : null}
               <div className="space-y-2">
                 <input
-                  className={`w-full rounded-md border px-3 py-2.5 text-sm ${
-                    fieldErrors.customerName ? 'border-rose-500' : 'border-stone-300'
-                  }`}
-                  placeholder={t('shopFullNameRequired').replace(' *', '')}
-                  value={draft.customerName}
-                  onChange={(e) => {
-                    patch({ customerName: e.target.value });
-                    if (fieldErrors.customerName) {
-                      setFieldErrors((prev) => ({ ...prev, customerName: undefined }));
-                    }
-                  }}
-                />
-                {fieldErrors.customerName ? (
-                  <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
-                ) : null}
-                <input
-                  className={`w-full rounded-md border px-3 py-2.5 text-sm ${
+                  className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
                     fieldErrors.customerEmail ? 'border-rose-500' : 'border-stone-300'
                   }`}
                   type="email"
@@ -1813,114 +1918,194 @@ export default function CheckoutPage() {
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">{t('shopPickupNote')}</h2>
               <textarea
-                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
                 rows={2}
                 placeholder={t('shopPickupNotePlaceholder')}
                 value={draft.notes}
                 onChange={(e) => patch({ notes: e.target.value })}
               />
             </section>
-          </div>
 
-          <aside className="bg-white lg:sticky lg:top-4 space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-              <ShoppingBag className="h-5 w-5 text-rose-400" strokeWidth={1.8} />
-              {t('shopYourOrder')}
-            </h2>
-            <ul className="text-sm space-y-4">
-              {groupCartForDisplay(draft.items).map((block) => {
-                if (block.kind === 'offer') {
+            <button
+              type="button"
+              className={`w-full rounded-full py-3 text-sm font-semibold text-white disabled:opacity-40 ${
+                checkoutReady ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-300'
+              }`}
+              disabled={
+                submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
+              }
+              onClick={() => void submitCheckout()}
+            >
+              {merchant?.acceptingOrders === false
+                ? t('shopNotAcceptingOrders')
+                : merchant?.vacation?.active
+                  ? t('shopVacationTitle')
+                  : submitting
+                    ? t('shopPlacingOrder')
+                    : pointsCoverFullOrder
+                      ? t('shopPlaceOrderPoints')
+                      : `${t('shopPlaceOrder')} — CHF ${total.toFixed(2)}`}
+            </button>
+        </div>
+      </div>
+
+      <div className="shop-checkout-sticky-bar">
+        <button
+          type="button"
+          className="shop-checkout-sticky-bar__cart"
+          onClick={() => setCartPopupOpen(true)}
+          aria-label={`${t('shopYourCart')} (${itemCount})`}
+        >
+          <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
+          {itemCount > 0 ? (
+            <span className="shop-checkout-sticky-bar__badge">
+              {itemCount > 99 ? '99+' : itemCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className={`shop-checkout-sticky-bar__order ${checkoutReady ? 'is-ready' : 'is-pending'}`}
+          disabled={
+            submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
+          }
+          onClick={() => void submitCheckout()}
+        >
+          {merchant?.acceptingOrders === false
+            ? t('shopNotAcceptingOrders')
+            : merchant?.vacation?.active
+              ? t('shopVacationTitle')
+              : submitting
+                ? t('shopPlacingOrder')
+                : pointsCoverFullOrder
+                  ? t('shopPlaceOrderPoints')
+                  : `${t('shopPlaceOrder')} — CHF ${total.toFixed(2)}`}
+        </button>
+      </div>
+
+      {cartPopupOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          onClick={() => setCartPopupOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('shopYourCart')}
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
+                {t('shopYourCart')}
+              </h2>
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
+                onClick={() => setCartPopupOpen(false)}
+                aria-label={t('shopClose')}
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <ul className="text-sm space-y-4">
+                {groupCartForDisplay(draft.items).map((block) => {
+                  if (block.kind === 'offer') {
+                    return (
+                      <li
+                        key={block.offerInstanceId}
+                        className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 space-y-1.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                              {block.offerBadge || t('shopOffer')}
+                            </span>
+                            <p className="mt-1 font-semibold text-sm">{block.offerName}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-rose-600"
+                            onClick={() => removeOfferBlock(block.offerInstanceId)}
+                          >
+                            {t('shopRemove')}
+                          </button>
+                        </div>
+                        {block.lines.map((i) => (
+                          <div key={i.lineId || i.id} className="flex justify-between gap-2 text-xs">
+                            <span className="min-w-0 truncate">
+                              {i.name}
+                              {i.price === 0 ? ` · ${t('shopFree')}` : ''}
+                            </span>
+                            <span className="shrink-0">
+                              {i.price === 0 ? t('shopFree') : `CHF ${(i.price * i.quantity).toFixed(2)}`}
+                            </span>
+                          </div>
+                        ))}
+                      </li>
+                    );
+                  }
+                  const i = block.item;
+                  const lineKey = i.lineId || i.id;
                   return (
-                    <li
-                      key={block.offerInstanceId}
-                      className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 space-y-1.5"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-                            {block.offerBadge || t('shopOffer')}
-                          </span>
-                          <p className="mt-1 font-semibold text-sm">{block.offerName}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-rose-600"
-                          onClick={() => removeOfferBlock(block.offerInstanceId)}
-                        >
-                          {t('shopRemove')}
-                        </button>
+                    <li key={lineKey} className="space-y-1.5">
+                      <div className="flex justify-between gap-3">
+                        <p className="font-semibold text-stone-900 min-w-0">
+                          {i.name}
+                          {i.loyaltyReward && (
+                            <span className="ml-1 text-xs font-semibold text-teal-800">{t('shopFree')}</span>
+                          )}
+                        </p>
+                        <span className="shrink-0 tabular-nums">CHF {(i.price * i.quantity).toFixed(2)}</span>
                       </div>
-                      {block.lines.map((i) => (
-                        <div key={i.lineId || i.id} className="flex justify-between gap-2 text-xs">
-                          <span className="min-w-0 truncate">
-                            {i.name}
-                            {i.price === 0 ? ` · ${t('shopFree')}` : ''}
-                          </span>
-                          <span className="shrink-0">
-                            {i.price === 0 ? t('shopFree') : `CHF ${(i.price * i.quantity).toFixed(2)}`}
-                          </span>
+                      {!!i.comboSelections?.length && (
+                        <p className="text-xs text-stone-500">
+                          {i.comboSelections.map((c) => `${c.slotName}: ${c.productName}`).join(' · ')}
+                        </p>
+                      )}
+                      {!!i.selectedExtras?.length && (
+                        <p className="text-xs text-stone-500">{i.selectedExtras.map((e) => e.name).join(', ')}</p>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-1 py-0.5">
+                          <button
+                            type="button"
+                            className="h-6 w-6 text-sm font-semibold"
+                            onClick={() => setLineQty(lineKey, i.quantity - 1)}
+                          >
+                            −
+                          </button>
+                          <span className="w-5 text-center font-semibold">{i.quantity}</span>
+                          <button
+                            type="button"
+                            className="h-6 w-6 text-sm font-semibold"
+                            onClick={() => setLineQty(lineKey, i.quantity + 1)}
+                          >
+                            +
+                          </button>
                         </div>
-                      ))}
+                        <div className="flex items-center gap-3 text-sm">
+                          <Link to={menuPath} className="text-stone-500 hover:underline">
+                            {t('shopEdit')}
+                          </Link>
+                          <button
+                            type="button"
+                            className="font-medium text-rose-600"
+                            onClick={() => removeLine(lineKey)}
+                          >
+                            {t('shopRemove')}
+                          </button>
+                        </div>
+                      </div>
                     </li>
                   );
-                }
-                const i = block.item;
-                const lineKey = i.lineId || i.id;
-                return (
-                  <li key={lineKey} className="space-y-1.5">
-                    <div className="flex justify-between gap-3">
-                      <p className="font-semibold text-stone-900 min-w-0">
-                        {i.name}
-                        {i.loyaltyReward && (
-                          <span className="ml-1 text-xs font-semibold text-teal-800">{t('shopFree')}</span>
-                        )}
-                      </p>
-                      <span className="shrink-0 tabular-nums">CHF {(i.price * i.quantity).toFixed(2)}</span>
-                    </div>
-                    {!!i.comboSelections?.length && (
-                      <p className="text-xs text-stone-500">
-                        {i.comboSelections.map((c) => `${c.slotName}: ${c.productName}`).join(' · ')}
-                      </p>
-                    )}
-                    {!!i.selectedExtras?.length && (
-                      <p className="text-xs text-stone-500">{i.selectedExtras.map((e) => e.name).join(', ')}</p>
-                    )}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-1 py-0.5">
-                        <button
-                          type="button"
-                          className="h-6 w-6 text-sm font-semibold"
-                          onClick={() => setLineQty(lineKey, i.quantity - 1)}
-                        >
-                          −
-                        </button>
-                        <span className="w-5 text-center font-semibold">{i.quantity}</span>
-                        <button
-                          type="button"
-                          className="h-6 w-6 text-sm font-semibold"
-                          onClick={() => setLineQty(lineKey, i.quantity + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm">
-                        <Link to={menuPath} className="text-stone-500 hover:underline">
-                          {t('shopEdit')}
-                        </Link>
-                        <button
-                          type="button"
-                          className="font-medium text-rose-600"
-                          onClick={() => removeLine(lineKey)}
-                        >
-                          {t('shopRemove')}
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="border-t border-stone-100 pt-3 text-sm space-y-1">
+                })}
+              </ul>
+            </div>
+            <div className="border-t border-stone-100 px-4 py-4 text-sm space-y-1">
               {offerDiscount > 0 && (
                 <div className="flex justify-between text-amber-800">
                   <span>{offerLabels.join(', ') || t('shopOffer')}</span>
@@ -1976,27 +2161,9 @@ export default function CheckoutPage() {
                 <span>CHF {total.toFixed(2)}</span>
               </div>
             </div>
-            <button
-              type="button"
-              className="w-full rounded-full bg-rose-300 py-3 text-sm font-semibold text-white disabled:opacity-40"
-              disabled={
-                submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
-              }
-              onClick={() => void submitCheckout()}
-            >
-              {merchant?.acceptingOrders === false
-                ? t('shopNotAcceptingOrders')
-                : merchant?.vacation?.active
-                ? t('shopVacationTitle')
-                : submitting
-                ? t('shopPlacingOrder')
-                : pointsCoverFullOrder
-                  ? t('shopPlaceOrderPoints')
-                  : t('shopPlaceOrder')}
-            </button>
-          </aside>
+          </div>
         </div>
-      </div>
+      ) : null}
       <ShopDeliveryAddressPopup
         open={deliveryAddressOpen}
         shopKey={shopKey}

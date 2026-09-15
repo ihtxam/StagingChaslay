@@ -30,6 +30,7 @@ export default function ChaslayStorefrontNavbar({
   const [navbarState, setNavbarState] = useState(null);
   const [sitePages, setSitePages] = useState([]);
   const [contact, setContact] = useState(null);
+  const [merchantDisplayName, setMerchantDisplayName] = useState(null);
 
   useEffect(() => {
     if (!shopKey) {
@@ -53,6 +54,7 @@ export default function ChaslayStorefrontNavbar({
         onPresenceRef.current?.(Boolean(extracted));
         const m = page?.merchant;
         if (m) {
+          setMerchantDisplayName(m.name || null);
           setContact({
             phone: m.phone,
             email: m.email,
@@ -113,6 +115,8 @@ export default function ChaslayStorefrontNavbar({
         defaultLanguage={defaultLanguage}
         sitePages={sitePages}
         contact={contact}
+        merchantDisplayName={merchantDisplayName}
+        accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
         surface="shop"
       >
         <div className="chaslay-pagebuilder-root chaslay-storefront-page chaslay-navbar-only">
