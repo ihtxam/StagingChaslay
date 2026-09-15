@@ -11,6 +11,8 @@ const PHRASES: Record<string, LocaleMap> = {
   'About Us': { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   About: { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   Gallery: { fr: 'Galerie', de: 'Galerie', it: 'Galleria' },
+  'Our Gallery': { fr: 'Notre Galerie', de: 'Unsere Galerie', it: 'La nostra galleria' },
+  'Photo Gallery': { fr: 'Galerie photos', de: 'Fotogalerie', it: 'Galleria fotografica' },
   Testimonials: { fr: 'Avis', de: 'Bewertungen', it: 'Recensioni' },
   'Customer Reviews': { fr: 'Avis clients', de: 'Kundenbewertungen', it: 'Recensioni clienti' },
   'What Our Guests Say': { fr: 'Ce que disent nos clients', de: 'Was unsere Gäste sagen', it: 'Cosa dicono i nostri ospiti' },
@@ -150,6 +152,31 @@ const PHRASES: Record<string, LocaleMap> = {
   'All rights reserved.': { fr: 'Tous droits réservés.', de: 'Alle Rechte vorbehalten.', it: 'Tutti i diritti riservati.' },
   'All rights reserved': { fr: 'Tous droits réservés', de: 'Alle Rechte vorbehalten', it: 'Tutti i diritti riservati' },
   'Crafted with love.': { fr: 'Fait avec amour.', de: 'Mit Liebe gemacht.', it: 'Fatto con amore.' },
+  'The food was absolutely amazing! Best dining experience we have had in years.': {
+    fr: 'La nourriture était absolument extraordinaire ! La meilleure expérience culinaire que nous ayons eue depuis des années.',
+    de: 'Das Essen war absolut fantastisch! Das beste Restauranterlebnis seit Jahren.',
+    it: 'Il cibo era assolutamente straordinario! La migliore esperienza culinaria che abbiamo avuto da anni.',
+  },
+  'Wonderful atmosphere and excellent service. The pasta dishes are to die for!': {
+    fr: 'Atmosphère merveilleuse et service excellent. Les plats de pâtes sont à tomber !',
+    de: 'Wunderbare Atmosphäre und ausgezeichneter Service. Die Pasta-Gerichte sind zum Sterben schön!',
+    it: 'Atmosfera meravigliosa e servizio eccellente. I piatti di pasta sono da morire!',
+  },
+  'A hidden gem! Every dish is crafted with care and the flavors are incredible.': {
+    fr: 'Un trésor caché ! Chaque plat est préparé avec soin et les saveurs sont incroyables.',
+    de: 'Ein Geheimtipp! Jedes Gericht wird mit Sorgfalt zubereitet und die Aromen sind unglaublich.',
+    it: 'Una perla nascosta! Ogni piatto è preparato con cura e i sapori sono incredibili.',
+  },
+  'We celebrated our anniversary here and it was perfect. Highly recommended!': {
+    fr: "Nous avons célébré notre anniversaire ici et c'était parfait. Fortement recommandé !",
+    de: 'Wir haben hier unseren Jahrestag gefeiert – es war perfekt. Sehr empfehlenswert!',
+    it: 'Abbiamo festeggiato il nostro anniversario qui ed è stato perfetto. Consigliatissimo!',
+  },
+  'An extraordinary culinary journey. Every visit reveals new flavors and the attention to detail is simply unmatched. This restaurant has become our family tradition for special occasions.': {
+    fr: "Un voyage culinaire extraordinaire. Chaque visite révèle de nouvelles saveurs et l'attention aux détails est incomparable. Ce restaurant est devenu notre tradition familiale pour les grandes occasions.",
+    de: 'Eine außergewöhnliche kulinarische Reise. Jeder Besuch enthüllt neue Aromen und die Liebe zum Detail ist schlicht unerreicht. Dieses Restaurant ist unsere Familientradition für besondere Anlässe geworden.',
+    it: "Un viaggio culinario straordinario. Ogni visita rivela nuovi sapori e l'attenzione ai dettagli è semplicemente ineguagliabile. Questo ristorante è diventato la nostra tradizione di famiglia per le occasioni speciali.",
+  },
 };
 
 const SORTED_PHRASES = Object.keys(PHRASES).sort((a, b) => b.length - a.length);
@@ -160,17 +187,33 @@ function localeKey(locale: string): 'fr' | 'de' | 'it' | null {
   return null;
 }
 
+/** Convert 12-hour clock fragments (11:00 AM, 11am) to 24-hour `HH:mm`. */
+export function to24HourClock(text: string): string {
+  if (!text) return text;
+  return text.replace(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)\b/g, (_, hourRaw, minutes, meridiem) => {
+    let hour = parseInt(hourRaw, 10);
+    const min = minutes ?? '00';
+    const isPm = String(meridiem).toUpperCase() === 'PM';
+    if (!isPm) {
+      if (hour === 12) hour = 0;
+    } else if (hour !== 12) {
+      hour += 12;
+    }
+    return `${String(hour).padStart(2, '0')}:${min}`;
+  });
+}
+
 export function translateSectionCopy(text: string, locale: string, _defaultLanguage = 'en'): string {
   if (!text) return text;
   const loc = localeKey(locale);
   const source = BUILDER_COPY_SOURCE_LOCALE;
   if (!loc || loc === source) return text;
   const exact = PHRASES[text]?.[loc];
-  if (exact) return exact;
+  if (exact) return to24HourClock(exact);
   let out = text;
   for (const phrase of SORTED_PHRASES) {
     const translated = PHRASES[phrase][loc];
     if (translated && out.includes(phrase)) out = out.split(phrase).join(translated);
   }
-  return out;
+  return to24HourClock(out);
 }

@@ -41,6 +41,24 @@ assert.equal(resolveTranslatedProp(props, 'title', 'en'), 'Our Menu');
 
 assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
 assert.equal(translateSectionCopy('What Our Guests Say', 'de'), 'Was unsere Gäste sagen');
+assert.equal(translateSectionCopy('Our Gallery', 'fr'), 'Notre Galerie');
+assert.equal(translateSectionCopy('Our Gallery', 'de'), 'Unsere Galerie');
+assert.equal(translateSectionCopy('Photo Gallery', 'it'), 'Galleria fotografica');
+assert.equal(translateSectionCopy('Closed', 'fr'), 'Fermé');
+assert.equal(translateSectionCopy('11:00 AM - 10:00 PM', 'fr'), '11:00 - 22:00');
+assert.equal(translateSectionCopy('11am - 10pm', 'de'), '11:00 - 22:00');
+assert.equal(translateSectionCopy('11:00 AM - 10:00 PM', 'en'), '11:00 AM - 10:00 PM');
+assert.equal(
+  translateSectionCopy(
+    'The food was absolutely amazing! Best dining experience we have had in years.',
+    'fr'
+  ),
+  'La nourriture était absolument extraordinaire ! La meilleure expérience culinaire que nous ayons eue depuis des années.'
+);
+assert.equal(
+  resolveTranslatedProp({ title: 'Our Gallery', title_fr: 'Galerie du chef' }, 'title', 'fr'),
+  'Galerie du chef'
+);
 assert.equal(
   resolveTranslatedProp(
     { testimonials_0_text: 'Great food', testimonials_0_text_fr: 'Excellente cuisine' },

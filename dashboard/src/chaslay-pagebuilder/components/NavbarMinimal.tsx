@@ -14,6 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
+import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
 
 interface MenuItem {
   label: string;
@@ -81,14 +82,18 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
             )}
           </div>
 
-          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '40px' }}>
+          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <NavbarDesktopLinks
               menuItems={menuItems}
               textColor={mergedProps.textColor || '#1a1a2e'}
               className=""
             />
+            <StorefrontNavbarLang />
           </div>
 
+          <div className="navbar-mobile-lang">
+            <StorefrontNavbarLang />
+          </div>
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}

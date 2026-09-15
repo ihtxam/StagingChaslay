@@ -85,7 +85,7 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
                 {trText(item.day)}
                 {i === todayIndex && <span style={{ marginLeft: '10px', fontSize: '12px', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '2px 10px', borderRadius: '12px' }}>{trText('Today')}</span>}
               </span>
-              <span style={{ color: item.open ? mergedProps.textColor : '#ef4444', fontWeight: item.open ? 400 : 600 }}>{item.time}</span>
+              <span style={{ color: item.open ? mergedProps.textColor : '#ef4444', fontWeight: item.open ? 400 : 600 }}>{trText(item.time)}</span>
             </div>
           ))}
         </div>

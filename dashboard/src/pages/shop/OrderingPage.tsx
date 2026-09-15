@@ -37,8 +37,7 @@ import ShopComboWizard, {
 } from '@/components/shop/ShopComboWizard';
 import { Gift, Info, Plus, ShoppingBag } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
-import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
-import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
+import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -911,7 +910,6 @@ export default function OrderingPage() {
   const allowScheduledOrders = merchant?.scheduledOrdersEnabled !== false;
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
-  const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
   const giftCardsPath = `${shopBasePath(shopKey, locSlug)}/gift-cards`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
@@ -1153,19 +1151,6 @@ export default function OrderingPage() {
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>
-        <ShopUtilityTopBar>
-          {showGiftCards ? (
-            <Link
-              to={giftCardsPath}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
-              aria-label={t('shopGiftCardTitle')}
-            >
-              <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="hidden sm:inline">{t('shopGiftCardTitle')}</span>
-            </Link>
-          ) : null}
-          <ShopTopBarActions accountPath={accountPath} />
-        </ShopUtilityTopBar>
         <ChaslayStorefrontNavbar
           key={`nav-${locale}`}
           shopKey={shopKey}
@@ -1191,15 +1176,28 @@ export default function OrderingPage() {
                 )}
                 <span className="hidden truncate font-bold tracking-tight sm:inline">{merchant?.name}</span>
               </Link>
-              <button
-                type="button"
-                onClick={() => setInfoOpen(true)}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100"
-                aria-label={t('shopStoreInfo')}
-                title={t('shopStoreInfo')}
-              >
-                <Info className="h-5 w-5" strokeWidth={1.75} />
-              </button>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {showGiftCards ? (
+                  <Link
+                    to={giftCardsPath}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
+                    aria-label={t('shopGiftCardTitle')}
+                  >
+                    <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                    <span className="hidden sm:inline">{t('shopGiftCardTitle')}</span>
+                  </Link>
+                ) : null}
+                <ShopLangSwitcher />
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100"
+                  aria-label={t('shopStoreInfo')}
+                  title={t('shopStoreInfo')}
+                >
+                  <Info className="h-5 w-5" strokeWidth={1.75} />
+                </button>
+              </div>
             </div>
           </header>
         )}

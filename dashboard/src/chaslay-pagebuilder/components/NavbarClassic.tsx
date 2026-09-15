@@ -15,6 +15,7 @@ import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
+import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
 
 interface MenuItem {
   label: string;
@@ -80,6 +81,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           width: '100%',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           position: 'relative',
+          overflow: 'visible',
         }}
       >
         <div className="hb-navbar-inner" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', minWidth: 0 }}>
@@ -95,6 +97,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           {/* Desktop Menu + Button */}
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0, flex: 1 }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#1a1a2e'} />
+            <StorefrontNavbarLang />
             {mergedProps.showButton && buttonText && (
               <a
                 href={shopHref(mergedProps.buttonLink)}
@@ -106,6 +109,9 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
             )}
           </div>
 
+          <div className="navbar-mobile-lang">
+            <StorefrontNavbarLang />
+          </div>
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}

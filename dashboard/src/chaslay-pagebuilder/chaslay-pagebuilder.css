@@ -59,6 +59,13 @@
   position: sticky;
   top: 0;
   z-index: 50;
+  overflow: visible;
+}
+
+.navbar-mobile-lang {
+  display: none;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .chaslay-storefront-page .navbar-centered-mobile-row {
@@ -75,6 +82,7 @@
   .chaslay-storefront-page .navbar-minimal-menu {
     display: none !important;
   }
+  .chaslay-storefront-page .navbar-mobile-lang,
   .chaslay-storefront-page .navbar-centered-mobile-row,
   .chaslay-storefront-page .navbar-mobile-toggle,
   .chaslay-storefront-page .navbar-mobile-drawer {
