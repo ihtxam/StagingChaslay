@@ -128,6 +128,7 @@ export default function OrderingPage() {
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef(0);
+  const addParamConsumedRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
