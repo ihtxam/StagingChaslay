@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -39,7 +39,7 @@ import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
-import { Check, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Check, ShoppingBag } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -136,6 +136,10 @@ export default function CheckoutPage() {
   const [cartPopupOpen, setCartPopupOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const phoneLocalRef = useRef<HTMLInputElement>(null);
+  const [showMoreScheduleDays, setShowMoreScheduleDays] = useState(false);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -434,6 +438,36 @@ export default function CheckoutPage() {
     : sortedScheduleSlots.slice(0, 8);
   const hiddenScheduleSlotCount = Math.max(0, sortedScheduleSlots.length - visibleScheduleSlots.length);
 
+  const tomorrowScheduleDay = scheduleDays.find((d) => d.offset === 1) || null;
+  const dayAfterScheduleDay = scheduleDays.find((d) => d.offset === 2) || null;
+  const extraScheduleDays = scheduleDays.filter((d) => d.offset > 2);
+
+  const renderScheduleDayButton = (day: (typeof scheduleDays)[number]) => (
+    <button
+      key={day.offset}
+      type="button"
+      className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
+        activeScheduleDay?.offset === day.offset && !customScheduleDay
+          ? 'bg-stone-900 text-white border-stone-900'
+          : 'bg-white border-stone-300'
+      }`}
+      onClick={() => {
+        setScheduleDayOffset(day.offset);
+        setCustomScheduleDay(null);
+        setChooseScheduleDateOpen(false);
+        setShowAllScheduleSlots(false);
+        patch({ scheduledFor: day.slots[0]?.value || '' });
+      }}
+    >
+      <span className="font-semibold block text-xs sm:text-sm leading-tight">
+        {scheduleDayTitle(day.offset)}
+      </span>
+      <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
+        {day.weekday} {day.dateLabel}
+      </span>
+    </button>
+  );
+
   const scheduleCalendarMin = new Date().toISOString().slice(0, 10);
   const scheduleCalendarMaxDate = new Date();
   scheduleCalendarMaxDate.setDate(scheduleCalendarMaxDate.getDate() + 60);
@@ -591,6 +625,34 @@ export default function CheckoutPage() {
   const pointsCoverFullOrder = payWithPoints && pointsDiscount > 0 && total <= 0.001;
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
+
+  const resolvePersonalFields = () => {
+    const resolvedFirst = (firstNameRef.current?.value ?? firstName).trim();
+    const resolvedLast = (lastNameRef.current?.value ?? lastName).trim();
+    const phoneLocal = phoneLocalRef.current?.value?.trim();
+    const resolvedPhone = phoneLocal
+      ? `${draft.customerPhone.match(/^(\+\d{1,3})/)?.[1] || '+41'}${phoneLocal}`.trim()
+      : draft.customerPhone.trim();
+    const fullName = buildCustomerFullName(resolvedFirst, resolvedLast);
+    return {
+      firstName: resolvedFirst,
+      lastName: resolvedLast,
+      fullName,
+      phone: resolvedPhone,
+    };
+  };
+
+  const syncPersonalFieldsFromDom = () => {
+    const resolved = resolvePersonalFields();
+    if (resolved.firstName !== firstName) setFirstName(resolved.firstName);
+    if (resolved.lastName !== lastName) setLastName(resolved.lastName);
+    if (resolved.phone && resolved.phone !== draft.customerPhone) {
+      patch({ customerPhone: resolved.phone, customerName: resolved.fullName });
+    } else if (resolved.fullName) {
+      patch({ customerName: resolved.fullName });
+    }
+    return resolved;
+  };
 
   const applyVoucher = async () => {
     const code = voucherInput.trim();
@@ -872,11 +934,12 @@ export default function CheckoutPage() {
     }
   };
 
-  const goPayment = async (): Promise<boolean> => {
+  const goPayment = async (personal?: ReturnType<typeof resolvePersonalFields>): Promise<boolean> => {
     setError(null);
-    const fullName = buildCustomerFullName(firstName, lastName);
-    patch({ customerName: fullName });
-    if (!fullName || !draft.customerPhone.trim()) {
+    const resolved = personal || syncPersonalFieldsFromDom();
+    const { fullName, phone } = resolved;
+    patch({ customerName: fullName, customerPhone: phone });
+    if (!fullName || !phone) {
       return false;
     }
     if (!customer && wantCreateAccount) {
@@ -913,24 +976,24 @@ export default function CheckoutPage() {
   };
 
   const submitCheckout = async () => {
+    const resolved = syncPersonalFieldsFromDom();
     const next: FieldErrors = {};
-    const fullName = buildCustomerFullName(firstName, lastName);
-    if (!firstName.trim()) next.customerFirstName = t('shopFirstNameRequired');
-    if (!lastName.trim()) next.customerLastName = t('shopLastNameRequired');
-    if (!fullName) next.customerName = t('shopFullNameFieldRequired');
-    if (!draft.customerPhone.trim()) next.customerPhone = t('shopPhoneFieldRequired');
+    if (!resolved.firstName) next.customerFirstName = t('shopFirstNameRequired');
+    if (!resolved.lastName) next.customerLastName = t('shopLastNameRequired');
+    if (!resolved.fullName) next.customerName = t('shopFullNameFieldRequired');
+    if (!resolved.phone) next.customerPhone = t('shopPhoneFieldRequired');
     if (wantCreateAccount && !draft.customerEmail.trim()) {
       next.customerEmail = t('shopEmailFieldRequired');
     }
     setFieldErrors(next);
     if (Object.keys(next).length) return;
-    patch({ customerName: fullName });
-    const ok = await goPayment();
+    patch({ customerName: resolved.fullName, customerPhone: resolved.phone });
+    const ok = await goPayment(resolved);
     if (!ok) return;
-    await placeOrder();
+    await placeOrder(resolved);
   };
 
-  const placeOrder = async () => {
+  const placeOrder = async (personal?: ReturnType<typeof resolvePersonalFields>) => {
     if (merchant?.acceptingOrders === false) {
       setError(t('shopNotAcceptingOrders'));
       return;
@@ -951,7 +1014,9 @@ export default function CheckoutPage() {
       }
 
       const token = loadCustomerToken(shopKey);
-      const customerFullName = buildCustomerFullName(firstName, lastName) || draft.customerName;
+      const customerFullName =
+        personal?.fullName || buildCustomerFullName(firstName, lastName) || draft.customerName;
+      const customerPhone = personal?.phone || draft.customerPhone;
       const res = await axios.post(
         `/api/shop/${shopKey}/orders`,
         {
@@ -972,7 +1037,7 @@ export default function CheckoutPage() {
           fulfillmentChannel: draft.channel,
           customerName: customerFullName,
           customerEmail: draft.customerEmail || undefined,
-          customerPhone: draft.customerPhone,
+          customerPhone,
           shippingAddress: draft.channel === 'delivery' ? draft.address : undefined,
           city: draft.city,
           zipCode: draft.zipCode,
@@ -1090,12 +1155,13 @@ export default function CheckoutPage() {
     <div className="min-h-dvh">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <header className="bg-white border-b border-stone-200">
-        <div className="shop-page-content flex h-14 items-center justify-center gap-6 text-sm">
-          <Link to={menuPath} className="font-medium text-stone-800 hover:text-stone-950">
-            {t('shopOrder')}
-          </Link>
-          <Link to={homePath} className="font-medium text-stone-500 hover:text-stone-800">
-            {t('shopLocations')}
+        <div className="shop-page-content flex h-14 items-center">
+          <Link
+            to={menuPath}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 hover:text-stone-950"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
+            {t('shopBackToShop')}
           </Link>
         </div>
       </header>
@@ -1227,56 +1293,56 @@ export default function CheckoutPage() {
                           <p className="text-sm text-red-600">{t('shopNoOpenHours')}</p>
                         ) : (
                           <>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                className={`rounded-full border px-3 py-1.5 text-sm ${
-                                  chooseScheduleDateOpen
-                                    ? 'border-stone-900 bg-stone-900 text-white'
-                                    : 'border-stone-300 bg-white'
-                                }`}
-                                onClick={() => setChooseScheduleDateOpen((v) => !v)}
-                              >
-                                {t('shopChooseDate')}
-                              </button>
-                              {chooseScheduleDateOpen ? (
-                                <input
-                                  type="date"
-                                  className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm"
-                                  min={scheduleCalendarMin}
-                                  max={scheduleCalendarMax}
-                                  value={scheduleCalendarDate}
-                                  onChange={(e) => onScheduleCalendarPick(e.target.value)}
-                                />
-                              ) : null}
-                            </div>
                             {!customScheduleDay ? (
-                              <div className="grid grid-cols-3 gap-2">
-                                {scheduleDays.map((day) => (
+                              <div className="flex flex-wrap items-stretch gap-2">
+                                {tomorrowScheduleDay ? renderScheduleDayButton(tomorrowScheduleDay) : null}
+                                {dayAfterScheduleDay ? renderScheduleDayButton(dayAfterScheduleDay) : null}
+                                {!showMoreScheduleDays && extraScheduleDays.length > 0 ? (
                                   <button
-                                    key={day.offset}
                                     type="button"
-                                    className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
-                                      activeScheduleDay?.offset === day.offset
-                                        ? 'bg-stone-900 text-white border-stone-900'
-                                        : 'bg-white border-stone-300'
-                                    }`}
-                                    onClick={() => {
-                                      setScheduleDayOffset(day.offset);
-                                      setCustomScheduleDay(null);
-                                      setShowAllScheduleSlots(false);
-                                      patch({ scheduledFor: day.slots[0]?.value || '' });
-                                    }}
+                                    className="inline-flex min-w-[2.75rem] items-center justify-center rounded-md border border-stone-300 bg-white px-3 py-2 text-lg font-semibold text-stone-700 hover:border-stone-900"
+                                    aria-label={t('shopMoreDates')}
+                                    title={t('shopMoreDates')}
+                                    onClick={() => setShowMoreScheduleDays(true)}
                                   >
-                                    <span className="font-semibold block text-xs sm:text-sm leading-tight">
-                                      {scheduleDayTitle(day.offset)}
-                                    </span>
-                                    <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
-                                      {day.weekday} {day.dateLabel}
-                                    </span>
+                                    +
                                   </button>
-                                ))}
+                                ) : null}
+                                {showMoreScheduleDays
+                                  ? extraScheduleDays.map((day) => renderScheduleDayButton(day))
+                                  : null}
+                                <button
+                                  type="button"
+                                  className={`rounded-full border px-3 py-1.5 text-sm ${
+                                    chooseScheduleDateOpen || customScheduleDay
+                                      ? 'border-stone-900 bg-stone-900 text-white'
+                                      : 'border-stone-300 bg-white'
+                                  }`}
+                                  onClick={() => {
+                                    setChooseScheduleDateOpen((v) => !v);
+                                    if (chooseScheduleDateOpen) {
+                                      setCustomScheduleDay(null);
+                                    }
+                                  }}
+                                >
+                                  {t('shopChooseDate')}
+                                </button>
                               </div>
+                            ) : null}
+                            {chooseScheduleDateOpen ? (
+                              <input
+                                type="date"
+                                className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm"
+                                min={scheduleCalendarMin}
+                                max={scheduleCalendarMax}
+                                value={scheduleCalendarDate}
+                                onChange={(e) => onScheduleCalendarPick(e.target.value)}
+                              />
+                            ) : null}
+                            {customScheduleDay ? (
+                              <p className="text-sm font-medium text-stone-800">
+                                {customScheduleDay.weekday} {customScheduleDay.dateLabel}
+                              </p>
                             ) : null}
                             <div>
                               <p className="text-xs text-stone-500 mb-2">{t('shopTimeSlotsHint')}</p>
@@ -1575,6 +1641,7 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <input
+                    ref={firstNameRef}
                     className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
                       fieldErrors.customerFirstName || fieldErrors.customerName
                         ? 'border-rose-500'
@@ -1592,6 +1659,7 @@ export default function CheckoutPage() {
                         }));
                       }
                     }}
+                    onInput={(e) => setFirstName(e.currentTarget.value)}
                     autoComplete="given-name"
                   />
                   {fieldErrors.customerFirstName ? (
@@ -1600,6 +1668,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="space-y-1">
                   <input
+                    ref={lastNameRef}
                     className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
                       fieldErrors.customerLastName || fieldErrors.customerName
                         ? 'border-rose-500'
@@ -1617,6 +1686,7 @@ export default function CheckoutPage() {
                         }));
                       }
                     }}
+                    onInput={(e) => setLastName(e.currentTarget.value)}
                     autoComplete="family-name"
                   />
                   {fieldErrors.customerLastName ? (
@@ -1650,6 +1720,7 @@ export default function CheckoutPage() {
                   value={draft.customerPhone}
                   invalid={!!fieldErrors.customerPhone}
                   placeholder={t('shopPhone')}
+                  localInputRef={phoneLocalRef}
                   onChange={(full) => {
                     patch({ customerPhone: full });
                     if (fieldErrors.customerPhone) {
