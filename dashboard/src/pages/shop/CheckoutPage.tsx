@@ -39,7 +39,7 @@ import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
-import { ShoppingBag } from 'lucide-react';
+import { Check, ShoppingBag } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -1326,89 +1326,111 @@ export default function CheckoutPage() {
                     </button>
                   </p>
                 ) : (
-                  <div className="grid md:grid-cols-2 gap-4 border border-stone-100 bg-stone-50/60 p-4">
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="rounded border-stone-300"
-                          checked={wantCreateAccount}
-                          onChange={(e) => {
-                            setWantCreateAccount(e.target.checked);
-                            if (e.target.checked) setShowLogin(false);
-                            if (!e.target.checked) setPassword('');
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 shadow-sm">
+                    <h3 className="text-base font-bold text-stone-900">{t('shopCheckoutRewardsTitle')}</h3>
+                    <ul className="mt-3 space-y-2">
+                      {(
+                        [
+                          'shopCheckoutReward1',
+                          'shopCheckoutReward2',
+                          'shopCheckoutReward3',
+                        ] as const
+                      ).map((key) => (
+                        <li key={key} className="flex items-start gap-2.5 text-sm text-stone-700">
+                          <Check
+                            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--shop-accent,#e11d48)]"
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
+                          <span>{t(key)}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {!showLogin ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white"
+                          onClick={() => {
+                            setShowLogin(true);
+                            setWantCreateAccount(false);
+                            setPassword('');
+                            if (draft.customerEmail) setLoginEmail(draft.customerEmail);
                           }}
-                        />
-                        {t('shopCreateAccount')}
-                      </label>
-                      {wantCreateAccount && (
+                        >
+                          {t('shopLogIn')}
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                            wantCreateAccount
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
+                          }`}
+                          onClick={() => {
+                            setWantCreateAccount(true);
+                            setShowLogin(false);
+                            setPassword('');
+                          }}
+                        >
+                          {t('shopCreateAccount')}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {showLogin ? (
+                      <form onSubmit={onLogin} className="mt-4 space-y-3 border-t border-stone-100 pt-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
+                          <button
+                            type="button"
+                            className="text-xs text-stone-500 underline"
+                            onClick={() => setShowLogin(false)}
+                          >
+                            {t('cancel')}
+                          </button>
+                        </div>
                         <input
-                          className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
+                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
+                          type="email"
+                          placeholder={t('shopEmail')}
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          required
+                          autoComplete="email"
+                        />
+                        <input
+                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
+                          type="password"
+                          placeholder={t('shopPassword')}
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          required
+                          autoComplete="current-password"
+                        />
+                        <button
+                          type="submit"
+                          className="w-full rounded-lg bg-stone-900 py-2.5 text-sm font-semibold text-white"
+                        >
+                          {t('shopLogIn')}
+                        </button>
+                      </form>
+                    ) : null}
+
+                    {wantCreateAccount && !showLogin ? (
+                      <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
+                        <p className="text-sm text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
+                        <input
+                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
                           type="password"
                           placeholder={t('shopPasswordMin6')}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           autoComplete="new-password"
                         />
-                      )}
-                    </div>
-
-                    <div className="space-y-3 md:border-l md:border-stone-200 md:pl-4">
-                      {!showLogin ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-stone-500">{t('shopHaveAccount')}</p>
-                          <button
-                            type="button"
-                            className="text-sm font-semibold underline underline-offset-2"
-                            onClick={() => {
-                              setShowLogin(true);
-                              setWantCreateAccount(false);
-                              setPassword('');
-                              if (draft.customerEmail) setLoginEmail(draft.customerEmail);
-                            }}
-                          >
-                            {t('shopLogIn')}
-                          </button>
-                        </div>
-                      ) : (
-                        <form onSubmit={onLogin} className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
-                            <button
-                              type="button"
-                              className="text-xs text-stone-500 underline"
-                              onClick={() => setShowLogin(false)}
-                            >
-                              {t('cancel')}
-                            </button>
-                          </div>
-                          <input
-                            className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
-                            type="email"
-                            placeholder={t('shopEmail')}
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            required
-                            autoComplete="email"
-                          />
-                          <input
-                            className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
-                            type="password"
-                            placeholder={t('shopPassword')}
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                            required
-                            autoComplete="current-password"
-                          />
-                          <button
-                            type="submit"
-                            className="w-full bg-stone-900 text-white py-2.5 text-sm font-semibold"
-                          >
-                            {t('shopLogIn')}
-                          </button>
-                        </form>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -1526,6 +1548,19 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
+
+            {!customer ? (
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                  <div className="w-full border-t border-stone-200" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-[var(--shop-bg-muted,#f6f5f2)] px-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    {t('shopOrderAsGuest')}
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
             <section className="space-y-3">
               <div className="flex items-baseline justify-between gap-2">
