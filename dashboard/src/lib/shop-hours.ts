@@ -251,6 +251,20 @@ export function buildScheduleDayForDate(opts: {
   };
 }
 
+/** Human-readable label for the next opening time (today / tomorrow / weekday). */
+export function formatNextOpenLabel(
+  nextOpen: { at: Date; labelHm: string; dayOffset: number } | null,
+  locale: string,
+  labels: { opensAt: string; opensTomorrow: string; opensWeekday: string }
+): string | null {
+  if (!nextOpen) return null;
+  if (nextOpen.dayOffset === 0) return labels.opensAt.replace('{time}', nextOpen.labelHm);
+  if (nextOpen.dayOffset === 1) return labels.opensTomorrow.replace('{time}', nextOpen.labelHm);
+  const loc = locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-CH';
+  const weekday = new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(nextOpen.at);
+  return labels.opensWeekday.replace('{weekday}', weekday).replace('{time}', nextOpen.labelHm);
+}
+
 /** Find the next opening time after `at` when the channel is currently closed. */
 export function findNextOpen(
   storeHours: StoreHours | null | undefined,

@@ -20,7 +20,7 @@ export default function ShopNavActions({
       <ShopLangSwitcher />
       <Link
         to={accountPath}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100 sm:w-auto sm:gap-1.5 sm:px-2.5 sm:text-xs sm:font-semibold"
+        className="inline-flex h-9 w-9 items-center justify-center border border-stone-200 bg-white text-stone-800 hover:border-stone-400 sm:w-auto sm:gap-1.5 sm:px-2.5 sm:text-xs sm:font-semibold"
         aria-label={t('shopLogIn')}
         title={t('shopLogIn')}
       >
