@@ -59,6 +59,10 @@ function splitCustomerName(name: string) {
   return { first: parts[0] || '', last: parts.slice(1).join(' ') || '' };
 }
 
+function buildCustomerFullName(first: string, last: string) {
+  return `${first.trim()} ${last.trim()}`.trim();
+}
+
 type SavedAddress = {
   id: string;
   label: string;
@@ -870,7 +874,7 @@ export default function CheckoutPage() {
 
   const goPayment = async (): Promise<boolean> => {
     setError(null);
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const fullName = buildCustomerFullName(firstName, lastName);
     patch({ customerName: fullName });
     if (!fullName || !draft.customerPhone.trim()) {
       return false;
@@ -910,7 +914,7 @@ export default function CheckoutPage() {
 
   const submitCheckout = async () => {
     const next: FieldErrors = {};
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const fullName = buildCustomerFullName(firstName, lastName);
     if (!firstName.trim()) next.customerFirstName = t('shopFirstNameRequired');
     if (!lastName.trim()) next.customerLastName = t('shopLastNameRequired');
     if (!fullName) next.customerName = t('shopFullNameFieldRequired');
@@ -947,6 +951,7 @@ export default function CheckoutPage() {
       }
 
       const token = loadCustomerToken(shopKey);
+      const customerFullName = buildCustomerFullName(firstName, lastName) || draft.customerName;
       const res = await axios.post(
         `/api/shop/${shopKey}/orders`,
         {
@@ -965,7 +970,7 @@ export default function CheckoutPage() {
             loyaltyReward: !!i.loyaltyReward,
           })),
           fulfillmentChannel: draft.channel,
-          customerName: draft.customerName,
+          customerName: customerFullName,
           customerEmail: draft.customerEmail || undefined,
           customerPhone: draft.customerPhone,
           shippingAddress: draft.channel === 'delivery' ? draft.address : undefined,
