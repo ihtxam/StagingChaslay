@@ -1977,7 +1977,7 @@ html.shop-shell #root {
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;
-  top: 0;
+  top: var(--shop-header-height, 3.5rem);
   left: 0;
   right: 0;
   width: 100%;
@@ -2049,6 +2049,19 @@ html.shop-shell #root {
   position: -webkit-sticky;
   position: sticky;
   top: calc(var(--shop-header-height, 3.5rem) + var(--shop-category-bar-height, 3rem));
+}
+
+.shop-top-shell {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+}
+
+.shop-top-shell .shop-cms-header {
+  position: static;
+  top: auto;
+  z-index: auto;
 }
 
 .shop-cms-header {

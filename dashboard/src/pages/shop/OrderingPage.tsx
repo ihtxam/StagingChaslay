@@ -35,9 +35,12 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { CalendarDays, Info, Plus, ShoppingBag, User } from 'lucide-react';
+import { Info, Plus, ShoppingBag } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
+import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
+import ShopTopShell from '@/components/shop/ShopTopShell';
+import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
@@ -909,7 +912,6 @@ export default function OrderingPage() {
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
-  const reservationsPath = `${shopBasePath(shopKey, locSlug)}/reservations`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
@@ -1148,62 +1150,47 @@ export default function OrderingPage() {
     <ShopThemeShell theme={cmsTheme} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
-      <ChaslayStorefrontNavbar
-        shopKey={shopKey}
-        basePath={shopBasePath(shopKey, locSlug)}
-        locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
-        onPresence={setHasCmsNav}
-      />
-      {hasCmsNav ? null : (
-      <header className="z-30 bg-white border-b border-stone-200">
-        <div className="shop-page-content h-14 flex items-center justify-between gap-2">
-          <Link
-            to={shopBasePath(shopKey, locSlug) || '/'}
-            className="flex items-center gap-2.5 min-w-0 shrink"
-            aria-label={merchant?.name || t('shopBackToMenu')}
-          >
-            {merchant?.shopLogoUrl ? (
-              <img src={merchant.shopLogoUrl} alt="" className="h-9 w-auto max-w-[7rem] object-contain" />
-            ) : (
-              <div className="h-9 w-9 bg-stone-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                {(merchant?.name || 'M').slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <span className="hidden sm:inline font-bold tracking-tight truncate">{merchant?.name}</span>
-          </Link>
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              className="inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100 rounded-full"
-              aria-label={t('shopStoreInfo')}
-              title={t('shopStoreInfo')}
-            >
-              <Info className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-            <ShopLangSwitcher />
-            {showReservations && (
+      <ShopTopShell>
+        <ShopUtilityTopBar>
+          <ShopTopBarActions accountPath={accountPath} />
+        </ShopUtilityTopBar>
+        <ChaslayStorefrontNavbar
+          shopKey={shopKey}
+          basePath={shopBasePath(shopKey, locSlug)}
+          locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
+          onPresence={setHasCmsNav}
+        />
+        {hasCmsNav ? null : (
+          <header className="border-b border-stone-200 bg-white">
+            <div className="shop-page-content flex h-14 items-center justify-between gap-2">
               <Link
-                to={reservationsPath}
-                className="inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100"
-                aria-label={t('shopReservations')}
-                title={t('shopReservations')}
+                to={shopBasePath(shopKey, locSlug) || '/'}
+                className="flex min-w-0 shrink items-center gap-2.5"
+                aria-label={merchant?.name || t('shopBackToMenu')}
               >
-                <CalendarDays className="h-5 w-5" strokeWidth={1.75} />
+                {merchant?.shopLogoUrl ? (
+                  <img src={merchant.shopLogoUrl} alt="" className="h-9 w-auto max-w-[7rem] object-contain" />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-stone-900 text-xs font-bold text-white">
+                    {(merchant?.name || 'M').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <span className="hidden truncate font-bold tracking-tight sm:inline">{merchant?.name}</span>
               </Link>
-            )}
-            <Link
-              to={accountPath}
-              className="inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100"
-              aria-label={t('shopAccount')}
-              title={t('shopAccount')}
-            >
-              <User className="h-5 w-5" strokeWidth={1.75} />
-            </Link>
-          </div>
-        </div>
-      </header>
-      )}
+              <button
+                type="button"
+                onClick={() => setInfoOpen(true)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100"
+                aria-label={t('shopStoreInfo')}
+                title={t('shopStoreInfo')}
+              >
+                <Info className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+            </div>
+          </header>
+        )}
+      </ShopTopShell>
+      <ShopFloatingActions basePath={shopBasePath(shopKey, locSlug)} showReservations={showReservations} />
 
       {ordersPaused ? (
         <div className="shop-page-content pt-4">

@@ -58,6 +58,27 @@ const PHRASES: Record<string, LocaleMap> = {
     it: 'Prenota la tua esperienza culinaria',
   },
   'Visit Us': { fr: 'Venez nous voir', de: 'Besuchen Sie uns', it: 'Venite a trovarci' },
+  'Find Us': { fr: 'Nous trouver', de: 'So finden Sie uns', it: 'Dove siamo' },
+  'Serving delicious food since 2020. Visit us for an unforgettable dining experience.': {
+    fr: 'Cuisine délicieuse depuis 2020. Venez vivre une expérience inoubliable.',
+    de: 'Seit 2020 servieren wir köstliches Essen. Besuchen Sie uns für ein unvergessliches Erlebnis.',
+    it: 'Serviamo piatti deliziosi dal 2020. Venite per un\'esperienza indimenticabile.',
+  },
+  'Mon-Fri: 11am-10pm': { fr: 'Lun-ven : 11h-22h', de: 'Mo-Fr: 11-22 Uhr', it: 'Lun-ven: 11-22' },
+  'Sat-Sun: 10am-11pm': { fr: 'Sam-dim : 10h-23h', de: 'Sa-So: 10-23 Uhr', it: 'Sab-dom: 10-23' },
+  'Follow Us': { fr: 'Suivez-nous', de: 'Folgen Sie uns', it: 'Seguici' },
+  'Get in Touch': { fr: 'Contactez-nous', de: 'Kontakt aufnehmen', it: 'Contattaci' },
+  'Subscribe': { fr: "S'abonner", de: 'Abonnieren', it: 'Iscriviti' },
+  'Subscribe to our newsletter': {
+    fr: 'Abonnez-vous à notre newsletter',
+    de: 'Abonnieren Sie unseren Newsletter',
+    it: 'Iscriviti alla nostra newsletter',
+  },
+  'Enter your email': {
+    fr: 'Entrez votre e-mail',
+    de: 'E-Mail eingeben',
+    it: 'Inserisci la tua email',
+  },
   'We look forward to serving you': {
     fr: 'Nous avons hâte de vous servir',
     de: 'Wir freuen uns auf Ihren Besuch',

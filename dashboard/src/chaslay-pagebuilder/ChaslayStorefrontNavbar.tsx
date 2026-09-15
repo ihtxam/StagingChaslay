@@ -86,10 +86,8 @@ export default function ChaslayStorefrontNavbar({
 
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || !navbarState) {
-      document.documentElement.style.removeProperty('--shop-header-height');
-      return;
-    }
+    if (!el || !navbarState) return;
+    if (el.closest('.shop-top-shell')) return;
     const apply = () => {
       document.documentElement.style.setProperty('--shop-header-height', `${el.offsetHeight}px`);
     };
@@ -98,7 +96,9 @@ export default function ChaslayStorefrontNavbar({
     ro?.observe(el);
     return () => {
       ro?.disconnect();
-      document.documentElement.style.removeProperty('--shop-header-height');
+      if (!el.closest('.shop-top-shell')) {
+        document.documentElement.style.removeProperty('--shop-header-height');
+      }
     };
   }, [navbarState]);
 

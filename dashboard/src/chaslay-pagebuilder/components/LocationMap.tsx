@@ -9,6 +9,7 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Slider } from '@/chaslay-pagebuilder/ui/slider';
 import { TranslatableInput } from './TranslatableInput';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultProps: LocationMapProps = {
   sectionId: SECTION_ANCHORS.map,
@@ -29,7 +30,9 @@ export const LocationMap: React.FC<LocationMapProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
+  const title = tr('title');
 
   const encodedAddress = encodeURIComponent(mergedProps.address || '');
   const mapSrc = `https://maps.google.com/maps?q=${encodedAddress}&output=embed`;
@@ -46,7 +49,7 @@ export const LocationMap: React.FC<LocationMapProps> & {
         padding: '48px 20px',
       }}
     >
-      {mergedProps.showTitle && mergedProps.title && (
+      {mergedProps.showTitle && title && (
         <h3 style={{
           color: mergedProps.textColor,
           fontSize: '28px',
@@ -54,7 +57,7 @@ export const LocationMap: React.FC<LocationMapProps> & {
           textAlign: 'center',
           marginBottom: '32px',
         }}>
-          {mergedProps.title}
+          {title}
         </h3>
       )}
       <div style={{
@@ -71,7 +74,7 @@ export const LocationMap: React.FC<LocationMapProps> & {
           allowFullScreen
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
-          title={mergedProps.title || 'Location Map'}
+          title={title || 'Location Map'}
         />
       </div>
     </div>
