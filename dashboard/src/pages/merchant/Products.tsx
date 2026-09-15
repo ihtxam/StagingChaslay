@@ -117,6 +117,7 @@ interface Product {
   sortOrder?: number;
   isTaxable?: boolean;
   visibility?: CatalogVisibility;
+  similarProductIds?: string[];
   modifierGroups?: ModifierGroupSummary[];
   comboItems?: Array<{
     id?: string;
@@ -157,6 +158,7 @@ type FormState = {
   loyaltyRewardPoints: string;
   isTaxable: boolean;
   visibility: CatalogVisibility;
+  similarProductIds: string[];
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -187,6 +189,7 @@ const emptyForm = (): FormState => ({
   loyaltyRewardPoints: '',
   isTaxable: true,
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
+  similarProductIds: [],
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
@@ -684,6 +687,7 @@ export default function Products() {
             : '',
         isTaxable: full.isTaxable !== false,
         visibility: normalizeCatalogVisibility(full.visibility),
+        similarProductIds: Array.isArray(full.similarProductIds) ? full.similarProductIds : [],
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -721,6 +725,7 @@ export default function Products() {
             : '',
         isTaxable: product.isTaxable !== false,
         visibility: normalizeCatalogVisibility(product.visibility),
+        similarProductIds: Array.isArray(product.similarProductIds) ? product.similarProductIds : [],
       });
     }
   };
@@ -798,6 +803,7 @@ export default function Products() {
       })(),
       isTaxable: form.isTaxable,
       visibility: form.visibility,
+      similarProductIds: form.similarProductIds,
     };
   };
 
@@ -2372,6 +2378,45 @@ export default function Products() {
                     value={form.visibility}
                     onChange={(visibility) => setForm({ ...form, visibility })}
                   />
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('shopSimilarProducts')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('shopSimilarProductsHint')}</p>
+                    </div>
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[var(--border)] p-2">
+                      {products
+                        .filter((p) => p.id !== editingId)
+                        .slice(0, 80)
+                        .map((p) => {
+                          const checked = form.similarProductIds.includes(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-[var(--bg-muted)]"
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    similarProductIds: e.target.checked
+                                      ? [...prev.similarProductIds, p.id].slice(0, 12)
+                                      : prev.similarProductIds.filter((id) => id !== p.id),
+                                  }));
+                                }}
+                              />
+                              <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+                            </label>
+                          );
+                        })}
+                      {!products.filter((p) => p.id !== editingId).length ? (
+                        <p className="text-xs muted px-1 py-2">{t('noProducts')}</p>
+                      ) : null}
+                    </div>
+                  </div>
 
                   <div>
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">

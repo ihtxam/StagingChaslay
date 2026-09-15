@@ -22,6 +22,7 @@ import {
   type ShopComboSelection,
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
+import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { roundMoney2 } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -46,7 +47,8 @@ import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
-import ShopFreeDeliveryProgress from '@/components/shop/ShopFreeDeliveryProgress';
+import ShopCartThresholdProgress from '@/components/shop/ShopCartThresholdProgress';
+import ShopCartSimilarProducts from '@/components/shop/ShopCartSimilarProducts';
 import ShopProductDetailModal from '@/components/shop/ShopProductDetailModal';
 import ShopHorizontalScroll from '@/components/shop/ShopHorizontalScroll';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
@@ -83,6 +85,7 @@ interface Product {
   modifierGroups?: ShopModifierGroup[];
   comboSlots?: ComboSlot[];
   loyaltyRewardPoints?: number | null;
+  similarProductIds?: string[];
 }
 
 type LoyaltyReward = {
@@ -474,6 +477,21 @@ export default function OrderingPage() {
     return mins.length ? Math.min(...mins) : 0;
   }, [channel, draft.deliveryInfo, deliveryZones]);
 
+  const effectiveDeliveryInfo = useMemo(
+    () => withDeliveryMinOrderStatus(draft.deliveryInfo || deliveryInfo, cartTotal),
+    [draft.deliveryInfo, deliveryInfo, cartTotal]
+  );
+
+  const minOrderThreshold = useMemo(() => {
+    if (channel !== 'delivery') return 0;
+    const fromInfo = Number(effectiveDeliveryInfo?.zone?.minOrderAmount || 0);
+    if (fromInfo > 0) return fromInfo;
+    const mins = deliveryZones
+      .map((z) => Number(z.minOrderAmount || 0))
+      .filter((n) => n > 0);
+    return mins.length ? Math.min(...mins) : 0;
+  }, [channel, effectiveDeliveryInfo, deliveryZones]);
+
   const popularProducts = useMemo(() => {
     const list: Product[] = [];
     for (const cat of menu) {
@@ -695,6 +713,28 @@ export default function OrderingPage() {
     }
     return null;
   };
+
+  const cartSimilarProducts = useMemo(() => {
+    const cartIds = new Set(cart.map((item) => item.id));
+    const orderedIds: string[] = [];
+    for (const item of cart) {
+      const product = findMenuProduct(item.id);
+      for (const sid of product?.similarProductIds || []) {
+        if (cartIds.has(sid) || orderedIds.includes(sid)) continue;
+        orderedIds.push(sid);
+      }
+    }
+    return orderedIds
+      .map((id) => findMenuProduct(id))
+      .filter((p): p is Product => !!p)
+      .slice(0, 12)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: catalogUnitPrice(p.price, p.categoryId ?? null),
+        image: p.image,
+      }));
+  }, [cart, menu, channel, categoryPricingEnabled, deliveryMenuMarkup, categoryDeliveryMap]);
 
   const advanceOfferConfigQueue = (
     queue: typeof offerConfigQueue
@@ -1276,11 +1316,38 @@ export default function OrderingPage() {
             })}
           </ul>
         )}
+        {cart.length > 0 ? (
+          <ShopCartSimilarProducts
+            products={cartSimilarProducts}
+            showImages={showProductImages}
+            onAdd={(p) => {
+              const product = findMenuProduct(p.id);
+              if (product) handleProductClick(product);
+            }}
+          />
+        ) : null}
       </div>
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
+        {channel === 'delivery' && minOrderThreshold > 0 ? (
+          <ShopCartThresholdProgress
+            subtotal={cartTotal}
+            threshold={minOrderThreshold}
+            progressKey="shopMinOrderProgress"
+            unlockedKey="shopMinOrderUnlocked"
+            remainingKey="shopMinOrderRemaining"
+            variant="min"
+          />
+        ) : null}
         {channel === 'delivery' && freeDeliveryThreshold > 0 ? (
-          <ShopFreeDeliveryProgress subtotal={cartTotal} threshold={freeDeliveryThreshold} />
+          <ShopCartThresholdProgress
+            subtotal={cartTotal}
+            threshold={freeDeliveryThreshold}
+            progressKey="shopFreeDeliveryProgress"
+            unlockedKey="shopFreeDeliveryUnlocked"
+            remainingKey="shopMinOrderRemaining"
+            variant="free"
+          />
         ) : null}
         {error && <p className="text-red-600 text-sm">{error}</p>}
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import axios from 'axios';
 import ZipCityFields from '@/components/shop/ZipCityFields';
+import ShopDeliveryZoneBadges from '@/components/shop/ShopDeliveryZoneBadges';
 import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { buildScheduleDays, buildScheduleDayForDate, type StoreHours } from '@/lib/shop-hours';
@@ -303,24 +304,6 @@ export default function ShopChannelPrompt({
   const dayTab =
     customDay ? 'choose' : dayOffset === 0 ? 'today' : dayOffset === 1 ? 'tomorrow' : 'choose';
 
-  const minBadge =
-    effectiveDeliveryInfo?.deliverable && effectiveDeliveryInfo.zone?.minOrderAmount > 0
-      ? t('shopMinOrderBadge').replace(
-          '{amount}',
-          Number(effectiveDeliveryInfo.zone.minOrderAmount).toFixed(2)
-        )
-      : null;
-  const fee = Number(effectiveDeliveryInfo?.zone?.deliveryFee ?? 0);
-  const freeBadge =
-    effectiveDeliveryInfo?.deliverable && fee === 0
-      ? t('shopFreeDeliveryFrom').replace(
-          '{amount}',
-          Number(effectiveDeliveryInfo.zone?.minOrderAmount || 0).toFixed(2)
-        )
-      : effectiveDeliveryInfo?.deliverable && fee > 0
-        ? t('shopDeliveryFeeBadge').replace('{amount}', fee.toFixed(2))
-        : null;
-
   const resolvedTitle =
     title ||
     (addressOnly
@@ -496,18 +479,10 @@ export default function ShopChannelPrompt({
                 </button>
 
                 {effectiveDeliveryInfo?.deliverable ? (
-                  <div className="flex flex-wrap gap-2">
-                    {minBadge ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
-                        {minBadge}
-                      </span>
-                    ) : null}
-                    {freeBadge ? (
-                      <span className="inline-flex items-center rounded-full bg-teal-50 border border-teal-200 px-3 py-1 text-xs font-semibold text-teal-900">
-                        {freeBadge}
-                      </span>
-                    ) : null}
-                  </div>
+                  <ShopDeliveryZoneBadges
+                    deliverable={effectiveDeliveryInfo.deliverable}
+                    zone={effectiveDeliveryInfo.zone}
+                  />
                 ) : null}
                 {error ? <p className="text-sm text-red-600">{error}</p> : null}
               </div>
