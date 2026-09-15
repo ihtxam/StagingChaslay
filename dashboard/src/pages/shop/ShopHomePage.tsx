@@ -167,7 +167,7 @@ export default function ShopHomePage() {
   }
 
   return (
-    <ShopThemeShell theme={theme} site={shopSite} className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
+    <ShopThemeShell theme={theme} site={shopSite} className="flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
       <ShopOpenPageHeader
         basePath={base}
@@ -175,7 +175,7 @@ export default function ShopHomePage() {
         logoUrl={merchant?.shopLogoUrl}
       />
 
-      <div className="cms-homepage flex flex-1 flex-col pb-6">
+      <div className="cms-homepage flex flex-col pb-6">
         {segments?.length ? (
           segments.map((seg, idx) =>
             seg.kind === 'dynamic' ? (
