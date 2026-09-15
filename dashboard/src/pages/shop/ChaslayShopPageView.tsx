@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { CalendarDays, ShoppingBag } from 'lucide-react';
+import { User } from 'lucide-react';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -11,6 +11,9 @@ import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRender
 import type { SitePageLink, MerchantContact } from '@/chaslay-pagebuilder/StorefrontContext';
 import { BuilderLanguageProvider } from '@/chaslay-pagebuilder/BuilderLanguageContext';
 import ChaslayLangSwitcher from '@/chaslay-pagebuilder/components/ChaslayLangSwitcher';
+import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
+import ShopTopShell from '@/components/shop/ShopTopShell';
+import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 
 type MerchantInfo = {
   name?: string;
@@ -196,6 +199,22 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     <BuilderLanguageProvider locale={chaslayLocale} defaultLanguage={defaultLanguage}>
       <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
         <ShopVacationPopup shopKey={shopKey} />
+        <ShopTopShell>
+          <ShopUtilityTopBar>
+            <ChaslayLangSwitcher
+              locale={chaslayLocale}
+              onLocaleChange={handleChaslayLocaleChange}
+            />
+            <Link
+              to={`${base}/account`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
+              aria-label={t('shopLogIn')}
+            >
+              <User className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              <span>{t('shopLogIn')}</span>
+            </Link>
+          </ShopUtilityTopBar>
+        </ShopTopShell>
         <div className="cms-homepage pb-24">
           <ChaslayHomepageRenderer
             key={`${pageSlug}-${chaslayLocale}`}
@@ -208,31 +227,7 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
             contact={contact}
           />
         </div>
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
-          <div
-            className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-1.5 shadow-2xl backdrop-blur-md"
-            style={{
-              borderColor: 'var(--color-border-default)',
-              background: 'color-mix(in srgb, var(--color-bg-0) 88%, transparent)',
-            }}
-          >
-            <ChaslayLangSwitcher
-              menuPlacement="top"
-              locale={chaslayLocale}
-              onLocaleChange={handleChaslayLocaleChange}
-            />
-            {showReservationsNav ? (
-              <Link to={`${base}/reservations`} className="shop-btn-secondary inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold">
-                <CalendarDays size={14} />
-                {t('shopReservations')}
-              </Link>
-            ) : null}
-            <Link to={`${base}/menu`} className="shop-btn-primary inline-flex items-center gap-1 px-3 py-2 text-xs font-bold">
-              <ShoppingBag size={14} />
-              {t('shopOrderNow')}
-            </Link>
-          </div>
-        </div>
+        <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
       </ShopThemeShell>
     </BuilderLanguageProvider>
   );

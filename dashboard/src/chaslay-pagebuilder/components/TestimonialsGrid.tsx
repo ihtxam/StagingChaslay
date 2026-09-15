@@ -41,9 +41,9 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
-  const { tr, trArrayField } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const testimonials = trTestimonials(mergedProps.testimonials);
   const { connectors: { connect, drag } } = useNode();
-  const sectionTitle = tr('title');
 
   return (
     <div
@@ -57,7 +57,7 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
         padding: '64px 20px',
       }}
     >
-      {sectionTitle && (
+      {tr('title') && (
         <h3 style={{
           color: mergedProps.textColor,
           fontSize: '28px',
@@ -65,24 +65,20 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
           textAlign: 'center',
           marginBottom: '48px',
         }}>
-          {sectionTitle}
+          {tr('title')}
         </h3>
       )}
       <div
         className="hb-testimonials-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min((mergedProps.testimonials || []).length, 3)}, 1fr)`,
+          gridTemplateColumns: `repeat(${Math.min(testimonials.length, 3)}, 1fr)`,
           gap: '24px',
           maxWidth: '1100px',
           margin: '0 auto',
         }}
       >
-        {(mergedProps.testimonials || []).map((item, i) => {
-          const text = trArrayField('testimonials', i, 'text', item.text || '');
-          const author = trArrayField('testimonials', i, 'author', item.author || '');
-          const role = trArrayField('testimonials', i, 'role', item.role || '');
-          return (
+        {testimonials.map((t, i) => (
           <div
             key={i}
             style={{
@@ -94,8 +90,8 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
               gap: '16px',
             }}
           >
-            {mergedProps.showRatings && item.rating && (
-              <StarRating rating={item.rating} color={mergedProps.accentColor} />
+            {mergedProps.showRatings && t.rating && (
+              <StarRating rating={t.rating} color={mergedProps.accentColor} />
             )}
             <p style={{
               color: mergedProps.textColor,
@@ -104,17 +100,17 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
               fontStyle: 'italic',
               flex: 1,
             }}>
-              &ldquo;{text}&rdquo;
+              &ldquo;{t.text}&rdquo;
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-              {mergedProps.showPhotos && item.photo && (
+              {mergedProps.showPhotos && t.photo && (
                 <img
-                  src={item.photo}
-                  alt={author}
+                  src={t.photo}
+                  alt={t.author}
                   style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
                 />
               )}
-              {mergedProps.showPhotos && !item.photo && (
+              {mergedProps.showPhotos && !t.photo && (
                 <div style={{
                   width: '40px',
                   height: '40px',
@@ -127,16 +123,16 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
                   fontSize: '16px',
                   fontWeight: 600,
                 }}>
-                  {author.charAt(0)}
+                  {t.author.charAt(0)}
                 </div>
               )}
               <div>
-                <div style={{ color: mergedProps.textColor, fontWeight: 600, fontSize: '14px' }}>{author}</div>
-                {role && <div style={{ color: mergedProps.textColor, opacity: 0.6, fontSize: '13px' }}>{role}</div>}
+                <div style={{ color: mergedProps.textColor, fontWeight: 600, fontSize: '14px' }}>{t.author}</div>
+                {t.role && <div style={{ color: mergedProps.textColor, opacity: 0.6, fontSize: '13px' }}>{t.role}</div>}
               </div>
             </div>
           </div>
-        );})}
+        ))}
       </div>
     </div>
   );

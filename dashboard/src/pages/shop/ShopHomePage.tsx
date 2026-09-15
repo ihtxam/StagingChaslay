@@ -4,8 +4,10 @@ import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
-import { CalendarDays, ShoppingBag } from 'lucide-react';
+import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
+import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
+import ShopTopShell from '@/components/shop/ShopTopShell';
+import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import {
   emptyOpenPageBlocks,
   isOpenPageBlocks,
@@ -168,6 +170,11 @@ export default function ShopHomePage() {
   return (
     <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
+      <ShopTopShell>
+        <ShopUtilityTopBar>
+          <ShopTopBarActions accountPath={`${base}/account`} />
+        </ShopUtilityTopBar>
+      </ShopTopShell>
 
       <div className="cms-homepage pb-24">
         {segments?.length ? (
@@ -193,27 +200,7 @@ export default function ShopHomePage() {
       </div>
 
       {!hideFloatingBar ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
-          <div
-            className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-1.5 shadow-2xl backdrop-blur-md"
-            style={{
-              borderColor: 'var(--color-border-default)',
-              background: 'color-mix(in srgb, var(--color-bg-0) 88%, transparent)',
-            }}
-          >
-            <ShopLangSwitcher menuPlacement="top" />
-            {showReservationsNav ? (
-              <Link to={`${base}/reservations`} className="shop-btn-secondary inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold">
-                <CalendarDays size={14} />
-                {t('shopReservations')}
-              </Link>
-            ) : null}
-            <Link to={`${base}/menu`} className="shop-btn-primary inline-flex items-center gap-1 px-3 py-2 text-xs font-bold">
-              <ShoppingBag size={14} />
-              {t('shopOrderNow')}
-            </Link>
-          </div>
-        </div>
+        <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
       ) : null}
     </ShopThemeShell>
   );
