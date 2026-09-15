@@ -22,22 +22,28 @@ export function ShopNavbarLogoRow({
 }) {
   const { surface, merchantDisplayName } = useStorefront();
   const showStoreName = !!merchantDisplayName && (surface === 'shop' || surface === 'home');
+  const storeLabel = showStoreName ? merchantDisplayName : logoText;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+    <div className="shop-navbar-logo-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
       {logoImageUrl ? (
         <BuilderImage
           src={logoImageUrl}
           alt={logoText || merchantDisplayName || 'Shop'}
+          className="shop-navbar-logo-image"
           style={{ width: `${logoWidth}px`, height: `${logoHeight}px`, objectFit: 'contain', flexShrink: 0 }}
         />
       ) : (
-        <span style={{ fontSize: '24px', fontWeight: 700, color: textColor, ...logoTextStyle }}>
-          {logoText}
+        <span
+          className="shop-navbar-logo-text"
+          style={{ fontSize: '24px', fontWeight: 700, color: textColor, ...logoTextStyle }}
+        >
+          {storeLabel}
         </span>
       )}
-      {showStoreName ? (
+      {logoImageUrl && showStoreName ? (
         <span
+          className="shop-navbar-store-name"
           style={{
             fontSize: '15px',
             fontWeight: 700,
@@ -45,7 +51,7 @@ export function ShopNavbarLogoRow({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            maxWidth: 'min(40vw, 12rem)',
+            minWidth: 0,
           }}
         >
           {merchantDisplayName}

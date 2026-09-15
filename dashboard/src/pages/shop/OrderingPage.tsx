@@ -1325,20 +1325,28 @@ export default function OrderingPage() {
         />
         {hasCmsNav ? null : (
           <header className="relative border-b border-stone-200 bg-white">
-            <div className="shop-page-content flex h-14 items-center justify-between gap-2">
+            <div className="shop-page-content flex h-14 items-center justify-between gap-2 shop-navbar-mobile-row">
               <Link
                 to={shopBasePath(shopKey, locSlug) || '/'}
-                className="flex min-w-0 shrink items-center gap-2.5"
+                className="shop-navbar-logo-row flex min-w-0 flex-1 items-center gap-2"
                 aria-label={merchant?.name || t('shopBackToMenu')}
               >
                 {merchant?.shopLogoUrl ? (
-                  <img src={merchant.shopLogoUrl} alt="" className="h-9 w-auto max-w-[7rem] object-contain" />
+                  <img
+                    src={merchant.shopLogoUrl}
+                    alt=""
+                    className="shop-navbar-logo-image h-9 w-auto max-w-[4.5rem] shrink-0 object-contain"
+                  />
                 ) : (
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-stone-900 text-xs font-bold text-white">
                     {(merchant?.name || 'M').slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <span className="truncate font-bold tracking-tight">{merchant?.name}</span>
+                {merchant?.name ? (
+                  <span className="shop-navbar-store-name min-w-0 truncate text-sm font-bold tracking-tight">
+                    {merchant.name}
+                  </span>
+                ) : null}
               </Link>
               <ShopMobileNavMenu
                 accountPath={accountPath}

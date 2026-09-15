@@ -87,7 +87,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
       >
         <div className="hb-navbar-inner" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', minWidth: 0 }}>
           {/* Logo */}
-          <div>
+          <div className="shop-navbar-logo-slot">
             <ShopNavbarLogoRow
               logoImageUrl={mergedProps.logoImageUrl}
               logoText={logoText}

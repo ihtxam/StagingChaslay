@@ -86,7 +86,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
       >
         <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
-          <div>
+          <div className="shop-navbar-logo-slot">
             <ShopNavbarLogoRow
               logoImageUrl={mergedProps.logoImageUrl}
               logoText={logoText}
