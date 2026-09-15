@@ -34,6 +34,7 @@ export function summarizeStoreHours(
   const source =
     storeHours?.takeaway || storeHours?.delivery || storeHours?.dine_in || ({} as Record<string, unknown>);
   const texts = DAYS.map((d) => slotsText((source as any)[d.key]));
+  const closedLabel = closedText(locale);
   const rows: Array<{ label: string; hours: string }> = [];
   let i = 0;
   while (i < DAYS.length) {
@@ -43,12 +44,39 @@ export function summarizeStoreHours(
       i === j
         ? dayLabel(DAYS[i].key, locale)
         : `${dayLabel(DAYS[i].key, locale)} - ${dayLabel(DAYS[j].key, locale)}`;
-    rows.push({ label, hours: texts[i] === '-' ? (locale === 'de' ? 'Geschlossen' : locale === 'fr' ? 'Fermé' : 'Closed') : texts[i] });
+    rows.push({ label, hours: texts[i] === '-' ? closedLabel : texts[i] });
     i = j + 1;
   }
   return rows;
 }
 
-export function formatDaySlotsLabel() {
-  return '';
+function closedText(locale: string) {
+  if (locale === 'de') return 'Geschlossen';
+  if (locale === 'fr') return 'Fermé';
+  return 'Closed';
+}
+
+/** Per-day rows for Chaslay hours sections (24h format, localized closed). */
+export function listDailyStoreHours(
+  storeHours: StoreHours | null | undefined,
+  locale = 'en'
+): Array<{ day: string; time: string; open: boolean; dayIndex: number }> {
+  const source =
+    storeHours?.takeaway || storeHours?.delivery || storeHours?.dine_in || ({} as Record<string, unknown>);
+  const closedLabel = closedText(locale);
+  const today = new Date().getDay();
+  const todayIndex = today === 0 ? 6 : today - 1;
+
+  return DAYS.map((d, index) => {
+    const slots = (source as Record<string, Array<{ open: string; close: string }>>)[d.key];
+    const open = !!slots?.length;
+    const time = open ? slots.map((s) => `${s.open}–${s.close}`).join(', ') : closedLabel;
+    return {
+      day: dayLabel(d.key, locale),
+      time,
+      open,
+      dayIndex: index,
+      isToday: index === todayIndex,
+    };
+  });
 }

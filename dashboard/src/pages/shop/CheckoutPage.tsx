@@ -37,6 +37,7 @@ import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
+import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { ShoppingBag } from 'lucide-react';
 import {
@@ -1095,27 +1096,13 @@ export default function CheckoutPage() {
       </header>
 
       <div className="shop-page-content py-8 pb-32">
-        <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold tracking-tight">{t('shopCheckoutTitle')}</h1>
-          <Link
-            to={menuPath}
-            className="shrink-0 rounded-full border border-rose-200 px-4 py-1.5 text-sm font-medium text-rose-400 hover:bg-rose-50"
-          >
-            {t('shopAddMoreItems')}
-          </Link>
         </div>
 
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{error}</div>
         )}
-
-        <button
-          type="button"
-          onClick={() => setCartPopupOpen(true)}
-          className="mb-6 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto sm:min-w-[14rem]"
-        >
-          {t('shopViewYourCart')}
-        </button>
 
         <div className="max-w-2xl space-y-8">
             <section className="space-y-2">
@@ -1925,28 +1912,13 @@ export default function CheckoutPage() {
                 onChange={(e) => patch({ notes: e.target.value })}
               />
             </section>
-
-            <button
-              type="button"
-              className={`w-full rounded-full py-3 text-sm font-semibold text-white disabled:opacity-40 ${
-                checkoutReady ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-300'
-              }`}
-              disabled={
-                submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
-              }
-              onClick={() => void submitCheckout()}
-            >
-              {merchant?.acceptingOrders === false
-                ? t('shopNotAcceptingOrders')
-                : merchant?.vacation?.active
-                  ? t('shopVacationTitle')
-                  : submitting
-                    ? t('shopPlacingOrder')
-                    : pointsCoverFullOrder
-                      ? t('shopPlaceOrderPoints')
-                      : `${t('shopPlaceOrder')} — CHF ${total.toFixed(2)}`}
-            </button>
         </div>
+
+        <ShopStorefrontFooter
+          basePath={shopBasePath(shopKey, locSlug)}
+          merchantName={merchant?.name}
+          className="mt-10"
+        />
       </div>
 
       <div className="shop-checkout-sticky-bar">
@@ -1996,19 +1968,28 @@ export default function CheckoutPage() {
             aria-modal="true"
             aria-label={t('shopYourCart')}
           >
-            <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
-                {t('shopYourCart')}
-              </h2>
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
+            <div className="border-b border-stone-100 px-4 py-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                  <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
+                  {t('shopYourCart')}
+                </h2>
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
+                  onClick={() => setCartPopupOpen(false)}
+                  aria-label={t('shopClose')}
+                >
+                  ×
+                </button>
+              </div>
+              <Link
+                to={menuPath}
+                className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
                 onClick={() => setCartPopupOpen(false)}
-                aria-label={t('shopClose')}
               >
-                ×
-              </button>
+                {t('shopAddMoreItems')}
+              </Link>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-4">
               <ul className="text-sm space-y-4">

@@ -21,7 +21,7 @@ export function ShopNavbarLogoRow({
   logoTextStyle?: React.CSSProperties;
 }) {
   const { surface, merchantDisplayName } = useStorefront();
-  const showStoreName = surface === 'shop' && !!merchantDisplayName;
+  const showStoreName = !!merchantDisplayName && (surface === 'shop' || surface === 'home');
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>

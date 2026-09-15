@@ -35,10 +35,10 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { Gift, Info, LayoutGrid, Plus, Rows3, ShoppingBag } from 'lucide-react';
+import { Info, LayoutGrid, Plus, Rows3, ShoppingBag } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
-import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
+import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -138,6 +138,7 @@ export default function OrderingPage() {
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef<number | null>(null);
+  const categoryScrollLock = useRef(false);
   const addParamConsumedRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
   const [, setDeliveryInfo] = useState<any>(null);
@@ -956,10 +957,59 @@ export default function OrderingPage() {
   const showGiftCards = !!merchant?.giftCards?.enabled;
 
   const scrollToCategory = (id: string) => {
+    categoryScrollLock.current = true;
     setSelectedCategory(id);
     const el = document.getElementById(id === 'all' ? 'shop-menu-start' : `shop-cat-${id}`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => {
+      categoryScrollLock.current = false;
+    }, 900);
   };
+
+  useEffect(() => {
+    if (!visibleMenuCategories.length) return;
+    const headerOffset =
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--shop-header-height') || '56'
+      ) +
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--shop-category-bar-height') ||
+          '52'
+      ) +
+      8;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (categoryScrollLock.current) return;
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (!visible.length) return;
+        const target = visible[0].target as HTMLElement;
+        if (target.id === 'shop-menu-start') {
+          setSelectedCategory('all');
+          return;
+        }
+        if (target.id.startsWith('shop-cat-')) {
+          setSelectedCategory(target.id.replace('shop-cat-', ''));
+        }
+      },
+      {
+        root: null,
+        rootMargin: `-${headerOffset}px 0px -55% 0px`,
+        threshold: [0, 0.15, 0.35],
+      }
+    );
+
+    const menuStart = document.getElementById('shop-menu-start');
+    if (menuStart) observer.observe(menuStart);
+    visibleMenuCategories.forEach((cat) => {
+      const el = document.getElementById(`shop-cat-${cat.id}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [visibleMenuCategories]);
 
   const Basket = ({
     className = 'max-h-[calc(100dvh-6rem)] min-h-[12rem] border border-stone-200',
@@ -1190,18 +1240,6 @@ export default function OrderingPage() {
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>
-        {!hasCmsNav && showGiftCards ? (
-          <ShopUtilityTopBar>
-            <Link
-              to={giftCardsPath}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 sm:px-3"
-              aria-label={t('shopGiftCardTitle')}
-            >
-              <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="hidden sm:inline">{t('shopGiftCardTitle')}</span>
-            </Link>
-          </ShopUtilityTopBar>
-        ) : null}
         <ChaslayStorefrontNavbar
           key={`nav-${locale}`}
           shopKey={shopKey}
@@ -1787,6 +1825,12 @@ export default function OrderingPage() {
         onClose={() => setInfoOpen(false)}
         merchant={merchant}
         zones={deliveryZones}
+      />
+
+      <ShopStorefrontFooter
+        basePath={shopBasePath(shopKey, locSlug)}
+        merchantName={merchant?.name}
+        className="mt-10"
       />
     </div>
     </ShopThemeShell>

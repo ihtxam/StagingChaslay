@@ -46,6 +46,11 @@
   color: var(--color-text-0, inherit);
   background: var(--color-bg-0, #fff);
   scroll-behavior: smooth;
+  min-height: 0;
+}
+
+.cms-homepage {
+  min-height: 0;
 }
 
 .chaslay-storefront-page [id] {
@@ -76,12 +81,15 @@
     display: none !important;
   }
   .chaslay-storefront-page .navbar-centered-mobile-row,
-  .chaslay-storefront-page .navbar-mobile-toggle,
+  .chaslay-storefront-page .navbar-mobile-controls,
   .chaslay-storefront-page .navbar-mobile-drawer {
     display: flex !important;
   }
   .chaslay-storefront-page .navbar-mobile-drawer {
     display: block !important;
+  }
+  .chaslay-storefront-page .navbar-desktop-actions {
+    display: none !important;
   }
 }
 

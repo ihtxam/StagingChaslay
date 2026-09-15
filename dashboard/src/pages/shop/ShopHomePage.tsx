@@ -4,9 +4,8 @@ import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
-import ShopTopBarActions from '@/components/shop/ShopTopBarActions';
-import ShopUtilityTopBar from '@/components/shop/ShopUtilityTopBar';
-import ShopTopShell from '@/components/shop/ShopTopShell';
+import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
+import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import {
   emptyOpenPageBlocks,
@@ -168,15 +167,15 @@ export default function ShopHomePage() {
   }
 
   return (
-    <ShopThemeShell theme={theme} site={shopSite} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
+    <ShopThemeShell theme={theme} site={shopSite} className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
-      <ShopTopShell>
-        <ShopUtilityTopBar>
-          <ShopTopBarActions accountPath={`${base}/account`} />
-        </ShopUtilityTopBar>
-      </ShopTopShell>
+      <ShopOpenPageHeader
+        basePath={base}
+        merchantName={merchant?.name}
+        logoUrl={merchant?.shopLogoUrl}
+      />
 
-      <div className="cms-homepage pb-24">
+      <div className="cms-homepage flex flex-1 flex-col pb-6">
         {segments?.length ? (
           segments.map((seg, idx) =>
             seg.kind === 'dynamic' ? (
@@ -197,6 +196,7 @@ export default function ShopHomePage() {
         ) : (
           <div dangerouslySetInnerHTML={{ __html: extractOpenPageBody(fullHtml) }} />
         )}
+        <ShopStorefrontFooter basePath={base} merchantName={merchant?.name} />
       </div>
 
       <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
