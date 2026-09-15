@@ -57,7 +57,7 @@ import ShopOfferPicker, {
   type ShopOfferForPicker,
   type ShopOfferProduct,
 } from '@/components/shop/ShopOfferPicker';
-import { findNextOpen, type StoreHours } from '@/lib/shop-hours';
+import { findNextOpen, formatNextOpenLabel, type StoreHours } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
 import {
   buildCategoryDeliveryPricingMap,
@@ -898,19 +898,51 @@ export default function OrderingPage() {
     return findNextOpen(merchant.storeHours as StoreHours, channel);
   }, [merchant, channelMeta?.open, channel]);
 
-  const statusLine = useMemo(() => {
-    if (channelMeta?.open) return t('shopOpenNow');
-    if (nextOpen) {
-      if (nextOpen.dayOffset === 0) {
-        return t('shopOpensAt').replace('{time}', nextOpen.labelHm);
-      }
-      if (nextOpen.dayOffset === 1) {
-        return t('shopOpensTomorrow').replace('{time}', nextOpen.labelHm);
-      }
-      return t('shopOpensLater').replace('{time}', nextOpen.labelHm);
+  const allowScheduledOrders = merchant?.scheduledOrdersEnabled !== false;
+
+  const openLabels = useMemo(
+    () => ({
+      opensAt: t('shopOpensAt'),
+      opensTomorrow: t('shopOpensTomorrow'),
+      opensWeekday: t('shopOpensWeekday'),
+    }),
+    [t]
+  );
+
+  const pickupOpen = !!(channels.takeaway?.open || channels.dine_in?.open);
+  const deliveryOpen = !!channels.delivery?.open;
+
+  const nextPickupOpen = useMemo(() => {
+    if (!merchant || pickupOpen) return null;
+    return (
+      findNextOpen(merchant.storeHours as StoreHours, 'takeaway') ||
+      findNextOpen(merchant.storeHours as StoreHours, 'dine_in')
+    );
+  }, [merchant, pickupOpen]);
+
+  const nextDeliveryOpen = useMemo(() => {
+    if (!merchant || deliveryOpen || !channels.delivery?.enabled) return null;
+    return findNextOpen(merchant.storeHours as StoreHours, 'delivery');
+  }, [merchant, deliveryOpen, channels.delivery?.enabled]);
+
+  const pickupStatusText = useMemo(() => {
+    if (pickupOpen) return t('shopOpenNow');
+    const opens = formatNextOpenLabel(nextPickupOpen, locale, openLabels);
+    if (opens) {
+      return allowScheduledOrders ? `${opens} · ${t('shopPreOrderAvailable')}` : opens;
     }
-    return t('shopClosed');
-  }, [channelMeta?.open, nextOpen, t]);
+    return t('shopStoreClosed');
+  }, [pickupOpen, nextPickupOpen, locale, openLabels, allowScheduledOrders, t]);
+
+  const deliveryStatusText = useMemo(() => {
+    if (!channels.delivery?.enabled) return null;
+    if (deliveryOpen) return t('shopOpenNow');
+    const opens = formatNextOpenLabel(nextDeliveryOpen, locale, openLabels);
+    if (opens) {
+      return allowScheduledOrders ? `${opens} · ${t('shopPreOrderAvailable')}` : opens;
+    }
+    return t('shopDeliveryClosed');
+  }, [channels.delivery?.enabled, deliveryOpen, nextDeliveryOpen, locale, openLabels, allowScheduledOrders, t]);
 
   useEffect(() => {
     if (!visibleMenuCategories.length || menuSearchOpen || menuSearchQuery.trim()) return;
@@ -1063,7 +1095,6 @@ export default function OrderingPage() {
 
   const showProductImages = merchant?.menuShowProductImages !== false;
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
-  const allowScheduledOrders = merchant?.scheduledOrdersEnabled !== false;
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
@@ -1462,27 +1493,32 @@ export default function OrderingPage() {
                     </h1>
                   </div>
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-                    <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                    <span
+                      className={`inline-flex items-center gap-1.5 ${
+                        pickupOpen ? 'text-emerald-700' : 'text-amber-700'
+                      }`}
+                    >
                       <span
                         className={`h-2 w-2 rounded-full ${
-                          channels.takeaway?.open || channels.dine_in?.open
-                            ? 'bg-emerald-500'
-                            : 'bg-stone-300'
+                          pickupOpen ? 'bg-emerald-500' : 'bg-amber-400'
                         }`}
                       />
-                      {t('shopStoreOpen')}
+                      {pickupStatusText}
                     </span>
-                    {channels.delivery?.enabled ? (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                    {deliveryStatusText ? (
+                      <span
+                        className={`inline-flex items-center gap-1.5 ${
+                          deliveryOpen ? 'text-emerald-700' : 'text-amber-700'
+                        }`}
+                      >
                         <span
                           className={`h-2 w-2 rounded-full ${
-                            channels.delivery?.open ? 'bg-emerald-500' : 'bg-stone-300'
+                            deliveryOpen ? 'bg-emerald-500' : 'bg-amber-400'
                           }`}
                         />
-                        {t('shopDeliveryOpen')}
+                        {deliveryStatusText}
                       </span>
                     ) : null}
-                    <span className="text-stone-400">{statusLine}</span>
                   </p>
                   {(merchant?.address || merchant?.city) && (
                     <p className="mt-1 text-[13px] text-stone-600">
