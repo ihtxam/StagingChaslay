@@ -1,5 +1,8 @@
 /** Built-in FR/DE/IT fallbacks for default English builder copy. */
 
+/** Default template / seed copy is authored in English in the page builder. */
+export const BUILDER_COPY_SOURCE_LOCALE = 'en';
+
 type LocaleMap = { fr: string; de: string; it: string };
 
 const PHRASES: Record<string, LocaleMap> = {
@@ -35,6 +38,28 @@ const PHRASES: Record<string, LocaleMap> = {
     it: 'Scopri le nostre specialità',
   },
   'Our Story': { fr: 'Notre histoire', de: 'Unsere Geschichte', it: 'La nostra storia' },
+  'Customer Reviews': { fr: 'Avis clients', de: 'Kundenbewertungen', it: 'Recensioni dei clienti' },
+  'What Our Guests Say': { fr: 'Ce que disent nos clients', de: 'Was unsere Gäste sagen', it: 'Cosa dicono i nostri ospiti' },
+  'Featured Review': { fr: 'Avis en vedette', de: 'Ausgewählte Bewertung', it: 'Recensione in evidenza' },
+  Phone: { fr: 'Téléphone', de: 'Telefon', it: 'Telefono' },
+  Email: { fr: 'E-mail', de: 'E-Mail', it: 'E-mail' },
+  Address: { fr: 'Adresse', de: 'Adresse', it: 'Indirizzo' },
+  All: { fr: 'Tout', de: 'Alle', it: 'Tutto' },
+  'Passion on every plate': {
+    fr: 'La passion dans chaque assiette',
+    de: 'Leidenschaft auf jedem Teller',
+    it: 'Passione in ogni piatto',
+  },
+  'Fresh ingredients, unforgettable flavours': {
+    fr: 'Ingrédients frais, saveurs inoubliables',
+    de: 'Frische Zutaten, unvergessliche Aromen',
+    it: 'Ingredienti freschi, sapori indimenticabili',
+  },
+  'Chef specials and guest favourites': {
+    fr: 'Spécialités du chef et coups de cœur',
+    de: 'Chef-Spezialitäten und Gästefavoriten',
+    it: 'Specialità dello chef e preferiti degli ospiti',
+  },
   'Welcome to Our Restaurant': {
     fr: 'Bienvenue dans notre restaurant',
     de: 'Willkommen in unserem Restaurant',
@@ -103,11 +128,11 @@ function localeKey(locale: string): 'fr' | 'de' | 'it' | null {
   return null;
 }
 
-export function translateSectionCopy(text: string, locale: string, defaultLanguage = 'en'): string {
+export function translateSectionCopy(text: string, locale: string, _defaultLanguage = 'en'): string {
   if (!text) return text;
   const loc = localeKey(locale);
-  const def = String(defaultLanguage || 'en').toLowerCase().slice(0, 2);
-  if (!loc || loc === def) return text;
+  const source = BUILDER_COPY_SOURCE_LOCALE;
+  if (!loc || loc === source) return text;
   const exact = PHRASES[text]?.[loc];
   if (exact) return exact;
   let out = text;

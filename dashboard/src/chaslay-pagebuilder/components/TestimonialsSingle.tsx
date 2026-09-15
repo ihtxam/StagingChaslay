@@ -13,6 +13,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { TranslatableInput, TranslatableArrayInput } from './TranslatableInput';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultTestimonials: TestimonialItem[] = [
   { text: 'An extraordinary culinary journey. Every visit reveals new flavors and the attention to detail is simply unmatched. This restaurant has become our family tradition for special occasions.', author: 'Robert & Maria Garcia', rating: 5, role: 'Loyal Patrons since 2019', photo: '' },
@@ -38,10 +39,15 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trArrayField } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
+  const sectionTitle = tr('title');
 
   const testimonial = (mergedProps.testimonials || [])[0];
   if (!testimonial) return null;
+  const text = trArrayField('testimonials', 0, 'text', testimonial.text || '');
+  const author = trArrayField('testimonials', 0, 'author', testimonial.author || '');
+  const role = trArrayField('testimonials', 0, 'role', testimonial.role || '');
 
   return (
     <div
@@ -57,7 +63,7 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
       }}
     >
       <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-        {mergedProps.title && (
+        {sectionTitle && (
           <h3 style={{
             color: mergedProps.textColor,
             fontSize: '14px',
@@ -67,7 +73,7 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
             marginBottom: '32px',
             opacity: 0.7,
           }}>
-            {mergedProps.title}
+            {sectionTitle}
           </h3>
         )}
 
@@ -84,25 +90,25 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
           fontStyle: 'italic',
           marginBottom: '32px',
         }}>
-          &ldquo;{testimonial.text}&rdquo;
+          &ldquo;{text}&rdquo;
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
           {mergedProps.showPhotos && (
             testimonial.photo ? (
-              <img src={testimonial.photo} alt={testimonial.author} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
+              <img src={testimonial.photo} alt={author} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
               <div style={{
                 width: '56px', height: '56px', borderRadius: '50%', backgroundColor: mergedProps.accentColor,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '22px', fontWeight: 600,
               }}>
-                {testimonial.author.charAt(0)}
+                {author.charAt(0)}
               </div>
             )
           )}
           <div style={{ textAlign: 'left' }}>
-            <div style={{ color: mergedProps.textColor, fontWeight: 600, fontSize: '16px' }}>{testimonial.author}</div>
-            {testimonial.role && <div style={{ color: mergedProps.textColor, opacity: 0.6, fontSize: '14px' }}>{testimonial.role}</div>}
+            <div style={{ color: mergedProps.textColor, fontWeight: 600, fontSize: '16px' }}>{author}</div>
+            {role && <div style={{ color: mergedProps.textColor, opacity: 0.6, fontSize: '14px' }}>{role}</div>}
           </div>
         </div>
       </div>

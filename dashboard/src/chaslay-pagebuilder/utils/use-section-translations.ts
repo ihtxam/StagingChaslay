@@ -29,5 +29,12 @@ export function useSectionTranslations(props: Record<string, unknown>) {
       const label = fromProp || trText(item.label || '');
       return { ...item, label };
     });
-  return { tr, trText, trList, locale, defaultLanguage };
+  const trArrayField = (arrayKey: string, index: number, field: string, fallback: string) => {
+    const key = `${arrayKey}_${index}_${field}`;
+    const resolved = resolveTranslatedProp(props, key, locale, defaultLanguage);
+    const value = resolved || fallback || '';
+    if (hasLocaleOverride(props, key, locale, defaultLanguage)) return value;
+    return translateSectionCopy(value, locale, defaultLanguage);
+  };
+  return { tr, trText, trList, trArrayField, locale, defaultLanguage };
 }

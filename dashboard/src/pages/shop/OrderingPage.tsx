@@ -1149,9 +1149,11 @@ export default function OrderingPage() {
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ChaslayStorefrontNavbar
+        key={`nav-${locale}`}
         shopKey={shopKey}
         basePath={shopBasePath(shopKey, locSlug)}
         locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
+        defaultLanguage={String(merchant?.language || 'en').toLowerCase().slice(0, 2)}
         onPresence={setHasCmsNav}
       />
       {hasCmsNav ? null : (

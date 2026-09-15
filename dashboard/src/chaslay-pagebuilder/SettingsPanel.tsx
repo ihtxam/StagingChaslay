@@ -74,7 +74,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSave }) => {
 
       <ScrollArea className="flex-1">
         {selected ? (
-          <div className="p-4">
+          <div className="p-4 min-w-0 overflow-x-hidden">
             {selected.settings && React.createElement(selected.settings)}
           </div>
         ) : (

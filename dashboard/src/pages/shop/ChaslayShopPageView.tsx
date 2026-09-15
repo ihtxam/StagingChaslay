@@ -159,6 +159,10 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     setChaslayLocale(code);
     try {
       localStorage.setItem(chaslayLangStorageKey(shopKey), code);
+      if (code === 'en' || code === 'fr' || code === 'de') {
+        localStorage.setItem(shopLangStorageKey(shopKey), code);
+        setLocale(code);
+      }
     } catch {
       /* ignore */
     }

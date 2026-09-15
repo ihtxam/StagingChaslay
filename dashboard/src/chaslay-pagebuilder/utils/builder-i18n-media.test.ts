@@ -30,7 +30,9 @@ assert.equal(
 );
 assert.equal(translateSectionCopy('Home', 'fr'), 'Accueil');
 assert.equal(translateSectionCopy('Order Now', 'en'), 'Order Now');
-assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Order Now');
+assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Commander');
+assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
+assert.equal(translateSectionCopy('Our Story', 'de'), 'Unsere Geschichte');
 
 const props = { title: 'Our Menu', title_fr: 'La carte', buttonText: 'Order Now' };
 assert.equal(resolveTranslatedProp(props, 'title', 'fr'), 'La carte');
