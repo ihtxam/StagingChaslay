@@ -1989,6 +1989,9 @@ html.shop-shell #root {
 }
 
 .shop-sticky-category-bar__inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   width: 80%;
   max-width: 90rem;
   margin-inline: auto;
