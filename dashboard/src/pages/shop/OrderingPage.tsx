@@ -35,7 +35,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { Info, LayoutGrid, Plus, Rows3, ShoppingBag } from 'lucide-react';
+import { Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
@@ -175,6 +175,9 @@ export default function OrderingPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   const [productView, setProductView] = useState<ShopProductView>('list');
+  const [menuSearchOpen, setMenuSearchOpen] = useState(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
+  const menuSearchInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!shopKey) return;
     try {
@@ -488,6 +491,31 @@ export default function OrderingPage() {
     () => menu.filter((cat) => !cat.isOffersCategory && (cat.items?.length ?? 0) > 0),
     [menu]
   );
+
+  const menuSearchResults = useMemo(() => {
+    const q = menuSearchQuery.trim().toLowerCase();
+    if (!q) return null;
+    const results: Array<{ product: Product; categoryId: string }> = [];
+    for (const cat of visibleMenuCategories) {
+      for (const product of cat.items || []) {
+        const haystack = `${product.name} ${product.description || ''}`.toLowerCase();
+        if (haystack.includes(q)) {
+          results.push({ product, categoryId: cat.id });
+        }
+      }
+    }
+    return results;
+  }, [menuSearchQuery, visibleMenuCategories]);
+
+  const openMenuSearch = () => {
+    setMenuSearchOpen(true);
+    window.setTimeout(() => menuSearchInputRef.current?.focus(), 0);
+  };
+
+  const closeMenuSearch = () => {
+    setMenuSearchOpen(false);
+    setMenuSearchQuery('');
+  };
 
   const addConfiguredItem = (
     product: Product | ShopProductForModifiers | ShopComboProduct,
@@ -845,7 +873,7 @@ export default function OrderingPage() {
   }, [channelMeta?.open, nextOpen, t]);
 
   useEffect(() => {
-    if (!visibleMenuCategories.length) return;
+    if (!visibleMenuCategories.length || menuSearchOpen || menuSearchQuery.trim()) return;
 
     const getHeaderOffset = () =>
       parseFloat(
@@ -884,7 +912,7 @@ export default function OrderingPage() {
       window.removeEventListener('scroll', syncCategoryFromScroll);
       window.removeEventListener('resize', syncCategoryFromScroll);
     };
-  }, [visibleMenuCategories]);
+  }, [visibleMenuCategories, menuSearchOpen, menuSearchQuery]);
 
   useEffect(() => {
     if (categoryScrollLock.current) return;
@@ -1013,6 +1041,49 @@ export default function OrderingPage() {
     window.setTimeout(() => {
       categoryScrollLock.current = false;
     }, 900);
+  };
+
+  const productGridClass =
+    productView === 'grid'
+      ? 'grid grid-cols-2 gap-3 xl:grid-cols-3'
+      : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3';
+
+  const renderMenuProduct = (product: Product, categoryId: string) => {
+    const catalog = catalogUnitPrice(product.price, product.categoryId ?? categoryId);
+    const pctMatch = matchingPercentOffer(
+      shopOffers,
+      { id: product.id, categoryId: product.categoryId ?? categoryId },
+      channel
+    );
+    const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
+    return (
+      <ProductCard
+        key={product.id}
+        product={product}
+        layout={productView}
+        showImage={showProductImages && !!product.image}
+        price={catalog}
+        salePrice={sale}
+        offerBadge={
+          pctMatch ? pctMatch.offer.badgeLabel || `${pctMatch.percent}% off` : null
+        }
+        onAdd={() => handleProductClick(product)}
+        rewardPts={
+          product.loyaltyRewardPoints != null && Number(product.loyaltyRewardPoints) >= 1
+            ? Number(product.loyaltyRewardPoints)
+            : null
+        }
+        unlocked={
+          !!(
+            product.loyaltyRewardPoints != null &&
+            customer &&
+            loyaltyBalance >= Number(product.loyaltyRewardPoints)
+          )
+        }
+        onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
+        t={t}
+      />
+    );
   };
 
   const Basket = ({
@@ -1380,34 +1451,55 @@ export default function OrderingPage() {
 
       <div className="shop-sticky-category-bar">
         <div className="shop-sticky-category-bar__inner">
-          <div className="shop-category-scroll flex gap-1.5">
-            <button
-              type="button"
-              data-active-category={selectedCategory === 'all' ? 'true' : undefined}
-              onClick={() => scrollToCategory('all')}
-              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                selectedCategory === 'all'
-                  ? 'bg-[var(--shop-accent,#e11d48)] text-white'
-                  : 'bg-white text-stone-700 border border-stone-200'
-              }`}
-            >
-              {t('shopAllCategories')}
-            </button>
-            {visibleMenuCategories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                data-active-category={selectedCategory === cat.id ? 'true' : undefined}
-                onClick={() => scrollToCategory(cat.id)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                  selectedCategory === cat.id
-                    ? 'bg-[var(--shop-accent,#e11d48)] text-white'
-                    : 'bg-white text-stone-700 border border-stone-200'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+          <div className="shop-category-scroll flex min-w-0 flex-1 items-center gap-1.5">
+            {menuSearchOpen ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={closeMenuSearch}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700"
+                  aria-label={t('cancel')}
+                >
+                  <X className="h-4 w-4" strokeWidth={2} />
+                </button>
+                <input
+                  ref={menuSearchInputRef}
+                  type="search"
+                  enterKeyHint="search"
+                  value={menuSearchQuery}
+                  onChange={(e) => setMenuSearchQuery(e.target.value)}
+                  placeholder={t('shopSearchMenu')}
+                  className="shop-category-search-input min-w-0 flex-1 rounded-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-stone-400"
+                />
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={openMenuSearch}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+                  aria-label={t('shopSearchMenu')}
+                  title={t('shopSearchMenu')}
+                >
+                  <Search className="h-4 w-4" strokeWidth={2} />
+                </button>
+                {visibleMenuCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    data-active-category={selectedCategory === cat.id ? 'true' : undefined}
+                    onClick={() => scrollToCategory(cat.id)}
+                    className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                      selectedCategory === cat.id
+                        ? 'bg-[var(--shop-accent,#e11d48)] text-white'
+                        : 'bg-white text-stone-700 border border-stone-200'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
           {visibleMenuCategories.length > 0 ? (
             <div className="shop-product-view-toggle shrink-0" role="group" aria-label={t('shopProductViewLabel')}>
@@ -1435,7 +1527,7 @@ export default function OrderingPage() {
       </div>
 
       <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-28 md:pb-6' : ''}`}>
-        {popularProducts.length > 0 ? (
+        {!menuSearchQuery.trim() && popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
             <ShopHorizontalScroll>
@@ -1461,7 +1553,7 @@ export default function OrderingPage() {
           </div>
         ) : null}
 
-        {shopOffers.length > 0 ? (
+        {!menuSearchQuery.trim() && shopOffers.length > 0 ? (
           <div className="mb-5 space-y-2">
             <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('shopOffers')}</h2>
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -1554,6 +1646,25 @@ export default function OrderingPage() {
         <div id="shop-menu-start" className="shop-menu-start-anchor" aria-hidden="true" />
 
         <div className="space-y-8">
+          {menuSearchResults ? (
+            <section className="shop-menu-section">
+              <h2 className="mb-3 text-lg font-bold tracking-tight text-stone-900">
+                {t('shopSearchResults')}
+              </h2>
+              {menuSearchResults.length === 0 ? (
+                <p className="py-12 text-center text-stone-500">{t('shopSearchNoResults')}</p>
+              ) : (
+                <div className={productGridClass}>
+                  {menuSearchResults.map(({ product, categoryId }) =>
+                    renderMenuProduct(product, categoryId)
+                  )}
+                </div>
+              )}
+            </section>
+          ) : menuSearchOpen ? (
+            <p className="py-12 text-center text-sm text-stone-500">{t('shopSearchMenuHint')}</p>
+          ) : (
+            <>
           {visibleMenuCategories.map((cat) => {
             const items = cat.items || [];
             return (
@@ -1566,53 +1677,8 @@ export default function OrderingPage() {
                     className="mb-3 w-full aspect-[21/9] object-cover rounded-xl bg-stone-100"
                   />
                 ) : null}
-                <div
-                  className={
-                    productView === 'grid'
-                      ? 'grid grid-cols-2 gap-3 xl:grid-cols-3'
-                      : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3'
-                  }
-                >
-                  {items.map((product) => {
-                    const catalog = catalogUnitPrice(product.price, product.categoryId ?? cat.id);
-                    const pctMatch = matchingPercentOffer(
-                      shopOffers,
-                      { id: product.id, categoryId: product.categoryId ?? cat.id },
-                      channel
-                    );
-                    const sale = pctMatch ? applyPercent(catalog, pctMatch.percent) : null;
-                    return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        layout={productView}
-                        showImage={showProductImages && !!product.image}
-                        price={catalog}
-                        salePrice={sale}
-                        offerBadge={
-                          pctMatch
-                            ? pctMatch.offer.badgeLabel || `${pctMatch.percent}% off`
-                            : null
-                        }
-                        onAdd={() => handleProductClick(product)}
-                        rewardPts={
-                          product.loyaltyRewardPoints != null &&
-                          Number(product.loyaltyRewardPoints) >= 1
-                            ? Number(product.loyaltyRewardPoints)
-                            : null
-                        }
-                        unlocked={
-                          !!(
-                            product.loyaltyRewardPoints != null &&
-                            customer &&
-                            loyaltyBalance >= Number(product.loyaltyRewardPoints)
-                          )
-                        }
-                        onAddFree={() => addConfiguredItem(product, [], 0, [], true)}
-                        t={t}
-                      />
-                    );
-                  })}
+                <div className={productGridClass}>
+                  {items.map((product) => renderMenuProduct(product, cat.id))}
                 </div>
               </section>
             );
@@ -1620,6 +1686,8 @@ export default function OrderingPage() {
           {visibleMenuCategories.length === 0 ? (
             <p className="text-stone-500 py-12 text-center">{t('shopNoProducts')}</p>
           ) : null}
+            </>
+          )}
         </div>
       </div>
 
