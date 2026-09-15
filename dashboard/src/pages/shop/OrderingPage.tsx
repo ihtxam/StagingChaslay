@@ -866,8 +866,24 @@ export default function OrderingPage() {
     }));
   };
 
+  const minOrderNotMet =
+    channel === 'delivery' &&
+    minOrderThreshold > 0 &&
+    cartTotal + 0.001 < minOrderThreshold;
+
+  const checkoutDisabled =
+    !cart.length ||
+    !!merchant?.vacation?.active ||
+    merchant?.acceptingOrders === false ||
+    (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
+    minOrderNotMet;
+
   const goCheckout = () => {
     if (!cart.length) return;
+    if (minOrderNotMet) {
+      setError(effectiveDeliveryInfo?.message || t('shopMinOrderNotMet'));
+      return;
+    }
     if (merchant?.acceptingOrders === false) {
       setError(t('shopNotAcceptingOrders'));
       return;
@@ -1392,14 +1408,9 @@ export default function OrderingPage() {
           </button>
           <button
             type="button"
-            disabled={
-              !cart.length ||
-              vacationActive ||
-              ordersPaused ||
-              (!channelMeta?.open && !allowScheduledOrders)
-            }
+            disabled={checkoutDisabled}
             onClick={goCheckout}
-            className="rounded-xl bg-[var(--shop-accent,#e11d48)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+            className="rounded-xl bg-[var(--shop-accent,#e11d48)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
           </button>
@@ -1817,12 +1828,7 @@ export default function OrderingPage() {
           </button>
           <button
             type="button"
-            disabled={
-              !cart.length ||
-              vacationActive ||
-              ordersPaused ||
-              (!channelMeta?.open && !allowScheduledOrders)
-            }
+            disabled={checkoutDisabled}
             onClick={goCheckout}
             className="shop-mobile-cart-bar__cta"
           >

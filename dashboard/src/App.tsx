@@ -58,10 +58,15 @@ function isWebPosRoute(pathname: string): boolean {
   );
 }
 
+function isShopCheckoutRoute(pathname: string) {
+  return /\/checkout(?:\/|$)/.test(pathname);
+}
+
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
 function AppToaster() {
   const { pathname } = useLocation();
   const webPos = isWebPosRoute(pathname);
+  const shopCheckout = isShopCheckoutRoute(pathname);
   const [showPosToasts, setShowPosToasts] = useState(readShowPosToasts);
 
   useEffect(() => {
@@ -79,8 +84,14 @@ function AppToaster() {
 
   return (
     <Toaster
-      position={webPos ? 'top-center' : 'top-right'}
-      containerClassName={webPos ? 'webpos-toast-container' : undefined}
+      position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
+      containerClassName={
+        webPos
+          ? 'webpos-toast-container'
+          : shopCheckout
+            ? 'shop-checkout-toast-container'
+            : undefined
+      }
       containerStyle={
         webPos
           ? {
@@ -93,7 +104,18 @@ function AppToaster() {
               transform: 'translateX(-50%)',
               zIndex: 60,
             }
-          : undefined
+          : shopCheckout
+            ? {
+                top: 'auto',
+                bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+                left: '50%',
+                right: 'auto',
+                width: 'min(92vw, 22rem)',
+                transform: 'translateX(-50%)',
+                zIndex: 60,
+                pointerEvents: 'none',
+              }
+            : undefined
       }
       toastOptions={{
         duration: 3500,

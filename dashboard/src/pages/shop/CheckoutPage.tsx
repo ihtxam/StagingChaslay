@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import {
   cartSubtotal,
   clearCart,
@@ -76,6 +77,12 @@ type SavedAddress = {
 
 const ADDRESS_LABELS = ['home', 'office', 'other'] as const;
 
+function showCheckoutError(message: string | null | undefined) {
+  const text = String(message || '').trim();
+  if (!text) return;
+  toast.error(text);
+}
+
 export default function CheckoutPage() {
   const { t, setLocale, locale, formatDateTime } = useI18n();
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
@@ -91,7 +98,6 @@ export default function CheckoutPage() {
   const [customTipOpen, setCustomTipOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [checkingZone, setCheckingZone] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
@@ -219,7 +225,7 @@ export default function CheckoutPage() {
           }
         }
       } catch (e: any) {
-        setError(e.response?.data?.error || t('shopFailedCheckout'));
+        showCheckoutError(e.response?.data?.error || t('shopFailedCheckout'));
       } finally {
         setLoading(false);
       }
@@ -658,7 +664,7 @@ export default function CheckoutPage() {
     const code = voucherInput.trim();
     if (!code) return;
     setApplyingVoucher(true);
-    setError(null);
+    showCheckoutError(null);
     try {
       const token = loadCustomerToken(shopKey);
       const res = await axios.post(
@@ -674,7 +680,7 @@ export default function CheckoutPage() {
       setVoucherInputOpen(false);
       setVoucherInput('');
     } catch (e: any) {
-      setError(e.response?.data?.error || t('shopVoucherInvalid'));
+      showCheckoutError(e.response?.data?.error || t('shopVoucherInvalid'));
     } finally {
       setApplyingVoucher(false);
     }
@@ -756,11 +762,11 @@ export default function CheckoutPage() {
   const checkDelivery = async (options?: { requireMinOrder?: boolean }) => {
     if (draft.channel !== 'delivery') return true;
     if (!draft.address.trim()) {
-      setError(t('shopEnterDeliveryAddress'));
+      showCheckoutError(t('shopEnterDeliveryAddress'));
       return false;
     }
     setCheckingZone(true);
-    setError(null);
+    showCheckoutError(null);
     try {
       const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
         query: `${draft.address}, ${draft.zipCode} ${draft.city} Switzerland`,
@@ -778,16 +784,16 @@ export default function CheckoutPage() {
       patch({ deliveryInfo: res.data });
       const live = withDeliveryMinOrderStatus(res.data, subtotal);
       if (!res.data.deliverable) {
-        setError(res.data.error || t('shopOutsideDelivery'));
+        showCheckoutError(res.data.error || t('shopOutsideDelivery'));
         return false;
       }
       if (options?.requireMinOrder && !live.meetsMinOrder) {
-        setError(live.message || t('shopMinOrderNotMet'));
+        showCheckoutError(live.message || t('shopMinOrderNotMet'));
         return false;
       }
       return true;
     } catch (e: any) {
-      setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
+      showCheckoutError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
       return false;
     } finally {
       setCheckingZone(false);
@@ -830,7 +836,7 @@ export default function CheckoutPage() {
     const token = loadCustomerToken(shopKey);
     if (!token) return;
     setSavingAddress(true);
-    setError(null);
+    showCheckoutError(null);
     try {
       let lat = draft.lat;
       let lng = draft.lng;
@@ -866,7 +872,7 @@ export default function CheckoutPage() {
       });
       setSelectedAddressId(saved.id);
     } catch (e: any) {
-      setError(e.response?.data?.error || t('shopCouldNotSaveAddress'));
+      showCheckoutError(e.response?.data?.error || t('shopCouldNotSaveAddress'));
     } finally {
       setSavingAddress(false);
     }
@@ -874,7 +880,7 @@ export default function CheckoutPage() {
 
   const onLogin = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
+    showCheckoutError(null);
     try {
       const res = await axios.post(`/api/shop/${shopKey}/auth/login`, {
         email: loginEmail,
@@ -904,13 +910,13 @@ export default function CheckoutPage() {
         lng: preferred?.longitude ?? draft.lng,
       });
     } catch (err: any) {
-      setError(err.response?.data?.error || t('shopLoginFailed'));
+      showCheckoutError(err.response?.data?.error || t('shopLoginFailed'));
     }
   };
 
   const registerAccount = async () => {
     if (!draft.customerEmail.trim() || password.length < 6) {
-      setError(t('shopEmailPasswordRequired'));
+      showCheckoutError(t('shopEmailPasswordRequired'));
       return false;
     }
     try {
@@ -929,13 +935,13 @@ export default function CheckoutPage() {
       patch({ authMode: 'register' });
       return true;
     } catch (err: any) {
-      setError(err.response?.data?.error || t('shopCouldNotCreateAccount'));
+      showCheckoutError(err.response?.data?.error || t('shopCouldNotCreateAccount'));
       return false;
     }
   };
 
   const goPayment = async (personal?: ReturnType<typeof resolvePersonalFields>): Promise<boolean> => {
-    setError(null);
+    showCheckoutError(null);
     const resolved = personal || syncPersonalFieldsFromDom();
     const { fullName, phone } = resolved;
     patch({ customerName: fullName, customerPhone: phone });
@@ -949,7 +955,7 @@ export default function CheckoutPage() {
       patch({ authMode: 'guest' });
     }
     if (whenMode === 'asap' && !channelOpen) {
-      setError(
+      showCheckoutError(
         merchant?.scheduledOrdersEnabled === false
           ? t('shopOrdersOnlyWhenOpen')
           : t('shopClosedChooseLater')
@@ -957,15 +963,15 @@ export default function CheckoutPage() {
       return false;
     }
     if (whenMode === 'later' && merchant?.scheduledOrdersEnabled === false) {
-      setError(t('shopOrdersOnlyWhenOpen'));
+      showCheckoutError(t('shopOrdersOnlyWhenOpen'));
       return false;
     }
     if (whenMode === 'later' && !draft.scheduledFor) {
-      setError(t('shopChooseDayAndTime'));
+      showCheckoutError(t('shopChooseDayAndTime'));
       return false;
     }
     if (whenMode === 'later' && scheduleDays.length === 0) {
-      setError(t('shopNoOpeningHours'));
+      showCheckoutError(t('shopNoOpeningHours'));
       return false;
     }
     if (draft.channel === 'delivery') {
@@ -995,15 +1001,15 @@ export default function CheckoutPage() {
 
   const placeOrder = async (personal?: ReturnType<typeof resolvePersonalFields>) => {
     if (merchant?.acceptingOrders === false) {
-      setError(t('shopNotAcceptingOrders'));
+      showCheckoutError(t('shopNotAcceptingOrders'));
       return;
     }
     if (merchant?.vacation?.active) {
-      setError(t('shopVacationOrdersBlocked'));
+      showCheckoutError(t('shopVacationOrdersBlocked'));
       return;
     }
     setSubmitting(true);
-    setError(null);
+    showCheckoutError(null);
     try {
       if (draft.channel === 'delivery') {
         const ok = await checkDelivery({ requireMinOrder: true });
@@ -1082,7 +1088,7 @@ export default function CheckoutPage() {
       clearCart(shopKey);
       navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}`);
     } catch (err: any) {
-      setError(err.response?.data?.error || t('shopCheckoutFailed'));
+      showCheckoutError(err.response?.data?.error || t('shopCheckoutFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -1127,7 +1133,7 @@ export default function CheckoutPage() {
     }
     setDraft((d) => ({ ...d, channel }));
     setDeliveryInfo(null);
-    setError(null);
+    showCheckoutError(null);
     setWhenMode('asap');
     setScheduleDayOffset(0);
   };
@@ -1170,10 +1176,6 @@ export default function CheckoutPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold tracking-tight">{t('shopCheckoutTitle')}</h1>
         </div>
-
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{error}</div>
-        )}
 
         <div className="max-w-2xl space-y-8">
             <section className="space-y-2">
@@ -2287,7 +2289,7 @@ export default function CheckoutPage() {
           setDeliveryInfo(payload.deliveryInfo);
           setDeliveryAddressOpen(false);
           setChannelBeforeDelivery(null);
-          setError(null);
+          showCheckoutError(null);
           setWhenMode('asap');
           setScheduleDayOffset(0);
         }}
