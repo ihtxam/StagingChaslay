@@ -1699,6 +1699,8 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       webposExpressEnabled: merchant.webposExpressEnabled,
     });
     const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
+    const { merchantHasGiftCardsLicense } = await import("@/lib/gift-card-addon");
+    const giftCardLicensed = await merchantHasGiftCardsLicense(merchantId).catch(() => false);
 
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
     const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
@@ -1728,10 +1730,14 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,
           tap_to_pay: tapToPayReady,
-          giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
+          giftCard:
+            giftCardLicensed &&
+            merchant.webposGiftCardEnabled === true &&
+            giftCardSettings.enabled,
           invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },
         giftCardSettings,
+        giftCardAddonEnabled: giftCardLicensed,
         loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
           merchant
         ),

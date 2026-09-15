@@ -51,6 +51,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
+import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
@@ -156,6 +157,7 @@ interface SettingsData {
   inventoryAddonEnabled?: boolean;
   inventoryEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
+  giftCardAddonEnabled?: boolean;
   signageAddonEnabled?: boolean;
   signageEnabled?: boolean;
   signageScreenLimit?: number;
@@ -2662,6 +2664,33 @@ export default function Settings() {
                 {isStorekeeperLicensed(settings) ? (
                   <Link to="/merchant/storekeeper" className="btn-secondary mt-3 inline-flex">
                     {t('storekeeperOpenApp')}
+                  </Link>
+                ) : null}
+              </Section>
+
+              <Section
+                id="gift-cards-addon"
+                icon={CreditCard}
+                accent={settingsDash.accent}
+                title={t('giftCard')}
+                description={t('giftCardAddonReadOnly')}
+                highlight={isSectionHighlight('gift-cards-addon')}
+              >
+                <p className="text-sm">
+                  {isGiftCardsLicensed({
+                    giftCardAddonEnabled: settings.giftCardAddonEnabled,
+                    editionFeatures: settings.editionFeatures,
+                  })
+                    ? t('giftCardAddonOn')
+                    : t('giftCardAddonOff')}
+                </p>
+                <p className="text-xs muted mt-1">{t('giftCardAddonReadOnly')}</p>
+                {isGiftCardsLicensed({
+                  giftCardAddonEnabled: settings.giftCardAddonEnabled,
+                  editionFeatures: settings.editionFeatures,
+                }) ? (
+                  <Link to="/merchant/loyalty" className="btn-secondary mt-3 inline-flex">
+                    {t('giftCardManagement')}
                   </Link>
                 ) : null}
               </Section>

@@ -19,6 +19,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 
 const router = Router();
 const imageUpload = multer({
@@ -423,6 +424,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
       kioskAddonEnabled,
+      giftCardAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -461,6 +463,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
         kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
+        giftCardAddonEnabled: isGiftCardAddonEnabled(giftCardAddonEnabled),
       }
     );
 
@@ -529,7 +532,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.deliveryPlatformsAddonEnabled != null ||
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
-      updates.kioskEnabled != null
+      updates.kioskEnabled != null ||
+      updates.giftCardAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -577,6 +581,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
+        giftCardAddonEnabled:
+          updates.giftCardAddonEnabled != null
+            ? isGiftCardAddonEnabled(updates.giftCardAddonEnabled)
+            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -594,6 +602,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
+      delete updates.giftCardAddonEnabled;
     }
 
     const merchant =

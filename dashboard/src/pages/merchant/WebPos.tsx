@@ -58,6 +58,7 @@ import {
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
 import { normalizeBusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature } from '@/lib/edition-features';
+import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
 import WebPosFulfillmentModal, {
   type FulfillmentWhen,
 } from '@/components/WebPosFulfillmentModal';
@@ -644,6 +645,7 @@ type WebPosPaymentConfig = {
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
   giftCardSettings?: GiftCardSettingsClient | null;
+  giftCardAddonEnabled?: boolean;
   loyalty?: {
     enabled?: boolean;
     earnPointsPerChf?: number;
@@ -1717,8 +1719,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   /** Bookings tab + reservation alerts — restaurant only when module is on. */
   const reservationsPosUiEnabled = !isRetail && !!merchant?.reservationsEnabled;
-  const giftCardsEditionOk =
-    editionAllows('pos_gift_cards') || editionAllows('gift_cards');
+  const giftCardsEditionOk = isGiftCardsLicensed({
+    giftCardAddonEnabled: paymentConfig?.giftCardAddonEnabled,
+    editionFeatures,
+  });
   // Counter / takeaway / delivery / open table or tab → Send.
   // When tables are off, always offer Send (fast-food walk-in).
   const showSend =

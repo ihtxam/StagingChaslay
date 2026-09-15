@@ -161,6 +161,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
   storekeeper_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
+  gift_card_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   panel_nav_hidden:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS panel_nav_hidden jsonb",
   shop_commission_percent:
@@ -1374,6 +1376,29 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+export async function ensureGiftCardAddonColumn(): Promise<void> {
+  await runPatch("gift_card_addon_enabled");
+  await ensureMerchantTables();
+  await backfillGiftCardAddonFromSettings();
+}
+
+/** Existing shops already selling gift cards keep the license after the paid-addon column lands. */
+async function backfillGiftCardAddonFromSettings(): Promise<void> {
+  try {
+    await execSql(`
+      UPDATE merchants
+      SET gift_card_addon_enabled = true
+      WHERE gift_card_addon_enabled = false
+        AND (
+          COALESCE(webpos_gift_card_enabled, false) = true
+          OR COALESCE(gift_card_settings->>'enabled', '') IN ('true', 't', '1')
+        )
+    `);
+  } catch (err) {
+    console.warn("[schema] gift card addon backfill skipped:", err);
+  }
+}
+
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
 export async function ensureMerchantColumnsSchema(): Promise<void> {
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
@@ -1382,6 +1407,7 @@ export async function ensureMerchantColumnsSchema(): Promise<void> {
   await runPatch("delivery_driver_pay_mode", "merchants");
   await runPatch("delivery_driver_hourly_rate", "merchants");
   await runPatch("delivery_per_order_fee", "merchants");
+  await backfillGiftCardAddonFromSettings();
 }
 
 /** Ensure optional orders columns exist (online shop, QR table, multi-location). */

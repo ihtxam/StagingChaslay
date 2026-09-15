@@ -52,6 +52,12 @@ import {
   readKioskAddonEnabledMap,
   writeKioskAddonEnabled,
 } from "@/lib/kiosk-addon";
+import {
+  isGiftCardAddonEnabled,
+  readGiftCardAddonEnabled,
+  readGiftCardAddonEnabledMap,
+  writeGiftCardAddonEnabled,
+} from "@/lib/gift-card-addon";
 import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
 import {
   isStorekeeperAddonEnabled,
@@ -161,6 +167,9 @@ export class MerchantService {
       const kioskById = await readKioskAddonEnabledMap(merchantIds).catch(
         () => new Map<string, boolean>()
       );
+      const giftCardById = await readGiftCardAddonEnabledMap(merchantIds).catch(
+        () => new Map<string, boolean>()
+      );
 
       return merchants.map((m) => {
         const floor = floorByMerchant.get(m.id) ?? [];
@@ -175,6 +184,7 @@ export class MerchantService {
         const kdsOn = kdsById.get(m.id) ?? isKdsAddonEnabled(m.kdsAddonEnabled);
         const odsOn = odsById.get(m.id) ?? isOdsAddonEnabled(m.odsAddonEnabled);
         const kioskOn = kioskById.get(m.id) ?? isKioskAddonEnabled(m.kioskAddonEnabled);
+        const giftCardOn = giftCardById.get(m.id) ?? isGiftCardAddonEnabled(m.giftCardAddonEnabled);
         return {
           id: m.id,
           name: m.name,
@@ -207,6 +217,7 @@ export class MerchantService {
           odsEnabled: odsOn,
           kioskAddonEnabled: kioskOn,
           kioskEnabled: kioskOn,
+          giftCardAddonEnabled: giftCardOn,
           createdAt: m.createdAt,
           devices: m.devices?.length ?? 0,
           licenses: m.licenses?.length ?? 0,
@@ -267,6 +278,9 @@ export class MerchantService {
       const kioskOn = await readKioskAddonEnabled(merchantId).catch(() =>
         isKioskAddonEnabled(merchant.kioskAddonEnabled)
       );
+      const giftCardOn = await readGiftCardAddonEnabled(merchantId).catch(() =>
+        isGiftCardAddonEnabled(merchant.giftCardAddonEnabled)
+      );
       const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
         isJustEatAddonEnabled(merchant.justEatAddonEnabled)
       );
@@ -286,6 +300,7 @@ export class MerchantService {
         odsEnabled: odsOn,
         kioskAddonEnabled: kioskOn,
         kioskEnabled: kioskOn,
+        giftCardAddonEnabled: giftCardOn,
         justEatAddonEnabled: justEatOn,
         uberEatsAddonEnabled: uberEatsOn,
         deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
@@ -341,6 +356,7 @@ export class MerchantService {
       kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      giftCardAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -412,6 +428,7 @@ export class MerchantService {
           kioskAddonEnabled: options?.kioskAddonEnabled === true,
           justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
           uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+          giftCardAddonEnabled: options?.giftCardAddonEnabled === true,
         })
         .returning();
 
@@ -422,6 +439,14 @@ export class MerchantService {
         await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId, {
           businessCategory: lockedModule || options?.businessCategory,
         });
+        const edition = await EditionService.getById(options.editionId);
+        if (edition?.features) {
+          const { PackageProvisioningService } = await import("./package-provisioning.service");
+          await PackageProvisioningService.applyEditionFeatureAddons(
+            created.id,
+            edition.features
+          );
+        }
       } else if (lockedModule) {
         const modulePatch = businessModuleMerchantPatch(lockedModule, {});
         await db
@@ -497,6 +522,12 @@ export class MerchantService {
       if (options?.kioskAddonEnabled === true) {
         await writeKioskAddonEnabled(created.id, true);
       }
+      if (options?.giftCardAddonEnabled === true) {
+        await writeGiftCardAddonEnabled(created.id, true);
+      }
+      if (options?.storekeeperAddonEnabled === true) {
+        await writeStorekeeperAddonEnabled(created.id, true);
+      }
       if (options?.deliveryPlatformsAddonEnabled === true) {
         await writeJustEatAddonEnabled(created.id, true);
         await writeUberEatsAddonEnabled(created.id, true);
@@ -508,6 +539,9 @@ export class MerchantService {
       }));
       const kdsOn = await readKdsAddonEnabled(created.id).catch(() => false);
       const odsOn = await readOdsAddonEnabled(created.id).catch(() => false);
+      const giftCardOn = await readGiftCardAddonEnabled(created.id).catch(
+        () => options?.giftCardAddonEnabled === true
+      );
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -526,6 +560,7 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        giftCardAddonEnabled: giftCardOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -551,6 +586,7 @@ export class MerchantService {
       const kdsRequested = updates.kdsAddonEnabled;
       const odsRequested = updates.odsAddonEnabled;
       const kioskRequested = updates.kioskAddonEnabled;
+      const giftCardRequested = updates.giftCardAddonEnabled;
       if (addonRequested !== undefined) {
         await ensureInventoryAddonColumn();
         updates.inventoryAddonEnabled = isInventoryAddonEnabled(addonRequested);
@@ -566,6 +602,9 @@ export class MerchantService {
       }
       if (kioskRequested !== undefined) {
         updates.kioskAddonEnabled = isKioskAddonEnabled(kioskRequested);
+      }
+      if (giftCardRequested !== undefined) {
+        updates.giftCardAddonEnabled = isGiftCardAddonEnabled(giftCardRequested);
       }
       const merchant = await withMerchantSchemaRetry(() =>
         db
@@ -598,6 +637,10 @@ export class MerchantService {
         const on = await writeKioskAddonEnabled(merchantId, kioskRequested);
         Object.assign(merchant[0], { kioskAddonEnabled: on, kioskEnabled: on });
       }
+      if (giftCardRequested !== undefined) {
+        const on = await writeGiftCardAddonEnabled(merchantId, giftCardRequested);
+        Object.assign(merchant[0], { giftCardAddonEnabled: on });
+      }
       return merchant[0];
     } catch (error) {
       console.error("Error updating merchant:", error);
@@ -620,6 +663,7 @@ export class MerchantService {
       kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      giftCardAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -670,9 +714,13 @@ export class MerchantService {
       await writeStorekeeperAddonEnabled(merchantId, limits.storekeeperAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.giftCardAddonEnabled !== undefined) {
+      await writeGiftCardAddonEnabled(merchantId, limits.giftCardAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, or deliveryPlatformsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, giftCardAddonEnabled, or deliveryPlatformsAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);
@@ -758,6 +806,7 @@ export class MerchantService {
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      giftCardAddonEnabled?: boolean;
     }
   ) {
     if (
@@ -766,7 +815,8 @@ export class MerchantService {
       addons.signageScreenLimit === undefined &&
       addons.kdsAddonEnabled === undefined &&
       addons.odsAddonEnabled === undefined &&
-      addons.kioskAddonEnabled === undefined
+      addons.kioskAddonEnabled === undefined &&
+      addons.giftCardAddonEnabled === undefined
     ) {
       throw new Error("No addon updates provided");
     }
@@ -787,6 +837,9 @@ export class MerchantService {
     }
     if (addons.kioskAddonEnabled !== undefined) {
       await writeKioskAddonEnabled(merchantId, addons.kioskAddonEnabled);
+    }
+    if (addons.giftCardAddonEnabled !== undefined) {
+      await writeGiftCardAddonEnabled(merchantId, addons.giftCardAddonEnabled);
     }
     return this.getMerchantById(merchantId);
   }

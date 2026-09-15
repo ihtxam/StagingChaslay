@@ -541,6 +541,11 @@ export function buildSettingsSearchIndex(
       keywords: ['storekeeper', 'barcode', 'scan', 'intake', t('storekeeperTitle')],
     },
     {
+      id: 'gift-cards-addon',
+      tab: 'pos',
+      keywords: ['gift', 'giftcard', 'gift card', 'carte cadeau', 'geschenk', t('giftCard')],
+    },
+    {
       id: 'signage-addon',
       tab: 'pos',
       keywords: ['signage', 'tv', 'menu board', 'screens', 'playlist', t('signageTitle'), t('signageNav')],

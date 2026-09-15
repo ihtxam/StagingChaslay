@@ -595,6 +595,9 @@ export class ChaslayCompatService {
     });
     if (!merchant) throw new Error("Merchant not found");
 
+    const { merchantHasGiftCardsLicense } = await import("@/lib/gift-card-addon");
+    const giftCardLicensed = await merchantHasGiftCardsLicense(merchantId).catch(() => false);
+
     const terminals = await db.query.paymentTerminals.findMany({
       where: eq(schema.paymentTerminals.merchantId, merchantId),
     });
@@ -640,6 +643,7 @@ export class ChaslayCompatService {
         terminal: merchant.webposTerminalEnabled !== false && terminalReady,
         tap_to_pay: tapToPayReady,
         giftCard:
+          giftCardLicensed &&
           merchant.webposGiftCardEnabled === true &&
           !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,
         invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,

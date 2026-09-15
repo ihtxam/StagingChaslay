@@ -12,6 +12,7 @@ import {
   buildGiftCardRedeemUrl,
 } from "@/lib/gift-card-code";
 import { GiftCardService } from "@/services/gift-card.service";
+import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { AdyenService } from "@/services/adyen.service";
 import { EmailService } from "@/services/email.service";
 
@@ -48,14 +49,15 @@ export class ShopGiftCardService {
   }
 
   /** Public shop settings — no auth required */
-  static publicSettings(settings: GiftCardSettings) {
+  static publicSettings(settings: GiftCardSettings, licensed = true) {
     const digital =
       settings.digitalVoucherEnabled !== false && settings.onlinePurchaseEnabled !== false;
     const physical = settings.physicalPostEnabled === true && settings.onlinePurchaseEnabled !== false;
+    const available = licensed && this.isOnlineEnabled(settings) && (digital || physical);
     return {
-      enabled: this.isOnlineEnabled(settings) && (digital || physical),
-      digitalVoucherEnabled: digital,
-      physicalPostEnabled: physical,
+      enabled: available,
+      digitalVoucherEnabled: licensed && digital,
+      physicalPostEnabled: licensed && physical,
       presetDenominations: settings.presetDenominations,
       minAmount: settings.minAmount,
       maxAmount: settings.maxAmount,
@@ -63,10 +65,20 @@ export class ShopGiftCardService {
     };
   }
 
+  static async publicSettingsForMerchant(merchant: {
+    id: string;
+    giftCardSettings?: unknown;
+  }) {
+    const licensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
+    return this.publicSettings(this.settingsFromMerchant(merchant), licensed);
+  }
+
   /** Public balance lookup — returns balance + masked holder email */
   static async lookupPublicBalance(merchantId: string, code: string) {
     const settings = await GiftCardService.getSettings(merchantId);
     if (!settings.enabled) throw new Error("Gift cards are not available");
+    const licensed = await merchantHasGiftCardsLicense(merchantId).catch(() => false);
+    if (!licensed) throw new Error("Gift cards are not available");
 
     const card = await GiftCardService.lookup(merchantId, code);
     if (card.status !== "active") throw new Error("Card is not active");
@@ -125,6 +137,10 @@ export class ShopGiftCardService {
     const settings = this.settingsFromMerchant(merchant);
     if (!this.isOnlineEnabled(settings)) {
       throw new Error("Online gift card purchase is not enabled");
+    }
+    const licensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
+    if (!licensed) {
+      throw new Error("Gift cards addon is not enabled");
     }
 
     const deliveryType: GiftDeliveryType =

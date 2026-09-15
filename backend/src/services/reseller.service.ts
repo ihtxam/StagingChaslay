@@ -373,6 +373,8 @@ export class ResellerService {
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
         justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
         uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
+        storekeeperAddonEnabled: schema.merchants.storekeeperAddonEnabled,
+        giftCardAddonEnabled: schema.merchants.giftCardAddonEnabled,
         panelNavHidden: schema.merchants.panelNavHidden,
         shopCommissionPercent: schema.merchants.shopCommissionPercent,
         createdAt: schema.merchants.createdAt,
@@ -390,6 +392,8 @@ export class ResellerService {
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
       kdsAddonEnabled: r.kdsAddonEnabled === true,
       odsAddonEnabled: r.odsAddonEnabled === true,
+      storekeeperAddonEnabled: r.storekeeperAddonEnabled === true,
+      giftCardAddonEnabled: r.giftCardAddonEnabled === true,
       deliveryPlatformsAddonEnabled:
         r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
     }));
@@ -422,6 +426,7 @@ export class ResellerService {
       odsAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      giftCardAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -468,6 +473,7 @@ export class ResellerService {
         odsAddonEnabled: input.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
+        giftCardAddonEnabled: input.giftCardAddonEnabled,
       }
     );
     return created;
@@ -488,6 +494,7 @@ export class ResellerService {
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      giftCardAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -504,6 +511,7 @@ export class ResellerService {
       deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
       kioskAddonEnabled: limits.kioskAddonEnabled,
+      giftCardAddonEnabled: limits.giftCardAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

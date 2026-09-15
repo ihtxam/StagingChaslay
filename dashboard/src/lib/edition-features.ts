@@ -50,7 +50,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
       { key: 'pos_retail', label: 'Retail mode' },
       { key: 'pos_cash_drawer', label: 'Cash drawer' },
       { key: 'pos_tips', label: 'Tips' },
-      { key: 'pos_gift_cards', label: 'Gift cards at POS' },
+      { key: 'pos_gift_cards', label: 'Gift cards at POS (paid addon)' },
       { key: 'pos_scale', label: 'Balance / scale (weighed products)' },
     ],
   },
@@ -69,7 +69,7 @@ export const EDITION_FEATURE_GROUPS: EditionFeatureGroup[] = [
     features: [
       { key: 'online_shop', label: 'Online shop' },
       { key: 'online_payments', label: 'Online payments' },
-      { key: 'gift_cards', label: 'Gift cards module' },
+      { key: 'gift_cards', label: 'Gift cards module (paid addon)' },
       { key: 'loyalty', label: 'Loyalty / membership' },
       { key: 'offers', label: 'Offers / promotions' },
     ],

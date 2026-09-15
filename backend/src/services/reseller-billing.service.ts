@@ -89,6 +89,7 @@ export function detectActiveBillableFeatures(merchant: {
   kdsAddonEnabled?: boolean | null;
   odsAddonEnabled?: boolean | null;
   kioskAddonEnabled?: boolean | null;
+  giftCardAddonEnabled?: boolean | null;
   adyenApiKey?: string | null;
   customDomain?: string | null;
   editionFeatures?: string[] | null;
@@ -99,7 +100,11 @@ export function detectActiveBillableFeatures(merchant: {
 
   if (merchant.shopEnabled) out.push("online_shop");
   if (merchant.loyaltyEnabled) out.push("loyalty");
-  if (merchant.webposGiftCardEnabled || giftCardSettingsEnabled(merchant.giftCardSettings)) {
+  if (
+    merchant.webposGiftCardEnabled ||
+    giftCardSettingsEnabled(merchant.giftCardSettings) ||
+    merchant.giftCardAddonEnabled
+  ) {
     out.push("gift_cards");
   }
   if (merchant.hasActiveTerminal) out.push("terminals");
@@ -297,6 +302,7 @@ export class ResellerBillingService {
             signageAddonEnabled: (m as { signageAddonEnabled?: boolean }).signageAddonEnabled,
             kdsAddonEnabled: (m as { kdsAddonEnabled?: boolean }).kdsAddonEnabled,
             odsAddonEnabled: (m as { odsAddonEnabled?: boolean }).odsAddonEnabled,
+            giftCardAddonEnabled: (m as { giftCardAddonEnabled?: boolean }).giftCardAddonEnabled,
             adyenApiKey: m.adyenApiKey,
             customDomain: m.customDomain,
             editionFeatures,
