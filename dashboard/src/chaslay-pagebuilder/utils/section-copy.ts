@@ -11,6 +11,8 @@ const PHRASES: Record<string, LocaleMap> = {
   'About Us': { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   About: { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   Gallery: { fr: 'Galerie', de: 'Galerie', it: 'Galleria' },
+  'Our Gallery': { fr: 'Notre galerie', de: 'Unsere Galerie', it: 'La nostra galleria' },
+  'Photo Gallery': { fr: 'Galerie photos', de: 'Fotogalerie', it: 'Galleria fotografica' },
   Testimonials: { fr: 'Avis', de: 'Bewertungen', it: 'Recensioni' },
   'Customer Reviews': { fr: 'Avis clients', de: 'Kundenbewertungen', it: 'Recensioni clienti' },
   'What Our Guests Say': { fr: 'Ce que disent nos clients', de: 'Was unsere Gäste sagen', it: 'Cosa dicono i nostri ospiti' },

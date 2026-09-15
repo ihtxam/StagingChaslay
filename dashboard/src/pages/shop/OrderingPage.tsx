@@ -844,6 +844,50 @@ export default function OrderingPage() {
     return t('shopClosed');
   }, [channelMeta?.open, nextOpen, t]);
 
+  useEffect(() => {
+    if (!visibleMenuCategories.length) return;
+    const headerOffset =
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--shop-header-height') || '56'
+      ) +
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--shop-category-bar-height') ||
+          '52'
+      ) +
+      8;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (categoryScrollLock.current) return;
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (!visible.length) return;
+        const target = visible[0].target as HTMLElement;
+        if (target.id === 'shop-menu-start') {
+          setSelectedCategory('all');
+          return;
+        }
+        if (target.id.startsWith('shop-cat-')) {
+          setSelectedCategory(target.id.replace('shop-cat-', ''));
+        }
+      },
+      {
+        root: null,
+        rootMargin: `-${headerOffset}px 0px -55% 0px`,
+        threshold: [0, 0.15, 0.35],
+      }
+    );
+
+    const menuStart = document.getElementById('shop-menu-start');
+    if (menuStart) observer.observe(menuStart);
+    visibleMenuCategories.forEach((cat) => {
+      const el = document.getElementById(`shop-cat-${cat.id}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [visibleMenuCategories]);
 
   if (loading) {
     return (
@@ -965,51 +1009,6 @@ export default function OrderingPage() {
       categoryScrollLock.current = false;
     }, 900);
   };
-
-  useEffect(() => {
-    if (!visibleMenuCategories.length) return;
-    const headerOffset =
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue('--shop-header-height') || '56'
-      ) +
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue('--shop-category-bar-height') ||
-          '52'
-      ) +
-      8;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (categoryScrollLock.current) return;
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (!visible.length) return;
-        const target = visible[0].target as HTMLElement;
-        if (target.id === 'shop-menu-start') {
-          setSelectedCategory('all');
-          return;
-        }
-        if (target.id.startsWith('shop-cat-')) {
-          setSelectedCategory(target.id.replace('shop-cat-', ''));
-        }
-      },
-      {
-        root: null,
-        rootMargin: `-${headerOffset}px 0px -55% 0px`,
-        threshold: [0, 0.15, 0.35],
-      }
-    );
-
-    const menuStart = document.getElementById('shop-menu-start');
-    if (menuStart) observer.observe(menuStart);
-    visibleMenuCategories.forEach((cat) => {
-      const el = document.getElementById(`shop-cat-${cat.id}`);
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [visibleMenuCategories]);
 
   const Basket = ({
     className = 'max-h-[calc(100dvh-6rem)] min-h-[12rem] border border-stone-200',

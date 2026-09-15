@@ -193,9 +193,9 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   return (
     <BuilderLanguageProvider locale={chaslayLocale} defaultLanguage={defaultLanguage}>
-      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
+      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
         <ShopVacationPopup shopKey={shopKey} />
-        <div className="cms-homepage flex flex-1 flex-col pb-6">
+        <div className="cms-homepage flex flex-col pb-6">
           <ChaslayHomepageRenderer
             key={`${pageSlug}-${chaslayLocale}`}
             editorState={editorState}

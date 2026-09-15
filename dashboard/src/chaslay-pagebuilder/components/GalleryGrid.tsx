@@ -12,6 +12,7 @@ import { Lightbox } from './Lightbox';
 import { TranslatableInput } from './TranslatableInput';
 import { MultiImageUpload } from './MultiImageUpload';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useSectionTranslations } from '../utils/use-section-translations';
 
 const defaultImages = [
   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80',
@@ -50,6 +51,7 @@ export const GalleryGrid: React.FC<GalleryProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -67,7 +69,7 @@ export const GalleryGrid: React.FC<GalleryProps> & {
         padding: '48px 20px',
       }}
     >
-      {mergedProps.title && (
+      {tr('title') && (
         <h3 style={{
           color: mergedProps.textColor,
           fontSize: '28px',
@@ -75,7 +77,7 @@ export const GalleryGrid: React.FC<GalleryProps> & {
           textAlign: 'center',
           marginBottom: '32px',
         }}>
-          {mergedProps.title}
+          {tr('title')}
         </h3>
       )}
       <div
