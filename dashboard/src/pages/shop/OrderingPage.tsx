@@ -35,7 +35,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { CalendarDays, Info, Plus, ShoppingBag, User } from 'lucide-react';
+import { CalendarDays, Gift, Info, Plus, ShoppingBag, User } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -910,9 +910,11 @@ export default function OrderingPage() {
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
   const reservationsPath = `${shopBasePath(shopKey, locSlug)}/reservations`;
+  const giftCardsPath = `${shopBasePath(shopKey, locSlug)}/gift-cards`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
+  const showGiftCards = !!merchant?.giftCards?.enabled;
 
   const scrollToCategory = (id: string) => {
     setSelectedCategory(id);
@@ -1192,6 +1194,16 @@ export default function OrderingPage() {
                 title={t('shopReservations')}
               >
                 <CalendarDays className="h-5 w-5" strokeWidth={1.75} />
+              </Link>
+            )}
+            {showGiftCards && (
+              <Link
+                to={giftCardsPath}
+                className="inline-flex h-9 w-9 items-center justify-center text-stone-700 hover:bg-stone-100"
+                aria-label={t('shopGiftCardTitle')}
+                title={t('shopGiftCardTitle')}
+              >
+                <Gift className="h-5 w-5" strokeWidth={1.75} />
               </Link>
             )}
             <Link

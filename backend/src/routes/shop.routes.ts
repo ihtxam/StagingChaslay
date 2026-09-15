@@ -1874,16 +1874,23 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
 
     const body = req.body || {};
+    const deliveryType =
+      body.deliveryType === "physical" ? "physical" : "digital";
     const result = await ShopGiftCardService.createOnlinePurchase(
       merchant,
       req.params.slug,
       {
         amount: Number(body.amount),
+        deliveryType,
         recipientEmail: body.recipientEmail,
         recipientName: body.recipientName,
         senderName: body.senderName,
         senderEmail: body.senderEmail,
         message: body.message,
+        shippingAddress: body.shippingAddress,
+        shippingZip: body.shippingZip,
+        shippingCity: body.shippingCity,
+        shippingCountry: body.shippingCountry,
       }
     );
 
@@ -1892,6 +1899,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
       purchase: {
         id: result.purchase.id,
         amount: result.amount,
+        deliveryType: result.purchase.deliveryType,
         recipientEmail: result.purchase.recipientEmail,
         paymentStatus: result.purchase.paymentStatus,
       },
@@ -1923,18 +1931,7 @@ router.get("/:slug/gift-cards/purchase/:purchaseId", async (req: Request, res: R
     }
     res.json({
       success: true,
-      purchase: {
-        id: purchase.id,
-        amount: purchase.amount,
-        recipientEmail: purchase.recipientEmail,
-        recipientName: purchase.recipientName,
-        senderName: purchase.senderName,
-        message: purchase.message,
-        paymentStatus: purchase.paymentStatus,
-        fulfilledAt: purchase.fulfilledAt,
-        cardCode: card?.ecardCode || null,
-        cardBalance: card?.balance || null,
-      },
+      purchase: ShopGiftCardService.purchasePublicView(purchase, card),
     });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : "Not found" });

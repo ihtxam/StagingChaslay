@@ -509,6 +509,13 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS gift_card_purchases_merchant_id_idx ON gift_card_purchases(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS gift_card_purchases_payment_status_idx ON gift_card_purchases(payment_status)`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS delivery_type varchar(20) NOT NULL DEFAULT 'digital'`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_address text`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_zip varchar(20)`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_city varchar(120)`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_country varchar(2) DEFAULT 'CH'`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS fulfillment_status varchar(30)`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipped_at timestamptz`,
   `CREATE TABLE IF NOT EXISTS pos_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
