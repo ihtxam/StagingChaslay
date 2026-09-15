@@ -6,6 +6,8 @@ import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
 import type { MembershipPlan } from '@/lib/membership-plans';
 import type { AttachedMembership } from '@/lib/loyalty-math';
+import type { MembershipSellMeta } from '@/components/webpos/types';
+import { roundMoney2 } from '@/lib/money';
 
 function normalizeRfidUid(raw: string): string {
   return String(raw || '')
@@ -19,9 +21,10 @@ type Props = {
   plans: MembershipPlan[];
   onClose: () => void;
   onSold: (membership: AttachedMembership) => void;
+  onAddToCart?: (meta: MembershipSellMeta, lineName: string) => void;
 };
 
-export default function WebPosMembershipSellModal({ open, plans, onClose, onSold }: Props) {
+export default function WebPosMembershipSellModal({ open, plans, onClose, onSold, onAddToCart }: Props) {
   const { t } = useI18n();
   const activePlans = plans.filter((p) => p.active);
   const [planId, setPlanId] = useState(activePlans[0]?.id || '');
@@ -29,11 +32,15 @@ export default function WebPosMembershipSellModal({ open, plans, onClose, onSold
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [cardNumber, setCardNumber] = useState('');
+  const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
 
   if (!open) return null;
 
   const selected = activePlans.find((p) => p.id === planId) || activePlans[0] || null;
+  const sellAmount = roundMoney2(
+    Number(amount !== '' ? amount : selected?.sellPrice || 0)
+  );
 
   const submit = async () => {
     const rfid = normalizeRfidUid(cardNumber);
@@ -45,6 +52,26 @@ export default function WebPosMembershipSellModal({ open, plans, onClose, onSold
       toast.error(t('membershipSellContactRequired'));
       return;
     }
+    if (sellAmount > 0 && onAddToCart) {
+      onAddToCart(
+        {
+          cardNumber: rfid,
+          planId: selected.id,
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          amount: sellAmount,
+        },
+        `${selected.label} CHF ${sellAmount.toFixed(2)}`
+      );
+      onClose();
+      setName('');
+      setEmail('');
+      setPhone('');
+      setCardNumber('');
+      setAmount('');
+      return;
+    }
     setBusy(true);
     try {
       const res = await api.post('/gift-cards/sell-membership', {
@@ -53,6 +80,7 @@ export default function WebPosMembershipSellModal({ open, plans, onClose, onSold
         name: name.trim(),
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
+        amount: sellAmount > 0 ? sellAmount : undefined,
       });
       const c = res.data?.card;
       if (!c?.id) throw new Error(t('membershipSellFailed'));
@@ -116,6 +144,20 @@ export default function WebPosMembershipSellModal({ open, plans, onClose, onSold
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">{t('membershipSellPrice')}</span>
+            <input
+              className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              placeholder={
+                selected?.sellPrice != null ? String(selected.sellPrice) : '0'
+              }
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </label>
           <label className="block text-sm">
             <span className="font-medium">{t('name')}</span>

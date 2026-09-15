@@ -37,14 +37,37 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export function parsePermissions(raw?: string | null): Permission[] {
   if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s): s is Permission => (PERMISSIONS as readonly string[]).includes(s));
+  const seen = new Set<Permission>();
+  for (const part of raw.split(",")) {
+    const key = part.trim();
+    if ((PERMISSIONS as readonly string[]).includes(key)) {
+      seen.add(key as Permission);
+    }
+  }
+  return PERMISSIONS.filter((p) => seen.has(p));
+}
+
+/**
+ * Accept the role-editor payload (array or comma-separated string) and keep only
+ * known permission keys. Unknown keys are dropped; known keys are not rewritten.
+ */
+export function normalizePermissions(input: unknown): Permission[] {
+  if (input == null) return [];
+  if (Array.isArray(input)) {
+    return parsePermissions(
+      input
+        .map((v) => String(v ?? "").trim())
+        .filter(Boolean)
+        .join(",")
+    );
+  }
+  if (typeof input === "string") return parsePermissions(input);
+  return [];
 }
 
 export function encodePermissions(perms: Permission[]): string {
-  return [...new Set(perms)].join(",");
+  const set = new Set(perms);
+  return PERMISSIONS.filter((p) => set.has(p)).join(",");
 }
 
 export function hasPermission(granted: readonly string[] | undefined, required: Permission): boolean {
@@ -414,13 +437,12 @@ export function waiterRestrictedHomePath(granted: readonly string[] | undefined)
   return "/merchant/pos";
 }
 
-/** Strip privileged permissions from system Waiter roles before issuing JWTs. */
+/**
+ * Runtime policy for issued JWTs / staff sessions.
+ * Storekeeper stays locked to intake. Waiter templates keep merchant-saved
+ * permissions so Users & roles checkboxes round-trip to the database.
+ */
 export function applyRolePermissionPolicy(roleName: string, permissions: Permission[]): Permission[] {
-  const kind = waiterSystemKind(roleName);
-  if (kind) {
-    const blocked = new Set(waiterBlockedPermissions(kind));
-    return permissions.filter((p) => !blocked.has(p));
-  }
   if (roleName.trim().toLowerCase() === "storekeeper") {
     const blocked = new Set(storekeeperBlockedPermissions());
     return permissions.filter((p) => !blocked.has(p));

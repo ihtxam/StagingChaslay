@@ -321,6 +321,9 @@ function shouldPrintRelayedJob(
   const remote = !!job.sourceDeviceId && job.sourceDeviceId !== localDeviceId;
   if (!remote) return true;
   if (jobKind === 'eod') return true;
+  const payload = (job.payload || {}) as EscPosPrintJobPayload;
+  const alertKind = String(payload.alertKind || '');
+  if (alertKind === 'online_order' || alertKind === 'reservation') return true;
   const merchant = readCachedMerchantAutoPrintSettings();
   if (jobKind === 'kitchen') {
     return shouldAutoPrintKitchen(merchant);
@@ -411,14 +414,16 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
         }
         if (p.kind === 'auto_print_order' && p.orderId) {
           const payload = p as AutoPrintOrderPayload;
+          const forced = payload.force === true;
+          const merchantAuto = readCachedMerchantAutoPrintSettings();
           const allowKitchen =
             payload.printKitchen === true &&
-            shouldAutoPrintKitchen(readCachedMerchantAutoPrintSettings());
+            (forced || shouldAutoPrintKitchen(merchantAuto));
           const allowReceiptLike =
             (payload.printReceipt === true ||
               payload.printNotification === true ||
               payload.printDeliveryReceipt === true) &&
-            shouldAutoPrintReceipt(readCachedMerchantAutoPrintSettings());
+            (forced || shouldAutoPrintReceipt(merchantAuto));
           if (!allowKitchen && !allowReceiptLike) {
             await ackPrintJob(job.id, 'DONE');
             continue;
@@ -426,6 +431,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
           try {
             await processAutoPrintOrderJob({
               ...payload,
+              force: forced,
               printKitchen: allowKitchen,
               printReceipt: allowReceiptLike && payload.printReceipt === true,
               printNotification: allowReceiptLike && payload.printNotification === true,

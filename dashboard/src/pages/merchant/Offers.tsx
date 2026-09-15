@@ -22,6 +22,7 @@ type Offer = {
   channels: string[];
   categoryIds: string[];
   productIds: string[];
+  staffIds: string[];
   scheduleMode: string;
   daysOfWeek: string[];
   timeStart?: string | null;
@@ -37,6 +38,7 @@ type Offer = {
 
 type Category = { id: string; name: string; isOffersCategory?: boolean };
 type ProductOpt = { id: string; name: string; price: string | number; categoryId?: string | null };
+type StaffOpt = { id: string; name: string; roleName?: string };
 
 const DAYS = [
   { key: 'mon', label: 'Mon' },
@@ -147,6 +149,21 @@ function validityPreset(kind: 'today' | 'two_days' | 'week'): { validFrom: strin
   return { validFrom: from.toISOString(), validTo: endOfZurichDay(to).toISOString() };
 }
 
+function validityOnDate(ymd: string): { validFrom: string; validTo: string } {
+  const from = startOfZurichDay(new Date(`${ymd}T12:00:00`));
+  return { validFrom: from.toISOString(), validTo: endOfZurichDay(from).toISOString() };
+}
+
+function ymdFromIso(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 const emptyForm = () => ({
   name: '',
   description: '',
@@ -167,13 +184,14 @@ const emptyForm = () => ({
   channels: [] as string[],
   categoryIds: [] as string[],
   productIds: [] as string[],
+  staffIds: [] as string[],
   scheduleMode: 'always',
   daysOfWeek: [] as string[],
   timeStart: '',
   timeEnd: '',
   validFrom: '' as string,
   validTo: '' as string,
-  validityPreset: '' as '' | 'today' | 'two_days' | 'week',
+  validityPreset: '' as '' | 'today' | 'two_days' | 'week' | 'date',
   featured: true,
   isActive: true,
   badgeLabel: '',
@@ -193,6 +211,7 @@ export default function Offers() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<ProductOpt[]>([]);
+  const [staff, setStaff] = useState<StaffOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -200,14 +219,16 @@ export default function Offers() {
 
   const load = async () => {
     try {
-      const [o, c, p] = await Promise.all([
+      const [o, c, p, s] = await Promise.all([
         api.get('/merchant/offers'),
         api.get('/merchant/categories'),
         api.get('/merchant/products?limit=500'),
+        api.get('/merchant/staff').catch(() => ({ data: { staff: [] } })),
       ]);
       setOffers(o.data.offers || []);
       setCategories(c.data.categories || []);
       setProducts(p.data.products || []);
+      setStaff(s.data.staff || []);
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('offerLoadFailed'));
     } finally {
@@ -247,6 +268,7 @@ export default function Offers() {
       channels: offer.channels || [],
       categoryIds: offer.categoryIds || [],
       productIds: offer.productIds || [],
+      staffIds: offer.staffIds || [],
       scheduleMode: offer.scheduleMode || 'always',
       daysOfWeek: offer.daysOfWeek || [],
       timeStart: offer.timeStart || '',
@@ -306,6 +328,7 @@ export default function Offers() {
         form.offerType === 'nth_item_percent'
           ? form.productIds
           : [],
+      staffIds: form.staffIds,
       scheduleMode: form.scheduleMode,
       daysOfWeek: form.daysOfWeek,
       timeStart: form.timeStart || null,
@@ -424,6 +447,24 @@ export default function Offers() {
   const applyValidityPreset = (kind: 'today' | 'two_days' | 'week') => {
     const { validFrom, validTo } = validityPreset(kind);
     setForm((f) => ({ ...f, validityPreset: kind, validFrom, validTo }));
+  };
+
+  const applySpecificDate = (ymd: string) => {
+    if (!ymd) {
+      setForm((f) => ({ ...f, validityPreset: '', validFrom: '', validTo: '' }));
+      return;
+    }
+    const { validFrom, validTo } = validityOnDate(ymd);
+    setForm((f) => ({ ...f, validityPreset: 'date', validFrom, validTo }));
+  };
+
+  const toggleStaff = (id: string) => {
+    setForm((f) => ({
+      ...f,
+      staffIds: f.staffIds.includes(id)
+        ? f.staffIds.filter((s) => s !== id)
+        : [...f.staffIds, id],
+    }));
   };
 
   const toggleProduct = (field: 'buyProductIds' | 'getProductIds', id: string) => {
@@ -875,6 +916,45 @@ export default function Offers() {
           )}
 
           <div>
+            <p className="text-xs muted mb-1">{t('offerPosUsers')}</p>
+            <p className="text-[11px] text-stone-500 mb-2">{t('offerPosUsersHint')}</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                type="button"
+                className={`rounded-full px-3 py-1 text-xs border ${
+                  form.staffIds.length === 0
+                    ? 'bg-stone-900 text-white border-stone-900'
+                    : 'bg-white border-[var(--border)]'
+                }`}
+                onClick={() => setForm({ ...form, staffIds: [] })}
+              >
+                {t('offerPosUsersAll')}
+              </button>
+            </div>
+            {staff.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                {staff.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-[11px] border ${
+                      form.staffIds.includes(s.id)
+                        ? 'bg-amber-700 text-white border-amber-700'
+                        : 'bg-white border-[var(--border)]'
+                    }`}
+                    onClick={() => toggleStaff(s.id)}
+                  >
+                    {s.name}
+                    {s.roleName ? ` · ${s.roleName}` : ''}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs muted">{t('offerPosUsersAll')}</p>
+            )}
+          </div>
+
+          <div>
             <p className="text-xs muted mb-1">Channels (empty = all) - for pickup-only, select Pickup</p>
             <div className="flex flex-wrap gap-2">
               {[
@@ -961,6 +1041,16 @@ export default function Offers() {
                 No end date
               </button>
             </div>
+            <label className="text-sm block mb-2">
+              <span className="muted block mb-1">{t('offerSpecificDate')}</span>
+              <input
+                className="input max-w-xs"
+                type="date"
+                value={form.validityPreset === 'date' ? ymdFromIso(form.validFrom) : ''}
+                onChange={(e) => applySpecificDate(e.target.value)}
+              />
+              <span className="block text-[11px] text-stone-500 mt-1">{t('offerSpecificDateHint')}</span>
+            </label>
             {(form.validFrom || form.validTo) && (
               <p className="text-[11px] text-stone-500">
                 {form.validFrom ? formatDateTime(form.validFrom) : '…'} →{' '}
@@ -1057,6 +1147,9 @@ export default function Offers() {
                       ? ` · ${o.timeStart || '…'}-${o.timeEnd || '…'}`
                       : ''}
                     {o.channels?.length ? ` · ${o.channels.join(', ')}` : ' · all channels'}
+                    {o.staffIds?.length
+                      ? ` · ${t('offerPosUsersSelected')} (${o.staffIds.length})`
+                      : ` · ${t('offerPosUsersAll')}`}
                   </p>
                   {o.description ? <p className="text-sm mt-1 text-stone-600">{o.description}</p> : null}
                 </div>

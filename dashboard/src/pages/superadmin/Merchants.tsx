@@ -29,6 +29,7 @@ interface Merchant {
   id: string;
   name: string;
   email: string;
+  supportCode?: string | null;
   phone?: string;
   address?: string;
   city?: string;
@@ -676,7 +677,7 @@ export default function Merchants() {
         <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
         <input
           type="text"
-          placeholder="Search merchants..."
+          placeholder="Search by name, email, slug, or support ID (CH-001)…"
           value={search}
           onChange={(e) => {
             setPage(1);
@@ -696,6 +697,7 @@ export default function Merchants() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Name</th>
+                <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Support ID</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Email</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Shop</th>
                 <th className="px-3 sm:px-4 py-3 text-left text-sm font-semibold">Status</th>
@@ -713,6 +715,9 @@ export default function Merchants() {
                     <span className="cell-truncate block" title={merchant.name}>
                       {merchant.name}
                     </span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 font-mono text-sm text-teal-800 whitespace-nowrap">
+                    {merchant.supportCode || '—'}
                   </td>
                   <td className="px-3 sm:px-4 py-3 text-gray-600">
                     <span className="cell-truncate block" title={merchant.email}>

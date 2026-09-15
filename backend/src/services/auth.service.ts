@@ -11,6 +11,7 @@ import {
   businessModuleMerchantPatch,
   normalizeBusinessModule,
 } from "@/lib/business-module";
+import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
 import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
 
 export interface JWTPayload {
@@ -131,6 +132,8 @@ export class AuthService {
 
       const lockedModule = normalizeBusinessModule(businessCategory);
 
+      const supportCode = await assignMerchantSupportCode(db, "CH");
+
       // Create merchant
       const merchant = await db
         .insert(schema.merchants)
@@ -141,6 +144,8 @@ export class AuthService {
           status: "active",
           subscriptionPlan: "free",
           businessCategory: lockedModule,
+          country: "CH",
+          supportCode,
         })
         .returning();
 

@@ -60,6 +60,18 @@ function audienceMatches(
   return false;
 }
 
+/** Build chronological tray rows (unread first-class) for the panel bell modal. */
+export function buildNotificationTray<T extends { id: string }>(
+  visible: T[],
+  dismissedIds: Set<string>,
+  limit = 20
+): Array<T & { unread: boolean }> {
+  return visible.slice(0, Math.max(0, limit)).map((m) => ({
+    ...m,
+    unread: !dismissedIds.has(m.id),
+  }));
+}
+
 export class PlatformMessageService {
   static resolveViewer(user?: {
     role?: string;
@@ -74,7 +86,11 @@ export class PlatformMessageService {
     if (user.role === 'reseller' && user.resellerId) {
       return { role: 'reseller', viewerId: user.resellerId, resellerId: user.resellerId };
     }
-    if ((user.role === 'merchant' || user.role === 'staff') && user.merchantId) {
+    if (user.role === 'merchant') {
+      const merchantId = user.merchantId || user.id;
+      return { role: 'merchant', viewerId: merchantId, merchantId };
+    }
+    if (user.role === 'staff' && user.merchantId) {
       return { role: 'merchant', viewerId: user.merchantId, merchantId: user.merchantId };
     }
     return null;
@@ -175,7 +191,14 @@ export class PlatformMessageService {
 
     const visible = all.filter((m) => audienceMatches(m, viewer) && isActiveWindow(m.startsAt, m.endsAt, now));
     if (!visible.length) {
-      return { messages: [], banner: [], loginPopup: [], unreadCount: 0 };
+      return {
+        messages: [],
+        banner: [],
+        loginPopup: [],
+        whatsNew: [],
+        tray: [],
+        unreadCount: 0,
+      };
     }
 
     const ids = visible.map((m) => m.id);
@@ -188,14 +211,58 @@ export class PlatformMessageService {
     });
     const dismissed = new Set(dismissals.map((d) => d.messageId));
     const undismissed = visible.filter((m) => !dismissed.has(m.id));
+    const tray = buildNotificationTray(visible, dismissed, 20);
 
     return {
       messages: undismissed,
       banner: undismissed.filter((m) => m.showInBanner || m.kind === 'incident'),
       loginPopup: undismissed.filter((m) => m.showOnLogin && m.kind !== 'incident'),
       whatsNew: undismissed.filter((m) => m.kind === 'whats_new' || m.kind === 'announcement'),
+      tray,
       unreadCount: undismissed.length,
     };
+  }
+
+  static paginateHistory<T>(items: T[], offsetRaw: unknown, limitRaw: unknown) {
+    const offset = Math.max(0, Math.floor(Number(offsetRaw) || 0));
+    const limit = Math.min(50, Math.max(1, Math.floor(Number(limitRaw) || 20)));
+    const page = items.slice(offset, offset + limit);
+    return {
+      messages: page,
+      total: items.length,
+      offset,
+      limit,
+      hasMore: offset + page.length < items.length,
+    };
+  }
+
+  /** All published messages for the viewer, including dismissed and expired entries. */
+  static async getHistoryForViewer(viewer: PanelViewer, offsetRaw?: unknown, limitRaw?: unknown) {
+    const db = getDb();
+    const now = new Date();
+    const all = await db.query.platformMessages.findMany({
+      where: and(
+        eq(schema.platformMessages.isActive, true),
+        or(isNull(schema.platformMessages.startsAt), lte(schema.platformMessages.startsAt, now))
+      ),
+      orderBy: [desc(schema.platformMessages.createdAt)],
+      limit: 500,
+    });
+
+    const visible = all.filter((m) => audienceMatches(m, viewer));
+    const ids = visible.map((m) => m.id);
+    const dismissals = ids.length
+      ? await db.query.platformMessageDismissals.findMany({
+          where: and(
+            inArray(schema.platformMessageDismissals.messageId, ids),
+            eq(schema.platformMessageDismissals.viewerRole, viewer.role),
+            eq(schema.platformMessageDismissals.viewerId, viewer.viewerId)
+          ),
+        })
+      : [];
+    const dismissed = new Set(dismissals.map((d) => d.messageId));
+    const stamped = visible.map((m) => ({ ...m, dismissed: dismissed.has(m.id) }));
+    return PlatformMessageService.paginateHistory(stamped, offsetRaw, limitRaw);
   }
 
   static async dismiss(viewer: PanelViewer, messageId: string) {

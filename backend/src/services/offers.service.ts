@@ -2,6 +2,11 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema, type OfferRules, type OfferType } from "@/db";
 import { roundMoney2 } from "@/lib/money";
 import { MERCHANT_TZ } from "@/lib/geo";
+import {
+  isOfferListedOnPos,
+  offerStaffIds,
+  posOfferStatus,
+} from "@/lib/pos-offer-visibility";
 
 export type CartLineForOffer = {
   productId: string;
@@ -156,6 +161,7 @@ export class OffersService {
       channels?: string[];
       categoryIds?: string[];
       productIds?: string[];
+      staffIds?: string[];
       scheduleMode?: string;
       daysOfWeek?: string[];
       timeStart?: string | null;
@@ -186,6 +192,7 @@ export class OffersService {
         channels: Array.isArray(input.channels) ? input.channels : [],
         categoryIds: Array.isArray(input.categoryIds) ? input.categoryIds : [],
         productIds: Array.isArray(input.productIds) ? input.productIds : [],
+        staffIds: Array.isArray(input.staffIds) ? input.staffIds.map(String).filter(Boolean) : [],
         scheduleMode: input.scheduleMode === "days" ? "days" : "always",
         daysOfWeek: Array.isArray(input.daysOfWeek) ? input.daysOfWeek : [],
         timeStart: input.timeStart || null,
@@ -213,6 +220,7 @@ export class OffersService {
       "channels",
       "categoryIds",
       "productIds",
+      "staffIds",
       "scheduleMode",
       "daysOfWeek",
       "timeStart",
@@ -232,6 +240,11 @@ export class OffersService {
     }
     if (updates.validTo !== undefined) {
       patch.validTo = updates.validTo ? new Date(String(updates.validTo)) : null;
+    }
+    if (updates.staffIds !== undefined) {
+      patch.staffIds = Array.isArray(updates.staffIds)
+        ? (updates.staffIds as unknown[]).map(String).filter(Boolean)
+        : [];
     }
     if (patch.featured) await this.ensureOffersCategory(merchantId);
     const rows = await db
@@ -274,7 +287,26 @@ export class OffersService {
 
   static async listActivePublic(merchantId: string, at = new Date(), channel?: string) {
     const all = await this.list(merchantId);
-    return all.filter((o) => this.isOfferActiveAt(o, at, channel));
+    return all.filter(
+      (o) => this.isOfferActiveAt(o, at, channel) && offerStaffIds(o).length === 0
+    );
+  }
+
+  /**
+   * Offers the logged-in POS user should see: active today or scheduled (validFrom in the future),
+   * targeted at this staff member or all POS users. Time-of-day windows are not applied so
+   * waiters can read happy-hour terms before the window starts.
+   */
+  static async listForPos(
+    merchantId: string,
+    staffId: string | null,
+    at = new Date(),
+    ownerSeesAll = false
+  ) {
+    const all = await this.list(merchantId);
+    return all
+      .filter((o) => isOfferListedOnPos(o, at, staffId, ownerSeesAll))
+      .map((o) => ({ ...o, posStatus: posOfferStatus(o, at) }));
   }
 
   static matchesProduct(

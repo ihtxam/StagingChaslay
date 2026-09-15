@@ -1692,7 +1692,12 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { normalizeGiftCardSettings } = await import("@/lib/gift-card-settings");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-    const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+    const posCheckoutSettings = normalizePosCheckoutSettings({
+      ...(merchant.posCheckoutSettings && typeof merchant.posCheckoutSettings === "object"
+        ? (merchant.posCheckoutSettings as Record<string, unknown>)
+        : {}),
+      webposExpressEnabled: merchant.webposExpressEnabled,
+    });
     const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
 
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
@@ -1811,6 +1816,30 @@ router.get("/webpos-entitlement", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to check POS entitlement",
+    });
+  }
+});
+
+/**
+ * POST /api/merchant/webpos-activate-license
+ * Redeem a Reborn activation code (e.g. 1758-D6DD-EF5A) to unlock WebPOS.
+ */
+router.post("/webpos-activate-license", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+    const activationCode = String(req.body?.activationCode || req.body?.licenseCode || "").trim();
+    if (!activationCode) {
+      return res.status(400).json({ error: "Activation code is required" });
+    }
+    const { ChaslayCompatService } = await import("@/services/chaslay-compat.service");
+    const result = await ChaslayCompatService.redeemLicenseForMerchant(merchantId, activationCode);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to activate license",
     });
   }
 });

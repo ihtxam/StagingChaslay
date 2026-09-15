@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
@@ -45,7 +46,7 @@ const defaultProps: NavbarClassicProps = {
   textColor: '#1a1a2e',
   showButton: true,
   buttonText: 'Order Now',
-  buttonLink: '/order',
+  buttonLink: '/menu',
   buttonColor: '#e94560',
   useSitePagesNav: false,
 };
@@ -75,30 +76,30 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
         className="hb-navbar-classic"
         style={{
           backgroundColor: mergedProps.backgroundColor,
-          padding: '16px 40px',
+          padding: '16px 0',
           width: '100%',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           position: 'relative',
         }}
       >
-        <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="hb-navbar-inner" style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', minWidth: 0 }}>
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <span style={{ fontSize: '24px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>
             )}
           </div>
 
           {/* Desktop Menu + Button */}
-          <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+          <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0, flex: 1 }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#1a1a2e'} />
             {mergedProps.showButton && buttonText && (
               <a
                 href={shopHref(mergedProps.buttonLink)}
                 onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
-                style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '10px 24px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}
+                className="hb-navbar-cta" style={{ backgroundColor: mergedProps.buttonColor, color: '#fff', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
               >
                 {buttonText}
               </a>

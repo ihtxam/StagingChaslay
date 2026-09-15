@@ -169,6 +169,21 @@ export class SupportTicketService {
       actorId: input.actorId,
       resellerId: merchant.resellerId,
     });
+    if (!input.auto) {
+      try {
+        await this.createTicket(merchantId, {
+          category: 'technical',
+          subcategory: input.source === 'android' ? 'android-logs' : 'webpos-logs',
+          subject: input.subject,
+          body: input.body,
+          authorName: input.authorName,
+          authorId: input.actorId || undefined,
+          merchantVisible: true,
+        });
+      } catch (ticketErr) {
+        console.warn('[support] diagnostic ticket create failed:', ticketErr);
+      }
+    }
     return log;
   }
 

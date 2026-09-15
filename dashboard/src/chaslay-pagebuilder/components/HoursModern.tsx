@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 export interface HoursModernProps {
@@ -43,6 +44,7 @@ export const HoursModern: React.FC<HoursModernProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -60,17 +62,17 @@ export const HoursModern: React.FC<HoursModernProps> & {
     >
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '16px' }}>{mergedProps.title}</h2>
-          <p style={{ fontSize: '18px', opacity: 0.7 }}>{mergedProps.subtitle}</p>
+          <h2 style={{ fontSize: '42px', fontWeight: 700, marginBottom: '16px' }}>{tr('title')}</h2>
+          <p style={{ fontSize: '18px', opacity: 0.7 }}>{tr('subtitle')}</p>
         </div>
 
         <div className="hb-hours-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
           {schedules.map((item, i) => (
             <div key={i} style={{ backgroundColor: mergedProps.cardColor, borderRadius: '16px', padding: '28px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '32px', marginBottom: '16px' }}>{item.icon}</div>
-              <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: mergedProps.accentColor }}>{item.label}</h3>
-              <p style={{ fontSize: '14px', opacity: 0.7, marginBottom: '12px' }}>{item.days}</p>
-              <p style={{ fontSize: '16px', fontWeight: 600 }}>{item.time}</p>
+              <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: mergedProps.accentColor }}>{trText(item.label)}</h3>
+              <p style={{ fontSize: '14px', opacity: 0.7, marginBottom: '12px' }}>{trText(item.days)}</p>
+              <p style={{ fontSize: '16px', fontWeight: 600 }}>{trText(item.time)}</p>
             </div>
           ))}
         </div>

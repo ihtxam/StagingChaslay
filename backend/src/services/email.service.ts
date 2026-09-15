@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import axios from "axios";
 import sgMail from "@sendgrid/mail";
+import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
 
 export type EmailAttachment = {
@@ -21,7 +22,7 @@ export type SendEmailInput = {
   emailType?: EmailSendType | string;
 };
 
-type EmailProvider = "smtp" | "brevo" | "sendgrid" | null;
+type EmailProvider = "smtp" | "brevo" | "mailco" | "sendgrid" | null;
 
 type ResolvedEmailConfig = {
   provider: EmailProvider;
@@ -31,6 +32,16 @@ type ResolvedEmailConfig = {
   source: "merchant_smtp" | "merchant_brevo" | "database" | "env" | "none";
   smtp?: MerchantSmtpSettings | null;
   merchantId?: string | null;
+  mailco?: {
+    apiBase: string;
+    templateSlug: string;
+  };
+  /** When primary is mailco, Brevo may still be used as automatic fallback. */
+  fallbackBrevo?: {
+    apiKey: string;
+    fromEmail: string;
+    fromName: string;
+  } | null;
 };
 
 function zurichYmd(d = new Date()): string {
@@ -47,8 +58,8 @@ function zurichYm(d = new Date()): string {
 }
 
 /**
- * Prefer platform Brevo when merchant emailDeliveryMode is platform;
- * otherwise merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
+ * Prefer platform mailco (with Brevo fallback) when merchant emailDeliveryMode is platform;
+ * otherwise merchant SMTP, then merchant Brevo, then platform mailco/Brevo, then SendGrid.
  */
 export class EmailService {
   private static envBrevoApiKey() {
@@ -157,30 +168,113 @@ export class EmailService {
     let dbApiKey = "";
     let dbFromEmail = "";
     let dbFromName = "";
+    let mailcoConfigured = false;
+    let mailcoCreds: Awaited<
+      ReturnType<
+        typeof import("@/services/platform-settings.service").PlatformSettingsService.resolveMailcoCredentials
+      >
+    > | null = null;
+    let brevoCreds: Awaited<
+      ReturnType<
+        typeof import("@/services/platform-settings.service").PlatformSettingsService.resolveBrevoCredentials
+      >
+    > | null = null;
+    let emailPrimary: "mailco" | "brevo" = "mailco";
+    let mailcoFromDb = false;
+    let brevoFromDb = false;
 
     try {
       const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+      emailPrimary = await PlatformSettingsService.getPlatformEmailPrimary();
+      const mailcoSettings = await PlatformSettingsService.getMailcoSettings();
+      mailcoFromDb = !!mailcoSettings.apiKey?.trim();
+      try {
+        mailcoCreds = await PlatformSettingsService.resolveMailcoCredentials();
+        mailcoConfigured = true;
+      } catch {
+        mailcoConfigured = false;
+      }
       const s = await PlatformSettingsService.getBrevoSettings();
+      brevoFromDb = !!s.apiKey?.trim();
       dbApiKey = (s.apiKey || "").trim();
       dbFromEmail = (s.fromEmail || "").trim();
       dbFromName = (s.fromName || "").trim();
+      try {
+        brevoCreds = await PlatformSettingsService.resolveBrevoCredentials();
+      } catch {
+        brevoCreds = null;
+      }
     } catch {
       /* platform settings table may be unavailable */
     }
 
-    const apiKey = dbApiKey || this.envBrevoApiKey();
-    const fromEmail = dbFromEmail || this.envFromAddress();
+    const envBrevoKey = this.envBrevoApiKey();
+    const brevoConfigured = !!(
+      brevoCreds ||
+      (dbApiKey || envBrevoKey) && (dbFromEmail || this.envFromAddress())
+    );
+
     const fromName = merchantId
       ? this.merchantSenderName(merchantName)
       : dbFromName || this.envFromName();
-    const source: ResolvedEmailConfig["source"] = dbApiKey
-      ? "database"
-      : this.envBrevoApiKey() || process.env.SENDGRID_API_KEY
-        ? "env"
-        : "none";
 
-    if (apiKey && fromEmail) {
-      return { provider: "brevo", apiKey, fromEmail, fromName, source, merchantId };
+    const buildBrevoConfig = (): ResolvedEmailConfig | null => {
+      const apiKey = brevoCreds?.apiKey || dbApiKey || envBrevoKey;
+      const fromEmail = brevoCreds?.fromEmail || dbFromEmail || this.envFromAddress();
+      const resolvedFromName = merchantId ? fromName : brevoCreds?.fromName || dbFromName || this.envFromName();
+      if (!apiKey || !fromEmail) return null;
+      const source: ResolvedEmailConfig["source"] = brevoFromDb || dbApiKey
+        ? "database"
+        : envBrevoKey || process.env.SENDGRID_API_KEY
+          ? "env"
+          : "none";
+      return {
+        provider: "brevo",
+        apiKey,
+        fromEmail,
+        fromName: resolvedFromName,
+        source,
+        merchantId,
+      };
+    };
+
+    const buildMailcoConfig = (): ResolvedEmailConfig | null => {
+      if (!mailcoConfigured || !mailcoCreds) return null;
+      const source: ResolvedEmailConfig["source"] = mailcoFromDb ? "database" : "env";
+      const fallback = brevoConfigured ? buildBrevoConfig() : null;
+      return {
+        provider: "mailco",
+        apiKey: mailcoCreds.apiKey,
+        fromEmail: mailcoCreds.fromEmail,
+        fromName: merchantId ? fromName : mailcoCreds.fromName,
+        source,
+        merchantId,
+        mailco: {
+          apiBase: mailcoCreds.apiBase,
+          templateSlug: mailcoCreds.templateSlug,
+        },
+        fallbackBrevo: fallback
+          ? {
+              apiKey: fallback.apiKey,
+              fromEmail: fallback.fromEmail,
+              fromName: fallback.fromName,
+            }
+          : null,
+      };
+    };
+
+    const preferMailco = emailPrimary !== "brevo";
+    const mailcoCfg = buildMailcoConfig();
+    const brevoCfg = buildBrevoConfig();
+
+    if (preferMailco && mailcoCfg) {
+      return mailcoCfg;
+    }
+    if (brevoCfg) {
+      return brevoCfg;
+    }
+    if (mailcoCfg) {
+      return mailcoCfg;
     }
 
     if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
@@ -189,12 +283,12 @@ export class EmailService {
         apiKey: process.env.SENDGRID_API_KEY,
         fromEmail: process.env.SENDGRID_FROM_EMAIL,
         fromName: fromName || "Reborn",
-        source: dbApiKey ? "database" : "env",
+        source: brevoFromDb || mailcoFromDb ? "database" : "env",
         merchantId,
       };
     }
 
-    return { provider: null, apiKey: "", fromEmail, fromName, source: "none", merchantId };
+    return { provider: null, apiKey: "", fromEmail: dbFromEmail || this.envFromAddress(), fromName, source: "none", merchantId };
   }
 
   static async isConfigured(merchantId?: string | null) {
@@ -358,11 +452,21 @@ export class EmailService {
     const cfg = await this.resolveConfig(merchantId);
     let apiKeyMasked = "";
     let apiKeySet = false;
+    let mailcoPublic: Awaited<
+      ReturnType<
+        typeof import("@/services/platform-settings.service").PlatformSettingsService.getMailcoSettingsPublic
+      >
+    > | null = null;
     try {
       const { PlatformSettingsService } = await import("@/services/platform-settings.service");
       const pub = await PlatformSettingsService.getBrevoSettingsPublic();
       apiKeyMasked = pub.apiKeyMasked;
       apiKeySet = pub.apiKeySet;
+      mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
+      if (cfg.provider === "mailco" && mailcoPublic.apiKeySet) {
+        apiKeyMasked = mailcoPublic.apiKeyMasked;
+        apiKeySet = mailcoPublic.apiKeySet;
+      }
     } catch {
       apiKeySet = !!(cfg.apiKey || this.envBrevoApiKey() || process.env.SENDGRID_API_KEY);
     }
@@ -394,6 +498,9 @@ export class EmailService {
         cfg.provider === "brevo" ||
         !!this.envBrevoApiKey() ||
         apiKeySet,
+      mailcoKeySet: !!mailcoPublic?.apiKeySet,
+      mailcoConfigured: !!mailcoPublic?.configured,
+      platformEmailPrimary: mailcoPublic?.emailPrimary || "mailco",
       sendgridKeySet: !!process.env.SENDGRID_API_KEY,
       smtpEnabled: cfg.provider === "smtp",
       usingPlatformEmail:
@@ -403,36 +510,50 @@ export class EmailService {
   }
 
   static async send(input: SendEmailInput) {
-    const cfg = await this.resolveConfig(input.merchantId);
+    let cfg = await this.resolveConfig(input.merchantId);
     if (!cfg.provider) {
       throw new Error(
-        "Email is not configured. Configure platform Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email."
+        "Email is not configured. Configure platform mailco or Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email."
       );
     }
 
     const emailType = input.emailType || "general";
     const { EmailUsageService } = await import("@/services/email-usage.service");
+    const hasAttachments = !!(input.attachments && input.attachments.length > 0);
 
-    try {
-      if (cfg.provider === "smtp") {
-        await this.sendViaSmtp(cfg, input);
-      } else if (cfg.provider === "brevo") {
-        if (cfg.source === "merchant_brevo" && cfg.merchantId) {
-          await this.assertMerchantBrevoLimits(cfg.merchantId);
+    // mailco relay API is template-based; use Brevo when attachments are required.
+    if (cfg.provider === "mailco" && hasAttachments && cfg.fallbackBrevo) {
+      cfg = {
+        ...cfg,
+        provider: "brevo",
+        apiKey: cfg.fallbackBrevo.apiKey,
+        fromEmail: cfg.fallbackBrevo.fromEmail,
+        fromName: cfg.fallbackBrevo.fromName,
+      };
+    }
+
+    const logAndSend = async (activeCfg: ResolvedEmailConfig) => {
+      if (activeCfg.provider === "smtp") {
+        await this.sendViaSmtp(activeCfg, input);
+      } else if (activeCfg.provider === "brevo") {
+        if (activeCfg.source === "merchant_brevo" && activeCfg.merchantId) {
+          await this.assertMerchantBrevoLimits(activeCfg.merchantId);
         }
-        await this.sendViaBrevo(cfg, input);
-        if (cfg.source === "merchant_brevo" && cfg.merchantId) {
+        await this.sendViaBrevo(activeCfg, input);
+        if (activeCfg.source === "merchant_brevo" && activeCfg.merchantId) {
           try {
-            await this.incrementMerchantBrevoUsage(cfg.merchantId, 1);
+            await this.incrementMerchantBrevoUsage(activeCfg.merchantId, 1);
           } catch (e) {
             console.warn("[email] failed to increment Brevo usage", e);
           }
         }
-      } else {
-        sgMail.setApiKey(cfg.apiKey);
+      } else if (activeCfg.provider === "mailco") {
+        await this.sendViaMailco(activeCfg, input);
+      } else if (activeCfg.provider === "sendgrid") {
+        sgMail.setApiKey(activeCfg.apiKey);
         await sgMail.send({
           to: input.to,
-          from: cfg.fromEmail,
+          from: activeCfg.fromEmail,
           subject: input.subject,
           html: input.html,
           text: input.text || input.html.replace(/<[^>]+>/g, " "),
@@ -446,6 +567,30 @@ export class EmailService {
             disposition: "attachment",
           })),
         });
+      }
+    };
+
+    try {
+      try {
+        await logAndSend(cfg);
+      } catch (primaryError) {
+        if (
+          cfg.provider === "mailco" &&
+          cfg.fallbackBrevo &&
+          !hasAttachments
+        ) {
+          const brevoCfg: ResolvedEmailConfig = {
+            ...cfg,
+            provider: "brevo",
+            apiKey: cfg.fallbackBrevo.apiKey,
+            fromEmail: cfg.fallbackBrevo.fromEmail,
+            fromName: cfg.fallbackBrevo.fromName,
+          };
+          await logAndSend(brevoCfg);
+          cfg = brevoCfg;
+        } else {
+          throw primaryError;
+        }
       }
 
       await EmailUsageService.logSend({
@@ -502,29 +647,58 @@ export class EmailService {
     });
   }
 
-  private static async sendViaSmtp(cfg: ResolvedEmailConfig, input: SendEmailInput) {
-    const smtp = cfg.smtp || {};
-    const port = Number(smtp.port) || (smtp.secure ? 465 : 587);
-    const transporter = nodemailer.createTransport({
-      host: String(smtp.host || "").trim(),
-      port,
-      secure: !!smtp.secure || port === 465,
-      auth:
-        smtp.user || smtp.password
-          ? {
-              user: String(smtp.user || "").trim(),
-              pass: String(smtp.password || ""),
-            }
-          : undefined,
-    });
+  private static async sendViaMailco(cfg: ResolvedEmailConfig, input: SendEmailInput) {
+    const mailco = cfg.mailco;
+    if (!mailco) {
+      throw new Error("mailco configuration is missing");
+    }
 
-    await transporter.sendMail({
-      from: `"${cfg.fromName || "Shop"}" <${cfg.fromEmail}>`,
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      text: input.text || input.html.replace(/<[^>]+>/g, " "),
-    });
+    const text = input.text || input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const idempotencyKey = randomUUID();
+
+    try {
+      await axios.post(
+        `${mailco.apiBase}/messages`,
+        {
+          from: {
+            email: cfg.fromEmail,
+            name: cfg.fromName || "Reborn",
+          },
+          to: [{ email: input.to }],
+          template: mailco.templateSlug,
+          data: {
+            subject: input.subject,
+            html: input.html,
+            text,
+          },
+          metadata: {
+            email_type: String(input.emailType || "general"),
+            merchant_id: cfg.merchantId ? String(cfg.merchantId) : "",
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cfg.apiKey}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Idempotency-Key": idempotencyKey,
+          },
+          timeout: 20000,
+          validateStatus: (status) => status >= 200 && status < 300,
+        }
+      );
+    } catch (error: any) {
+      const data = error?.response?.data;
+      const detail =
+        (typeof data === "object" && data !== null
+          ? (data as { message?: string; code?: string }).message ||
+            (data as { code?: string }).code
+          : null) ||
+        (typeof data === "string" ? data : null) ||
+        error?.message ||
+        "mailco send failed";
+      throw new Error(typeof detail === "string" ? detail : "mailco send failed");
+    }
   }
 
   private static async sendViaBrevo(cfg: ResolvedEmailConfig, input: SendEmailInput) {

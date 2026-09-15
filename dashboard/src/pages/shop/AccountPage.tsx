@@ -17,6 +17,7 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopAccountGuestAuth from '@/components/shop/ShopAccountGuestAuth';
 
 type LoyaltyReward = {
   id: string;
@@ -80,9 +81,9 @@ export default function AccountPage() {
   const [catalog, setCatalog] = useState<Map<string, MenuProduct>>(new Map());
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [merchantInfo, setMerchantInfo] = useState<{ name?: string; shopLogoUrl?: string | null } | null>(
+    null
+  );
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -144,6 +145,13 @@ export default function AccountPage() {
       try {
         if (!token) {
           setCustomer(null);
+          try {
+            const menuRes = await axios.get(`/api/shop/${shopKey}/menu`);
+            const m = menuRes.data?.merchant || menuRes.data?.store;
+            if (m) setMerchantInfo({ name: m.name, shopLogoUrl: m.shopLogoUrl });
+          } catch {
+            /* optional */
+          }
           return;
         }
         await loadAll(token);
@@ -156,25 +164,6 @@ export default function AccountPage() {
     };
     void boot();
   }, [shopKey]);
-
-  const onLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!shopKey) return;
-    setLoggingIn(true);
-    setError('');
-    try {
-      const res = await axios.post(`/api/shop/${shopKey}/auth/login`, {
-        email: loginEmail,
-        password: loginPassword,
-      });
-      saveCustomerToken(shopKey, res.data.token);
-      await loadAll(res.data.token);
-    } catch (err: any) {
-      setError(err.response?.data?.error || t('shopLoginFailed'));
-    } finally {
-      setLoggingIn(false);
-    }
-  };
 
   const onSaveProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -388,43 +377,25 @@ export default function AccountPage() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <main className={customer ? 'max-w-2xl mx-auto px-4 py-6 space-y-5' : ''}>
         {!customer ? (
-          <section className="bg-white border border-stone-200 p-5 space-y-4">
-            <h1 className="text-xl font-bold">{t('shopLoginToContinue')}</h1>
-            <form onSubmit={onLogin} className="space-y-3">
-              <input
-                className="w-full border border-stone-300 px-3 py-2.5 text-sm"
-                type="email"
-                placeholder={t('shopEmail')}
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-              />
-              <input
-                className="w-full border border-stone-300 px-3 py-2.5 text-sm"
-                type="password"
-                placeholder={t('shopPassword')}
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-              />
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={loggingIn}
-                className="w-full bg-stone-900 text-white py-3 font-semibold disabled:opacity-40"
-              >
-                {loggingIn ? t('shopLoading') : t('shopLogIn')}
-              </button>
-            </form>
-            <p className="text-sm text-stone-500">
-              {t('shopHaveAccount')}{' '}
-              <Link to={`${base}/checkout`} className="underline font-medium text-stone-900">
-                {t('shopCreateAccount')}
-              </Link>
-            </p>
-          </section>
+          <ShopAccountGuestAuth
+            shopKey={shopKey}
+            base={base}
+            merchantName={merchantInfo?.name || 'Shop'}
+            logoUrl={merchantInfo?.shopLogoUrl}
+            onAuthed={async (token) => {
+              setLoading(true);
+              setError('');
+              try {
+                await loadAll(token);
+              } catch {
+                setError(t('shopLoginFailed'));
+              } finally {
+                setLoading(false);
+              }
+            }}
+          />
         ) : (
           <>
             <section className="bg-white border border-stone-200 p-5 space-y-3">

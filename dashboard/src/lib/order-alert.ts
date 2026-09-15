@@ -35,6 +35,10 @@ function tone(ctx: AudioContext, freq: number, start: number, dur: number, gain 
 export function playOrderAlertOnce(): void {
   const ctx = getCtx();
   if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    void ctx.resume().then(() => playOrderAlertOnce());
+    return;
+  }
   const t0 = ctx.currentTime + 0.02;
   tone(ctx, 880, t0, 0.18, 0.2);
   tone(ctx, 1175, t0 + 0.2, 0.18, 0.2);

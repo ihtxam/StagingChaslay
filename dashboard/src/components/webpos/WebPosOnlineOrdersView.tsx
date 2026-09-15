@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
+  canCancelOrder,
   canCollectPayment,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
@@ -54,7 +55,7 @@ type Props = {
 
 function isArchiveStatus(status: string) {
   const s = status.toLowerCase();
-  return s === 'cancelled' || s === 'refunded';
+  return s === 'cancelled' || s === 'refunded' || s === 'rejected';
 }
 
 function categoryTags(order: CenterOrder): string[] {
@@ -157,7 +158,10 @@ export default function WebPosOnlineOrdersView({
     if (tab === 'active') {
       list = list.filter((o) => isActiveOnlineOrder(o));
     } else if (tab === 'completed') {
-      list = list.filter((o) => o.status?.toLowerCase().trim() === 'completed');
+      list = list.filter((o) => {
+        const s = o.status?.toLowerCase().trim();
+        return s === 'completed' || s === 'partially_refunded';
+      });
     } else {
       list = list.filter((o) => isArchiveStatus(o.status));
     }
@@ -170,6 +174,21 @@ export default function WebPosOnlineOrdersView({
   }, [orders, tab, platform, search]);
 
   const money = (n: string | number) => `CHF ${Number(n || 0).toFixed(2)}`;
+
+  const archiveButton = (o: CenterOrder) => {
+    if (!canCancelOrder(o as MerchantOrder)) return null;
+    const busy = busyId === o.id;
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+        onClick={() => void runAction(o, 'archive', { rejectReason: t('orderCenterArchive') })}
+      >
+        {t('orderCenterArchive')}
+      </button>
+    );
+  };
 
   const renderActions = (o: CenterOrder) => {
     const status = o.status;
@@ -213,46 +232,57 @@ export default function WebPosOnlineOrdersView({
           >
             {t('webPosWorkflowReady')}
           </button>
+          {archiveButton(o)}
         </div>
       );
     }
     if (status === 'ready' || status === 'out_for_delivery') {
       if (canCollectPayment(o as MerchantOrder)) {
         return (
-          <button
-            type="button"
-            disabled={busy}
-            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
-            onClick={() => onCollectPayment?.(o)}
-          >
-            {t('webPosTakePayment')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
+              onClick={() => onCollectPayment?.(o)}
+            >
+              {t('webPosTakePayment')}
+            </button>
+            {archiveButton(o)}
+          </div>
         );
       }
       if (!isPaidOrder(o as MerchantOrder) && isAwaitingPaymentOrder(o as MerchantOrder)) {
         return (
-          <button
-            type="button"
-            disabled={busy}
-            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
-            onClick={() => onCollectPayment?.(o)}
-          >
-            {t('webPosTakePayment')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
+              onClick={() => onCollectPayment?.(o)}
+            >
+              {t('webPosTakePayment')}
+            </button>
+            {archiveButton(o)}
+          </div>
         );
       }
       return (
-        <button
-          type="button"
-          disabled={busy}
-          className="rounded-lg bg-stone-800 px-3 py-2 text-xs font-bold text-white hover:bg-stone-900 disabled:opacity-50"
-          onClick={() => void runAction(o, 'complete')}
-        >
-          {t('webPosWorkflowDone')}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            className="rounded-lg bg-stone-800 px-3 py-2 text-xs font-bold text-white hover:bg-stone-900 disabled:opacity-50"
+            onClick={() => void runAction(o, 'complete')}
+          >
+            {t('webPosWorkflowDone')}
+          </button>
+          {archiveButton(o)}
+        </div>
       );
     }
-    return null;
+    const extra = archiveButton(o);
+    return extra ? <div className="flex flex-wrap gap-2">{extra}</div> : null;
   };
 
   return (

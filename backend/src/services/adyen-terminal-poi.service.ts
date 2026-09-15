@@ -332,7 +332,9 @@ function shouldRetryLegacy(message: string): boolean {
   return (
     /HTTP 404/i.test(message) ||
     /00_403/i.test(message) ||
-    /HTTP 403/i.test(message)
+    /HTTP 403/i.test(message) ||
+    /\(403\)/.test(message) ||
+    /rejected the request \(403\)/i.test(message)
   );
 }
 

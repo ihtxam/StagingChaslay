@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { StaffService } from "@/services/staff.service";
-import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { ALL_PERMISSIONS, normalizePermissions } from "@/lib/permissions";
 
 const router = Router();
 
@@ -29,7 +29,7 @@ router.get("/roles", requireStaffManage, async (req: Request, res: Response) => 
       roles: roles.map((r) => ({
         id: r.id,
         name: r.name,
-        permissions: r.permissions.split(",").filter(Boolean),
+        permissions: normalizePermissions(r.permissions),
         isSystem: r.isSystem,
         sortOrder: r.sortOrder,
       })),
@@ -43,7 +43,7 @@ router.post("/roles", requireStaffManage, async (req: Request, res: Response) =>
   try {
     const merchantId = req.merchantId!;
     const { name, permissions } = req.body;
-    const role = await StaffService.createRole(merchantId, name, (permissions || []) as Permission[]);
+    const role = await StaffService.createRole(merchantId, name, normalizePermissions(permissions));
     res.json({ success: true, role });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create role" });
@@ -56,7 +56,7 @@ router.put("/roles/:roleId", requireStaffManage, async (req: Request, res: Respo
     const { name, permissions } = req.body;
     const role = await StaffService.updateRole(merchantId, req.params.roleId, {
       name,
-      permissions: permissions as Permission[] | undefined,
+      permissions: permissions !== undefined ? normalizePermissions(permissions) : undefined,
     });
     res.json({ success: true, role });
   } catch (error) {

@@ -223,6 +223,36 @@ router.put("/platform-settings/brevo", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/platform-settings/mailco
+ */
+router.get("/platform-settings/mailco", async (_req: Request, res: Response) => {
+  try {
+    const mailco = await PlatformSettingsService.getMailcoSettingsPublic();
+    res.json({ success: true, mailco });
+  } catch (error) {
+    console.error("Error getting platform mailco settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load mailco settings",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/mailco
+ */
+router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
+  try {
+    const mailco = await PlatformSettingsService.updateMailcoSettings(req.body || {});
+    res.json({ success: true, mailco });
+  } catch (error) {
+    console.error("Error updating platform mailco settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save mailco settings",
+    });
+  }
+});
+
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req: Request, res: Response) => {
@@ -239,7 +269,7 @@ router.get("/email/usage", async (_req: Request, res: Response) => {
 });
 
 /**
- * POST /api/superadmin/email/test — send a test email via platform Brevo
+ * POST /api/superadmin/email/test — send a test email via platform mailco (Brevo fallback)
  */
 router.post("/email/test", async (req: Request, res: Response) => {
   try {
@@ -249,13 +279,17 @@ router.post("/email/test", async (req: Request, res: Response) => {
       return;
     }
     const { EmailService } = await import("@/services/email.service");
+    const status = await EmailService.status();
     await EmailService.send({
       to,
       subject: "Reborn platform email test",
-      html: "<p>This is a test email from Reborn platform Brevo.</p>",
+      html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
       emailType: "marketing_test",
     });
-    res.json({ success: true });
+    res.json({
+      success: true,
+      provider: status.provider,
+    });
   } catch (error) {
     console.error("Error sending platform test email:", error);
     res.status(400).json({
@@ -267,6 +301,20 @@ router.post("/email/test", async (req: Request, res: Response) => {
 // ============================================================================
 // MERCHANT MANAGEMENT
 // ============================================================================
+
+/**
+ * POST /api/superadmin/merchants/backfill-support-codes
+ * Assign CH-001 / UK-001 style codes to merchants missing one.
+ */
+router.post("/merchants/backfill-support-codes", async (_req: Request, res: Response) => {
+  try {
+    const result = await MerchantService.backfillSupportCodes();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Error backfilling support codes:", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Backfill failed" });
+  }
+});
 
 /**
  * GET /api/superadmin/merchants
@@ -1401,6 +1449,28 @@ router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Respo
     res.json({ success: true, voucher });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update voucher" });
+  }
+});
+
+router.delete("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.deleteVoucher(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to delete voucher";
+    res.status(msg === "Voucher not found" ? 404 : 400).json({ error: msg });
+  }
+});
+
+router.get("/platform-shop/vouchers/:voucherId/usage", async (req: Request, res: Response) => {
+  try {
+    const { PlatformShopService } = await import("@/services/platform-shop.service");
+    const result = await PlatformShopService.listVoucherUsage(req.params.voucherId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to load voucher usage";
+    res.status(msg === "Voucher not found" ? 404 : 500).json({ error: msg });
   }
 });
 

@@ -209,13 +209,6 @@ export default function WebPosCashMovementModal({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-stone-800">{t('webPosCashDetails')}</h3>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-[var(--webpos-accent)]"
-                  onClick={() => setShowDetails(false)}
-                >
-                  {t('webPosCashBackToForm')}
-                </button>
               </div>
               {loadingDetails ? (
                 <p className="text-sm text-stone-500">{t('loading')}</p>

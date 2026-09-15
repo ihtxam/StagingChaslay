@@ -5,6 +5,7 @@ import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
 import { isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
+import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
@@ -30,6 +31,7 @@ import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
+import CustomerDisplayPage from '@/pages/CustomerDisplayPage';
 import KioskApp from '@/pages/kiosk/KioskApp';
 import KioskLaunchRedirect from '@/pages/kiosk/KioskLaunchRedirect';
 import KioskTokenAdminPage from '@/pages/kiosk/KioskTokenAdminPage';
@@ -51,7 +53,8 @@ function isWebPosRoute(pathname: string): boolean {
   return (
     /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
     /^\/kds(?:\/|$)/.test(pathname) ||
-    /^\/tv(?:\/|$)/.test(pathname)
+    /^\/tv(?:\/|$)/.test(pathname) ||
+    /^\/cds(?:\/|$)/.test(pathname)
   );
 }
 
@@ -320,6 +323,14 @@ function App() {
             }
           />
           <Route
+            path="/cds/:token"
+            element={
+              <I18nProvider storageKey={CDS_LANG_KEY}>
+                <CustomerDisplayPage />
+              </I18nProvider>
+            }
+          />
+          <Route
             path="/tv/:token"
             element={
               <I18nProvider storageKey={PANEL_LANG_KEY}>
@@ -416,6 +427,22 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/register"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/forgot-password"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug/reservations"
             element={
               <ShopRoutes>
@@ -488,6 +515,22 @@ function App() {
               />
               <Route
                 path="/:merchantSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/forgot-password"
                 element={
                   <ShopRoutes>
                     <AccountPage />
@@ -600,6 +643,22 @@ function App() {
                 }
               />
               <Route
+                path="/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/forgot-password"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -698,6 +757,22 @@ function App() {
               />
               <Route
                 path="/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/forgot-password"
                 element={
                   <ShopRoutes>
                     <AccountPage />

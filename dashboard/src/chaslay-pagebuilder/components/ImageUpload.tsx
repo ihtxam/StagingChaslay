@@ -1,13 +1,14 @@
 // @ts-nocheck
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Upload, X, Link } from 'lucide-react';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
 import { uploadPageBuilderImage } from '@/lib/chaslay-pagebuilder/upload-image';
+import { normalizeMediaUrl } from '../utils/media-url';
 
 interface ImageUploadProps {
   value?: string;
@@ -31,6 +32,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const displayUrl = useMemo(() => normalizeMediaUrl(value), [value]);
 
   const aspectRatioClass = {
     square: 'aspect-square',
@@ -66,7 +68,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         targetBytes: Math.min(maxSizeKB * 1024, 320 * 1024),
         maxWidth: aspectRatio === 'auto' ? 1200 : 1800,
       });
-      onChange(url);
+      onChange(normalizeMediaUrl(url));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload image';
       setError(message);
@@ -79,11 +81,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleUrlSubmit = () => {
-    if (urlInput.trim()) {
-      onChange(urlInput.trim());
-      setUrlInput('');
-      setIsUrlMode(false);
-    }
+    const url = normalizeMediaUrl(urlInput);
+    if (!url) return;
+    setError(null);
+    onChange(normalizeMediaUrl(url));
+    setUrlInput('');
+    setIsUrlMode(false);
   };
 
   const handleRemove = () => {
@@ -95,16 +98,17 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     <div className={cn('space-y-2', className)}>
       {label && <Label>{label}</Label>}
 
-      {value ? (
+      {displayUrl ? (
         <div className="relative group">
           <div className={cn('relative overflow-hidden rounded-lg border bg-muted', aspectRatioClass[aspectRatio])}>
             <img
-              src={value}
+              src={displayUrl}
               alt="Uploaded"
               className="w-full h-full object-cover"
               loading="lazy"
               decoding="async"
-              onError={() => setError('Failed to load image')}
+              referrerPolicy="no-referrer"
+              onError={() => setError('Failed to load image. Check the URL is a direct image link.')}
             />
           </div>
           <Button
@@ -126,6 +130,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://example.com/image.jpg"
                   className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleUrlSubmit();
+                    }
+                  }}
                 />
                 <Button onClick={handleUrlSubmit} size="sm">
                   Add

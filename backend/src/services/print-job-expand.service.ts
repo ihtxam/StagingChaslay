@@ -100,6 +100,8 @@ export class PrintJobExpandService {
       printNotification?: boolean;
       printDeliveryReceipt?: boolean;
       orderSource?: string;
+      /** Online/reservation arrival — ignore master auto-print receipt/kitchen toggles */
+      independentOfMasterAutoPrint?: boolean;
     }
   ) {
     const db = getDb();
@@ -116,6 +118,7 @@ export class PrintJobExpandService {
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
     const paper = printSettings.paperWidthMm === 58 ? 58 : 80;
     const source = String(opts.orderSource || order.orderSource || "online_shop");
+    const bypass = opts.independentOfMasterAutoPrint === true;
     const items = (order.items || []).map((i) => ({
       name: String(i.productName || "Item"),
       quantity: Number(i.quantity) || 1,
@@ -125,7 +128,7 @@ export class PrintJobExpandService {
     const jobs: Array<{ target: EscPosTarget; bytes: Buffer; jobKind: "kitchen" | "receipt"; alertKind: string }> =
       [];
 
-    if (opts.printKitchen && printSettings.autoPrintKitchen !== false) {
+    if (opts.printKitchen && (bypass || printSettings.autoPrintKitchen !== false)) {
       for (const printer of printersForRole(printSettings.printers, "kitchen", paper)) {
         jobs.push({
           target: printer,
@@ -147,7 +150,7 @@ export class PrintJobExpandService {
       }
     }
 
-    if (opts.printNotification && printSettings.autoPrintReceipt !== false) {
+    if (opts.printNotification && (bypass || printSettings.autoPrintReceipt !== false)) {
       for (const printer of printersForRole(printSettings.printers, "receipt", paper)) {
         jobs.push({
           target: printer,
@@ -169,7 +172,7 @@ export class PrintJobExpandService {
       }
     }
 
-    if (opts.printDeliveryReceipt && printSettings.autoPrintReceipt !== false) {
+    if (opts.printDeliveryReceipt && (bypass || printSettings.autoPrintReceipt !== false)) {
       for (const printer of printersForRole(printSettings.printers, "receipt", paper)) {
         jobs.push({
           target: printer,

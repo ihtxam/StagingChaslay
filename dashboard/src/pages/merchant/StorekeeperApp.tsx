@@ -95,6 +95,15 @@ type SavedLabel = {
   price?: string;
 };
 
+const FALLBACK_UNITS: Unit[] = [
+  { code: 'kg', name: 'Kilogram' },
+  { code: 'g', name: 'Gram' },
+  { code: 'L', name: 'Liter' },
+  { code: 'ml', name: 'Milliliter' },
+  { code: 'piece', name: 'Piece' },
+  { code: 'pack', name: 'Pack' },
+];
+
 export default function StorekeeperApp() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -105,7 +114,7 @@ export default function StorekeeperApp() {
   const [pinMode, setPinMode] = useState<'gate' | 'switch'>('gate');
   const [licensed, setLicensed] = useState<boolean | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [units, setUnits] = useState<Unit[]>(FALLBACK_UNITS);
   const [barcode, setBarcode] = useState('');
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('piece');
@@ -168,6 +177,8 @@ export default function StorekeeperApp() {
 
   const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
 
+  const unitOptions = units.length ? units : FALLBACK_UNITS;
+
   const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
 
   const loadBootstrap = useCallback(async () => {
@@ -176,7 +187,8 @@ export default function StorekeeperApp() {
       const res = await api.get('/merchant/storekeeper/bootstrap', { headers: apiHeaders });
       setLicensed(res.data.enabled !== false);
       setCategories(res.data.categories || []);
-      setUnits(res.data.units || []);
+      const loadedUnits = (res.data.units || []).length ? res.data.units : FALLBACK_UNITS;
+      setUnits(loadedUnits);
       setStoreName(String(res.data.storeName || '').trim());
       const label = res.data.labelPrint || {};
       setLabelOpts({
@@ -190,12 +202,15 @@ export default function StorekeeperApp() {
         showSku: label.showSku === true,
       });
       setPosPrintSettings(res.data.posPrintSettings || null);
-      if (res.data.units?.[0]?.code) setUnit((u) => u || res.data.units[0].code);
+      if (loadedUnits[0]?.code) {
+        setUnit((u) => (loadedUnits.some((x: Unit) => u && x.code === u) ? u : loadedUnits[0].code));
+      }
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
       setLicensed(
         code === 'STOREKEEPER_ADDON_REQUIRED' || code === 'INVENTORY_ADDON_REQUIRED' ? false : null
       );
+      setUnits(FALLBACK_UNITS);
     }
   }, [clockedIn, apiHeaders]);
 
@@ -711,7 +726,7 @@ export default function StorekeeperApp() {
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
             >
-              {units.map((u) => (
+              {unitOptions.map((u) => (
                 <option key={u.code} value={u.code}>
                   {u.name}
                 </option>

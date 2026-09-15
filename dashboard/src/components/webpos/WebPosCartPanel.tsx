@@ -296,14 +296,8 @@ export default function WebPosCartPanel({
       }
     };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    window.addEventListener('orientationchange', close);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('orientationchange', close);
     };
   }, [moreOpen]);
 
@@ -568,6 +562,14 @@ export default function WebPosCartPanel({
               >
                 {customerLabel}
               </span>
+            ) : !isRetail ? (
+              <button
+                type="button"
+                className="min-w-0 truncate text-[11px] font-semibold text-stone-500 hover:text-stone-800"
+                onClick={onCustomer}
+              >
+                {t('webPosAddClient')}
+              </button>
             ) : null}
           </div>
           <button
@@ -1116,7 +1118,7 @@ export default function WebPosCartPanel({
         </div>
 
         <div
-          className={`grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
+          className={`shrink-0 grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
             isRetail
               ? isPage && onBack
                 ? 'grid-cols-[auto_1fr_1fr]'
@@ -1198,7 +1200,14 @@ export default function WebPosCartPanel({
                   {onHoldOrder ? t('webPosHoldOrder') : t('webPosNew')}
                 </button>
               ) : (
-                <div />
+                <button
+                  type="button"
+                  disabled={!canCancelOrder || busy}
+                  onClick={onCancelOrder}
+                  className={`${actionBtn()} bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40`}
+                >
+                  {t('webPosCancelOrder')}
+                </button>
               )}
               {kitchenEnabled && !isRetail ? (
                 <button

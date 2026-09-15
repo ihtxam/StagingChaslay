@@ -7,6 +7,7 @@ import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { ImageUpload } from './ImageUpload';
+import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { MenuItemsEditor } from './MenuItemsEditor';
 import { normalizeLink } from '../utils/normalizeLink';
@@ -65,16 +66,16 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
         className="hb-navbar-minimal"
         style={{
           backgroundColor: mergedProps.backgroundColor,
-          padding: '24px 40px',
+          padding: '24px 0',
           width: '100%',
           position: 'relative',
         }}
       >
-        <div style={{ maxWidth: '1350px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
           <div>
             {mergedProps.logoImageUrl ? (
-              <img src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
             ) : (
               <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{logoText}</span>
             )}

@@ -69,9 +69,12 @@ function balanceLabel(card: MemberCard, t: (k: string) => string): string {
     const req = card.membershipPlan.stampsRequired || 6;
     return `${card.stampCount ?? 0} / ${req} ${t('membershipStamps')}`;
   }
-  if (Number(card.balance || 0) > 0 || !card.membershipEnabled) {
-    return `CHF ${Number(card.balance || 0).toFixed(2)}`;
+  const stored = Number(card.balance || 0);
+  const sell = Number(card.membershipPlan?.sellPrice || 0);
+  if (stored > 0 || !card.membershipEnabled) {
+    return `CHF ${stored.toFixed(2)}`;
   }
+  if (sell > 0) return `CHF ${sell.toFixed(2)}`;
   if ((card.pointsBalance ?? 0) > 0) return `${card.pointsBalance} ${t('points')}`;
   return '—';
 }

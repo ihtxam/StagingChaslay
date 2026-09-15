@@ -6,6 +6,7 @@ import { useNode } from '@craftjs/core';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { TranslatableInput } from './TranslatableInput';
+import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 
 interface SocialLink {
@@ -61,6 +62,7 @@ export const FooterMinimal: React.FC<FooterMinimalProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
   return (
@@ -78,7 +80,7 @@ export const FooterMinimal: React.FC<FooterMinimalProps> & {
       }}
     >
       <div className="hb-footer-minimal" style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <p style={{ fontSize: '14px', opacity: 0.8 }}>{mergedProps.copyrightText}</p>
+        <p style={{ fontSize: '14px', opacity: 0.8 }}>{tr('copyrightText')}</p>
         <div style={{ display: 'flex', gap: '16px' }}>
           {mergedProps.socialLinks?.map((social, i) => (
             <a key={i} href={social.url} style={{ color: mergedProps.textColor, opacity: 0.6 }}>

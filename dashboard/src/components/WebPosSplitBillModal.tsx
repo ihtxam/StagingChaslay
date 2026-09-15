@@ -17,6 +17,12 @@ export type SplitPart = {
   lineIds: string[];
   /** Per-line quantity assigned to this part (supports partial splits). */
   lineQtys?: Record<string, number>;
+  linesSnapshot?: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
 };
 
 type Props = {

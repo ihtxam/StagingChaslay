@@ -151,6 +151,7 @@ export class EmailUsageService {
 
     const { PlatformSettingsService } = await import("@/services/platform-settings.service");
     const brevoPublic = await PlatformSettingsService.getBrevoSettingsPublic();
+    const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
 
     let account: Awaited<
       ReturnType<typeof import("@/services/email.service").EmailService.fetchBrevoAccount>
@@ -188,6 +189,8 @@ export class EmailUsageService {
         count: Number(r.count || 0),
       })),
       brevo: brevoPublic,
+      mailco: mailcoPublic,
+      platformEmailPrimary: mailcoPublic.emailPrimary,
       account,
     };
   }

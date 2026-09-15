@@ -164,12 +164,24 @@ export function loadCart(shopKey: string): ShopCheckoutDraft | null {
   }
 }
 
+export const SHOP_CART_EVENT = 'manupos:shop-cart';
+
+function emitCartChange(shopKey: string) {
+  try {
+    window.dispatchEvent(new CustomEvent(SHOP_CART_EVENT, { detail: { shopKey } }));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function saveCart(shopKey: string, draft: ShopCheckoutDraft) {
   localStorage.setItem(cartStorageKey(shopKey), JSON.stringify(draft));
+  emitCartChange(shopKey);
 }
 
 export function clearCart(shopKey: string) {
   localStorage.removeItem(cartStorageKey(shopKey));
+  emitCartChange(shopKey);
 }
 
 export function emptyDraft(channel: ShopChannel = 'takeaway'): ShopCheckoutDraft {

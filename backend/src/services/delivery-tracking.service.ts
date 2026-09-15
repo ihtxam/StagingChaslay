@@ -1,8 +1,19 @@
-import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { ensureMerchantTables } from "@/lib/ensure-merchant-schema";
 
 const STALE_MS = 3 * 60 * 1000;
+
+/** Shop/3P payloads sometimes store Delivery / DELIVERY instead of delivery. */
+export function isDeliveryFulfillmentChannel(channel?: string | null): boolean {
+  const s = String(channel || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return s === "delivery" || s === "deliver" || s.startsWith("delivery");
+}
+
+const deliveryChannelSql = sql`lower(coalesce(${schema.orders.fulfillmentChannel}, '')) in ('delivery', 'deliver')`;
 
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
@@ -144,7 +155,7 @@ export class DeliveryTrackingService {
     const activeOrders = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
-        eq(schema.orders.fulfillmentChannel, "delivery"),
+        deliveryChannelSql,
         inArray(schema.orders.status, ["ready", "out_for_delivery"]),
         inArray(schema.orders.assignedDeliveryStaffId, staffIds)
       ),
@@ -186,7 +197,7 @@ export class DeliveryTrackingService {
     const rows = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
-        eq(schema.orders.fulfillmentChannel, "delivery"),
+        deliveryChannelSql,
         or(
           eq(schema.orders.status, "ready"),
           eq(schema.orders.status, "out_for_delivery"),
@@ -294,7 +305,7 @@ export class DeliveryTrackingService {
       columns: { deliveryTrackingToken: true, fulfillmentChannel: true },
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     if (order.deliveryTrackingToken) return order.deliveryTrackingToken;
@@ -314,7 +325,7 @@ export class DeliveryTrackingService {
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Only delivery orders can be assigned to a driver");
     }
 
@@ -322,17 +333,21 @@ export class DeliveryTrackingService {
       const staff = await db.query.merchantStaff.findFirst({
         where: and(
           eq(schema.merchantStaff.id, staffId),
-          eq(schema.merchantStaff.merchantId, merchantId),
-          eq(schema.merchantStaff.isActive, true)
+          eq(schema.merchantStaff.merchantId, merchantId)
         ),
       });
       if (!staff) throw new Error("Staff member not found");
+      if (staff.isActive === false) throw new Error("Staff member is inactive");
     }
 
-    await db
-      .update(schema.orders)
-      .set({ assignedDeliveryStaffId: staffId })
-      .where(eq(schema.orders.id, orderId));
+    try {
+      await db
+        .update(schema.orders)
+        .set({ assignedDeliveryStaffId: staffId })
+        .where(eq(schema.orders.id, orderId));
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : "Failed to assign driver");
+    }
 
     await this.ensureDeliveryTrackingToken(merchantId, orderId);
 
@@ -352,7 +367,7 @@ export class DeliveryTrackingService {
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     const expected = order.deliveryTrackingToken || (await this.ensureDeliveryTrackingToken(merchantId, orderId));
@@ -431,7 +446,7 @@ export class DeliveryTrackingService {
         estimatedReadyAt: true,
       },
     });
-    if (!order || order.fulfillmentChannel !== "delivery") {
+    if (!order || !isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Order not found");
     }
     if (!order.deliveryTrackingToken || order.deliveryTrackingToken !== token) {
@@ -514,7 +529,7 @@ export class DeliveryTrackingService {
     if (order.assignedDeliveryStaffId !== staffId) {
       throw new Error("This delivery is not assigned to you");
     }
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     await this.advanceDeliveryForDriver(merchantId, orderId);
@@ -540,7 +555,7 @@ export class DeliveryTrackingService {
     if (order.assignedDeliveryStaffId !== staffId) {
       throw new Error("This delivery is not assigned to you");
     }
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     if (["cancelled", "refunded", "completed"].includes(String(order.status))) {
@@ -566,7 +581,7 @@ export class DeliveryTrackingService {
 
     let order = await read();
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
 

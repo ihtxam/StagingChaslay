@@ -70,7 +70,7 @@ router.post("/location", requirePermission("DELIVERY_ORDERS"), async (req: Reque
 /** GET /api/merchant/delivery/live — map panel: drivers + orders */
 router.get(
   "/live",
-  requirePermission("VIEW_DELIVERY_TRACKING"),
+  requirePermission("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "DELIVERY_ORDERS"),
   async (req: Request, res: Response) => {
     try {
       const merchantId = req.merchantId;
@@ -92,7 +92,7 @@ router.get(
 /** POST /api/merchant/delivery/orders/:orderId/assign */
 router.post(
   "/orders/:orderId/assign",
-  requirePermission("VIEW_DELIVERY_TRACKING"),
+  requirePermission("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "DELIVERY_ORDERS"),
   async (req: Request, res: Response) => {
     try {
       const merchantId = req.merchantId;

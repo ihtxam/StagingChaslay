@@ -17,17 +17,16 @@ export function merchantWebOrderCode(merchantId: string): string {
   return compact.padStart(4, "0");
 }
 
-/** Display-friendly web order number — shortens legacy WEB-{timestamp}-{suffix} values. */
+/** Display-friendly web order number — keeps scoped WEB-CODE-SEQ; shortens legacy timestamps. */
 export function formatWebOrderNumberDisplay(orderNumber: string): string {
   const n = String(orderNumber || "").trim();
   if (!n) return n;
   if (SHORT_WEB_RE.test(n)) return n;
-  const scoped = n.match(SCOPED_WEB_RE);
-  if (scoped) return `WEB-${scoped[2]}`;
+  if (SCOPED_WEB_RE.test(n)) return n;
   const legacy = n.match(LEGACY_WEB_RE);
   if (legacy) {
     if (legacy[2]) return `WEB-${legacy[2]}`;
-    return `WEB-${legacy[1].slice(-4)}`;
+    return `WEB-${legacy[1].slice(-8)}`;
   }
   return n;
 }

@@ -676,7 +676,7 @@ export class InventoryService {
     });
     const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
     const printSettings = normalizePosPrintSettings(merchant?.posPrintSettings);
-    const [categories, units] = await Promise.all([
+    let [categories, units] = await Promise.all([
       db.query.inventoryCategories.findMany({
         where: eq(schema.inventoryCategories.merchantId, merchantId),
         orderBy: [asc(schema.inventoryCategories.name)],
@@ -686,6 +686,49 @@ export class InventoryService {
         orderBy: [asc(schema.inventoryUnits.code)],
       }),
     ]);
+
+    if (!units.length) {
+      try {
+        await db.insert(schema.inventoryUnits).values(
+          DEFAULT_UNITS.map((u) => ({ merchantId, code: u.code, name: u.name }))
+        );
+      } catch {
+        /* unique race if another request seeded first */
+      }
+      units = await db.query.inventoryUnits.findMany({
+        where: eq(schema.inventoryUnits.merchantId, merchantId),
+        orderBy: [asc(schema.inventoryUnits.code)],
+      });
+    }
+
+    if (!categories.length) {
+      const posCategories = await db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchantId),
+        orderBy: [asc(schema.categories.sortOrder), asc(schema.categories.name)],
+        columns: { name: true },
+      });
+      const names = [
+        ...new Set(
+          posCategories
+            .map((c) => String(c.name || "").trim().slice(0, 100))
+            .filter(Boolean)
+        ),
+      ];
+      if (names.length) {
+        try {
+          await db.insert(schema.inventoryCategories).values(
+            names.map((name) => ({ merchantId, name }))
+          );
+        } catch {
+          /* unique race / duplicate names */
+        }
+        categories = await db.query.inventoryCategories.findMany({
+          where: eq(schema.inventoryCategories.merchantId, merchantId),
+          orderBy: [asc(schema.inventoryCategories.name)],
+        });
+      }
+    }
+
     return {
       ...license,
       enabled: true,

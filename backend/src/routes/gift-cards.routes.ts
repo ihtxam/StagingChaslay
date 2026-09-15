@@ -141,6 +141,7 @@ router.post("/sell-membership", async (req: Request, res: Response) => {
       email: req.body.email || req.body.holderEmail,
       phone: req.body.phone || req.body.holderPhone,
       orderId: req.body.orderId,
+      amount: req.body.amount,
     });
     res.status(201).json({ success: true, card });
   } catch (error) {

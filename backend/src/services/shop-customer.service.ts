@@ -1,6 +1,8 @@
+import crypto from "crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { AuthService } from "@/services/auth.service";
+import { EmailService } from "@/services/email.service";
 import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
 
 export type SavedAddressInput = {
@@ -87,6 +89,63 @@ export class ShopCustomerService {
       .returning();
 
     return this.tokenFor(created);
+  }
+
+  static async requestPasswordReset(merchantId: string, email: string) {
+    const db = getDb();
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized || !normalized.includes("@")) {
+      throw new Error("Valid email is required");
+    }
+
+    const customer = await db.query.customers.findFirst({
+      where: and(eq(schema.customers.merchantId, merchantId), eq(schema.customers.email, normalized)),
+    });
+
+    if (!customer?.passwordHash) {
+      return { success: true };
+    }
+
+    const tempPassword = crypto.randomBytes(4).toString("hex");
+    const passwordHash = await AuthService.hashPassword(tempPassword);
+    await db
+      .update(schema.customers)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(schema.customers.id, customer.id));
+
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { id: true, name: true, shopLanguage: true, panelLanguage: true },
+    });
+    const shopName = String(merchant?.name || "Shop");
+    const locale = merchant?.shopLanguage || merchant?.panelLanguage || "en";
+    const subject =
+      locale === "fr"
+        ? `${shopName} — mot de passe temporaire`
+        : locale === "de"
+          ? `${shopName} — temporäres Passwort`
+          : `${shopName} — temporary password`;
+    const body =
+      locale === "fr"
+        ? `Voici votre mot de passe temporaire : ${tempPassword}\nConnectez-vous puis changez-le dans Mon compte.`
+        : locale === "de"
+          ? `Ihr temporäres Passwort: ${tempPassword}\nMelden Sie sich an und ändern Sie es unter Mein Konto.`
+          : `Your temporary password: ${tempPassword}\nSign in and change it under My account.`;
+
+    try {
+      await EmailService.send({
+        to: normalized,
+        subject,
+        html: `<p style="font-family:system-ui,sans-serif">${body.replace(/\n/g, "<br/>")}</p>`,
+        text: body,
+        merchantId,
+        emailType: "shop_customer",
+      });
+    } catch (err) {
+      console.error("[shop-customer] password reset email failed", err);
+    }
+
+    return { success: true };
   }
 
   static async login(merchantId: string, email: string, password: string) {

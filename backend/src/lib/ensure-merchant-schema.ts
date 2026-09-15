@@ -153,6 +153,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_addon_enabled boolean NOT NULL DEFAULT false",
   kiosk_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_settings jsonb",
+  customer_display_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS customer_display_settings jsonb",
   just_eat_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
   uber_eats_addon_enabled:
@@ -183,6 +185,7 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS subscription_billing_cycle varchar(20)",
   adyen_recurring_detail_reference:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
+  support_code: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS support_code varchar(16)",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -324,6 +327,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   held_orders_paid_total: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)",
   subscription_plans_max_locations:
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
+  offers_staff_ids:
+    "ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json",
 };
 
 /** subscription_plans columns added after the original packages table. */
@@ -417,6 +422,35 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_id_idx ON vouchers(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_active_idx ON vouchers(merchant_id, is_active)`,
   `CREATE INDEX IF NOT EXISTS vouchers_customer_id_idx ON vouchers(customer_id)`,
+  `CREATE TABLE IF NOT EXISTS offers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(255) NOT NULL,
+    description text,
+    offer_type varchar(40) NOT NULL,
+    rules json NOT NULL DEFAULT '{}'::json,
+    channels json NOT NULL DEFAULT '[]'::json,
+    category_ids json NOT NULL DEFAULT '[]'::json,
+    product_ids json NOT NULL DEFAULT '[]'::json,
+    staff_ids json NOT NULL DEFAULT '[]'::json,
+    schedule_mode varchar(20) NOT NULL DEFAULT 'always',
+    days_of_week json NOT NULL DEFAULT '[]'::json,
+    time_start varchar(5),
+    time_end varchar(5),
+    valid_from timestamptz,
+    valid_to timestamptz,
+    is_active boolean NOT NULL DEFAULT true,
+    featured boolean NOT NULL DEFAULT true,
+    badge_label varchar(40),
+    priority integer NOT NULL DEFAULT 0,
+    stackable boolean NOT NULL DEFAULT false,
+    sort_order integer NOT NULL DEFAULT 0,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS offers_merchant_id_idx ON offers(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS offers_merchant_active_idx ON offers(merchant_id, is_active)`,
+  `ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json`,
   `CREATE TABLE IF NOT EXISTS voucher_redemptions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -1310,6 +1344,11 @@ export async function ensureKioskAddonColumn(): Promise<void> {
 
 export async function ensureKioskSettingsColumn(): Promise<void> {
   await runPatch("kiosk_settings");
+  await ensureMerchantTables();
+}
+
+export async function ensureCustomerDisplaySettingsColumn(): Promise<void> {
+  await runPatch("customer_display_settings");
   await ensureMerchantTables();
 }
 

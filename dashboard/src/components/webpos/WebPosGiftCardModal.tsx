@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
-import { roundMoney2 } from '@/lib/money';
+import { moneyDigitCount, normalizeMoneyInput, roundMoney2 } from '@/lib/money';
 import { normalizeScannedPayload } from '@/lib/qr';
 
 function normalizeRfidUid(raw: string): string {
@@ -216,12 +216,17 @@ export default function WebPosGiftCardModal({
       toast.error(t('giftCardInvalidAmount'));
       return;
     }
-    if (n < minA || n > maxA) {
+    const skipRange = custom && customOk;
+    if (!skipRange && (n < minA || n > maxA)) {
       toast.error(
         t('giftCardDenomOutOfRange')
           .replace('{min}', minA.toFixed(2))
           .replace('{max}', maxA.toFixed(2))
       );
+      return;
+    }
+    if (moneyDigitCount(String(Math.floor(n))) > 10) {
+      toast.error(t('giftCardInvalidAmount'));
       return;
     }
     const cardNumber = (card?.cardNumber || code).trim();
@@ -550,13 +555,16 @@ export default function WebPosGiftCardModal({
                       {custom && (
                         <input
                           className="input w-full"
-                          type="number"
-                          min={minA}
-                          max={maxA}
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder={`CHF ${minA} - ${maxA}`}
+                          onChange={(e) => {
+                            const next = normalizeMoneyInput(e.target.value);
+                            const intPart = next.split('.')[0] || '';
+                            if (moneyDigitCount(intPart) > 10) return;
+                            setAmount(next);
+                          }}
+                          placeholder={t('giftCardCustomAmount')}
                         />
                       )}
                     </>
