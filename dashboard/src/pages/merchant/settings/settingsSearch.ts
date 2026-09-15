@@ -526,6 +526,21 @@ export function buildSettingsSearchIndex(
       keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
     },
     {
+      id: 'order-labels',
+      tab: 'receipt',
+      keywords: [
+        'order label',
+        'sticker',
+        'hold',
+        'send',
+        'niimbot',
+        t('orderLabelsTitle'),
+        t('orderLabelEnabled'),
+        t('autoPrintOrderLabelOnHold'),
+        t('autoPrintOrderLabelOnSend'),
+      ],
+    },
+    {
       id: 'barcode-labels',
       tab: 'receipt',
       keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],

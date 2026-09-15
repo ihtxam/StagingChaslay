@@ -1758,6 +1758,16 @@ const en: Dict = {
   autoPrintReceipt: 'Auto-print customer receipt',
   autoPrintKitchen: 'Auto-print kitchen ticket',
   autoPrintReservations: 'Auto-print reservations',
+  orderLabelsTitle: 'Order labels',
+  orderLabelsHint:
+    'Stickers for held and kitchen orders (items, total, barcode). Assign a Labels printer in the profiles below.',
+  orderLabelEnabled: 'Enable order labels',
+  orderLabelEnabledHint: 'Turn on order stickers in WebPOS. Assign a printer with the Labels role first.',
+  orderLabelAutoPrintHint: 'Auto-print labels',
+  autoPrintOrderLabelOnHold: 'Print on hold',
+  autoPrintOrderLabelOnHoldHint: 'Print a label when staff hold (park) the order.',
+  autoPrintOrderLabelOnSend: 'Print on send',
+  autoPrintOrderLabelOnSendHint: 'Print a label when staff send the order to the kitchen.',
   autoPrintOnlineOrdersOnArrival: 'Print online orders on arrival',
   autoPrintOnlineOrdersOnArrivalHint:
     'Print the kitchen ticket as soon as an online order arrives. Off (default): print after accept, or immediately when auto-accept is on.',
@@ -5657,6 +5667,17 @@ const fr: Dict = {
   autoPrintReceipt: 'Impression auto du reçu',
   autoPrintKitchen: 'Impression auto cuisine',
   autoPrintReservations: 'Impression auto des réservations',
+  orderLabelsTitle: 'Étiquettes de commande',
+  orderLabelsHint:
+    'Stickers pour les commandes en attente et envoyées en cuisine (articles, total, code-barres). Assignez une imprimante au rôle Étiquettes ci-dessous.',
+  orderLabelEnabled: 'Activer les étiquettes de commande',
+  orderLabelEnabledHint:
+    'Autorise WebPOS à imprimer un sticker de commande. Assignez d’abord une imprimante au rôle Étiquettes.',
+  orderLabelAutoPrintHint: 'Impression automatique',
+  autoPrintOrderLabelOnHold: 'À la mise en attente',
+  autoPrintOrderLabelOnHoldHint: 'Imprimer quand le personnel met la commande en attente.',
+  autoPrintOrderLabelOnSend: 'À l’envoi en cuisine',
+  autoPrintOrderLabelOnSendHint: 'Imprimer quand le personnel envoie la commande en cuisine.',
   autoPrintOnlineOrdersOnArrival: 'Imprimer les commandes en ligne à l’arrivée',
   autoPrintOnlineOrdersOnArrivalHint:
     'Imprimer le ticket cuisine dès qu’une commande en ligne arrive. Désactivé (défaut) : impression après acceptation, ou tout de suite si l’acceptation auto est activée.',
@@ -9504,6 +9525,17 @@ const de: Dict = {
   autoPrintReceipt: 'Kundenbeleg automatisch drucken',
   autoPrintKitchen: 'Küchenticket automatisch drucken',
   autoPrintReservations: 'Reservationen automatisch drucken',
+  orderLabelsTitle: 'Bestell-Etiketten',
+  orderLabelsHint:
+    'Aufkleber für gehaltene und an die Küche gesendete Bestellungen (Artikel, Total, Barcode). Weisen Sie unten einem Drucker die Rolle Etiketten zu.',
+  orderLabelEnabled: 'Bestell-Etiketten aktivieren',
+  orderLabelEnabledHint:
+    'WebPOS darf einen Bestellaufkleber drucken. Zuerst einem Drucker die Rolle Etiketten zuweisen.',
+  orderLabelAutoPrintHint: 'Automatisch drucken',
+  autoPrintOrderLabelOnHold: 'Beim Halten',
+  autoPrintOrderLabelOnHoldHint: 'Drucken, wenn das Personal die Bestellung parkt.',
+  autoPrintOrderLabelOnSend: 'Beim Senden',
+  autoPrintOrderLabelOnSendHint: 'Drucken, wenn die Bestellung an die Küche geht.',
   autoPrintOnlineOrdersOnArrival: 'Online-Bestellungen bei Eingang drucken',
   autoPrintOnlineOrdersOnArrivalHint:
     'Küchenticket drucken, sobald eine Online-Bestellung eintrifft. Aus (Standard): Druck nach Annahme, oder sofort bei Auto-Annahme.',
