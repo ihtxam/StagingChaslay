@@ -21,7 +21,7 @@ import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { geocodeQuery } from "@/lib/geocode";
-import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
+import { isAllowedImageMime, isAllowedFaviconMime, saveMerchantImage, saveMerchantFavicon } from "@/services/media-upload.service";
 import path from "path";
 import { getDb, schema } from "@/db";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
@@ -36,6 +36,7 @@ import type { ReportPreset } from "@/services/pos-reports.service";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const FAVICON_EXTENSIONS = new Set([".png", ".ico", ".svg"]);
 
 const imageUpload = multer({
   storage: multer.memoryStorage(),
@@ -51,6 +52,23 @@ const imageUpload = multer({
       return;
     }
     cb(new Error("Only JPEG, PNG, WebP, or GIF images are allowed"));
+  },
+});
+
+const faviconUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedFaviconMime(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    const ext = path.extname(String(file.originalname || "")).toLowerCase();
+    if (FAVICON_EXTENSIONS.has(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Favicon must be PNG, ICO, or SVG"));
   },
 });
 
@@ -83,6 +101,7 @@ const ONLINE_SHOP_SETTINGS_KEYS = new Set([
   "categoryPricingEnabled",
   "shopLogoUrl",
   "shopBannerUrl",
+  "shopSiteSettings",
 ]);
 
 /** Domain/branding identity — requires MANAGE_SETTINGS even from the online shop form. */
@@ -118,7 +137,8 @@ function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunc
       /^\/categories(\/|$)/.test(path) ||
       /^\/modifiers(\/|$)/.test(path) ||
       path === "/demo-menu-photos" ||
-      path === "/media");
+      path === "/media" ||
+      path === "/shop-favicon");
   if (catalogWrite) {
     return requirePermission("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(
       req,
@@ -2908,6 +2928,47 @@ router.post("/media", (req: Request, res: Response, next) => {
     if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
 
     const saved = await saveMerchantImage({
+      merchantId,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname,
+    });
+
+    res.status(201).json({
+      success: true,
+      url: saved.url,
+      mimeType: saved.mimeType,
+      size: saved.size,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Upload failed" });
+  }
+});
+
+/**
+ * POST /api/merchant/shop-favicon
+ * multipart field "file" — PNG, ICO, or SVG
+ */
+router.post("/shop-favicon", (req: Request, res: Response, next) => {
+  faviconUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Upload failed";
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    if (!req.file) return res.status(400).json({ error: "No favicon file uploaded" });
+
+    const saved = await saveMerchantFavicon({
       merchantId,
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,

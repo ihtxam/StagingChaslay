@@ -81,6 +81,7 @@ export function shopThemeCssVars(theme: Required<ShopThemeConfig>): Record<strin
     '--font-display': `"${theme.fontDisplay}", system-ui, sans-serif`,
     '--radius-default': `${theme.radius}px`,
     '--radius-lg': `${theme.radiusLg}px`,
+    '--color-primary': theme.accent,
     '--shop-accent': theme.accent,
     '--shop-accent-dim': theme.accentDim,
     '--shop-bg': theme.bg0,

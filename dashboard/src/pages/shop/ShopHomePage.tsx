@@ -24,6 +24,7 @@ import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { CmsDynamicBlock, fetchCmsMenuCatalog } from '@/components/shop/cms/CmsDynamicBlocks';
 import { useCmsTailwindCdn } from '@/hooks/useCmsTailwindCdn';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 
 /**
  * Public CMS homepage — static OpenPage HTML + live menu/hours/reservation blocks.
@@ -32,6 +33,7 @@ export default function ShopHomePage() {
   const { t, locale, setLocale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const { site: shopSite } = useShopCmsTheme(shopKey);
   const base = shopBasePath(shopKey);
 
   const [loading, setLoading] = useState(true);
@@ -111,7 +113,6 @@ export default function ShopHomePage() {
   }, [pageConfig, fullHtml]);
 
   const theme = pageConfig?.theme;
-  const hasDynamic = pageConfig?.blocks?.some((b) => isDynamicCmsBlock(b)) ?? false;
   useCmsTailwindCdn(Boolean(segments?.length));
 
   useEffect(() => {
@@ -143,7 +144,6 @@ export default function ShopHomePage() {
     }).format(n);
 
   const showReservationsNav = Boolean(merchant?.reservationsEnabled);
-  const hideFloatingBar = hasDynamic && pageConfig?.blocks?.some((b) => b.type === 'menu');
 
   if (loading) {
     return (
@@ -168,7 +168,7 @@ export default function ShopHomePage() {
   }
 
   return (
-    <ShopThemeShell theme={theme} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
+    <ShopThemeShell theme={theme} site={shopSite} className="min-h-dvh" style={{ background: 'var(--color-bg-0)' }}>
       <ShopVacationPopup shopKey={shopKey} />
       <ShopTopShell>
         <ShopUtilityTopBar>
@@ -199,9 +199,7 @@ export default function ShopHomePage() {
         )}
       </div>
 
-      {!hideFloatingBar ? (
-        <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
-      ) : null}
+      <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
     </ShopThemeShell>
   );
 }

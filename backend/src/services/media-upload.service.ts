@@ -132,3 +132,90 @@ export function resolveImageMime(
   if (fromName) return fromName;
   throw new Error("Only JPEG, PNG, WebP, or GIF images are allowed");
 }
+
+const FAVICON_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/x-icon": ".ico",
+  "image/vnd.microsoft.icon": ".ico",
+  "image/svg+xml": ".svg",
+};
+
+function sniffIco(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 4 &&
+    buffer[0] === 0x00 &&
+    buffer[1] === 0x00 &&
+    (buffer[2] === 0x01 || buffer[2] === 0x02) &&
+    buffer[3] === 0x00
+  );
+}
+
+function sniffSvg(buffer: Buffer): boolean {
+  const head = buffer.slice(0, 256).toString("utf8").replace(/^\uFEFF/, "").trimStart();
+  if (head.startsWith("<svg")) return true;
+  if (head.startsWith("<?xml") && /<svg[\s>]/i.test(buffer.slice(0, 2048).toString("utf8"))) {
+    return true;
+  }
+  return false;
+}
+
+function resolveFaviconMime(mimeType: string, buffer: Buffer, originalName?: string): string {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (FAVICON_MIME[normalized]) return normalized;
+  if (sniffImageMime(buffer) === "image/png") return "image/png";
+  if (sniffIco(buffer)) return "image/x-icon";
+  if (sniffSvg(buffer)) return "image/svg+xml";
+  const ext = path.extname(String(originalName || "")).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".ico") return "image/x-icon";
+  if (ext === ".svg") return "image/svg+xml";
+  throw new Error("Favicon must be PNG, ICO, or SVG");
+}
+
+export function isAllowedFaviconMime(mime: string): boolean {
+  const normalized = String(mime || "").toLowerCase();
+  return !!FAVICON_MIME[normalized] || normalized === "image/png";
+}
+
+/**
+ * Persist a shop favicon (PNG / ICO / SVG).
+ */
+export async function saveMerchantFavicon(opts: {
+  merchantId: string;
+  buffer: Buffer;
+  mimeType: string;
+  originalName?: string;
+}): Promise<{ filename: string; url: string; mimeType: string; size: number }> {
+  const resolvedMime = resolveFaviconMime(opts.mimeType, opts.buffer, opts.originalName);
+  const extFromMime = FAVICON_MIME[resolvedMime];
+  if (!extFromMime) {
+    throw new Error("Favicon must be PNG, ICO, or SVG");
+  }
+  if (!opts.buffer?.length) {
+    throw new Error("Empty file");
+  }
+  if (opts.buffer.length > 2 * 1024 * 1024) {
+    throw new Error("Favicon must be 2 MB or smaller");
+  }
+  if (resolvedMime === "image/svg+xml") {
+    const text = opts.buffer.toString("utf8").slice(0, 64 * 1024);
+    if (/<script[\s>]/i.test(text) || /on\w+\s*=/i.test(text)) {
+      throw new Error("SVG favicon cannot contain scripts");
+    }
+  }
+
+  const root = ensureUploadsRoot();
+  const dir = path.join(root, opts.merchantId);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const filename = `${randomUUID()}${extFromMime}`;
+  const fullPath = path.join(dir, filename);
+  await fs.promises.writeFile(fullPath, opts.buffer);
+
+  return {
+    filename,
+    url: publicUploadPath(opts.merchantId, filename),
+    mimeType: resolvedMime,
+    size: opts.buffer.length,
+  };
+}

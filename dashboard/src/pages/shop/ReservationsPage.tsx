@@ -15,7 +15,7 @@ export default function ReservationsPage() {
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
-  const cmsTheme = useShopCmsTheme(shopKey);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const [vacation, setVacation] = useState<any>(null);
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function ReservationsPage() {
   return (
     <ShopThemeShell
       theme={cmsTheme}
+      site={shopSite}
       className="min-h-screen"
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >

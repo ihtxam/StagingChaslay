@@ -60,7 +60,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref } = useStorefront();
+  const { shopHref, surface } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -68,6 +68,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
   );
   const logoText = t('logoText') || mergedProps.logoText;
   const buttonText = t('buttonText') || mergedProps.buttonText;
+  const showNavCta = mergedProps.showButton && buttonText && surface !== 'shop';
 
   return (
     <>
@@ -95,7 +96,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           {/* Desktop Menu + Button */}
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0, flex: 1 }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#1a1a2e'} />
-            {mergedProps.showButton && buttonText && (
+            {showNavCta ? (
               <a
                 href={shopHref(mergedProps.buttonLink)}
                 onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
@@ -103,14 +104,14 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
               >
                 {buttonText}
               </a>
-            )}
+            ) : null}
           </div>
 
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}
             backgroundColor={mergedProps.backgroundColor || '#ffffff'}
-            showButton={mergedProps.showButton}
+            showButton={showNavCta}
             buttonText={buttonText}
             buttonLink={mergedProps.buttonLink}
             buttonColor={mergedProps.buttonColor}

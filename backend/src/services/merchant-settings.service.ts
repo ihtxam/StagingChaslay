@@ -38,6 +38,7 @@ import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
 import {
   normalizeCustomerDisplaySettings,
   type CustomerDisplaySettings,
@@ -240,6 +241,9 @@ export class MerchantSettingsService {
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
       shopBannerUrl: merchant.shopBannerUrl,
+      shopSiteSettings: normalizeShopSiteSettings(
+        (merchant as { shopSiteSettings?: unknown }).shopSiteSettings
+      ),
       latitude: merchant.latitude,
       longitude: merchant.longitude,
       pickupEtaMinutes: merchant.pickupEtaMinutes,
@@ -364,6 +368,7 @@ export class MerchantSettingsService {
       storeHours?: Record<string, unknown>;
       shopLogoUrl?: string | null;
       shopBannerUrl?: string | null;
+      shopSiteSettings?: ShopSiteSettings | Partial<ShopSiteSettings> | null;
       latitude?: number | string | null;
       longitude?: number | string | null;
       pickupEtaMinutes?: number;
@@ -489,6 +494,27 @@ export class MerchantSettingsService {
     if (updates.storeHours !== undefined) patch.storeHours = updates.storeHours;
     if (updates.shopLogoUrl !== undefined) patch.shopLogoUrl = updates.shopLogoUrl;
     if (updates.shopBannerUrl !== undefined) patch.shopBannerUrl = updates.shopBannerUrl;
+    if (updates.shopSiteSettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { shopSiteSettings: true },
+      });
+      const existing = normalizeShopSiteSettings(current?.shopSiteSettings);
+      const incoming = updates.shopSiteSettings && typeof updates.shopSiteSettings === "object"
+        ? updates.shopSiteSettings
+        : {};
+      const incomingObj = incoming as Partial<ShopSiteSettings>;
+      patch.shopSiteSettings = normalizeShopSiteSettings({
+        ...existing,
+        ...incoming,
+        metaTitle:
+          incomingObj.metaTitle !== undefined ? incomingObj.metaTitle : existing.metaTitle,
+        metaDescription:
+          incomingObj.metaDescription !== undefined
+            ? incomingObj.metaDescription
+            : existing.metaDescription,
+      });
+    }
     if (updates.latitude !== undefined) {
       patch.latitude = updates.latitude === null || updates.latitude === "" ? null : String(updates.latitude);
     }

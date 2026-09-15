@@ -67,7 +67,7 @@ export default function CheckoutPage() {
   const locSlug = resolveShopLocationSlug({ locationSlug });
   const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const navigate = useNavigate();
-  const cmsTheme = useShopCmsTheme(shopKey);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [draft, setDraft] = useState<ShopCheckoutDraft>(emptyDraft());
   const [merchant, setMerchant] = useState<any>(null);
@@ -1018,6 +1018,7 @@ export default function CheckoutPage() {
   return (
     <ShopThemeShell
       theme={cmsTheme}
+      site={shopSite}
       className="min-h-dvh"
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >

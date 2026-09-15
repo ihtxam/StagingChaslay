@@ -9,6 +9,7 @@ import {
   effectiveGroups as modifierGroupsForProduct,
   groupMax,
   initialSelection,
+  selectionSummary,
   validateModifierGroups,
   type ShopModifierGroup,
 } from '@/components/shop/shop-modifier-utils';

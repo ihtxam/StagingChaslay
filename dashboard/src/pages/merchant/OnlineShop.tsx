@@ -11,6 +11,14 @@ import ZoneMapEditor, {
 import { useI18n } from '@/lib/i18n';
 import { compressImageIfNeeded, ensureImageFileType } from '@/lib/compress-image';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
+import {
+  DEFAULT_SHOP_FAVICON,
+  SHOP_SEO_LOCALES,
+  normalizeGaMeasurementId,
+  normalizeShopSiteSettings,
+  type ShopSeoLocale,
+  type ShopSiteSettings,
+} from '@/lib/shop-site-settings';
 
 /** Reject empty / Null Island (0,0) so the map does not open in the ocean. */
 function parseStoreCoords(latRaw: unknown, lngRaw: unknown): LatLngTuple | null {
@@ -103,8 +111,10 @@ export default function OnlineShop() {
   const [locatingStore, setLocatingStore] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const logoFileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
+  const faviconFileRef = useRef<HTMLInputElement>(null);
 
   const storeCoords = useMemo(
     () => parseStoreCoords(settings?.latitude, settings?.longitude),
@@ -119,6 +129,25 @@ export default function OnlineShop() {
   );
 
   const deliveryMode = settings?.deliveryMode === 'zipcode' ? 'zipcode' : 'zones';
+  const siteSettings = useMemo(
+    () => normalizeShopSiteSettings(settings?.shopSiteSettings),
+    [settings?.shopSiteSettings]
+  );
+
+  const patchSite = (patch: Partial<ShopSiteSettings>) => {
+    setSettings((prev: any) => {
+      const cur = normalizeShopSiteSettings(prev?.shopSiteSettings);
+      return {
+        ...prev,
+        shopSiteSettings: normalizeShopSiteSettings({
+          ...cur,
+          ...patch,
+          metaTitle: { ...cur.metaTitle, ...(patch.metaTitle || {}) },
+          metaDescription: { ...cur.metaDescription, ...(patch.metaDescription || {}) },
+        }),
+      };
+    });
+  };
 
   const load = async () => {
     try {
@@ -272,10 +301,50 @@ export default function OnlineShop() {
     }
   };
 
+  const uploadFavicon = async (file: File | null) => {
+    if (!file) return;
+    const prevUrl = siteSettings.faviconUrl;
+    setUploadingFavicon(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/merchant/shop-favicon', fd);
+      const url = String(res.data?.url || '').trim();
+      if (!url) throw new Error('Upload succeeded but no image URL was returned');
+      patchSite({ faviconUrl: url });
+      await api.put('/merchant/settings', { shopSiteSettings: { faviconUrl: url } });
+      toast.success(t('shopFaviconUploaded'));
+    } catch (error: any) {
+      patchSite({ faviconUrl: prevUrl });
+      toast.error(error.response?.data?.error || error.message || t('uploadFailed'));
+    } finally {
+      setUploadingFavicon(false);
+      if (faviconFileRef.current) faviconFileRef.current.value = '';
+    }
+  };
+
+  const clearFavicon = async () => {
+    const prevUrl = siteSettings.faviconUrl;
+    try {
+      patchSite({ faviconUrl: null });
+      await api.put('/merchant/settings', { shopSiteSettings: { faviconUrl: null } });
+      toast.success(t('shopFaviconRemoved'));
+    } catch (error: any) {
+      patchSite({ faviconUrl: prevUrl });
+      toast.error(error.response?.data?.error || t('uploadFailed'));
+    }
+  };
+
   const onSaveShopMeta = async (e: FormEvent) => {
     e.preventDefault();
     setSavingShop(true);
     try {
+      const gaRaw = String(siteSettings.gaMeasurementId || '').trim();
+      if (gaRaw && !normalizeGaMeasurementId(gaRaw)) {
+        toast.error(t('shopGaIdInvalid'));
+        setSavingShop(false);
+        return;
+      }
       const response = await api.put('/merchant/settings', {
         shopEnabled: settings.shopEnabled,
         pickupEnabled: settings.pickupEnabled,
@@ -296,6 +365,7 @@ export default function OnlineShop() {
         categoryPricingEnabled: !!settings.categoryPricingEnabled,
         shopLogoUrl: settings.shopLogoUrl,
         shopBannerUrl: settings.shopBannerUrl,
+        shopSiteSettings: siteSettings,
         slug: settings.slug,
         subdomain: settings.subdomain,
       });
@@ -663,6 +733,122 @@ export default function OnlineShop() {
                     </button>
                   ) : null}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-4">
+            <div>
+              <p className="text-sm font-medium">{t('shopSiteSettingsTitle')}</p>
+              <p className="text-xs text-stone-500 mt-0.5">{t('shopSiteSettingsHint')}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">{t('shopBrandColor')}</label>
+              <p className="text-xs text-stone-500">{t('shopBrandColorHint')}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  className="h-10 w-14 cursor-pointer rounded border border-stone-200 bg-white p-1"
+                  value={siteSettings.brandColor || '#e11d48'}
+                  onChange={(e) => patchSite({ brandColor: e.target.value })}
+                  aria-label={t('shopBrandColor')}
+                />
+                <input
+                  className="input max-w-[9rem] font-mono uppercase"
+                  value={siteSettings.brandColor || ''}
+                  placeholder="#E11D48"
+                  maxLength={7}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    patchSite({ brandColor: v || null });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('shopFavicon')}</p>
+              <p className="text-xs text-stone-500">{t('shopFaviconHint')}</p>
+              <div className="flex items-center gap-3">
+                <img
+                  src={siteSettings.faviconUrl || DEFAULT_SHOP_FAVICON}
+                  alt=""
+                  className="h-10 w-10 rounded border border-stone-200 bg-stone-50 object-contain p-1"
+                />
+                <input
+                  ref={faviconFileRef}
+                  type="file"
+                  accept=".ico,.png,.svg,image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => void uploadFavicon(e.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={uploadingFavicon}
+                  onClick={() => faviconFileRef.current?.click()}
+                >
+                  {uploadingFavicon ? t('uploading') : t('shopFaviconUpload')}
+                </button>
+                {siteSettings.faviconUrl ? (
+                  <button type="button" className="btn-secondary text-sm" onClick={() => void clearFavicon()}>
+                    {t('shopFaviconRemove')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">{t('shopGaId')}</label>
+              <p className="text-xs text-stone-500">{t('shopGaIdHint')}</p>
+              <input
+                className="input max-w-md font-mono"
+                value={siteSettings.gaMeasurementId || ''}
+                placeholder="G-XXXXXXXXXX"
+                onChange={(e) => patchSite({ gaMeasurementId: e.target.value.toUpperCase() })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('shopMetaTitle')}</p>
+              <p className="text-xs text-stone-500">{t('shopMetaTitleHint')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {SHOP_SEO_LOCALES.map((loc: ShopSeoLocale) => (
+                  <label key={`title-${loc}`} className="block text-xs text-stone-500">
+                    {loc.toUpperCase()}
+                    <input
+                      className="input mt-1 w-full"
+                      maxLength={60}
+                      value={siteSettings.metaTitle[loc] || ''}
+                      onChange={(e) => patchSite({ metaTitle: { [loc]: e.target.value } })}
+                    />
+                    <span className="mt-0.5 block text-[11px] text-stone-400">
+                      {(siteSettings.metaTitle[loc] || '').length}/60
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('shopMetaDescription')}</p>
+              <p className="text-xs text-stone-500">{t('shopMetaDescriptionHint')}</p>
+              <div className="grid grid-cols-1 gap-2">
+                {SHOP_SEO_LOCALES.map((loc: ShopSeoLocale) => (
+                  <label key={`desc-${loc}`} className="block text-xs text-stone-500">
+                    {loc.toUpperCase()}
+                    <textarea
+                      className="input mt-1 w-full min-h-[4.5rem] resize-y"
+                      maxLength={160}
+                      value={siteSettings.metaDescription[loc] || ''}
+                      onChange={(e) => patchSite({ metaDescription: { [loc]: e.target.value } })}
+                    />
+                    <span className="mt-0.5 block text-[11px] text-stone-400">
+                      {(siteSettings.metaDescription[loc] || '').length}/160
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
           </div>
