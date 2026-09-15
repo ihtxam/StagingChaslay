@@ -312,6 +312,17 @@ export function removeOfferInstance(items: ShopCartItem[], offerInstanceId: stri
 import { isShopPathHubHost } from '@/lib/brand';
 
 const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'shop', 'order']);
+/** Path slugs on shop hubs that must never be treated as merchant shop keys. */
+const RESERVED_SHOP_SLUGS = new Set([
+  'merchant',
+  'login',
+  'signin',
+  'superadmin',
+  'reseller',
+  'forgot-password',
+  'reset-password',
+  'set-password',
+]);
 
 function publicDomain() {
   return (import.meta.env.VITE_PUBLIC_DOMAIN || 'manupos.webprintmedia.swiss').toLowerCase();
@@ -332,7 +343,11 @@ function subdomainLabel() {
  * - custom domain → full hostname (backend matches merchants.custom_domain)
  */
 export function resolveShopKey(paramSlug?: string) {
-  if (paramSlug) return paramSlug;
+  if (paramSlug) {
+    const slug = paramSlug.trim().toLowerCase();
+    if (RESERVED_SHOP_SLUGS.has(slug)) return '';
+    return paramSlug;
+  }
   const label = subdomainLabel();
   if (label && !RESERVED_SUBDOMAINS.has(label)) return label;
   if (label === 'shop') {

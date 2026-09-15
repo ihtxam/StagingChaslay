@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from '
 import toast, { Toaster, ToastBar } from 'react-hot-toast';
 import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
-import { isShopPathHubHost } from '@/lib/brand';
+import { isPanelAppHost, isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
@@ -157,8 +157,14 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
+  // app.* / admin.* are always the merchant panel — even when VITE_PUBLIC_DOMAIN was baked wrong.
+  if (isPanelAppHost(host)) return { host, kind: 'main' as const, label: '' };
+  if (host.startsWith('status.')) return { host, kind: 'status' as const, label: 'status' };
   // Path shop hub: shop.chaslay.com/{slug}, order.rebornsense.com/{slug}, legacy shop.*
   if (isShopPathHubHost(host)) return { host, kind: 'shop_hub' as const, label: 'shop' };
+  if (host.startsWith('api.') || host.startsWith('pay.')) {
+    return { host, kind: 'reserved' as const, label: host.split('.')[0] || 'api' };
+  }
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
@@ -479,6 +485,7 @@ function App() {
           {shopHub && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
               <Route
@@ -600,6 +607,7 @@ function App() {
           {merchantSubdomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
@@ -721,6 +729,7 @@ function App() {
           {customDomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
