@@ -113,7 +113,6 @@ export default function ShopHomePage() {
   }, [pageConfig, fullHtml]);
 
   const theme = pageConfig?.theme;
-  const hasDynamic = pageConfig?.blocks?.some((b) => isDynamicCmsBlock(b)) ?? false;
   useCmsTailwindCdn(Boolean(segments?.length));
 
   useEffect(() => {
@@ -145,7 +144,6 @@ export default function ShopHomePage() {
     }).format(n);
 
   const showReservationsNav = Boolean(merchant?.reservationsEnabled);
-  const hideFloatingBar = hasDynamic && pageConfig?.blocks?.some((b) => b.type === 'menu');
 
   if (loading) {
     return (
@@ -201,9 +199,7 @@ export default function ShopHomePage() {
         )}
       </div>
 
-      {!hideFloatingBar ? (
-        <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
-      ) : null}
+      <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
     </ShopThemeShell>
   );
 }

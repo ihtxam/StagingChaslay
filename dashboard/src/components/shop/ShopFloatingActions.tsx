@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CalendarDays, ShoppingBag } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 export default function ShopFloatingActions({
@@ -10,8 +10,7 @@ export default function ShopFloatingActions({
   showReservations?: boolean;
 }) {
   const { t } = useI18n();
-  const reservationsPath = `${basePath}/reservations`;
-  const menuPath = `${basePath}/menu`;
+  if (!showReservations) return null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
@@ -22,21 +21,12 @@ export default function ShopFloatingActions({
           background: 'color-mix(in srgb, var(--color-bg-0, #ffffff) 88%, transparent)',
         }}
       >
-        {showReservations ? (
-          <Link
-            to={reservationsPath}
-            className="shop-btn-secondary inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold"
-          >
-            <CalendarDays size={14} />
-            {t('shopReservations')}
-          </Link>
-        ) : null}
         <Link
-          to={menuPath}
-          className="shop-btn-primary inline-flex items-center gap-1 px-3 py-2 text-xs font-bold"
+          to={`${basePath}/reservations`}
+          className="shop-btn-secondary inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold"
         >
-          <ShoppingBag size={14} />
-          {t('shopOrderNow')}
+          <CalendarDays size={14} />
+          {t('shopReservations')}
         </Link>
       </div>
     </div>
