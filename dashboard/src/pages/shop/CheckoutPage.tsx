@@ -664,7 +664,6 @@ export default function CheckoutPage() {
     const code = voucherInput.trim();
     if (!code) return;
     setApplyingVoucher(true);
-    showCheckoutError(null);
     try {
       const token = loadCustomerToken(shopKey);
       const res = await axios.post(
@@ -766,7 +765,6 @@ export default function CheckoutPage() {
       return false;
     }
     setCheckingZone(true);
-    showCheckoutError(null);
     try {
       const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
         query: `${draft.address}, ${draft.zipCode} ${draft.city} Switzerland`,
@@ -836,7 +834,6 @@ export default function CheckoutPage() {
     const token = loadCustomerToken(shopKey);
     if (!token) return;
     setSavingAddress(true);
-    showCheckoutError(null);
     try {
       let lat = draft.lat;
       let lng = draft.lng;
@@ -880,7 +877,6 @@ export default function CheckoutPage() {
 
   const onLogin = async (e: FormEvent) => {
     e.preventDefault();
-    showCheckoutError(null);
     try {
       const res = await axios.post(`/api/shop/${shopKey}/auth/login`, {
         email: loginEmail,
@@ -941,7 +937,6 @@ export default function CheckoutPage() {
   };
 
   const goPayment = async (personal?: ReturnType<typeof resolvePersonalFields>): Promise<boolean> => {
-    showCheckoutError(null);
     const resolved = personal || syncPersonalFieldsFromDom();
     const { fullName, phone } = resolved;
     patch({ customerName: fullName, customerPhone: phone });
@@ -992,7 +987,16 @@ export default function CheckoutPage() {
       next.customerEmail = t('shopEmailFieldRequired');
     }
     setFieldErrors(next);
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length) {
+      showCheckoutError(
+        next.customerFirstName ||
+          next.customerLastName ||
+          next.customerName ||
+          next.customerPhone ||
+          next.customerEmail
+      );
+      return;
+    }
     patch({ customerName: resolved.fullName, customerPhone: resolved.phone });
     const ok = await goPayment(resolved);
     if (!ok) return;
@@ -1009,7 +1013,6 @@ export default function CheckoutPage() {
       return;
     }
     setSubmitting(true);
-    showCheckoutError(null);
     try {
       if (draft.channel === 'delivery') {
         const ok = await checkDelivery({ requireMinOrder: true });
@@ -1133,7 +1136,6 @@ export default function CheckoutPage() {
     }
     setDraft((d) => ({ ...d, channel }));
     setDeliveryInfo(null);
-    showCheckoutError(null);
     setWhenMode('asap');
     setScheduleDayOffset(0);
   };
@@ -2289,7 +2291,6 @@ export default function CheckoutPage() {
           setDeliveryInfo(payload.deliveryInfo);
           setDeliveryAddressOpen(false);
           setChannelBeforeDelivery(null);
-          showCheckoutError(null);
           setWhenMode('asap');
           setScheduleDayOffset(0);
         }}
