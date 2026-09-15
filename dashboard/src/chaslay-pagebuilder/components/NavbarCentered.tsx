@@ -122,7 +122,8 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
             ))}
           </div>
         </div>
-        <div className="navbar-centered-mobile-row shop-page-content" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        <div className="navbar-centered-mobile-row shop-page-content shop-navbar-mobile-row" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div className="shop-navbar-logo-slot">
           <ShopNavbarLogoRow
             logoImageUrl={mergedProps.logoImageUrl}
             logoText={logoText}
@@ -131,6 +132,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
             textColor={mergedProps.textColor}
             logoTextStyle={{ fontSize: '18px', fontWeight: 700 }}
           />
+          </div>
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}
