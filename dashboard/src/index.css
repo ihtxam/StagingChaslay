@@ -2005,28 +2005,45 @@ html.shop-shell #root {
   }
 }
 
+.shop-menu-start-anchor {
+  height: 0;
+  scroll-margin-top: calc(
+    var(--shop-header-height, 3.5rem) + var(--shop-category-bar-height, 3.25rem) + 0.5rem
+  );
+}
+
 .shop-menu-section {
-  scroll-margin-top: calc(var(--shop-category-bar-height, 3.25rem) + 0.5rem);
+  scroll-margin-top: calc(
+    var(--shop-header-height, 3.5rem) + var(--shop-category-bar-height, 3.25rem) + 0.5rem
+  );
 }
 
-.shop-floating-cart {
-  position: fixed;
-  right: 1rem;
-  top: 46%;
-  z-index: 40;
-  display: inline-flex;
-  height: 3.25rem;
-  width: 3.25rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.85rem;
-  background: var(--shop-accent, #e11d48);
-  color: #fff;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+@media (min-width: 768px) {
+  .shop-floating-cart {
+    position: fixed;
+    right: 1rem;
+    top: 46%;
+    z-index: 40;
+    display: inline-flex;
+    height: 3.25rem;
+    width: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.85rem;
+    background: var(--shop-accent, #e11d48);
+    color: #fff;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+
+  .shop-floating-cart:hover {
+    filter: brightness(0.95);
+  }
 }
 
-.shop-floating-cart:hover {
-  filter: brightness(0.95);
+@media (max-width: 767px) {
+  .shop-floating-cart {
+    display: none !important;
+  }
 }
 
 .shop-mobile-cart-bar {

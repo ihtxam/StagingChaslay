@@ -846,7 +846,8 @@ export default function OrderingPage() {
 
   useEffect(() => {
     if (!visibleMenuCategories.length) return;
-    const headerOffset =
+
+    const getHeaderOffset = () =>
       parseFloat(
         getComputedStyle(document.documentElement).getPropertyValue('--shop-header-height') || '56'
       ) +
@@ -854,40 +855,44 @@ export default function OrderingPage() {
         getComputedStyle(document.documentElement).getPropertyValue('--shop-category-bar-height') ||
           '52'
       ) +
-      8;
+      12;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (categoryScrollLock.current) return;
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (!visible.length) return;
-        const target = visible[0].target as HTMLElement;
-        if (target.id === 'shop-menu-start') {
-          setSelectedCategory('all');
-          return;
-        }
-        if (target.id.startsWith('shop-cat-')) {
-          setSelectedCategory(target.id.replace('shop-cat-', ''));
-        }
-      },
-      {
-        root: null,
-        rootMargin: `-${headerOffset}px 0px -55% 0px`,
-        threshold: [0, 0.15, 0.35],
+    const syncCategoryFromScroll = () => {
+      if (categoryScrollLock.current) return;
+      const offset = getHeaderOffset();
+      const menuStart = document.getElementById('shop-menu-start');
+      if (menuStart && menuStart.getBoundingClientRect().top > offset) {
+        setSelectedCategory('all');
+        return;
       }
-    );
 
-    const menuStart = document.getElementById('shop-menu-start');
-    if (menuStart) observer.observe(menuStart);
-    visibleMenuCategories.forEach((cat) => {
-      const el = document.getElementById(`shop-cat-${cat.id}`);
-      if (el) observer.observe(el);
-    });
+      let activeId = 'all';
+      for (const cat of visibleMenuCategories) {
+        const el = document.getElementById(`shop-cat-${cat.id}`);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= offset + 4) {
+          activeId = cat.id;
+        }
+      }
+      setSelectedCategory(activeId);
+    };
 
-    return () => observer.disconnect();
+    syncCategoryFromScroll();
+    window.addEventListener('scroll', syncCategoryFromScroll, { passive: true });
+    window.addEventListener('resize', syncCategoryFromScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', syncCategoryFromScroll);
+      window.removeEventListener('resize', syncCategoryFromScroll);
+    };
   }, [visibleMenuCategories]);
+
+  useEffect(() => {
+    if (categoryScrollLock.current) return;
+    const container = document.querySelector('.shop-category-scroll');
+    if (!container) return;
+    const active = container.querySelector('[data-active-category="true"]');
+    active?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [selectedCategory]);
 
   if (loading) {
     return (
@@ -1378,6 +1383,7 @@ export default function OrderingPage() {
           <div className="shop-category-scroll flex gap-1.5">
             <button
               type="button"
+              data-active-category={selectedCategory === 'all' ? 'true' : undefined}
               onClick={() => scrollToCategory('all')}
               className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
                 selectedCategory === 'all'
@@ -1391,6 +1397,7 @@ export default function OrderingPage() {
               <button
                 key={cat.id}
                 type="button"
+                data-active-category={selectedCategory === cat.id ? 'true' : undefined}
                 onClick={() => scrollToCategory(cat.id)}
                 className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
                   selectedCategory === cat.id
@@ -1427,7 +1434,7 @@ export default function OrderingPage() {
         </div>
       </div>
 
-      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-28 md:pb-6' : ''}`} id="shop-menu-start">
+      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-28 md:pb-6' : ''}`}>
         {popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
@@ -1544,6 +1551,8 @@ export default function OrderingPage() {
           </div>
         )}
 
+        <div id="shop-menu-start" className="shop-menu-start-anchor" aria-hidden="true" />
+
         <div className="space-y-8">
           {visibleMenuCategories.map((cat) => {
             const items = cat.items || [];
@@ -1614,7 +1623,7 @@ export default function OrderingPage() {
         </div>
       </div>
 
-      <CartIconButton />
+      {itemCount > 0 ? <CartIconButton /> : null}
 
       {itemCount > 0 ? (
         <div className="shop-mobile-cart-bar md:hidden">
