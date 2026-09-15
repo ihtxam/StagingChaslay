@@ -187,7 +187,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
                 <Phone size={28} />
               </div>
               <div>
-                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Phone</h3>
+                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>{trText('Phone')}</h3>
                 <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.phone}</p>
               </div>
             </div>
@@ -199,7 +199,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
                 <Mail size={28} />
               </div>
               <div>
-                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Email</h3>
+                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>{trText('Email')}</h3>
                 <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.email}</p>
               </div>
             </div>
@@ -211,7 +211,7 @@ export const ContactInfo: React.FC<ContactInfoProps> & {
                 <MapPin size={28} />
               </div>
               <div>
-                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>Address</h3>
+                <h3 style={{ fontSize: '14px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>{trText('Address')}</h3>
                 <p style={{ fontSize: '18px', fontWeight: 500 }}>{contactDetails.address}</p>
               </div>
             </div>

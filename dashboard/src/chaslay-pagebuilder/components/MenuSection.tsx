@@ -19,6 +19,7 @@ import { useStorefront } from '../StorefrontContext';
 import { formatMenuProductPrice } from '../menu-product-utils';
 import { useStorefrontCart } from '../useStorefrontCart';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { SettingsToggleRow } from './SettingsToggleRow';
 
 const defaultProps: MenuSectionProps = {
   sectionId: SECTION_ANCHORS.menu,
@@ -159,7 +160,7 @@ export const MenuSection: React.FC<MenuSectionProps> & {
             boxShadow: !isGrid && selectedCategory === null ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
           }}
         >
-          All
+          {trText('All')}
         </button>
         {categories.map((cat) => (
           <button
@@ -396,10 +397,9 @@ const MenuSectionSettings: React.FC = () => {
       <TranslatableInput label="Title" propKey="title" value={p.title} onChange={(v) => setProp((props: MenuSectionProps) => (props.title = v))} nodeProps={p.nodeProps} setProp={setProp} />
       <TranslatableInput label="Subtitle" propKey="subtitle" value={p.subtitle} onChange={(v) => setProp((props: MenuSectionProps) => (props.subtitle = v))} nodeProps={p.nodeProps} setProp={setProp} multiline rows={2} />
 
-      <div className="flex items-center justify-between">
-        <Label>Show Categories</Label>
+      <SettingsToggleRow label="Show Categories">
         <Switch checked={p.showCategories} onCheckedChange={(c) => setProp((props: MenuSectionProps) => (props.showCategories = c))} />
-      </div>
+      </SettingsToggleRow>
 
       <div className="space-y-2">
         <Label>Max Products</Label>
