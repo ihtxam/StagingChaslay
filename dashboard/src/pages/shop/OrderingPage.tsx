@@ -144,7 +144,7 @@ export default function OrderingPage() {
   const categoryScrollLock = useRef(false);
   const addParamConsumedRef = useRef(false);
   const [promptInitialChannel, setPromptInitialChannel] = useState<ShopChannel>('takeaway');
-  const [, setDeliveryInfo] = useState<any>(null);
+  const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
   const [pendingDetail, setPendingDetail] = useState<Product | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
