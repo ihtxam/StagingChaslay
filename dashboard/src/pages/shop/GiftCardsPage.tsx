@@ -6,6 +6,11 @@ import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import {
+  formatAdyenError,
+  mountAdyenDropin,
+  normalizeAdyenPaymentSession,
+} from '@/lib/adyen-checkout';
 
 type GiftSettings = {
   enabled: boolean;
@@ -20,16 +25,16 @@ type GiftSettings = {
 type DeliveryType = 'digital' | 'physical';
 
 type PaymentSession = {
-  id: string;
-  sessionData: string;
-  clientKey: string;
-  environment: string;
+  id?: string;
+  sessionData?: string;
+  clientKey?: string;
+  environment?: string;
   error?: string;
   demoConfirmAvailable?: boolean;
 };
 
 export default function GiftCardsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
@@ -114,9 +119,19 @@ export default function GiftCardsPage() {
       });
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
-      setSession(res.data?.paymentSession || null);
-      if (res.data?.paymentSession?.demoConfirmAvailable && !res.data?.paymentSession?.id) {
+      const rawSession = res.data?.paymentSession || null;
+      const normalized = normalizeAdyenPaymentSession(rawSession);
+      setSession(
+        normalized
+          ? { ...normalized, environment: normalized.environment || 'test' }
+          : rawSession
+      );
+      if (normalized) {
+        setPayMsg('');
+      } else if (rawSession?.demoConfirmAvailable && !rawSession?.id) {
         setPayMsg(t('shopGiftCardDemoPayHint'));
+      } else if (rawSession?.error) {
+        setPayMsg(String(rawSession.error));
       }
     } catch (err: any) {
       setError(err?.response?.data?.error || t('actionFailed'));
@@ -142,36 +157,56 @@ export default function GiftCardsPage() {
   }, [shopKey, purchaseId, base, t]);
 
   useEffect(() => {
-    if (!session?.id || !dropinRef.current || dropinMounted.current) return;
+    const sessionId = session?.id;
+    const sessionData = session?.sessionData;
+    const clientKey = session?.clientKey;
+    if (!sessionId || !sessionData || !clientKey || !dropinRef.current || dropinMounted.current) {
+      return;
+    }
     dropinMounted.current = true;
+    let cancelled = false;
+    const adyenLocale = locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-US';
     const mount = async () => {
       try {
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const checkout = await AdyenCheckout({
-          environment: session.environment as 'test' | 'live',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
-          onPaymentCompleted: async () => {
+        await mountAdyenDropin({
+          session: {
+            id: sessionId,
+            sessionData,
+            clientKey,
+            environment: session?.environment,
+          },
+          container: dropinRef.current!,
+          locale: adyenLocale,
+          credentialSource: 'merchant',
+          onPaymentCompleted: async (result) => {
+            if (cancelled) return;
             try {
               await axios.post(
                 `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}/confirm-payment`,
-                {}
+                { resultCode: result?.resultCode || 'Authorised' }
               );
               window.location.href = `${base}/gift-cards/confirm/${purchaseId}`;
             } catch {
               setPayMsg(t('shopGiftCardConfirmPending'));
             }
           },
-          onError: () => setPayMsg(t('actionFailed')),
+          onError: (err) => {
+            if (!cancelled) {
+              setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('actionFailed'));
+            }
+          },
         });
-        checkout.create('dropin').mount(dropinRef.current!);
-      } catch {
-        setPayMsg(t('shopGiftCardPayLoadFailed'));
+      } catch (err) {
+        if (!cancelled) {
+          setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopGiftCardPayLoadFailed'));
+        }
       }
     };
     void mount();
-  }, [session, shopKey, purchaseId, base, t]);
+    return () => {
+      cancelled = true;
+    };
+  }, [session, shopKey, purchaseId, base, t, locale]);
 
   if (loading) {
     return (
