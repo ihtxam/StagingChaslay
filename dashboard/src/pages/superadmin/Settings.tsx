@@ -431,7 +431,8 @@ export default function Settings() {
               >
                 mailco.ch
               </a>
-              ). Brevo remains configured as fallback and for merchants on their own Brevo account.
+              ). Customers see the merchant business name as sender; Reply-To is set to the merchant
+              shop email so replies go to them. Brevo remains configured as fallback.
             </p>
           </div>
           <button

@@ -566,11 +566,6 @@ export function buildSettingsSearchIndex(
       ],
     },
     {
-      id: 'email-brevo',
-      tab: 'email',
-      keywords: ['brevo', 'sendinblue', 'api key', 'newsletter', t('settingsBrevo')],
-    },
-    {
       id: 'language-panel',
       tab: 'language',
       keywords: ['language', 'langue', 'sprache', t('language')],

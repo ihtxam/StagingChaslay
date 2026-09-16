@@ -29,6 +29,9 @@ type ResolvedEmailConfig = {
   apiKey: string;
   fromEmail: string;
   fromName: string;
+  /** Customer replies go here (merchant inbox) when platform sends on their behalf. */
+  replyToEmail?: string | null;
+  replyToName?: string | null;
   source: "merchant_smtp" | "merchant_brevo" | "database" | "env" | "none";
   smtp?: MerchantSmtpSettings | null;
   merchantId?: string | null;
@@ -99,8 +102,22 @@ export class EmailService {
     return name || "Shop";
   }
 
+  /** Reply address for customer-facing mail — merchant inbox, not platform noreply. */
+  private static merchantReplyTo(
+    merchantName: string | null | undefined,
+    merchantEmail: string | null | undefined,
+    smtpFromEmail?: string | null
+  ): { replyToEmail: string | null; replyToName: string } {
+    const replyToEmail = String(smtpFromEmail || merchantEmail || "").trim() || null;
+    return {
+      replyToEmail,
+      replyToName: this.merchantSenderName(merchantName),
+    };
+  }
+
   static async resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig> {
     let merchantName: string | null = null;
+    let merchantEmail: string | null = null;
     let useOwnDelivery = false;
 
     if (merchantId) {
@@ -112,6 +129,7 @@ export class EmailService {
         const merchant = await db.query.merchants.findFirst({
           where: eq(schema.merchants.id, merchantId),
           columns: {
+            email: true,
             emailSmtpSettings: true,
             emailBrevoSettings: true,
             emailDeliveryMode: true,
@@ -119,6 +137,7 @@ export class EmailService {
           },
         });
         merchantName = merchant?.name || null;
+        merchantEmail = merchant?.email || null;
         const mode = String(merchant?.emailDeliveryMode || "platform").toLowerCase();
         useOwnDelivery = mode === "own";
 
@@ -131,11 +150,14 @@ export class EmailService {
             String(smtp.host).trim() &&
             String(smtp.fromEmail).trim()
           ) {
+            const reply = this.merchantReplyTo(merchant?.name, merchant?.email, smtp.fromEmail);
             return {
               provider: "smtp",
               apiKey: "",
               fromEmail: String(smtp.fromEmail).trim(),
               fromName: this.merchantSenderName(merchant?.name),
+              replyToEmail: reply.replyToEmail,
+              replyToName: reply.replyToName,
               source: "merchant_smtp",
               smtp,
               merchantId,
@@ -150,11 +172,14 @@ export class EmailService {
             String(brevo.apiKey).trim() &&
             String(brevo.fromEmail).trim()
           ) {
+            const reply = this.merchantReplyTo(merchant?.name, merchant?.email, brevo.fromEmail);
             return {
               provider: "brevo",
               apiKey: String(brevo.apiKey).trim(),
               fromEmail: String(brevo.fromEmail).trim(),
               fromName: this.merchantSenderName(merchant?.name),
+              replyToEmail: reply.replyToEmail,
+              replyToName: reply.replyToName,
               source: "merchant_brevo",
               merchantId,
             };
@@ -164,6 +189,11 @@ export class EmailService {
         /* continue to platform */
       }
     }
+
+    const platformReply =
+      merchantId && merchantEmail
+        ? this.merchantReplyTo(merchantName, merchantEmail, null)
+        : { replyToEmail: null, replyToName: "Shop" as string };
 
     let dbApiKey = "";
     let dbFromEmail = "";
@@ -233,6 +263,8 @@ export class EmailService {
         apiKey,
         fromEmail,
         fromName: resolvedFromName,
+        replyToEmail: merchantId ? platformReply.replyToEmail : null,
+        replyToName: merchantId ? platformReply.replyToName : resolvedFromName,
         source,
         merchantId,
       };
@@ -247,6 +279,8 @@ export class EmailService {
         apiKey: mailcoCreds.apiKey,
         fromEmail: mailcoCreds.fromEmail,
         fromName: merchantId ? fromName : mailcoCreds.fromName,
+        replyToEmail: merchantId ? platformReply.replyToEmail : null,
+        replyToName: merchantId ? platformReply.replyToName : mailcoCreds.fromName,
         source,
         merchantId,
         mailco: {
@@ -554,6 +588,7 @@ export class EmailService {
         await sgMail.send({
           to: input.to,
           from: activeCfg.fromEmail,
+          replyTo: this.formatReplyTo(activeCfg),
           subject: input.subject,
           html: input.html,
           text: input.text || input.html.replace(/<[^>]+>/g, " "),
@@ -617,6 +652,13 @@ export class EmailService {
     }
   }
 
+  private static formatReplyTo(cfg: ResolvedEmailConfig): string | undefined {
+    const email = String(cfg.replyToEmail || "").trim();
+    if (!email) return undefined;
+    const name = String(cfg.replyToName || cfg.fromName || "").trim();
+    return name ? `"${name}" <${email}>` : email;
+  }
+
   private static async sendViaSmtp(cfg: ResolvedEmailConfig, input: SendEmailInput) {
     const smtp = cfg.smtp || {};
     const port = Number(smtp.port) || (smtp.secure ? 465 : 587);
@@ -636,6 +678,7 @@ export class EmailService {
     await transporter.sendMail({
       from: `"${cfg.fromName || "Shop"}" <${cfg.fromEmail}>`,
       to: input.to,
+      replyTo: this.formatReplyTo(cfg),
       subject: input.subject,
       html: input.html,
       text: input.text || input.html.replace(/<[^>]+>/g, " "),
@@ -655,6 +698,9 @@ export class EmailService {
 
     const text = input.text || input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const idempotencyKey = randomUUID();
+    const replyTo = cfg.replyToEmail
+      ? [{ email: cfg.replyToEmail, name: cfg.replyToName || cfg.fromName || undefined }]
+      : undefined;
 
     try {
       await axios.post(
@@ -665,6 +711,7 @@ export class EmailService {
             name: cfg.fromName || "Reborn",
           },
           to: [{ email: input.to }],
+          ...(replyTo ? { reply_to: replyTo } : {}),
           template: mailco.templateSlug,
           data: {
             subject: input.subject,
@@ -717,6 +764,14 @@ export class EmailService {
             email: cfg.fromEmail,
           },
           to: [{ email: input.to }],
+          ...(cfg.replyToEmail
+            ? {
+                replyTo: {
+                  email: cfg.replyToEmail,
+                  name: cfg.replyToName || cfg.fromName || undefined,
+                },
+              }
+            : {}),
           subject: input.subject,
           htmlContent: input.html,
           textContent: input.text || input.html.replace(/<[^>]+>/g, " "),
