@@ -226,22 +226,27 @@ function buildTestPatternBitmap(widthPx, heightPx) {
 }
 
 function isComPort(name) {
-  return /^COM\d+$/i.test(String(name || "").trim());
+  return /^COM\d+:?$/i.test(String(name || "").trim());
 }
 
 function isWindowsUsbPort(name) {
   return /^USB\d+$/i.test(String(name || "").trim());
 }
 
+/**
+ * The COM port named anywhere in these values, canonicalised to the bare `COMn`
+ * name .NET accepts — see `normalizeComPort`.
+ */
 function extractComPort(...values) {
   for (const raw of values) {
     const text = String(raw || "").trim();
     if (!text) continue;
-    if (isComPort(text)) return text.toUpperCase();
+    const direct = normalizeComPort(text);
+    if (direct) return direct;
     const paren = text.match(/\((COM\d+)\)/i);
-    if (paren) return paren[1].toUpperCase();
+    if (paren) return normalizeComPort(paren[1]);
     const inline = text.match(/\b(COM\d+)\b/i);
-    if (inline) return inline[1].toUpperCase();
+    if (inline) return normalizeComPort(inline[1]);
   }
   return null;
 }
@@ -257,15 +262,69 @@ function extractWindowsUsbPort(...values) {
   return null;
 }
 
+/**
+ * The port name `System.IO.Ports.SerialPort` will accept, or "" when the value
+ * is not a Windows serial port name at all.
+ *
+ * .NET is stricter here than CreateFile, and the difference between the two is
+ * this whole bug. `SerialStream`'s constructor rejects any name that does not
+ * begin with "COM" (dotnet/runtime, SerialStream.Windows.cs) and the `PortName`
+ * setter rejects any name beginning with a backslash, so the `\\.\COM12` form
+ * that CreateFile *requires* for two-digit ports is exactly what SerialPort
+ * refuses — with
+ *   "The given port name does not start with COM/com or does not resolve to a
+ *    valid serial port."
+ * which is the exception a French till reported against 1.10.14. SerialPort
+ * builds the `\\.\` prefix itself, for every port number, so the bare COMn name
+ * is the only correct thing to hand it. Until now every port above COM9 got
+ * `\\.\COMnn` and could therefore never open, and the probe reported all of
+ * them as failed.
+ *
+ * Accepts every spelling Windows hands us: `COM8`, `com8`, `COM8:` (the form
+ * `Win32_Printer.PortName` uses), `\\.\COM8`, and any of those padded.
+ */
 function normalizeComPort(port) {
-  const raw = String(port || "").trim();
+  const raw = String(port == null ? "" : port).trim();
   if (!raw) return "";
-  const stripped = raw.replace(/^\\\\\.\\/i, "").toUpperCase();
-  const m = stripped.match(/^COM(\d+)$/);
-  if (!m) return raw;
-  const num = parseInt(m[1], 10);
-  const com = `COM${num}`;
-  return num >= 10 ? `\\\\.\\${com}` : com;
+  const m = raw
+    .replace(/^\\\\[.?]\\/, "")
+    .replace(/:+$/, "")
+    .trim()
+    .match(/^com0*(\d{1,4})$/i);
+  if (!m) return "";
+  const num = Number(m[1]);
+  if (!num) return "";
+  return `COM${num}`;
+}
+
+/**
+ * Why a port name cannot be opened, said before .NET gets a chance to say it
+ * badly. An empty or malformed name reaching `SerialPort` throws the same
+ * opaque ArgumentException as a port that has gone away, so an unset port and a
+ * dead printer were indistinguishable in the toast.
+ */
+function describeComPortNameProblem(port) {
+  const raw = String(port == null ? "" : port).trim();
+  if (!raw) {
+    return 'No serial port is set for the Niimbot. Select a COM port on the printer profile in Settings → Receipts & printers, or run "Diagnose Niimbot ports" to find it.';
+  }
+  return `'${raw}' is not a Windows serial port name. Windows serial ports are named COM1, COM2, COM3 … — set one on the printer profile, or run "Diagnose Niimbot ports" to see which ports this PC has.`;
+}
+
+/**
+ * The remote Bluetooth device address carried by a PnP instance id.
+ *
+ * An outgoing SPP port's id ends in the paired device's address
+ * (`...&0&001A7DDA7113_C00000000`) and the Bluetooth device itself is
+ * `BTHENUM\DEV_001A7DDA7113\...`, so the two can be tied together even after
+ * the print queue that named the printer has been deleted. The SPP service GUID
+ * contains a 12-hex run of its own (`00805f9b34fb`), which is why braced
+ * sections are dropped first.
+ */
+function bluetoothAddressOf(instanceId) {
+  const text = String(instanceId || "").replace(/\{[^}]*\}/g, " ");
+  const found = text.match(/(?<![0-9a-z])[0-9a-f]{12}(?![0-9a-f])/gi) || [];
+  return found.length ? found[found.length - 1].toUpperCase() : "";
 }
 
 function packetDelayMs(packet) {
@@ -305,6 +364,7 @@ const SERIAL_EXIT = {
   OPEN_FAILED: 20,
   WRITE_FAILED: 21,
   MISSING_PAYLOAD: 22,
+  BAD_PORT_NAME: 23,
 };
 
 /**
@@ -331,7 +391,10 @@ const SERIAL_PAYLOAD_SEPARATOR = "\t";
  */
 function buildSerialJobScript() {
   return `param(
-  [Parameter(Mandatory = $true)][string]$PortPath,
+  # AllowEmptyString so that an empty name is answered by the check below with a
+  # reason and exit ${SERIAL_EXIT.BAD_PORT_NAME}, instead of PowerShell's own
+  # "Cannot bind argument to parameter 'PortPath'" landing in the merchant's toast.
+  [Parameter(Mandatory = $true)][AllowEmptyString()][string]$PortPath,
   [Parameter(Mandatory = $true)][int]$Baud,
   [Parameter(Mandatory = $true)][string]$PayloadFile,
   [string]$PortName = '',
@@ -342,21 +405,83 @@ function buildSerialJobScript() {
 
 $ErrorActionPreference = 'Stop'
 
+# Without this a non-English Windows writes its exception text in the console
+# code page while Node decodes the pipe as UTF-8, so a French till's reason came
+# back as mojibake: unreadable for the merchant and unmatchable for the agent.
+try {
+  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+} catch { }
+
+# PowerShell wraps anything thrown inside a .NET method call in a
+# MethodInvocationException whose own message is the *localized*
+# 'Exception calling "Open" with "0" argument(s): "<the real reason>"'. Peeling
+# off PowerShell's own layers leaves .NET's exception, in every locale, with no
+# wrapper to strip.
+#
+# Only PowerShell's layers: GetBaseException() would keep going and throw away
+# .NET's own classification — an UnauthorizedAccessException carrying
+# "Access to the port 'COM8' is denied." reduces to its inner
+# "No such file or directory", which names neither the port nor the cause.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
 function Get-ErrorText {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
-    return [string]$Record.Exception.Message
+    $ex = $Record.Exception
+    if ($null -eq $ex) { return 'unknown serial error' }
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
+    if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
+    if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown serial error' }
+    return $text
   } catch {
     return 'unknown serial error'
   }
 }
 
-function Write-RawError {
+# The .NET type name, which is identical in every locale. Both reasons a port
+# name is refused arrive as ArgumentException and their text is translated, so
+# the type is what the agent classifies on.
+function Get-ErrorType {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
-    [Console]::Error.WriteLine($Record.Exception.Message)
+    $ex = $Record.Exception
+    if ($null -eq $ex) { return 'unknown' }
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    return [string]$real.GetType().FullName
   } catch {
-    [Console]::Error.WriteLine('unknown serial error')
+    return 'unknown'
+  }
+}
+
+function Write-RawError {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  [Console]::Error.WriteLine((Get-ErrorText $Record))
+  [Console]::Error.WriteLine('type: ' + (Get-ErrorType $Record))
+}
+
+# The ports Windows has right now. A name Windows has dropped and a name that
+# still resolves to something which is not a serial device throw the *same*
+# ArgumentException, so this list is the only thing that tells them apart.
+function Get-AvailablePortNames {
+  try {
+    $names = [System.IO.Ports.SerialPort]::GetPortNames()
+    if ($null -eq $names) { return '' }
+    return (($names | Sort-Object) -join ',')
+  } catch {
+    return ''
   }
 }
 
@@ -442,19 +567,36 @@ if (-not (Test-Path -LiteralPath $PayloadFile)) {
 # that has not been upgraded to PowerShell 7.
 try { Add-Type -AssemblyName System.IO.Ports -ErrorAction SilentlyContinue } catch { }
 
+$available = Get-AvailablePortNames
+
+# SerialPort only accepts a bare COMn name, so anything else is caught here and
+# named plainly rather than coming back as .NET's ArgumentException, which says
+# the same thing for a blank setting, a device path and a port that is gone.
+if ([string]::IsNullOrWhiteSpace($PortPath)) {
+  [Console]::Error.WriteLine('no serial port name was given')
+  [Console]::Error.WriteLine('ports: ' + $available)
+  exit ${SERIAL_EXIT.BAD_PORT_NAME}
+}
+if ($PortPath -notmatch '^COM\\d+$') {
+  [Console]::Error.WriteLine('not a serial port name: ' + $PortPath)
+  [Console]::Error.WriteLine('ports: ' + $available)
+  exit ${SERIAL_EXIT.BAD_PORT_NAME}
+}
+
 $osBaud = Get-OsConfiguredBaud $PortName
 
-$port = New-Object System.IO.Ports.SerialPort $PortPath, $Baud, 'None', 8, 'One'
-$port.Handshake = 'None'
-$port.DtrEnable = $true
-$port.RtsEnable = $true
-$port.ReadTimeout = 400
-$port.WriteTimeout = 15000
-
+$port = $null
 try {
+  $port = New-Object System.IO.Ports.SerialPort $PortPath, $Baud, 'None', 8, 'One'
+  $port.Handshake = 'None'
+  $port.DtrEnable = $true
+  $port.RtsEnable = $true
+  $port.ReadTimeout = 400
+  $port.WriteTimeout = 15000
   $port.Open()
 } catch {
   Write-RawError $_
+  [Console]::Error.WriteLine('ports: ' + $available)
   [Console]::Error.WriteLine('os-configured: ' + $osBaud)
   exit ${SERIAL_EXIT.OPEN_FAILED}
 }
@@ -538,6 +680,7 @@ try {
   portName = $PortName
   baud = $Baud
   osConfiguredBaud = $osBaud
+  availablePorts = $available
   bytesWritten = $written
   printed = $printed
   writeError = $writeError
@@ -588,22 +731,72 @@ async function runPowerShellSource(source, args, options = {}) {
 }
 
 /**
+ * PowerShell's method-invocation wrapper, in any locale.
+ *
+ * The English form is
+ *   Exception calling "Open" with "0" argument(s): "<the real message>"
+ * and a French Windows says
+ *   Exception lors de l'appel de « Open » avec « 0 » argument(s) : « ... »
+ * with the message in guillemets. Matching only the English form left the whole
+ * wrapper in front of the reason on the merchant's till, so the sentence they
+ * read began with PowerShell trivia and was then truncated before the point.
+ * Each pattern takes the last quoted run on the line, which is where the real
+ * message always is; the final one covers a wrapper whose closing quote has
+ * been lost to truncation, which is exactly what was reported.
+ */
+const PS_INVOCATION_WRAPPERS = [
+  /^.*\bargument\(s\)\s*:\s*"(.+)"\s*$/,
+  /^.*:\s*«\s*(.+?)\s*»\s*$/u,
+  /^.*:\s*[“”]\s*(.+?)\s*[“”]\s*$/u,
+  /^.*:\s*"\s*(.+?)\s*"\s*$/,
+  /^.*\bargument.*:\s*«\s*(.+)$/u,
+];
+
+/**
  * First non-empty stderr line — the raw .NET exception message, nothing else.
- * PowerShell wraps exceptions thrown inside a method call as
- * `Exception calling "Open" with "0" argument(s): "<real message>"`; the wrapper
- * is stripped so the merchant reads the actual reason.
+ * The script now sends the base exception, so there is usually no wrapper left
+ * to strip; this keeps stripping it for anything already in the field.
  */
 function rawSerialError(error) {
   const stderr = String((error && error.stderr) || "");
   for (const line of stderr.split(/\r?\n/)) {
     const text = line.trim();
     if (!text) continue;
-    const unwrapped = text.match(
-      /^Exception calling "[^"]*" with "[^"]*" argument\(s\): "(.*)"$/
-    );
-    return (unwrapped ? unwrapped[1] : text).slice(0, 300);
+    for (const wrapper of PS_INVOCATION_WRAPPERS) {
+      const unwrapped = text.match(wrapper);
+      if (unwrapped) return unwrapped[1].trim().slice(0, 300);
+    }
+    return text.slice(0, 300);
   }
   return "";
+}
+
+/** A labelled line the serial script appends to stderr after the exception. */
+function serialErrorField(error, label) {
+  const stderr = String((error && error.stderr) || "");
+  const match = stderr.match(new RegExp(`^${label}:[ \\t]*(.*)$`, "im"));
+  return match ? match[1].trim() : "";
+}
+
+/**
+ * The COM ports the failing script saw, or null when it did not report them
+ * (an older agent, or a failure that never reached the enumeration). "Windows
+ * has no serial port at all" and "we do not know" must not read the same.
+ */
+function availablePortsFromError(error) {
+  const stderr = String((error && error.stderr) || "");
+  if (!/^ports:/im.test(stderr)) return null;
+  return serialErrorField(error, "ports")
+    .split(",")
+    .map((p) => normalizeComPort(p))
+    .filter(Boolean);
+}
+
+function describeAvailablePorts(available) {
+  if (!available) return "";
+  return available.length
+    ? ` Windows currently has: ${available.join(", ")}.`
+    : " Windows currently has no serial port at all.";
 }
 
 /**
@@ -611,19 +804,47 @@ function rawSerialError(error) {
  * message is always appended so the real cause is visible even when we have no
  * rule for it.
  */
+/**
+ * .NET's own words for a name it will not accept as a serial port, in the
+ * languages we have seen. Only a fallback: the script reports the exception
+ * *type*, which needs no translation.
+ */
+const NET_PORT_NAME_REFUSED =
+  /does not start with COM|does not resolve to a valid serial port|not a serial port|ne commence pas par COM|ne d[ée]marre pas avec COM|port s[ée]rie valide|PortName cannot be empty|not a serial port name|no serial port name was given/i;
+
 function describeSerialFailure(comPort, error, baud) {
-  const label = String(comPort || "COM").toUpperCase();
+  const label = normalizeComPort(comPort);
+  // A name Windows could never accept makes the setting itself the fault, so no
+  // sentence about the port can be true. This used to fall back to the literal
+  // "COM", inventing a port and sending merchants off to re-pair Bluetooth.
+  if (!label) return describeComPortNameProblem(comPort);
   const at = baud ? ` at ${baud} baud` : "";
   if (error && (error.killed || error.code === "ETIMEDOUT")) {
     return `Niimbot ${label} timed out${at}`;
   }
   const raw = rawSerialError(error);
   const detail = raw ? ` — ${raw}` : "";
+  const available = availablePortsFromError(error);
+  const have = describeAvailablePorts(available);
+  const type = serialErrorField(error, "type");
+
+  /*
+   * ArgumentException from Open() means Windows would not accept the *name*, and
+   * .NET gives the identical message whether the name is malformed, gone, or
+   * resolves to a device that is not a serial port. Only the live port list can
+   * separate those, so it decides which of the two sentences is true.
+   */
+  if (/Argument(Null)?Exception/i.test(type) || NET_PORT_NAME_REFUSED.test(raw)) {
+    if (available && available.includes(label)) {
+      return `Niimbot ${label} exists but Windows will not open it as a serial port${at}.${have} That is a leftover port entry, not a working port: remove the device in Device Manager, then unpair and re-pair the printer over Bluetooth (or reinstall the NIIMBOT driver) so ${label} is created again.${detail}`;
+    }
+    return `Niimbot ${label} is not a serial port on this PC${at}.${have} Unpair and re-pair the printer over Bluetooth, or reinstall the NIIMBOT driver, to recreate its COM port — then run "Diagnose Niimbot ports" and pick a port from the list.${detail}`;
+  }
   if (/access to the port|access is denied|UnauthorizedAccess/i.test(raw)) {
     return `Niimbot ${label} is already open${at}. Close NIIMBOT.exe (and any other app holding the port), then retry.${detail}`;
   }
   if (/does not exist|FileNotFoundException|could not find|cannot find the (file|port)/i.test(raw)) {
-    return `Niimbot ${label} does not exist on this PC${at}. Run "Diagnose Niimbot ports" and pick a port from the list.${detail}`;
+    return `Niimbot ${label} does not exist on this PC${at}.${have} Run "Diagnose Niimbot ports" and pick a port from the list.${detail}`;
   }
   if (/semaphore timeout|device attached to the system is not functioning|The I\/O operation/i.test(raw)) {
     return `Niimbot ${label} did not answer${at}. This is what a Bluetooth incoming/unconnected port does — connect the printer in Windows Bluetooth settings and use its outgoing port.${detail}`;
@@ -666,6 +887,10 @@ function parseHandshakeOutput(stdout, comPort, baud) {
     portPath: String(parsed.portPath || ""),
     baud: Number(parsed.baud || baud),
     osConfiguredBaud: String(parsed.osConfiguredBaud || ""),
+    availablePorts: String(parsed.availablePorts || "")
+      .split(",")
+      .map((p) => normalizeComPort(p))
+      .filter(Boolean),
     bytesWritten: Number(parsed.bytesWritten || 0),
     printed: Boolean(parsed.printed),
     writeError: String(parsed.writeError || ""),
@@ -698,6 +923,15 @@ function recoverHandshakeOutput(error, comPort, baud) {
 /** One open+handshake attempt at one baud. Throws with the real reason attached. */
 async function runNiimbotSerialHandshake(comPort, job, baud, options = {}) {
   const portPath = normalizeComPort(comPort);
+  // No port name, no attempt. Handing an empty or malformed name to SerialPort
+  // spends a PowerShell start-up to get back a .NET message that says nothing
+  // the merchant can act on.
+  if (!portPath) {
+    const failure = new Error(describeComPortNameProblem(comPort));
+    failure.fatal = true;
+    failure.baud = baud;
+    throw failure;
+  }
   const steps = job.steps || [];
   const timeoutMs = Math.min(240000, Math.max(60000, 20000 + steps.length * 80));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-job-"));
@@ -732,6 +966,8 @@ async function runNiimbotSerialHandshake(comPort, job, baud, options = {}) {
     }
     const failure = new Error(describeSerialFailure(comPort, error, baud));
     failure.rawError = rawSerialError(error);
+    failure.errorType = serialErrorField(error, "type");
+    failure.availablePorts = availablePortsFromError(error);
     failure.baud = baud;
     throw failure;
   } finally {
@@ -741,6 +977,22 @@ async function runNiimbotSerialHandshake(comPort, job, baud, options = {}) {
       /* temp dir cleanup is best effort */
     }
   }
+}
+
+/**
+ * Whether another baud is worth trying. A port that is held by another app,
+ * absent, or refused by name fails identically at every rate, and a name is not
+ * a baud problem in any language — retrying it spends two more PowerShell
+ * starts to reprint the same sentence with a different number in it.
+ */
+function isFatalSerialFailure(error) {
+  if (!error) return false;
+  if (error.fatal) return true;
+  const type = String(error.errorType || "");
+  if (/Argument(Null)?Exception/i.test(type)) return true;
+  const raw = String(error.rawError || "");
+  if (NET_PORT_NAME_REFUSED.test(raw)) return true;
+  return /access to the port|access is denied|does not exist|could not find/i.test(raw);
 }
 
 /**
@@ -758,9 +1010,7 @@ async function printNiimbotJobSerial(comPort, job, options = {}) {
       result = await runNiimbotSerialHandshake(comPort, job, baud, options);
     } catch (error) {
       failures.push(error);
-      const raw = String((error && error.rawError) || "");
-      // A port held by another app or absent will not open at any baud.
-      if (/access to the port|access is denied|does not exist|could not find/i.test(raw)) break;
+      if (isFatalSerialFailure(error)) break;
       continue;
     }
     if (result.printed || result.answered) return result;
@@ -836,12 +1086,49 @@ try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 } catch { }
 
+# .NET's exception, with PowerShell's localized 'Exception calling "Open" with
+# "0" argument(s): "..."' layers peeled off — and no further, or .NET's own
+# classification is lost with them. See Get-ErrorText in the serial script.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
 function Reason {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
-    return [string]$Record.Exception.Message
+    $ex = $Record.Exception
+    if ($null -eq $ex) { return 'unknown error' }
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
+    if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
+    if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown error' }
+    return $text
   } catch {
     return 'unknown error'
+  }
+}
+
+# The .NET type, which is the same in every locale and is what separates a name
+# Windows refuses (ArgumentException) from a port that is busy or silent.
+function Get-ReasonType {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  try {
+    $ex = $Record.Exception
+    if ($null -eq $ex) { return '' }
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    return [string]$real.GetType().FullName
+  } catch {
+    return ''
   }
 }
 
@@ -861,12 +1148,16 @@ function Add-PortRow {
       caption = ''
       pnpDeviceId = ''
       configuredBaud = ''
+      # Get-PnpDevice lists ports whose device is not attached any more, so a
+      # row existing is not the same as Windows having the port.
+      present = $false
       queues = @()
       sources = @()
       opens = @()
     }
   }
   $row = $ports[$key]
+  if ($Source -eq 'GetPortNames' -or $Source -eq 'Win32_SerialPort') { $row.present = $true }
   if ([string]::IsNullOrWhiteSpace($row.caption) -and -not [string]::IsNullOrWhiteSpace($Caption)) {
     $row.caption = $Caption
   }
@@ -900,9 +1191,18 @@ function Get-ConfiguredBaud {
 
 $errors = @()
 
+# The ports Windows actually has. Everything else this script finds is either a
+# name a queue still points at or a device that is no longer attached, and
+# recommending one of those sends the merchant to a port .NET refuses to open.
+$live = @{}
+
 try {
   [System.IO.Ports.SerialPort]::GetPortNames() | ForEach-Object {
-    Add-PortRow -Name $_ -Caption '' -Pnp '' -Source 'GetPortNames'
+    $name = ([string]$_).Trim().TrimEnd(':')
+    if (-not [string]::IsNullOrWhiteSpace($name)) {
+      $live[$name.ToUpperInvariant()] = $true
+      Add-PortRow -Name $name -Caption '' -Pnp '' -Source 'GetPortNames'
+    }
   }
 } catch {
   $errors += ('GetPortNames: ' + (Reason $_))
@@ -910,7 +1210,11 @@ try {
 
 try {
   Get-CimInstance -ClassName Win32_SerialPort -ErrorAction Stop | ForEach-Object {
-    Add-PortRow -Name ([string]$_.DeviceID) -Caption ([string]$_.Caption) -Pnp ([string]$_.PNPDeviceID) -Source 'Win32_SerialPort'
+    $name = ([string]$_.DeviceID).Trim().TrimEnd(':')
+    if (-not [string]::IsNullOrWhiteSpace($name)) {
+      $live[$name.ToUpperInvariant()] = $true
+    }
+    Add-PortRow -Name $name -Caption ([string]$_.Caption) -Pnp ([string]$_.PNPDeviceID) -Source 'Win32_SerialPort'
   }
 } catch {
   $errors += ('Win32_SerialPort: ' + (Reason $_))
@@ -934,40 +1238,6 @@ try {
   }
 } catch {
   $errors += ('Win32_SerialPortConfiguration: ' + (Reason $_))
-}
-
-$bauds = @()
-foreach ($b in ($Bauds -split ',')) {
-  $trimmed = $b.Trim()
-  if ($trimmed) { $bauds += [int]$trimmed }
-}
-
-foreach ($key in @($ports.Keys)) {
-  $row = $ports[$key]
-  $row.configuredBaud = Get-ConfiguredBaud $row.port
-  $path = $row.port
-  if ($path -match '^COM(\\d+)$' -and [int]$Matches[1] -ge 10) {
-    $path = '\\\\.\\' + $row.port
-  }
-  foreach ($baud in $bauds) {
-    $attempt = [PSCustomObject]@{ baud = $baud; opened = $false; error = '' }
-    $sp = $null
-    try {
-      $sp = New-Object System.IO.Ports.SerialPort $path, $baud, 'None', 8, 'One'
-      $sp.ReadTimeout = 400
-      $sp.WriteTimeout = 1500
-      $sp.Open()
-      $attempt.opened = $true
-    } catch {
-      $attempt.error = Reason $_
-    } finally {
-      try {
-        if ($sp -and $sp.IsOpen) { $sp.Close() }
-        if ($sp) { $sp.Dispose() }
-      } catch { }
-    }
-    $row.opens += $attempt
-  }
 }
 
 # Installed printer drivers, so a queue whose driver is gone can be named as
@@ -1016,9 +1286,50 @@ try {
 foreach ($queue in $printers) {
   foreach ($part in (([string]$queue.port) -split ',')) {
     $portKey = $part.Trim().TrimEnd(':').ToUpperInvariant()
-    if (-not $ports.ContainsKey($portKey)) { continue }
+    if ($portKey -notmatch '^COM\\d+$') { continue }
+    # A queue keeps its port binding after Windows drops the port, so this adds
+    # a row for a port nothing else found. It stays present = $false, which is
+    # what stops it being recommended and makes the report name it as absent
+    # instead of going quiet about the one port the merchant was told to use.
+    Add-PortRow -Name $portKey -Caption '' -Pnp '' -Source 'Win32_Printer'
     $row = $ports[$portKey]
     if ($row.queues -notcontains $queue.name) { $row.queues += [string]$queue.name }
+  }
+}
+
+$bauds = @()
+foreach ($b in ($Bauds -split ',')) {
+  $trimmed = $b.Trim()
+  if ($trimmed) { $bauds += [int]$trimmed }
+}
+
+# Runs after the queues are known so that a port only a queue points at is
+# tried too: the exception it gives is the proof of what is wrong with it.
+foreach ($key in @($ports.Keys)) {
+  $row = $ports[$key]
+  $row.configuredBaud = Get-ConfiguredBaud $row.port
+  # The bare COMn name, never '\\.\COMnn': SerialPort builds that prefix itself
+  # and rejects a name that does not start with COM, so prefixing it here made
+  # every port above COM9 report as unopenable. See normalizeComPort.
+  foreach ($baud in $bauds) {
+    $attempt = [PSCustomObject]@{ baud = $baud; opened = $false; error = ''; errorType = '' }
+    $sp = $null
+    try {
+      $sp = New-Object System.IO.Ports.SerialPort $row.port, $baud, 'None', 8, 'One'
+      $sp.ReadTimeout = 400
+      $sp.WriteTimeout = 1500
+      $sp.Open()
+      $attempt.opened = $true
+    } catch {
+      $attempt.error = Reason $_
+      $attempt.errorType = Get-ReasonType $_
+    } finally {
+      try {
+        if ($sp -and $sp.IsOpen) { $sp.Close() }
+        if ($sp) { $sp.Dispose() }
+      } catch { }
+    }
+    $row.opens += $attempt
   }
 }
 
@@ -1036,6 +1347,9 @@ try {
 }
 
 $result = [PSCustomObject]@{
+  # The direct answer to "does that port still exist": what Windows reports
+  # right now, independently of what any print queue still points at.
+  availablePorts = @($live.Keys | Sort-Object)
   ports = @($ports.Values | Sort-Object port)
   printers = @($printers)
   bluetooth = @($bluetooth)
@@ -1078,10 +1392,46 @@ function buildUsbDeviceScript() {
 
 $ErrorActionPreference = 'Stop'
 
+# Node decodes this pipe as UTF-8, so a localized Windows writing its exception
+# text in the console code page would arrive as mojibake.
+try {
+  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+} catch { }
+
+# .NET's exception, with PowerShell's localized 'Exception calling ...' layers
+# peeled off — and no further. See Get-ErrorText in the serial script.
+function Get-DotNetException {
+  param($Exception)
+  $ex = $Exception
+  while ($null -ne $ex -and $null -ne $ex.InnerException) {
+    $name = ''
+    try { $name = [string]$ex.GetType().FullName } catch { $name = '' }
+    if (-not $name.StartsWith('System.Management.Automation')) { break }
+    $ex = $ex.InnerException
+  }
+  return $ex
+}
+
+function Get-ReasonText {
+  param([System.Management.Automation.ErrorRecord]$Record)
+  try {
+    $ex = $Record.Exception
+    if ($null -eq $ex) { return 'unknown error' }
+    $real = Get-DotNetException $ex
+    if ($null -eq $real) { $real = $ex }
+    $text = [string]$real.Message
+    if ([string]::IsNullOrWhiteSpace($text)) { $text = [string]$ex.Message }
+    if ([string]::IsNullOrWhiteSpace($text)) { return 'unknown error' }
+    return $text
+  } catch {
+    return 'unknown error'
+  }
+}
+
 function Write-RawError {
   param([System.Management.Automation.ErrorRecord]$Record)
   try {
-    [Console]::Error.WriteLine($Record.Exception.Message)
+    [Console]::Error.WriteLine((Get-ReasonText $Record))
   } catch {
     [Console]::Error.WriteLine('unknown usb device error')
   }
@@ -1114,15 +1464,6 @@ function Get-InterfacePath {
   param([string]$InstanceId)
   $slug = $InstanceId.ToLowerInvariant().Replace('\\', '#')
   return ('\\\\?\\' + $slug + '#{${USBPRINT_INTERFACE_GUID}}')
-}
-
-function Get-ReasonText {
-  param([System.Management.Automation.ErrorRecord]$Record)
-  try {
-    return [string]$Record.Exception.Message
-  } catch {
-    return 'unknown error'
-  }
 }
 
 function Get-UsbPrintDevices {
@@ -1251,18 +1592,58 @@ const NIIMBOT_NAME_RE = /niimbot|niimbus|\bk3\b|k3w|\bb21\b|\bb1\b|\bb18\b|\bb31
 const VERDICT_TEXT = {
   busy: "another program is holding it",
   missing: "Windows no longer has that port",
+  "not-a-serial-port": "Windows will not open that name as a serial port",
   "not-connected": "nothing answered on it",
   failed: "it would not open",
   unknown: "it was never tried",
 };
 
+/**
+ * The COM ports this PC actually has, or null when nothing told us.
+ *
+ * A print queue keeps its port binding after Windows drops the port: deleting
+ * the K3-* queue does not renumber anything, but unpairing the printer takes
+ * its SPP port with it, and the queue for the other one still says COM8. Until
+ * now a bound port with no enumerated row counted as fine, so the diagnosis
+ * recommended a port that no longer existed and the bar test then failed inside
+ * .NET with a message about the port *name*. Nothing may be recommended that is
+ * not in this set.
+ */
+function liveComPortSet(ports, availablePorts) {
+  if (Array.isArray(availablePorts)) {
+    return new Set(availablePorts.map((p) => normalizeComPort(p)).filter(Boolean));
+  }
+  if (Array.isArray(ports) && ports.length) {
+    return new Set(
+      ports
+        .filter((p) => p && p.present !== false)
+        .map((p) => normalizeComPort(p && p.port))
+        .filter(Boolean)
+    );
+  }
+  return null;
+}
+
+/** "COM3, COM6", or "none" — the list every stale-port message needs. */
+function availablePortsText(live) {
+  if (!live || !live.size) return "none";
+  return [...live]
+    .sort((a, b) => Number(a.slice(3)) - Number(b.slice(3)))
+    .join(", ");
+}
+
 /** Classifies one probed COM port and explains, in plain language, what to do. */
-function classifyProbedPort(row) {
+function classifyProbedPort(row, context = {}) {
   const blob = `${row.port || ""} ${row.caption || ""} ${row.pnpDeviceId || ""}`;
   const opens = Array.isArray(row.opens) ? row.opens : [];
   const openedBauds = opens.filter((o) => o && o.opened).map((o) => o.baud);
   const errors = opens.map((o) => String((o && o.error) || "")).filter(Boolean);
   const allErrors = errors.join(" | ");
+  const errorTypes = opens.map((o) => String((o && o.errorType) || "")).join(" ");
+  // Rows only a print queue pointed at are absent by construction, and the
+  // "present" flag is the only thing that says so — a row existing does not
+  // mean Windows has the port.
+  const present = row.present === undefined ? true : Boolean(row.present);
   const isBluetooth = /bthenum|bluetooth/i.test(blob);
   /*
    * A Bluetooth SPP pair gives Windows two ports. The local RFCOMM server
@@ -1276,17 +1657,37 @@ function classifyProbedPort(row) {
     !incoming &&
     /BTHENUM|BluetoothDevice_|&VID|_VID/i.test(String(row.pnpDeviceId || ""));
   const queues = (Array.isArray(row.queues) ? row.queues : []).map(String).filter(Boolean);
-  const looksNiimbot = NIIMBOT_NAME_RE.test(`${blob} ${queues.join(" ")}`);
+  /*
+   * The paired Bluetooth device behind an outgoing SPP port. Windows gives such
+   * a port the generic caption "Standard Serial over Bluetooth link (COMn)", so
+   * once the K3-* print queue is deleted nothing in the port's own fields says
+   * "Niimbot" any more. The remote address in its PnP id does, via the paired
+   * device list.
+   */
+  const btDevices = Array.isArray(context.bluetoothDevices) ? context.bluetoothDevices : [];
+  const bluetoothAddress = isBluetooth ? bluetoothAddressOf(row.pnpDeviceId) : "";
+  const paired = bluetoothAddress
+    ? btDevices.find((d) => d && bluetoothAddressOf(d.instanceId) === bluetoothAddress) || null
+    : null;
+  const bluetoothDevice = paired ? String(paired.name || "") : "";
+  const looksNiimbot = NIIMBOT_NAME_RE.test(`${blob} ${queues.join(" ")} ${bluetoothDevice}`);
   const looksScale = /ch340|ch341|usb-serial ch|1a86/i.test(blob) && !looksNiimbot;
   const foreignQueues = queues.filter((q) => !NIIMBOT_NAME_RE.test(q));
 
   let verdict;
   if (openedBauds.length) {
     verdict = "opened";
+  } else if (!present) {
+    verdict = "missing";
   } else if (/access to the port|access is denied/i.test(allErrors)) {
     verdict = "busy";
   } else if (/does not exist|could not find|cannot find/i.test(allErrors)) {
     verdict = "missing";
+  } else if (/Argument(Null)?Exception/i.test(errorTypes) || NET_PORT_NAME_REFUSED.test(allErrors)) {
+    // Windows would not accept the name at all. The port is listed somewhere but
+    // does not resolve to a serial device, which is not the same as busy or
+    // silent and must not be advised as either.
+    verdict = "not-a-serial-port";
   } else if (/semaphore timeout|not functioning|I\/O operation/i.test(allErrors)) {
     verdict = "not-connected";
   } else {
@@ -1303,7 +1704,15 @@ function classifyProbedPort(row) {
   } else if (verdict === "busy") {
     advice.push("Held by another program. Close NIIMBOT.exe and any label software, then retry.");
   } else if (verdict === "missing") {
-    advice.push("Windows no longer has this port. Clear it from the printer profile.");
+    advice.push(
+      present
+        ? "Windows no longer has this port. Clear it from the printer profile."
+        : "Windows does not have this port. Only a print queue still points at it, which is a stale binding — nothing can print to it."
+    );
+  } else if (verdict === "not-a-serial-port") {
+    advice.push(
+      "Windows lists this name but will not open it as a serial port, so it is a leftover entry rather than a working port. Remove the device in Device Manager, then re-pair the printer over Bluetooth (or reinstall its driver) to recreate the port."
+    );
   } else if (verdict === "not-connected") {
     advice.push(
       incoming
@@ -1313,6 +1722,15 @@ function classifyProbedPort(row) {
   }
   if (incoming) advice.push("Marked as a Bluetooth incoming/local port.");
   if (outgoing) advice.push("Bluetooth outgoing port: this is the direction that can reach a printer.");
+  if (bluetoothDevice) {
+    advice.push(
+      `Paired Bluetooth device on this port: '${bluetoothDevice}'.${
+        looksNiimbot && !queues.length
+          ? " That name is the label printer, so this port is it even with no print queue left."
+          : ""
+      }`
+    );
+  }
   if (foreignQueues.length) {
     advice.push(
       `Bound to the print queue ${foreignQueues.join(", ")}, which is not a Niimbot. Niimbot data sent here will not print a label.`
@@ -1325,10 +1743,11 @@ function classifyProbedPort(row) {
   }
 
   return {
-    port: row.port,
+    port: normalizeComPort(row.port) || String(row.port || ""),
     caption: row.caption || "",
     pnpDeviceId: row.pnpDeviceId || "",
     configuredBaud: String(row.configuredBaud || ""),
+    present,
     queues,
     foreignQueues,
     sources: Array.isArray(row.sources) ? row.sources : [],
@@ -1338,6 +1757,8 @@ function classifyProbedPort(row) {
     isBluetooth,
     bluetoothIncoming: incoming,
     bluetoothOutgoing: outgoing,
+    bluetoothAddress,
+    bluetoothDevice,
     looksNiimbot,
     looksScale,
     advice,
@@ -1360,6 +1781,19 @@ function formatComProbeReport(probe) {
     return lines.join("\n");
   }
 
+  // First, and on its own line: the answer to "does that port still exist".
+  const available = Array.isArray(probe.availablePorts)
+    ? probe.availablePorts.map((p) => normalizeComPort(p)).filter(Boolean)
+    : null;
+  if (available) {
+    lines.push(
+      available.length
+        ? `SERIAL PORTS WINDOWS HAS RIGHT NOW: ${available.join(", ")}`
+        : "SERIAL PORTS WINDOWS HAS RIGHT NOW: none"
+    );
+    lines.push("");
+  }
+
   if (!probe.ports.length) {
     lines.push("SERIAL PORTS: none. Windows has no COM port at all, so there is");
     lines.push("nothing to print to over Bluetooth or USB serial. Pair and connect");
@@ -1368,8 +1802,11 @@ function formatComProbeReport(probe) {
     lines.push(`SERIAL PORTS (${probe.ports.length}):`);
     for (const p of probe.ports) {
       lines.push("");
-      lines.push(`  ${p.port} — ${p.caption || "no name"}`);
+      lines.push(
+        `  ${p.port} — ${p.caption || "no name"}${p.present === false ? "  <= NOT PRESENT: Windows does not have this port" : ""}`
+      );
       if (p.pnpDeviceId) lines.push(`    device: ${p.pnpDeviceId}`);
+      if (p.bluetoothDevice) lines.push(`    paired bluetooth device: ${p.bluetoothDevice}`);
       lines.push(
         `    looks like: ${p.looksNiimbot ? "Niimbot printer" : p.looksScale ? "CH340 scale" : "unknown device"}${p.isBluetooth ? ` (bluetooth ${p.bluetoothIncoming ? "incoming" : p.bluetoothOutgoing ? "outgoing" : "unknown direction"})` : ""}`
       );
@@ -1398,10 +1835,25 @@ function formatComProbeReport(probe) {
   }
 
   lines.push("");
-  if (probe.recommendedPort) {
+  if (probe.recommendedPort && probe.recommendedPort.exists === false) {
+    // Never present a port Windows does not have as the one to select. Naming
+    // it as absent, next to the ports that do exist, is the fix the merchant
+    // needs; recommending it is how they got here.
+    const r = probe.recommendedPort;
+    lines.push("RECOMMENDED PORT FOR NIIMBOT: none — the port its queue points at does not exist.");
+    lines.push(
+      `  ${r.port} not found — available ports: ${available && available.length ? available.join(", ") : "none"}`
+    );
+    if (r.queue) {
+      lines.push(`  The queue '${r.queue}' still prints to ${r.port}, so that binding is stale.`);
+    }
+    lines.push(
+      "  Re-pair the printer over Bluetooth, or reinstall the NIIMBOT driver, so Windows creates its serial port again — then run this diagnosis a second time."
+    );
+  } else if (probe.recommendedPort) {
     const r = probe.recommendedPort;
     lines.push(
-      `RECOMMENDED PORT FOR NIIMBOT: ${r.port}${r.queue ? ` (bound to queue '${r.queue}')` : ""}`
+      `RECOMMENDED PORT FOR NIIMBOT: ${r.port}${r.queue ? ` (bound to queue '${r.queue}')` : ""}${r.device ? ` (paired device '${r.device}')` : ""}`
     );
     lines.push(`  why: ${RECOMMENDATION_REASONS[r.reason] || r.reason}`);
   } else {
@@ -1450,13 +1902,18 @@ const RECOMMENDATION_REASONS = {
   "bound-to-queue": "this is the port the Niimbot print queue is really bound to (Win32_Printer.PortName).",
   "bound-to-driverless-queue":
     "the only Niimbot queue on a COM port has no Windows driver, but the agent opens the port itself, so the port is still usable.",
+  "bound-to-missing-port":
+    "the Niimbot queue still prints to this port, but Windows does not have it any more, so nothing can be printed to it.",
   "bluetooth-outgoing": "no queue is bound to a COM port, but this is the Bluetooth outgoing port of a Niimbot device.",
   "usb-queue": "the Niimbot queue is on a USB spooler port; the agent drives that port's USB printer interface directly.",
 };
 
 /** Plain-language conclusion drawn from the probed ports and queues. */
-function summarizeComProbe(ports, printers, usbDevices = []) {
+function summarizeComProbe(ports, printers, usbDevices = [], options = {}) {
   const summary = [];
+  const live = liveComPortSet(ports, options.availablePorts);
+  const existsOnPc = (com) => (live ? live.has(com) : true);
+  const haveText = availablePortsText(live);
   const usable = ports.filter(
     (p) => p.verdict === "opened" && !p.looksScale && !(p.foreignQueues && p.foreignQueues.length)
   );
@@ -1468,7 +1925,16 @@ function summarizeComProbe(ports, printers, usbDevices = []) {
 
   for (const queue of comQueues) {
     const port = extractComPort(queue.port);
-    const row = ports.find((p) => String(p.port || "").toUpperCase() === port);
+    const row = ports.find((p) => normalizeComPort(p.port) === port);
+    // A queue keeps pointing at a port Windows has dropped, and that binding is
+    // the only trace left of it. Saying so, with the ports that do exist, is the
+    // whole answer to "the diagnosis told me COM8 and COM8 will not open".
+    if (!existsOnPc(port)) {
+      summary.push(
+        `'${queue.name}' prints to ${port}, but ${port} not found — available ports: ${haveText}. That binding is stale: Windows removed the port when the printer was unpaired or its driver was removed. Nothing can print to ${port} until the device is re-paired or reinstalled and Windows gives it a port again.`
+      );
+      continue;
+    }
     // A queue can be bound to a port that cannot be opened at all — the K3-*
     // pairing sits on the Bluetooth *incoming* port. Calling that "the
     // transport to use" would send the merchant straight back to a dead port.
@@ -1495,6 +1961,30 @@ function summarizeComProbe(ports, printers, usbDevices = []) {
     }
   }
 
+  /*
+   * Deleting the "Pilote indisponible" K3-* queue removes the only place the
+   * printer's name appeared, so the SPP port it left behind has to be found by
+   * the Bluetooth device paired on it. Without this, a merchant who followed the
+   * advice to delete that queue is told no Niimbot port exists at all.
+   */
+  const sppPorts = ports.filter(
+    (p) =>
+      p &&
+      p.isBluetooth &&
+      !p.bluetoothIncoming &&
+      p.bluetoothDevice &&
+      p.looksNiimbot &&
+      existsOnPc(normalizeComPort(p.port))
+  );
+  for (const port of sppPorts) {
+    if (port.queues && port.queues.some((q) => NIIMBOT_NAME_RE.test(q))) continue;
+    summary.push(
+      port.verdict === "opened"
+        ? `${port.port} is the Bluetooth outgoing port of '${port.bluetoothDevice}', which is the label printer, and it opens. No print queue is left on it — that is fine, the agent does not need one. Set ${port.port} as the Port on the Niimbot printer profile.`
+        : `${port.port} is the Bluetooth outgoing port of '${port.bluetoothDevice}', the label printer, but it would not open — ${VERDICT_TEXT[port.verdict] || port.verdict}. Connect the printer in Windows Bluetooth settings, then run this diagnosis again.`
+    );
+  }
+
   const missingDrivers = printers.filter((q) => q.driverMissing);
   if (missingDrivers.length) {
     summary.push(
@@ -1519,8 +2009,13 @@ function summarizeComProbe(ports, printers, usbDevices = []) {
         : "Set one of these as the Port on the Niimbot printer profile and print a test label."
     );
   } else if (ports.length) {
+    // "None opened" and "the ones that opened are all something else" are very
+    // different situations to be told you are in.
+    const opened = ports.filter((p) => p.verdict === "opened");
     summary.push(
-      "No COM port that could be the printer opened, so Bluetooth serial printing cannot work until the reason listed above is fixed."
+      opened.length
+        ? `No COM port that could be the printer opened. ${opened.map((p) => p.port).join(", ")} did open, but ${opened.length === 1 ? "it belongs" : "they belong"} to the scale or to another printer, so none of them is the Niimbot.`
+        : "No COM port that could be the printer opened, so Bluetooth serial printing cannot work until the reason listed above is fixed."
     );
   } else {
     summary.push("No COM port exists. Connect the printer over Bluetooth to get one.");
@@ -1555,6 +2050,7 @@ async function probeNiimbotComPorts(options = {}) {
     platform: process.platform,
     agentVersion: options.agentVersion || null,
     generatedAt: new Date().toISOString(),
+    availablePorts: [],
     ports: [],
     printers: [],
     bluetooth: [],
@@ -1579,8 +2075,15 @@ async function probeNiimbotComPorts(options = {}) {
     );
     const raw = String(stdout || "").trim().replace(/^\uFEFF/, "");
     const parsed = raw ? JSON.parse(raw) : {};
-    const portRows = Array.isArray(parsed.ports) ? parsed.ports : parsed.ports ? [parsed.ports] : [];
-    base.ports = portRows.map(classifyProbedPort);
+    const availableRows = Array.isArray(parsed.availablePorts)
+      ? parsed.availablePorts
+      : parsed.availablePorts
+        ? [parsed.availablePorts]
+        : [];
+    base.availablePorts = availableRows
+      .map((p) => normalizeComPort(p))
+      .filter(Boolean)
+      .sort((a, b) => Number(a.slice(3)) - Number(b.slice(3)));
     const printerRows = Array.isArray(parsed.printers)
       ? parsed.printers
       : parsed.printers
@@ -1605,13 +2108,22 @@ async function probeNiimbotComPorts(options = {}) {
       status: String(b.status || ""),
       instanceId: String(b.instanceId || ""),
     }));
+    // Ports are classified last: an SPP port's own fields never name the
+    // printer, only the device paired on it does, so the Bluetooth list has to
+    // exist first.
+    const portRows = Array.isArray(parsed.ports) ? parsed.ports : parsed.ports ? [parsed.ports] : [];
+    base.ports = portRows.map((row) => classifyProbedPort(row, { bluetoothDevices: base.bluetooth }));
     base.warnings = (Array.isArray(parsed.errors) ? parsed.errors : []).map(String).filter(Boolean);
     const usb = await listUsbPrintDevices({ timeout: 30000 });
     base.usbPrintDevices = usb.devices;
     base.usbPrintError = usb.error;
     base.usbPrintGuid = USBPRINT_INTERFACE_GUID;
-    base.recommendedPort = recommendNiimbotPort(base.printers, base.ports);
-    base.summary = summarizeComProbe(base.ports, base.printers, base.usbPrintDevices);
+    base.recommendedPort = recommendNiimbotPort(base.printers, base.ports, {
+      availablePorts: base.availablePorts,
+    });
+    base.summary = summarizeComProbe(base.ports, base.printers, base.usbPrintDevices, {
+      availablePorts: base.availablePorts,
+    });
   } catch (error) {
     base.ok = false;
     base.error = rawSerialError(error) || String((error && error.message) || error);
@@ -1698,39 +2210,60 @@ function describeForeignComPort({ comPort, owners, printerName, recommended }) {
  * means Windows itself can never print to it. A port the probe could not open
  * is ranked below both, because no amount of protocol gets through it.
  */
-function recommendNiimbotPort(queues = [], ports = []) {
+function recommendNiimbotPort(queues = [], ports = [], options = {}) {
   const rows = Array.isArray(queues) ? queues : [];
   const portRows = Array.isArray(ports) ? ports : [];
+  const live = liveComPortSet(portRows, options.availablePorts);
+  const existsOnPc = (com) => (live ? live.has(com) : true);
   const niimbot = rows.filter((q) => NIIMBOT_NAME_RE.test(`${q.name || ""} ${q.driver || q.driverName || ""}`));
   const unopenable = (com) => {
-    const row = portRows.find((p) => String((p && p.port) || "").toUpperCase() === com);
+    const row = portRows.find((p) => normalizeComPort((p && p.port) || "") === com);
     return Boolean(row && row.verdict && row.verdict !== "opened");
   };
   const comQueues = niimbot
     .map((q) => ({ queue: q, com: extractComPort(q.port || q.portName) }))
     .filter((x) => x.com)
-    .map((x) => ({ ...x, dead: unopenable(x.com) }))
+    .map((x) => ({ ...x, missing: !existsOnPc(x.com), dead: unopenable(x.com) }))
     .sort(
       (a, b) =>
+        Number(a.missing) - Number(b.missing) ||
         Number(a.dead) - Number(b.dead) ||
         Number(Boolean(a.queue.driverMissing)) - Number(Boolean(b.queue.driverMissing))
     );
   const asQueue = (x) => ({
     port: x.com,
     queue: String(x.queue.name || ""),
-    reason: x.queue.driverMissing ? "bound-to-driverless-queue" : "bound-to-queue",
+    reason: x.missing
+      ? "bound-to-missing-port"
+      : x.queue.driverMissing
+        ? "bound-to-driverless-queue"
+        : "bound-to-queue",
+    exists: !x.missing,
   });
-  const live = comQueues.find((x) => !x.dead);
-  if (live) return asQueue(live);
+  const usable = comQueues.find((x) => !x.dead && !x.missing);
+  if (usable) return asQueue(usable);
 
   // Either no queue is on a COM port, or the only one that is cannot be opened.
   // A Bluetooth outgoing port for a K3-* device is the next candidate, since
-  // that is what SPP pairing produces.
-  const spp = (Array.isArray(ports) ? ports : []).find(
-    (p) => p && p.looksNiimbot && p.isBluetooth && !p.bluetoothIncoming && p.verdict !== "missing"
+  // that is what SPP pairing produces — and after the K3-* queue is deleted it
+  // is recognised by the paired device's name, which is all that is left.
+  const spp = portRows.find(
+    (p) =>
+      p &&
+      p.looksNiimbot &&
+      p.isBluetooth &&
+      !p.bluetoothIncoming &&
+      p.verdict !== "missing" &&
+      existsOnPc(normalizeComPort(p.port))
   );
   if (spp) {
-    return { port: String(spp.port || ""), queue: "", reason: "bluetooth-outgoing" };
+    return {
+      port: normalizeComPort(spp.port) || String(spp.port || ""),
+      queue: "",
+      device: String(spp.bluetoothDevice || ""),
+      reason: "bluetooth-outgoing",
+      exists: true,
+    };
   }
   const usbQueue = niimbot.find((q) => extractWindowsUsbPort(q.port || q.portName));
   if (usbQueue) {
@@ -1738,10 +2271,12 @@ function recommendNiimbotPort(queues = [], ports = []) {
       port: extractWindowsUsbPort(usbQueue.port || usbQueue.portName),
       queue: String(usbQueue.name || ""),
       reason: "usb-queue",
+      exists: true,
     };
   }
   // Nothing better exists: name the bound port anyway, so the report says which
-  // port to fix rather than going silent.
+  // port to fix rather than going silent. `exists: false` is what stops the
+  // report presenting it as a port to select.
   return comQueues.length ? asQueue(comQueues[0]) : null;
 }
 
@@ -2061,6 +2596,14 @@ module.exports = {
   },
   extractComPort,
   extractWindowsUsbPort,
+  normalizeComPort,
+  describeComPortNameProblem,
+  bluetoothAddressOf,
+  liveComPortSet,
+  serialErrorField,
+  availablePortsFromError,
+  isFatalSerialFailure,
+  printNiimbotJobSerial,
   chooseNiimbotTransport,
   describeForeignComPort,
   recommendNiimbotPort,

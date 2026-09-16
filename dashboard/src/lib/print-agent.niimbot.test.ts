@@ -23,7 +23,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => fs.readFileSync(path.join(here, rel), 'utf8');
 
 test('the dashboard requires the agent build that can diagnose a blank label', () => {
-  assert.equal(MIN_NIIMBOT_AGENT_VERSION, '1.10.14');
+  assert.equal(MIN_NIIMBOT_AGENT_VERSION, '1.10.15');
   const src = read('print-agent.ts');
   assert.match(src, /profile: opts\.profile \|\| undefined/);
   assert.match(src, /invertBitmap: opts\.invertBitmap === true/);
@@ -43,7 +43,7 @@ test('the dashboard requires the agent build that can diagnose a blank label', (
 
 const AGENT_REPLY = {
   ok: true,
-  version: '1.10.14',
+  version: '1.10.15',
   printer: 'COM8',
   path: 'com',
   portSource: 'queue',
@@ -240,7 +240,7 @@ test('the real Windows exception survives the toast formatter', () => {
       agentMessage: "WritePrinter failed for 'NIIMBOT K3' (Win32=5)",
       printerName: 'NIIMBOT K3',
       httpStatus: 500,
-      health: { ok: true, version: '1.10.14', features: ['niimbot-label'] },
+      health: { ok: true, version: '1.10.15', features: ['niimbot-label'] },
     }),
     "WritePrinter failed for 'NIIMBOT K3' (Win32=5)"
   );
@@ -250,7 +250,7 @@ test('the real Windows exception survives the toast formatter', () => {
         "Niimbot COM3 is already open at 115200 baud. Close NIIMBOT.exe (and any other app holding the port), then retry. — Access to the port 'COM3' is denied.",
       printerName: 'NIIMBOT K3',
       httpStatus: 500,
-      health: { ok: true, version: '1.10.14', features: ['niimbot-label'] },
+      health: { ok: true, version: '1.10.15', features: ['niimbot-label'] },
     }),
     /Access to the port 'COM3' is denied\./
   );
@@ -260,7 +260,7 @@ test('the real Windows exception survives the toast formatter', () => {
         'Niimbot COM6 did not answer at 115200 baud. This is what a Bluetooth incoming/unconnected port does — connect the printer in Windows Bluetooth settings and use its outgoing port. — The semaphore timeout period has expired.',
       printerName: 'NIIMBOT K3',
       httpStatus: 500,
-      health: { ok: true, version: '1.10.14', features: ['niimbot-label'] },
+      health: { ok: true, version: '1.10.15', features: ['niimbot-label'] },
     }),
     /The semaphore timeout period has expired\./
   );
