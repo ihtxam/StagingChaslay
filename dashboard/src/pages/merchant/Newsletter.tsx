@@ -16,6 +16,7 @@ import {
   type NativeNewsletterDesign,
 } from '@/lib/newsletter/email-html';
 import { buildPuckNewsletterEmailHtml } from '@/lib/newsletter/puck-email-html';
+import { normalizePuckData } from '@/lib/newsletter/puck-utils';
 
 type AudienceRow = {
   id: string | null;
@@ -47,6 +48,12 @@ type MarketingSettings = {
   reorderReminderBody?: string | null;
 };
 
+function puckFromStored(raw: unknown): Data {
+  if (!raw || typeof raw !== 'object') return defaultNewsletterPuckData();
+  const { engine: _engine, ...rest } = raw as Record<string, unknown>;
+  return normalizePuckData(rest as Data);
+}
+
 function designFromCampaign(c: Campaign): {
   mode: 'simple' | 'visual';
   native: NativeNewsletterDesign;
@@ -56,7 +63,7 @@ function designFromCampaign(c: Campaign): {
     return {
       mode: 'visual',
       native: defaultNativeNewsletter(c.title || 'Newsletter'),
-      puck: c.designJson as Data,
+      puck: puckFromStored(c.designJson),
     };
   }
   if (isNativeNewsletterDesign(c.designJson)) {
@@ -297,7 +304,11 @@ export default function Newsletter() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div
+      className={
+        designMode === 'visual' ? 'mx-auto max-w-[1600px] space-y-4' : 'mx-auto max-w-6xl space-y-4'
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">{t('newsletter')}</h1>
@@ -409,13 +420,19 @@ export default function Newsletter() {
             <button
               type="button"
               className={designMode === 'visual' ? 'btn-secondary text-xs' : 'text-xs underline'}
-              onClick={() => setDesignMode('visual')}
+              onClick={() => {
+                setDesignMode('visual');
+                setPuckData((prev) => normalizePuckData(prev));
+              }}
             >
               {t('newsletterVisualEditor')}
             </button>
           </div>
 
-          <form onSubmit={saveDraft} className="grid gap-4 lg:grid-cols-2">
+          <form
+            onSubmit={saveDraft}
+            className={designMode === 'visual' ? 'space-y-4' : 'grid gap-4 lg:grid-cols-2'}
+          >
             <div className="card space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block space-y-1 text-sm sm:col-span-2">
@@ -444,7 +461,29 @@ export default function Newsletter() {
               </div>
 
               {designMode === 'visual' ? (
-                <NewsletterPuckEditor data={puckData} onChange={setPuckData} />
+                <>
+                  <NewsletterPuckEditor
+                    data={puckData}
+                    onChange={setPuckData}
+                    fullPage
+                  />
+                  <div className="space-y-2 border-t border-[var(--border)] pt-4 !bg-stone-100 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold text-stone-800">
+                        {t('newsletterPreview')}
+                      </h2>
+                      <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                      <iframe
+                        title="Newsletter preview"
+                        className="h-[min(480px,50vh)] w-full border-0 bg-white"
+                        srcDoc={bodyHtml}
+                        sandbox=""
+                      />
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   <label className="block space-y-1 text-sm">
@@ -574,20 +613,22 @@ export default function Newsletter() {
               </div>
             </div>
 
-            <div className="card space-y-2 !bg-stone-100">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-stone-800">{t('newsletterPreview')}</h2>
-                <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
+            {designMode === 'simple' ? (
+              <div className="card space-y-2 !bg-stone-100">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-stone-800">{t('newsletterPreview')}</h2>
+                  <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
+                </div>
+                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <iframe
+                    title="Newsletter preview"
+                    className="h-[min(720px,70vh)] w-full border-0 bg-white"
+                    srcDoc={bodyHtml}
+                    sandbox=""
+                  />
+                </div>
               </div>
-              <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                <iframe
-                  title="Newsletter preview"
-                  className="h-[min(720px,70vh)] w-full border-0 bg-white"
-                  srcDoc={bodyHtml}
-                  sandbox=""
-                />
-              </div>
-            </div>
+            ) : null}
           </form>
 
           <div className="card space-y-2">

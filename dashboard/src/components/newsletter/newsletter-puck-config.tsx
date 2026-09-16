@@ -1,4 +1,5 @@
 import type { Config, Data } from '@measured/puck';
+import { normalizePuckData } from '@/lib/newsletter/puck-utils';
 
 export type PuckNewsletterBlockProps = {
   Heading: { text: string; level: 'h1' | 'h2' };
@@ -7,11 +8,29 @@ export type PuckNewsletterBlockProps = {
   Spacer: { height: number };
 };
 
-export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
+export type PuckNewsletterRootProps = {
+  background: string;
+};
+
+export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewsletterRootProps> = {
   root: {
-    props: {
+    fields: {
+      background: { type: 'text', label: 'Background color' },
+    },
+    defaultProps: {
       background: '#f5f5f4',
     },
+    render: ({ children, background }) => (
+      <div
+        style={{
+          background: background || '#f5f5f4',
+          padding: 24,
+          minHeight: 280,
+        }}
+      >
+        {children}
+      </div>
+    ),
   },
   categories: {
     content: { title: 'Content', components: ['Heading', 'Text', 'Button', 'Spacer'] },
@@ -32,10 +51,10 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
       },
       defaultProps: { text: 'Newsletter headline', level: 'h1' },
       render: ({ text, level }) => {
-        const Tag = level;
+        const Tag = level === 'h2' ? 'h2' : 'h1';
         return (
           <Tag style={{ margin: '0 0 12px', fontFamily: 'Georgia, serif', color: '#0c0a09' }}>
-            {text}
+            {text || ''}
           </Tag>
         );
       },
@@ -46,7 +65,7 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
         content: { type: 'textarea', label: 'Body' },
       },
       defaultProps: {
-        content: 'Write your message here. Use {{name}} and {{shopUrl}} placeholders.',
+        content: '<p>Write your message here. Use {{name}} and {{shopUrl}} placeholders.</p>',
       },
       render: ({ content }) => (
         <div
@@ -56,7 +75,7 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
             color: '#44403c',
             fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
           }}
-          dangerouslySetInnerHTML={{ __html: content }}
+          dangerouslySetInnerHTML={{ __html: content || '' }}
         />
       ),
     },
@@ -70,7 +89,7 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
       defaultProps: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e' },
       render: ({ label, url, color }) => (
         <a
-          href={url}
+          href={url || '#'}
           style={{
             display: 'inline-block',
             background: color || '#0f766e',
@@ -81,23 +100,23 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps> = {
             borderRadius: 8,
           }}
         >
-          {label}
+          {label || 'Button'}
         </a>
       ),
     },
     Spacer: {
       label: 'Spacer',
       fields: {
-        height: { type: 'number', label: 'Height (px)', min: 8, max: 80 },
+        height: { type: 'number', label: 'Height (px)' },
       },
       defaultProps: { height: 24 },
-      render: ({ height }) => <div style={{ height }} />,
+      render: ({ height }) => <div style={{ height: Math.max(8, Number(height) || 24) }} />,
     },
   },
 };
 
 export function defaultNewsletterPuckData(): Data {
-  return {
+  return normalizePuckData({
     root: { props: { background: '#f5f5f4' } },
     content: [
       { type: 'Heading', props: { text: 'Newsletter', level: 'h1' } },
@@ -110,11 +129,12 @@ export function defaultNewsletterPuckData(): Data {
       { type: 'Button', props: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e' } },
     ],
     zones: {},
-  };
+  } as Data);
 }
 
 export function isPuckNewsletterDesign(raw: unknown): raw is Data {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const o = raw as Record<string, unknown>;
-  return Array.isArray(o.content);
+  if (o.engine === 'puck') return true;
+  return Array.isArray(o.content) && o.engine !== 'native' && !('headline' in o);
 }
