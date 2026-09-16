@@ -3488,6 +3488,10 @@ const en: Dict = {
   tapToPayDeviceActivate: 'Activate Tap to Pay on this device',
   tapToPayDeviceActivated: 'Tap to Pay activated on this tablet.',
   tapToPayDeviceActivateFailed: 'Tap to Pay activation failed.',
+  tapToPayDeviceAdyenNotConfigured:
+    'Adyen is not fully configured in Settings → Payments. Complete merchant setup, then try again.',
+  tapToPayDeviceNotEnabled:
+    'Tap to Pay is disabled in Settings → Payments. Enable it first, then activate on this tablet.',
   tapToPayDeviceRegistered: 'This tablet is registered for Tap to Pay.',
   tapToPayDeviceNotRegistered: 'This tablet is not registered yet.',
   tapToPayDeviceBridgeOffline: 'Bridge Reborn is not running — open the Bridge app on this tablet first.',

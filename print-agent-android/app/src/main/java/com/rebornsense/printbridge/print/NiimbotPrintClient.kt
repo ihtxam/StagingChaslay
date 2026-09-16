@@ -17,8 +17,7 @@ import kotlin.math.ceil
  * Every command except the raster rows is a request/response pair
  * (https://printers.niim.blue/interfacing/proto/), and PrintEnd must be
  * repeated until the printer answers 0xf4 with 01 — "print finished
- * (accepted)". Bluetooth SPP is the transport that can do that, which is why
- * this is the path to trust over a Windows print queue.
+ * (accepted)". Bluetooth SPP is the transport that can do that.
  */
 object NiimbotPrintClient {
     private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -69,16 +68,13 @@ object NiimbotPrintClient {
 
     /**
      * Waits for one framed reply carrying [expected]. Bluetooth classic
-     * fragments packets, so the buffer is rescanned after every read. Returns
-     * null when the printer stays silent for [timeoutMs].
+     * fragments packets, so the buffer is rescanned after every read.
      */
     private fun readReply(input: InputStream, expected: Int, timeoutMs: Long): ByteArray? {
         val deadline = System.currentTimeMillis() + timeoutMs
         val buf = ByteArray(512)
         var used = 0
         while (System.currentTimeMillis() < deadline) {
-            // available() first: read() on an SPP socket blocks with no timeout,
-            // and a silent printer would hang the print thread for good.
             val ready = try {
                 input.available()
             } catch (_: Exception) {
@@ -111,7 +107,6 @@ object NiimbotPrintClient {
         return null
     }
 
-    /** True when a simple response carries the success byte 01. */
     private fun acked(reply: ByteArray?): Boolean =
         reply != null && reply.size >= 8 && reply[4] == 1.toByte()
 
@@ -183,10 +178,8 @@ object NiimbotPrintClient {
                 val out = socket.outputStream
                 val input = socket.inputStream
                 val density5 = density.coerceIn(1, 5).toByte()
-                // The density reply is the first proof the printer speaks this
-                // protocol at all. Without it the rest is guesswork.
                 if (!acked(transceive(out, input, 0x21, byteArrayOf(density5), 16))) {
-                    throw IllegalStateException("Printer did not answer SetDensity — it is not speaking the Niimbot protocol on this connection")
+                    throw IllegalStateException("Printer did not answer SetDensity — not speaking Niimbot on this connection")
                 }
                 transceive(out, input, 0x23, byteArrayOf(1), 16)
                 transceive(out, input, 0x01, byteArrayOf(1))
@@ -208,25 +201,21 @@ object NiimbotPrintClient {
                     }.array()
                     out.write(packet(0x85, header + line))
                     out.flush()
-                    Thread.sleep(12)
+                    Thread.sleep(8)
                 }
                 transceive(out, input, 0xE3, byteArrayOf(1))
-                Thread.sleep(300)
-                // 0xf4 answers 00 while the page is still running and 01 once it
-                // is committed, so keep asking until it says 01.
                 var committed = false
-                for (attempt in 0 until 20) {
+                for (attempt in 0 until 12) {
                     if (acked(transceive(out, input, 0xF3, byteArrayOf(1)))) {
                         committed = true
                         break
                     }
-                    Thread.sleep(100)
+                    Thread.sleep(80)
                 }
-                if (committed) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(IllegalStateException("Printer never confirmed the label finished printing"))
+                if (!committed) {
+                    throw IllegalStateException("Printer never confirmed the label finished printing")
                 }
+                Result.success(Unit)
             } finally {
                 runCatching { socket.close() }
             }

@@ -3,6 +3,7 @@ package com.rebornsense.printbridge.boot
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.rebornsense.printbridge.BridgeAlarmWatchdog
 import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
@@ -14,7 +15,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
-            ACTION_QUICKBOOT_POWERON -> PrintBridgeLauncher.start(context)
+            ACTION_QUICKBOOT_POWERON -> {
+                PrintBridgeLauncher.ensureRunning(context)
+                BridgeAlarmWatchdog.arm(context)
+            }
         }
     }
 

@@ -14,7 +14,7 @@ object BridgeServiceWatchdog {
     private val tick = object : Runnable {
         override fun run() {
             if (!BridgeHealthChecker.isHealthy()) {
-                PrintBridgeLauncher.start(appContext)
+                PrintBridgeLauncher.ensureRunning(appContext)
             }
             handler.postDelayed(this, INTERVAL_MS)
         }
