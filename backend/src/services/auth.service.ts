@@ -7,6 +7,7 @@ import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/invent
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
+import { isGiftCardAddonEnabled, readGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 import {
   businessModuleMerchantPatch,
   normalizeBusinessModule,
@@ -243,6 +244,9 @@ export class AuthService {
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const giftCardOn = await readGiftCardAddonEnabled(merchant.id).catch(() =>
+      isGiftCardAddonEnabled(merchant.giftCardAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -260,6 +264,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        giftCardAddonEnabled: giftCardOn,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       },
       isOwner: true,
@@ -298,6 +303,7 @@ export class AuthService {
     }));
     const kdsOn = await readKdsAddonEnabled(staff.merchantId).catch(() => false);
     const odsOn = await readOdsAddonEnabled(staff.merchantId).catch(() => false);
+    const giftCardOn = await readGiftCardAddonEnabled(staff.merchantId).catch(() => false);
     return {
       token,
       merchant: {
@@ -317,6 +323,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        giftCardAddonEnabled: giftCardOn,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
         loginHome: normalizeStaffLoginHome(staff.loginHome),
       },
@@ -533,6 +540,9 @@ export class AuthService {
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
       isOdsAddonEnabled(merchant.odsAddonEnabled)
     );
+    const giftCardOn = await readGiftCardAddonEnabled(merchant.id).catch(() =>
+      isGiftCardAddonEnabled(merchant.giftCardAddonEnabled)
+    );
     return {
       token,
       merchant: {
@@ -549,6 +559,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        giftCardAddonEnabled: giftCardOn,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       },
       impersonatedBy: superadminId,
@@ -585,6 +596,9 @@ export class AuthService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.odsAddonEnabled)
       );
+      const giftCardOn = await readGiftCardAddonEnabled(merchantId).catch(() =>
+        isGiftCardAddonEnabled(merchant.giftCardAddonEnabled)
+      );
       return {
         id: merchant.id,
         email: merchant.email,
@@ -599,6 +613,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        giftCardAddonEnabled: giftCardOn,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       };
     } catch (error) {

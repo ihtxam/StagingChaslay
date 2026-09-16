@@ -24,6 +24,7 @@ import { geocodeQuery } from "@/lib/geocode";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
+import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   filterCatalogForChannel,
@@ -743,9 +744,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           currency: "CHF",
         },
         loyalty: ShopLoyaltyService.programFromMerchant(merchant),
-        giftCards: ShopGiftCardService.publicSettings(
-          ShopGiftCardService.settingsFromMerchant(merchant)
-        ),
+        giftCards: await ShopGiftCardService.publicSettingsForMerchant(merchant),
         reservationsEnabled: !!merchant.reservationsEnabled,
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
@@ -1939,9 +1938,7 @@ router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => 
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
     res.json({
       success: true,
-      settings: ShopGiftCardService.publicSettings(
-        ShopGiftCardService.settingsFromMerchant(merchant)
-      ),
+      settings: await ShopGiftCardService.publicSettingsForMerchant(merchant),
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
@@ -2589,7 +2586,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let giftCardPreviewBalance = 0;
     if (trimmedGiftCode) {
       const gcSettings = ShopGiftCardService.settingsFromMerchant(merchant);
-      if (!gcSettings.enabled) {
+      const gcLicensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
+      if (!gcSettings.enabled || !gcLicensed) {
         return res.status(400).json({ error: "Gift cards are not enabled" });
       }
       try {

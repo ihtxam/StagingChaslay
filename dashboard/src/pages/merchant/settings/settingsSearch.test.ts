@@ -292,6 +292,13 @@ test('query ta matches POS rows that used to blank plus taxes/payments', () => {
   assert.ok(ids.includes('payments-adyen') || ids.includes('payments-tap-to-pay'));
 });
 
+test('gift cards addon is indexed on the POS tab', () => {
+  const tLive = (key: string) => (key === 'giftCard' ? 'Gift card' : key);
+  const matches = matchSettingsSearch(buildSettingsSearchIndex(tLive), 'gift card');
+  const ids = matches.map((entry) => entry.id);
+  assert.ok(ids.includes('gift-cards-addon'));
+});
+
 test('planSettingsSearchResultClick for POS rows targets pos without forcing remount when already there', () => {
   const posMode = { id: 'pos-mode', tab: 'pos' as const, keywords: ['ta'] };
   const taxes = { id: 'taxes-rates', tab: 'taxes' as const, keywords: ['ta'] };

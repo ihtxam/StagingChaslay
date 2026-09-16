@@ -1,13 +1,28 @@
 import axios from "axios";
 import { getDb, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
+import {
+  adyenCheckoutApiBase,
+  adyenEnvironmentFromClientKey,
+  formatMerchantAdyenSessionError,
+  type AdyenCheckoutEnvironment,
+} from "@/lib/adyen-checkout-env";
 
-const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
+const ADYEN_API_BASE_TEST =
+  process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 
 export class AdyenService {
+  static environmentFromClientKey(clientKey?: string | null): AdyenCheckoutEnvironment {
+    return adyenEnvironmentFromClientKey(clientKey);
+  }
+
+  static checkoutApiBase(clientKey?: string | null): string {
+    return adyenCheckoutApiBase(clientKey);
+  }
+
   /**
    * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
    * Legacy per-terminal credential overrides are still honored if present.
@@ -73,9 +88,11 @@ export class AdyenService {
   ) {
     try {
       const creds = await this.resolveCredentials(merchantId);
+      const apiBase = this.checkoutApiBase(creds.clientId);
+      const environment = this.environmentFromClientKey(creds.clientId);
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/sessions`,
+        `${apiBase}/sessions`,
         {
           amount: {
             value: Math.round(amount * 100), // Convert to cents
@@ -95,10 +112,10 @@ export class AdyenService {
         }
       );
 
-      return response.data;
+      return { ...response.data, environment };
     } catch (error) {
       console.error("Error initializing payment session:", error);
-      throw error;
+      throw new Error(formatMerchantAdyenSessionError(error));
     }
   }
 
@@ -125,7 +142,7 @@ export class AdyenService {
       }
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments`,
+        `${ADYEN_API_BASE_TEST}/payments`,
         {
           amount: {
             value: Math.round(amount * 100),
@@ -164,9 +181,10 @@ export class AdyenService {
   ) {
     try {
       const creds = await this.resolveCredentials(merchantId, terminalId);
+      const apiBase = this.checkoutApiBase(creds.clientId);
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments`,
+        `${apiBase}/payments`,
         {
           amount: {
             value: Math.round(amount * 100),
@@ -286,7 +304,7 @@ export class AdyenService {
       }
 
       const response = await axios.get(
-        `${ADYEN_API_BASE}/payments/${reference}`,
+        `${ADYEN_API_BASE_TEST}/payments/${reference}`,
         {
           headers: {
             "x-api-key": ADYEN_API_KEY,
@@ -331,7 +349,7 @@ export class AdyenService {
       const refundAmount = amount || parseFloat(transaction.amount.toString());
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments/${transaction.adyenReference}/refunds`,
+        `${ADYEN_API_BASE_TEST}/payments/${transaction.adyenReference}/refunds`,
         {
           amount: {
             value: Math.round(refundAmount * 100),

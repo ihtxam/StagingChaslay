@@ -10,6 +10,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 
@@ -195,6 +196,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odsAddonEnabled,
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
+      giftCardAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -226,6 +228,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odsAddonEnabled: odsAddonEnabled === true,
       deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
       storekeeperAddonEnabled: storekeeperAddonEnabled === true,
+      giftCardAddonEnabled: giftCardAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -256,6 +259,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       storekeeperAddonEnabled,
       kioskAddonEnabled,
       kioskEnabled,
+      giftCardAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -302,6 +306,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
             : kioskEnabled != null
               ? isKioskAddonEnabled(kioskEnabled)
               : undefined,
+        giftCardAddonEnabled:
+          giftCardAddonEnabled != null ? isGiftCardAddonEnabled(giftCardAddonEnabled) : undefined,
       }
     );
     res.json({ success: true, merchant });

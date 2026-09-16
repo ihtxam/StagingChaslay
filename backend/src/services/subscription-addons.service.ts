@@ -34,6 +34,7 @@ const VALID_ADDON_KEYS = new Set([
   "kds",
   "ods",
   "kiosk",
+  "gift_cards",
   "just_eat",
   "uber_eats",
   "extra_pos_post",
@@ -237,6 +238,15 @@ export class SubscriptionAddonsService {
         sortOrder: 35,
       },
       {
+        name: "Gift cards",
+        slug: "gift-cards",
+        addonKey: "gift_cards",
+        description: "Sell, reload, and redeem gift cards on POS and the online shop",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 36,
+      },
+      {
         name: "Extra POS station",
         slug: "extra-pos",
         addonKey: "extra_pos_post",
@@ -327,6 +337,15 @@ export class SubscriptionAddonsService {
         priceMonthly: 29,
         priceYearly: 290,
         sortOrder: 35,
+      },
+      {
+        name: "Gift cards",
+        slug: "gift-cards",
+        addonKey: "gift_cards",
+        description: "Sell, reload, and redeem gift cards on POS and the online shop",
+        priceMonthly: 15,
+        priceYearly: 150,
+        sortOrder: 36,
       },
     ];
 

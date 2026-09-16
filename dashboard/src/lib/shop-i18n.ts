@@ -282,7 +282,8 @@ export const shopEn: Record<string, string> = {
   shopGiftCardMessagePlaceholder: 'Write a note for the recipient…',
   shopGiftCardPay: 'Pay CHF {amount}',
   shopGiftCardPayment: 'Complete payment',
-  shopGiftCardDemoPayHint: 'Card payments are not configured — use demo confirm for testing.',
+  shopGiftCardDemoPayHint:
+    'Card payments are not configured in Settings → Payments — use demo confirm for testing.',
   shopGiftCardDemoConfirm: 'Confirm payment (demo)',
   shopGiftCardConfirmPending: 'Payment received — confirming your gift card…',
   shopGiftCardPayLoadFailed: 'Could not load payment form',
@@ -766,7 +767,8 @@ export const shopFr: Record<string, string> = {
   shopGiftCardMessagePlaceholder: 'Écrivez un mot pour le destinataire…',
   shopGiftCardPay: 'Payer CHF {amount}',
   shopGiftCardPayment: 'Finaliser le paiement',
-  shopGiftCardDemoPayHint: 'Paiement carte non configuré — utilisez la confirmation démo pour tester.',
+  shopGiftCardDemoPayHint:
+    'Paiement carte non configuré dans Paramètres → Paiements — utilisez la confirmation démo pour tester.',
   shopGiftCardDemoConfirm: 'Confirmer le paiement (démo)',
   shopGiftCardConfirmPending: 'Paiement reçu — confirmation de la carte cadeau…',
   shopGiftCardPayLoadFailed: 'Impossible de charger le formulaire de paiement',
@@ -1252,7 +1254,8 @@ export const shopDe: Record<string, string> = {
   shopGiftCardMessagePlaceholder: 'Nachricht für den Empfänger…',
   shopGiftCardPay: 'CHF {amount} bezahlen',
   shopGiftCardPayment: 'Zahlung abschliessen',
-  shopGiftCardDemoPayHint: 'Kartenzahlung nicht konfiguriert — Demo-Bestätigung zum Testen.',
+  shopGiftCardDemoPayHint:
+    'Kartenzahlung in Einstellungen → Zahlungen nicht konfiguriert — Demo-Bestätigung zum Testen.',
   shopGiftCardDemoConfirm: 'Zahlung bestätigen (Demo)',
   shopGiftCardConfirmPending: 'Zahlung erhalten — Geschenkkarte wird bestätigt…',
   shopGiftCardPayLoadFailed: 'Zahlungsformular konnte nicht geladen werden',

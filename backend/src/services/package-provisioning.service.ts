@@ -4,6 +4,7 @@ import type { PackageIncludedAddons } from "@/db/schema";
 import type { EditionFeatureKey } from "@/lib/edition-features";
 import { normalizeEditionFeatures } from "@/lib/edition-features";
 import { readKioskAddonEnabled, writeKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { readGiftCardAddonEnabled, writeGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 import { writeInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { writeSignageAddonEnabled } from "@/lib/signage-addon";
 import { writeKdsAddonEnabled } from "@/lib/kds-addon";
@@ -27,7 +28,7 @@ function applyIncludedAddons(
   }
   if (addons.kds) patch.kdsAddonEnabled = true;
   if (addons.ods) patch.odsAddonEnabled = true;
-  // kiosk flag is persisted via writeKioskAddonEnabled (SQL source of truth)
+  // kiosk / gift cards flags are persisted via SQL helpers (source of truth)
 }
 
 export class PackageProvisioningService {
@@ -55,6 +56,9 @@ export class PackageProvisioningService {
     if (normalized.includes("self_order_kiosk")) {
       await writeKioskAddonEnabled(merchantId, true);
     }
+    if (normalized.includes("gift_cards") || normalized.includes("pos_gift_cards")) {
+      await writeGiftCardAddonEnabled(merchantId, true);
+    }
   }
 
   /** Apply a subscription package to a merchant (edition, limits, bundled addons). */
@@ -62,7 +66,9 @@ export class PackageProvisioningService {
     const plan = await SubscriptionPlansService.getById(planId);
     const db = getDb();
     const kioskBefore = await readKioskAddonEnabled(merchantId).catch(() => false);
+    const giftCardsBefore = await readGiftCardAddonEnabled(merchantId).catch(() => false);
     const bundleKiosk = plan.includedAddons?.kiosk === true;
+    const bundleGiftCards = plan.includedAddons?.giftCards === true;
 
     if (plan.editionId) {
       const edition = await EditionService.getById(plan.editionId);
@@ -95,6 +101,9 @@ export class PackageProvisioningService {
 
     if (bundleKiosk || kioskBefore) {
       await writeKioskAddonEnabled(merchantId, true);
+    }
+    if (bundleGiftCards || giftCardsBefore) {
+      await writeGiftCardAddonEnabled(merchantId, true);
     }
 
     return plan;
@@ -131,6 +140,9 @@ export class PackageProvisioningService {
         break;
       case "kiosk":
         await writeKioskAddonEnabled(merchantId, true);
+        break;
+      case "gift_cards":
+        await writeGiftCardAddonEnabled(merchantId, true);
         break;
       case "just_eat":
         patch.justEatAddonEnabled = true;
