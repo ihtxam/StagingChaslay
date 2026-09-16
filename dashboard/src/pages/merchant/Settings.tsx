@@ -3970,23 +3970,6 @@ export default function Settings() {
                       {label}
                     </label>
                   ))}
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          posPrintSettings: {
-                            ...(settings.posPrintSettings || {}),
-                            autoPrintOrderLabelOnSend: e.target.checked,
-                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
-                          },
-                        })
-                      }
-                    />
-                    {t('autoPrintOrderLabelOnSend')}
-                  </label>
                 </div>
                 <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
                   <label className="flex items-start gap-2 text-sm">
