@@ -554,6 +554,19 @@ async function resolveMerchant(slugOrHost: string) {
   return merchant;
 }
 
+/** Short public blurb for shop footer / SEO when available from the published homepage. */
+async function resolveShopPublicDescription(merchant: typeof schema.merchants.$inferSelect) {
+  if (!merchant.cmsHomepageEnabled) return "";
+  try {
+    const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
+    if (chaslay?.editor_state) return "";
+    const home = await CmsService.getPublishedHomepage(merchant.id);
+    return String(home?.seoDescription || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 async function resolveShopLocationId(
   merchantId: string,
   locationSlug?: string | null,
@@ -657,6 +670,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
       merchant.cmsHomepageEnabled
         ? await CmsService.getPublishedTheme(merchant.id)
         : null;
+    const description = await resolveShopPublicDescription(merchant);
 
     const db = getDb();
     const categoryRows = await db.query.categories.findMany({
@@ -678,8 +692,11 @@ router.get("/:slug", async (req: Request, res: Response) => {
         customDomain: merchant.customDomain,
         cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
         cmsTheme,
+        description,
         address: merchant.address,
         city: merchant.city,
+        country: merchant.country,
+        email: merchant.email,
         phone: merchant.phone,
         latitude: merchant.latitude,
         longitude: merchant.longitude,
