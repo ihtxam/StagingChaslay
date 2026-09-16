@@ -48,6 +48,8 @@ export type ReceiptLabels = {
   endOfShift: string;
   mySales: string;
   reportPeriod: string;
+  /** Connector between period from/to dates, e.g. " to " */
+  periodRangeTo: string;
   salesSummary: string;
   salesCount: string;
   revenue: string;
@@ -77,6 +79,9 @@ export type ReceiptLabels = {
   /** Unused leftover; Pay Later receipts always name one collected tender. */
   or: string;
   invoice: string;
+  bankTransfer: string;
+  giftCard: string;
+  mixed: string;
   totalItems: string;
   vatIncludedNote: string;
   tip: string;
@@ -149,6 +154,7 @@ const EN: ReceiptLabels = {
   endOfShift: 'END OF SHIFT',
   mySales: 'My sales',
   reportPeriod: 'Report Period',
+  periodRangeTo: ' to ',
   salesSummary: 'SALES SUMMARY',
   salesCount: 'Sales',
   revenue: 'Revenue',
@@ -176,6 +182,9 @@ const EN: ReceiptLabels = {
   payLater: 'Pay Later',
   or: 'or',
   invoice: 'Invoice',
+  bankTransfer: 'Bank transfer',
+  giftCard: 'Gift card',
+  mixed: 'Mixed',
   totalItems: 'Items',
   vatIncludedNote: 'VAT included in prices',
   tip: 'Tip',
@@ -247,6 +256,7 @@ const FR: ReceiptLabels = {
   endOfShift: 'FIN DE SHIFT',
   mySales: 'Mes ventes',
   reportPeriod: 'Periode du rapport',
+  periodRangeTo: ' au ',
   salesSummary: 'RESUME DES VENTES',
   salesCount: 'Ventes',
   revenue: "Chiffre d'affaires",
@@ -274,6 +284,9 @@ const FR: ReceiptLabels = {
   payLater: 'Paiement différé',
   or: 'ou',
   invoice: 'Facture',
+  bankTransfer: 'Virement bancaire',
+  giftCard: 'Carte cadeau',
+  mixed: 'Mixte',
   totalItems: 'Articles',
   vatIncludedNote: 'TVA incluse dans les prix',
   tip: 'Pourboire',
@@ -345,6 +358,7 @@ const DE: ReceiptLabels = {
   endOfShift: 'SCHICHTENDE',
   mySales: 'Meine Verkaeufe',
   reportPeriod: 'Berichtszeitraum',
+  periodRangeTo: ' bis ',
   salesSummary: 'VERKAUFSUEBERSICHT',
   salesCount: 'Verkaeufe',
   revenue: 'Umsatz',
@@ -372,6 +386,9 @@ const DE: ReceiptLabels = {
   payLater: 'Später zahlen',
   or: 'oder',
   invoice: 'Rechnung',
+  bankTransfer: 'Bankueberweisung',
+  giftCard: 'Geschenkkarte',
+  mixed: 'Gemischt',
   totalItems: 'Artikel',
   vatIncludedNote: 'MwSt. im Preis enthalten',
   tip: 'Trinkgeld',
@@ -455,9 +472,9 @@ export function paymentLabel(labels: ReceiptLabels, method?: string | null): str
   if (m === 'terminal') return labels.terminal;
   if (m === 'pay_later') return formatPayLaterPaymentLabel(labels);
   if (m === 'invoice') return labels.invoice || 'Invoice';
-  if (m === 'bank_transfer') return 'Bank transfer';
-  if (m === 'gift_card') return 'Gift card';
-  if (m === 'mixed') return 'Mixed';
+  if (m === 'bank_transfer') return labels.bankTransfer;
+  if (m === 'gift_card') return labels.giftCard;
+  if (m === 'mixed') return labels.mixed;
   return String(method || '').toUpperCase();
 }
 

@@ -11122,16 +11122,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">{t('webPosEodReport')}</h3>
-            <p className="mt-1 text-sm text-slate-600">Choose company-wide or an individual waiter.</p>
+            <p className="mt-1 text-sm text-slate-600">{t('webPosEodPickerHint')}</p>
             <EodIncludeProductsCheckbox
               className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
               checked={eodIncludeProductsSold}
               onChange={setEodIncludeProductsSold}
             />
-            <div className="mt-4 flex flex-col gap-2">
+            <div className="mt-4 flex flex-col gap-3">
               <button
                 type="button"
-                className="rounded-lg border border-slate-200 px-4 py-2 text-left font-semibold hover:bg-slate-50"
+                className="webpos-accent-btn inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-bold"
                 onClick={() => {
                   setEodPickerOpen(false);
                   void printTodayEod(undefined, undefined, {
@@ -11139,23 +11139,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   });
                 }}
               >
-                Company-wide
+                {t('webPosEodCompanyWide')}
               </button>
-              {panelStaff.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-left hover:bg-slate-50"
-                  onClick={() => {
-                    setEodPickerOpen(false);
-                    void printTodayEod(s.id, s.name, {
-                      includeProductsSold: eodIncludeProductsSold,
-                    });
-                  }}
-                >
-                  {s.name}
-                </button>
-              ))}
+              <div className="flex flex-wrap gap-2">
+                {panelStaff.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="inline-flex min-h-[2.75rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                    onClick={() => {
+                      setEodPickerOpen(false);
+                      void printTodayEod(s.id, s.name, {
+                        includeProductsSold: eodIncludeProductsSold,
+                      });
+                    }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
             </div>
             <button
               type="button"
