@@ -39,7 +39,6 @@ type Props = {
 export default function WebPosLicenseGate({ entitlement, businessName, onActivated }: Props) {
   const { t, formatDate } = useI18n();
   const navigate = useNavigate();
-  const [contactBusy, setContactBusy] = useState(false);
   const [activationCode, setActivationCode] = useState('');
   const [activating, setActivating] = useState(false);
 
@@ -65,33 +64,6 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
   const endedLabel = endedAt ? formatDate(endedAt) : null;
 
   const reseller = entitlement.reseller;
-
-  const contactReseller = async () => {
-    if (contactBusy) return;
-    setContactBusy(true);
-    try {
-      const reasonLabel =
-        entitlement.reason === 'suspended'
-          ? 'suspended'
-          : entitlement.reason === 'subscription_expired'
-            ? 'subscription_expired'
-            : 'trial_expired';
-      await api.post('/merchant/support/tickets', {
-        category: 'miscellaneous',
-        subcategory: 'license_renewal',
-        subject: t('webPosLicenseMailSubject'),
-        body: t('webPosLicenseContactBody')
-          .replace('{reason}', reasonLabel)
-          .replace('{business}', businessName || APP_NAME),
-      });
-      toast.success(t('webPosLicenseContactSent'));
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } }; message?: string };
-      toast.error(err.response?.data?.error || err.message || t('webPosLicenseContactFailed'));
-    } finally {
-      setContactBusy(false);
-    }
-  };
 
   const activateWithCode = async () => {
     const code = activationCode.trim();
@@ -167,15 +139,15 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
           >
             {t('webPosLicenseBuy')}
           </button>
-          {reseller ? (
-            <button
-              type="button"
-              disabled={contactBusy}
-              className="flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-bold text-stone-800 hover:bg-stone-50 disabled:opacity-60"
-              onClick={() => void contactReseller()}
+          {reseller?.email ? (
+            <a
+              href={`mailto:${reseller.email}?subject=${encodeURIComponent(
+                t('webPosLicenseMailSubject')
+              )}`}
+              className="flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-bold text-stone-800 hover:bg-stone-50"
             >
-              {contactBusy ? t('webPosLicenseContacting') : t('webPosLicenseContactReseller')}
-            </button>
+              {t('webPosLicenseContactReseller')}
+            </a>
           ) : (
             <button
               type="button"
@@ -191,13 +163,11 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
           <div className="mt-6 rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
             <p className="font-semibold">{t('webPosLicenseYourReseller')}</p>
             <p className="mt-1">{reseller.name}</p>
-            {reseller.email ? (
-              <p className="mt-0.5">
-                <a className="text-teal-800 underline" href={`mailto:${reseller.email}`}>
-                  {reseller.email}
-                </a>
-              </p>
-            ) : null}
+            <p className="mt-0.5">
+              <a className="text-teal-800 underline" href={`mailto:${reseller.email}`}>
+                {reseller.email}
+              </a>
+            </p>
             {reseller.phone ? (
               <p className="mt-0.5">
                 <a className="text-teal-800 underline" href={`tel:${reseller.phone}`}>

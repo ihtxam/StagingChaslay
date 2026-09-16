@@ -9229,6 +9229,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         <WebPosLicenseGate
           entitlement={entitlement}
           businessName={merchant?.name || APP_NAME}
+          onActivated={(next) => {
+            if (next) {
+              setEntitlement(next);
+              return;
+            }
+            void api
+              .get('/merchant/webpos-entitlement')
+              .then((res) => setEntitlement(res.data?.entitlement || null))
+              .catch(() => undefined);
+          }}
         />
       </div>
     );

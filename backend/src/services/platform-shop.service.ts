@@ -487,8 +487,6 @@ export class PlatformShopService {
         channel: 'Web',
         countryCode: 'CH',
         shopperReference: merchantId,
-        // Do NOT send clientKey here — Adyen CreateCheckoutSessionRequest rejects it.
-        // clientKey is returned separately below for Drop-in config only.
         metadata: {
           type: 'platform_shop',
           orderId: order!.id,
