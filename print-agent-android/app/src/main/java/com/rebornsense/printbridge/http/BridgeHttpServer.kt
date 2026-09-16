@@ -12,6 +12,8 @@ import com.rebornsense.printbridge.payment.TapToPayAuthParams
 import com.rebornsense.printbridge.payment.TapToPayEngines
 import com.rebornsense.printbridge.payment.TapToPaySaleParams
 import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
+import com.rebornsense.printbridge.fleet.FleetPreferences
+import com.rebornsense.printbridge.fleet.KioskController
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.payment.hasNfcFeature
 import com.rebornsense.printbridge.scale.AclasScaleReader
@@ -95,6 +97,9 @@ class BridgeHttpServer(
                         .put("tapToPayRegistered", deviceRegistered)
                         .put("tapToPayReady", tapToPayReady)
                         .put("tapToPayMessage", tapToPayMessage)
+                        .put("deviceOwner", KioskController.isDeviceOwner(appContext))
+                        .put("kioskEnabled", FleetPreferences.isKioskEnabled(appContext))
+                        .put("kioskActive", KioskController.isKioskActive(appContext))
                 )
             }
 

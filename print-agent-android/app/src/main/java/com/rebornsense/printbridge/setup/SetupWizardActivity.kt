@@ -40,7 +40,7 @@ class SetupWizardActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_setup_wizard)
-        steps = OemSetupSteps.forDevice()
+        steps = OemSetupSteps.forDevice(this)
         stepIndex = savedInstanceState?.getInt(STATE_STEP_INDEX) ?: firstIncompleteStepIndex()
 
         findViewById<TextView>(R.id.wizardDeviceLabel).text =

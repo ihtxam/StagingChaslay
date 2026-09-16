@@ -22,16 +22,35 @@ data class OemSetupStep(
 )
 
 object OemSetupSteps {
-    fun forDevice(): List<OemSetupStep> {
-        return when (DeviceProfiler.detect()) {
+    fun forDevice(context: android.content.Context): List<OemSetupStep> {
+        val base = when (DeviceProfiler.detect()) {
             DeviceProfiler.Profile.SUNMI -> sunmiSteps()
             DeviceProfiler.Profile.FEITIAN -> feitianSteps()
             DeviceProfiler.Profile.GENERIC_CHINESE -> genericChineseSteps()
             DeviceProfiler.Profile.GENERIC_ANDROID -> genericAndroidSteps()
         }
+        if (!com.rebornsense.printbridge.fleet.KioskController.isDeviceOwner(context)) {
+            return base
+        }
+        return fleetOwnerSteps(base)
     }
 
-    private fun sunmiSteps(): List<OemSetupStep> = listOfNotNull(
+    /** Device owner replaces manual OEM battery/autostart whitelisting. */
+    private fun fleetOwnerSteps(base: List<OemSetupStep>): List<OemSetupStep> {
+        val skip = setOf(
+            "battery",
+            "sunmi_autostart",
+            "feitian_background",
+            "generic_autostart",
+            "generic_lock_recents",
+        )
+        return base.filter { it.id !in skip }
+    }
+
+    @Deprecated("Use forDevice(context)", ReplaceWith("forDevice(context)"))
+    fun forDeviceLegacy(): List<OemSetupStep> = genericAndroidSteps()
+
+    private fun sunmiSteps(): List<OemSetupStep> = listOfNotNull( List<OemSetupStep> = listOfNotNull(
         welcomeStep(),
         batteryStep(),
         OemSetupStep(

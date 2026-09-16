@@ -100,4 +100,33 @@
     <string name="tap_to_pay_ready_unknown">Tap to Pay: status unknown</string>
     <string name="tap_to_pay_diag_offline">Bridge service offline.\n%1$s\nBridge version: %2$s</string>
     <string name="tap_to_pay_diag_summary">%1$s\n%2$s\n%3$s\nBridge version: %4$s</string>
+
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="fleet_setup_title">Fleet kiosk mode</string>
+    <string name="fleet_setup_subtitle">Device owner locks this tablet to WebPOS + Bridge. Bridge starts on boot and cannot be force-stopped by staff.</string>
+    <string name="fleet_setup_open">Fleet kiosk setup</string>
+    <string name="fleet_setup_banner">Fleet kiosk available — provision device owner for locked POS tablets.</string>
+    <string name="fleet_device_owner_status">Device owner</string>
+    <string name="fleet_device_owner_active">Active — Bridge controls lock task and boot startup.</string>
+    <string name="fleet_device_owner_missing">Not set — provision once per tablet (factory reset or fresh device).</string>
+    <string name="fleet_provision_adb_command">adb shell dpm set-device-owner %1$s/.fleet.PrintBridgeDeviceAdminReceiver</string>
+    <string name="fleet_kiosk_enabled_title">POS kiosk mode</string>
+    <string name="fleet_kiosk_enabled_summary">On boot: start Bridge service, open WebPOS in Chrome, lock task (staff cannot leave POS).</string>
+    <string name="fleet_admin_pin_label">Admin PIN (exit kiosk)</string>
+    <string name="fleet_pos_url_label">WebPOS URL (optional override)</string>
+    <string name="fleet_browser_detected">Browser: %1$s</string>
+    <string name="fleet_browser_missing">No Chrome/browser found — install Chrome before enabling kiosk.</string>
+    <string name="fleet_launch_kiosk_now">Launch kiosk now</string>
+    <string name="fleet_exit_kiosk">Exit kiosk (admin PIN)</string>
+    <string name="fleet_kiosk_launching">Starting Bridge and WebPOS…</string>
+    <string name="fleet_kiosk_enabled_toast">Fleet kiosk enabled</string>
+    <string name="fleet_kiosk_disabled_toast">Fleet kiosk disabled</string>
+    <string name="fleet_admin_pin_wrong">Wrong admin PIN</string>
+    <string name="fleet_admin_pin_prompt_title">Enter admin PIN</string>
+    <string name="fleet_disable_kiosk_title">Disable kiosk?</string>
+    <string name="fleet_disable_kiosk_message">Staff will be able to leave WebPOS and force-stop Bridge again.</string>
+    <string name="fleet_disable_kiosk_confirm">Disable</string>
+    <string name="fleet_notification_kiosk">POS kiosk running — tap for admin</string>
 </resources>
