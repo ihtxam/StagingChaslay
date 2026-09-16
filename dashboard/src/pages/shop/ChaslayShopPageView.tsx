@@ -2,14 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
-import { shopDocumentTitle } from '@/lib/brand';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-site-settings';
 import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRenderer';
 import type { SitePageLink, MerchantContact } from '@/chaslay-pagebuilder/StorefrontContext';
 import { BuilderLanguageProvider } from '@/chaslay-pagebuilder/BuilderLanguageContext';
-import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 
 type MerchantInfo = {
@@ -30,7 +29,8 @@ type ChaslayPagePayload = {
   editorState?: string;
   title?: string;
   seoTitle?: string;
-  merchant?: MerchantInfo;
+  seoDescription?: string;
+  merchant?: MerchantInfo & { site?: ShopSiteSettings | null };
 };
 
 type ChaslayLocale = 'en' | 'fr' | 'de' | 'it';
@@ -63,6 +63,8 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
   const [editorState, setEditorState] = useState('');
   const [merchant, setMerchant] = useState<MerchantInfo | null>(null);
   const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
+  const [pageSite, setPageSite] = useState<ShopSiteSettings | null>(null);
   const [sitePages, setSitePages] = useState<SitePageLink[]>([]);
   const [defaultLanguage, setDefaultLanguage] = useState('en');
   const [chaslayLocale, setChaslayLocale] = useState<ChaslayLocale>('en');
@@ -94,6 +96,8 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
         }
         setMerchant(page.merchant || null);
         setSeoTitle(page.seoTitle || page.title || page.merchant?.name || '');
+        setSeoDescription(page.seoDescription || '');
+        setPageSite(page.merchant?.site ? normalizeShopSiteSettings(page.merchant.site) : null);
         setEditorState(page.editorState);
         const m = page.merchant;
         if (m) {
@@ -147,9 +151,7 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     };
   }, [shopKey, apiPath, t, setLocale]);
 
-  useEffect(() => {
-    if (seoTitle) document.title = shopDocumentTitle(seoTitle);
-  }, [seoTitle]);
+  const site = pageSite || shopSite;
 
   useEffect(() => {
     document.documentElement.lang = chaslayLocale;
@@ -171,12 +173,20 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   if (loading) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center"
-        style={{ background: 'var(--shop-bg, #fafaf9)', color: 'var(--shop-text-muted, #78716c)' }}
+      <ShopThemeShell
+        theme={theme}
+        site={site}
+        pageTitle={seoTitle}
+        pageDescription={seoDescription}
+        language={chaslayLocale}
       >
-        {t('loading')}
-      </div>
+        <div
+          className="flex min-h-screen items-center justify-center"
+          style={{ background: 'var(--shop-bg, #fafaf9)', color: 'var(--shop-text-muted, #78716c)' }}
+        >
+          {t('loading')}
+        </div>
+      </ShopThemeShell>
     );
   }
 
@@ -193,7 +203,15 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   return (
     <BuilderLanguageProvider locale={chaslayLocale} defaultLanguage={defaultLanguage}>
-      <ShopThemeShell theme={theme} site={shopSite} language={chaslayLocale} className="flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
+      <ShopThemeShell
+        theme={theme}
+        site={site}
+        pageTitle={seoTitle}
+        pageDescription={seoDescription}
+        language={chaslayLocale}
+        className="flex flex-col"
+        style={{ background: 'var(--color-bg-0)' }}
+      >
         <ShopVacationPopup shopKey={shopKey} />
         <div className="cms-homepage flex flex-col pb-6">
           <ChaslayHomepageRenderer

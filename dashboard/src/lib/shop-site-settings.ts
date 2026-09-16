@@ -90,6 +90,20 @@ export function localizedShopCopy(
   );
 }
 
+/** Prefer Online Shop SEO settings; page/builder copy is fallback only. */
+export function resolveShopDocumentSeo(
+  site: ShopSiteSettings | null | undefined,
+  locale: string,
+  fallbacks?: { title?: string | null; description?: string | null }
+): { title: string; description: string; faviconUrl: string | null } {
+  return {
+    title: localizedShopCopy(site?.metaTitle, locale) || String(fallbacks?.title || '').trim(),
+    description:
+      localizedShopCopy(site?.metaDescription, locale) || String(fallbacks?.description || '').trim(),
+    faviconUrl: site?.faviconUrl || null,
+  };
+}
+
 /** Override shop/CMS accent tokens with the merchant primary brand color. */
 export function shopBrandCssVars(brandColor: string | null | undefined): Record<string, string> {
   if (!brandColor) return {};

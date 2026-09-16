@@ -5,6 +5,7 @@ import { Gift, Mail, Package } from 'lucide-react';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
+import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
@@ -31,7 +32,7 @@ type PaymentSession = {
 };
 
 export default function GiftCardsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
@@ -61,7 +62,9 @@ export default function GiftCardsPage() {
 
   useEffect(() => {
     if (!shopKey) return;
-    document.title = shopDocumentTitle('Gift cards', merchant?.name);
+    if (!localizedShopCopy(shopSite?.metaTitle, locale)) {
+      document.title = shopDocumentTitle('Gift cards');
+    }
     (async () => {
       try {
         const [shopRes, gcRes] = await Promise.all([
@@ -82,7 +85,7 @@ export default function GiftCardsPage() {
         setLoading(false);
       }
     })();
-  }, [shopKey, merchant?.name, t]);
+  }, [shopKey, merchant?.name, t, shopSite?.metaTitle, locale]);
 
   const resolvedAmount = useMemo(() => {
     if (amount === -1) {
@@ -198,7 +201,7 @@ export default function GiftCardsPage() {
   }
 
   return (
-    <ShopThemeShell theme={cmsTheme} site={shopSite} className="min-h-screen">
+    <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle="Gift cards" className="min-h-screen">
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
       <header className="border-b border-stone-200 bg-white">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
