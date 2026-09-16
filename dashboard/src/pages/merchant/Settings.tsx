@@ -44,12 +44,6 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
-import {
-  labelPixelSize,
-  renderNiimbotBarsToast,
-  resolveNiimbotTestPortName,
-  shouldTestNiimbotBars,
-} from '@/lib/niimbot-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -69,11 +63,8 @@ import {
   listAgentPrinters,
   listScaleDevices,
   printViaAgent,
-  printNiimbotLabelViaAgent,
   probeNiimbotComPorts,
   probePrintAgentHealth,
-  printerSelectValue,
-  findPrinterBySelectValue,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
@@ -1118,87 +1109,11 @@ export default function Settings() {
     }
   }, [printAgentManifest?.version, printBridgeManifest?.version]);
 
-  const testNiimbotBars = useCallback(
-    async (
-      profile: { id: string; name: string; portName?: string | null },
-      opts?: { invert?: boolean; protocol?: string }
-    ) => {
-      const name = String(profile.name || '').trim();
-      if (!name) {
-        toast.error(t('testPrinterNeedName'));
-        return;
-      }
-      const health = await getPrintAgentHealth().catch(() => ({ ok: false as const }));
-      if (!health.ok && !printAgentOk) {
-        toast.error(t('testPrinterNeedAgent'));
-        return;
-      }
-      const invert = opts?.invert === true;
-      setTestingPrinterId(invert ? `${profile.id}:invert` : profile.id);
-      try {
-        const size = labelPixelSize(
-          {
-            widthMm: settings?.posPrintSettings?.labelWidthMm,
-            heightMm: settings?.posPrintSettings?.labelHeightMm,
-          },
-          name
-        );
-        const portName = resolveNiimbotTestPortName(profile, agentPrinters);
-        const protocol = String(opts?.protocol || 'b21').trim() || 'b21';
-        const result = await printNiimbotLabelViaAgent({
-          printerName: name,
-          portName,
-          widthPx: size.widthPx,
-          heightPx: size.heightPx,
-          testPattern: true,
-          profile: protocol,
-          invertBitmap: invert,
-        });
-        const fingerprint = renderNiimbotBarsToast(t('testNiimbotBarsOk'), {
-          name,
-          result,
-          protocol,
-          invert,
-        });
-        // The bytes left the PC, but only a transport that reads the printer's
-        // replies can tell us the head fired. Do not claim success otherwise.
-        if (result.unconfirmed) {
-          toast(`${fingerprint}\n\n${result.warning || t('testNiimbotBarsUnconfirmed')}`, {
-            icon: '⚠️',
-            duration: 20000,
-          });
-        } else {
-          const proof = result.confirmed ? `\n\n${result.detail || t('testNiimbotBarsConfirmed')}` : '';
-          toast.success(`${fingerprint}${proof}`, { duration: result.confirmed ? 15000 : 6000 });
-        }
-      } catch (error: unknown) {
-        const msg =
-          error && typeof error === 'object' && 'message' in error
-            ? String((error as { message?: string }).message || '')
-            : '';
-        toast.error(msg || t('testNiimbotBarsFailed'));
-      } finally {
-        setTestingPrinterId(null);
-      }
-    },
-    [
-      printAgentOk,
-      agentPrinters,
-      settings?.posPrintSettings?.labelWidthMm,
-      settings?.posPrintSettings?.labelHeightMm,
-      t,
-    ]
-  );
-
   const testPrinterProfile = useCallback(
-    async (profile: { id: string; name: string; portName?: string | null }) => {
+    async (profile: { id: string; name: string }) => {
       const name = String(profile.name || '').trim();
       if (!name) {
         toast.error(t('testPrinterNeedName'));
-        return;
-      }
-      if (shouldTestNiimbotBars(profile)) {
-        await testNiimbotBars(profile);
         return;
       }
       const health = await getPrintAgentHealth().catch(() => ({ ok: false }));
@@ -1228,7 +1143,7 @@ export default function Settings() {
         setTestingPrinterId(null);
       }
     },
-    [printAgentOk, settings?.name, t, testNiimbotBars]
+    [printAgentOk, settings?.name, t]
   );
 
   /**
@@ -4649,13 +4564,13 @@ export default function Settings() {
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={savedNameMissing ? '' : printerSelectValue(p)}
+                          value={savedNameMissing ? '' : p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const picked = findPrinterBySelectValue(agentPrinters, e.target.value);
+                            const picked = agentPrinters.find((ap) => ap.name === e.target.value);
                             printers[idx] = {
                               ...p,
-                              name: picked?.name || e.target.value,
+                              name: e.target.value,
                               portName: picked?.portName || null,
                               matchHint: picked?.matchHint || picked?.driverName || null,
                             };
@@ -4669,7 +4584,7 @@ export default function Settings() {
                           {agentPrinters.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (
-                              <option key={printerSelectValue(ap)} value={printerSelectValue(ap)}>
+                              <option key={ap.name} value={ap.name}>
                                 {ap.name}
                                 {ap.portName ? ` · ${ap.portName}` : ''}
                                 {ap.isDefault ? t('webPosDefaultSuffix') : ''}
@@ -4773,40 +4688,15 @@ export default function Settings() {
                       </div>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-3">
-                      {shouldTestNiimbotBars(p) ? (
-                        <>
-                          <button
-                            type="button"
-                            className="btn-secondary inline-flex items-center gap-2 text-sm"
-                            disabled={!p.name?.trim() || !!testingPrinterId}
-                            onClick={() => void testNiimbotBars(p, { protocol: 'b21' })}
-                          >
-                            <Printer size={14} />
-                            {testingPrinterId === p.id ? t('loading') : t('testNiimbotBars')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary inline-flex items-center gap-2 text-sm"
-                            disabled={!p.name?.trim() || !!testingPrinterId}
-                            onClick={() => void testNiimbotBars(p, { protocol: 'b21', invert: true })}
-                          >
-                            <Printer size={14} />
-                            {testingPrinterId === `${p.id}:invert`
-                              ? t('loading')
-                              : t('testNiimbotBarsInvert')}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn-secondary inline-flex items-center gap-2 text-sm"
-                          disabled={!p.name?.trim() || testingPrinterId === p.id}
-                          onClick={() => void testPrinterProfile(p)}
-                        >
-                          <Printer size={14} />
-                          {testingPrinterId === p.id ? t('loading') : t('testPrinter')}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-2 text-sm"
+                        disabled={!p.name?.trim() || testingPrinterId === p.id}
+                        onClick={() => void testPrinterProfile(p)}
+                      >
+                        <Printer size={14} />
+                        {testingPrinterId === p.id ? t('loading') : t('testPrinter')}
+                      </button>
                       <button
                         type="button"
                         className="text-xs text-red-600"

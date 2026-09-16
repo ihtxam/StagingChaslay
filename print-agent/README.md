@@ -40,38 +40,10 @@ exactly like a protocol bug: the printer beeps, feeds a label, and prints nothin
 
 | Transport | Works | Why |
 |---|---|---|
-| Serial port the queue is bound to (`COMx`, opened by the agent) | Yes | Bidirectional, and the agent chooses the baud rate. Agent 1.10.14+ reads `Win32_Printer.PortName` for the selected queue and takes this path whenever the queue is bound to a COM port. |
-| USBPRINT device interface (`\\?\usb#...#{28d78fad-...}`) | Yes | Same bulk pipes as the spooler, but bidirectional and with no driver in the way. This is the Windows equivalent of `/dev/usb/lp0`, which is the transport [niimgo](https://github.com/MarkusOderSo/niimgo) requires for the K3. Agent 1.10.13+ prefers it over the spooler. |
+| USBPRINT device interface (`\\?\usb#...#{28d78fad-...}`) | Yes | Same bulk pipes as the spooler, but bidirectional and with no driver in the way. This is the Windows equivalent of `/dev/usb/lp0`, which is the transport [niimgo](https://github.com/MarkusOderSo/niimgo) requires for the K3. Agent 1.10.13+ prefers it. |
 | Bluetooth SPP (`COMx` outgoing port) | Yes | The transport [niimprint](https://github.com/AndBondStyle/niimprint) and [niimbluelib](https://github.com/MultiMote/niimbluelib) use. Bidirectional. |
 | Android Print Bridge over Bluetooth | Yes | `print-agent-android` implements the same sequence niimgo uses, and reads the replies. |
 | Windows print queue (`USBnnn` + `WritePrinter` RAW) | No | One-way only. The standard USB port monitor is not bidirectional, so the printer's acknowledgements never reach us -- and every Niimbot setup command expects one. A job can be accepted in full and still print nothing. |
-| Windows print queue on a serial port (`COMx:` + `WritePrinter` RAW) | No | One-way, and worse: the spooler relays the bytes at the rate configured on that port in Windows, which defaults to **9600**. A Niimbot only speaks **115200**, so correct frames arrive as garbage. |
-
-### The port the queue is bound to is the transport
-
-`Win32_Printer.PortName` is the only authoritative answer to "where does this
-queue print". The Ports dialog is not: a port can still be *associated* with a
-queue (its name shown in the "Printer" column) while a different port is the
-checked, active one.
-
-One till cost eight days to this. `NIIMBOT K3` was bound to `COM8:` ("Port
-série") while `USB005` was still listed against it, so every build up to 1.10.13
-resolved `USB005`, or handed the job to the spooler. Either way the bytes never
-reached the printer at a rate it could read, and the symptom -- beep, feed,
-blank label -- was identical for every protocol variant we tried, which is what
-made it look like a protocol bug for a week.
-
-1.10.14 therefore picks the transport in this order:
-
-1. a COM port the merchant selected explicitly,
-2. the port `Win32_Printer.PortName` reports for that queue,
-3. a USB spooler port (driven through the USBPRINT interface),
-4. a COM port discovered only by name.
-
-(4) never outranks (3), because CH340 scales share VID `1a86` and would
-otherwise be mistaken for the printer. And a COM port that belongs to another,
-non-Niimbot queue is refused outright: sending Niimbot frames to a receipt
-printer only makes it beep.
 
 No reference implementation prints a Niimbot through a print spooler. niimprint
 ships exactly two transports, `BluetoothTransport` (an RFCOMM socket) and
@@ -127,37 +99,11 @@ builds with the existing `pkg` step.
 
 ### Diagnosing a blank label
 
-**Settings -> Receipts & printers -> Diagnose Niimbot ports** is meant to be
-enough on its own, with no follow-up questions. It reports:
-
-- every print queue with its `PortName`, its driver, and whether that driver is
-  missing (what Windows shows as *Pilote indisponible*),
-- every COM port with its caption, PnP id, **the baud rate Windows has it
-  configured at**, the print queue that owns it, and whether a Bluetooth port is
-  the incoming (local RFCOMM server, unusable) or the outgoing one,
-- each open attempt at 115200/9600/19200 with the real Windows exception,
-- whether the USB printer-class interface can be opened directly,
-- and one line: `RECOMMENDED PORT FOR NIIMBOT: COMx (bound to queue '...')`.
-
-It is also available as `GET /print/niimbot-label/com-probe`, always returns 200,
-and never throws.
-
-### What a print result means
-
-On the serial path the agent writes each command and reads the reply frame the
-protocol owes it, then loops `PrintEnd` until `0xf4` answers `01`. Only that
-answer is reported as a printed label. Anything else names the step the printer
-refused, with the reply bytes, e.g.
-
-```
-Niimbot COM8 refused SetPageSize at 115200 baud: expected 0x14, answered 0xdb.
-Raw bytes back: 5555db00dbaaaa. Replies so far: SetDensity=0x31:01, ...
-```
-
-If the printer answers but never confirms, the transport is right and the job
-content is the problem. If it answers nothing at all, the port is wrong -- and
-the agent does not fall back to the spooler for a COM-bound queue, because that
-would only repeat the write at the wrong baud rate.
+**Settings -> Receipts & printers -> Diagnose Niimbot ports** lists every serial
+port and print queue, tries each port at 115200/9600/19200, reports the real
+Windows exception for each attempt, and says whether the USB printer-class
+interface can be opened directly. It is also available as
+`GET /print/niimbot-label/com-probe`, always returns 200, and never throws.
 
 ## Dev (Node)
 

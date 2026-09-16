@@ -275,41 +275,16 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
   return resolved;
 }
 
-/** Dedupe agent enumeration by Windows queue name + port (USB005 vs COM6). */
-export function printerSelectValue(p: { name?: string | null; portName?: string | null }): string {
-  const name = String(p.name || '').trim();
-  const port = String(p.portName || '').trim();
-  return port ? `${name}|||${port}` : name;
-}
-
-export function findPrinterBySelectValue(
-  printers: AgentPrinter[],
-  value: string
-): AgentPrinter | undefined {
-  const raw = String(value || '');
-  const sep = raw.indexOf('|||');
-  if (sep >= 0) {
-    const name = raw.slice(0, sep);
-    const port = raw.slice(sep + 3);
-    return (
-      printers.find((ap) => ap.name === name && String(ap.portName || '') === port) ||
-      printers.find((ap) => ap.name === name)
-    );
-  }
-  return printers.find((ap) => ap.name === raw);
-}
-
+/** Dedupe agent enumeration by exact Windows queue name. */
 export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
   const seen = new Set<string>();
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name) continue;
-    const key = printerSelectValue({ name, portName: p.portName });
-    if (seen.has(key)) continue;
+    if (!name || seen.has(name)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
-    seen.add(key);
+    seen.add(name);
     out.push({
       ...p,
       name,
@@ -460,12 +435,11 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
 /**
- * 1.10.15 hands System.IO.Ports.SerialPort the bare COMn name it actually
- * accepts, and refuses to recommend a port Windows no longer has. 1.10.14 sent
- * `\\.\COMnn` for every port above COM9 — which .NET rejects outright — and
- * recommended whatever port a queue was still bound to, existing or not.
+ * 1.10.13 drops the bogus 0x54 prologue bytes, stops guessing the black-pixel
+ * counts, and adds the one-click COM port probe. Older builds cannot diagnose
+ * a blank label at all.
  */
-export const MIN_NIIMBOT_AGENT_VERSION = '1.10.15';
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.13';
 
 const BT_COM_PRINTER_RE =
   /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
@@ -955,45 +929,6 @@ export type PrintViaAgentResult = {
   warning?: string;
 };
 
-export type NiimbotHandshakeStep = {
-  step: string;
-  request: number;
-  expect: number;
-  replyCmd: number;
-  replyHex: string;
-  rawHex: string;
-  attempts: number;
-  ok: boolean;
-  done: boolean;
-};
-
-export type NiimbotPrintResult = PrintViaAgentResult & {
-  version?: string;
-  profile?: string;
-  path?: string;
-  transport?: string;
-  dimensionHex?: string;
-  bitmapNonZeroBytes?: number | null;
-  rasterLines?: number;
-  rasterRowBytes?: number | null;
-  packetCount?: number;
-  baud?: number | null;
-  /** Where the port came from: the merchant's choice, the queue, or a guess. */
-  portSource?: string;
-  osConfiguredBaud?: string;
-  queuePort?: string;
-  queueDriverMissing?: boolean;
-  /** True only when PrintEnd (0xf4) answered 01 — the one proof of a label. */
-  confirmed?: boolean;
-  answered?: boolean;
-  detail?: string;
-  handshake?: NiimbotHandshakeStep[];
-  /** Set on the USBPRINT device path: the interface we opened and what it answered. */
-  devicePath?: string;
-  bytesWritten?: number;
-  replies?: Array<{ afterType: number; hex: string }> | string[];
-};
-
 export async function printViaAgent(opts: {
   printerName?: string;
   dataBase64: string;
@@ -1042,15 +977,11 @@ export async function printViaAgent(opts: {
 export async function printNiimbotLabelViaAgent(opts: {
   printerName?: string | null;
   portName?: string | null;
-  bitmapBase64?: string;
+  bitmapBase64: string;
   widthPx: number;
   heightPx: number;
   density?: number;
-  testPattern?: boolean;
-  profile?: string | null;
-  invertBitmap?: boolean;
-  usbWriteMode?: string | null;
-}): Promise<NiimbotPrintResult> {
+}): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitableRawPrinterMessage(name));
@@ -1066,14 +997,10 @@ export async function printNiimbotLabelViaAgent(opts: {
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
         portName: opts.portName || undefined,
-        bitmapBase64: opts.testPattern ? undefined : opts.bitmapBase64,
+        bitmapBase64: opts.bitmapBase64,
         widthPx: opts.widthPx,
         heightPx: opts.heightPx,
         density: opts.density,
-        testPattern: opts.testPattern === true,
-        profile: opts.profile || undefined,
-        invertBitmap: opts.invertBitmap === true,
-        usbWriteMode: opts.usbWriteMode || undefined,
       }),
       signal: controller.signal,
     });
@@ -1089,29 +1016,8 @@ export async function printNiimbotLabelViaAgent(opts: {
         })
       );
     }
-    const data = (await res.json()) as NiimbotPrintResult;
-    console.info('[niimbot-label]', {
-      version: data?.version,
-      path: data?.path,
-      portSource: data?.portSource,
-      baud: data?.baud,
-      profile: data?.profile,
-      dimensionHex: data?.dimensionHex,
-      bitmapNonZeroBytes: data?.bitmapNonZeroBytes,
-      devicePath: data?.devicePath,
-      replies: data?.replies?.length,
-      confirmed: data?.confirmed,
-      unconfirmed: data?.unconfirmed,
-    });
-    /*
-     * Everything the agent reports has to reach the caller. Returning only
-     * `{ ok, printer, unconfirmed, warning }` is what made the merchant's toast
-     * read `via ? · inkBytes=? · rowBytes=? · dim=?` — the placeholders were
-     * substituted, with values this function had already thrown away, so every
-     * diagnostic we asked them to screenshot for a week was blank.
-     */
+    const data = await res.json();
     return {
-      ...data,
       ok: true,
       printer: data?.printer,
       unconfirmed: Boolean(data?.unconfirmed),
