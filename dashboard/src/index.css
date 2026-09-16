@@ -2208,6 +2208,18 @@ html.shop-shell #root {
   opacity: 0.45;
 }
 
+@media (min-width: 1024px) {
+  .shop-checkout-sticky-bar {
+    display: none;
+  }
+}
+
+.shop-checkout-desktop-cart {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 5.5rem;
+}
+
 html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
 html.shop-shell textarea,
 html.shop-shell select {
