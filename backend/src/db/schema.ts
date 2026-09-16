@@ -2796,6 +2796,8 @@ export const offers = pgTable(
 
 export type VoucherUsageType = "single_use" | "multi_use" | "customer";
 export type VoucherDiscountType = "percent" | "fixed";
+/** Fulfillment channels a voucher may apply to; empty array = all types. */
+export type VoucherOrderType = "takeaway" | "dine_in" | "delivery";
 
 export const vouchers = pgTable(
   "vouchers",
@@ -2814,6 +2816,8 @@ export const vouchers = pgTable(
     discountType: varchar("discount_type", { length: 20 }).notNull().default("percent"),
     discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+    /** Empty = valid for all order types (pickup, delivery, dine-in). */
+    orderTypes: json("order_types").$type<VoucherOrderType[]>().default([]).notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validTo: timestamp("valid_to", { withTimezone: true }),
     isActive: boolean("is_active").default(true).notNull(),
