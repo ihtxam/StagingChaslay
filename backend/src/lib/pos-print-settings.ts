@@ -106,6 +106,12 @@ export type PosPrintSettings = {
   labelShowBarcodeNumber?: boolean;
   labelShowPrice?: boolean;
   labelShowSku?: boolean;
+  /** Enable order labels (kitchen/order stickers) in WebPOS. */
+  orderLabelEnabled?: boolean;
+  /** Auto-print order labels when an order is held. */
+  autoPrintOrderLabelOnHold?: boolean;
+  /** Auto-print order labels when an order is sent to kitchen. */
+  autoPrintOrderLabelOnSend?: boolean;
 };
 
 export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
@@ -165,6 +171,9 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
     labelShowBarcodeNumber: true,
     labelShowPrice: false,
     labelShowSku: false,
+    orderLabelEnabled: false,
+    autoPrintOrderLabelOnHold: true,
+    autoPrintOrderLabelOnSend: false,
   };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -332,6 +341,9 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     labelShowBarcodeNumber: src.labelShowBarcodeNumber !== false,
     labelShowPrice: src.labelShowPrice === true,
     labelShowSku: src.labelShowSku === true,
+    orderLabelEnabled: src.orderLabelEnabled === true,
+    autoPrintOrderLabelOnHold: src.autoPrintOrderLabelOnHold !== false,
+    autoPrintOrderLabelOnSend: src.autoPrintOrderLabelOnSend === true,
   };
 }
 
