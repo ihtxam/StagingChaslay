@@ -47,6 +47,7 @@ import {
 } from '@/lib/webpos-receipt';
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
+import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -69,6 +70,7 @@ import {
   probePrintAgentHealth,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
+  printNiimbotLabelViaAgent,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -1133,7 +1135,19 @@ export default function Settings() {
       }
       setTestingPrinterId(profile.id);
       try {
-        if (isTsplLabelPrinterName(name)) {
+        const protocol = resolveLabelPrintProtocol(settings?.posPrintSettings, name);
+        if (protocol === 'niimbot') {
+          const widthMm = parseLabelWidthMm(settings?.posPrintSettings?.labelWidthMm);
+          const heightMm = parseLabelHeightMm(settings?.posPrintSettings?.labelHeightMm);
+          await printNiimbotLabelViaAgent({
+            printerName: name,
+            portName: (settings?.posPrintSettings?.printers || []).find((p) => p.name === name)?.portName || null,
+            bitmapBase64: '',
+            widthPx: Math.max(8, Math.round(widthMm * 8)),
+            heightPx: Math.max(8, Math.round(heightMm * 8)),
+            testPattern: true,
+          });
+        } else if (protocol === 'tspl') {
           const tspl = buildTsplTestLabel({
             printerName: name,
             storeName: settings?.name,
@@ -1167,7 +1181,7 @@ export default function Settings() {
         setTestingPrinterId(null);
       }
     },
-    [printAgentOk, settings?.name, settings?.posPrintSettings?.labelHeightMm, settings?.posPrintSettings?.labelWidthMm, t]
+    [printAgentOk, settings?.name, settings?.posPrintSettings, t]
   );
 
   const refreshScalePorts = useCallback(async () => {

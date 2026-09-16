@@ -8,7 +8,7 @@ export const NIIMBOT_DPMM = 8;
 
 export function isNiimbotPrinterName(name?: string | null): boolean {
   const n = String(name || '').toLowerCase();
-  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
+  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/.test(n);
 }
 
 export function labelPrinterUsesNiimbot(
