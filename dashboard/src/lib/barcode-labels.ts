@@ -3,25 +3,14 @@ import { concatBytes, escposCode128 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
-import { renderNiimbotLabelPng } from '@/lib/niimbot-label';
-import { buildLabelTspl } from '@/lib/tspl-label';
-import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import {
+  labelPrinterUsesNiimbot,
+  renderNiimbotLabelPng,
+} from '@/lib/niimbot-label';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
-export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
-export const LABEL_HEIGHTS_MM = [20, 25, 30, 40, 50, 80, 150] as const;
-export type LabelWidthMm = (typeof LABEL_WIDTHS_MM)[number];
-export type LabelHeightMm = (typeof LABEL_HEIGHTS_MM)[number];
-
-export function parseLabelWidthMm(value: unknown): LabelWidthMm {
-  const n = Number(value);
-  return (LABEL_WIDTHS_MM as readonly number[]).includes(n) ? (n as LabelWidthMm) : 40;
-}
-
-export function parseLabelHeightMm(value: unknown): LabelHeightMm {
-  const n = Number(value);
-  return (LABEL_HEIGHTS_MM as readonly number[]).includes(n) ? (n as LabelHeightMm) : 20;
-}
+export type LabelHeightMm = 20 | 25 | 30 | 40;
+export type LabelWidthMm = 40 | 58;
 
 export type LabelPrintOptions = {
   storeName?: string;
@@ -98,10 +87,11 @@ export function normalizeLabelOptions(raw?: Partial<LabelPrintOptions> | null): 
   storeName: string;
   copies: number;
 } {
+  const h = Number(raw?.heightMm);
   return {
     storeName: String(raw?.storeName || '').trim().slice(0, 80),
-    widthMm: parseLabelWidthMm(raw?.widthMm),
-    heightMm: parseLabelHeightMm(raw?.heightMm),
+    widthMm: Number(raw?.widthMm) === 58 ? 58 : 40,
+    heightMm: (h === 25 || h === 30 || h === 40 ? h : 20) as LabelHeightMm,
     showStoreName: raw?.showStoreName !== false,
     showProductName: raw?.showProductName !== false,
     showBarcodeNumber: raw?.showBarcodeNumber !== false,
@@ -150,34 +140,11 @@ export async function printLabelsViaAgentOrQueue(
 
   const labelsPrinters = printersForRole(settings || null, 'labels');
   const labelProfile = labelsPrinters[0];
-  const printerName = labelProfile?.name?.trim();
-  if (!printerName) {
-    throw new Error(
-      'No label printer configured. Open Settings → Receipts & printers, add your LuckyDoor or Niimbot, and enable Labels.'
-    );
-  }
-  const portName =
-    ((settings?.printers || []).find((p) => p.name === printerName) as { portName?: string | null } | undefined)
-      ?.portName || null;
-  const protocol = resolveLabelPrintProtocol(settings, printerName);
+  const printerName = labelProfile?.name;
+  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
+  const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
 
-  if (protocol === 'tspl') {
-    const chunks: Uint8Array[] = [];
-    for (const product of printable) {
-      chunks.push(buildLabelTspl(product, o));
-    }
-    const data = concatBytes(...chunks);
-    return await printViaAgentOrQueue({
-      dataBase64: toBase64(data),
-      printerName,
-      text: printable.map((p) => p.barcode).join(', '),
-      retryLocally: relayOpts?.retryLocally,
-      jobKind: 'other',
-      jobLabel: 'barcode-label-tspl',
-    });
-  }
-
-  if (protocol === 'niimbot') {
+  if (useNiimbot) {
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
         const rendered = await renderNiimbotLabelPng(product, o);
@@ -188,9 +155,6 @@ export async function printLabelsViaAgentOrQueue(
           widthPx: rendered.widthPx,
           heightPx: rendered.heightPx,
         });
-        if (printable.length > 1 || o.copies > 1) {
-          await new Promise((r) => setTimeout(r, 400));
-        }
       }
     }
     return 'local';

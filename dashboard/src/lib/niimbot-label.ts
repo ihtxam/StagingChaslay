@@ -8,7 +8,7 @@ export const NIIMBOT_DPMM = 8;
 
 export function isNiimbotPrinterName(name?: string | null): boolean {
   const n = String(name || '').toLowerCase();
-  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/.test(n);
+  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b/.test(n);
 }
 
 export function labelPrinterUsesNiimbot(
@@ -72,7 +72,7 @@ async function drawBarcodeOnCanvasAsync(
 export async function renderNiimbotLabelPng(
   product: LabelProduct,
   opts: LabelPrintOptions
-): Promise<{ imageBase64: string; bitmapBase64: string; widthPx: number; heightPx: number }> {
+): Promise<{ imageBase64: string; widthPx: number; heightPx: number }> {
   if (typeof document === 'undefined') {
     throw new Error('Label rendering requires a browser');
   }
