@@ -1108,7 +1108,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return [...ids];
   }, [draftVersion, heldTableIds]);
 
-  const cartCount = useMemo(() => cart.reduce((n, l) => n + l.quantity, 0), [cart]);
+  /** Distinct cart lines — do not sum weighted qty (e.g. 0.558 kg) into "articles". */
+  const cartCount = useMemo(() => cart.length, [cart]);
 
   useEffect(() => {
     let cancelled = false;
