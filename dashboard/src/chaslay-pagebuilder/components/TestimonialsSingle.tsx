@@ -42,7 +42,13 @@ export const TestimonialsSingle: React.FC<TestimonialsProps> & {
   const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
 
-  const testimonial = trTestimonials(mergedProps.testimonials)[0];
+  const translated =
+    typeof trTestimonials === 'function'
+      ? trTestimonials(Array.isArray(mergedProps.testimonials) ? mergedProps.testimonials : defaultTestimonials)
+      : Array.isArray(mergedProps.testimonials)
+        ? mergedProps.testimonials
+        : defaultTestimonials;
+  const testimonial = translated[0];
   if (!testimonial) return null;
 
   return (

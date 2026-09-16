@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
@@ -34,6 +34,30 @@ type ChaslayPagePayload = {
 };
 
 type ChaslayLocale = 'en' | 'fr' | 'de' | 'it';
+
+class ShopHomepageErrorBoundary extends Component<
+  { children: ReactNode; menuHref: string; fallbackLabel: string },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[shop homepage]', error, info.componentStack);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+        <p className="text-stone-700">This page could not be displayed.</p>
+        <Link to={this.props.menuHref} className="text-sm underline">
+          {this.props.fallbackLabel}
+        </Link>
+      </div>
+    );
+  }
+}
 
 function chaslayLangStorageKey(shopKey: string): string {
   return `chaslay_builder_lang:${shopKey.trim().toLowerCase()}`;
@@ -214,18 +238,20 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
       >
         <ShopVacationPopup shopKey={shopKey} />
         <div className="cms-homepage flex flex-col pb-6">
-          <ChaslayHomepageRenderer
-            key={`${pageSlug}-${chaslayLocale}`}
-            editorState={editorState}
-            shopKey={shopKey}
-            basePath={base}
-            locale={chaslayLocale}
-            defaultLanguage={defaultLanguage}
-            sitePages={sitePages}
-            contact={contact}
-            merchantDisplayName={merchant?.name || null}
-            storeHours={merchant?.storeHours || null}
-          />
+          <ShopHomepageErrorBoundary menuHref={`${base}/menu`} fallbackLabel={t('shopOrderNow')}>
+            <ChaslayHomepageRenderer
+              key={`${pageSlug}-${chaslayLocale}`}
+              editorState={editorState}
+              shopKey={shopKey}
+              basePath={base}
+              locale={chaslayLocale}
+              defaultLanguage={defaultLanguage}
+              sitePages={sitePages}
+              contact={contact}
+              merchantDisplayName={merchant?.name || null}
+              storeHours={merchant?.storeHours || null}
+            />
+          </ShopHomepageErrorBoundary>
         </div>
         <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
       </ShopThemeShell>
