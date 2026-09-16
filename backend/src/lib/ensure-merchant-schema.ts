@@ -99,8 +99,6 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS menu_show_category_banners boolean NOT NULL DEFAULT true",
   cart_layout:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cart_layout varchar(20) NOT NULL DEFAULT 'hidden_slide'",
-  shop_site_settings:
-    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shop_site_settings jsonb",
   delivery_menu_markup:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_menu_markup numeric(10,2) DEFAULT 0",
   delivery_mode:
@@ -155,16 +153,12 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_addon_enabled boolean NOT NULL DEFAULT false",
   kiosk_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_settings jsonb",
-  customer_display_settings:
-    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS customer_display_settings jsonb",
   just_eat_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
   uber_eats_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
   storekeeper_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
-  gift_card_addon_enabled:
-    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   panel_nav_hidden:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS panel_nav_hidden jsonb",
   shop_commission_percent:
@@ -189,7 +183,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS subscription_billing_cycle varchar(20)",
   adyen_recurring_detail_reference:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
-  support_code: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS support_code varchar(16)",
+  fiskaly_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -239,8 +234,6 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
   products_visibility:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
-  products_similar_product_ids:
-    "ALTER TABLE products ADD COLUMN IF NOT EXISTS similar_product_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
   categories_visibility:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:
@@ -273,8 +266,6 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_discount numeric(10,2) DEFAULT 0",
   orders_points_earned: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_earned integer DEFAULT 0",
   orders_points_redeemed: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_redeemed integer DEFAULT 0",
-  vouchers_order_types:
-    "ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'",
   orders_card_fee: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS card_fee numeric(10,2) DEFAULT 0",
   orders_amount_tendered: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_tendered numeric(10,2)",
   orders_change_due: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS change_due numeric(10,2)",
@@ -300,6 +291,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS adyen_cashier_receipt_json text",
   orders_device_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS device_id varchar(255)",
   orders_client_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_id varchar(64)",
+  orders_fiskaly_signature: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fiskaly_signature jsonb",
   orders_synced_at: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at timestamptz",
   orders_delivery_zone_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_zone_id uuid",
   order_items_weight_kg: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS weight_kg numeric(12,3)",
@@ -335,8 +327,6 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   held_orders_paid_total: "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)",
   subscription_plans_max_locations:
     "ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1",
-  offers_staff_ids:
-    "ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json",
 };
 
 /** subscription_plans columns added after the original packages table. */
@@ -419,7 +409,6 @@ const TABLE_PATCHES: string[] = [
     discount_type varchar(20) NOT NULL DEFAULT 'percent',
     discount_value numeric(10, 2) NOT NULL,
     min_order_amount numeric(10, 2) NOT NULL DEFAULT 0,
-    order_types jsonb NOT NULL DEFAULT '[]',
     valid_from timestamptz,
     valid_to timestamptz,
     is_active boolean NOT NULL DEFAULT true,
@@ -431,35 +420,6 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_id_idx ON vouchers(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS vouchers_merchant_active_idx ON vouchers(merchant_id, is_active)`,
   `CREATE INDEX IF NOT EXISTS vouchers_customer_id_idx ON vouchers(customer_id)`,
-  `CREATE TABLE IF NOT EXISTS offers (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
-    name varchar(255) NOT NULL,
-    description text,
-    offer_type varchar(40) NOT NULL,
-    rules json NOT NULL DEFAULT '{}'::json,
-    channels json NOT NULL DEFAULT '[]'::json,
-    category_ids json NOT NULL DEFAULT '[]'::json,
-    product_ids json NOT NULL DEFAULT '[]'::json,
-    staff_ids json NOT NULL DEFAULT '[]'::json,
-    schedule_mode varchar(20) NOT NULL DEFAULT 'always',
-    days_of_week json NOT NULL DEFAULT '[]'::json,
-    time_start varchar(5),
-    time_end varchar(5),
-    valid_from timestamptz,
-    valid_to timestamptz,
-    is_active boolean NOT NULL DEFAULT true,
-    featured boolean NOT NULL DEFAULT true,
-    badge_label varchar(40),
-    priority integer NOT NULL DEFAULT 0,
-    stackable boolean NOT NULL DEFAULT false,
-    sort_order integer NOT NULL DEFAULT 0,
-    created_at timestamp NOT NULL DEFAULT now(),
-    updated_at timestamp NOT NULL DEFAULT now()
-  )`,
-  `CREATE INDEX IF NOT EXISTS offers_merchant_id_idx ON offers(merchant_id)`,
-  `CREATE INDEX IF NOT EXISTS offers_merchant_active_idx ON offers(merchant_id, is_active)`,
-  `ALTER TABLE offers ADD COLUMN IF NOT EXISTS staff_ids json NOT NULL DEFAULT '[]'::json`,
   `CREATE TABLE IF NOT EXISTS voucher_redemptions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -518,13 +478,6 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS gift_card_purchases_merchant_id_idx ON gift_card_purchases(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS gift_card_purchases_payment_status_idx ON gift_card_purchases(payment_status)`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS delivery_type varchar(20) NOT NULL DEFAULT 'digital'`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_address text`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_zip varchar(20)`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_city varchar(120)`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_country varchar(2) DEFAULT 'CH'`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS fulfillment_status varchar(30)`,
-  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipped_at timestamptz`,
   `CREATE TABLE IF NOT EXISTS pos_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -1225,24 +1178,6 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_reason varchar(40)`,
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
   `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
-  `CREATE TABLE IF NOT EXISTS pay_at_x_sessions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
-    held_order_id uuid REFERENCES held_orders(id) ON DELETE SET NULL,
-    terminal_poi_id varchar(255) NOT NULL,
-    staff_reference varchar(32),
-    sale_transaction_id varchar(64),
-    sale_transaction_timestamp varchar(40),
-    paid_amount numeric(10,2) NOT NULL DEFAULT 0,
-    cart_total numeric(10,2) NOT NULL,
-    status varchar(32) NOT NULL DEFAULT 'awaiting_payment',
-    input_step varchar(40),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
-  )`,
-  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_merchant_idx ON pay_at_x_sessions(merchant_id)`,
-  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_terminal_idx ON pay_at_x_sessions(merchant_id, terminal_poi_id)`,
-  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_status_idx ON pay_at_x_sessions(merchant_id, status)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1379,11 +1314,6 @@ export async function ensureKioskSettingsColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
-export async function ensureCustomerDisplaySettingsColumn(): Promise<void> {
-  await runPatch("customer_display_settings");
-  await ensureMerchantTables();
-}
-
 export async function ensureJustEatAddonColumn(): Promise<void> {
   await runPatch("just_eat_addon_enabled");
   await ensureMerchantTables();
@@ -1399,29 +1329,6 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
-export async function ensureGiftCardAddonColumn(): Promise<void> {
-  await runPatch("gift_card_addon_enabled");
-  await ensureMerchantTables();
-  await backfillGiftCardAddonFromSettings();
-}
-
-/** Existing shops already selling gift cards keep the license after the paid-addon column lands. */
-async function backfillGiftCardAddonFromSettings(): Promise<void> {
-  try {
-    await execSql(`
-      UPDATE merchants
-      SET gift_card_addon_enabled = true
-      WHERE gift_card_addon_enabled = false
-        AND (
-          COALESCE(webpos_gift_card_enabled, false) = true
-          OR COALESCE(gift_card_settings->>'enabled', '') IN ('true', 't', '1')
-        )
-    `);
-  } catch (err) {
-    console.warn("[schema] gift card addon backfill skipped:", err);
-  }
-}
-
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
 export async function ensureMerchantColumnsSchema(): Promise<void> {
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
@@ -1430,7 +1337,6 @@ export async function ensureMerchantColumnsSchema(): Promise<void> {
   await runPatch("delivery_driver_pay_mode", "merchants");
   await runPatch("delivery_driver_hourly_rate", "merchants");
   await runPatch("delivery_per_order_fee", "merchants");
-  await backfillGiftCardAddonFromSettings();
 }
 
 /** Ensure optional orders columns exist (online shop, QR table, multi-location). */

@@ -372,6 +372,14 @@ export type WebPosReceipt = {
   splitLabel?: string | null;
   notes?: string;
   receiptUrl?: string;
+  /** Fiskaly fiscal signature from push-sales (DE/FR). */
+  fiskalySignature?: {
+    country?: string;
+    qrCodeData?: string | null;
+    signature?: string | null;
+    txNumber?: string | number | null;
+    txId?: string | null;
+  } | null;
   includeQr?: boolean;
   /** When false, skip delivery directions QR even for delivery channel. */
   deliveryDirectionsQr?: boolean;
@@ -1184,8 +1192,27 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  // QR label + graphic embedded by buildReceiptEscPos (digital receipt only).
-  const hasDigitalQr = tx.includeQr !== false && !!(tx.receiptUrl || tx.id);
+  const fiscalQr = tx.fiskalySignature?.qrCodeData?.trim();
+  if (fiscalQr) {
+    r += thin + '\n';
+    r += centerLine(L.fiscalQrTitle, width) + '\n';
+    if (tx.fiskalySignature?.txNumber != null && String(tx.fiskalySignature.txNumber).trim()) {
+      r +=
+        padLine(`${L.fiscalTxNumber}:`, String(tx.fiskalySignature.txNumber).slice(0, width - 16), width) +
+        '\n';
+    }
+    if (tx.fiskalySignature?.signature?.trim()) {
+      const sig = tx.fiskalySignature.signature.trim();
+      r += `${L.fiscalSignature}:\n`;
+      for (let i = 0; i < sig.length; i += width) {
+        r += sig.slice(i, i + width) + '\n';
+      }
+    }
+  }
+
+  // QR label + graphic embedded by buildReceiptEscPos (fiscal QR preferred, else digital receipt).
+  const hasDigitalQr =
+    tx.includeQr !== false && !!(fiscalQr || tx.receiptUrl || tx.id);
   if (hasDigitalQr) {
     r += thin + '\n';
   }
@@ -2519,6 +2546,8 @@ export async function buildReceiptEscPos(
   text: string,
   opts: {
     qrData?: string;
+    /** When set, used for thermal QR instead of qrData (KassenSichV). */
+    fiscalQrData?: string;
     /** @deprecated Directions QR removed — kept for call-site compat, ignored. */
     deliveryQrData?: string;
     language?: ReceiptLang | string;
@@ -2534,7 +2563,7 @@ export async function buildReceiptEscPos(
   const langCode = String(opts.language || 'en').toLowerCase().slice(0, 2);
   const lang: ReceiptLang = langCode === 'fr' || langCode === 'de' ? langCode : 'en';
   const L = receiptLabels(lang);
-  const qrData = opts.qrData?.trim();
+  const qrData = (opts.fiscalQrData || opts.qrData)?.trim();
 
   let qrRaster: Uint8Array | null = null;
 

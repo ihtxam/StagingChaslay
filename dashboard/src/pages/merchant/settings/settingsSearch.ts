@@ -10,6 +10,7 @@ export type SettingsTabId =
   | 'reservations'
   | 'pos'
   | 'payments'
+  | 'fiscal'
   | 'receipt'
   | 'kds'
   | 'ods'

@@ -17,7 +17,7 @@ import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 import type { KioskSettings } from "../lib/kiosk-settings";
-import type { CustomerDisplaySettings } from "../lib/customer-display-settings";
+import type { FiskalySettings, FiskalySignature } from "../lib/fiskaly-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -117,8 +117,6 @@ export const merchants = pgTable(
     address: text("address"),
     city: varchar("city", { length: 100 }),
     country: varchar("country", { length: 100 }),
-    /** Human support reference for DB lookup — e.g. CH-001, UK-042 */
-    supportCode: varchar("support_code", { length: 16 }),
     vatNumber: varchar("vat_number", { length: 50 }),
     vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("0"),
     // Channel-specific tax rates (%). Fall back to vatRate when null/0 unused.
@@ -189,11 +187,6 @@ export const merchants = pgTable(
     storeHours: json("store_hours").$type<Record<string, Record<string, Array<{ open: string; close: string }>>>>().default({}),
     shopLogoUrl: varchar("shop_logo_url", { length: 500 }),
     shopBannerUrl: varchar("shop_banner_url", { length: 500 }),
-    /**
-     * Global online-shop appearance / SEO:
-     * { brandColor, metaTitle: {en,fr,de,it}, metaDescription, gaMeasurementId, faviconUrl }
-     */
-    shopSiteSettings: json("shop_site_settings").$type<Record<string, unknown> | null>(),
     latitude: decimal("latitude", { precision: 10, scale: 7 }),
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     pickupEtaMinutes: integer("pickup_eta_minutes").default(25),
@@ -317,19 +310,12 @@ export const merchants = pgTable(
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
      */
     kioskSettings: json("kiosk_settings").$type<KioskSettings | null>(),
-    /**
-     * Customer-facing display (CDS) for dual-screen tills:
-     * { accessToken, promoSlides, slideIntervalSec, theme, enabled }
-     */
-    customerDisplaySettings: json("customer_display_settings").$type<CustomerDisplaySettings | null>(),
     /** Paid Just Eat / JET Connect order integration addon. */
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
     uberEatsAddonEnabled: boolean("uber_eats_addon_enabled").default(false).notNull(),
     /** Paid mobile storekeeper intake app (barcode scan, receive stock). */
     storekeeperAddonEnabled: boolean("storekeeper_addon_enabled").default(false).notNull(),
-    /** Paid gift cards addon (POS + online). Superadmin/reseller only. */
-    giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
     /**
      * Extra yield / waste factor applied to recipe usage on sale (0–0.50). Default 20%.
      */
@@ -413,6 +399,11 @@ export const merchants = pgTable(
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
     deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Fiskaly fiscal compliance (SIGN DE / SIGN FR):
+     * { enabled, environment, de: { apiKey, apiSecret, tssId, clientId, ... }, fr: { ... } }
+     */
+    fiskalySettings: json("fiskaly_settings").$type<FiskalySettings | null>(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
     /** Incremented to invalidate all merchant/staff JWTs and force re-login. */
     authEpoch: integer("auth_epoch").default(0).notNull(),
@@ -450,7 +441,6 @@ export const merchants = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("merchants_email_idx").on(table.email),
-    supportCodeIdx: uniqueIndex("merchants_support_code_idx").on(table.supportCode),
     statusIdx: index("merchants_status_idx").on(table.status),
     slugIdx: uniqueIndex("merchants_slug_idx").on(table.slug),
     subdomainIdx: uniqueIndex("merchants_subdomain_idx").on(table.subdomain),
@@ -730,7 +720,6 @@ export type PackageIncludedAddons = {
   kds?: boolean;
   ods?: boolean;
   kiosk?: boolean;
-  giftCards?: boolean;
   signageScreenLimit?: number;
 };
 
@@ -1149,8 +1138,6 @@ export const products = pgTable(
       .$type<{ channels: string[] }>()
       .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
-    /** Product IDs suggested in online shop cart upsell slider */
-    similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1427,6 +1414,8 @@ export const orders = pgTable(
     paymentBreakdown: json("payment_breakdown").$type<
       Array<{ method: string; amount: number }> | null
     >(),
+    /** Fiskaly fiscal signature payload (DE KassenSichV QR / FR NF525). */
+    fiskalySignature: json("fiskaly_signature").$type<FiskalySignature | null>(),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
@@ -2377,36 +2366,6 @@ export const paymentTerminals = pgTable(
 );
 
 // ============================================================================
-// ADYEN PAY AT X (terminal-initiated split payments)
-// ============================================================================
-
-export const payAtXSessions = pgTable(
-  "pay_at_x_sessions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    heldOrderId: uuid("held_order_id").references(() => heldOrders.id, { onDelete: "set null" }),
-    terminalPoiId: varchar("terminal_poi_id", { length: 255 }).notNull(),
-    staffReference: varchar("staff_reference", { length: 32 }),
-    saleTransactionId: varchar("sale_transaction_id", { length: 64 }),
-    saleTransactionTimestamp: varchar("sale_transaction_timestamp", { length: 40 }),
-    paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0").notNull(),
-    cartTotal: decimal("cart_total", { precision: 10, scale: 2 }).notNull(),
-    status: varchar("status", { length: 32 }).default("awaiting_payment").notNull(),
-    inputStep: varchar("input_step", { length: 40 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("pay_at_x_sessions_merchant_idx").on(table.merchantId),
-    terminalIdx: index("pay_at_x_sessions_terminal_idx").on(table.merchantId, table.terminalPoiId),
-    statusIdx: index("pay_at_x_sessions_status_idx").on(table.merchantId, table.status),
-  })
-);
-
-// ============================================================================
 // RFID CARD READERS (gift / loyalty)
 // ============================================================================
 
@@ -2642,15 +2601,6 @@ export const giftCardPurchases = pgTable(
     message: text("message"),
     paymentMethod: varchar("payment_method", { length: 20 }).default("card").notNull(),
     paymentStatus: varchar("payment_status", { length: 30 }).default("awaiting_payment").notNull(),
-    /** digital = email voucher with QR/barcode; physical = card shipped by post */
-    deliveryType: varchar("delivery_type", { length: 20 }).default("digital").notNull(),
-    shippingAddress: text("shipping_address"),
-    shippingZip: varchar("shipping_zip", { length: 20 }),
-    shippingCity: varchar("shipping_city", { length: 120 }),
-    shippingCountry: varchar("shipping_country", { length: 2 }).default("CH"),
-    /** pending_shipment | shipped | digital_sent */
-    fulfillmentStatus: varchar("fulfillment_status", { length: 30 }),
-    shippedAt: timestamp("shipped_at"),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     cardId: uuid("card_id").references(() => giftCards.id, { onDelete: "set null" }),
     fulfilledAt: timestamp("fulfilled_at"),
@@ -2796,8 +2746,6 @@ export const offers = pgTable(
     channels: json("channels").$type<string[]>().default([]).notNull(),
     categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
-    /** Empty = all POS users; otherwise only these staff see the offer on POS. */
-    staffIds: json("staff_ids").$type<string[]>().default([]).notNull(),
     scheduleMode: varchar("schedule_mode", { length: 20 }).default("always").notNull(),
     daysOfWeek: json("days_of_week").$type<string[]>().default([]).notNull(),
     timeStart: varchar("time_start", { length: 5 }),
@@ -2825,8 +2773,6 @@ export const offers = pgTable(
 
 export type VoucherUsageType = "single_use" | "multi_use" | "customer";
 export type VoucherDiscountType = "percent" | "fixed";
-/** Fulfillment channels a voucher may apply to; empty array = all types. */
-export type VoucherOrderType = "takeaway" | "dine_in" | "delivery";
 
 export const vouchers = pgTable(
   "vouchers",
@@ -2845,8 +2791,6 @@ export const vouchers = pgTable(
     discountType: varchar("discount_type", { length: 20 }).notNull().default("percent"),
     discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
-    /** Empty = valid for all order types (pickup, delivery, dine-in). */
-    orderTypes: json("order_types").$type<VoucherOrderType[]>().default([]).notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validTo: timestamp("valid_to", { withTimezone: true }),
     isActive: boolean("is_active").default(true).notNull(),
@@ -3412,7 +3356,7 @@ export const emailSendLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "set null" }),
-    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | mailco | sendgrid
+    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | sendgrid
     source: varchar("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
     emailType: varchar("email_type", { length: 50 }).notNull().default("general"),
     recipient: varchar("recipient", { length: 255 }).notNull(),
@@ -3514,335 +3458,6 @@ export const posCashMovements = pgTable(
     createdIdx: index("pos_cash_movements_created_idx").on(table.merchantId, table.createdAt),
   })
 );
-
-// ============================================================================
-// INVENTORY (storekeeper / stock units & categories)
-// ============================================================================
-
-export const inventorySuppliers = pgTable(
-  "inventory_suppliers",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 255 }).notNull(),
-    email: varchar("email", { length: 255 }),
-    phone: varchar("phone", { length: 40 }),
-    address: text("address"),
-    contactPerson: varchar("contact_person", { length: 255 }),
-    notes: text("notes"),
-    /** Soft-delete when items still reference this supplier */
-    archivedAt: timestamp("archived_at"),
-    lastOrderEmailAt: timestamp("last_order_email_at"),
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_suppliers_merchant_idx").on(table.merchantId),
-    merchantNameIdx: index("inventory_suppliers_merchant_name_idx").on(table.merchantId, table.name),
-    demoIdx: index("inventory_suppliers_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-export const inventoryItems = pgTable(
-  "inventory_items",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 255 }).notNull(),
-    /** Supplier / shelf barcode for storekeeper mobile scan */
-    barcode: varchar("barcode", { length: 255 }),
-    /** kg | L | piece */
-    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
-    cost: decimal("cost", { precision: 12, scale: 4 }).default("0").notNull(),
-    onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
-    /** Par / reorder point (Lightspeed par level) */
-    minStock: decimal("min_stock", { precision: 14, scale: 4 }).default("0").notNull(),
-    /** Qty to request when at/below par */
-    reorderQty: decimal("reorder_qty", { precision: 14, scale: 4 }).default("0").notNull(),
-    supplierId: uuid("supplier_id").references(() => inventorySuppliers.id, { onDelete: "set null" }),
-    categoryId: uuid("category_id"),
-    perishable: boolean("perishable").default(false).notNull(),
-    autoReorderEnabled: boolean("auto_reorder_enabled").default(false).notNull(),
-    /** Merchant flagged: do not include in supplier reorder emails / auto-reorder. */
-    doNotReorder: boolean("do_not_reorder").default(false).notNull(),
-    lastAutoReorderAt: timestamp("last_auto_reorder_at"),
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_items_merchant_idx").on(table.merchantId),
-    supplierIdx: index("inventory_items_supplier_idx").on(table.supplierId),
-    categoryIdx: index("inventory_items_category_idx").on(table.categoryId),
-    merchantNameIdx: index("inventory_items_merchant_name_idx").on(table.merchantId, table.name),
-    merchantBarcodeIdx: index("inventory_items_merchant_barcode_idx").on(table.merchantId, table.barcode),
-    demoIdx: index("inventory_items_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-/** Per-location inventory on-hand (overlay on merchant-wide inventory_items). */
-export const inventoryLocationStock = pgTable(
-  "inventory_location_stock",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    locationId: uuid("location_id")
-      .notNull()
-      .references(() => locations.id, { onDelete: "cascade" }),
-    itemId: uuid("item_id")
-      .notNull()
-      .references(() => inventoryItems.id, { onDelete: "cascade" }),
-    onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    locItemIdx: uniqueIndex("inventory_location_stock_loc_item_idx").on(
-      table.locationId,
-      table.itemId
-    ),
-    merchantIdx: index("inventory_location_stock_merchant_idx").on(table.merchantId),
-  })
-);
-
-/** Cross-location stock transfers between branches. */
-export const inventoryTransfers = pgTable(
-  "inventory_transfers",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    fromLocationId: uuid("from_location_id")
-      .notNull()
-      .references(() => locations.id, { onDelete: "cascade" }),
-    toLocationId: uuid("to_location_id")
-      .notNull()
-      .references(() => locations.id, { onDelete: "cascade" }),
-    itemId: uuid("item_id")
-      .notNull()
-      .references(() => inventoryItems.id, { onDelete: "cascade" }),
-    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
-    status: varchar("status", { length: 20 }).default("pending").notNull(),
-    note: text("note"),
-    createdByStaffId: uuid("created_by_staff_id").references(() => merchantStaff.id, {
-      onDelete: "set null",
-    }),
-    createdByName: varchar("created_by_name", { length: 255 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    confirmedAt: timestamp("confirmed_at"),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_transfers_merchant_idx").on(table.merchantId, table.createdAt),
-    statusIdx: index("inventory_transfers_status_idx").on(table.merchantId, table.status),
-  })
-);
-
-export const inventoryCategories = pgTable(
-  "inventory_categories",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).notNull(),
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_categories_merchant_idx").on(table.merchantId),
-    merchantNameUidx: uniqueIndex("inventory_categories_merchant_name_uidx").on(
-      table.merchantId,
-      table.name
-    ),
-    demoIdx: index("inventory_categories_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-export const inventoryUnits = pgTable(
-  "inventory_units",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    code: varchar("code", { length: 20 }).notNull(),
-    name: varchar("name", { length: 80 }).notNull(),
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_units_merchant_idx").on(table.merchantId),
-    merchantCodeUidx: uniqueIndex("inventory_units_merchant_code_uidx").on(table.merchantId, table.code),
-    demoIdx: index("inventory_units_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-export const inventoryUnitRatios = pgTable(
-  "inventory_unit_ratios",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    fromCode: varchar("from_code", { length: 20 }).notNull(),
-    toCode: varchar("to_code", { length: 20 }).notNull(),
-    /** 1 fromCode = factor toCode (1 kg = 1000 g). */
-    factor: decimal("factor", { precision: 16, scale: 6 }).notNull(),
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_unit_ratios_merchant_idx").on(table.merchantId),
-    pairUidx: uniqueIndex("inventory_unit_ratios_pair_uidx").on(
-      table.merchantId,
-      table.fromCode,
-      table.toCode
-    ),
-    demoIdx: index("inventory_unit_ratios_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-export const inventoryMovements = pgTable(
-  "inventory_movements",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    itemId: uuid("item_id")
-      .notNull()
-      .references(() => inventoryItems.id, { onDelete: "cascade" }),
-    /** in | out | waste | sale | adjust */
-    type: varchar("type", { length: 20 }).notNull(),
-    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
-    unitCost: decimal("unit_cost", { precision: 12, scale: 4 }),
-    note: text("note"),
-    supplierName: varchar("supplier_name", { length: 255 }),
-    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_movements_merchant_idx").on(table.merchantId),
-    itemIdx: index("inventory_movements_item_idx").on(table.itemId, table.createdAt),
-    orderIdx: index("inventory_movements_order_idx").on(table.orderId),
-    typeIdx: index("inventory_movements_type_idx").on(table.merchantId, table.type),
-  })
-);
-
-/** FEFO stock lots — expiry tracked per inbound delivery. */
-export const inventoryStockLots = pgTable(
-  "inventory_stock_lots",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    itemId: uuid("item_id")
-      .notNull()
-      .references(() => inventoryItems.id, { onDelete: "cascade" }),
-    movementId: uuid("movement_id").references(() => inventoryMovements.id, { onDelete: "set null" }),
-    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
-    remainingQty: decimal("remaining_qty", { precision: 14, scale: 4 }).notNull(),
-    expiryDate: timestamp("expiry_date"),
-    note: text("note"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("inventory_stock_lots_merchant_idx").on(table.merchantId),
-    itemIdx: index("inventory_stock_lots_item_idx").on(table.itemId, table.expiryDate),
-    expiryIdx: index("inventory_stock_lots_expiry_idx").on(table.merchantId, table.expiryDate),
-  })
-);
-
-export const productRecipes = pgTable(
-  "product_recipes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    itemId: uuid("item_id")
-      .notNull()
-      .references(() => inventoryItems.id, { onDelete: "cascade" }),
-    qty: decimal("qty", { precision: 14, scale: 4 }).notNull(),
-    unit: varchar("unit", { length: 20 }).default("kg").notNull(),
-    /** Sample data from demo import — safe to bulk-delete */
-    isDemo: boolean("is_demo").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    merchantIdx: index("product_recipes_merchant_idx").on(table.merchantId),
-    productIdx: index("product_recipes_product_idx").on(table.productId),
-    itemIdx: index("product_recipes_item_idx").on(table.itemId),
-    productItemUidx: uniqueIndex("product_recipes_product_item_uidx").on(table.productId, table.itemId),
-    demoIdx: index("product_recipes_demo_idx").on(table.merchantId, table.isDemo),
-  })
-);
-
-export const inventorySuppliersRelations = relations(inventorySuppliers, ({ one, many }) => ({
-  merchant: one(merchants, { fields: [inventorySuppliers.merchantId], references: [merchants.id] }),
-  items: many(inventoryItems),
-}));
-
-export const inventoryItemsRelations = relations(inventoryItems, ({ one, many }) => ({
-  merchant: one(merchants, { fields: [inventoryItems.merchantId], references: [merchants.id] }),
-  supplier: one(inventorySuppliers, {
-    fields: [inventoryItems.supplierId],
-    references: [inventorySuppliers.id],
-  }),
-  movements: many(inventoryMovements),
-  stockLots: many(inventoryStockLots),
-  recipes: many(productRecipes),
-  category: one(inventoryCategories, {
-    fields: [inventoryItems.categoryId],
-    references: [inventoryCategories.id],
-  }),
-}));
-
-export const inventoryStockLotsRelations = relations(inventoryStockLots, ({ one }) => ({
-  merchant: one(merchants, { fields: [inventoryStockLots.merchantId], references: [merchants.id] }),
-  item: one(inventoryItems, { fields: [inventoryStockLots.itemId], references: [inventoryItems.id] }),
-  movement: one(inventoryMovements, {
-    fields: [inventoryStockLots.movementId],
-    references: [inventoryMovements.id],
-  }),
-}));
-
-export const inventoryCategoriesRelations = relations(inventoryCategories, ({ one, many }) => ({
-  merchant: one(merchants, { fields: [inventoryCategories.merchantId], references: [merchants.id] }),
-  items: many(inventoryItems),
-}));
-
-export const inventoryUnitsRelations = relations(inventoryUnits, ({ one }) => ({
-  merchant: one(merchants, { fields: [inventoryUnits.merchantId], references: [merchants.id] }),
-}));
-
-export const inventoryUnitRatiosRelations = relations(inventoryUnitRatios, ({ one }) => ({
-  merchant: one(merchants, { fields: [inventoryUnitRatios.merchantId], references: [merchants.id] }),
-}));
-
-export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({
-  merchant: one(merchants, { fields: [inventoryMovements.merchantId], references: [merchants.id] }),
-  item: one(inventoryItems, { fields: [inventoryMovements.itemId], references: [inventoryItems.id] }),
-  order: one(orders, { fields: [inventoryMovements.orderId], references: [orders.id] }),
-}));
-
-export const productRecipesRelations = relations(productRecipes, ({ one }) => ({
-  merchant: one(merchants, { fields: [productRecipes.merchantId], references: [merchants.id] }),
-  product: one(products, { fields: [productRecipes.productId], references: [products.id] }),
-  item: one(inventoryItems, { fields: [productRecipes.itemId], references: [inventoryItems.id] }),
-}));
 
 export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one, many }) => ({
   edition: one(editions, {

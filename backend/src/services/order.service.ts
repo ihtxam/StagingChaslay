@@ -737,6 +737,7 @@ export class OrderService {
             console.warn("Inventory deduct after collect_payment failed:", invErr);
           }
           void releaseHeldAfterPosPayment(merchantId, order);
+          // TODO(fiscal): call FiskalyService.signPosSale on collect_payment for DE/FR merchants.
           // Invoice A4 at sale — skip auto receipt unless counter cash/card collection.
           const wasPayLater = /^pay[_-]?later/i.test(String(order.paymentMethod || ""));
           const invoiceCounter = invoiceOrder && isCounterTender(method);
