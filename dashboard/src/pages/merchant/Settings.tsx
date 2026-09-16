@@ -186,6 +186,7 @@ interface SettingsData {
     actionButtonSize?: 'sm' | 'md' | 'lg';
     expressCheckoutEnabled?: boolean;
     showPosToasts?: boolean;
+    payAtXEnabled?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -215,6 +216,7 @@ interface SettingsData {
   adyenHmacKeyMasked?: string | null;
   adyenHmacKeySet?: boolean;
   adyenWebhookUrl?: string | null;
+  adyenTerminalEventWebhookUrl?: string | null;
   adyenLiveEnvironment?: boolean;
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
@@ -593,6 +595,17 @@ export default function Settings() {
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
   }, [settings?.adyenWebhookUrl, settings?.id, adyen.webhookUrl, user?.merchantId, user?.role, user?.id]);
+  const adyenTerminalEventWebhookUrl = useMemo(() => {
+    if (settings?.adyenTerminalEventWebhookUrl) return settings.adyenTerminalEventWebhookUrl;
+    const merchantId =
+      settings?.id ||
+      user?.merchantId ||
+      (user?.role === 'merchant' ? user?.id : undefined);
+    if (!merchantId) return '';
+    const env = import.meta.env.VITE_API_URL as string | undefined;
+    const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
+    return `${base}/webhooks/adyen-terminal/${merchantId}`;
+  }, [settings?.adyenTerminalEventWebhookUrl, settings?.id, user?.merchantId, user?.role, user?.id]);
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -3259,6 +3272,59 @@ export default function Settings() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="mt-6 space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-4">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={settings?.posCheckoutSettings?.payAtXEnabled === true}
+                        onChange={(e) =>
+                          setSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  posCheckoutSettings: {
+                                    ...(prev.posCheckoutSettings || {}),
+                                    payAtXEnabled: e.target.checked,
+                                  },
+                                }
+                              : prev
+                          )
+                        }
+                      />
+                      {t('payAtXEnabled')}
+                    </label>
+                    <p className="text-xs text-[var(--text-muted)]">{t('payAtXEnabledHint')}</p>
+                    {adyenTerminalEventWebhookUrl ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[var(--text)]">
+                          {t('adyenTerminalEventWebhookUrl')}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
+                            {adyenTerminalEventWebhookUrl}
+                          </code>
+                          <button
+                            type="button"
+                            className="btn-secondary shrink-0"
+                            aria-label={t('copied')}
+                            onClick={() => {
+                              void navigator.clipboard
+                                .writeText(adyenTerminalEventWebhookUrl)
+                                .then(
+                                  () => toast.success(t('copied')),
+                                  () => toast.error(t('copyFailed'))
+                                );
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)]">{t('payAtXSetupHint')}</p>
+                      </div>
+                    ) : null}
                   </div>
                 </Section>
             </div>

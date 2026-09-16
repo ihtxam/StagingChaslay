@@ -1225,6 +1225,24 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_reason varchar(40)`,
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
   `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
+  `CREATE TABLE IF NOT EXISTS pay_at_x_sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    held_order_id uuid REFERENCES held_orders(id) ON DELETE SET NULL,
+    terminal_poi_id varchar(255) NOT NULL,
+    staff_reference varchar(32),
+    sale_transaction_id varchar(64),
+    sale_transaction_timestamp varchar(40),
+    paid_amount numeric(10,2) NOT NULL DEFAULT 0,
+    cart_total numeric(10,2) NOT NULL,
+    status varchar(32) NOT NULL DEFAULT 'awaiting_payment',
+    input_step varchar(40),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_merchant_idx ON pay_at_x_sessions(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_terminal_idx ON pay_at_x_sessions(merchant_id, terminal_poi_id)`,
+  `CREATE INDEX IF NOT EXISTS pay_at_x_sessions_status_idx ON pay_at_x_sessions(merchant_id, status)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */

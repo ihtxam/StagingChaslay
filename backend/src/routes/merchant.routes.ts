@@ -1643,12 +1643,17 @@ router.get("/settings", async (req: Request, res: Response) => {
     const { AdyenMerchantWebhookService } = await import(
       "@/services/adyen-merchant-webhook.service"
     );
+    const { AdyenPayAtXService } = await import("@/services/adyen-pay-at-x.service");
 
     res.json({
       success: true,
       settings: {
         ...settings,
         adyenWebhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(merchantId, req),
+        adyenTerminalEventWebhookUrl: AdyenPayAtXService.terminalWebhookUrlFromRequest(
+          merchantId,
+          req
+        ),
       },
     });
   } catch (error) {
@@ -2797,6 +2802,20 @@ router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to save preferences",
+    });
+  }
+});
+
+router.get("/pay-at-x/active", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { AdyenPayAtXService } = await import("@/services/adyen-pay-at-x.service");
+    const sessions = await AdyenPayAtXService.listActiveSessions(merchantId);
+    res.json({ success: true, sessions });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list Pay at X sessions",
     });
   }
 });

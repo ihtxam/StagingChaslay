@@ -2377,6 +2377,36 @@ export const paymentTerminals = pgTable(
 );
 
 // ============================================================================
+// ADYEN PAY AT X (terminal-initiated split payments)
+// ============================================================================
+
+export const payAtXSessions = pgTable(
+  "pay_at_x_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    heldOrderId: uuid("held_order_id").references(() => heldOrders.id, { onDelete: "set null" }),
+    terminalPoiId: varchar("terminal_poi_id", { length: 255 }).notNull(),
+    staffReference: varchar("staff_reference", { length: 32 }),
+    saleTransactionId: varchar("sale_transaction_id", { length: 64 }),
+    saleTransactionTimestamp: varchar("sale_transaction_timestamp", { length: 40 }),
+    paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+    cartTotal: decimal("cart_total", { precision: 10, scale: 2 }).notNull(),
+    status: varchar("status", { length: 32 }).default("awaiting_payment").notNull(),
+    inputStep: varchar("input_step", { length: 40 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("pay_at_x_sessions_merchant_idx").on(table.merchantId),
+    terminalIdx: index("pay_at_x_sessions_terminal_idx").on(table.merchantId, table.terminalPoiId),
+    statusIdx: index("pay_at_x_sessions_status_idx").on(table.merchantId, table.status),
+  })
+);
+
+// ============================================================================
 // RFID CARD READERS (gift / loyalty)
 // ============================================================================
 
