@@ -100,13 +100,18 @@ export default function ShopProductModifiersModal({
         onClick={onClose}
       >
         <div
-          className={`flex w-full flex-col bg-white shadow-2xl ${
+          className={`flex w-full flex-col overflow-hidden bg-white shadow-2xl ${
             isPos || wide
-              ? 'max-h-[92vh] sm:max-w-2xl'
-              : 'max-h-[90vh] sm:max-w-md'
+              ? 'max-h-[92vh] rounded-t-2xl sm:max-w-2xl sm:rounded-2xl'
+              : 'max-h-[90vh] rounded-t-2xl sm:max-w-md sm:rounded-2xl'
           }`}
           onClick={(e) => e.stopPropagation()}
         >
+          {!isPos && showProductImages && product.image ? (
+            <div className="relative shrink-0">
+              <img src={product.image} alt="" className="h-44 w-full object-cover sm:h-52" />
+            </div>
+          ) : null}
           <div className="border-b border-stone-200 px-4 py-3 sm:px-5 sm:py-4">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">

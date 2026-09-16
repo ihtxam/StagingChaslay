@@ -37,7 +37,7 @@ import ShopComboWizard, {
   type ComboSlot,
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
-import { Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
+import { Bike, Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
@@ -58,7 +58,12 @@ import ShopOfferPicker, {
   type ShopOfferForPicker,
   type ShopOfferProduct,
 } from '@/components/shop/ShopOfferPicker';
-import { findNextOpen, formatNextOpenLabel, type StoreHours } from '@/lib/shop-hours';
+import {
+  currentChannelClose,
+  findNextOpen,
+  formatNextOpenLabel,
+  type StoreHours,
+} from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
 import {
   buildCategoryDeliveryPricingMap,
@@ -115,7 +120,7 @@ interface ChannelInfo {
   etaMinutes: number;
 }
 
-type ShopProductView = 'list' | 'grid';
+type ShopProductView = 'list' | 'grid' | 'grid5';
 
 function shopProductViewKey(shopKey: string) {
   return `shop_product_view:${shopKey}`;
@@ -179,6 +184,7 @@ export default function OrderingPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   const [productView, setProductView] = useState<ShopProductView>('list');
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const menuSearchInputRef = useRef<HTMLInputElement>(null);
@@ -186,7 +192,7 @@ export default function OrderingPage() {
     if (!shopKey) return;
     try {
       const stored = localStorage.getItem(shopProductViewKey(shopKey));
-      if (stored === 'grid' || stored === 'list') setProductView(stored);
+      if (stored === 'grid' || stored === 'grid5' || stored === 'list') setProductView(stored);
     } catch {
       /* ignore */
     }
@@ -200,6 +206,10 @@ export default function OrderingPage() {
       /* ignore */
     }
   }, [shopKey, productView]);
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
   useEffect(() => {
     if (!shopKey) {
       setLoading(false);
@@ -933,34 +943,95 @@ export default function OrderingPage() {
   const nextPickupOpen = useMemo(() => {
     if (!merchant || pickupOpen) return null;
     return (
-      findNextOpen(merchant.storeHours as StoreHours, 'takeaway') ||
-      findNextOpen(merchant.storeHours as StoreHours, 'dine_in')
+      findNextOpen(merchant.storeHours as StoreHours, 'takeaway', new Date(nowTick)) ||
+      findNextOpen(merchant.storeHours as StoreHours, 'dine_in', new Date(nowTick))
     );
-  }, [merchant, pickupOpen]);
+  }, [merchant, pickupOpen, nowTick]);
 
   const nextDeliveryOpen = useMemo(() => {
     if (!merchant || deliveryOpen || !channels.delivery?.enabled) return null;
-    return findNextOpen(merchant.storeHours as StoreHours, 'delivery');
-  }, [merchant, deliveryOpen, channels.delivery?.enabled]);
+    return findNextOpen(merchant.storeHours as StoreHours, 'delivery', new Date(nowTick));
+  }, [merchant, deliveryOpen, channels.delivery?.enabled, nowTick]);
 
-  const pickupStatusText = useMemo(() => {
-    if (pickupOpen) return t('shopOpenNow');
-    const opens = formatNextOpenLabel(nextPickupOpen, locale, openLabels);
+  const formatChannelStatus = (
+    open: boolean,
+    close: { minutes: number; labelHm: string } | null,
+    nextOpen: { at: Date; labelHm: string; dayOffset: number } | null,
+    closedFallback: string
+  ) => {
+    if (open) {
+      if (close && close.minutes <= 90) {
+        return `${t('shopOpenNow')} · ${t('shopClosingSoon').replace('{n}', String(Math.max(1, close.minutes)))}`;
+      }
+      if (close) {
+        return `${t('shopOpenNow')} · ${t('shopClosesAt').replace('{time}', close.labelHm)}`;
+      }
+      return t('shopOpenNow');
+    }
+    if (nextOpen && nextOpen.dayOffset === 0) {
+      const mins = Math.max(1, Math.round((nextOpen.at.getTime() - nowTick) / 60_000));
+      if (mins <= 90) {
+        const opening = t('shopOpeningIn').replace('{n}', String(mins));
+        return allowScheduledOrders ? `${opening} · ${t('shopPreOrderAvailable')}` : opening;
+      }
+    }
+    const opens = formatNextOpenLabel(nextOpen, locale, openLabels);
     if (opens) {
       return allowScheduledOrders ? `${opens} · ${t('shopPreOrderAvailable')}` : opens;
     }
-    return t('shopStoreClosed');
-  }, [pickupOpen, nextPickupOpen, locale, openLabels, allowScheduledOrders, t]);
+    return closedFallback;
+  };
+
+  const pickupClose = useMemo(() => {
+    if (!merchant || !pickupOpen) return null;
+    const storeHours = merchant.storeHours as StoreHours;
+    const at = new Date(nowTick);
+    const candidates = (['takeaway', 'dine_in'] as const)
+      .filter((id) => channels[id]?.open)
+      .map((id) => currentChannelClose(storeHours, id, at))
+      .filter((n): n is { minutes: number; labelHm: string } => n != null);
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) => (a.minutes <= b.minutes ? a : b));
+  }, [merchant, pickupOpen, channels.takeaway?.open, channels.dine_in?.open, nowTick]);
+
+  const deliveryClose = useMemo(() => {
+    if (!merchant || !deliveryOpen) return null;
+    return currentChannelClose(merchant.storeHours as StoreHours, 'delivery', new Date(nowTick));
+  }, [merchant, deliveryOpen, nowTick]);
+
+  const pickupStatusText = useMemo(
+    () => formatChannelStatus(pickupOpen, pickupClose, nextPickupOpen, t('shopStoreClosed')),
+    [
+      pickupOpen,
+      pickupClose,
+      nextPickupOpen,
+      locale,
+      openLabels,
+      allowScheduledOrders,
+      t,
+      nowTick,
+    ]
+  );
 
   const deliveryStatusText = useMemo(() => {
     if (!channels.delivery?.enabled) return null;
-    if (deliveryOpen) return t('shopOpenNow');
-    const opens = formatNextOpenLabel(nextDeliveryOpen, locale, openLabels);
-    if (opens) {
-      return allowScheduledOrders ? `${opens} · ${t('shopPreOrderAvailable')}` : opens;
-    }
-    return t('shopDeliveryClosed');
-  }, [channels.delivery?.enabled, deliveryOpen, nextDeliveryOpen, locale, openLabels, allowScheduledOrders, t]);
+    return formatChannelStatus(
+      deliveryOpen,
+      deliveryClose,
+      nextDeliveryOpen,
+      t('shopDeliveryClosed')
+    );
+  }, [
+    channels.delivery?.enabled,
+    deliveryOpen,
+    deliveryClose,
+    nextDeliveryOpen,
+    locale,
+    openLabels,
+    allowScheduledOrders,
+    t,
+    nowTick,
+  ]);
 
   useEffect(() => {
     if (!visibleMenuCategories.length || menuSearchOpen || menuSearchQuery.trim()) return;
@@ -1133,9 +1204,11 @@ export default function OrderingPage() {
   };
 
   const productGridClass =
-    productView === 'grid'
-      ? 'grid grid-cols-2 gap-3 xl:grid-cols-3'
-      : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3';
+    productView === 'grid5'
+      ? 'grid grid-cols-2 gap-3 md:grid-cols-3 min-[1080px]:grid-cols-5'
+      : productView === 'grid'
+        ? 'grid grid-cols-2 gap-3 md:grid-cols-3 min-[1080px]:grid-cols-4'
+        : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3';
 
   const renderMenuProduct = (product: Product, categoryId: string) => {
     const catalog = catalogUnitPrice(product.price, product.categoryId ?? categoryId);
@@ -1149,7 +1222,7 @@ export default function OrderingPage() {
       <ProductCard
         key={product.id}
         product={product}
-        layout={productView}
+        layout={productView === 'list' ? 'list' : 'grid'}
         showImage={showProductImages && !!product.image}
         price={catalog}
         salePrice={sale}
@@ -1504,6 +1577,15 @@ export default function OrderingPage() {
                     <h1 className="truncate text-xl font-bold tracking-tight md:text-2xl">
                       {merchant?.name}
                     </h1>
+                    <button
+                      type="button"
+                      onClick={() => setInfoOpen(true)}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 hover:bg-stone-50"
+                      aria-label={t('shopStoreInfo')}
+                      title={t('shopStoreInfo')}
+                    >
+                      <Info className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    </button>
                   </div>
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
                     <span
@@ -1524,11 +1606,7 @@ export default function OrderingPage() {
                           deliveryOpen ? 'text-emerald-700' : 'text-amber-700'
                         }`}
                       >
-                        <span
-                          className={`h-2 w-2 rounded-full ${
-                            deliveryOpen ? 'bg-emerald-500' : 'bg-amber-400'
-                          }`}
-                        />
+                        <Bike className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                         {deliveryStatusText}
                       </span>
                     ) : null}
@@ -1540,13 +1618,12 @@ export default function OrderingPage() {
                     </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setInfoOpen(true)}
+                <Link
+                  to={`${shopBasePath(shopKey, locSlug)}#gallery`}
                   className="shrink-0 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
                 >
                   {t('shopGallery')}
-                </button>
+                </Link>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1638,12 +1715,17 @@ export default function OrderingPage() {
               </button>
               <button
                 type="button"
-                className={productView === 'grid' ? 'is-active' : ''}
-                onClick={() => setProductView('grid')}
-                aria-label={t('shopProductViewGrid')}
-                title={t('shopProductViewGrid')}
+                className={`relative ${productView === 'grid' || productView === 'grid5' ? 'is-active' : ''}`}
+                onClick={() => setProductView((prev) => (prev === 'grid' ? 'grid5' : 'grid'))}
+                aria-label={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
+                title={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
               >
                 <LayoutGrid className="h-4 w-4" strokeWidth={2} />
+                {productView === 'grid' || productView === 'grid5' ? (
+                  <span className="absolute bottom-0 right-0.5 text-[8px] font-bold leading-none">
+                    {productView === 'grid5' ? '5' : '4'}
+                  </span>
+                ) : null}
               </button>
             </div>
           ) : null}
@@ -1890,6 +1972,7 @@ export default function OrderingPage() {
             ...pendingProduct,
             price: catalogUnitPrice(pendingProduct.price, pendingProduct.categoryId ?? null),
           }}
+          showProductImages={showProductImages}
           onClose={() => {
             setPendingProduct(null);
             if (offerConfigMeta) {
@@ -1929,6 +2012,7 @@ export default function OrderingPage() {
             ...pendingCombo,
             price: catalogUnitPrice(pendingCombo.price, pendingCombo.categoryId ?? null),
           }}
+          showImage={showProductImages}
           onClose={() => {
             setPendingCombo(null);
             if (offerConfigMeta) {
@@ -2068,7 +2152,7 @@ function ProductCard({
     );
 
   const hasPhoto = showImage && !!product.image;
-  const isGrid = layout === 'grid';
+  const isGrid = layout !== 'list';
 
   const imageBlock = hasPhoto ? (
     <div
