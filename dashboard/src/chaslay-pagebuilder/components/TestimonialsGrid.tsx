@@ -42,7 +42,12 @@ export const TestimonialsGrid: React.FC<TestimonialsProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trTestimonials } = useSectionTranslations(mergedProps as Record<string, unknown>);
-  const testimonials = trTestimonials(mergedProps.testimonials);
+  const testimonials =
+    typeof trTestimonials === 'function'
+      ? trTestimonials(Array.isArray(mergedProps.testimonials) ? mergedProps.testimonials : defaultTestimonials)
+      : Array.isArray(mergedProps.testimonials)
+        ? mergedProps.testimonials
+        : defaultTestimonials;
   const { connectors: { connect, drag } } = useNode();
 
   return (
