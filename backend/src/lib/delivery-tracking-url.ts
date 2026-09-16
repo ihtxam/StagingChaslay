@@ -10,17 +10,14 @@ type MerchantSlug = Pick<
 export function buildGuestOrderTrackingUrl(
   merchant: MerchantSlug,
   orderId: string,
-  token: string
+  token?: string | null
 ): string {
-  const base = (
-    process.env.PUBLIC_APP_URL ||
-    process.env.MERCHANT_DASHBOARD_URL ||
-    process.env.WEB_SHOP_URL ||
-    "http://localhost:5173"
-  ).replace(/\/$/, "");
+  const base = appBaseUrl();
   const slug = merchant.slug || merchant.subdomain || "shop";
-  const params = new URLSearchParams({ track: token });
-  return `${base}/shop/${encodeURIComponent(slug)}/order/${orderId}?${params.toString()}`;
+  const params = new URLSearchParams();
+  if (token) params.set("track", token);
+  const qs = params.toString();
+  return `${base}/shop/${encodeURIComponent(slug)}/order/${orderId}${qs ? `?${qs}` : ""}`;
 }
 
 export function generateDeliveryTrackingToken(): string {

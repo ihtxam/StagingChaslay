@@ -156,21 +156,24 @@ const SHOP_ORDER_SUBJECTS: Record<TxLocale, Record<ShopOrderKind, (shop: string,
 const SHOP_ORDER_BODIES: Record<TxLocale, Record<ShopOrderKind, string>> = {
   en: {
     received: 'Thank you for your order. We will confirm it shortly.',
-    confirmed: 'Your order has been confirmed and is being prepared.',
+    confirmed:
+      'The store has accepted your order and is preparing it. Track status with the link below.',
     ready: 'Your order is ready for pickup.',
     out_for_delivery: 'Your driver is on the way. Track live delivery using the link below.',
     cancelled: 'Your order has been cancelled.',
   },
   fr: {
     received: 'Merci pour votre commande. Nous la confirmerons sous peu.',
-    confirmed: 'Votre commande est confirmée et en préparation.',
+    confirmed:
+      'Le magasin a accepté votre commande et la prépare. Suivez son statut via le lien ci-dessous.',
     ready: 'Votre commande est prête à être récupérée.',
     out_for_delivery: 'Votre livreur est en route. Suivez la livraison en direct via le lien ci-dessous.',
     cancelled: 'Votre commande a été annulée.',
   },
   de: {
     received: 'Vielen Dank für Ihre Bestellung. Wir bestätigen sie in Kürze.',
-    confirmed: 'Ihre Bestellung ist bestätigt und wird zubereitet.',
+    confirmed:
+      'Das Geschäft hat Ihre Bestellung angenommen und bereitet sie zu. Verfolgen Sie den Status über den Link unten.',
     ready: 'Ihre Bestellung ist zur Abholung bereit.',
     out_for_delivery: 'Ihr Fahrer ist unterwegs. Verfolgen Sie die Lieferung live über den Link unten.',
     cancelled: 'Ihre Bestellung wurde storniert.',
@@ -188,4 +191,45 @@ export function shopOrderEmailCopy(
     subject: SHOP_ORDER_SUBJECTS[lang][kind](shop, orderNumber),
     body: SHOP_ORDER_BODIES[lang][kind],
   };
+}
+
+const MERCHANT_NEW_ORDER: Record<TxLocale, { subject: (shop: string, n: string) => string; body: string }> = {
+  en: {
+    subject: (s, n) => `New online order ${n} — ${s}`,
+    body: 'A new online order was placed. Open the orders screen to accept it.',
+  },
+  fr: {
+    subject: (s, n) => `Nouvelle commande en ligne ${n} — ${s}`,
+    body: 'Une nouvelle commande en ligne a été passée. Ouvrez les commandes pour l’accepter.',
+  },
+  de: {
+    subject: (s, n) => `Neue Online-Bestellung ${n} — ${s}`,
+    body: 'Eine neue Online-Bestellung ist eingegangen. Öffnen Sie die Bestellungen, um sie anzunehmen.',
+  },
+};
+
+export function merchantNewOrderEmailCopy(
+  shop: string,
+  orderNumber: string,
+  locale?: string | null
+): { subject: string; body: string } {
+  const lang = loc(locale);
+  return {
+    subject: MERCHANT_NEW_ORDER[lang].subject(shop, orderNumber),
+    body: MERCHANT_NEW_ORDER[lang].body,
+  };
+}
+
+export function shopOrderTrackLabel(locale?: string | null): string {
+  const lang = loc(locale);
+  if (lang === 'fr') return 'Suivre votre commande';
+  if (lang === 'de') return 'Bestellung verfolgen';
+  return 'Track your order';
+}
+
+export function shopOrderReadyLabel(locale?: string | null): string {
+  const lang = loc(locale);
+  if (lang === 'fr') return 'Heure estimée';
+  if (lang === 'de') return 'Geschätzte Zeit';
+  return 'Estimated time';
 }

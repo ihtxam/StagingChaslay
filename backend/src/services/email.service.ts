@@ -45,6 +45,8 @@ type ResolvedEmailConfig = {
     fromEmail: string;
     fromName: string;
   } | null;
+  /** Merchant SMTP used when platform mailco/Brevo is missing or fails. */
+  fallbackSmtp?: MerchantSmtpSettings | null;
 };
 
 function zurichYmd(d = new Date()): string {
@@ -119,6 +121,7 @@ export class EmailService {
     let merchantName: string | null = null;
     let merchantEmail: string | null = null;
     let useOwnDelivery = false;
+    let merchantSmtpFallback: MerchantSmtpSettings | null = null;
 
     if (merchantId) {
       try {
@@ -141,29 +144,30 @@ export class EmailService {
         const mode = String(merchant?.emailDeliveryMode || "platform").toLowerCase();
         useOwnDelivery = mode === "own";
 
-        if (useOwnDelivery) {
-          const smtp = MarketingService.normalizeSmtp(merchant?.emailSmtpSettings || null);
-          if (
-            smtp.enabled &&
-            smtp.host &&
-            smtp.fromEmail &&
-            String(smtp.host).trim() &&
-            String(smtp.fromEmail).trim()
-          ) {
-            const reply = this.merchantReplyTo(merchant?.name, merchant?.email, smtp.fromEmail);
-            return {
-              provider: "smtp",
-              apiKey: "",
-              fromEmail: String(smtp.fromEmail).trim(),
-              fromName: this.merchantSenderName(merchant?.name),
-              replyToEmail: reply.replyToEmail,
-              replyToName: reply.replyToName,
-              source: "merchant_smtp",
-              smtp,
-              merchantId,
-            };
-          }
+        const smtp = MarketingService.normalizeSmtp(merchant?.emailSmtpSettings || null);
+        const smtpHasCreds = !!(
+          String(smtp.host || "").trim() && String(smtp.fromEmail || "").trim()
+        );
+        const smtpReady = smtp.enabled && smtpHasCreds;
+        // Keep filled SMTP as fallback even if the merchant chose platform delivery.
+        if (smtpHasCreds) merchantSmtpFallback = smtp;
 
+        if (useOwnDelivery && smtpReady) {
+          const reply = this.merchantReplyTo(merchant?.name, merchant?.email, smtp.fromEmail);
+          return {
+            provider: "smtp",
+            apiKey: "",
+            fromEmail: String(smtp.fromEmail).trim(),
+            fromName: this.merchantSenderName(merchant?.name),
+            replyToEmail: reply.replyToEmail,
+            replyToName: reply.replyToName,
+            source: "merchant_smtp",
+            smtp,
+            merchantId,
+          };
+        }
+
+        if (useOwnDelivery) {
           const brevo = MarketingService.normalizeBrevo(merchant?.emailBrevoSettings || null);
           if (
             brevo.enabled &&
@@ -301,33 +305,62 @@ export class EmailService {
     const mailcoCfg = buildMailcoConfig();
     const brevoCfg = buildBrevoConfig();
 
+    const withSmtpFallback = (cfg: ResolvedEmailConfig): ResolvedEmailConfig =>
+      merchantSmtpFallback ? { ...cfg, fallbackSmtp: merchantSmtpFallback } : cfg;
+
+    const smtpFromMerchant = (): ResolvedEmailConfig | null => {
+      if (!merchantSmtpFallback || !merchantId) return null;
+      const reply = this.merchantReplyTo(merchantName, merchantEmail, merchantSmtpFallback.fromEmail);
+      return {
+        provider: "smtp",
+        apiKey: "",
+        fromEmail: String(merchantSmtpFallback.fromEmail).trim(),
+        fromName: this.merchantSenderName(merchantName),
+        replyToEmail: reply.replyToEmail,
+        replyToName: reply.replyToName,
+        source: "merchant_smtp",
+        smtp: merchantSmtpFallback,
+        merchantId,
+      };
+    };
+
     if (preferMailco && mailcoCfg) {
-      return mailcoCfg;
+      return withSmtpFallback(mailcoCfg);
     }
     if (brevoCfg) {
-      return brevoCfg;
+      return withSmtpFallback(brevoCfg);
     }
     if (mailcoCfg) {
-      return mailcoCfg;
+      return withSmtpFallback(mailcoCfg);
     }
 
+    const smtpCfg = smtpFromMerchant();
+    if (smtpCfg) return smtpCfg;
+
     if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
-      return {
+      return withSmtpFallback({
         provider: "sendgrid",
         apiKey: process.env.SENDGRID_API_KEY,
         fromEmail: process.env.SENDGRID_FROM_EMAIL,
         fromName: fromName || "Reborn",
         source: brevoFromDb || mailcoFromDb ? "database" : "env",
         merchantId,
-      };
+      });
     }
 
-    return { provider: null, apiKey: "", fromEmail: dbFromEmail || this.envFromAddress(), fromName, source: "none", merchantId };
+    return withSmtpFallback({
+      provider: null,
+      apiKey: "",
+      fromEmail: dbFromEmail || this.envFromAddress(),
+      fromName,
+      source: "none",
+      merchantId,
+    });
   }
 
   static async isConfigured(merchantId?: string | null) {
     const cfg = await this.resolveConfig(merchantId);
-    return cfg.provider !== null;
+    return cfg.provider !== null || !!cfg.fallbackSmtp;
   }
 
   /** Roll daily/monthly counters for the current Zurich calendar periods. */
@@ -520,7 +553,7 @@ export class EmailService {
     }
 
     return {
-      configured: cfg.provider !== null,
+      configured: cfg.provider !== null || !!cfg.fallbackSmtp,
       provider: cfg.provider,
       fromEmail: cfg.fromEmail,
       fromName: cfg.fromName,
@@ -545,6 +578,17 @@ export class EmailService {
 
   static async send(input: SendEmailInput) {
     let cfg = await this.resolveConfig(input.merchantId);
+    if (!cfg.provider && cfg.fallbackSmtp) {
+      const reply = this.merchantReplyTo(null, input.to, cfg.fallbackSmtp.fromEmail);
+      cfg = {
+        ...cfg,
+        provider: "smtp",
+        fromEmail: String(cfg.fallbackSmtp.fromEmail).trim(),
+        source: "merchant_smtp",
+        smtp: cfg.fallbackSmtp,
+        replyToEmail: cfg.replyToEmail || reply.replyToEmail,
+      };
+    }
     if (!cfg.provider) {
       throw new Error(
         "Email is not configured. Configure platform mailco or Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email."
@@ -609,23 +653,36 @@ export class EmailService {
       try {
         await logAndSend(cfg);
       } catch (primaryError) {
-        if (
-          cfg.provider === "mailco" &&
-          cfg.fallbackBrevo &&
-          !hasAttachments
-        ) {
-          const brevoCfg: ResolvedEmailConfig = {
-            ...cfg,
-            provider: "brevo",
-            apiKey: cfg.fallbackBrevo.apiKey,
-            fromEmail: cfg.fallbackBrevo.fromEmail,
-            fromName: cfg.fallbackBrevo.fromName,
-          };
-          await logAndSend(brevoCfg);
-          cfg = brevoCfg;
-        } else {
-          throw primaryError;
+        let recovered = false;
+        if (cfg.provider === "mailco" && cfg.fallbackBrevo && !hasAttachments) {
+          try {
+            const brevoCfg: ResolvedEmailConfig = {
+              ...cfg,
+              provider: "brevo",
+              apiKey: cfg.fallbackBrevo.apiKey,
+              fromEmail: cfg.fallbackBrevo.fromEmail,
+              fromName: cfg.fallbackBrevo.fromName,
+            };
+            await logAndSend(brevoCfg);
+            cfg = brevoCfg;
+            recovered = true;
+          } catch {
+            /* try merchant SMTP next */
+          }
         }
+        if (!recovered && cfg.fallbackSmtp && cfg.provider !== "smtp") {
+          const smtpCfg: ResolvedEmailConfig = {
+            ...cfg,
+            provider: "smtp",
+            fromEmail: String(cfg.fallbackSmtp.fromEmail).trim(),
+            source: "merchant_smtp",
+            smtp: cfg.fallbackSmtp,
+          };
+          await logAndSend(smtpCfg);
+          cfg = smtpCfg;
+          recovered = true;
+        }
+        if (!recovered) throw primaryError;
       }
 
       await EmailUsageService.logSend({
