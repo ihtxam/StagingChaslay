@@ -2176,6 +2176,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     if (!isQrTableOrder && !isKioskOrder && (!customerName?.trim() || !customerPhone?.trim())) {
       return res.status(400).json({ error: "Name and phone are required" });
     }
+    if (!isQrTableOrder && !isKioskOrder) {
+      const emailCheck = String(customerEmail || "").trim();
+      if (!emailCheck || !emailCheck.includes("@")) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+    }
 
     const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
     const payMethod =
@@ -2957,6 +2963,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
         guestLocale: guestLocale || null,
       });
+      if (shopAutoAccept) {
+        await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
+          guestLocale: guestLocale || null,
+        });
+      }
     } catch (mailErr) {
       console.warn("Shop order confirmation email failed:", mailErr);
     }

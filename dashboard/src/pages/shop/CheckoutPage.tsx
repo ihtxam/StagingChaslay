@@ -606,7 +606,7 @@ export default function CheckoutPage() {
   const checkoutReady = useMemo(() => {
     if (merchant?.acceptingOrders === false || merchant?.vacation?.active) return false;
     if (!firstName.trim() || !lastName.trim() || !draft.customerPhone.trim()) return false;
-    if (wantCreateAccount && !draft.customerEmail.trim()) return false;
+    if (!draft.customerEmail.trim()) return false;
     if (whenMode === 'asap' && !channelOpen) return false;
     if (whenMode === 'later') {
       if (merchant?.scheduledOrdersEnabled === false) return false;
@@ -990,7 +990,7 @@ export default function CheckoutPage() {
     if (!resolved.lastName) next.customerLastName = t('shopLastNameRequired');
     if (!resolved.fullName) next.customerName = t('shopFullNameFieldRequired');
     if (!resolved.phone) next.customerPhone = t('shopPhoneFieldRequired');
-    if (wantCreateAccount && !draft.customerEmail.trim()) {
+    if (!draft.customerEmail.trim()) {
       next.customerEmail = t('shopEmailFieldRequired');
     }
     setFieldErrors(next);
