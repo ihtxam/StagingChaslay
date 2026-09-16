@@ -35,7 +35,7 @@ export default function ShopLangSwitcher({
   }, [open]);
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative z-[80] ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -50,7 +50,7 @@ export default function ShopLangSwitcher({
       {open ? (
         <ul
           role="listbox"
-          className={`absolute right-0 z-40 min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
+          className={`absolute right-0 z-[80] min-w-full overflow-hidden border border-stone-200 bg-white shadow-lg ${
             menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
           }`}
         >
