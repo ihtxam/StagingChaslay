@@ -70,8 +70,6 @@ export type ShopDeliveryInfo = {
     name?: string;
     minOrderAmount?: number | string | null;
     deliveryFee?: number | string | null;
-    baseDeliveryFee?: number | string | null;
-    freeDeliveryMinOrder?: number | string | null;
   };
 };
 
@@ -166,24 +164,12 @@ export function loadCart(shopKey: string): ShopCheckoutDraft | null {
   }
 }
 
-export const SHOP_CART_EVENT = 'manupos:shop-cart';
-
-function emitCartChange(shopKey: string) {
-  try {
-    window.dispatchEvent(new CustomEvent(SHOP_CART_EVENT, { detail: { shopKey } }));
-  } catch {
-    /* ignore */
-  }
-}
-
 export function saveCart(shopKey: string, draft: ShopCheckoutDraft) {
   localStorage.setItem(cartStorageKey(shopKey), JSON.stringify(draft));
-  emitCartChange(shopKey);
 }
 
 export function clearCart(shopKey: string) {
   localStorage.removeItem(cartStorageKey(shopKey));
-  emitCartChange(shopKey);
 }
 
 export function emptyDraft(channel: ShopChannel = 'takeaway'): ShopCheckoutDraft {
@@ -314,17 +300,6 @@ export function removeOfferInstance(items: ShopCartItem[], offerInstanceId: stri
 import { isShopPathHubHost } from '@/lib/brand';
 
 const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'shop', 'order']);
-/** Path slugs on shop hubs that must never be treated as merchant shop keys. */
-const RESERVED_SHOP_SLUGS = new Set([
-  'merchant',
-  'login',
-  'signin',
-  'superadmin',
-  'reseller',
-  'forgot-password',
-  'reset-password',
-  'set-password',
-]);
 
 function publicDomain() {
   return (import.meta.env.VITE_PUBLIC_DOMAIN || 'manupos.webprintmedia.swiss').toLowerCase();
@@ -345,16 +320,17 @@ function subdomainLabel() {
  * - custom domain → full hostname (backend matches merchants.custom_domain)
  */
 export function resolveShopKey(paramSlug?: string) {
-  if (paramSlug) {
-    const slug = paramSlug.trim().toLowerCase();
-    if (RESERVED_SHOP_SLUGS.has(slug)) return '';
-    return paramSlug;
-  }
+  if (paramSlug) return paramSlug;
   const label = subdomainLabel();
   if (label && !RESERVED_SUBDOMAINS.has(label)) return label;
   if (label === 'shop') {
     const seg = window.location.pathname.split('/').filter(Boolean)[0];
-    if (seg && !['checkout', 'order', 'account', 'register', 'menu', 'table', 'api', 'assets'].includes(seg)) return seg;
+    if (
+      seg &&
+      !['checkout', 'order', 'account', 'register', 'menu', 'table', 'api', 'assets', 'l', 'pages', 'gift-cards', 'gift', 'reservations'].includes(seg)
+    ) {
+      return seg;
+    }
   }
   const host = window.location.hostname.toLowerCase();
   const main = publicDomain();

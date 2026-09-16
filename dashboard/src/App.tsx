@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster, ToastBar } from 'react-hot-toast';
+import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
+import { isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
@@ -37,6 +39,7 @@ import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
+const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 
 function LegacyReceiptRedirect() {
   const { saleId } = useParams();
@@ -56,6 +59,20 @@ function isWebPosRoute(pathname: string): boolean {
 function AppToaster() {
   const { pathname } = useLocation();
   const webPos = isWebPosRoute(pathname);
+  const [showPosToasts, setShowPosToasts] = useState(readShowPosToasts);
+
+  useEffect(() => {
+    const onPref = (ev: Event) => {
+      const enabled = (ev as CustomEvent<boolean>).detail;
+      setShowPosToasts(enabled === true);
+    };
+    window.addEventListener(POS_TOAST_PREF_EVENT, onPref);
+    return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
+  }, []);
+
+  if (webPos && !showPosToasts) {
+    return null;
+  }
 
   return (
     <Toaster
@@ -66,7 +83,7 @@ function AppToaster() {
           ? {
               bottom: 'auto',
               height: 'auto',
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
               left: '50%',
               right: 'auto',
               width: 'min(92vw, 22rem)',
@@ -75,17 +92,27 @@ function AppToaster() {
             }
           : undefined
       }
-      toastOptions={
-        webPos
+      toastOptions={{
+        duration: 3500,
+        style: webPos
           ? {
-              style: {
-                maxWidth: 'min(92vw, 22rem)',
-                fontSize: '0.875rem',
-              },
+              maxWidth: 'min(92vw, 22rem)',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
             }
-          : undefined
-      }
-    />
+          : { cursor: 'pointer' },
+      }}
+    >
+      {(t) => (
+        <div
+          role="presentation"
+          className="cursor-pointer"
+          onClick={() => toast.dismiss(t.id)}
+        >
+          <ToastBar toast={t} />
+        </div>
+      )}
+    </Toaster>
   );
 }
 
@@ -119,7 +146,7 @@ const MAIN_HOST = (
 ).toLowerCase();
 
 /** Reserved hosts that must never be treated as a merchant shop subdomain. */
-const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status']);
+const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status', 'order', 'shop']);
 
 /** Local dev hosts should use panel routes (/login, /merchant), not shop subdomain mode. */
 const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
@@ -127,10 +154,11 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
+  // Path shop hub: shop.chaslay.com/{slug}, order.rebornsense.com/{slug}, legacy shop.*
+  if (isShopPathHubHost(host)) return { host, kind: 'shop_hub' as const, label: 'shop' };
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
-  if (label === 'shop') return { host, kind: 'shop_hub' as const, label };
   if (label === 'status') return { host, kind: 'status' as const, label };
   if (RESERVED_SUBDOMAINS.has(label)) return { host, kind: 'reserved' as const, label };
   return { host, kind: 'merchant_subdomain' as const, label };
@@ -332,6 +360,14 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/pages/:pageSlug"
+            element={
+              <ShopRoutes>
+                <ChaslayShopPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug"
             element={
               <ShopRoutes>
@@ -381,6 +417,14 @@ function App() {
           />
           <Route
             path="/shop/:merchantSlug/register"
+            element={
+              <ShopRoutes>
+                <AccountPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug/register"
             element={
               <ShopRoutes>
                 <AccountPage />
@@ -475,6 +519,54 @@ function App() {
                 }
               />
               <Route
+                path="/:merchantSlug/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/:merchantSlug/reservations"
                 element={
                   <ShopRoutes>
@@ -507,6 +599,14 @@ function App() {
                 }
               />
               <Route
+                path="/:merchantSlug/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/:merchantSlug"
                 element={
                   <ShopRoutes>
@@ -516,6 +616,14 @@ function App() {
               />
               <Route
                 path="/"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="*"
                 element={
                   <ShopRoutes>
                     <ShopEntry />
@@ -580,6 +688,54 @@ function App() {
                 }
               />
               <Route
+                path="/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -608,6 +764,14 @@ function App() {
                 element={
                   <ShopRoutes>
                     <GiftCardViewPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
                   </ShopRoutes>
                 }
               />
@@ -685,6 +849,54 @@ function App() {
                 }
               />
               <Route
+                path="/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <CheckoutPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/order/:orderId"
+                element={
+                  <ShopRoutes>
+                    <OrderConfirmationPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/register"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug/account"
+                element={
+                  <ShopRoutes>
+                    <AccountPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -713,6 +925,14 @@ function App() {
                 element={
                   <ShopRoutes>
                     <GiftCardViewPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/pages/:pageSlug"
+                element={
+                  <ShopRoutes>
+                    <ChaslayShopPage />
                   </ShopRoutes>
                 }
               />
