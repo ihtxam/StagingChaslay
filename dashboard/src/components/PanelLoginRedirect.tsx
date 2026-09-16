@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
-import { resolvePanelAppOrigin } from '@/lib/brand';
 
-/** Shop/custom-domain hosts have no panel login — send staff to the panel app (app.chaslay.com / app.rebornsense.com). */
+const PANEL_APP =
+  (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.replace(/\/$/, '') ||
+  `https://app.${(import.meta.env.VITE_PUBLIC_DOMAIN || 'rebornsense.com').toLowerCase()}`;
+
+/** Shop/custom-domain hosts have no panel login — send staff to app.rebornsense.com. */
 export default function PanelLoginRedirect() {
   useEffect(() => {
-    const target = `${resolvePanelAppOrigin()}/login${window.location.search}${window.location.hash}`;
+    const target = `${PANEL_APP}/login${window.location.search}${window.location.hash}`;
     window.location.replace(target);
   }, []);
   return (

@@ -1,11 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import toast, { Toaster, ToastBar } from 'react-hot-toast';
-import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
+import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { isPanelAppHost, isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
-import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
@@ -31,7 +28,6 @@ import PosEmbedPage from '@/pages/PosEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
-import CustomerDisplayPage from '@/pages/CustomerDisplayPage';
 import KioskApp from '@/pages/kiosk/KioskApp';
 import KioskLaunchRedirect from '@/pages/kiosk/KioskLaunchRedirect';
 import KioskTokenAdminPage from '@/pages/kiosk/KioskTokenAdminPage';
@@ -41,7 +37,6 @@ import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
-const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 
 function LegacyReceiptRedirect() {
   const { saleId } = useParams();
@@ -53,91 +48,44 @@ function isWebPosRoute(pathname: string): boolean {
   return (
     /\/merchant\/(?:pos|waiter)(?:\/|$)/.test(pathname) ||
     /^\/kds(?:\/|$)/.test(pathname) ||
-    /^\/tv(?:\/|$)/.test(pathname) ||
-    /^\/cds(?:\/|$)/.test(pathname)
+    /^\/tv(?:\/|$)/.test(pathname)
   );
-}
-
-function isShopCheckoutRoute(pathname: string) {
-  return /\/checkout(?:\/|$)/.test(pathname);
 }
 
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
 function AppToaster() {
   const { pathname } = useLocation();
   const webPos = isWebPosRoute(pathname);
-  const shopCheckout = isShopCheckoutRoute(pathname);
-  const [showPosToasts, setShowPosToasts] = useState(readShowPosToasts);
-
-  useEffect(() => {
-    const onPref = (ev: Event) => {
-      const enabled = (ev as CustomEvent<boolean>).detail;
-      setShowPosToasts(enabled === true);
-    };
-    window.addEventListener(POS_TOAST_PREF_EVENT, onPref);
-    return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
-  }, []);
-
-  if (webPos && !showPosToasts) {
-    return null;
-  }
 
   return (
     <Toaster
-      position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
-      containerClassName={
-        webPos
-          ? 'webpos-toast-container'
-          : shopCheckout
-            ? 'shop-checkout-toast-container'
-            : undefined
-      }
+      position={webPos ? 'top-center' : 'top-right'}
+      containerClassName={webPos ? 'webpos-toast-container' : undefined}
       containerStyle={
         webPos
           ? {
               bottom: 'auto',
               height: 'auto',
-              pointerEvents: 'auto',
+              pointerEvents: 'none',
               left: '50%',
               right: 'auto',
               width: 'min(92vw, 22rem)',
               transform: 'translateX(-50%)',
               zIndex: 60,
             }
-          : shopCheckout
-            ? {
-                top: 'auto',
-                bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
-                left: '50%',
-                right: 'auto',
-                width: 'min(92vw, 22rem)',
-                transform: 'translateX(-50%)',
-                zIndex: 60,
-                pointerEvents: 'none',
-              }
-            : undefined
+          : undefined
       }
-      toastOptions={{
-        duration: 3500,
-        style: webPos
+      toastOptions={
+        webPos
           ? {
-              maxWidth: 'min(92vw, 22rem)',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
+              style: {
+                maxWidth: 'min(92vw, 22rem)',
+                fontSize: '0.875rem',
+              },
             }
-          : { cursor: 'pointer' },
-      }}
-    >
-      {(t) => (
-        <div
-          role="presentation"
-          className="cursor-pointer"
-          onClick={() => toast.dismiss(t.id)}
-        >
-          <ToastBar toast={t} />
-        </div>
-      )}
-    </Toaster>
+          : undefined
+      }
+    />
   );
 }
 
@@ -171,7 +119,7 @@ const MAIN_HOST = (
 ).toLowerCase();
 
 /** Reserved hosts that must never be treated as a merchant shop subdomain. */
-const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status', 'order', 'shop']);
+const RESERVED_SUBDOMAINS = new Set(['admin', 'api', 'pay', 'www', 'app', 'panel', 'status']);
 
 /** Local dev hosts should use panel routes (/login, /merchant), not shop subdomain mode. */
 const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
@@ -179,17 +127,10 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
-  // app.* / admin.* are always the merchant panel — even when VITE_PUBLIC_DOMAIN was baked wrong.
-  if (isPanelAppHost(host)) return { host, kind: 'main' as const, label: '' };
-  if (host.startsWith('status.')) return { host, kind: 'status' as const, label: 'status' };
-  // Path shop hub: shop.chaslay.com/{slug}, order.rebornsense.com/{slug}, legacy shop.*
-  if (isShopPathHubHost(host)) return { host, kind: 'shop_hub' as const, label: 'shop' };
-  if (host.startsWith('api.') || host.startsWith('pay.')) {
-    return { host, kind: 'reserved' as const, label: host.split('.')[0] || 'api' };
-  }
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
+  if (label === 'shop') return { host, kind: 'shop_hub' as const, label };
   if (label === 'status') return { host, kind: 'status' as const, label };
   if (RESERVED_SUBDOMAINS.has(label)) return { host, kind: 'reserved' as const, label };
   return { host, kind: 'merchant_subdomain' as const, label };
@@ -351,14 +292,6 @@ function App() {
             }
           />
           <Route
-            path="/cds/:token"
-            element={
-              <I18nProvider storageKey={CDS_LANG_KEY}>
-                <CustomerDisplayPage />
-              </I18nProvider>
-            }
-          />
-          <Route
             path="/tv/:token"
             element={
               <I18nProvider storageKey={PANEL_LANG_KEY}>
@@ -395,14 +328,6 @@ function App() {
             element={
               <ShopRoutes>
                 <OrderConfirmationPage />
-              </ShopRoutes>
-            }
-          />
-          <Route
-            path="/shop/:merchantSlug/pages/:pageSlug"
-            element={
-              <ShopRoutes>
-                <ChaslayShopPage />
               </ShopRoutes>
             }
           />
@@ -463,14 +388,6 @@ function App() {
             }
           />
           <Route
-            path="/shop/:merchantSlug/forgot-password"
-            element={
-              <ShopRoutes>
-                <AccountPage />
-              </ShopRoutes>
-            }
-          />
-          <Route
             path="/shop/:merchantSlug/reservations"
             element={
               <ShopRoutes>
@@ -507,7 +424,6 @@ function App() {
           {shopHub && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
-              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
               <Route
@@ -559,14 +475,6 @@ function App() {
                 }
               />
               <Route
-                path="/:merchantSlug/forgot-password"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
                 path="/:merchantSlug/reservations"
                 element={
                   <ShopRoutes>
@@ -599,14 +507,6 @@ function App() {
                 }
               />
               <Route
-                path="/:merchantSlug/pages/:pageSlug"
-                element={
-                  <ShopRoutes>
-                    <ChaslayShopPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
                 path="/:merchantSlug"
                 element={
                   <ShopRoutes>
@@ -629,7 +529,6 @@ function App() {
           {merchantSubdomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
-              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
@@ -681,14 +580,6 @@ function App() {
                 }
               />
               <Route
-                path="/forgot-password"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -717,14 +608,6 @@ function App() {
                 element={
                   <ShopRoutes>
                     <GiftCardViewPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/pages/:pageSlug"
-                element={
-                  <ShopRoutes>
-                    <ChaslayShopPage />
                   </ShopRoutes>
                 }
               />
@@ -751,7 +634,6 @@ function App() {
           {customDomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
-              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
@@ -803,14 +685,6 @@ function App() {
                 }
               />
               <Route
-                path="/forgot-password"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
                 path="/reservations"
                 element={
                   <ShopRoutes>
@@ -839,14 +713,6 @@ function App() {
                 element={
                   <ShopRoutes>
                     <GiftCardViewPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/pages/:pageSlug"
-                element={
-                  <ShopRoutes>
-                    <ChaslayShopPage />
                   </ShopRoutes>
                 }
               />
