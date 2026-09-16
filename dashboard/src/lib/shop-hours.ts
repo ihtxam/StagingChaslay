@@ -116,6 +116,33 @@ export function isChannelOpenAt(
   return { open, todayLabel, slots };
 }
 
+function minutesUntilSlotClose(mins: number, openMin: number, closeMin: number): number | null {
+  if (closeMin >= openMin) {
+    if (mins >= openMin && mins < closeMin) return closeMin - mins;
+    return null;
+  }
+  if (mins >= openMin) return 24 * 60 - mins + closeMin;
+  if (mins < closeMin) return closeMin - mins;
+  return null;
+}
+
+/** Minutes remaining in the current opening slot, or null when the channel is closed. */
+export function minutesUntilChannelClose(
+  storeHours: StoreHours | null | undefined,
+  channel: ShopChannel,
+  at: Date = new Date()
+): number | null {
+  const { day, mins } = zonedParts(at);
+  const slots = storeHours?.[channel]?.[day] || [];
+  let best: number | null = null;
+  for (const slot of slots) {
+    const remaining = minutesUntilSlotClose(mins, parseHm(slot.open), parseHm(slot.close));
+    if (remaining == null) continue;
+    if (best == null || remaining < best) best = remaining;
+  }
+  return best;
+}
+
 export type ScheduleDayOption = {
   offset: number;
   label: string;
@@ -292,6 +319,17 @@ export function findNextOpen(
     }
   }
   return null;
+}
+
+/** Minutes until the next opening today, or null if closed until a later day. */
+export function minutesUntilChannelOpen(
+  storeHours: StoreHours | null | undefined,
+  channel: ShopChannel,
+  at: Date = new Date()
+): number | null {
+  const next = findNextOpen(storeHours, channel, at);
+  if (!next || next.dayOffset !== 0) return null;
+  return Math.max(0, Math.round((next.at.getTime() - at.getTime()) / 60_000));
 }
 
 /** Convert Zurich datetime-local value to ISO string for API. */

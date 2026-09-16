@@ -63,6 +63,7 @@ type Props = {
     selectedExtras: ShopSelectedExtra[];
     unitPrice: number;
   }) => void;
+  showImage?: boolean;
 };
 
 type SlotPick = {
@@ -135,7 +136,7 @@ function comboGroupsSeed(product: ShopComboProduct): ShopModifierGroup[] {
 
 export { productHasComboSlots };
 
-export default function ShopComboWizard({ product, onClose, onConfirm }: Props) {
+export default function ShopComboWizard({ product, onClose, onConfirm, showImage = true }: Props) {
   const { t } = useI18n();
   const slots = product.comboSlots || [];
   const [picksBySlot, setPicksBySlot] = useState<Record<string, SlotPick[]>>({});
@@ -146,6 +147,11 @@ export default function ShopComboWizard({ product, onClose, onConfirm }: Props) 
   const [error, setError] = useState<string | null>(null);
 
   const comboGroups = useMemo(() => comboGroupsSeed(product), [product]);
+  const heroImage = showImage
+    ? product.image ||
+      product.comboSlots?.flatMap((s) => s.options).find((o) => o.image)?.image ||
+      null
+    : null;
 
   const validateGroups = (groups: ShopModifierGroup[], selection: Record<string, string[]>) =>
     validateModifierGroups(groups, selection, {
@@ -435,10 +441,24 @@ export default function ShopComboWizard({ product, onClose, onConfirm }: Props) 
         onClick={onClose}
       >
         <div
-          className="flex max-h-[92vh] w-full flex-col bg-white shadow-2xl sm:max-w-2xl"
+          className="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="border-b border-stone-200 px-5 py-4">
+          <div className="border-b border-stone-200">
+            {heroImage ? (
+              <div className="relative">
+                <img src={heroImage} alt="" className="h-52 w-full object-cover sm:h-56" />
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-stone-700 shadow"
+                  onClick={onClose}
+                  aria-label={t('close')}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ) : null}
+            <div className="px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-lg font-bold tracking-tight text-stone-900">
@@ -448,6 +468,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm }: Props) 
                   {t('shopCombo')} · CHF {product.price.toFixed(2)}
                 </p>
               </div>
+              {heroImage ? null : (
               <button
                 type="button"
                 className="shrink-0 rounded-lg p-1 text-stone-500 hover:bg-stone-100"
@@ -456,6 +477,11 @@ export default function ShopComboWizard({ product, onClose, onConfirm }: Props) 
               >
                 <X size={20} />
               </button>
+              )}
+            </div>
+            {product.description ? (
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">{product.description}</p>
+            ) : null}
             </div>
           </div>
 
