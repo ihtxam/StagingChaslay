@@ -67,7 +67,6 @@ import {
   probeNiimbotComPorts,
   probePrintAgentHealth,
   reconcilePosPrinterProfiles,
-  reconcileAndPrunePosPrinterProfiles,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -1146,19 +1145,15 @@ export default function Settings() {
       setAgentPrinters(list);
       setSettings((prev) => {
         if (!prev?.posPrintSettings?.printers?.length) return prev;
-        const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(
+        const { profiles, changed } = reconcilePosPrinterProfiles(
           prev.posPrintSettings.printers,
           list
         );
         if (!changed) return prev;
-        const nextSettings = {
+        return {
           ...prev,
           posPrintSettings: { ...prev.posPrintSettings, printers: profiles },
         };
-        void api
-          .put('/merchant/settings', { posPrintSettings: nextSettings.posPrintSettings })
-          .catch(() => undefined);
-        return nextSettings;
       });
     } catch {
       setPrintAgentOk(false);
@@ -4731,15 +4726,15 @@ export default function Settings() {
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={savedNameMissing ? '' : p.name}
+                          value={p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
                             const picked = agentPrinters.find((ap) => ap.name === e.target.value);
                             printers[idx] = {
                               ...p,
                               name: e.target.value,
-                              portName: picked?.portName || null,
-                              matchHint: picked?.matchHint || picked?.driverName || null,
+                              portName: picked?.portName || p.portName || null,
+                              matchHint: picked?.matchHint || picked?.driverName || p.matchHint || null,
                             };
                             setSettings({
                               ...settings,
@@ -4747,7 +4742,13 @@ export default function Settings() {
                             });
                           }}
                         >
-                          <option value="">{t('webPosDefaultPrinter')}</option>
+                          {p.name && !agentPrinters.some((ap) => ap.name === p.name) ? (
+                            <option value={p.name}>
+                              {p.name}
+                              {p.portName ? ` · ${p.portName}` : ''}
+                              {` — ${t('webPosPrinterSavedOffline')}`}
+                            </option>
+                          ) : null}
                           {agentPrinters.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (

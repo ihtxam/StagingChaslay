@@ -85,11 +85,8 @@ import {
   listAgentPrinters,
   pairPrintAgentCloudRelay,
   printViaAgent,
-  reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
-  resolveAgentPrinterName,
   resolveLivePrinterName,
-  suggestPrinterAutoHeal,
   syncWebPosLocalPrinterName,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
@@ -932,7 +929,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bridgeProbeComplete, setBridgeProbeComplete] = useState(false);
   const bridgeSetupDismissedRef = useRef(false);
   const bridgeAutoConfigRef = useRef(false);
-  const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
   const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
@@ -2056,23 +2052,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPrinterName((current) => {
         const trimmed = (current || '').trim();
         if (healedLocal) return healedLocal;
-        if (!trimmed) {
-          if (!list.length) return current;
-          const def =
-            list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
-            list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
-            list[0];
-          return def?.name || current;
-        }
-        return resolveLivePrinterName(trimmed, list) || '';
+        if (!trimmed) return current;
+        return resolveLivePrinterName(trimmed, list) || trimmed;
       });
       setPrintSettings((ps) => {
         if (!ps?.printers?.length) return ps;
         const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(ps.printers, list);
         if (!changed) return ps;
-        const next = { ...ps, printers: profiles };
-        void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
-        return next;
+        return { ...ps, printers: profiles };
       });
     } catch {
       setPrinters([]);
@@ -3112,48 +3099,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const configured = printerName.trim();
     if (configured && isConfiguredPrinterMissing(configured, printers)) {
-      const heal = suggestPrinterAutoHeal(configured, printers);
-      const key = `local:${configured}->${heal?.name || ''}`;
-      if (heal && !printerHealAttemptedRef.current.has(key)) {
-        printerHealAttemptedRef.current.add(key);
-        setPrinterName(heal.name);
-        setPrinterDisconnected(false);
-        toast.success(t('webPosPrinterAutoHealed').replace('{name}', heal.name));
-      } else if (!resolveLivePrinterName(configured, printers)) {
-        setPrinterDisconnected(true);
-      }
+      setPrinterDisconnected(true);
     } else if (configured) {
       setPrinterDisconnected(false);
     }
-
-    const profiles = printSettings?.printers;
-    if (!profiles?.length) return;
-    let changed = false;
-    const nextProfiles = profiles.map((p) => {
-      const name = (p.name || '').trim();
-      if (!name && !String(p.portName || '').trim()) return p;
-      const resolved = resolveLivePrinterName(name, printers, {
-        portName: p.portName,
-        matchHint: p.matchHint,
-      });
-      if (!resolved || resolved === name) return p;
-      const key = `set:${p.id}:${name}->${resolved}`;
-      if (printerHealAttemptedRef.current.has(key)) return p;
-      printerHealAttemptedRef.current.add(key);
-      changed = true;
-      const picked = printers.find((ap) => ap.name === resolved);
-      return {
-        ...p,
-        name: resolved,
-        portName: picked?.portName ?? p.portName ?? null,
-        matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
-      };
-    });
-    if (!changed) return;
-    const next = { ...printSettings, printers: nextProfiles };
-    setPrintSettings(next);
-    void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
-  }, [agentOk, printersReady, printers, printerName, printSettings, t]);
+  }, [agentOk, printersReady, printers, printerName]);
 
   const scalePortHealRef = useRef<string | null>(null);
   const scaleUsbHealRef = useRef<string | null>(null);

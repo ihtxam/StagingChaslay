@@ -2596,6 +2596,7 @@ const en: Dict = {
   webPosProductsMenu: 'Products',
   webPosPrinter: 'Printer',
   webPosDefaultPrinter: 'Default printer',
+  webPosPrinterSavedOffline: 'saved (not seen on this PC yet)',
   webPosDefaultSuffix: ' (default)',
   webPosAutoPrint: 'Auto-print after sale',
   webPosAutoPrintHint: 'Print a customer receipt when you complete a sale here. On the main till, also blocks relayed receipts from phones when off.',
@@ -6529,6 +6530,7 @@ const fr: Dict = {
   webPosProductsMenu: 'Produits',
   webPosPrinter: 'Imprimante',
   webPosDefaultPrinter: 'Imprimante par défaut',
+  webPosPrinterSavedOffline: 'enregistrée (pas encore vue sur ce PC)',
   webPosDefaultSuffix: ' (défaut)',
   webPosAutoPrint: 'Impression auto après vente',
   webPosAutoPrintHint:
@@ -10406,6 +10408,7 @@ const de: Dict = {
   webPosProductsMenu: 'Produkte',
   webPosPrinter: 'Drucker',
   webPosDefaultPrinter: 'Standarddrucker',
+  webPosPrinterSavedOffline: 'gespeichert (auf diesem PC noch nicht gesehen)',
   webPosDefaultSuffix: ' (Standard)',
   webPosAutoPrint: 'Nach Verkauf automatisch drucken',
   webPosAutoPrintHint:
