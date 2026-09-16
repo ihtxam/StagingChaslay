@@ -4531,55 +4531,58 @@ export default function Settings() {
                     </span>
                   </span>
                 </label>
-                <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
-                  <p className="text-xs text-[var(--text-muted)]">{t('orderLabelAutoPrintHint')}</p>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false}
+                <div className="mt-3 space-y-2 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                  <p className="text-sm font-medium">{t('orderLabelAutoPrintHint')}</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
                       disabled={settings.posPrintSettings?.orderLabelEnabled !== true}
-                      onChange={(e) =>
+                      aria-pressed={settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false}
+                      className={`flex min-h-[4.5rem] flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        settings.posPrintSettings?.orderLabelEnabled === true &&
+                        settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false
+                          ? 'border-[#13A99A] bg-white shadow-sm ring-1 ring-[#13A99A]'
+                          : 'border-stone-200 bg-white'
+                      }`}
+                      onClick={() =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            autoPrintOrderLabelOnHold: e.target.checked,
-                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                            autoPrintOrderLabelOnHold:
+                              settings.posPrintSettings?.autoPrintOrderLabelOnHold === false,
                           },
                         })
                       }
-                    />
-                    <span>
-                      <span className="font-medium">{t('autoPrintOrderLabelOnHold')}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
-                        {t('autoPrintOrderLabelOnHoldHint')}
-                      </span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
-                      onChange={(e) =>
+                    >
+                      <span className="font-semibold text-[var(--text)]">{t('autoPrintOrderLabelOnHold')}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{t('autoPrintOrderLabelOnHoldHint')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={settings.posPrintSettings?.orderLabelEnabled !== true}
+                      aria-pressed={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                      className={`flex min-h-[4.5rem] flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        settings.posPrintSettings?.orderLabelEnabled === true &&
+                        settings.posPrintSettings?.autoPrintOrderLabelOnSend === true
+                          ? 'border-[#13A99A] bg-white shadow-sm ring-1 ring-[#13A99A]'
+                          : 'border-stone-200 bg-white'
+                      }`}
+                      onClick={() =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            autoPrintOrderLabelOnSend: e.target.checked,
-                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                            autoPrintOrderLabelOnSend:
+                              settings.posPrintSettings?.autoPrintOrderLabelOnSend !== true,
                           },
                         })
                       }
-                    />
-                    <span>
-                      <span className="font-medium">{t('autoPrintOrderLabelOnSend')}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
-                        {t('autoPrintOrderLabelOnSendHint')}
-                      </span>
-                    </span>
-                  </label>
+                    >
+                      <span className="font-semibold text-[var(--text)]">{t('autoPrintOrderLabelOnSend')}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{t('autoPrintOrderLabelOnSendHint')}</span>
+                    </button>
+                  </div>
                 </div>
               </Section>
 
