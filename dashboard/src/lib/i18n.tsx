@@ -2131,6 +2131,8 @@ const en: Dict = {
   deliveryUnassigned: 'Unassigned',
   deliveryAssignSaved: 'Driver assignment saved',
   deliveryAssignFailed: 'Could not assign driver',
+  deliveryAssignHeldHint:
+    'This is a held POS ticket — assign a driver after submitting or paying the order in WebPOS.',
   deliveryDriverTitle: 'Delivery driver',
   deliveryDriverHello: 'Hello {name}',
   deliveryDriverHint: 'Share your location while delivering so the kitchen can track you on the map.',
@@ -5886,6 +5888,8 @@ const fr: Dict = {
   deliveryUnassigned: 'Non assigné',
   deliveryAssignSaved: 'Livreur assigné',
   deliveryAssignFailed: 'Assignation impossible',
+  deliveryAssignHeldHint:
+    'Ticket POS en attente — assignez un livreur après validation ou paiement dans WebPOS.',
   deliveryDriverTitle: 'Livreur',
   deliveryDriverHello: 'Bonjour {name}',
   deliveryDriverHint: 'Partagez votre position pendant la livraison.',
@@ -9594,6 +9598,8 @@ const de: Dict = {
   deliveryUnassigned: 'Nicht zugewiesen',
   deliveryAssignSaved: 'Fahrer zugewiesen',
   deliveryAssignFailed: 'Zuweisung fehlgeschlagen',
+  deliveryAssignHeldHint:
+    'Gehaltenes POS-Ticket — Fahrer nach Absenden oder Bezahlen in WebPOS zuweisen.',
   deliveryDriverTitle: 'Lieferfahrer',
   deliveryDriverHello: 'Hallo {name}',
   deliveryDriverHint: 'Teilen Sie Ihren Standort während der Lieferung.',
