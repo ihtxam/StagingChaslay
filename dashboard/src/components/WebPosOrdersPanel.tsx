@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
@@ -62,40 +62,28 @@ import {
   sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
+import { fetchKdsBoardStatus, buildKdsReadyMap, lineKitchenReady, type KdsBoardTicket } from '@/lib/kds-push';
 import {
-  fetchKdsBoardStatus,
-  buildKdsReadyMap,
-  fetchKdsTicketStatus,
-  lineKitchenReady,
-  type KdsBoardTicket,
-} from '@/lib/kds-push';
-import {
-  kitchenProgressFromLines,
   kitchenTicketKeyBase,
-  mergeKitchenProgress,
   resolveKitchenTicketKey,
 } from '@/lib/kitchen-progress';
-import type { CartLine } from '@/components/webpos/types';
 import { hasTerminalPortion, parsePaymentBreakdown, paymentMethodLabel } from '@/lib/payment-breakdown';
 import WebPosCancelModal from '@/components/webpos/WebPosCancelModal';
 import WebPosRefundModal, {
   type RefundReasonOption,
 } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
-import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
+import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
 import {
   isGandolaPurgeEligible,
   orderMatchesPaymentFilter,
 } from '@/lib/gandola-purge';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
-import {
-  mergeOrdersWithOnlineForAllFilter,
-  onlineOrderAsPosOrder,
-} from '@/lib/webpos-orders-merge';
 
 function toMs(raw: string | number | Date | null | undefined): number {
   if (raw == null || raw === '') return 0;
@@ -277,15 +265,14 @@ type Props = {
   onChannelFilterChange?: (filter: ChannelFilter) => void;
   /** Open full delivery management hub (map + drivers) */
   onOpenDeliveryHub?: () => void;
-  /** Gandola role — five taps on search icon unlocks permanent cash order deletion */
+  /** Owner/manager only — unlock cash sales adjustment via search icon taps */
+  canSalesAdjust?: boolean;
+  /** Gandola role — five taps on earthworm unlocks permanent cash order deletion */
   canGandolaPurge?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
   /** Merchant Settings — auto-print receipt after collect payment */
   autoPrintReceipt?: boolean;
-  /** Merchant tax mode — drives VAT breakdown in order detail */
-  taxIncludedInPrice?: boolean;
-  vatAfterDiscount?: boolean;
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -294,9 +281,9 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
-/** In-store unpaid ticket — load into register / collect, even if kitchen already closed. */
+/** In-store open ticket awaiting payment — show preview + load/collect, not instant checkout. */
 function isOpenPosAwaitingOrder(o: PosOrder): boolean {
-  return !isOnlineShopOrder(o) && isAwaitingPaymentOrder(o);
+  return !isOnlineShopOrder(o) && isOpenWebPosOrder(o) && isAwaitingPaymentOrder(o);
 }
 
 /** Ongoing / kitchen / unpaid — not completed sales (POS cancel rules) */
@@ -509,11 +496,10 @@ export default function WebPosOrdersPanel({
   onRefreshOnline,
   onChannelFilterChange,
   onOpenDeliveryHub,
+  canSalesAdjust = false,
   canGandolaPurge = false,
   kitchenEnabled = true,
   autoPrintReceipt = true,
-  taxIncludedInPrice,
-  vatAfterDiscount = true,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -533,7 +519,6 @@ export default function WebPosOrdersPanel({
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [cancelFor, setCancelFor] = useState<PosOrder | null>(null);
   const [cancelHeldFor, setCancelHeldFor] = useState<HeldRow | null>(null);
-  const [cancelBusy, setCancelBusy] = useState(false);
   const [refundFor, setRefundFor] = useState<PosOrder | null>(null);
   const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
     order: PosOrder;
@@ -550,7 +535,6 @@ export default function WebPosOrdersPanel({
   const [paymentMethodDraft, setPaymentMethodDraft] = useState('cash');
   const [page, setPage] = useState(0);
   const [ordersView, setOrdersView] = useState<OrdersViewMode>(() => readOrdersView());
-  const highlightNavRef = useRef<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   /** Overflow menu for selected order (side detail breadcrumb) */
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
@@ -558,14 +542,12 @@ export default function WebPosOrdersPanel({
   const [rowMenuOrderId, setRowMenuOrderId] = useState<string | null>(null);
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const [detailMenuAnchor, setDetailMenuAnchor] = useState<HTMLElement | null>(null);
+  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
   const [purgeMode, setPurgeMode] = useState(false);
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
-  const [kdsByTicket, setKdsByTicket] = useState<
-    Record<string, { ready: number; sent: number; readyLineIds: string[] }>
-  >({});
 
   useEffect(() => {
     if (!open || !kitchenEnabled) return;
@@ -697,31 +679,23 @@ export default function WebPosOrdersPanel({
     setChannelFilter(initialChannelFilter);
     setStatusFilter('active');
     setPage(0);
-  }, [open, initialChannelFilter]);
+  }, [open, initialChannelFilter, refreshToken]);
 
   useEffect(() => {
     onChannelFilterChange?.(channelFilter);
   }, [channelFilter, onChannelFilterChange]);
 
   useEffect(() => {
-    if (!open || !highlightOrderId) {
-      highlightNavRef.current = null;
-      return;
+    if (!open || !highlightOrderId || orders.length === 0) return;
+    const match = orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId);
+    if (match) {
+      setStatusFilter(isOpenWebPosOrder(match) ? 'active' : 'completed');
+      if (isOnlineShopOrder(match)) setChannelFilter('online');
+      setSelectedOrder(match);
+      setSelectedHeld(null);
+      setOrdersView('list');
     }
-    if (highlightNavRef.current === highlightOrderId) return;
-    const match =
-      orders.find((o) => o.id === highlightOrderId || o.clientId === highlightOrderId) ||
-      onlineOrders.find((o) => o.id === highlightOrderId);
-    if (!match) return;
-    const asPos =
-      'refundAmount' in match ? (match as PosOrder) : onlineOrderAsPosOrder(match as OnlineOrder);
-    highlightNavRef.current = highlightOrderId;
-    setStatusFilter(isOpenWebPosOrder(asPos) ? 'active' : 'completed');
-    if (isOnlineShopOrder(asPos)) setChannelFilter('online');
-    setSelectedOrder(asPos);
-    setSelectedHeld(null);
-    setOrdersView('list');
-  }, [open, highlightOrderId, orders, onlineOrders]);
+  }, [open, highlightOrderId, orders]);
 
   useEffect(() => {
     setPage(0);
@@ -736,11 +710,6 @@ export default function WebPosOrdersPanel({
     }
     return map;
   }, [orders]);
-
-  const ordersForList = useMemo(
-    () => mergeOrdersWithOnlineForAllFilter(orders, onlineOrders, channelFilter) as PosOrder[],
-    [orders, onlineOrders, channelFilter]
-  );
 
   const listItems = useMemo(() => {
     const items: ListItem[] = [];
@@ -774,7 +743,7 @@ export default function WebPosOrdersPanel({
         heldBucket.push(h);
       }
       if (view !== 'held') {
-      for (const o of ordersForList) {
+      for (const o of orders) {
         const showOnActive =
           isOpenWebPosOrder(o) ||
           (view === 'active' && isScheduledPosKitchenTicket(o)) ||
@@ -806,7 +775,7 @@ export default function WebPosOrdersPanel({
       }
     }
     if (view === 'completed' || view === 'all') {
-      for (const o of ordersForList) {
+      for (const o of orders) {
         // Ongoing orders already listed under Active; skip them here (including "All").
         // Invoice sales stay in history even when unpaid / still "preparing".
         const listedInActive =
@@ -841,15 +810,10 @@ export default function WebPosOrdersPanel({
     for (const h of heldBucket) items.push({ kind: 'held', held: h });
     for (const o of activeBucket) items.push({ kind: 'order', order: o });
     for (const o of doneBucket) items.push({ kind: 'order', order: o });
-    items.sort((a, b) => {
-      if (view === 'active') {
-        if (a.kind === 'held' && b.kind !== 'held') return -1;
-        if (b.kind === 'held' && a.kind !== 'held') return 1;
-      }
-      return listItemTimeMs(b) - listItemTimeMs(a);
-    });
+    // Single chronology: newest activity at the top (held / open / completed interleaved).
+    items.sort((a, b) => listItemTimeMs(b) - listItemTimeMs(a));
     return items;
-  }, [held, ordersForList, statusFilter, channelFilter, search]);
+  }, [held, orders, statusFilter, channelFilter, search]);
 
   const displayItems = useMemo(() => {
     if (!purgeMode) return listItems;
@@ -936,33 +900,26 @@ export default function WebPosOrdersPanel({
   const heldTotal = (h: HeldRow) =>
     heldCartLines(h).reduce((s, l) => s + Number(l.lineTotal || 0), 0);
 
-  const doCancelOrder = async (reason: string, reasonId: string) => {
-    if (!cancelFor || cancelBusy) return;
-    const orderSnapshot = cancelFor;
-    setCancelBusy(true);
+  const doCancelOrder = async (reason: string) => {
+    if (!cancelFor) return;
     try {
-      await api.post(`/merchant/pos/orders/${orderSnapshot.id}/cancel`, {
-        reason: reasonId || reason,
-      });
+      await api.post(`/merchant/pos/orders/${cancelFor.id}/cancel`, { reason });
       toast.success(t('webPosOrderCancelled'));
       setCancelFor(null);
       setSelectedOrder(null);
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosCancelFailed'));
-    } finally {
-      setCancelBusy(false);
     }
   };
 
-  const doCancelHeld = async (reason: string, reasonId: string) => {
-    if (!cancelHeldFor || cancelBusy) return;
+  const doCancelHeld = async (reason: string) => {
+    if (!cancelHeldFor) return;
     const heldRow = cancelHeldFor;
-    setCancelBusy(true);
     try {
       if (heldRow.status === 'sent_to_kitchen' && onVoidHeldKitchen) {
         try {
-          await onVoidHeldKitchen(heldRow, reasonId || reason);
+          await onVoidHeldKitchen(heldRow, reason);
         } catch {
           /* kitchen print is best-effort */
         }
@@ -976,9 +933,7 @@ export default function WebPosOrdersPanel({
           tabNumber: meta.tabNumber,
         });
       } else {
-        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, {
-          reason: reasonId || reason,
-        });
+        await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, { reason });
       }
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
@@ -986,8 +941,6 @@ export default function WebPosOrdersPanel({
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosCancelFailed'));
-    } finally {
-      setCancelBusy(false);
     }
   };
 
@@ -1043,25 +996,18 @@ export default function WebPosOrdersPanel({
 
   const doUpdatePayment = async () => {
     if (!paymentEditFor) return;
-    const orderId = paymentEditFor.id;
-    const method = paymentMethodDraft;
-    const paymentPatch = {
-      paymentMethod: method,
-      paymentBreakdown: [{ method, amount: Number(paymentEditFor.total) || 0 }],
-    };
     try {
-      await api.patch(`/merchant/pos/orders/${orderId}/payment-method`, {
-        paymentMethod: method,
+      await api.patch(`/merchant/pos/orders/${paymentEditFor.id}/payment-method`, {
+        paymentMethod: paymentMethodDraft,
       });
       toast.success(t('webPosPaymentUpdated'));
       setPaymentEditFor(null);
-      setSelectedOrder((prev) =>
-        prev && prev.id === orderId ? { ...prev, ...paymentPatch } : prev
-      );
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, ...paymentPatch } : o))
-      );
       void load();
+      setSelectedOrder((prev) =>
+        prev && prev.id === paymentEditFor.id
+          ? { ...prev, paymentMethod: paymentMethodDraft }
+          : prev
+      );
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentUpdateFailed'));
     }
@@ -1414,7 +1360,6 @@ export default function WebPosOrdersPanel({
   ];
 
   const cancelModalOpen = !!(cancelFor || cancelHeldFor);
-  const detailOpen = !!(selectedHeld || selectedOrder);
 
   return (
     <div
@@ -1444,8 +1389,11 @@ export default function WebPosOrdersPanel({
             </button>
           ) : null}
           <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
+            {canSalesAdjust ? (
+              <SecretSearchTapButton onUnlock={() => setSalesAdjOpen(true)} />
+            ) : null}
             {canGandolaPurge ? (
-              <SecretSearchTapButton onUnlock={enterPurgeMode} />
+              <SecretGandolaTapButton onUnlock={enterPurgeMode} />
             ) : null}
             <input
               type="search"
@@ -1520,7 +1468,6 @@ export default function WebPosOrdersPanel({
                 aria-pressed={ordersView === 'grid'}
                 onClick={() => {
                   setOrdersView('grid');
-                  if (highlightOrderId) highlightNavRef.current = highlightOrderId;
                   setPage(0);
                   setSelectedHeld(null);
                   setSelectedOrder(null);
@@ -1563,7 +1510,7 @@ export default function WebPosOrdersPanel({
               className="rounded p-1.5 hover:bg-stone-100"
               onClick={() => {
                 void load();
-                if ((channelFilter === 'all' || isOnlineMode) && onRefreshOnline) void onRefreshOnline();
+                if (isOnlineMode && onRefreshOnline) void onRefreshOnline();
               }}
               disabled={loading}
               aria-label={t('webPosRefreshOrders')}
@@ -1594,11 +1541,7 @@ export default function WebPosOrdersPanel({
             deleting={purgeBusy}
           />
         ) : null}
-        <div
-          className={`relative flex min-h-0 flex-1 flex-col lg:flex-row ${
-            detailOpen ? 'overflow-hidden lg:overflow-visible' : ''
-          }`}
-        >
+        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
           {isOnlineMode ? (
             <WebPosOnlineOrdersView
               orders={onlineOrders}
@@ -1617,9 +1560,11 @@ export default function WebPosOrdersPanel({
           ) : (
           <div
             className={
-              detailOpen
-                ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
-                : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+              ordersView === 'grid'
+                ? 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
+                : selectedHeld || selectedOrder
+                  ? 'hidden min-h-0 min-w-0 flex-1 overflow-y-auto lg:block'
+                  : 'min-h-0 min-w-0 w-full flex-1 overflow-y-auto'
             }
           >
             {loading ? (
@@ -1670,9 +1615,6 @@ export default function WebPosOrdersPanel({
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                          <p className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-                            {t('webPosOnHold')}
-                          </p>
                           <p className="text-[11px] text-stone-500">
                             {sentCount > 0 ? `${readyCount}/${sentCount}` : `${sentCount}/${lines.length || 0}`}
                           </p>
@@ -1802,9 +1744,6 @@ export default function WebPosOrdersPanel({
                               </span>
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                                {t('webPosOnHold')}
-                              </span>
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
                               >
@@ -2046,13 +1985,9 @@ export default function WebPosOrdersPanel({
             className={
               purgeMode
                 ? 'hidden'
-                : detailOpen
-                  ? `${
-                      embedded
-                        ? 'absolute inset-0 z-[55]'
-                        : 'fixed inset-0 z-[55] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
-                    } flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0`
-                  : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+                : selectedHeld || selectedOrder
+                ? 'absolute inset-0 z-10 flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+                : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
             }
           >
             {selectedHeld ? (
@@ -2139,10 +2074,10 @@ export default function WebPosOrdersPanel({
               </>
             ) : selectedOrder ? (
               <>
-                <div className="shrink-0 border-b border-stone-200 px-4 pb-3 pt-4 lg:hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
                   <button
                     type="button"
-                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                    className="mb-3 inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 lg:hidden"
                     onClick={() => {
                       setSelectedOrder(null);
                       closeMenus();
@@ -2151,33 +2086,7 @@ export default function WebPosOrdersPanel({
                     <ChevronLeft size={16} />
                     {t('back')}
                   </button>
-                  {isOpenPosAwaitingOrder(selectedOrder) ? (
-                    <div className="space-y-2">
-                      {onLoadPosOrder ? (
-                        <button
-                          type="button"
-                          className="w-full rounded-xl bg-violet-800 py-3.5 text-sm font-bold text-white hover:bg-violet-900"
-                          onClick={() => {
-                            onLoadPosOrder(selectedOrder);
-                            onClose();
-                          }}
-                        >
-                          {t('webPosLoadOrder')}
-                        </button>
-                      ) : null}
-                      {canCollectPayment(selectedOrder) || canAdminCollectPayment(selectedOrder) ? (
-                        <button
-                          type="button"
-                          className="w-full rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white hover:bg-emerald-800"
-                          onClick={() => startCollectPayment(selectedOrder)}
-                        >
-                          {t('webPosTakePayment')} · {money(selectedOrder.total)}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+
                   {/* Side breadcrumb / overflow actions (print, refund, cancel) */}
                   {(() => {
                     const refs = orderPublicRefs(selectedOrder);
@@ -2279,13 +2188,9 @@ export default function WebPosOrdersPanel({
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-4 border-t border-stone-200 pt-3">
-                    <OrderDetailTotals
-                      order={selectedOrder}
-                      taxIncludedInPrice={taxIncludedInPrice}
-                      vatAfterDiscount={vatAfterDiscount}
-                      compact
-                    />
+                  <div className="mt-4 flex justify-between border-t border-stone-200 pt-3 text-base font-bold">
+                    <span>{t('webPosTotal')}</span>
+                    <span className="tabular-nums">{money(selectedOrder.total)}</span>
                   </div>
                   {selectedOrder.paymentMethod ? (
                     <p className="mt-2 text-sm text-stone-600">
@@ -2382,7 +2287,7 @@ export default function WebPosOrdersPanel({
                   </div>
                 ) : null}
                 {isOpenPosAwaitingOrder(selectedOrder) ? (
-                  <div className="hidden space-y-2 border-t border-stone-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:block">
+                  <div className="space-y-2 border-t border-stone-200 p-3">
                     {onLoadPosOrder ? (
                       <button
                         type="button"
@@ -2585,15 +2490,13 @@ export default function WebPosOrdersPanel({
         open={cancelModalOpen}
         scope="order"
         reasons={reasons}
-        busy={cancelBusy}
         onClose={() => {
-          if (cancelBusy) return;
           setCancelFor(null);
           setCancelHeldFor(null);
         }}
-        onConfirm={(reason, reasonId) => {
-          if (cancelHeldFor) void doCancelHeld(reason, reasonId);
-          else void doCancelOrder(reason, reasonId);
+        onConfirm={(reason) => {
+          if (cancelHeldFor) void doCancelHeld(reason);
+          else void doCancelOrder(reason);
         }}
       />
 
@@ -2636,6 +2539,11 @@ export default function WebPosOrdersPanel({
               setRefundPrintPrompt(null);
             });
         }}
+      />
+      <SalesAdjustmentModal
+        open={salesAdjOpen}
+        onClose={() => setSalesAdjOpen(false)}
+        onApplied={() => void load()}
       />
     </div>
   );
