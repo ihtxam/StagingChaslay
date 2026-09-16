@@ -7,6 +7,7 @@ import { Editor as CraftEditor, Frame } from '@craftjs/core';
 import { chaslayPageBuilderResolver } from './resolver';
 import { StorefrontProvider, type SitePageLink, type MerchantContact } from './StorefrontContext';
 import { extractNavbarEditorState } from './extract-navbar-state';
+import { useI18n, type Locale } from '@/lib/i18n';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 
 type Props = {
@@ -24,6 +25,7 @@ export default function ChaslayStorefrontNavbar({
   defaultLanguage = 'en',
   onPresence,
 }: Props) {
+  const { setLocale } = useI18n();
   const wrapRef = useRef(null);
   const onPresenceRef = useRef(onPresence);
   onPresenceRef.current = onPresence;
@@ -114,6 +116,10 @@ export default function ChaslayStorefrontNavbar({
         shopKey={shopKey}
         basePath={basePath}
         locale={locale}
+        onLocaleChange={(code) => {
+          const loc = String(code || '').toLowerCase().slice(0, 2);
+          if (loc === 'en' || loc === 'fr' || loc === 'de') setLocale(loc as Locale);
+        }}
         defaultLanguage={defaultLanguage}
         sitePages={sitePages}
         contact={contact}

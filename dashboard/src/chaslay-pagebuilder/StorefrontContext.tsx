@@ -24,6 +24,7 @@ export type StorefrontContextValue = {
   basePath: string;
   isStorefront: boolean;
   locale: string;
+  setLocale?: (code: string) => void;
   defaultLanguage: string;
   sitePages: SitePageLink[];
   contact: MerchantContact | null;
@@ -42,6 +43,7 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   basePath: '',
   isStorefront: false,
   locale: 'en',
+  setLocale: undefined,
   defaultLanguage: 'en',
   sitePages: [],
   contact: null,
@@ -57,6 +59,7 @@ export function StorefrontProvider({
   shopKey,
   basePath,
   locale = 'en',
+  onLocaleChange,
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
@@ -69,6 +72,7 @@ export function StorefrontProvider({
   shopKey: string;
   basePath: string;
   locale?: string;
+  onLocaleChange?: (code: string) => void;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
@@ -89,6 +93,12 @@ export function StorefrontProvider({
     },
     [basePath]
   );
+  const setLocale = useCallback(
+    (code: string) => {
+      onLocaleChange?.(code);
+    },
+    [onLocaleChange]
+  );
   return (
     <StorefrontContext.Provider
       value={{
@@ -96,6 +106,7 @@ export function StorefrontProvider({
         basePath,
         isStorefront: true,
         locale,
+        setLocale,
         defaultLanguage,
         sitePages,
         contact,

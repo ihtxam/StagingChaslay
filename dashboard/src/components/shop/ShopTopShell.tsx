@@ -20,7 +20,7 @@ export default function ShopTopShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div ref={ref} className="shop-top-shell sticky top-0 z-[60] overflow-visible bg-white">
+    <div ref={ref} className="shop-top-shell sticky top-0 z-50 overflow-visible bg-white">
       {children}
     </div>
   );

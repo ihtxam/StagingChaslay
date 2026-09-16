@@ -14,9 +14,8 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
-import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
-import ShopNavActions from '@/components/shop/ShopNavActions';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
+import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
 
 interface MenuItem {
   label: string;
@@ -62,7 +61,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref, surface, isStorefront, accountPath } = useStorefront();
+  const { shopHref } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -70,7 +69,6 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
   );
   const logoText = t('logoText') || mergedProps.logoText;
   const buttonText = t('buttonText') || mergedProps.buttonText;
-  const showNavCta = !!buttonText && surface !== 'shop';
 
   return (
     <>
@@ -86,39 +84,36 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
       >
         <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
-          <div className="shop-navbar-logo-slot">
-            <ShopNavbarLogoRow
-              logoImageUrl={mergedProps.logoImageUrl}
-              logoText={logoText}
-              logoWidth={mergedProps.logoWidth}
-              logoHeight={mergedProps.logoHeight}
-              textColor={mergedProps.textColor}
-              logoTextStyle={{ fontSize: '26px', fontStyle: 'italic' }}
-            />
+          <div>
+            {mergedProps.logoImageUrl ? (
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+            ) : (
+              <span style={{ fontSize: '26px', fontWeight: 700, color: mergedProps.textColor, fontStyle: 'italic' }}>{logoText}</span>
+            )}
           </div>
 
           <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
-            {isStorefront && accountPath ? (
-              <ShopNavActions accountPath={accountPath} className="navbar-desktop-actions" />
-            ) : null}
+            <StorefrontNavbarLang />
+            {buttonText && (
+              <a
+                href={shopHref(mergedProps.buttonLink)}
+                onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
+                className="hb-navbar-cta navbar-modern-button" style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '8px 14px', borderRadius: '50px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                {buttonText}
+              </a>
+            )}
           </div>
 
-          {showNavCta ? (
-            <a
-              href={shopHref(mergedProps.buttonLink)}
-              onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
-              className="hb-navbar-cta navbar-modern-button navbar-modern-desktop" style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '8px 14px', borderRadius: '50px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
-            >
-              {buttonText}
-            </a>
-          ) : null}
-
+          <div className="navbar-mobile-lang">
+            <StorefrontNavbarLang />
+          </div>
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#ffffff'}
             backgroundColor={mergedProps.backgroundColor || '#1a1a2e'}
-            showButton={showNavCta}
+            showButton={!!buttonText}
             buttonText={buttonText}
             buttonLink={mergedProps.buttonLink}
             buttonColor={mergedProps.buttonColor}

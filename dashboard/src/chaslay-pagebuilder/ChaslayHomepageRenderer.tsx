@@ -17,6 +17,7 @@ type ChaslayHomepageRendererProps = {
   basePath: string;
   className?: string;
   locale?: string;
+  onLocaleChange?: (code: string) => void;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
@@ -33,6 +34,7 @@ export default function ChaslayHomepageRenderer({
   basePath,
   className,
   locale = 'en',
+  onLocaleChange,
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
@@ -101,6 +103,7 @@ export default function ChaslayHomepageRenderer({
       shopKey={shopKey}
       basePath={basePath}
       locale={locale}
+      onLocaleChange={onLocaleChange}
       defaultLanguage={defaultLanguage}
       sitePages={navPages}
       contact={contact}
