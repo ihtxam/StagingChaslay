@@ -30,6 +30,7 @@ import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
+import { localizedShopCopy } from '@/lib/shop-site-settings';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
@@ -243,8 +244,9 @@ export default function CheckoutPage() {
   }, [locale]);
 
   useEffect(() => {
+    if (localizedShopCopy(shopSite?.metaTitle, locale)) return;
     if (merchant?.name) document.title = shopDocumentTitle(merchant.name);
-  }, [merchant?.name]);
+  }, [merchant?.name, shopSite?.metaTitle, locale]);
 
   /** Preview promotional offers for the cart */
   useEffect(() => {
@@ -1372,6 +1374,7 @@ export default function CheckoutPage() {
     <ShopThemeShell
       theme={cmsTheme}
       site={shopSite}
+      pageTitle={merchant?.name}
       className="min-h-dvh"
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >

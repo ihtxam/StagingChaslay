@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
-import { shopDocumentTitle } from '@/lib/brand';
 import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
@@ -115,22 +114,6 @@ export default function ShopHomePage() {
   useCmsTailwindCdn(Boolean(segments?.length));
 
   useEffect(() => {
-    if (seoTitle) document.title = shopDocumentTitle(seoTitle);
-  }, [seoTitle]);
-
-  useEffect(() => {
-    const desc = seoDescription.trim();
-    if (!desc) return;
-    let el = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
-    if (!el) {
-      el = document.createElement('meta');
-      el.name = 'description';
-      document.head.appendChild(el);
-    }
-    el.content = desc.slice(0, 500);
-  }, [seoDescription]);
-
-  useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.classList.add('shop-shell');
     return () => document.documentElement.classList.remove('shop-shell');
@@ -146,12 +129,14 @@ export default function ShopHomePage() {
 
   if (loading) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center"
-        style={{ background: 'var(--shop-bg, #fafaf9)', color: 'var(--shop-text-muted, #78716c)' }}
-      >
-        {t('loading')}
-      </div>
+      <ShopThemeShell site={shopSite} pageTitle={seoTitle} pageDescription={seoDescription}>
+        <div
+          className="flex min-h-screen items-center justify-center"
+          style={{ background: 'var(--shop-bg, #fafaf9)', color: 'var(--shop-text-muted, #78716c)' }}
+        >
+          {t('loading')}
+        </div>
+      </ShopThemeShell>
     );
   }
 
@@ -167,7 +152,14 @@ export default function ShopHomePage() {
   }
 
   return (
-    <ShopThemeShell theme={theme} site={shopSite} className="flex flex-col" style={{ background: 'var(--color-bg-0)' }}>
+    <ShopThemeShell
+      theme={theme}
+      site={shopSite}
+      pageTitle={seoTitle}
+      pageDescription={seoDescription}
+      className="flex flex-col"
+      style={{ background: 'var(--color-bg-0)' }}
+    >
       <ShopVacationPopup shopKey={shopKey} />
       <ShopOpenPageHeader
         basePath={base}

@@ -38,7 +38,7 @@ import { verifyTableAccess } from "@/lib/table-qr-token";
 import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
 import { TableSessionService } from "@/services/table-session.service";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
-import { normalizeShopSiteSettings } from "@/lib/shop-site-settings";
+import { normalizeShopSiteSettings, resolveShopDocumentSeo } from "@/lib/shop-site-settings";
 
 const router = Router();
 
@@ -59,6 +59,25 @@ function publicShopSite(req: Request, merchant: { shopSiteSettings?: unknown }) 
       ? resolvePublicAssetUrl(req, s.faviconUrl) || s.faviconUrl
       : null,
   };
+}
+
+function shopSeoFromMerchant(
+  req: Request,
+  merchant: {
+    shopSiteSettings?: unknown;
+    shopLanguage?: string | null;
+    panelLanguage?: string | null;
+  },
+  fallbackTitle?: string | null,
+  fallbackDescription?: string | null
+) {
+  const site = publicShopSite(req, merchant);
+  const lang = String(merchant.shopLanguage || merchant.panelLanguage || "en");
+  const resolved = resolveShopDocumentSeo(site, lang, {
+    title: fallbackTitle,
+    description: fallbackDescription,
+  });
+  return { site, seoTitle: resolved.title, seoDescription: resolved.description };
 }
 
 function serializeShopModifierGroup(g: any) {
@@ -739,6 +758,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
 
     const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
     if (chaslay?.editor_state) {
+      const seo = shopSeoFromMerchant(req, merchant, chaslay.name, "");
       return res.json({
         success: true,
         data: {
@@ -748,8 +768,8 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
           slug: "home",
           isHomepage: true,
           editorState: chaslay.editor_state,
-          seoTitle: chaslay.name,
-          seoDescription: merchant.description || "",
+          seoTitle: seo.seoTitle,
+          seoDescription: seo.seoDescription,
           publishedAt: chaslay.updated_at,
           merchant: {
             id: merchant.id,
@@ -759,6 +779,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
             customDomain: merchant.customDomain,
             shopLogoUrl: merchant.shopLogoUrl,
             shopBannerUrl: merchant.shopBannerUrl,
+            site: seo.site,
             storeHours: merchant.storeHours || {},
             address: merchant.address,
             city: merchant.city,
@@ -779,6 +800,12 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
     if (!page) {
       return res.status(404).json({ error: "Homepage not published" });
     }
+    const seo = shopSeoFromMerchant(
+      req,
+      merchant,
+      page.seoTitle || page.title,
+      page.seoDescription
+    );
     res.json({
       success: true,
       data: {
@@ -789,8 +816,8 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
         isHomepage: page.isHomepage,
         blocks: page.blocks || [],
         theme: page.theme || null,
-        seoTitle: page.seoTitle,
-        seoDescription: page.seoDescription,
+        seoTitle: seo.seoTitle,
+        seoDescription: seo.seoDescription,
         publishedAt: page.publishedAt,
         merchant: {
           id: merchant.id,
@@ -862,6 +889,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
     if (merchant.cmsHomepageEnabled) {
       const chaslayPage = await ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
       if (chaslayPage) {
+        const seo = shopSeoFromMerchant(req, merchant, chaslayPage.title, "");
         return res.json({
           success: true,
           data: {
@@ -871,8 +899,8 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
             slug: chaslayPage.slug,
             isHomepage: chaslayPage.is_homepage,
             editorState: chaslayPage.editor_state,
-            seoTitle: chaslayPage.title,
-            seoDescription: merchant.description || "",
+            seoTitle: seo.seoTitle,
+            seoDescription: seo.seoDescription,
             publishedAt: chaslayPage.updated_at,
             merchant: {
               id: merchant.id,
@@ -882,6 +910,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
               customDomain: merchant.customDomain,
               shopLogoUrl: merchant.shopLogoUrl,
               shopBannerUrl: merchant.shopBannerUrl,
+              site: seo.site,
               storeHours: merchant.storeHours || {},
               address: merchant.address,
               city: merchant.city,
@@ -904,6 +933,12 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
       if (!home || !merchant.cmsHomepageEnabled) {
         return res.status(404).json({ error: "Page not found" });
       }
+      const seo = shopSeoFromMerchant(
+        req,
+        merchant,
+        home.seoTitle || home.title,
+        home.seoDescription
+      );
       return res.json({
         success: true,
         data: {
@@ -914,14 +949,20 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
           isHomepage: home.isHomepage,
           blocks: home.blocks || [],
           theme: home.theme || null,
-          seoTitle: home.seoTitle,
-          seoDescription: home.seoDescription,
+          seoTitle: seo.seoTitle,
+          seoDescription: seo.seoDescription,
           publishedAt: home.publishedAt,
         },
       });
     }
     const page = await CmsService.getPublishedBySlug(merchant.id, pageSlug);
     if (!page) return res.status(404).json({ error: "Page not found" });
+    const seo = shopSeoFromMerchant(
+      req,
+      merchant,
+      page.seoTitle || page.title,
+      page.seoDescription
+    );
     res.json({
       success: true,
       data: {
@@ -932,8 +973,8 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
         isHomepage: page.isHomepage,
         blocks: page.blocks || [],
         theme: page.theme || null,
-        seoTitle: page.seoTitle,
-        seoDescription: page.seoDescription,
+        seoTitle: seo.seoTitle,
+        seoDescription: seo.seoDescription,
         publishedAt: page.publishedAt,
       },
     });

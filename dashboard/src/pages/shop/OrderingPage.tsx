@@ -26,6 +26,7 @@ import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { roundMoney2 } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
+import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopProductModifiersModal, {
   productHasModifiers,
   type ShopModifierGroup,
@@ -327,8 +328,9 @@ export default function OrderingPage() {
   }, [locale]);
 
   useEffect(() => {
+    if (localizedShopCopy(shopSite?.metaTitle, locale)) return;
     if (merchant?.name) document.title = shopDocumentTitle(merchant.name);
-  }, [merchant?.name]);
+  }, [merchant?.name, shopSite?.metaTitle, locale]);
 
   const channels: Record<ShopChannel, ChannelInfo> = merchant?.channels || {
     takeaway: { enabled: true, open: true, todayLabel: '', etaMinutes: 25 },
@@ -1420,7 +1422,7 @@ export default function OrderingPage() {
   );
 
   return (
-    <ShopThemeShell theme={cmsTheme} site={shopSite} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
+    <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle={merchant?.name} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>

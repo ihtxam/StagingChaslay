@@ -6,6 +6,8 @@ import OrderingPage from './OrderingPage';
 import ShopHomePage from './ShopHomePage';
 import ChaslayShopHomePage from './ChaslayShopHomePage';
 import { useI18n } from '@/lib/i18n';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-site-settings';
 
 /**
  * Shop root: CMS homepage when published + enabled, otherwise the ordering menu.
@@ -15,6 +17,7 @@ export default function ShopEntry() {
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const [mode, setMode] = useState<'loading' | 'cms' | 'chaslay' | 'menu'>('loading');
+  const [site, setSite] = useState<ShopSiteSettings | null>(null);
 
   useEffect(() => {
     if (!shopKey) {
@@ -27,6 +30,7 @@ export default function ShopEntry() {
         const res = await axios.get(`/api/shop/${shopKey}`);
         const data = res.data.data;
         if (cancelled) return;
+        setSite(normalizeShopSiteSettings(data?.site));
         if (data?.cmsHomepageEnabled) {
           try {
             const homeRes = await axios.get(`/api/shop/${shopKey}/pages/home`);
@@ -50,9 +54,11 @@ export default function ShopEntry() {
 
   if (mode === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-600">
-        {t('loading')}
-      </div>
+      <ShopThemeShell site={site}>
+        <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-600">
+          {t('loading')}
+        </div>
+      </ShopThemeShell>
     );
   }
   if (mode === 'chaslay') return <ChaslayShopHomePage />;
