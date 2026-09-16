@@ -17,12 +17,9 @@ type ChaslayHomepageRendererProps = {
   basePath: string;
   className?: string;
   locale?: string;
-  onLocaleChange?: (code: string) => void;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
-  merchantDisplayName?: string | null;
-  storeHours?: import('@/lib/shop-hours').StoreHours | null;
 };
 
 /**
@@ -34,12 +31,9 @@ export default function ChaslayHomepageRenderer({
   basePath,
   className,
   locale = 'en',
-  onLocaleChange,
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
-  merchantDisplayName = null,
-  storeHours = null,
 }: ChaslayHomepageRendererProps) {
   const [navPages, setNavPages] = useState<SitePageLink[]>(sitePages);
 
@@ -103,13 +97,9 @@ export default function ChaslayHomepageRenderer({
       shopKey={shopKey}
       basePath={basePath}
       locale={locale}
-      onLocaleChange={onLocaleChange}
       defaultLanguage={defaultLanguage}
       sitePages={navPages}
       contact={contact}
-      merchantDisplayName={merchantDisplayName}
-      accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
-      storeHours={storeHours}
       surface="home"
     >
       <BuilderLanguageProvider locale={locale} defaultLanguage={defaultLanguage}>

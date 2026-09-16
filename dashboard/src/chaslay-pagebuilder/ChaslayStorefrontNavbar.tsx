@@ -7,7 +7,6 @@ import { Editor as CraftEditor, Frame } from '@craftjs/core';
 import { chaslayPageBuilderResolver } from './resolver';
 import { StorefrontProvider, type SitePageLink, type MerchantContact } from './StorefrontContext';
 import { extractNavbarEditorState } from './extract-navbar-state';
-import { useI18n, type Locale } from '@/lib/i18n';
 import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 
 type Props = {
@@ -25,15 +24,12 @@ export default function ChaslayStorefrontNavbar({
   defaultLanguage = 'en',
   onPresence,
 }: Props) {
-  const { setLocale } = useI18n();
   const wrapRef = useRef(null);
   const onPresenceRef = useRef(onPresence);
   onPresenceRef.current = onPresence;
   const [navbarState, setNavbarState] = useState(null);
   const [sitePages, setSitePages] = useState([]);
   const [contact, setContact] = useState(null);
-  const [merchantDisplayName, setMerchantDisplayName] = useState(null);
-  const [storeHours, setStoreHours] = useState(null);
 
   useEffect(() => {
     if (!shopKey) {
@@ -57,8 +53,6 @@ export default function ChaslayStorefrontNavbar({
         onPresenceRef.current?.(Boolean(extracted));
         const m = page?.merchant;
         if (m) {
-          setMerchantDisplayName(m.name || null);
-          setStoreHours(m.storeHours || null);
           setContact({
             phone: m.phone,
             email: m.email,
@@ -92,8 +86,10 @@ export default function ChaslayStorefrontNavbar({
 
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || !navbarState) return;
-    if (el.closest('.shop-top-shell')) return;
+    if (!el || !navbarState) {
+      document.documentElement.style.removeProperty('--shop-header-height');
+      return;
+    }
     const apply = () => {
       document.documentElement.style.setProperty('--shop-header-height', `${el.offsetHeight}px`);
     };
@@ -102,9 +98,7 @@ export default function ChaslayStorefrontNavbar({
     ro?.observe(el);
     return () => {
       ro?.disconnect();
-      if (!el.closest('.shop-top-shell')) {
-        document.documentElement.style.removeProperty('--shop-header-height');
-      }
+      document.documentElement.style.removeProperty('--shop-header-height');
     };
   }, [navbarState]);
 
@@ -116,16 +110,9 @@ export default function ChaslayStorefrontNavbar({
         shopKey={shopKey}
         basePath={basePath}
         locale={locale}
-        onLocaleChange={(code) => {
-          const loc = String(code || '').toLowerCase().slice(0, 2);
-          if (loc === 'en' || loc === 'fr' || loc === 'de') setLocale(loc as Locale);
-        }}
         defaultLanguage={defaultLanguage}
         sitePages={sitePages}
         contact={contact}
-        merchantDisplayName={merchantDisplayName}
-        accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
-        storeHours={storeHours}
         surface="shop"
       >
         <div className="chaslay-pagebuilder-root chaslay-storefront-page chaslay-navbar-only">

@@ -3600,7 +3600,14 @@ export default function Settings() {
                   </button>
                 }
               />
-              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
+              <Section
+                id="receipt-print"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('settingsReceipt')}
+                description={t('settingsReceiptHint')}
+                highlight={isSectionHighlight('receipt-print')}
+              >
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"
@@ -4016,6 +4023,23 @@ export default function Settings() {
                       {label}
                     </label>
                   ))}
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnSend: e.target.checked,
+                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                          },
+                        })
+                      }
+                    />
+                    {t('autoPrintOrderLabelOnSend')}
+                  </label>
                 </div>
                 <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
                   <label className="flex items-start gap-2 text-sm">
@@ -4149,6 +4173,89 @@ export default function Settings() {
                     </span>
                   </span>
                 </label>
+              </Section>
+
+              <Section
+                id="order-labels"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('orderLabelsTitle')}
+                description={t('orderLabelsHint')}
+                highlight={isSectionHighlight('order-labels')}
+              >
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.orderLabelEnabled === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          orderLabelEnabled: e.target.checked,
+                          ...(e.target.checked ? {} : { autoPrintOrderLabelOnSend: false }),
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('orderLabelEnabled')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('orderLabelEnabledHint')}
+                    </span>
+                  </span>
+                </label>
+                <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                  <p className="text-xs text-[var(--text-muted)]">{t('orderLabelAutoPrintHint')}</p>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false}
+                      disabled={settings.posPrintSettings?.orderLabelEnabled !== true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnHold: e.target.checked,
+                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintOrderLabelOnHold')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintOrderLabelOnHoldHint')}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnSend: e.target.checked,
+                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintOrderLabelOnSend')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintOrderLabelOnSendHint')}
+                      </span>
+                    </span>
+                  </label>
+                </div>
               </Section>
 
               <Section

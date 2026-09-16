@@ -133,7 +133,6 @@ export class AdyenService {
           returnUrl: returnUrl || `${process.env.APP_URL}/payment/return`,
           channel: "Web",
           countryCode: "CH",
-          ...(creds.clientId ? { clientKey: creds.clientId } : {}),
         },
         {
           headers: {

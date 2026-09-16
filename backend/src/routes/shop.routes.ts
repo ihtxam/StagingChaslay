@@ -9,7 +9,7 @@ import {
   type StoreHours,
 } from "@/lib/geo";
 import { findMatchingDeliveryRule, normalizeDeliveryMode, computeEffectiveDeliveryFee } from "@/lib/delivery-match";
-import { roundMoney2, roundTo005, roundingAdjustment } from "@/lib/money";
+import { roundMoney2, roundTo005, roundingAdjustment, extractVatFromGross } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { ShopCustomerService } from "@/services/shop-customer.service";
 import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
@@ -551,7 +551,7 @@ async function resolveShopLocationId(
 
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {
   if (channel === "delivery") return merchant.deliveryEnabled;
-  if (channel === "dine_in") return merchant.dineInEnabled;
+  if (channel === "dine_in") return merchant.dineInEnabled !== false;
   return merchant.pickupEnabled;
 }
 
@@ -2187,7 +2187,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       }
     }
 
-    const taxRate = MerchantSettingsService.channelTaxRate(merchant, channel);
+    let taxRate = MerchantSettingsService.channelTaxRate(merchant, channel);
+    if ((!taxRate || taxRate <= 0) && channel === "delivery") {
+      taxRate =
+        MerchantSettingsService.channelTaxRate(merchant, "takeaway") ||
+        Number(merchant.vatRate || 0) ||
+        0;
+    }
+    const vatIncluded = merchant.taxIncludedInPrice === true;
     const db = getDb();
     const authCustomer = optionalCustomer(req);
     const loyaltyProgram = ShopLoyaltyService.programFromMerchant(merchant);
@@ -2306,7 +2313,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge
       );
       const totalPrice = roundMoney2(unitPrice * qty);
-      const lineTax = product.isTaxable ? roundMoney2((totalPrice * taxRate) / 100) : 0;
+      const lineTax = product.isTaxable
+        ? vatIncluded
+          ? extractVatFromGross(totalPrice, taxRate)
+          : roundMoney2((totalPrice * taxRate) / 100)
+        : 0;
       subtotal += totalPrice;
       taxAmount += lineTax;
 

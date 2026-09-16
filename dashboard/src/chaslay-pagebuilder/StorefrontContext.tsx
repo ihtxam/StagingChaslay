@@ -24,13 +24,9 @@ export type StorefrontContextValue = {
   basePath: string;
   isStorefront: boolean;
   locale: string;
-  setLocale?: (code: string) => void;
   defaultLanguage: string;
   sitePages: SitePageLink[];
   contact: MerchantContact | null;
-  merchantDisplayName: string | null;
-  accountPath: string;
-  storeHours: import('@/lib/shop-hours').StoreHours | null;
   surface: StorefrontSurface;
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
@@ -43,13 +39,9 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   basePath: '',
   isStorefront: false,
   locale: 'en',
-  setLocale: undefined,
   defaultLanguage: 'en',
   sitePages: [],
   contact: null,
-  merchantDisplayName: null,
-  accountPath: '',
-  storeHours: null,
   surface: 'home',
   shopHref: defaultShopHref,
   pageHref: () => '#',
@@ -59,26 +51,18 @@ export function StorefrontProvider({
   shopKey,
   basePath,
   locale = 'en',
-  onLocaleChange,
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
-  merchantDisplayName = null,
-  accountPath = '',
-  storeHours = null,
   surface = 'home',
   children,
 }: {
   shopKey: string;
   basePath: string;
   locale?: string;
-  onLocaleChange?: (code: string) => void;
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
-  merchantDisplayName?: string | null;
-  accountPath?: string;
-  storeHours?: import('@/lib/shop-hours').StoreHours | null;
   surface?: StorefrontSurface;
   children: React.ReactNode;
 }) {
@@ -93,12 +77,6 @@ export function StorefrontProvider({
     },
     [basePath]
   );
-  const setLocale = useCallback(
-    (code: string) => {
-      onLocaleChange?.(code);
-    },
-    [onLocaleChange]
-  );
   return (
     <StorefrontContext.Provider
       value={{
@@ -106,13 +84,9 @@ export function StorefrontProvider({
         basePath,
         isStorefront: true,
         locale,
-        setLocale,
         defaultLanguage,
         sitePages,
         contact,
-        merchantDisplayName,
-        accountPath: accountPath || `${basePath}/account`.replace(/\/+/g, '/'),
-        storeHours,
         surface,
         shopHref,
         pageHref,

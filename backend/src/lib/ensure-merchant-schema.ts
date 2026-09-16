@@ -963,11 +963,9 @@ const TABLE_PATCHES: string[] = [
     adyen_psp_reference varchar(255),
     adyen_result_code varchar(50),
     paid_at timestamptz,
-    tracking_url varchar(500),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
-  `ALTER TABLE platform_shop_orders ADD COLUMN IF NOT EXISTS tracking_url varchar(500)`,
   `CREATE INDEX IF NOT EXISTS platform_shop_orders_merchant_idx ON platform_shop_orders(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS platform_shop_orders_status_idx ON platform_shop_orders(status)`,
   `CREATE INDEX IF NOT EXISTS platform_shop_orders_created_idx ON platform_shop_orders(created_at)`,

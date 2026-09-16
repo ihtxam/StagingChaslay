@@ -1977,7 +1977,7 @@ html.shop-shell #root {
 .shop-sticky-category-bar {
   position: -webkit-sticky;
   position: sticky;
-  top: var(--shop-header-height, 3.5rem);
+  top: 0;
   left: 0;
   right: 0;
   width: 100%;
@@ -2051,26 +2051,11 @@ html.shop-shell #root {
   top: calc(var(--shop-header-height, 3.5rem) + var(--shop-category-bar-height, 3rem));
 }
 
-.shop-top-shell {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  width: 100%;
-  overflow: visible;
-}
-
-.shop-top-shell .shop-cms-header {
-  position: static;
-  top: auto;
-  z-index: auto;
-}
-
 .shop-cms-header {
   position: sticky;
   top: 0;
   z-index: 40;
   width: 100%;
-  overflow: visible;
 }
 
 .chaslay-navbar-only,

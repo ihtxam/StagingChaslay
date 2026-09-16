@@ -33,14 +33,12 @@ export type WebPosEntitlement = {
 type Props = {
   entitlement: WebPosEntitlement;
   businessName?: string | null;
-  onActivated?: (entitlement?: WebPosEntitlement) => void;
 };
 
-export default function WebPosLicenseGate({ entitlement, businessName, onActivated }: Props) {
+export default function WebPosLicenseGate({ entitlement, businessName }: Props) {
   const { t, formatDate } = useI18n();
   const navigate = useNavigate();
-  const [activationCode, setActivationCode] = useState('');
-  const [activating, setActivating] = useState(false);
+  const [contactBusy, setContactBusy] = useState(false);
 
   const title =
     entitlement.reason === 'suspended'
@@ -65,20 +63,30 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
 
   const reseller = entitlement.reseller;
 
-  const activateWithCode = async () => {
-    const code = activationCode.trim();
-    if (!code || activating) return;
-    setActivating(true);
+  const contactReseller = async () => {
+    if (contactBusy) return;
+    setContactBusy(true);
     try {
-      const res = await api.post('/merchant/webpos-activate-license', { activationCode: code });
-      const next = res.data?.entitlement as WebPosEntitlement | undefined;
-      toast.success(t('webPosLicenseActivateSuccess'));
-      onActivated?.(next);
+      const reasonLabel =
+        entitlement.reason === 'suspended'
+          ? 'suspended'
+          : entitlement.reason === 'subscription_expired'
+            ? 'subscription_expired'
+            : 'trial_expired';
+      await api.post('/merchant/support/tickets', {
+        category: 'miscellaneous',
+        subcategory: 'license_renewal',
+        subject: t('webPosLicenseMailSubject'),
+        body: t('webPosLicenseContactBody')
+          .replace('{reason}', reasonLabel)
+          .replace('{business}', businessName || APP_NAME),
+      });
+      toast.success(t('webPosLicenseContactSent'));
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
-      toast.error(err.response?.data?.error || err.message || t('webPosLicenseActivateFailed'));
+      toast.error(err.response?.data?.error || err.message || t('webPosLicenseContactFailed'));
     } finally {
-      setActivating(false);
+      setContactBusy(false);
     }
   };
 
@@ -96,41 +104,6 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
           </p>
         ) : null}
 
-        {entitlement.reason !== 'suspended' ? (
-          <form
-            className="mt-6 space-y-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void activateWithCode();
-            }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-              {t('webPosLicenseActivateTitle')}
-            </p>
-            <p className="text-sm text-stone-600">{t('webPosLicenseActivateHint')}</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                inputMode="text"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                value={activationCode}
-                onChange={(e) => setActivationCode(e.target.value.toUpperCase())}
-                placeholder={t('webPosLicenseActivatePlaceholder')}
-                className="flex-1 rounded-xl border border-stone-300 bg-white px-3 py-3 font-mono text-sm tracking-wider text-stone-900 outline-none focus:border-stone-900"
-              />
-              <button
-                type="submit"
-                disabled={activating || !activationCode.trim()}
-                className="rounded-xl bg-teal-800 px-4 py-3 text-sm font-bold text-white hover:bg-teal-900 disabled:opacity-60"
-              >
-                {activating ? t('webPosLicenseActivating') : t('webPosLicenseActivateButton')}
-              </button>
-            </div>
-          </form>
-        ) : null}
-
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
@@ -139,15 +112,15 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
           >
             {t('webPosLicenseBuy')}
           </button>
-          {reseller?.email ? (
-            <a
-              href={`mailto:${reseller.email}?subject=${encodeURIComponent(
-                t('webPosLicenseMailSubject')
-              )}`}
-              className="flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-bold text-stone-800 hover:bg-stone-50"
+          {reseller ? (
+            <button
+              type="button"
+              disabled={contactBusy}
+              className="flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-bold text-stone-800 hover:bg-stone-50 disabled:opacity-60"
+              onClick={() => void contactReseller()}
             >
-              {t('webPosLicenseContactReseller')}
-            </a>
+              {contactBusy ? t('webPosLicenseContacting') : t('webPosLicenseContactReseller')}
+            </button>
           ) : (
             <button
               type="button"
@@ -163,11 +136,13 @@ export default function WebPosLicenseGate({ entitlement, businessName, onActivat
           <div className="mt-6 rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
             <p className="font-semibold">{t('webPosLicenseYourReseller')}</p>
             <p className="mt-1">{reseller.name}</p>
-            <p className="mt-0.5">
-              <a className="text-teal-800 underline" href={`mailto:${reseller.email}`}>
-                {reseller.email}
-              </a>
-            </p>
+            {reseller.email ? (
+              <p className="mt-0.5">
+                <a className="text-teal-800 underline" href={`mailto:${reseller.email}`}>
+                  {reseller.email}
+                </a>
+              </p>
+            ) : null}
             {reseller.phone ? (
               <p className="mt-0.5">
                 <a className="text-teal-800 underline" href={`tel:${reseller.phone}`}>

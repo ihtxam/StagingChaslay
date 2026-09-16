@@ -20,7 +20,6 @@ import {
 } from '@/lib/shop-cart';
 import {
   buildScheduleDays,
-  buildScheduleDayForDate,
   isChannelOpenAt,
   localDateTimeToIso,
   type StoreHours,
@@ -36,28 +35,15 @@ import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
-import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
-import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
-import { Check, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
 
 type WhenMode = 'asap' | 'later';
-type FieldErrors = {
-  customerName?: string;
-  customerFirstName?: string;
-  customerLastName?: string;
-  customerEmail?: string;
-  customerPhone?: string;
-};
-
-function splitCustomerName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return { first: parts[0] || '', last: parts.slice(1).join(' ') || '' };
-}
+type FieldErrors = { customerName?: string; customerEmail?: string; customerPhone?: string };
 
 type SavedAddress = {
   id: string;
@@ -79,7 +65,7 @@ export default function CheckoutPage() {
   const locSlug = resolveShopLocationSlug({ locationSlug });
   const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
   const navigate = useNavigate();
-  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
+  const cmsTheme = useShopCmsTheme(shopKey);
 
   const [draft, setDraft] = useState<ShopCheckoutDraft>(emptyDraft());
   const [merchant, setMerchant] = useState<any>(null);
@@ -99,18 +85,6 @@ export default function CheckoutPage() {
   const [loginPassword, setLoginPassword] = useState('');
   const [whenMode, setWhenMode] = useState<WhenMode>('asap');
   const [scheduleDayOffset, setScheduleDayOffset] = useState(0);
-  const [showAllScheduleSlots, setShowAllScheduleSlots] = useState(false);
-  const [chooseScheduleDateOpen, setChooseScheduleDateOpen] = useState(false);
-  const [scheduleCalendarDate, setScheduleCalendarDate] = useState('');
-  const [customScheduleDay, setCustomScheduleDay] = useState<
-    ReturnType<typeof buildScheduleDayForDate>
-  >(null);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentOrderId, setPaymentOrderId] = useState('');
-  const [paymentSession, setPaymentSession] = useState<any>(null);
-  const [paymentTotal, setPaymentTotal] = useState(0);
-  const [paymentDemoMode, setPaymentDemoMode] = useState(false);
-  const [paymentDemoError, setPaymentDemoError] = useState('');
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [redeemRate, setRedeemRate] = useState(100);
   /** Explicit "Pay with points" option on the payment step */
@@ -129,9 +103,6 @@ export default function CheckoutPage() {
   const [voucherInputOpen, setVoucherInputOpen] = useState(false);
   const [voucherInput, setVoucherInput] = useState('');
   const [applyingVoucher, setApplyingVoucher] = useState(false);
-  const [cartPopupOpen, setCartPopupOpen] = useState(false);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
 
   useEffect(() => {
     if (!shopKey) return;
@@ -141,9 +112,6 @@ export default function CheckoutPage() {
       return;
     }
     setDraft(stored);
-    const storedNames = splitCustomerName(stored.customerName || '');
-    setFirstName(storedNames.first);
-    setLastName(storedNames.last);
     if (stored.scheduledFor) setWhenMode('later');
     if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
 
@@ -188,14 +156,10 @@ export default function CheckoutPage() {
             setSelectedAddressId(preferred?.id || null);
             setLoyaltyBalance(Number(loyaltyRes.data.balance) || 0);
             setRedeemRate(Number(loyaltyRes.data.program?.redeemPointsPerChf) || 100);
-            const loggedInName = me.data.customer.name || '';
-            const loggedInNames = splitCustomerName(loggedInName);
-            setFirstName(loggedInNames.first);
-            setLastName(loggedInNames.last);
             setDraft((d) => ({
               ...d,
               authMode: 'login',
-              customerName: loggedInName || d.customerName,
+              customerName: me.data.customer.name || d.customerName,
               customerEmail: me.data.customer.email || d.customerEmail,
               customerPhone: me.data.customer.phone || d.customerPhone,
               address: preferred?.address || me.data.customer.defaultAddress || d.address,
@@ -398,7 +362,7 @@ export default function CheckoutPage() {
       channel: draft.channel as ShopChannel,
       leadMinutes,
       intervalMinutes: 15,
-      horizonDays: 14,
+      horizonDays: 3,
       locale: shopLocale,
     });
   }, [merchant, draft.channel, leadMinutes, shopLocale]);
@@ -411,53 +375,12 @@ export default function CheckoutPage() {
   };
 
   const activeScheduleDay = useMemo(() => {
-    if (customScheduleDay) return customScheduleDay;
     if (!scheduleDays.length) return null;
     return (
       scheduleDays.find((d) => d.offset === scheduleDayOffset) ||
       scheduleDays[0]
     );
-  }, [customScheduleDay, scheduleDays, scheduleDayOffset]);
-
-  const sortedScheduleSlots = useMemo(() => {
-    const slots = [...(activeScheduleDay?.slots || [])];
-    slots.sort((a, b) => a.value.localeCompare(b.value));
-    return slots;
-  }, [activeScheduleDay]);
-
-  const visibleScheduleSlots = showAllScheduleSlots
-    ? sortedScheduleSlots
-    : sortedScheduleSlots.slice(0, 8);
-  const hiddenScheduleSlotCount = Math.max(0, sortedScheduleSlots.length - visibleScheduleSlots.length);
-
-  const scheduleCalendarMin = new Date().toISOString().slice(0, 10);
-  const scheduleCalendarMaxDate = new Date();
-  scheduleCalendarMaxDate.setDate(scheduleCalendarMaxDate.getDate() + 60);
-  const scheduleCalendarMax = scheduleCalendarMaxDate.toISOString().slice(0, 10);
-
-  const onScheduleCalendarPick = (ymd: string) => {
-    setScheduleCalendarDate(ymd);
-    setShowAllScheduleSlots(false);
-    if (!ymd || !merchant) {
-      setCustomScheduleDay(null);
-      return;
-    }
-    const [y, m, d] = ymd.split('-').map(Number);
-    const day = buildScheduleDayForDate({
-      storeHours: merchant.storeHours as StoreHours,
-      channel: draft.channel as ShopChannel,
-      year: y,
-      month: m,
-      day: d,
-      leadMinutes,
-      intervalMinutes: 15,
-      locale: shopLocale,
-    });
-    setCustomScheduleDay(day);
-    if (day?.slots[0]) {
-      patch({ scheduledFor: day.slots[0].value });
-    }
-  };
+  }, [scheduleDays, scheduleDayOffset]);
 
   // When closed (or ASAP unavailable), force "later" and auto-pick first slot - only if scheduled orders are allowed.
   useEffect(() => {
@@ -551,39 +474,6 @@ export default function CheckoutPage() {
   const rawTotal = preCardTotal + cardFee;
   const rounding = roundingAdjustment(rawTotal);
   const total = roundTo005(rawTotal);
-  const itemCount = draft.items.reduce((sum, item) => sum + item.quantity, 0);
-  const checkoutReady = useMemo(() => {
-    if (merchant?.acceptingOrders === false || merchant?.vacation?.active) return false;
-    if (!firstName.trim() || !lastName.trim() || !draft.customerPhone.trim()) return false;
-    if (wantCreateAccount && !draft.customerEmail.trim()) return false;
-    if (whenMode === 'asap' && !channelOpen) return false;
-    if (whenMode === 'later') {
-      if (merchant?.scheduledOrdersEnabled === false) return false;
-      if (!draft.scheduledFor || scheduleDays.length === 0) return false;
-    }
-    if (draft.channel === 'delivery') {
-      if (!draft.address.trim() || !draft.zipCode.trim() || !draft.city.trim()) return false;
-      if (!effectiveDeliveryInfo?.deliverable || !effectiveDeliveryInfo?.meetsMinOrder) return false;
-    }
-    return draft.items.length > 0;
-  }, [
-    merchant,
-    firstName,
-    lastName,
-    draft.items.length,
-    draft.customerPhone,
-    draft.customerEmail,
-    draft.channel,
-    draft.address,
-    draft.zipCode,
-    draft.city,
-    draft.scheduledFor,
-    wantCreateAccount,
-    whenMode,
-    channelOpen,
-    effectiveDeliveryInfo,
-    scheduleDays.length,
-  ]);
   const pointsCoverFullOrder = payWithPoints && pointsDiscount > 0 && total <= 0.001;
 
   const patch = (p: Partial<ShopCheckoutDraft>) => setDraft((d) => ({ ...d, ...p }));
@@ -597,7 +487,7 @@ export default function CheckoutPage() {
       const token = loadCustomerToken(shopKey);
       const res = await axios.post(
         `/api/shop/${shopKey}/vouchers/validate`,
-        { code, subtotal, orderType: draft.channel },
+        { code, subtotal },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       patch({
@@ -628,7 +518,7 @@ export default function CheckoutPage() {
       try {
         const res = await axios.post(
           `/api/shop/${shopKey}/vouchers/validate`,
-          { code: draft.voucherCode, subtotal, orderType: draft.channel },
+          { code: draft.voucherCode, subtotal },
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
         if (cancelled) return;
@@ -644,7 +534,7 @@ export default function CheckoutPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subtotal, draft.voucherCode, draft.channel]);
+  }, [subtotal, draft.voucherCode]);
 
   const setLineQty = (lineId: string, quantity: number) => {
     setDraft((d) => {
@@ -848,11 +738,12 @@ export default function CheckoutPage() {
       return false;
     }
     try {
+      const names = draft.customerName.trim().split(/\s+/);
       const res = await axios.post(`/api/shop/${shopKey}/auth/register`, {
         email: draft.customerEmail,
         password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim() || undefined,
+        firstName: names[0],
+        lastName: names.slice(1).join(' ') || undefined,
         phone: draft.customerPhone,
       });
       saveCustomerToken(shopKey, res.data.token);
@@ -870,9 +761,7 @@ export default function CheckoutPage() {
 
   const goPayment = async (): Promise<boolean> => {
     setError(null);
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-    patch({ customerName: fullName });
-    if (!fullName || !draft.customerPhone.trim()) {
+    if (!draft.customerName.trim() || !draft.customerPhone.trim()) {
       return false;
     }
     if (!customer && wantCreateAccount) {
@@ -910,17 +799,13 @@ export default function CheckoutPage() {
 
   const submitCheckout = async () => {
     const next: FieldErrors = {};
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-    if (!firstName.trim()) next.customerFirstName = t('shopFirstNameRequired');
-    if (!lastName.trim()) next.customerLastName = t('shopLastNameRequired');
-    if (!fullName) next.customerName = t('shopFullNameFieldRequired');
+    if (!draft.customerName.trim()) next.customerName = t('shopFullNameFieldRequired');
     if (!draft.customerPhone.trim()) next.customerPhone = t('shopPhoneFieldRequired');
     if (wantCreateAccount && !draft.customerEmail.trim()) {
       next.customerEmail = t('shopEmailFieldRequired');
     }
     setFieldErrors(next);
     if (Object.keys(next).length) return;
-    patch({ customerName: fullName });
     const ok = await goPayment();
     if (!ok) return;
     await placeOrder();
@@ -990,26 +875,18 @@ export default function CheckoutPage() {
       );
 
       const order = res.data.order;
+      clearCart(shopKey);
 
       const payCard = !pointsCoverFullOrder && draft.paymentMethod === 'card';
       if (payCard) {
         const session = res.data.paymentSession;
-        setPaymentOrderId(order.id);
-        setPaymentTotal(Number(order.total) || total);
         if (session?.sessionData && session?.clientKey) {
-          setPaymentSession(session);
-          setPaymentDemoMode(false);
-          setPaymentDemoError('');
-        } else {
-          setPaymentSession(null);
-          setPaymentDemoMode(true);
-          setPaymentDemoError(t('shopCardNotConfigured'));
+          sessionStorage.setItem(`manupos_pay_${order.id}`, JSON.stringify(session));
         }
-        setPaymentModalOpen(true);
+        navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}?pay=1`);
         return;
       }
 
-      clearCart(shopKey);
       navigate(`${shopBasePath(shopKey, locSlug)}/order/${order.id}`);
     } catch (err: any) {
       setError(err.response?.data?.error || t('shopCheckoutFailed'));
@@ -1078,7 +955,6 @@ export default function CheckoutPage() {
   return (
     <ShopThemeShell
       theme={cmsTheme}
-      site={shopSite}
       className="min-h-dvh"
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >
@@ -1095,16 +971,23 @@ export default function CheckoutPage() {
         </div>
       </header>
 
-      <div className="shop-page-content py-8 pb-32">
-        <div className="mb-6">
+      <div className="shop-page-content py-8">
+        <div className="mb-6 flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight">{t('shopCheckoutTitle')}</h1>
+          <Link
+            to={menuPath}
+            className="shrink-0 rounded-full border border-rose-200 px-4 py-1.5 text-sm font-medium text-rose-400 hover:bg-rose-50"
+          >
+            {t('shopAddMoreItems')}
+          </Link>
         </div>
 
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{error}</div>
         )}
 
-        <div className="max-w-2xl space-y-8">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] items-start">
+          <div className="min-w-0 space-y-8">
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">
                 {draft.channel === 'delivery'
@@ -1218,65 +1101,38 @@ export default function CheckoutPage() {
 
                     {whenMode === 'later' && (
                       <div className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                        {scheduleDays.length === 0 && !customScheduleDay ? (
+                        {scheduleDays.length === 0 ? (
                           <p className="text-sm text-red-600">{t('shopNoOpenHours')}</p>
                         ) : (
                           <>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                className={`rounded-full border px-3 py-1.5 text-sm ${
-                                  chooseScheduleDateOpen
-                                    ? 'border-stone-900 bg-stone-900 text-white'
-                                    : 'border-stone-300 bg-white'
-                                }`}
-                                onClick={() => setChooseScheduleDateOpen((v) => !v)}
-                              >
-                                {t('shopChooseDate')}
-                              </button>
-                              {chooseScheduleDateOpen ? (
-                                <input
-                                  type="date"
-                                  className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm"
-                                  min={scheduleCalendarMin}
-                                  max={scheduleCalendarMax}
-                                  value={scheduleCalendarDate}
-                                  onChange={(e) => onScheduleCalendarPick(e.target.value)}
-                                />
-                              ) : null}
+                            <div className="grid grid-cols-3 gap-2">
+                              {scheduleDays.map((day) => (
+                                <button
+                                  key={day.offset}
+                                  type="button"
+                                  className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
+                                    activeScheduleDay?.offset === day.offset
+                                      ? 'bg-stone-900 text-white border-stone-900'
+                                      : 'bg-white border-stone-300'
+                                  }`}
+                                  onClick={() => {
+                                    setScheduleDayOffset(day.offset);
+                                    patch({ scheduledFor: day.slots[0]?.value || '' });
+                                  }}
+                                >
+                                  <span className="font-semibold block text-xs sm:text-sm leading-tight">
+                                    {scheduleDayTitle(day.offset)}
+                                  </span>
+                                  <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
+                                    {day.weekday} {day.dateLabel}
+                                  </span>
+                                </button>
+                              ))}
                             </div>
-                            {!customScheduleDay ? (
-                              <div className="grid grid-cols-3 gap-2">
-                                {scheduleDays.map((day) => (
-                                  <button
-                                    key={day.offset}
-                                    type="button"
-                                    className={`min-w-0 px-1.5 py-2 text-center border rounded-md ${
-                                      activeScheduleDay?.offset === day.offset
-                                        ? 'bg-stone-900 text-white border-stone-900'
-                                        : 'bg-white border-stone-300'
-                                    }`}
-                                    onClick={() => {
-                                      setScheduleDayOffset(day.offset);
-                                      setCustomScheduleDay(null);
-                                      setShowAllScheduleSlots(false);
-                                      patch({ scheduledFor: day.slots[0]?.value || '' });
-                                    }}
-                                  >
-                                    <span className="font-semibold block text-xs sm:text-sm leading-tight">
-                                      {scheduleDayTitle(day.offset)}
-                                    </span>
-                                    <span className="text-[10px] sm:text-[11px] opacity-80 block truncate">
-                                      {day.weekday} {day.dateLabel}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
                             <div>
                               <p className="text-xs text-stone-500 mb-2">{t('shopTimeSlotsHint')}</p>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                {visibleScheduleSlots.map((slot) => (
+                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                                {(activeScheduleDay?.slots || []).map((slot) => (
                                   <button
                                     key={slot.value}
                                     type="button"
@@ -1291,15 +1147,6 @@ export default function CheckoutPage() {
                                   </button>
                                 ))}
                               </div>
-                              {hiddenScheduleSlotCount > 0 && !showAllScheduleSlots ? (
-                                <button
-                                  type="button"
-                                  className="mt-2 text-sm font-medium text-stone-700 underline underline-offset-2"
-                                  onClick={() => setShowAllScheduleSlots(true)}
-                                >
-                                  {t('shopMoreSlots').replace('{n}', String(hiddenScheduleSlotCount))}
-                                </button>
-                              ) : null}
                             </div>
                           </>
                         )}
@@ -1326,111 +1173,89 @@ export default function CheckoutPage() {
                     </button>
                   </p>
                 ) : (
-                  <div className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 shadow-sm">
-                    <h3 className="text-base font-bold text-stone-900">{t('shopCheckoutRewardsTitle')}</h3>
-                    <ul className="mt-3 space-y-2">
-                      {(
-                        [
-                          'shopCheckoutReward1',
-                          'shopCheckoutReward2',
-                          'shopCheckoutReward3',
-                        ] as const
-                      ).map((key) => (
-                        <li key={key} className="flex items-start gap-2.5 text-sm text-stone-700">
-                          <Check
-                            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--shop-accent,#e11d48)]"
-                            strokeWidth={2.5}
-                            aria-hidden
-                          />
-                          <span>{t(key)}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {!showLogin ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white"
-                          onClick={() => {
-                            setShowLogin(true);
-                            setWantCreateAccount(false);
-                            setPassword('');
-                            if (draft.customerEmail) setLoginEmail(draft.customerEmail);
+                  <div className="grid md:grid-cols-2 gap-4 border border-stone-100 bg-stone-50/60 p-4">
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded border-stone-300"
+                          checked={wantCreateAccount}
+                          onChange={(e) => {
+                            setWantCreateAccount(e.target.checked);
+                            if (e.target.checked) setShowLogin(false);
+                            if (!e.target.checked) setPassword('');
                           }}
-                        >
-                          {t('shopLogIn')}
-                        </button>
-                        <button
-                          type="button"
-                          className={`rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
-                            wantCreateAccount
-                              ? 'border-stone-900 bg-stone-900 text-white'
-                              : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
-                          }`}
-                          onClick={() => {
-                            setWantCreateAccount(true);
-                            setShowLogin(false);
-                            setPassword('');
-                          }}
-                        >
-                          {t('shopCreateAccount')}
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {showLogin ? (
-                      <form onSubmit={onLogin} className="mt-4 space-y-3 border-t border-stone-100 pt-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
-                          <button
-                            type="button"
-                            className="text-xs text-stone-500 underline"
-                            onClick={() => setShowLogin(false)}
-                          >
-                            {t('cancel')}
-                          </button>
-                        </div>
-                        <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
-                          type="email"
-                          placeholder={t('shopEmail')}
-                          value={loginEmail}
-                          onChange={(e) => setLoginEmail(e.target.value)}
-                          required
-                          autoComplete="email"
                         />
+                        {t('shopCreateAccount')}
+                      </label>
+                      {wantCreateAccount && (
                         <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
-                          type="password"
-                          placeholder={t('shopPassword')}
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          required
-                          autoComplete="current-password"
-                        />
-                        <button
-                          type="submit"
-                          className="w-full rounded-lg bg-stone-900 py-2.5 text-sm font-semibold text-white"
-                        >
-                          {t('shopLogIn')}
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {wantCreateAccount && !showLogin ? (
-                      <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
-                        <p className="text-sm text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
-                        <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
+                          className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
                           type="password"
                           placeholder={t('shopPasswordMin6')}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           autoComplete="new-password"
                         />
-                      </div>
-                    ) : null}
+                      )}
+                    </div>
+
+                    <div className="space-y-3 md:border-l md:border-stone-200 md:pl-4">
+                      {!showLogin ? (
+                        <div className="space-y-1">
+                          <p className="text-sm text-stone-500">{t('shopHaveAccount')}</p>
+                          <button
+                            type="button"
+                            className="text-sm font-semibold underline underline-offset-2"
+                            onClick={() => {
+                              setShowLogin(true);
+                              setWantCreateAccount(false);
+                              setPassword('');
+                              if (draft.customerEmail) setLoginEmail(draft.customerEmail);
+                            }}
+                          >
+                            {t('shopLogIn')}
+                          </button>
+                        </div>
+                      ) : (
+                        <form onSubmit={onLogin} className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
+                            <button
+                              type="button"
+                              className="text-xs text-stone-500 underline"
+                              onClick={() => setShowLogin(false)}
+                            >
+                              {t('cancel')}
+                            </button>
+                          </div>
+                          <input
+                            className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
+                            type="email"
+                            placeholder={t('shopEmail')}
+                            value={loginEmail}
+                            onChange={(e) => setLoginEmail(e.target.value)}
+                            required
+                            autoComplete="email"
+                          />
+                          <input
+                            className="w-full border border-stone-300 px-3 py-2 text-sm bg-white"
+                            type="password"
+                            placeholder={t('shopPassword')}
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            required
+                            autoComplete="current-password"
+                          />
+                          <button
+                            type="submit"
+                            className="w-full bg-stone-900 text-white py-2.5 text-sm font-semibold"
+                          >
+                            {t('shopLogIn')}
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1474,7 +1299,7 @@ export default function CheckoutPage() {
                     ) : null}
 
                     <input
-                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      className="w-full border border-stone-300 px-3 py-2 text-sm"
                       placeholder={t('shopStreetAddressRequired')}
                       value={draft.address}
                       onChange={(e) => {
@@ -1494,12 +1319,12 @@ export default function CheckoutPage() {
                         setSelectedAddressId(null);
                         patch({ city, lat: undefined, lng: undefined });
                       }}
-                      zipClassName="border border-stone-300 bg-white px-3 py-2 text-sm w-full rounded-md"
-                      cityClassName="border border-stone-300 bg-white px-3 py-2 text-sm w-full rounded-md"
+                      zipClassName="border border-stone-300 px-3 py-2 text-sm w-full"
+                      cityClassName="border border-stone-300 px-3 py-2 text-sm w-full"
                     />
                     <button
                       type="button"
-                      className="rounded-md border border-stone-900 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+                      className="border border-stone-900 px-4 py-2 text-sm font-semibold"
                       onClick={() => void checkDelivery()}
                       disabled={checkingZone}
                     >
@@ -1549,82 +1374,30 @@ export default function CheckoutPage() {
                 )}
 
 
-            {!customer ? (
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                  <div className="w-full border-t border-stone-200" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-[var(--shop-bg-muted,#f6f5f2)] px-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
-                    {t('shopOrderAsGuest')}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-
             <section className="space-y-3">
               <div className="flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold text-stone-900">{t('shopPersonalInfo')}</h2>
                 <span className="text-xs text-rose-500">{t('shopAllFieldsRequired')}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <input
-                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
-                      fieldErrors.customerFirstName || fieldErrors.customerName
-                        ? 'border-rose-500'
-                        : 'border-stone-300'
-                    }`}
-                    placeholder={t('shopFirstName')}
-                    value={firstName}
-                    onChange={(e) => {
-                      setFirstName(e.target.value);
-                      if (fieldErrors.customerFirstName || fieldErrors.customerName) {
-                        setFieldErrors((prev) => ({
-                          ...prev,
-                          customerFirstName: undefined,
-                          customerName: undefined,
-                        }));
-                      }
-                    }}
-                    autoComplete="given-name"
-                  />
-                  {fieldErrors.customerFirstName ? (
-                    <p className="text-sm text-rose-600">{fieldErrors.customerFirstName}</p>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <input
-                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
-                      fieldErrors.customerLastName || fieldErrors.customerName
-                        ? 'border-rose-500'
-                        : 'border-stone-300'
-                    }`}
-                    placeholder={t('shopLastName')}
-                    value={lastName}
-                    onChange={(e) => {
-                      setLastName(e.target.value);
-                      if (fieldErrors.customerLastName || fieldErrors.customerName) {
-                        setFieldErrors((prev) => ({
-                          ...prev,
-                          customerLastName: undefined,
-                          customerName: undefined,
-                        }));
-                      }
-                    }}
-                    autoComplete="family-name"
-                  />
-                  {fieldErrors.customerLastName ? (
-                    <p className="text-sm text-rose-600">{fieldErrors.customerLastName}</p>
-                  ) : null}
-                </div>
-              </div>
-              {fieldErrors.customerName ? (
-                <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
-              ) : null}
               <div className="space-y-2">
                 <input
-                  className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
+                  className={`w-full rounded-md border px-3 py-2.5 text-sm ${
+                    fieldErrors.customerName ? 'border-rose-500' : 'border-stone-300'
+                  }`}
+                  placeholder={t('shopFullNameRequired').replace(' *', '')}
+                  value={draft.customerName}
+                  onChange={(e) => {
+                    patch({ customerName: e.target.value });
+                    if (fieldErrors.customerName) {
+                      setFieldErrors((prev) => ({ ...prev, customerName: undefined }));
+                    }
+                  }}
+                />
+                {fieldErrors.customerName ? (
+                  <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
+                ) : null}
+                <input
+                  className={`w-full rounded-md border px-3 py-2.5 text-sm ${
                     fieldErrors.customerEmail ? 'border-rose-500' : 'border-stone-300'
                   }`}
                   type="email"
@@ -1940,188 +1713,114 @@ export default function CheckoutPage() {
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">{t('shopPickupNote')}</h2>
               <textarea
-                className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
                 rows={2}
                 placeholder={t('shopPickupNotePlaceholder')}
                 value={draft.notes}
                 onChange={(e) => patch({ notes: e.target.value })}
               />
             </section>
-        </div>
+          </div>
 
-        <ShopStorefrontFooter
-          basePath={shopBasePath(shopKey, locSlug)}
-          merchantName={merchant?.name}
-          className="mt-10"
-        />
-      </div>
-
-      <div className="shop-checkout-sticky-bar">
-        <button
-          type="button"
-          className="shop-checkout-sticky-bar__cart"
-          onClick={() => setCartPopupOpen(true)}
-          aria-label={`${t('shopYourCart')} (${itemCount})`}
-        >
-          <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
-          {itemCount > 0 ? (
-            <span className="shop-checkout-sticky-bar__badge">
-              {itemCount > 99 ? '99+' : itemCount}
-            </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={`shop-checkout-sticky-bar__order ${checkoutReady ? 'is-ready' : 'is-pending'}`}
-          disabled={
-            submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
-          }
-          onClick={() => void submitCheckout()}
-        >
-          {merchant?.acceptingOrders === false
-            ? t('shopNotAcceptingOrders')
-            : merchant?.vacation?.active
-              ? t('shopVacationTitle')
-              : submitting
-                ? t('shopPlacingOrder')
-                : pointsCoverFullOrder
-                  ? t('shopPlaceOrderPoints')
-                  : `${t('shopPlaceOrder')} — CHF ${total.toFixed(2)}`}
-        </button>
-      </div>
-
-      {cartPopupOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
-          onClick={() => setCartPopupOpen(false)}
-          role="presentation"
-        >
-          <div
-            className="flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('shopYourCart')}
-          >
-            <div className="border-b border-stone-100 px-4 py-3 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                  <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
-                  {t('shopYourCart')}
-                </h2>
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
-                  onClick={() => setCartPopupOpen(false)}
-                  aria-label={t('shopClose')}
-                >
-                  ×
-                </button>
-              </div>
-              <Link
-                to={menuPath}
-                className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
-                onClick={() => setCartPopupOpen(false)}
-              >
-                {t('shopAddMoreItems')}
-              </Link>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              <ul className="text-sm space-y-4">
-                {groupCartForDisplay(draft.items).map((block) => {
-                  if (block.kind === 'offer') {
-                    return (
-                      <li
-                        key={block.offerInstanceId}
-                        className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 space-y-1.5"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-                              {block.offerBadge || t('shopOffer')}
-                            </span>
-                            <p className="mt-1 font-semibold text-sm">{block.offerName}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="text-xs font-semibold text-rose-600"
-                            onClick={() => removeOfferBlock(block.offerInstanceId)}
-                          >
-                            {t('shopRemove')}
-                          </button>
-                        </div>
-                        {block.lines.map((i) => (
-                          <div key={i.lineId || i.id} className="flex justify-between gap-2 text-xs">
-                            <span className="min-w-0 truncate">
-                              {i.name}
-                              {i.price === 0 ? ` · ${t('shopFree')}` : ''}
-                            </span>
-                            <span className="shrink-0">
-                              {i.price === 0 ? t('shopFree') : `CHF ${(i.price * i.quantity).toFixed(2)}`}
-                            </span>
-                          </div>
-                        ))}
-                      </li>
-                    );
-                  }
-                  const i = block.item;
-                  const lineKey = i.lineId || i.id;
+          <aside className="bg-white lg:sticky lg:top-4 space-y-4">
+            <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+              <ShoppingBag className="h-5 w-5 text-rose-400" strokeWidth={1.8} />
+              {t('shopYourOrder')}
+            </h2>
+            <ul className="text-sm space-y-4">
+              {groupCartForDisplay(draft.items).map((block) => {
+                if (block.kind === 'offer') {
                   return (
-                    <li key={lineKey} className="space-y-1.5">
-                      <div className="flex justify-between gap-3">
-                        <p className="font-semibold text-stone-900 min-w-0">
-                          {i.name}
-                          {i.loyaltyReward && (
-                            <span className="ml-1 text-xs font-semibold text-teal-800">{t('shopFree')}</span>
-                          )}
-                        </p>
-                        <span className="shrink-0 tabular-nums">CHF {(i.price * i.quantity).toFixed(2)}</span>
-                      </div>
-                      {!!i.comboSelections?.length && (
-                        <p className="text-xs text-stone-500">
-                          {i.comboSelections.map((c) => `${c.slotName}: ${c.productName}`).join(' · ')}
-                        </p>
-                      )}
-                      {!!i.selectedExtras?.length && (
-                        <p className="text-xs text-stone-500">{i.selectedExtras.map((e) => e.name).join(', ')}</p>
-                      )}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-1 py-0.5">
-                          <button
-                            type="button"
-                            className="h-6 w-6 text-sm font-semibold"
-                            onClick={() => setLineQty(lineKey, i.quantity - 1)}
-                          >
-                            −
-                          </button>
-                          <span className="w-5 text-center font-semibold">{i.quantity}</span>
-                          <button
-                            type="button"
-                            className="h-6 w-6 text-sm font-semibold"
-                            onClick={() => setLineQty(lineKey, i.quantity + 1)}
-                          >
-                            +
-                          </button>
+                    <li
+                      key={block.offerInstanceId}
+                      className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 space-y-1.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="inline-block rounded-full bg-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                            {block.offerBadge || t('shopOffer')}
+                          </span>
+                          <p className="mt-1 font-semibold text-sm">{block.offerName}</p>
                         </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <Link to={menuPath} className="text-stone-500 hover:underline">
-                            {t('shopEdit')}
-                          </Link>
-                          <button
-                            type="button"
-                            className="font-medium text-rose-600"
-                            onClick={() => removeLine(lineKey)}
-                          >
-                            {t('shopRemove')}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-rose-600"
+                          onClick={() => removeOfferBlock(block.offerInstanceId)}
+                        >
+                          {t('shopRemove')}
+                        </button>
                       </div>
+                      {block.lines.map((i) => (
+                        <div key={i.lineId || i.id} className="flex justify-between gap-2 text-xs">
+                          <span className="min-w-0 truncate">
+                            {i.name}
+                            {i.price === 0 ? ` · ${t('shopFree')}` : ''}
+                          </span>
+                          <span className="shrink-0">
+                            {i.price === 0 ? t('shopFree') : `CHF ${(i.price * i.quantity).toFixed(2)}`}
+                          </span>
+                        </div>
+                      ))}
                     </li>
                   );
-                })}
-              </ul>
-            </div>
-            <div className="border-t border-stone-100 px-4 py-4 text-sm space-y-1">
+                }
+                const i = block.item;
+                const lineKey = i.lineId || i.id;
+                return (
+                  <li key={lineKey} className="space-y-1.5">
+                    <div className="flex justify-between gap-3">
+                      <p className="font-semibold text-stone-900 min-w-0">
+                        {i.name}
+                        {i.loyaltyReward && (
+                          <span className="ml-1 text-xs font-semibold text-teal-800">{t('shopFree')}</span>
+                        )}
+                      </p>
+                      <span className="shrink-0 tabular-nums">CHF {(i.price * i.quantity).toFixed(2)}</span>
+                    </div>
+                    {!!i.comboSelections?.length && (
+                      <p className="text-xs text-stone-500">
+                        {i.comboSelections.map((c) => `${c.slotName}: ${c.productName}`).join(' · ')}
+                      </p>
+                    )}
+                    {!!i.selectedExtras?.length && (
+                      <p className="text-xs text-stone-500">{i.selectedExtras.map((e) => e.name).join(', ')}</p>
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-1 py-0.5">
+                        <button
+                          type="button"
+                          className="h-6 w-6 text-sm font-semibold"
+                          onClick={() => setLineQty(lineKey, i.quantity - 1)}
+                        >
+                          −
+                        </button>
+                        <span className="w-5 text-center font-semibold">{i.quantity}</span>
+                        <button
+                          type="button"
+                          className="h-6 w-6 text-sm font-semibold"
+                          onClick={() => setLineQty(lineKey, i.quantity + 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <Link to={menuPath} className="text-stone-500 hover:underline">
+                          {t('shopEdit')}
+                        </Link>
+                        <button
+                          type="button"
+                          className="font-medium text-rose-600"
+                          onClick={() => removeLine(lineKey)}
+                        >
+                          {t('shopRemove')}
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="border-t border-stone-100 pt-3 text-sm space-y-1">
               {offerDiscount > 0 && (
                 <div className="flex justify-between text-amber-800">
                   <span>{offerLabels.join(', ') || t('shopOffer')}</span>
@@ -2177,9 +1876,27 @@ export default function CheckoutPage() {
                 <span>CHF {total.toFixed(2)}</span>
               </div>
             </div>
-          </div>
+            <button
+              type="button"
+              className="w-full rounded-full bg-rose-300 py-3 text-sm font-semibold text-white disabled:opacity-40"
+              disabled={
+                submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false
+              }
+              onClick={() => void submitCheckout()}
+            >
+              {merchant?.acceptingOrders === false
+                ? t('shopNotAcceptingOrders')
+                : merchant?.vacation?.active
+                ? t('shopVacationTitle')
+                : submitting
+                ? t('shopPlacingOrder')
+                : pointsCoverFullOrder
+                  ? t('shopPlaceOrderPoints')
+                  : t('shopPlaceOrder')}
+            </button>
+          </aside>
         </div>
-      ) : null}
+      </div>
       <ShopDeliveryAddressPopup
         open={deliveryAddressOpen}
         shopKey={shopKey}
@@ -2214,23 +1931,6 @@ export default function CheckoutPage() {
           setError(null);
           setWhenMode('asap');
           setScheduleDayOffset(0);
-        }}
-      />
-      <ShopPaymentModal
-        open={paymentModalOpen}
-        shopKey={shopKey || ''}
-        orderId={paymentOrderId}
-        total={paymentTotal}
-        session={paymentSession}
-        demoMode={paymentDemoMode}
-        demoError={paymentDemoError}
-        onClose={() => {
-          setPaymentModalOpen(false);
-          navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}?pay=1`);
-        }}
-        onPaid={() => {
-          setPaymentModalOpen(false);
-          navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}`);
         }}
       />
     </div>

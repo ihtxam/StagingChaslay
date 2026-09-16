@@ -16,7 +16,7 @@ import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
-import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
+import { StorefrontNavCart } from '../StorefrontNavCart';
 
 interface MenuItem {
   label: string;
@@ -117,19 +117,16 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
                 {item.label}
               </a>
             ))}
-            <StorefrontNavbarLang />
+            <StorefrontNavCart color={mergedProps.textColor || '#1a1a2e'} />
           </div>
         </div>
         <div className="navbar-centered-mobile-row shop-page-content" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>{mergedProps.logoImageUrl ? null : <span style={{ fontSize: '18px', fontWeight: 700, color: mergedProps.textColor }}>{logoText}</span>}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <StorefrontNavbarLang />
-            <NavbarMobileMenu
-              menuItems={menuItems}
-              textColor={mergedProps.textColor || '#1a1a2e'}
-              backgroundColor={mergedProps.backgroundColor || '#ffffff'}
-            />
-          </div>
+          <NavbarMobileMenu
+            menuItems={menuItems}
+            textColor={mergedProps.textColor || '#1a1a2e'}
+            backgroundColor={mergedProps.backgroundColor || '#ffffff'}
+          />
         </div>
       </nav>
     </>

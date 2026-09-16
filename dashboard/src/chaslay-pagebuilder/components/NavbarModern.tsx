@@ -15,7 +15,6 @@ import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
-import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
 
 interface MenuItem {
   label: string;
@@ -94,21 +93,18 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 
           <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
-            <StorefrontNavbarLang />
-            {buttonText && (
-              <a
-                href={shopHref(mergedProps.buttonLink)}
-                onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
-                className="hb-navbar-cta navbar-modern-button" style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '8px 14px', borderRadius: '50px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                {buttonText}
-              </a>
-            )}
           </div>
 
-          <div className="navbar-mobile-lang">
-            <StorefrontNavbarLang />
-          </div>
+          {buttonText && (
+            <a
+              href={shopHref(mergedProps.buttonLink)}
+              onClick={(e) => handleStorefrontNavClick(e, shopHref(mergedProps.buttonLink))}
+              className="hb-navbar-cta navbar-modern-button navbar-modern-desktop" style={{ backgroundColor: mergedProps.buttonColor, color: mergedProps.buttonTextColor, padding: '8px 14px', borderRadius: '50px', textDecoration: 'none', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              {buttonText}
+            </a>
+          )}
+
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#ffffff'}

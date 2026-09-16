@@ -2164,7 +2164,6 @@ export type EmailSendType =
   | "password_reset"
   | "merchant_invite"
   | "platform_shop_order"
-  | "platform_shop_status"
   | "marketing_test"
   | "invoice"
   | "alert";
@@ -3924,7 +3923,7 @@ export const platformShopOrders = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
-    status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | accepted | processing | shipped | fulfilled | cancelled
+    status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | cancelled | fulfilled
     paymentStatus: varchar("payment_status", { length: 30 }).notNull().default("pending"),
     subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
     discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -3937,7 +3936,6 @@ export const platformShopOrders = pgTable(
     adyenPspReference: varchar("adyen_psp_reference", { length: 255 }),
     adyenResultCode: varchar("adyen_result_code", { length: 50 }),
     paidAt: timestamp("paid_at"),
-    trackingUrl: varchar("tracking_url", { length: 500 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

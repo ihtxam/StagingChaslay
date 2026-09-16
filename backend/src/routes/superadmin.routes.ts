@@ -19,7 +19,6 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
-import { isGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 
 const router = Router();
 const imageUpload = multer({
@@ -270,26 +269,23 @@ router.get("/email/usage", async (_req: Request, res: Response) => {
 });
 
 /**
- * POST /api/superadmin/email/test — send a test email via platform mailco (Brevo fallback)
+ * POST /api/superadmin/email/test — send a test email via platform mailco or Brevo
+ * Body: { to, provider?: "mailco" | "brevo" } (defaults to mailco)
  */
 router.post("/email/test", async (req: Request, res: Response) => {
   try {
     const to = String(req.body?.to || "").trim();
-    if (!to) {
-      res.status(400).json({ error: "Recipient email is required" });
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.status(400).json({ error: "Valid recipient email is required" });
       return;
     }
+    const providerRaw = String(req.body?.provider || "mailco").toLowerCase();
+    const provider = providerRaw === "brevo" ? "brevo" : "mailco";
     const { EmailService } = await import("@/services/email.service");
-    const status = await EmailService.status();
-    await EmailService.send({
-      to,
-      subject: "Reborn platform email test",
-      html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
-      emailType: "marketing_test",
-    });
+    await EmailService.sendPlatformTest(to, provider);
     res.json({
       success: true,
-      provider: status.provider,
+      provider,
     });
   } catch (error) {
     console.error("Error sending platform test email:", error);
@@ -302,20 +298,6 @@ router.post("/email/test", async (req: Request, res: Response) => {
 // ============================================================================
 // MERCHANT MANAGEMENT
 // ============================================================================
-
-/**
- * POST /api/superadmin/merchants/backfill-support-codes
- * Assign CH-001 / UK-001 style codes to merchants missing one.
- */
-router.post("/merchants/backfill-support-codes", async (_req: Request, res: Response) => {
-  try {
-    const result = await MerchantService.backfillSupportCodes();
-    res.json({ success: true, ...result });
-  } catch (error) {
-    console.error("Error backfilling support codes:", error);
-    res.status(500).json({ error: error instanceof Error ? error.message : "Backfill failed" });
-  }
-});
 
 /**
  * GET /api/superadmin/merchants
@@ -424,7 +406,6 @@ router.post("/merchants", async (req: Request, res: Response) => {
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
       kioskAddonEnabled,
-      giftCardAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -463,7 +444,6 @@ router.post("/merchants", async (req: Request, res: Response) => {
         deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
         kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
-        giftCardAddonEnabled: isGiftCardAddonEnabled(giftCardAddonEnabled),
       }
     );
 
@@ -532,8 +512,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.deliveryPlatformsAddonEnabled != null ||
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
-      updates.kioskEnabled != null ||
-      updates.giftCardAddonEnabled != null
+      updates.kioskEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -581,10 +560,6 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
-        giftCardAddonEnabled:
-          updates.giftCardAddonEnabled != null
-            ? isGiftCardAddonEnabled(updates.giftCardAddonEnabled)
-            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -602,7 +577,6 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
-      delete updates.giftCardAddonEnabled;
     }
 
     const merchant =
@@ -972,9 +946,10 @@ router.get("/licenses", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting licenses:", error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to load licenses",
+    res.json({
+      success: true,
+      licenses: [],
+      pagination: { page: parseInt(req.query.page as string) || 1, limit: parseInt(req.query.limit as string) || 20 },
     });
   }
 });
@@ -1461,28 +1436,6 @@ router.put("/platform-shop/vouchers/:voucherId", async (req: Request, res: Respo
   }
 });
 
-router.delete("/platform-shop/vouchers/:voucherId", async (req: Request, res: Response) => {
-  try {
-    const { PlatformShopService } = await import("@/services/platform-shop.service");
-    const result = await PlatformShopService.deleteVoucher(req.params.voucherId);
-    res.json({ success: true, ...result });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : "Failed to delete voucher";
-    res.status(msg === "Voucher not found" ? 404 : 400).json({ error: msg });
-  }
-});
-
-router.get("/platform-shop/vouchers/:voucherId/usage", async (req: Request, res: Response) => {
-  try {
-    const { PlatformShopService } = await import("@/services/platform-shop.service");
-    const result = await PlatformShopService.listVoucherUsage(req.params.voucherId);
-    res.json({ success: true, ...result });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : "Failed to load voucher usage";
-    res.status(msg === "Voucher not found" ? 404 : 500).json({ error: msg });
-  }
-});
-
 router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
   try {
     const { PlatformShopService } = await import("@/services/platform-shop.service");
@@ -1496,11 +1449,7 @@ router.get("/platform-shop/orders", async (_req: Request, res: Response) => {
 router.patch("/platform-shop/orders/:orderId", async (req: Request, res: Response) => {
   try {
     const { PlatformShopService } = await import("@/services/platform-shop.service");
-    const order = await PlatformShopService.updateOrderStatus(
-      req.params.orderId,
-      req.body?.status,
-      req.body?.trackingUrl
-    );
+    const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
     res.json({ success: true, order });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update order" });
