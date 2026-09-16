@@ -58,9 +58,9 @@ import ShopOfferPicker, {
   type ShopOfferProduct,
 } from '@/components/shop/ShopOfferPicker';
 import {
+  currentChannelClose,
   findNextOpen,
   formatNextOpenLabel,
-  minutesUntilChannelClose,
   type StoreHours,
 } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
@@ -953,19 +953,22 @@ export default function OrderingPage() {
 
   const formatChannelStatus = (
     open: boolean,
-    closeMinutes: number | null,
+    close: { minutes: number; labelHm: string } | null,
     nextOpen: { at: Date; labelHm: string; dayOffset: number } | null,
     closedFallback: string
   ) => {
     if (open) {
-      if (closeMinutes != null && closeMinutes <= 60) {
-        return `${t('shopOpenNow')} · ${t('shopClosingSoon').replace('{n}', String(closeMinutes))}`;
+      if (close && close.minutes <= 90) {
+        return `${t('shopOpenNow')} · ${t('shopClosingSoon').replace('{n}', String(Math.max(1, close.minutes)))}`;
+      }
+      if (close) {
+        return `${t('shopOpenNow')} · ${t('shopClosesAt').replace('{time}', close.labelHm)}`;
       }
       return t('shopOpenNow');
     }
     if (nextOpen && nextOpen.dayOffset === 0) {
       const mins = Math.max(1, Math.round((nextOpen.at.getTime() - nowTick) / 60_000));
-      if (mins <= 60) {
+      if (mins <= 90) {
         const opening = t('shopOpeningIn').replace('{n}', String(mins));
         return allowScheduledOrders ? `${opening} · ${t('shopPreOrderAvailable')}` : opening;
       }
@@ -977,28 +980,28 @@ export default function OrderingPage() {
     return closedFallback;
   };
 
-  const pickupCloseMinutes = useMemo(() => {
+  const pickupClose = useMemo(() => {
     if (!merchant || !pickupOpen) return null;
     const storeHours = merchant.storeHours as StoreHours;
     const at = new Date(nowTick);
     const candidates = (['takeaway', 'dine_in'] as const)
       .filter((id) => channels[id]?.open)
-      .map((id) => minutesUntilChannelClose(storeHours, id, at))
-      .filter((n): n is number => n != null);
+      .map((id) => currentChannelClose(storeHours, id, at))
+      .filter((n): n is { minutes: number; labelHm: string } => n != null);
     if (!candidates.length) return null;
-    return Math.min(...candidates);
+    return candidates.reduce((a, b) => (a.minutes <= b.minutes ? a : b));
   }, [merchant, pickupOpen, channels.takeaway?.open, channels.dine_in?.open, nowTick]);
 
-  const deliveryCloseMinutes = useMemo(() => {
+  const deliveryClose = useMemo(() => {
     if (!merchant || !deliveryOpen) return null;
-    return minutesUntilChannelClose(merchant.storeHours as StoreHours, 'delivery', new Date(nowTick));
+    return currentChannelClose(merchant.storeHours as StoreHours, 'delivery', new Date(nowTick));
   }, [merchant, deliveryOpen, nowTick]);
 
   const pickupStatusText = useMemo(
-    () => formatChannelStatus(pickupOpen, pickupCloseMinutes, nextPickupOpen, t('shopStoreClosed')),
+    () => formatChannelStatus(pickupOpen, pickupClose, nextPickupOpen, t('shopStoreClosed')),
     [
       pickupOpen,
-      pickupCloseMinutes,
+      pickupClose,
       nextPickupOpen,
       locale,
       openLabels,
@@ -1012,14 +1015,14 @@ export default function OrderingPage() {
     if (!channels.delivery?.enabled) return null;
     return formatChannelStatus(
       deliveryOpen,
-      deliveryCloseMinutes,
+      deliveryClose,
       nextDeliveryOpen,
       t('shopDeliveryClosed')
     );
   }, [
     channels.delivery?.enabled,
     deliveryOpen,
-    deliveryCloseMinutes,
+    deliveryClose,
     nextDeliveryOpen,
     locale,
     openLabels,

@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  currentChannelClose,
   isChannelOpenAt,
   minutesUntilChannelClose,
   minutesUntilChannelOpen,
@@ -22,6 +23,10 @@ const hours: StoreHours = {
 const closingSoon = zonedLocalDate(2026, 9, 16, 22, 30);
 assert.equal(isChannelOpenAt(hours, 'takeaway', closingSoon).open, true);
 assert.equal(minutesUntilChannelClose(hours, 'takeaway', closingSoon), 30);
+assert.deepEqual(currentChannelClose(hours, 'takeaway', closingSoon), {
+  minutes: 30,
+  labelHm: '23:00',
+});
 assert.equal(isChannelOpenAt(hours, 'delivery', closingSoon).open, false);
 assert.equal(minutesUntilChannelClose(hours, 'delivery', closingSoon), null);
 
@@ -32,6 +37,10 @@ assert.equal(minutesUntilChannelClose(hours, 'takeaway', beforeOpen), null);
 
 const midday = zonedLocalDate(2026, 9, 16, 14, 0);
 assert.equal(minutesUntilChannelClose(hours, 'takeaway', midday), 9 * 60);
+assert.deepEqual(currentChannelClose(hours, 'takeaway', midday), {
+  minutes: 9 * 60,
+  labelHm: '23:00',
+});
 assert.equal(minutesUntilChannelOpen(hours, 'takeaway', midday), null);
 
 console.log('shop-hours.test.ts ok');

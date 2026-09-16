@@ -126,21 +126,36 @@ function minutesUntilSlotClose(mins: number, openMin: number, closeMin: number):
   return null;
 }
 
+/** Current slot close time, or null when the channel is closed. */
+export function currentChannelClose(
+  storeHours: StoreHours | null | undefined,
+  channel: ShopChannel,
+  at: Date = new Date()
+): { minutes: number; labelHm: string } | null {
+  const { day, mins } = zonedParts(at);
+  const slots = storeHours?.[channel]?.[day] || [];
+  let best: { minutes: number; labelHm: string } | null = null;
+  for (const slot of slots) {
+    const closeMin = parseHm(slot.close);
+    const remaining = minutesUntilSlotClose(mins, parseHm(slot.open), closeMin);
+    if (remaining == null) continue;
+    if (best == null || remaining < best.minutes) {
+      best = {
+        minutes: remaining,
+        labelHm: `${pad2(Math.floor(closeMin / 60) % 24)}:${pad2(closeMin % 60)}`,
+      };
+    }
+  }
+  return best;
+}
+
 /** Minutes remaining in the current opening slot, or null when the channel is closed. */
 export function minutesUntilChannelClose(
   storeHours: StoreHours | null | undefined,
   channel: ShopChannel,
   at: Date = new Date()
 ): number | null {
-  const { day, mins } = zonedParts(at);
-  const slots = storeHours?.[channel]?.[day] || [];
-  let best: number | null = null;
-  for (const slot of slots) {
-    const remaining = minutesUntilSlotClose(mins, parseHm(slot.open), parseHm(slot.close));
-    if (remaining == null) continue;
-    if (best == null || remaining < best) best = remaining;
-  }
-  return best;
+  return currentChannelClose(storeHours, channel, at)?.minutes ?? null;
 }
 
 export type ScheduleDayOption = {
