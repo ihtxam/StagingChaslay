@@ -13,6 +13,12 @@ import kotlin.math.ceil
 /**
  * Niimbot label protocol (K3 / B21 / D11). Not ESC/POS.
  * Ported from https://github.com/AndBondStyle/niimprint
+ *
+ * Every command except the raster rows is a request/response pair
+ * (https://printers.niim.blue/interfacing/proto/), and PrintEnd must be
+ * repeated until the printer answers 0xf4 with 01 — "print finished
+ * (accepted)". Bluetooth SPP is the transport that can do that, which is why
+ * this is the path to trust over a Windows print queue.
  */
 object NiimbotPrintClient {
     private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -61,26 +67,68 @@ object NiimbotPrintClient {
         return out
     }
 
-    private fun transceive(out: OutputStream, input: InputStream?, type: Int, data: ByteArray, respOffset: Int = 1) {
-        val pkt = packet(type, data)
-        out.write(pkt)
+    /**
+     * Waits for one framed reply carrying [expected]. Bluetooth classic
+     * fragments packets, so the buffer is rescanned after every read. Returns
+     * null when the printer stays silent for [timeoutMs].
+     */
+    private fun readReply(input: InputStream, expected: Int, timeoutMs: Long): ByteArray? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        val buf = ByteArray(512)
+        var used = 0
+        while (System.currentTimeMillis() < deadline) {
+            // available() first: read() on an SPP socket blocks with no timeout,
+            // and a silent printer would hang the print thread for good.
+            val ready = try {
+                input.available()
+            } catch (_: Exception) {
+                return null
+            }
+            if (ready <= 0) {
+                Thread.sleep(20)
+                continue
+            }
+            val read = try {
+                input.read(buf, used, minOf(ready, buf.size - used))
+            } catch (_: Exception) {
+                return null
+            }
+            if (read <= 0) return null
+            used += read
+            var i = 0
+            while (i + 6 < used) {
+                if (buf[i] != 0x55.toByte() || buf[i + 1] != 0x55.toByte()) {
+                    i++
+                    continue
+                }
+                val end = i + 4 + (buf[i + 3].toInt() and 0xff) + 3
+                if (end > used) break
+                if ((buf[i + 2].toInt() and 0xff) == expected) return buf.copyOfRange(i, end)
+                i = end
+            }
+            if (used >= buf.size) used = 0
+        }
+        return null
+    }
+
+    /** True when a simple response carries the success byte 01. */
+    private fun acked(reply: ByteArray?): Boolean =
+        reply != null && reply.size >= 8 && reply[4] == 1.toByte()
+
+    private fun transceive(
+        out: OutputStream,
+        input: InputStream?,
+        type: Int,
+        data: ByteArray,
+        respOffset: Int = 1,
+    ): ByteArray? {
+        out.write(packet(type, data))
         out.flush()
         if (input == null) {
             Thread.sleep(60)
-            return
+            return null
         }
-        val buf = ByteArray(256)
-        repeat(6) {
-            Thread.sleep(80)
-            val read = try {
-                input.read(buf)
-            } catch (_: Exception) {
-                0
-            }
-            if (read >= 4 && buf[0] == 0x55.toByte() && buf[1] == 0x55.toByte()) {
-                return
-            }
-        }
+        return readReply(input, type + respOffset, 700)
     }
 
     private fun buildAllPackets(bitmap: ByteArray, widthPx: Int, heightPx: Int, density: Int): List<ByteArray> {
@@ -134,7 +182,12 @@ object NiimbotPrintClient {
             try {
                 val out = socket.outputStream
                 val input = socket.inputStream
-                transceive(out, input, 0x21, byteArrayOf(density.coerceIn(1, 5).toByte()), 16)
+                val density5 = density.coerceIn(1, 5).toByte()
+                // The density reply is the first proof the printer speaks this
+                // protocol at all. Without it the rest is guesswork.
+                if (!acked(transceive(out, input, 0x21, byteArrayOf(density5), 16))) {
+                    throw IllegalStateException("Printer did not answer SetDensity — it is not speaking the Niimbot protocol on this connection")
+                }
                 transceive(out, input, 0x23, byteArrayOf(1), 16)
                 transceive(out, input, 0x01, byteArrayOf(1))
                 transceive(out, input, 0x03, byteArrayOf(1))
@@ -142,7 +195,9 @@ object NiimbotPrintClient {
                     putShort(heightPx.toShort())
                     putShort(widthPx.toShort())
                 }.array()
-                transceive(out, input, 0x13, dim)
+                if (!acked(transceive(out, input, 0x13, dim))) {
+                    throw IllegalStateException("Printer rejected the page size ${widthPx}x$heightPx")
+                }
                 val rowBytes = ceil(widthPx / 8.0).toInt()
                 for (y in 0 until heightPx) {
                     val rowStart = y * rowBytes
@@ -157,11 +212,21 @@ object NiimbotPrintClient {
                 }
                 transceive(out, input, 0xE3, byteArrayOf(1))
                 Thread.sleep(300)
-                repeat(20) {
-                    transceive(out, input, 0xF3, byteArrayOf(1))
+                // 0xf4 answers 00 while the page is still running and 01 once it
+                // is committed, so keep asking until it says 01.
+                var committed = false
+                for (attempt in 0 until 20) {
+                    if (acked(transceive(out, input, 0xF3, byteArrayOf(1)))) {
+                        committed = true
+                        break
+                    }
                     Thread.sleep(100)
                 }
-                Result.success(Unit)
+                if (committed) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(IllegalStateException("Printer never confirmed the label finished printing"))
+                }
             } finally {
                 runCatching { socket.close() }
             }

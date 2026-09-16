@@ -2,7 +2,8 @@ import axios, { AxiosInstance } from 'axios';
 
 /** Prefer same-origin /api in production; localhost only for local dev without env override. */
 function resolveApiBaseUrl(): string {
-  const fromEnv = import.meta.env.VITE_API_URL;
+  // import.meta.env only exists under Vite; node test runners import this file too.
+  const fromEnv = import.meta.env?.VITE_API_URL;
   if (fromEnv != null && String(fromEnv).trim() !== '') {
     return String(fromEnv).trim();
   }

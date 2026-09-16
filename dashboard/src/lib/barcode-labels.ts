@@ -132,7 +132,11 @@ export async function printLabelsViaAgentOrQueue(
   products: LabelProduct[],
   opts: LabelPrintOptions,
   settings?: PosPrintSettingsClient | null,
-  relayOpts?: { retryLocally?: boolean }
+  relayOpts?: {
+    retryLocally?: boolean;
+    /** Called once when the transport accepted the job but cannot confirm it printed. */
+    onUnconfirmed?: (warning: string) => void;
+  }
 ): Promise<'local' | 'queued' | 'browser'> {
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
@@ -140,23 +144,34 @@ export async function printLabelsViaAgentOrQueue(
 
   const labelsPrinters = printersForRole(settings || null, 'labels');
   const labelProfile = labelsPrinters[0];
-  const printerName = labelProfile?.name;
-  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
+  const printerName = labelProfile?.name?.trim();
+  if (!printerName) {
+    throw new Error(
+      'No label printer configured. Open Settings → Receipts & printers, add your Niimbot, and enable Labels.'
+    );
+  }
+  const portName = labelProfile?.portName || null;
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
 
   if (useNiimbot) {
+    let unconfirmed = '';
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
-        const rendered = await renderNiimbotLabelPng(product, o);
-        await printNiimbotLabelViaAgent({
+        const rendered = await renderNiimbotLabelPng(product, o, printerName);
+        const res = await printNiimbotLabelViaAgent({
           printerName,
           portName,
           bitmapBase64: rendered.bitmapBase64,
           widthPx: rendered.widthPx,
           heightPx: rendered.heightPx,
         });
+        if (res.warning && !unconfirmed) unconfirmed = res.warning;
+        if (printable.length > 1 || o.copies > 1) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
       }
     }
+    if (unconfirmed) relayOpts?.onUnconfirmed?.(unconfirmed);
     return 'local';
   }
 

@@ -1755,11 +1755,27 @@ const en: Dict = {
   printRoleKitchen: 'Kitchen',
   printRoleEod: 'End of day',
   addPrinterProfile: 'Add printer',
+  niimbotProbeTitle: 'Niimbot label printer diagnosis',
+  niimbotProbeHint:
+    'Blank labels? Run this to list every COM port and print queue on this PC, with the exact Windows error for each one. Screenshot the result.',
+  niimbotProbeRun: 'Diagnose Niimbot ports',
+  niimbotProbeRunning: 'Checking every serial port and print queue. This can take up to a minute...',
+  niimbotProbeCopy: 'Copy report',
+  niimbotProbeCopyFailed: 'Could not copy. Select the text and copy it manually.',
   testPrinter: 'Test printer',
   testPrinterNeedName: 'Choose a printer first.',
   testPrinterNeedAgent: 'Print agent is offline. Start it on this PC, then try again.',
   testPrinterOk: 'Test page sent to {name}',
   testPrinterFailed: 'Test print failed',
+  testNiimbotBars: 'Test bars (B21)',
+  testNiimbotBarsInvert: 'Test bars (inverted)',
+  testNiimbotBarsOk:
+    'Bars sent to {name} via {path} · profile={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'The bytes left this PC, but this transport cannot confirm the label printed. If nothing came out, use a Bluetooth COM port or the Android Print Bridge.',
+  testNiimbotBarsConfirmed:
+    'The printer acknowledged every command and reported the label as finished.',
+  testNiimbotBarsFailed: 'Niimbot bar test failed',
   printerLinkedCategories: 'Categories on this printer',
   printerLinkedCategoriesHint:
     'Choose which menu categories print kitchen tickets here. Leave all checked (default) to print every category.',
@@ -5496,11 +5512,27 @@ const fr: Dict = {
   printRoleKitchen: 'Cuisine',
   printRoleEod: 'Fin de journée',
   addPrinterProfile: 'Ajouter une imprimante',
+  niimbotProbeTitle: 'Diagnostic imprimante etiquettes Niimbot',
+  niimbotProbeHint:
+    'Etiquettes vides ? Lancez ce test pour lister chaque port COM et chaque file d\'impression de ce PC, avec l\'erreur Windows exacte. Faites une capture d\'ecran du resultat.',
+  niimbotProbeRun: 'Diagnostiquer les ports Niimbot',
+  niimbotProbeRunning: 'Verification de chaque port serie et file d\'impression. Cela peut prendre une minute...',
+  niimbotProbeCopy: 'Copier le rapport',
+  niimbotProbeCopyFailed: 'Copie impossible. Selectionnez le texte et copiez-le manuellement.',
   testPrinter: 'Tester l’imprimante',
   testPrinterNeedName: 'Choisissez d’abord une imprimante.',
   testPrinterNeedAgent: 'L’agent d’impression est hors ligne. Démarrez-le sur ce PC, puis réessayez.',
   testPrinterOk: 'Page de test envoyée à {name}',
   testPrinterFailed: 'Échec du test d’impression',
+  testNiimbotBars: 'Tester les barres (B21)',
+  testNiimbotBarsInvert: 'Tester les barres (inversé)',
+  testNiimbotBarsOk:
+    'Barres envoyées à {name} via {path} · profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'Les octets sont partis de ce PC, mais ce transport ne peut pas confirmer que l\'étiquette a été imprimée. Si rien ne sort, utilisez un port COM Bluetooth ou le Print Bridge Android.',
+  testNiimbotBarsConfirmed:
+    'L\'imprimante a accusé réception de chaque commande et a signalé l\'étiquette comme terminée.',
+  testNiimbotBarsFailed: 'Échec du test de barres Niimbot',
   printerLinkedCategories: 'Catégories sur cette imprimante',
   printerLinkedCategoriesHint:
     'Choisissez quelles catégories du menu impriment les tickets cuisine ici. Tout cocher (défaut) = toutes les catégories.',
@@ -9188,11 +9220,27 @@ const de: Dict = {
   printRoleKitchen: 'Küche',
   printRoleEod: 'Tagesabschluss',
   addPrinterProfile: 'Drucker hinzufügen',
+  niimbotProbeTitle: 'Niimbot Etikettendrucker-Diagnose',
+  niimbotProbeHint:
+    'Leere Etiketten? Diese Prüfung listet jeden COM-Port und jede Druckwarteschlange dieses PCs mit dem genauen Windows-Fehler. Machen Sie einen Screenshot.',
+  niimbotProbeRun: 'Niimbot-Ports diagnostizieren',
+  niimbotProbeRunning: 'Jeder serielle Port und jede Warteschlange wird geprüft. Das kann eine Minute dauern...',
+  niimbotProbeCopy: 'Bericht kopieren',
+  niimbotProbeCopyFailed: 'Kopieren fehlgeschlagen. Text markieren und manuell kopieren.',
   testPrinter: 'Drucker testen',
   testPrinterNeedName: 'Zuerst einen Drucker wählen.',
   testPrinterNeedAgent: 'Druckagent ist offline. Agent auf diesem PC starten und erneut versuchen.',
   testPrinterOk: 'Testseite an {name} gesendet',
   testPrinterFailed: 'Testdruck fehlgeschlagen',
+  testNiimbotBars: 'Balken testen (B21)',
+  testNiimbotBarsInvert: 'Balken testen (invertiert)',
+  testNiimbotBarsOk:
+    'Balken an {name} via {path} · Profil={profile} · inkBytes={ink} · rowBytes={row} · dim={dim}',
+  testNiimbotBarsUnconfirmed:
+    'Die Bytes haben diesen PC verlassen, aber dieser Übertragungsweg kann nicht bestätigen, dass das Etikett gedruckt wurde. Kommt nichts heraus, nutzen Sie einen Bluetooth-COM-Port oder die Android Print Bridge.',
+  testNiimbotBarsConfirmed:
+    'Der Drucker hat jeden Befehl bestätigt und das Etikett als fertig gemeldet.',
+  testNiimbotBarsFailed: 'Niimbot-Balkentest fehlgeschlagen',
   printerLinkedCategories: 'Kategorien auf diesem Drucker',
   printerLinkedCategoriesHint:
     'Wählen Sie, welche Menükategorien hier Küchentickets drucken. Alle aktiviert (Standard) = alle Kategorien.',

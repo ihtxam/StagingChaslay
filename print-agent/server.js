@@ -19,10 +19,16 @@ const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
-const { printNiimbotLabel } = require("./niimbot-client");
+const {
+  printNiimbotLabel,
+  probeNiimbotComPorts,
+  extractComPort,
+  extractWindowsUsbPort,
+  recommendNiimbotPort,
+} = require("./niimbot-client");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.9.7";
+const VERSION = "1.10.14";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -244,7 +250,7 @@ function assetPath(filename) {
 
 function ensurePs1OnDisk() {
   const dir = runtimeDir();
-  const scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1"];
+  const scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-niimbot-print.ps1"];
   for (const name of scripts) {
     const dest = path.join(dir, name);
     const bundled = path.join(__dirname, name);
@@ -259,9 +265,93 @@ function ensurePs1OnDisk() {
   return path.join(dir, "win-raw-print.ps1");
 }
 
+function ensureNiimbotPs1OnDisk() {
+  ensurePs1OnDisk();
+  return path.join(runtimeDir(), "win-niimbot-print.ps1");
+}
+
 function ensureWorkerPs1OnDisk() {
   ensurePs1OnDisk();
   return path.join(runtimeDir(), "win-raw-print-worker.ps1");
+}
+
+async function discoverNiimbotComPorts() {
+  if (!isWindows()) return [];
+  const ps = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$ports = @()
+# Name tokens only — VID 1a86 (CH340) is also used by Aclas scales and must not match.
+try {
+  Get-CimInstance -ClassName Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object {
+    $blob = ("$($_.Caption) $($_.Description) $($_.PNPDeviceID) $($_.Name)").ToLowerInvariant()
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
+      $ports += [PSCustomObject]@{ port = [string]$_.DeviceID; caption = [string]$_.Caption }
+    }
+  }
+} catch { }
+try {
+  Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
+    $blob = ("$($_.FriendlyName) $($_.InstanceId)").ToLowerInvariant()
+    if ($blob -match 'niimbot|\bk3\b|\bb21\b|\bd11\b|\bd110\b|\bb1\b') {
+      if ($_.FriendlyName -match '(COM\\d+)') {
+        $ports += [PSCustomObject]@{ port = $Matches[1]; caption = [string]$_.FriendlyName }
+      }
+    }
+  }
+} catch { }
+($ports | Sort-Object port -Unique | ConvertTo-Json -Compress -Depth 3)
+`;
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, maxBuffer: 1024 * 1024, encoding: "utf8", timeout: 15000 }
+    );
+    const raw = (stdout || "").trim().replace(/^\uFEFF/, "");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    return list
+      .map((row) => extractComPort(row.port, row.caption))
+      .filter(Boolean);
+  } catch (error) {
+    console.warn("[print-agent] Niimbot COM discovery failed:", error.message || error);
+    return [];
+  }
+}
+
+async function printNiimbotWindows({ printerName, packetsBase64 }) {
+  const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
+  if (!name) throw new Error("Niimbot printer name is required.");
+  const lines = Array.isArray(packetsBase64) ? packetsBase64.filter(Boolean) : [];
+  if (!lines.length) throw new Error("No Niimbot packets to print.");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-niimbot-"));
+  const packetsFile = path.join(tmpDir, "packets.txt");
+  const nameFile = path.join(tmpDir, "printer-name.txt");
+  fs.writeFileSync(packetsFile, lines.join("\n"), "utf8");
+
+  try {
+    const scriptPath = ensureNiimbotPs1OnDisk();
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(`win-niimbot-print.ps1 not found at ${scriptPath}`);
+    }
+    const args = ["-PacketsFile", packetsFile];
+    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
+    args.push("-PrinterNameFile", nameFile);
+    const usedPrinter = await runPowerShell(scriptPath, args, name);
+    return usedPrinter || name;
+  } finally {
+    try {
+      fs.unlinkSync(packetsFile);
+      if (fs.existsSync(nameFile)) fs.unlinkSync(nameFile);
+      fs.rmdirSync(tmpDir);
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
 }
 
 function killPrintWorker() {
@@ -580,7 +670,7 @@ async function doInstall() {
     appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
-  const ps1Scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1"];
+  const ps1Scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-niimbot-print.ps1"];
   for (const ps1Name of ps1Scripts) {
     const ps1Src = path.join(__dirname, ps1Name);
     const ps1Dest = path.join(dir, ps1Name);
@@ -738,13 +828,43 @@ function isShellDump(text) {
   );
 }
 
+/** Pull a specific Niimbot / Win32 / COM reason out of a PowerShell dump. */
+function extractUsefulPrintLine(raw) {
+  const text = String(raw || "");
+  const patterns = [
+    /win-niimbot-print\.ps1 not found[^\n]*/i,
+    /WritePrinter short write for '[^']+'[^\n]*/i,
+    /WritePrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /OpenPrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /StartDocPrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /StartPagePrinter failed for '[^']+' \(Win32=\d+\)/i,
+    /Printer '[^']+' not found or disconnected/i,
+    /Niimbot COM[^\n]*/i,
+    /Niimbot [^\n]*/i,
+    /Access to the port '[^']+'[^\n]*/i,
+    /The port '[^']+' does not exist[^\n]*/i,
+    /No Niimbot packets[^\n]*/i,
+    /Niimbot Windows print requires[^\n]*/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m && m[0]) return m[0].replace(/^.*Exception:\s*/i, "").trim().slice(0, 220);
+  }
+  return "";
+}
+
 /** Short user-facing print errors — never leak PowerShell stacks, argv, or temp paths. Never throws. */
 function sanitizePrintAgentError(error, printerName, fallback) {
   const safeFallback = fallback || "Print failed";
   try {
+    if (error && (error.killed || error.code === "ETIMEDOUT")) {
+      const label = printerName ? String(printerName).trim() : "";
+      return label ? `Print timed out for '${label}'` : "Print timed out";
+    }
     const raw = [error && error.stderr, error && error.message, error && error.stdout]
       .filter(Boolean)
       .join("\n");
+    const useful = extractUsefulPrintLine(raw);
     const win32 =
       raw.match(/OpenPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
       raw.match(/StartDocPrinter failed for '([^']+)' \(Win32=(\d+)\)/i) ||
@@ -760,7 +880,7 @@ function sanitizePrintAgentError(error, printerName, fallback) {
       code === 1801 ||
       code === 1905 ||
       code === 1906 ||
-      /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|OpenPrinter failed|StartDocPrinter failed|\bGLPrinter\b/i.test(
+      /ERROR_INVALID_PRINTER_NAME|ERROR_PRINTER_DELETED|ERROR_INVALID_PRINTER_STATE|\bGLPrinter\b/i.test(
         raw
       )
     ) {
@@ -768,13 +888,14 @@ function sanitizePrintAgentError(error, printerName, fallback) {
         ? `Printer '${name}' not found or disconnected`
         : "Printer not found or disconnected";
     }
+    if (useful) return useful;
     const cleanLine = raw
       .split(/\r?\n/)
       .map((l) => String(l).trim())
       .find(
         (l) =>
           l &&
-          /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer/i.test(
+          /Printer '|OpenPrinter|StartDocPrinter|WritePrinter|not found or disconnected|corrupted|Select a receipt|No default printer|Niimbot /i.test(
             l
           ) &&
           !isShellDump(l)
@@ -920,6 +1041,158 @@ async function resolvePrinterName(requested) {
     .filter((x) => x.score >= 12)
     .sort((a, b) => b.score - a.score);
   return scored[0] ? scored[0].p.name : want;
+}
+
+async function resolveNiimbotComPort(printerName, portName) {
+  const direct = extractComPort(portName, printerName);
+  if (direct) return direct;
+  if (extractWindowsUsbPort(portName, printerName)) return null;
+  const resolved = printerName ? await resolvePrinterName(printerName) : "";
+  const printers = await listPrinters();
+  const match =
+    printers.find((p) => p.name === resolved) ||
+    printers.find((p) => p.name === printerName) ||
+    printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
+  const fromPrinter = extractComPort(match?.portName, match?.name);
+  if (fromPrinter) return fromPrinter;
+  if (extractWindowsUsbPort(match?.portName, match?.name)) return null;
+
+  const discovered = await discoverNiimbotComPorts();
+  if (!discovered.length) return null;
+  const want = stableDeviceKey(printerName || match?.name || match?.matchHint);
+  if (want) {
+    const scored = discovered
+      .map((port) => ({ port, score: scoreDeviceMatch(want, port) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+    if (scored[0]) return scored[0].port;
+  }
+  return discovered[0];
+}
+
+async function resolveNiimbotWindowsUsbPort(printerName, portName) {
+  const direct = extractWindowsUsbPort(portName, printerName);
+  if (direct) return direct;
+  const resolved = printerName ? await resolvePrinterName(printerName) : "";
+  const printers = await listPrinters();
+  const match =
+    printers.find((p) => p.name === resolved) ||
+    printers.find((p) => p.name === printerName) ||
+    printers.find((p) => String(p.matchHint || "").toLowerCase() === String(printerName || "").toLowerCase());
+  return extractWindowsUsbPort(match?.portName);
+}
+
+/**
+ * Every print queue with the port it is really bound to.
+ *
+ * `listPrinters()` hides offline queues, which is right for a receipt printer
+ * picker and wrong here: the port a Niimbot queue is bound to is the one fact
+ * that decides how we talk to it, and `Win32_Printer.PortName` is the only
+ * authoritative source for it. A queue can keep an association with USB005 in
+ * the Ports dialog while actually printing to COM8 — which is exactly what the
+ * merchant's till does, and what we spent eight days printing blanks over.
+ */
+// One label job resolves the queue's port and then the COM port owners, and the
+// diagnostics route asks for both again. PowerShell costs the better part of a
+// second to start, and the answer cannot change inside one job.
+const QUEUE_PORT_CACHE_MS = 4000;
+let queuePortCache = { at: 0, rows: null };
+
+async function listPrintQueuePorts() {
+  if (!isWindows()) return [];
+  if (queuePortCache.rows && Date.now() - queuePortCache.at < QUEUE_PORT_CACHE_MS) {
+    return queuePortCache.rows;
+  }
+  const ps = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$drivers = @()
+try {
+  Get-PrinterDriver -ErrorAction Stop | ForEach-Object { $drivers += ([string]$_.Name).ToLowerInvariant() }
+} catch {
+  try {
+    Get-CimInstance -ClassName Win32_PrinterDriver -ErrorAction Stop | ForEach-Object {
+      $drivers += (([string]$_.Name) -split ',')[0].ToLowerInvariant()
+    }
+  } catch { }
+}
+$items = Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue | ForEach-Object {
+  $driver = [string]$_.DriverName
+  $missing = $false
+  if ([string]::IsNullOrWhiteSpace($driver)) {
+    $missing = $true
+  } elseif ($drivers.Count -gt 0 -and ($drivers -notcontains $driver.ToLowerInvariant())) {
+    $missing = $true
+  }
+  [PSCustomObject]@{
+    name = [string]$_.Name
+    portName = [string]$_.PortName
+    driverName = $driver
+    driverMissing = $missing
+    offline = [bool]$_.WorkOffline
+  }
+}
+[Console]::Out.Write(($items | ConvertTo-Json -Compress -Depth 4))
+`;
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { windowsHide: true, maxBuffer: 4 * 1024 * 1024, encoding: "utf8", timeout: 20000 }
+    );
+    const raw = (stdout || "").trim().replace(/^\uFEFF/, "");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    const rows = list.map((q) => ({
+      name: String(q.name || ""),
+      portName: String(q.portName || ""),
+      driverName: String(q.driverName || ""),
+      driverMissing: Boolean(q.driverMissing),
+      offline: Boolean(q.offline),
+    }));
+    queuePortCache = { at: Date.now(), rows };
+    return rows;
+  } catch (error) {
+    console.warn("[print-agent] print queue port lookup failed:", error.message || error);
+    return [];
+  }
+}
+
+/** The queue row for the printer the label job targets, port included. */
+async function resolveNiimbotQueuePort(printerName, portName) {
+  const want = String(printerName || "").trim();
+  if (!want) return null;
+  const queues = await listPrintQueuePorts();
+  if (!queues.length) return null;
+  const lower = want.toLowerCase();
+  const match =
+    queues.find((q) => q.name === want) ||
+    queues.find((q) => q.name.toLowerCase() === lower) ||
+    queues.find((q) => stableDeviceKey(q.name) === stableDeviceKey(want));
+  if (!match) return null;
+  const selected = extractComPort(portName) || extractWindowsUsbPort(portName);
+  if (selected && match.portName && !String(match.portName).toUpperCase().includes(selected)) {
+    console.log(
+      `[print-agent] '${match.name}' is bound to ${match.portName}, not the selected ${selected}`
+    );
+  }
+  return match;
+}
+
+/** COM port -> the queues bound to it, plus the port the Niimbot really uses. */
+async function resolveNiimbotComOwners() {
+  const queues = await listPrintQueuePorts();
+  const byPort = {};
+  for (const queue of queues) {
+    for (const part of String(queue.portName || "").split(",")) {
+      const com = extractComPort(part);
+      if (!com) continue;
+      if (!byPort[com]) byPort[com] = [];
+      if (!byPort[com].includes(queue.name)) byPort[com].push(queue.name);
+    }
+  }
+  return { byPort, queues, recommended: recommendNiimbotPort(queues) };
 }
 
 function buildPrintErrorPayload(error, printerName) {
@@ -1216,7 +1489,12 @@ function startServer() {
         "bt-com-paced-spooler",
         "com-serial-write-fallback",
         "niimbot-label",
+        "niimbot-diagnostics",
+        "niimbot-test-pattern",
+        "niimbot-com-probe",
         "bt-cut-trailer",
+        "usb-unpaced-raw",
+        "faster-bt-com-pace",
       ],
     });
   });
@@ -1287,16 +1565,21 @@ function startServer() {
   app.post("/print/niimbot-label", async (req, res) => {
     try {
       const body = req.body || {};
-      const bitmapBase64 = String(body.bitmapBase64 || "").trim();
       const widthPx = Number(body.widthPx);
       const heightPx = Number(body.heightPx);
-      if (!bitmapBase64 || !widthPx || !heightPx) {
-        res.status(400).json({ ok: false, error: "bitmapBase64, widthPx, and heightPx are required" });
+      const testPattern = body.testPattern === true;
+      const bitmapBase64 = String(body.bitmapBase64 || "").trim();
+      if (!widthPx || !heightPx) {
+        res.status(400).json({ ok: false, error: "widthPx and heightPx are required" });
+        return;
+      }
+      if (!testPattern && !bitmapBase64) {
+        res.status(400).json({ ok: false, error: "bitmapBase64 is required (or set testPattern=true)" });
         return;
       }
       const printerName = String(body.printerName || "").trim();
       const portName = String(body.portName || "").trim();
-      const usedPrinter = await enqueuePrint(() =>
+      const result = await enqueuePrint(() =>
         printNiimbotLabel({
           printerName,
           portName: portName || printerName,
@@ -1304,16 +1587,99 @@ function startServer() {
           widthPx,
           heightPx,
           density: body.density,
-          printRawFn: async ({ printerName: name, dataBase64 }) => {
-            await printRaw({ printerName: name, dataBase64 });
-          },
+          profile: body.profile,
+          testPattern,
+          invertBitmap: body.invertBitmap === true,
+          allowForeignPort: body.allowForeignPort === true,
+          resolveComPortFn: resolveNiimbotComPort,
+          resolveWindowsUsbPortFn: resolveNiimbotWindowsUsbPort,
+          resolveQueuePortFn: resolveNiimbotQueuePort,
+          resolveComOwnersFn: resolveNiimbotComOwners,
+          printWindowsPacketsFn: printNiimbotWindows,
         })
       );
-      res.json({ ok: true, printer: usedPrinter });
+      const diag = result && typeof result === "object" ? result : { printer: result };
+      console.log(
+        `[print-agent] niimbot ${diag.confirmed ? "PRINTED (0xf4 -> 01)" : diag.unconfirmed ? "sent (unconfirmed)" : "ok"} path=${diag.path || "?"} port=${diag.printer || "?"} source=${diag.portSource || "?"} baud=${diag.baud || "?"} profile=${diag.profile || "?"} packets=${diag.packetCount || "?"} raster=${diag.rasterLines || "?"} bitmapNonZero=${diag.bitmapNonZeroBytes ?? "?"} dim=${diag.dimensionHex || "?"} replies=${(diag.replies || []).length}`
+      );
+      res.json({ ok: true, version: VERSION, ...diag });
     } catch (error) {
       const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
       console.error("[print-agent] niimbot label failed:", payload.error);
       res.status(500).json(payload);
+    }
+  });
+
+  /** GET /print/niimbot-label/diagnostics — list Niimbot COM ports and protocol hint. */
+  app.get("/print/niimbot-label/diagnostics", async (req, res) => {
+    try {
+      const printerName = String(req.query.printerName || "").trim();
+      const portName = String(req.query.portName || "").trim();
+      const { detectNiimbotProfile, chooseNiimbotTransport } = require("./niimbot-client");
+      const comPorts = await discoverNiimbotComPorts();
+      const resolvedCom = await resolveNiimbotComPort(printerName, portName);
+      const usbPort = await resolveNiimbotWindowsUsbPort(printerName, portName);
+      const queue = await resolveNiimbotQueuePort(printerName, portName);
+      const owners = await resolveNiimbotComOwners();
+      const transport = chooseNiimbotTransport({
+        printerName,
+        portName,
+        resolvedCom,
+        resolvedUsb: usbPort,
+        boundPort: queue?.portName || "",
+      });
+      res.json({
+        ok: true,
+        version: VERSION,
+        profile: detectNiimbotProfile(printerName, portName, req.query.profile),
+        comPorts,
+        resolvedComPort: resolvedCom,
+        windowsUsbPort: usbPort,
+        // What the queue is really bound to — the fact that decides everything.
+        queueName: queue?.name || "",
+        queuePort: queue?.portName || "",
+        queueDriver: queue?.driverName || "",
+        queueDriverMissing: Boolean(queue?.driverMissing),
+        comPortOwners: owners.byPort,
+        recommendedPort: owners.recommended,
+        transport: transport.mode,
+        transportPort: transport.comPort || transport.usbPort || "",
+        portSource: transport.portSource,
+        preferredPath: transport.mode === "com" ? "com" : usbPort ? `usb:${usbPort}` : "spooler",
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message || "diagnostics failed" });
+    }
+  });
+
+  /**
+   * GET /print/niimbot-label/com-probe — one-click port diagnosis.
+   * Lists every serial port and print queue, tries to open each port at each
+   * baud, and reports the real Windows exception per attempt. Always 200: the
+   * point is to hand the merchant readable text, never another opaque failure.
+   */
+  app.get("/print/niimbot-label/com-probe", async (req, res) => {
+    try {
+      const probe = await probeNiimbotComPorts({ agentVersion: VERSION });
+      console.log(
+        `[print-agent] niimbot com-probe ports=${probe.ports.length} queues=${probe.printers.length} ok=${probe.ok}`
+      );
+      res.json({ version: VERSION, ...probe });
+    } catch (error) {
+      const message = error && error.message ? error.message : "com-probe failed";
+      console.error("[print-agent] niimbot com-probe failed:", message);
+      res.json({
+        ok: false,
+        version: VERSION,
+        supported: process.platform === "win32",
+        error: message,
+        ports: [],
+        printers: [],
+        bluetooth: [],
+        warnings: [],
+        summary: ["The diagnosis itself failed. The reason is shown above."],
+        text: `Niimbot port diagnosis failed: ${message}`,
+      });
     }
   });
 

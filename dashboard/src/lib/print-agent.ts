@@ -275,16 +275,41 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
   return resolved;
 }
 
-/** Dedupe agent enumeration by exact Windows queue name. */
+/** Dedupe agent enumeration by Windows queue name + port (USB005 vs COM6). */
+export function printerSelectValue(p: { name?: string | null; portName?: string | null }): string {
+  const name = String(p.name || '').trim();
+  const port = String(p.portName || '').trim();
+  return port ? `${name}|||${port}` : name;
+}
+
+export function findPrinterBySelectValue(
+  printers: AgentPrinter[],
+  value: string
+): AgentPrinter | undefined {
+  const raw = String(value || '');
+  const sep = raw.indexOf('|||');
+  if (sep >= 0) {
+    const name = raw.slice(0, sep);
+    const port = raw.slice(sep + 3);
+    return (
+      printers.find((ap) => ap.name === name && String(ap.portName || '') === port) ||
+      printers.find((ap) => ap.name === name)
+    );
+  }
+  return printers.find((ap) => ap.name === raw);
+}
+
 export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
   const seen = new Set<string>();
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name || seen.has(name)) continue;
+    if (!name) continue;
+    const key = printerSelectValue({ name, portName: p.portName });
+    if (seen.has(key)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
-    seen.add(name);
+    seen.add(key);
     out.push({
       ...p,
       name,
@@ -434,10 +459,17 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
-const BT_COM_PRINTER_RE =
-  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
+/**
+ * 1.10.14 drives the COM port the print queue is really bound to and validates
+ * every reply frame, so a result finally means something. Older builds wrote to
+ * the spooler and could not tell a printed label from a blank one.
+ */
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.14';
 
-/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
+const BT_COM_PRINTER_RE =
+  /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
+
+/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. USB skips this. */
 export const BLUETOOTH_KITCHEN_SETTLE_MS = 1800;
 
 export function looksLikeBluetoothOrComPrinter(
@@ -445,12 +477,18 @@ export function looksLikeBluetoothOrComPrinter(
 ): boolean {
   if (!printer) return false;
   if (typeof printer === 'object' && printer.connectionType === 'bluetooth') return true;
-  if (typeof printer === 'string') return BT_COM_PRINTER_RE.test(printer);
-  return BT_COM_PRINTER_RE.test(
-    [printer.name, printer.portName, printer.driverName, printer.matchHint, printer.connectionType]
-      .filter(Boolean)
-      .join(' ')
-  );
+  const blob =
+    typeof printer === 'string'
+      ? printer
+      : [printer.portName, printer.connectionType, printer.name, printer.driverName, printer.matchHint]
+          .filter(Boolean)
+          .join(' ');
+  // USB001 / USBPRINT / LPT are fast RAW. Do not match "XP-80" / "Receipt" / "80mm" as Bluetooth —
+  // that used to add BLUETOOTH_KITCHEN_SETTLE_MS (1.8s) on top of paced USB drain sleeps (~4–5s).
+  if (/\busb\d+\b|\busb00|usbprint|\bdot4\b|\blpt\d*\b/i.test(blob) && !BT_COM_PRINTER_RE.test(blob)) {
+    return false;
+  }
+  return BT_COM_PRINTER_RE.test(blob);
 }
 
 export async function settleAfterBluetoothKitchenPrint(
@@ -589,6 +627,10 @@ export function isPrintAgentVersionOutdated(
   return compareAgentVersion(installed, MIN_PRINT_AGENT_VERSION) < 0;
 }
 
+function isGenericPrintFailedToast(msg: string): boolean {
+  return /^print failed( for '[^']+')?\.?$/i.test(String(msg || '').trim());
+}
+
 /** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
@@ -602,6 +644,42 @@ export function friendlyPrintAgentError(raw: unknown, printerName?: string): str
     return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
   }
   return msg.length > 220 ? 'Print failed' : msg;
+}
+
+/** Toast for Niimbot label jobs — keep the agent's real reason, plus version when generic. */
+export function formatNiimbotLabelError(opts: {
+  agentMessage?: string;
+  printerName?: string;
+  httpStatus?: number;
+  health?: PrintAgentHealth | null;
+}): string {
+  const name = String(opts.printerName || '').trim() || 'Niimbot';
+  const ver = String(opts.health?.version || '').trim();
+  const features = opts.health?.features || [];
+  const hasNiimbot = features.includes('niimbot-label');
+  const missingRoute =
+    opts.httpStatus === 404 ||
+    opts.httpStatus === 405 ||
+    (opts.health?.ok === true && ver && !hasNiimbot);
+
+  if (missingRoute) {
+    return `Label print failed: Print Agent ${ver || 'on this till'} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings → Receipts & printers.`;
+  }
+
+  const raw = String(opts.agentMessage || '').trim();
+  if (raw && !isGenericPrintFailedToast(raw) && !isNoisyPrintAgentDump(raw) && raw.length <= 280) {
+    return raw;
+  }
+  const friendly = raw ? friendlyPrintAgentError(raw, name) : '';
+  if (friendly && !isGenericPrintFailedToast(friendly)) return friendly;
+
+  const stale =
+    ver && !isBridgeVersion(ver) && compareAgentVersion(ver, MIN_NIIMBOT_AGENT_VERSION) < 0;
+  if (stale) {
+    return `Label print failed for '${name}'. Print Agent v${ver} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings.`;
+  }
+  const verBit = ver ? ` Agent v${ver}.` : '';
+  return `Label print failed for '${name}'.${verBit} Check http://127.0.0.1:9101/health (need v${MIN_NIIMBOT_AGENT_VERSION}+), printer is on, labels loaded, and NIIMBOT.exe is closed.`;
 }
 
 async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
@@ -758,10 +836,22 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
   }
 }
 
+const PRINT_AGENT_OK_TTL_MS = 30_000;
+let printAgentLastOkAt = 0;
+
+/** Skip repeated /health probes after a recent successful print on this tab. */
+export function markPrintAgentRecentSuccess(): void {
+  printAgentLastOkAt = Date.now();
+}
+
 export async function isPrintAgentAvailable(): Promise<boolean> {
+  if (printAgentLastOkAt > 0 && Date.now() - printAgentLastOkAt < PRINT_AGENT_OK_TTL_MS) {
+    return true;
+  }
   const health = isAndroidTabletDevice()
     ? await getPrintAgentHealth(2)
     : await probePrintAgentHealth(3);
+  if (health.ok) markPrintAgentRecentSuccess();
   return health.ok;
 }
 
@@ -859,6 +949,48 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
 export type PrintViaAgentResult = {
   ok: true;
   printer?: string;
+  /** Set when the transport accepted the bytes but cannot confirm they printed. */
+  unconfirmed?: boolean;
+  warning?: string;
+};
+
+export type NiimbotHandshakeStep = {
+  step: string;
+  request: number;
+  expect: number;
+  replyCmd: number;
+  replyHex: string;
+  rawHex: string;
+  attempts: number;
+  ok: boolean;
+  done: boolean;
+};
+
+export type NiimbotPrintResult = PrintViaAgentResult & {
+  version?: string;
+  profile?: string;
+  path?: string;
+  transport?: string;
+  dimensionHex?: string;
+  bitmapNonZeroBytes?: number | null;
+  rasterLines?: number;
+  rasterRowBytes?: number | null;
+  packetCount?: number;
+  baud?: number | null;
+  /** Where the port came from: the merchant's choice, the queue, or a guess. */
+  portSource?: string;
+  osConfiguredBaud?: string;
+  queuePort?: string;
+  queueDriverMissing?: boolean;
+  /** True only when PrintEnd (0xf4) answered 01 — the one proof of a label. */
+  confirmed?: boolean;
+  answered?: boolean;
+  detail?: string;
+  handshake?: NiimbotHandshakeStep[];
+  /** Set on the USBPRINT device path: the interface we opened and what it answered. */
+  devicePath?: string;
+  bytesWritten?: number;
+  replies?: Array<{ afterType: number; hex: string }> | string[];
 };
 
 export async function printViaAgent(opts: {
@@ -884,6 +1016,7 @@ export async function printViaAgent(opts: {
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }
+    markPrintAgentRecentSuccess();
     return { ok: true, printer: res.printer };
   }
   const data = await agentFetch(
@@ -901,37 +1034,149 @@ export async function printViaAgent(opts: {
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
+  markPrintAgentRecentSuccess();
   return { ok: true, printer: data?.printer };
 }
 
 export async function printNiimbotLabelViaAgent(opts: {
   printerName?: string | null;
   portName?: string | null;
-  bitmapBase64: string;
+  bitmapBase64?: string;
   widthPx: number;
   heightPx: number;
   density?: number;
-}): Promise<PrintViaAgentResult> {
+  testPattern?: boolean;
+  profile?: string | null;
+  invertBitmap?: boolean;
+  usbWriteMode?: string | null;
+}): Promise<NiimbotPrintResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
     throw new Error(unsuitableRawPrinterMessage(name));
   }
-  const data = await agentFetch(
-    '/print/niimbot-label',
-    {
-      method: 'POST',
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const method = 'POST';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label`, {
+      method,
+      headers,
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
         portName: opts.portName || undefined,
-        bitmapBase64: opts.bitmapBase64,
+        bitmapBase64: opts.testPattern ? undefined : opts.bitmapBase64,
         widthPx: opts.widthPx,
         heightPx: opts.heightPx,
         density: opts.density,
+        testPattern: opts.testPattern === true,
+        profile: opts.profile || undefined,
+        invertBitmap: opts.invertBitmap === true,
+        usbWriteMode: opts.usbWriteMode || undefined,
       }),
-    },
-    name
-  );
-  return { ok: true, printer: data?.printer };
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const health = await getPrintAgentHealth(0).catch(() => null);
+      throw new Error(
+        formatNiimbotLabelError({
+          agentMessage: collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+          printerName: name,
+          httpStatus: res.status,
+          health,
+        })
+      );
+    }
+    const data = (await res.json()) as NiimbotPrintResult;
+    console.info('[niimbot-label]', {
+      version: data?.version,
+      path: data?.path,
+      portSource: data?.portSource,
+      baud: data?.baud,
+      profile: data?.profile,
+      dimensionHex: data?.dimensionHex,
+      bitmapNonZeroBytes: data?.bitmapNonZeroBytes,
+      devicePath: data?.devicePath,
+      replies: data?.replies?.length,
+      confirmed: data?.confirmed,
+      unconfirmed: data?.unconfirmed,
+    });
+    /*
+     * Everything the agent reports has to reach the caller. Returning only
+     * `{ ok, printer, unconfirmed, warning }` is what made the merchant's toast
+     * read `via ? · inkBytes=? · rowBytes=? · dim=?` — the placeholders were
+     * substituted, with values this function had already thrown away, so every
+     * diagnostic we asked them to screenshot for a week was blank.
+     */
+    return {
+      ...data,
+      ok: true,
+      printer: data?.printer,
+      unconfirmed: Boolean(data?.unconfirmed),
+      warning: typeof data?.warning === 'string' ? data.warning : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v${MIN_NIIMBOT_AGENT_VERSION}+).`
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export type NiimbotComProbe = {
+  ok: boolean;
+  version?: string;
+  supported?: boolean;
+  error?: string | null;
+  text: string;
+  summary?: string[];
+};
+
+/**
+ * Runs the Print Agent's port diagnosis. Returns readable text for the merchant
+ * to screenshot; the agent itself never throws, so only transport errors surface.
+ */
+export async function probeNiimbotComPorts(): Promise<NiimbotComProbe> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label/com-probe`, {
+      signal: controller.signal,
+    });
+    if (res.status === 404) {
+      return {
+        ok: false,
+        text: `This Print Agent is too old to diagnose ports. Install v${MIN_NIIMBOT_AGENT_VERSION}+ from Settings → Receipts & printers, then run the diagnosis again.`,
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, text: `Print Agent returned HTTP ${res.status} for the port diagnosis.` };
+    }
+    const data = await res.json();
+    return {
+      ok: Boolean(data?.ok),
+      version: data?.version,
+      supported: data?.supported,
+      error: data?.error ?? null,
+      text: typeof data?.text === 'string' && data.text ? data.text : JSON.stringify(data, null, 2),
+      summary: Array.isArray(data?.summary) ? data.summary.map(String) : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { ok: false, text: 'Port diagnosis timed out after 2 minutes.' };
+    }
+    return {
+      ok: false,
+      text: `Could not reach the Print Agent at ${PRINT_AGENT_URL}. Start it on this till, then retry.`,
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */
