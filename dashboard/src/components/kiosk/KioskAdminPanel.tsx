@@ -72,6 +72,7 @@ export default function KioskAdminPanel({
   const [testing, setTesting] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [settings, setSettings] = useState<KioskAdminSettings>({});
+  const [kioskLayoutLocked, setKioskLayoutLocked] = useState(false);
   const [serverDiag, setServerDiag] = useState<KioskDiagnostics | null>(null);
   const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);
   const [printOk, setPrintOk] = useState<boolean | null>(null);
@@ -81,6 +82,7 @@ export default function KioskAdminPanel({
 
   const token = accessToken || settings.accessToken || '';
   const kioskLicensed = isKioskLicensed({ enabled });
+  const isGroceryLayout = kioskLayoutLocked || settings.kioskLayout === 'grocery';
   const activeTerminals = useMemo(
     () => terminals.filter((term) => String(term.status).toLowerCase() === 'active'),
     [terminals]
@@ -107,6 +109,9 @@ export default function KioskAdminPanel({
         const res = await api.get('/merchant/kiosk/settings');
         setEnabled(!!res.data.enabled);
         setSettings(res.data.settings || {});
+        setKioskLayoutLocked(
+          !!res.data.kioskLayoutLocked || res.data.businessModule === 'retail'
+        );
         const diag = await api.get('/merchant/kiosk/diagnostics');
         setServerDiag(diag.data.diagnostics || null);
       } else if (accessToken) {
@@ -117,9 +122,12 @@ export default function KioskAdminPanel({
         if (pin && isKioskAdminUnlocked(accessToken)) {
           const adminSettings = await fetchKioskAdminSettingsByToken(accessToken, pin);
           setSettings({ ...adminSettings, accessToken });
+          const cfg = await axios.get(`/api/kiosk/${accessToken}/config`).catch(() => null);
+          setKioskLayoutLocked(!!cfg?.data?.settings?.kioskLayoutLocked);
         } else {
           const cfg = await axios.get(`/api/kiosk/${accessToken}/config`);
           setSettings((prev) => ({ ...prev, accessToken, name: cfg.data.settings?.name }));
+          setKioskLayoutLocked(!!cfg.data.settings?.kioskLayoutLocked);
         }
       }
     } catch (e: unknown) {
@@ -142,8 +150,15 @@ export default function KioskAdminPanel({
     setSaving(true);
     try {
       if (mode === 'merchant') {
-        const res = await api.put('/merchant/kiosk/settings', { settings });
-        setSettings(res.data.settings || settings);
+        const payload = kioskLayoutLocked
+          ? {
+              ...settings,
+              kioskLayout: 'grocery' as const,
+              categoryNav: settings.categoryNav === 'left' ? 'left' : 'bottom',
+            }
+          : settings;
+        const res = await api.put('/merchant/kiosk/settings', { settings: payload });
+        setSettings(res.data.settings || payload);
       } else if (accessToken) {
         const pin = getKioskAdminPin(accessToken);
         if (!pin) {
@@ -626,6 +641,7 @@ export default function KioskAdminPanel({
               </select>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskScreenSizeHint')}</p>
             </label>
+            {!kioskLayoutLocked ? (
             <div className="md:col-span-2">
               <p className="text-sm font-semibold text-[var(--text)]">{t('kioskLayoutLabel')}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskLayoutHint')}</p>
@@ -664,17 +680,23 @@ export default function KioskAdminPanel({
                 </label>
               </div>
             </div>
+            ) : (
+            <div className="md:col-span-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-3">
+              <p className="text-sm font-semibold text-[var(--text)]">{t('kioskLayoutGrocery')}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{t('kioskLayoutRetailLocked')}</p>
+            </div>
+            )}
             <div className="md:col-span-2">
               <p className="text-sm font-semibold text-[var(--text)]">
-                {settings.kioskLayout === 'grocery' ? t('kioskGroceryNavLabel') : t('kioskCategoryNavLabel')}
+                {isGroceryLayout ? t('kioskGroceryNavLabel') : t('kioskCategoryNavLabel')}
               </p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {settings.kioskLayout === 'grocery' ? t('kioskGroceryNavHint') : t('kioskCategoryNavHint')}
+                {isGroceryLayout ? t('kioskGroceryNavHint') : t('kioskCategoryNavHint')}
               </p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <label
                   className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
-                    (settings.categoryNav || (settings.kioskLayout === 'grocery' ? 'bottom' : 'left')) === 'left'
+                    (settings.categoryNav || (isGroceryLayout ? 'bottom' : 'left')) === 'left'
                       ? 'border-[var(--accent,#059669)] bg-[var(--surface-2,transparent)]'
                       : 'border-[var(--border)]'
                   }`}
@@ -684,7 +706,7 @@ export default function KioskAdminPanel({
                       type="radio"
                       name="kioskCategoryNav"
                       checked={
-                        settings.kioskLayout === 'grocery'
+                        isGroceryLayout
                           ? settings.categoryNav === 'left'
                           : (settings.categoryNav || 'left') === 'left'
                       }
@@ -705,7 +727,7 @@ export default function KioskAdminPanel({
                     </span>
                   </span>
                 </label>
-                {settings.kioskLayout === 'grocery' ? (
+                {isGroceryLayout ? (
                 <label
                   className={`flex cursor-pointer flex-col gap-2 rounded-xl border-2 px-3 py-3 ${
                     (settings.categoryNav || 'bottom') === 'bottom'

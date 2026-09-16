@@ -36,6 +36,7 @@ export type KioskConfig = {
     screenSizeIn?: 23 | 27;
     kioskLayout?: 'restaurant' | 'grocery';
     categoryNav?: 'left' | 'top' | 'bottom';
+    kioskLayoutLocked?: boolean;
   };
   tables: Array<{ id: string; label: string }>;
 };
