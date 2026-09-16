@@ -770,11 +770,13 @@ export class MerchantSettingsService {
       }
     }
 
-    const merchant = await db
-      .update(schema.merchants)
-      .set(patch)
-      .where(eq(schema.merchants.id, merchantId))
-      .returning();
+    const merchant = await withMerchantSchemaRetry(() =>
+      db
+        .update(schema.merchants)
+        .set(patch)
+        .where(eq(schema.merchants.id, merchantId))
+        .returning()
+    );
 
     if (merchant.length === 0) {
       throw new Error("Merchant not found");

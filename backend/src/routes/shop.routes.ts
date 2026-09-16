@@ -709,7 +709,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
             .toLowerCase();
           return v === "popup_start" || v === "menu" || v === "checkout" ? v : "checkout";
         })(),
-        menuShowProductImages: merchant.menuShowProductImages !== false,
+        menuShowProductImages: merchant.menuShowProductImages === true,
         menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
         cartLayout: (() => {
           const v = String(merchant.cartLayout || "")
@@ -1131,16 +1131,38 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
   );
   const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
 
-  const toItem = (p: (typeof visibleProducts)[number]) =>
-    withPublicShopImageUrls(
+  const showProductImages = merchant.menuShowProductImages === true;
+  const showCategoryBanners = merchant.menuShowCategoryBanners !== false;
+
+  const toItem = (p: (typeof visibleProducts)[number]) => {
+    const item = withPublicShopImageUrls(
       req,
       mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
     );
+    if (!showProductImages) {
+      return {
+        ...item,
+        image: null,
+        comboSlots: item.comboSlots?.map((slot) => ({
+          ...slot,
+          options: slot.options.map((opt) => ({ ...opt, image: null })),
+        })),
+        modifierGroups: item.modifierGroups?.map((g) => ({
+          ...g,
+          options: g.options.map((o) => ({ ...o, image: null })),
+        })),
+      };
+    }
+    return item;
+  };
 
   const menu = visibleCategories.map((cat) => ({
     id: cat.id,
     name: cat.name,
-    image: resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null,
+    image:
+      showCategoryBanners
+        ? resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null
+        : null,
     isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
     deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
     extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
