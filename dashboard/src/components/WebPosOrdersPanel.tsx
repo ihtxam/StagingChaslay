@@ -841,8 +841,13 @@ export default function WebPosOrdersPanel({
     for (const h of heldBucket) items.push({ kind: 'held', held: h });
     for (const o of activeBucket) items.push({ kind: 'order', order: o });
     for (const o of doneBucket) items.push({ kind: 'order', order: o });
-    // Single chronology: newest activity at the top (held / open / completed interleaved).
-    items.sort((a, b) => listItemTimeMs(b) - listItemTimeMs(a));
+    items.sort((a, b) => {
+      if (view === 'active') {
+        if (a.kind === 'held' && b.kind !== 'held') return -1;
+        if (b.kind === 'held' && a.kind !== 'held') return 1;
+      }
+      return listItemTimeMs(b) - listItemTimeMs(a);
+    });
     return items;
   }, [held, ordersForList, statusFilter, channelFilter, search]);
 
@@ -1665,6 +1670,9 @@ export default function WebPosOrdersPanel({
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
+                          <p className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                            {t('webPosOnHold')}
+                          </p>
                           <p className="text-[11px] text-stone-500">
                             {sentCount > 0 ? `${readyCount}/${sentCount}` : `${sentCount}/${lines.length || 0}`}
                           </p>
@@ -1794,6 +1802,9 @@ export default function WebPosOrdersPanel({
                               </span>
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                                {t('webPosOnHold')}
+                              </span>
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
                               >

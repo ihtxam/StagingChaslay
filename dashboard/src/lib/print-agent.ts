@@ -976,6 +976,7 @@ export async function printNiimbotLabelViaAgent(opts: {
   widthPx: number;
   heightPx: number;
   density?: number;
+  testPattern?: boolean;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   if (name && isUnsuitableRawPrinter(name)) {
@@ -996,6 +997,7 @@ export async function printNiimbotLabelViaAgent(opts: {
         widthPx: opts.widthPx,
         heightPx: opts.heightPx,
         density: opts.density,
+        testPattern: opts.testPattern === true,
       }),
       signal: controller.signal,
     });

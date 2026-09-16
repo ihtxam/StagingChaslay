@@ -12,6 +12,7 @@ import {
 
 assert.equal(isTsplLabelPrinterName('EML-400L (4inch)'), true);
 assert.equal(isTsplLabelPrinterName('LuckyDoor LP-80H'), true);
+assert.equal(isTsplLabelPrinterName('XP-365B'), true);
 assert.equal(isTsplLabelPrinterName('POS-80C'), false);
 assert.equal(isTsplLabelPrinterName('NIIMBOT K3'), false);
 assert.equal(isTsplLabelPrinterName('Microsoft Print to PDF'), false);
