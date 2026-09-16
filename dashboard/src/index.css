@@ -2365,3 +2365,19 @@ html.shop-shell textarea::placeholder {
   max-width: 100%;
   box-sizing: border-box;
 }
+
+/* Newsletter Puck editor — full-width canvas with preview below */
+.newsletter-puck-editor {
+  width: 100%;
+}
+
+.newsletter-puck-editor--full {
+  min-height: min(72vh, 880px);
+  display: flex;
+  flex-direction: column;
+}
+
+.newsletter-puck-editor--full > div {
+  flex: 1;
+  min-height: 0;
+}
