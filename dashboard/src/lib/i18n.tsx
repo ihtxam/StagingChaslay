@@ -3720,6 +3720,25 @@ const en: Dict = {
   barcodePrinted: 'Labels sent to printer',
   barcodePrintedBrowser: 'Opened browser print dialog',
   barcodePrintFailed: 'Could not print labels',
+  orderLabelsTitle: 'Order labels',
+  orderLabelsHint:
+    'Print a sticker when weighing or holding a sale. Cashier scans the barcode at POS to load the order total. Uses the Labels printer from barcode label settings.',
+  orderLabelEnabled: 'Print order labels',
+  orderLabelEnabledHint:
+    'Show “Print label” on the register and optionally print when holding an order (butcher / weighed goods).',
+  orderLabelAutoPrintHint:
+    'Auto-print options (same pattern as kitchen auto-print). Requires a printer with the Labels role above.',
+  autoPrintOrderLabelOnHold: 'Auto-print on hold',
+  autoPrintOrderLabelOnHoldHint: 'Print an order label automatically when staff hold a cart at POS.',
+  autoPrintOrderLabelOnSend: 'Print label on Send',
+  autoPrintOrderLabelOnSendHint:
+    'Butcher workflow: on POS Send, hold the order and print a scannable label to the label printer instead of a kitchen ticket.',
+  webPosHeldOrderLabelSent: 'Order held — label sent to printer',
+  webPosPrintOrderLabel: 'Print label',
+  webPosOrderLabelPrinted: 'Order label sent to printer',
+  webPosOrderLabelFailed: 'Could not print order label',
+  webPosOrderLabelLoaded: 'Order loaded — total {total}',
+  webPosOrderLabelNotFound: 'Held order not found for barcode',
   invTitle: 'Inventory',
   invHint: 'Ingredients, suppliers, recipes and low-stock reorders (Lightspeed-style).',
   invImportDemo: 'Import demo data',
@@ -7637,6 +7656,25 @@ const fr: Dict = {
   barcodePrinted: 'Étiquettes envoyées à l’imprimante',
   barcodePrintedBrowser: 'Aperçu d’impression ouvert',
   barcodePrintFailed: 'Impression impossible',
+  orderLabelsTitle: 'Étiquettes commande',
+  orderLabelsHint:
+    'Imprimez une étiquette lors de la pesée ou de la mise en attente. Le caissier scanne le code-barres au POS pour charger le total. Utilise l’imprimante Étiquettes.',
+  orderLabelEnabled: 'Imprimer étiquettes commande',
+  orderLabelEnabledHint:
+    'Affiche « Imprimer étiquette » à la caisse et peut imprimer à la mise en attente (boucherie / pesée).',
+  orderLabelAutoPrintHint:
+    'Options d’impression auto (comme l’impression cuisine auto). Nécessite une imprimante avec le rôle Étiquettes ci-dessus.',
+  autoPrintOrderLabelOnHold: 'Impression auto à la mise en attente',
+  autoPrintOrderLabelOnHoldHint: 'Imprime une étiquette quand le panier est mis en attente au POS.',
+  autoPrintOrderLabelOnSend: 'Imprimer étiquette à l’envoi',
+  autoPrintOrderLabelOnSendHint:
+    'Boucherie : à l’envoi POS, mettre la commande en attente et imprimer une étiquette scannable sur l’imprimante étiquettes au lieu d’un ticket cuisine.',
+  webPosHeldOrderLabelSent: 'Commande en attente — étiquette envoyée à l’imprimante',
+  webPosPrintOrderLabel: 'Imprimer étiquette',
+  webPosOrderLabelPrinted: 'Étiquette commande envoyée à l’imprimante',
+  webPosOrderLabelFailed: 'Impossible d’imprimer l’étiquette',
+  webPosOrderLabelLoaded: 'Commande chargée — total {total}',
+  webPosOrderLabelNotFound: 'Commande en attente introuvable pour ce code',
   invTitle: 'Inventaire',
   invHint: 'Ingrédients, fournisseurs, recettes et commandes sous seuil (style Lightspeed).',
   invImportDemo: 'Importer les données démo',
@@ -11553,6 +11591,25 @@ const de: Dict = {
   barcodePrinted: 'Etiketten an Drucker gesendet',
   barcodePrintedBrowser: 'Browser-Druckdialog geöffnet',
   barcodePrintFailed: 'Druck fehlgeschlagen',
+  orderLabelsTitle: 'Bestell-Etiketten',
+  orderLabelsHint:
+    'Etikett beim Wiegen oder Halten drucken. Kassierer scannt den Barcode am POS für den Gesamtbetrag. Nutzt die Etiketten-Druckerrolle.',
+  orderLabelEnabled: 'Bestell-Etiketten drucken',
+  orderLabelEnabledHint:
+    'Zeigt « Etikett drucken » an der Kasse und optional beim Halten (Metzgerei / Wiegeartikel).',
+  orderLabelAutoPrintHint:
+    'Auto-Druck-Optionen (wie Küchen-Auto-Druck). Erfordert einen Drucker mit der Etiketten-Rolle oben.',
+  autoPrintOrderLabelOnHold: 'Auto-Druck beim Halten',
+  autoPrintOrderLabelOnHoldHint: 'Druckt automatisch ein Etikett, wenn der Warenkorb gehalten wird.',
+  autoPrintOrderLabelOnSend: 'Etikett beim Senden drucken',
+  autoPrintOrderLabelOnSendHint:
+    'Metzgerei: Beim POS-Senden Bestellung halten und scannbares Etikett auf den Etikettendrucker statt Küchenticket drucken.',
+  webPosHeldOrderLabelSent: 'Bestellung gehalten — Etikett an Drucker gesendet',
+  webPosPrintOrderLabel: 'Etikett drucken',
+  webPosOrderLabelPrinted: 'Bestell-Etikett an Drucker gesendet',
+  webPosOrderLabelFailed: 'Etikett konnte nicht gedruckt werden',
+  webPosOrderLabelLoaded: 'Bestellung geladen — Total {total}',
+  webPosOrderLabelNotFound: 'Gehaltene Bestellung für Barcode nicht gefunden',
   invTitle: 'Inventar',
   invHint: 'Zutaten, Lieferanten, Rezepte und Nachbestellungen (Lightspeed-Stil).',
   invImportDemo: 'Demo-Daten importieren',

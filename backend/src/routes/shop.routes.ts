@@ -9,7 +9,7 @@ import {
   type StoreHours,
 } from "@/lib/geo";
 import { findMatchingDeliveryRule, normalizeDeliveryMode, computeEffectiveDeliveryFee } from "@/lib/delivery-match";
-import { roundMoney2, roundTo005, roundingAdjustment, extractVatFromGross } from "@/lib/money";
+import { roundMoney2, roundTo005, roundingAdjustment } from "@/lib/money";
 import { adjustTaxForOrderDiscount } from "@/lib/tax-discount";
 import { ShopCustomerService } from "@/services/shop-customer.service";
 import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
@@ -24,7 +24,6 @@ import { geocodeQuery } from "@/lib/geocode";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
-import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   filterCatalogForChannel,
@@ -39,7 +38,10 @@ import { verifyTableAccess } from "@/lib/table-qr-token";
 import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
 import { TableSessionService } from "@/services/table-session.service";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
-import { normalizeShopSiteSettings, resolveShopDocumentSeo } from "@/lib/shop-site-settings";
+import {
+  shopAdyenCardReady,
+  shopOrderPaymentReturnUrl,
+} from "@/lib/shop-public-url";
 
 const router = Router();
 
@@ -51,35 +53,6 @@ type ShopComboSelectionInput = {
   productId: string;
   selectedExtras?: ShopExtraSelection[];
 };
-
-function publicShopSite(req: Request, merchant: { shopSiteSettings?: unknown }) {
-  const s = normalizeShopSiteSettings(merchant.shopSiteSettings);
-  return {
-    ...s,
-    faviconUrl: s.faviconUrl
-      ? resolvePublicAssetUrl(req, s.faviconUrl) || s.faviconUrl
-      : null,
-  };
-}
-
-function shopSeoFromMerchant(
-  req: Request,
-  merchant: {
-    shopSiteSettings?: unknown;
-    shopLanguage?: string | null;
-    panelLanguage?: string | null;
-  },
-  fallbackTitle?: string | null,
-  fallbackDescription?: string | null
-) {
-  const site = publicShopSite(req, merchant);
-  const lang = String(merchant.shopLanguage || merchant.panelLanguage || "en");
-  const resolved = resolveShopDocumentSeo(site, lang, {
-    title: fallbackTitle,
-    description: fallbackDescription,
-  });
-  return { site, seoTitle: resolved.title, seoDescription: resolved.description };
-}
 
 function serializeShopModifierGroup(g: any) {
   const pricingType = g.pricingType || "fixed";
@@ -174,11 +147,6 @@ function mapShopProduct(
     comboSlots: isCombo ? comboSlots : [],
     loyaltyRewardPoints:
       rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
-    similarProductIds: Array.isArray((p as { similarProductIds?: string[] }).similarProductIds)
-      ? (p as { similarProductIds?: string[] }).similarProductIds!.filter(
-          (id) => typeof id === "string" && id.trim()
-        )
-      : [],
   };
 }
 
@@ -555,19 +523,6 @@ async function resolveMerchant(slugOrHost: string) {
   return merchant;
 }
 
-/** Short public blurb for shop footer / SEO when available from the published homepage. */
-async function resolveShopPublicDescription(merchant: typeof schema.merchants.$inferSelect) {
-  if (!merchant.cmsHomepageEnabled) return "";
-  try {
-    const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
-    if (chaslay?.editor_state) return "";
-    const home = await CmsService.getPublishedHomepage(merchant.id);
-    return String(home?.seoDescription || "").trim();
-  } catch {
-    return "";
-  }
-}
-
 async function resolveShopLocationId(
   merchantId: string,
   locationSlug?: string | null,
@@ -596,7 +551,7 @@ async function resolveShopLocationId(
 
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {
   if (channel === "delivery") return merchant.deliveryEnabled;
-  if (channel === "dine_in") return merchant.dineInEnabled !== false;
+  if (channel === "dine_in") return merchant.dineInEnabled;
   return merchant.pickupEnabled;
 }
 
@@ -671,7 +626,6 @@ router.get("/:slug", async (req: Request, res: Response) => {
       merchant.cmsHomepageEnabled
         ? await CmsService.getPublishedTheme(merchant.id)
         : null;
-    const description = await resolveShopPublicDescription(merchant);
 
     const db = getDb();
     const categoryRows = await db.query.categories.findMany({
@@ -693,17 +647,13 @@ router.get("/:slug", async (req: Request, res: Response) => {
         customDomain: merchant.customDomain,
         cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
         cmsTheme,
-        description,
         address: merchant.address,
         city: merchant.city,
-        country: merchant.country,
-        email: merchant.email,
         phone: merchant.phone,
         latitude: merchant.latitude,
         longitude: merchant.longitude,
         shopLogoUrl: resolvePublicAssetUrl(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
         shopBannerUrl: resolvePublicAssetUrl(req, merchant.shopBannerUrl) || merchant.shopBannerUrl,
-        site: publicShopSite(req, merchant),
         taxTakeawayRate: merchant.taxTakeawayRate,
         taxDineInRate: merchant.taxDineInRate,
         taxDeliveryRate: merchant.taxDeliveryRate,
@@ -727,7 +677,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
             .toLowerCase();
           return v === "popup_start" || v === "menu" || v === "checkout" ? v : "checkout";
         })(),
-        menuShowProductImages: merchant.menuShowProductImages === true,
+        menuShowProductImages: merchant.menuShowProductImages !== false,
         menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
         cartLayout: (() => {
           const v = String(merchant.cartLayout || "")
@@ -740,11 +690,13 @@ router.get("/:slug", async (req: Request, res: Response) => {
         payment: {
           cash: true,
           card: true,
-          cardReady: !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId),
+          cardReady: shopAdyenCardReady(merchant),
           currency: "CHF",
         },
         loyalty: ShopLoyaltyService.programFromMerchant(merchant),
-        giftCards: await ShopGiftCardService.publicSettingsForMerchant(merchant),
+        giftCards: ShopGiftCardService.publicSettings(
+          ShopGiftCardService.settingsFromMerchant(merchant)
+        ),
         reservationsEnabled: !!merchant.reservationsEnabled,
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
@@ -774,7 +726,6 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
 
     const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
     if (chaslay?.editor_state) {
-      const seo = shopSeoFromMerchant(req, merchant, chaslay.name, "");
       return res.json({
         success: true,
         data: {
@@ -784,8 +735,8 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
           slug: "home",
           isHomepage: true,
           editorState: chaslay.editor_state,
-          seoTitle: seo.seoTitle,
-          seoDescription: seo.seoDescription,
+          seoTitle: chaslay.name,
+          seoDescription: merchant.description || "",
           publishedAt: chaslay.updated_at,
           merchant: {
             id: merchant.id,
@@ -795,7 +746,6 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
             customDomain: merchant.customDomain,
             shopLogoUrl: merchant.shopLogoUrl,
             shopBannerUrl: merchant.shopBannerUrl,
-            site: seo.site,
             storeHours: merchant.storeHours || {},
             address: merchant.address,
             city: merchant.city,
@@ -816,12 +766,6 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
     if (!page) {
       return res.status(404).json({ error: "Homepage not published" });
     }
-    const seo = shopSeoFromMerchant(
-      req,
-      merchant,
-      page.seoTitle || page.title,
-      page.seoDescription
-    );
     res.json({
       success: true,
       data: {
@@ -832,8 +776,8 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
         isHomepage: page.isHomepage,
         blocks: page.blocks || [],
         theme: page.theme || null,
-        seoTitle: seo.seoTitle,
-        seoDescription: seo.seoDescription,
+        seoTitle: page.seoTitle,
+        seoDescription: page.seoDescription,
         publishedAt: page.publishedAt,
         merchant: {
           id: merchant.id,
@@ -843,7 +787,6 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
           customDomain: merchant.customDomain,
           shopLogoUrl: merchant.shopLogoUrl,
           shopBannerUrl: merchant.shopBannerUrl,
-          site: publicShopSite(req, merchant),
           storeHours: merchant.storeHours || {},
           address: merchant.address,
           city: merchant.city,
@@ -905,7 +848,6 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
     if (merchant.cmsHomepageEnabled) {
       const chaslayPage = await ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
       if (chaslayPage) {
-        const seo = shopSeoFromMerchant(req, merchant, chaslayPage.title, "");
         return res.json({
           success: true,
           data: {
@@ -915,8 +857,8 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
             slug: chaslayPage.slug,
             isHomepage: chaslayPage.is_homepage,
             editorState: chaslayPage.editor_state,
-            seoTitle: seo.seoTitle,
-            seoDescription: seo.seoDescription,
+            seoTitle: chaslayPage.title,
+            seoDescription: merchant.description || "",
             publishedAt: chaslayPage.updated_at,
             merchant: {
               id: merchant.id,
@@ -926,7 +868,6 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
               customDomain: merchant.customDomain,
               shopLogoUrl: merchant.shopLogoUrl,
               shopBannerUrl: merchant.shopBannerUrl,
-              site: seo.site,
               storeHours: merchant.storeHours || {},
               address: merchant.address,
               city: merchant.city,
@@ -949,12 +890,6 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
       if (!home || !merchant.cmsHomepageEnabled) {
         return res.status(404).json({ error: "Page not found" });
       }
-      const seo = shopSeoFromMerchant(
-        req,
-        merchant,
-        home.seoTitle || home.title,
-        home.seoDescription
-      );
       return res.json({
         success: true,
         data: {
@@ -965,20 +900,14 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
           isHomepage: home.isHomepage,
           blocks: home.blocks || [],
           theme: home.theme || null,
-          seoTitle: seo.seoTitle,
-          seoDescription: seo.seoDescription,
+          seoTitle: home.seoTitle,
+          seoDescription: home.seoDescription,
           publishedAt: home.publishedAt,
         },
       });
     }
     const page = await CmsService.getPublishedBySlug(merchant.id, pageSlug);
     if (!page) return res.status(404).json({ error: "Page not found" });
-    const seo = shopSeoFromMerchant(
-      req,
-      merchant,
-      page.seoTitle || page.title,
-      page.seoDescription
-    );
     res.json({
       success: true,
       data: {
@@ -989,8 +918,8 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
         isHomepage: page.isHomepage,
         blocks: page.blocks || [],
         theme: page.theme || null,
-        seoTitle: seo.seoTitle,
-        seoDescription: seo.seoDescription,
+        seoTitle: page.seoTitle,
+        seoDescription: page.seoDescription,
         publishedAt: page.publishedAt,
       },
     });
@@ -1147,38 +1076,16 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
   );
   const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
 
-  const showProductImages = merchant.menuShowProductImages === true;
-  const showCategoryBanners = merchant.menuShowCategoryBanners !== false;
-
-  const toItem = (p: (typeof visibleProducts)[number]) => {
-    const item = withPublicShopImageUrls(
+  const toItem = (p: (typeof visibleProducts)[number]) =>
+    withPublicShopImageUrls(
       req,
       mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
     );
-    if (!showProductImages) {
-      return {
-        ...item,
-        image: null,
-        comboSlots: item.comboSlots?.map((slot) => ({
-          ...slot,
-          options: slot.options.map((opt) => ({ ...opt, image: null })),
-        })),
-        modifierGroups: item.modifierGroups?.map((g) => ({
-          ...g,
-          options: g.options.map((o) => ({ ...o, image: null })),
-        })),
-      };
-    }
-    return item;
-  };
 
   const menu = visibleCategories.map((cat) => ({
     id: cat.id,
     name: cat.name,
-    image:
-      showCategoryBanners
-        ? resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null
-        : null,
+    image: resolvePublicAssetUrl(req, (cat as { imageUrl?: string | null }).imageUrl) || null,
     isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
     deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
     extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
@@ -1323,8 +1230,7 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
     }
     const total = unpaid.reduce((s, o) => s + Number(o.total || 0), 0);
     const anchor = unpaid[0]!;
-    const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-    const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/table/${tableId}?paid=1&s=${encodeURIComponent(sessionToken)}`;
+    const returnUrl = shopOrderPaymentReturnUrl(merchant, anchor.id, { paid: "1" });
     const { AdyenService } = await import("@/services/adyen.service");
     const paySession = await AdyenService.initializePaymentSession(
       merchant.id,
@@ -1343,7 +1249,7 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
         sessionData: paySession.sessionData,
         clientKey: merchant.adyenClientId,
         environment:
-          (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+          paySession.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
       },
     });
   } catch (error) {
@@ -1491,7 +1397,6 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
     }
 
     const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
-    const baseFee = parseFloat(zone.deliveryFee?.toString() || "0");
     const fee = computeEffectiveDeliveryFee(zone, subtotal);
     const meetsMin = subtotal >= minOrder;
 
@@ -1505,7 +1410,6 @@ router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
         name: zone.name,
         minOrderAmount: minOrder,
         deliveryFee: fee,
-        baseDeliveryFee: baseFee,
         freeDeliveryMinOrder: parseFloat(zone.freeDeliveryMinOrder?.toString() || "0"),
         estimatedMinutes: zone.estimatedMinutes,
       },
@@ -1559,20 +1463,6 @@ router.post("/:slug/auth/login", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
-  }
-});
-
-/**
- * POST /api/shop/:slug/auth/forgot-password
- */
-router.post("/:slug/auth/forgot-password", async (req: Request, res: Response) => {
-  try {
-    const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
-    await ShopCustomerService.requestPasswordReset(merchant.id, String(req.body?.email || ""));
-    res.json({ success: true });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Reset failed" });
   }
 });
 
@@ -1909,7 +1799,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
-    const cardReady = !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId);
+    const cardReady = shopAdyenCardReady(merchant);
     res.json({
       success: true,
       options: {
@@ -1919,7 +1809,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
         cardReady,
         currency: "CHF",
         clientKey: cardReady ? merchant.adyenClientId : null,
-        environment: (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+        environment: AdyenService.environmentFromClientKey(merchant.adyenClientId),
         cardFeeFixed: Number(merchant.onlineCardFeeFixed || 0) || 0,
         cardFeePercent: Number(merchant.onlineCardFeePercent || 0) || 0,
       },
@@ -1938,7 +1828,9 @@ router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => 
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
     res.json({
       success: true,
-      settings: await ShopGiftCardService.publicSettingsForMerchant(merchant),
+      settings: ShopGiftCardService.publicSettings(
+        ShopGiftCardService.settingsFromMerchant(merchant)
+      ),
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
@@ -1971,23 +1863,16 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
 
     const body = req.body || {};
-    const deliveryType =
-      body.deliveryType === "physical" ? "physical" : "digital";
     const result = await ShopGiftCardService.createOnlinePurchase(
       merchant,
       req.params.slug,
       {
         amount: Number(body.amount),
-        deliveryType,
         recipientEmail: body.recipientEmail,
         recipientName: body.recipientName,
         senderName: body.senderName,
         senderEmail: body.senderEmail,
         message: body.message,
-        shippingAddress: body.shippingAddress,
-        shippingZip: body.shippingZip,
-        shippingCity: body.shippingCity,
-        shippingCountry: body.shippingCountry,
       }
     );
 
@@ -1996,7 +1881,6 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
       purchase: {
         id: result.purchase.id,
         amount: result.amount,
-        deliveryType: result.purchase.deliveryType,
         recipientEmail: result.purchase.recipientEmail,
         paymentStatus: result.purchase.paymentStatus,
       },
@@ -2028,7 +1912,18 @@ router.get("/:slug/gift-cards/purchase/:purchaseId", async (req: Request, res: R
     }
     res.json({
       success: true,
-      purchase: ShopGiftCardService.purchasePublicView(purchase, card),
+      purchase: {
+        id: purchase.id,
+        amount: purchase.amount,
+        recipientEmail: purchase.recipientEmail,
+        recipientName: purchase.recipientName,
+        senderName: purchase.senderName,
+        message: purchase.message,
+        paymentStatus: purchase.paymentStatus,
+        fulfilledAt: purchase.fulfilledAt,
+        cardCode: card?.ecardCode || null,
+        cardBalance: card?.balance || null,
+      },
     });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : "Not found" });
@@ -2212,12 +2107,6 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     if (!isQrTableOrder && !isKioskOrder && (!customerName?.trim() || !customerPhone?.trim())) {
       return res.status(400).json({ error: "Name and phone are required" });
     }
-    if (!isQrTableOrder && !isKioskOrder) {
-      const emailCheck = String(customerEmail || "").trim();
-      if (!emailCheck || !emailCheck.includes("@")) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-    }
 
     const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
     const payMethod =
@@ -2292,14 +2181,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       }
     }
 
-    let taxRate = MerchantSettingsService.channelTaxRate(merchant, channel);
-    if ((!taxRate || taxRate <= 0) && channel === "delivery") {
-      taxRate =
-        MerchantSettingsService.channelTaxRate(merchant, "takeaway") ||
-        Number(merchant.vatRate || 0) ||
-        0;
-    }
-    const vatIncluded = merchant.taxIncludedInPrice === true;
+    const taxRate = MerchantSettingsService.channelTaxRate(merchant, channel);
     const db = getDb();
     const authCustomer = optionalCustomer(req);
     const loyaltyProgram = ShopLoyaltyService.programFromMerchant(merchant);
@@ -2418,11 +2300,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge
       );
       const totalPrice = roundMoney2(unitPrice * qty);
-      const lineTax = product.isTaxable
-        ? vatIncluded
-          ? extractVatFromGross(totalPrice, taxRate)
-          : roundMoney2((totalPrice * taxRate) / 100)
-        : 0;
+      const lineTax = product.isTaxable ? roundMoney2((totalPrice * taxRate) / 100) : 0;
       subtotal += totalPrice;
       taxAmount += lineTax;
 
@@ -2522,13 +2400,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         return res.status(400).json({ error: outsideMessage });
       }
       const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
-      const orderSubtotal = roundMoney2(Math.max(0, subtotal - offerDiscount));
-      if (orderSubtotal < minOrder) {
+      if (subtotal < minOrder) {
         return res.status(400).json({
           error: `Minimum order for this zone is CHF ${minOrder.toFixed(2)}`,
         });
       }
-      deliveryFee = computeEffectiveDeliveryFee(zone, orderSubtotal);
+      deliveryFee = computeEffectiveDeliveryFee(zone, subtotal);
       deliveryZoneId = zone.id;
     }
 
@@ -2586,8 +2463,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let giftCardPreviewBalance = 0;
     if (trimmedGiftCode) {
       const gcSettings = ShopGiftCardService.settingsFromMerchant(merchant);
-      const gcLicensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
-      if (!gcSettings.enabled || !gcLicensed) {
+      if (!gcSettings.enabled) {
         return res.status(400).json({ error: "Gift cards are not enabled" });
       }
       try {
@@ -2988,7 +2864,6 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
           printKitchen: kitchenOnArrival,
           printReceipt: false,
-          independentOfMasterAutoPrint: kitchenOnArrival,
         });
       }
     } catch (printErr) {
@@ -3001,11 +2876,6 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
         guestLocale: guestLocale || null,
       });
-      if (shopAutoAccept) {
-        await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
-          guestLocale: guestLocale || null,
-        });
-      }
     } catch (mailErr) {
       console.warn("Shop order confirmation email failed:", mailErr);
     }
@@ -3013,8 +2883,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let paymentSession: unknown = null;
     if (payMethod === "card" && preCardTotal > 0) {
       try {
-        const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-        const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
+        const returnUrl = shopOrderPaymentReturnUrl(merchant, order.id, { paid: "1" });
         const session = await AdyenService.initializePaymentSession(
           merchant.id,
           order.id,
@@ -3027,7 +2896,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           sessionData: session.sessionData,
           clientKey: merchant.adyenClientId,
           environment:
-            (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+            session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
         };
       } catch (e) {
         // Card selected but Swisspayout not ready — keep order awaiting_payment; client can retry or switch
@@ -3166,8 +3035,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       return res.json({ success: true, alreadyPaid: true });
     }
 
-    const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-    const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
+    const returnUrl = shopOrderPaymentReturnUrl(merchant, order.id, { paid: "1" });
     const session = await AdyenService.initializePaymentSession(
       merchant.id,
       order.id,
@@ -3182,7 +3050,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
         sessionData: session.sessionData,
         clientKey: merchant.adyenClientId,
         environment:
-          (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+          session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
       },
     });
   } catch (error) {

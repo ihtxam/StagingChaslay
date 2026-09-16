@@ -1,28 +1,58 @@
 import axios from "axios";
 import { getDb, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
-import {
-  adyenCheckoutApiBase,
-  adyenEnvironmentFromClientKey,
-  formatMerchantAdyenSessionError,
-  type AdyenCheckoutEnvironment,
-} from "@/lib/adyen-checkout-env";
 
 const ADYEN_API_BASE_TEST =
   process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
+const ADYEN_API_BASE_LIVE =
+  process.env.ADYEN_API_BASE_LIVE ||
+  process.env.PLATFORM_ADYEN_API_BASE_LIVE ||
+  "https://checkout-live.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 
+export type AdyenCheckoutEnvironment = "live" | "test";
+
 export class AdyenService {
+  /** Derive live/test from Drop-in client key prefix (test_ / live_). */
   static environmentFromClientKey(clientKey?: string | null): AdyenCheckoutEnvironment {
-    return adyenEnvironmentFromClientKey(clientKey);
+    return String(clientKey || "")
+      .trim()
+      .startsWith("live_")
+      ? "live"
+      : "test";
   }
 
   static checkoutApiBase(clientKey?: string | null): string {
-    return adyenCheckoutApiBase(clientKey);
+    return this.environmentFromClientKey(clientKey) === "live"
+      ? ADYEN_API_BASE_LIVE
+      : ADYEN_API_BASE_TEST;
   }
 
+  static formatSessionError(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const data = error.response?.data as
+        | { message?: string; errorCode?: string; errorType?: string }
+        | undefined;
+      const detail =
+        data?.message ||
+        data?.errorCode ||
+        (typeof data === "string" ? data : undefined) ||
+        error.message;
+      if (status === 401 || /unauthorized/i.test(String(detail))) {
+        return (
+          "Adyen rejected the API key (Unauthorized). Use the Checkout Web service API key from the same " +
+          "Adyen account as the merchant account and client key (test_… or live_…). " +
+          "The client key field must not contain the API key."
+        );
+      }
+      return detail || "Adyen payment session failed";
+    }
+    if (error instanceof Error) return error.message;
+    return "Adyen payment session failed";
+  }
   /**
    * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
    * Legacy per-terminal credential overrides are still honored if present.
@@ -103,6 +133,7 @@ export class AdyenService {
           returnUrl: returnUrl || `${process.env.APP_URL}/payment/return`,
           channel: "Web",
           countryCode: "CH",
+          ...(creds.clientId ? { clientKey: creds.clientId } : {}),
         },
         {
           headers: {
@@ -115,7 +146,7 @@ export class AdyenService {
       return { ...response.data, environment };
     } catch (error) {
       console.error("Error initializing payment session:", error);
-      throw new Error(formatMerchantAdyenSessionError(error));
+      throw new Error(this.formatSessionError(error));
     }
   }
 

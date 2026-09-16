@@ -6,13 +6,10 @@ type MerchantShopUrl = Pick<
   "slug" | "subdomain" | "customDomain"
 >;
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 /** Public shop base URL (custom domain → subdomain → shop hub /{slug}). */
 export function shopPublicBaseUrl(merchant: MerchantShopUrl): string {
   const shopHost = resolveShopPublicHost();
-  const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "").replace(/^order\./, "");
+  const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
   const custom = String(merchant.customDomain || "")
     .trim()
     .replace(/^https?:\/\//, "")
@@ -25,25 +22,16 @@ export function shopPublicBaseUrl(merchant: MerchantShopUrl): string {
   return `https://${shopHost}`;
 }
 
-/** Adyen return URL after online gift-card payment. */
-export function shopGiftCardPaymentReturnUrl(
+/** Adyen return URL for guest shop order payment confirmation. */
+export function shopOrderPaymentReturnUrl(
   merchant: MerchantShopUrl,
-  purchaseId: string
+  orderId: string,
+  query: Record<string, string> = { paid: "1" }
 ): string {
   const base = shopPublicBaseUrl(merchant).replace(/\/+$/, "");
-  return `${base}/gift-cards/confirm/${encodeURIComponent(purchaseId)}?paid=1`;
-}
-
-/** Session reference is `{merchantId}-{purchaseId}`. */
-export function giftCardPurchaseIdFromAdyenReference(
-  merchantId: string,
-  merchantReference: string
-): string | null {
-  const mid = String(merchantId || "").trim();
-  const ref = String(merchantReference || "").trim();
-  if (!mid || !ref.startsWith(`${mid}-`)) return null;
-  const purchaseId = ref.slice(mid.length + 1);
-  return UUID_RE.test(purchaseId) ? purchaseId : null;
+  const params = new URLSearchParams(query);
+  const qs = params.toString();
+  return `${base}/order/${encodeURIComponent(orderId)}${qs ? `?${qs}` : ""}`;
 }
 
 /** True when merchant Adyen client key looks like a Drop-in client key (not API key). */

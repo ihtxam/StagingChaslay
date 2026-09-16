@@ -2813,6 +2813,19 @@ router.get("/pos/held", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/pos/held/:id", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const held = await PosOrdersService.resumeHeld(merchantId, req.params.id);
+    res.json({ success: true, held });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Held order not found";
+    res.status(msg.includes("not found") ? 404 : 400).json({ error: msg });
+  }
+});
+
 router.post("/pos/held", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
