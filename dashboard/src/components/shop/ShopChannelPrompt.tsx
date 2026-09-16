@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import type { ShopChannel } from '@/lib/shop-cart';
-import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
+import { deliveryMinOrderShortfall, withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { buildScheduleDays, type StoreHours } from '@/lib/shop-hours';
 import { useI18n } from '@/lib/i18n';
 
@@ -232,6 +232,11 @@ export default function ShopChannelPrompt({
       }
       if (!effectiveDeliveryInfo?.deliverable) {
         setError(t('shopConfirmDeliveryVerifyFirst'));
+        return;
+      }
+      if (effectiveDeliveryInfo.meetsMinOrder === false) {
+        const shortfall = deliveryMinOrderShortfall(effectiveDeliveryInfo, subtotal);
+        setError(t('shopMinOrderAddMore').replace('{amount}', shortfall.toFixed(2)));
         return;
       }
       onConfirm({
@@ -600,11 +605,26 @@ export default function ShopChannelPrompt({
             ) : null}
           </div>
 
-          <div className="shrink-0 px-5 py-4 border-t border-stone-100 bg-stone-50/80">
+          <div className="shrink-0 px-5 py-4 border-t border-stone-100 bg-stone-50/80 space-y-2">
+            {showDeliveryPanel &&
+              effectiveDeliveryInfo?.deliverable &&
+              effectiveDeliveryInfo.meetsMinOrder === false && (
+                <p className="text-amber-800 text-sm font-medium">
+                  {t('shopMinOrderAddMore').replace(
+                    '{amount}',
+                    deliveryMinOrderShortfall(effectiveDeliveryInfo, subtotal).toFixed(2)
+                  )}
+                </p>
+              )}
             <button
               type="button"
               onClick={handleConfirm}
-              className="w-full rounded-xl bg-amber-700 py-3.5 text-sm font-semibold text-white hover:bg-amber-800 transition"
+              disabled={
+                showDeliveryPanel &&
+                !!effectiveDeliveryInfo?.deliverable &&
+                effectiveDeliveryInfo.meetsMinOrder === false
+              }
+              className="w-full rounded-xl bg-amber-700 py-3.5 text-sm font-semibold text-white hover:bg-amber-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {resolvedConfirm}
             </button>
