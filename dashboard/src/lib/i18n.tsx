@@ -3012,6 +3012,11 @@ const en: Dict = {
   webPosFullscreen: 'Fullscreen',
   webPosEnterFullscreen: 'Fullscreen',
   webPosExitFullscreen: 'Fullscreen',
+  webPosOnScreenKeyboard: 'On-screen keyboard',
+  webPosOnScreenKeyboardHide: 'Hide keyboard',
+  webPosOnScreenKeyboardSpace: 'Space',
+  webPosOnScreenKeyboardShift: 'Shift',
+  webPosOnScreenKeyboardBackspace: 'Backspace',
   webPosFullscreenHint:
     'Use Fullscreen here, browser F11, or install Reborn as an app (PWA) for a kiosk-like screen. After leaving fullscreen, open the menu and tap Fullscreen again.',
   webPosEodWhenShiftsOff:
@@ -6741,6 +6746,11 @@ const fr: Dict = {
   webPosFullscreen: 'Plein écran',
   webPosEnterFullscreen: 'Plein écran',
   webPosExitFullscreen: 'Plein écran',
+  webPosOnScreenKeyboard: 'Clavier à l’écran',
+  webPosOnScreenKeyboardHide: 'Masquer le clavier',
+  webPosOnScreenKeyboardSpace: 'Espace',
+  webPosOnScreenKeyboardShift: 'Maj',
+  webPosOnScreenKeyboardBackspace: 'Retour arrière',
   webPosFullscreenHint:
     'Utilisez Plein écran ici, F11 du navigateur, ou installez Reborn en application (PWA). Après avoir quitté le plein écran, rouvrez le menu et tapez Plein écran.',
   webPosEodWhenShiftsOff:
@@ -10451,6 +10461,11 @@ const de: Dict = {
   webPosFullscreen: 'Vollbild',
   webPosEnterFullscreen: 'Vollbild',
   webPosExitFullscreen: 'Vollbild',
+  webPosOnScreenKeyboard: 'Bildschirmtastatur',
+  webPosOnScreenKeyboardHide: 'Tastatur ausblenden',
+  webPosOnScreenKeyboardSpace: 'Leertaste',
+  webPosOnScreenKeyboardShift: 'Umschalt',
+  webPosOnScreenKeyboardBackspace: 'Rücktaste',
   webPosFullscreenHint:
     'Vollbild hier, Browser-F11 oder Reborn als App (PWA) installieren. Nach Verlassen des Vollbilds: Menü öffnen und erneut Vollbild tippen.',
   webPosEodWhenShiftsOff:

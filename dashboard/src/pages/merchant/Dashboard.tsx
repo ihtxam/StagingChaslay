@@ -48,6 +48,7 @@ import WaiterApp from './WaiterApp';
 import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
+import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { isTillPrintHubCandidate } from '@/lib/webpos-print-relay';
 import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
@@ -1316,7 +1317,9 @@ export default function MerchantDashboard() {
   return (
     <I18nProvider>
       <PlatformMessagesProvider>
-        <MerchantShell />
+        <OnScreenKeyboardProvider>
+          <MerchantShell />
+        </OnScreenKeyboardProvider>
       </PlatformMessagesProvider>
     </I18nProvider>
   );
