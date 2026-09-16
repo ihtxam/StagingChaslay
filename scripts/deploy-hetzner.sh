@@ -517,8 +517,9 @@ if [[ ! -f "$SETUP_EXE" ]] || [[ "$(wc -c < "$SETUP_EXE" | tr -d " ")" -lt 10000
   echo "WARNING: $SETUP_EXE missing or too small - Windows will report a corrupted download"
 fi
 
-echo "=== Build Print Bridge Android APK ==="
+echo "=== Build Print Bridge Android APKs (print + Tap to Pay) ==="
 BRIDGE_APK="$DOWNLOADS_DIR/reborn-print-bridge.apk"
+BRIDGE_PRINT_APK="$DOWNLOADS_DIR/reborn-print-bridge-print.apk"
 BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/build.gradle.kts" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
 [[ -n "$BRIDGE_VERSION" ]] || BRIDGE_VERSION="0.0.0"
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
@@ -543,14 +544,18 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
       fi
       chmod +x ./gradlew
       ./gradlew --stop 2>/dev/null || true
-      ./gradlew assembleRelease --no-daemon --no-build-cache \
+      ./gradlew assemblePrintRelease assembleTapToPayRelease --no-daemon --no-build-cache \
         -g /tmp/gradle-home \
         --project-cache-dir=/tmp/gradle-project-cache
-      APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
-      test -n "$APK"
-      cp -f "$APK" /out/reborn-print-bridge.apk
+      PRINT_APK="$(find app/build/outputs/apk/print/release -name "*.apk" | head -1)"
+      TTP_APK="$(find app/build/outputs/apk/tapToPay/release -name "*.apk" | head -1)"
+      test -n "$PRINT_APK"
+      test -n "$TTP_APK"
+      cp -f "$PRINT_APK" /out/reborn-print-bridge-print.apk
+      cp -f "$TTP_APK" /out/reborn-print-bridge.apk
+      head -c 2 /out/reborn-print-bridge-print.apk | grep -q PK
       head -c 2 /out/reborn-print-bridge.apk | grep -q PK
-      ls -la /out/reborn-print-bridge.apk
+      ls -la /out/reborn-print-bridge*.apk
     '; then
     printf '%s\n' \
       "{" \
@@ -559,9 +564,23 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
       "  \"apkFile\": \"reborn-print-bridge.apk\"," \
       "  \"builtAt\": \"${BUILT_AT}\"," \
       "  \"platform\": \"android\"," \
+      "  \"edition\": \"tapToPay\"," \
+      "  \"hasTapToPay\": true," \
       "  \"signed\": false" \
       "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
+    printf '%s\n' \
+      "{" \
+      "  \"name\": \"reborn-print-bridge-print\"," \
+      "  \"version\": \"${BRIDGE_VERSION}\"," \
+      "  \"apkFile\": \"reborn-print-bridge-print.apk\"," \
+      "  \"builtAt\": \"${BUILT_AT}\"," \
+      "  \"platform\": \"android\"," \
+      "  \"edition\": \"print\"," \
+      "  \"hasTapToPay\": false," \
+      "  \"signed\": false" \
+      "}" > "$DOWNLOADS_DIR/reborn-print-bridge-print.json"
     echo "Print Bridge APK ready: $BRIDGE_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
+    echo "Print-only Bridge APK ready: $BRIDGE_PRINT_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_PRINT_APK" | tr -d " ") bytes)"
     # Verify baked-in APK version matches build.gradle (manifest JSON alone is not enough).
     APK_VERSION="$(
       python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
@@ -590,8 +609,8 @@ PY
     fi
   else
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
-    echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
-    echo "  Then copy app/build/outputs/apk/release/*.apk to $BRIDGE_APK"
+    echo "  Manual: cd print-agent-android && ./gradlew assemblePrintRelease assembleTapToPayRelease"
+    echo "  Then copy app/build/outputs/apk/*/release/*.apk to $DOWNLOADS_DIR/"
     if [[ -f "$BRIDGE_APK" ]]; then
       STALE_APK_VERSION="$(
         python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
@@ -654,6 +673,9 @@ PY
 fi
 if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
   echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"
+fi
+if [[ ! -f "$BRIDGE_PRINT_APK" ]] || ! head -c 2 "$BRIDGE_PRINT_APK" | grep -q PK; then
+  echo "WARNING: $BRIDGE_PRINT_APK missing or not a valid APK (expected PK zip header)"
 fi
 
 compose_project_name() {
@@ -958,6 +980,15 @@ if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; t
   echo "WARNING: print-bridge download is not a valid APK (expected PK / >100KB) or not published yet"
 else
   echo "print-bridge download OK (PK zip/APK)"
+fi
+BRIDGE_PRINT_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-bridge-print.apk" || true)"
+BRIDGE_PRINT_LEN="$(printf '%s' "$BRIDGE_PRINT_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
+BRIDGE_PRINT_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-print-bridge-print.apk" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+echo "print-bridge-print download: Content-Length=${BRIDGE_PRINT_LEN:-?} magic=${BRIDGE_PRINT_MAGIC:-?}"
+if [[ "${BRIDGE_PRINT_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_PRINT_LEN:-0}" -lt 100000 ]]; then
+  echo "WARNING: print-only bridge download is not a valid APK (expected PK / >100KB) or not published yet"
+else
+  echo "print-only bridge download OK (PK zip/APK)"
 fi
 echo
 

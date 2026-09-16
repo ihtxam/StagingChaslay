@@ -166,10 +166,12 @@ export function qrImageUrl(
   )}`;
 }
 
-/** Thermal receipt QR raster width — ~180px on 80mm (384-dot) paper. */
-export const RECEIPT_QR_RASTER_PX_80 = 180;
-/** 58mm thermal QR — use most of the printable width (384-dot heads). */
-export const RECEIPT_QR_RASTER_PX_58 = 200;
+/** Max thermal receipt QR width/height in pixels (bitmap + ESC/POS sizing target). */
+export const RECEIPT_QR_RASTER_PX_MAX = 170;
+/** Thermal receipt QR raster width — capped at 170px on 80mm (384-dot) paper. */
+export const RECEIPT_QR_RASTER_PX_80 = RECEIPT_QR_RASTER_PX_MAX;
+/** 58mm thermal QR — same cap so QR never exceeds 170px. */
+export const RECEIPT_QR_RASTER_PX_58 = RECEIPT_QR_RASTER_PX_MAX;
 
 /** Labeled QR canvas width in pixels (matches printable dot width). */
 export const RECEIPT_QR_CANVAS_PX_80 = 384;
@@ -180,7 +182,8 @@ export const DELIVERY_SLIP_QR_RASTER_PX_80 = 384;
 export const DELIVERY_SLIP_QR_RASTER_PX_58 = 280;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
-  return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+  const paper = paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+  return Math.min(RECEIPT_QR_RASTER_PX_MAX, paper);
 }
 
 export function receiptQrCanvasPx(paperWidthMm?: 58 | 80): number {
@@ -314,7 +317,7 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
   if (!raw || typeof document === 'undefined') return null;
   const paper = opts.paperWidthMm ?? 80;
   const canvasWidth = receiptQrCanvasPx(paper);
-  const qrSize = opts.qrSizePx ?? (paper === 58 ? 200 : 180);
+  const qrSize = Math.min(RECEIPT_QR_RASTER_PX_MAX, opts.qrSizePx ?? receiptQrRasterPx(paper));
   const labelLineHeight = paper === 58 ? 13 : 14;
   const gap = paper === 58 ? 4 : 6;
   try {
@@ -326,7 +329,7 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
     const labelLines = wrapLabelLines(ctx, opts.label, canvasWidth - 8);
     const labelHeight = Math.max(labelLineHeight, labelLines.length * labelLineHeight);
     canvas.width = canvasWidth;
-    canvas.height = labelHeight + gap + qrSize + 8;
+    canvas.height = labelHeight + gap + qrSize + 2;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const labelBottom = drawCenteredLabel(ctx, opts.label, 0, 4, canvasWidth, labelLineHeight);
@@ -408,6 +411,33 @@ const ESCPOS_EC_BYTE: Record<EscPosErrorCorrection, number> = {
   Q: 0x32,
   H: 0x33,
 };
+
+/** QR model-2 modules per side by version (1-based index). */
+const QR_MODULES_PER_SIDE = [21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77];
+
+/** Rough QR version from UTF-8 byte length (byte mode, ECC-M). */
+function estimateQrVersion(byteLength: number): number {
+  if (byteLength <= 14) return 1;
+  if (byteLength <= 26) return 2;
+  if (byteLength <= 42) return 3;
+  if (byteLength <= 62) return 4;
+  if (byteLength <= 84) return 5;
+  if (byteLength <= 106) return 6;
+  if (byteLength <= 130) return 7;
+  if (byteLength <= 154) return 8;
+  if (byteLength <= 180) return 9;
+  if (byteLength <= 206) return 10;
+  return 11;
+}
+
+/** ESC/POS QR module size so printed QR stays within receiptQrRasterPx (max 170px). */
+export function receiptQrEscPosModuleSize(data: string, paperWidthMm?: 58 | 80): number {
+  const maxPx = receiptQrRasterPx(paperWidthMm);
+  const byteLength = new TextEncoder().encode(String(data || '')).length;
+  const version = estimateQrVersion(byteLength);
+  const modules = QR_MODULES_PER_SIDE[Math.min(version - 1, QR_MODULES_PER_SIDE.length - 1)] ?? 57;
+  return Math.max(2, Math.min(8, Math.floor(maxPx / modules)));
+}
 
 /**
  * ESC/POS QR code (Function 165/167/169/180 - common on Epson-compatible thermals).

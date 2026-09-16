@@ -7,6 +7,7 @@ export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
 /** Old installer URL — redirects to PRINT_AGENT_SETUP_FILE */
 export const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
+export const PRINT_BRIDGE_PRINT_APK_FILE = "reborn-print-bridge-print.apk";
 
 export function downloadsFilePath(filename: string): string {
   const safe = path.basename(filename);
@@ -49,8 +50,31 @@ export type DownloadDescriptor = {
 };
 
 export function describePrintBridgeApk(): DownloadDescriptor {
-  const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
-  const manifest = readDownloadManifest("reborn-print-bridge");
+  return describeBridgeApkFile({
+    id: "print-bridge",
+    name: "Reborn Print Bridge + Tap to Pay (Android)",
+    filename: PRINT_BRIDGE_APK_FILE,
+    manifestBase: "reborn-print-bridge",
+  });
+}
+
+export function describePrintBridgePrintApk(): DownloadDescriptor {
+  return describeBridgeApkFile({
+    id: "print-bridge-print",
+    name: "Reborn Print Bridge — print only (Android)",
+    filename: PRINT_BRIDGE_PRINT_APK_FILE,
+    manifestBase: "reborn-print-bridge-print",
+  });
+}
+
+function describeBridgeApkFile(opts: {
+  id: string;
+  name: string;
+  filename: string;
+  manifestBase: string;
+}): DownloadDescriptor {
+  const filePath = downloadsFilePath(opts.filename);
+  const manifest = readDownloadManifest(opts.manifestBase);
   const valid = fileMagicOk(filePath, "apk");
   const stat = valid ? fs.statSync(filePath) : null;
   const declaredVersion =
@@ -61,9 +85,9 @@ export function describePrintBridgeApk(): DownloadDescriptor {
     !!apkVersion && !!declaredVersion && apkVersion !== declaredVersion;
   const cacheBust = stat ? `?v=${encodeURIComponent(apkVersion || declaredVersion || String(stat.mtimeMs))}` : "";
   return {
-    id: "print-bridge",
-    name: "Reborn Print Bridge (Android)",
-    filename: PRINT_BRIDGE_APK_FILE,
+    id: opts.id,
+    name: opts.name,
+    filename: opts.filename,
     available: valid && !versionMismatch,
     sizeBytes: stat?.size ?? 0,
     version,
@@ -71,7 +95,7 @@ export function describePrintBridgeApk(): DownloadDescriptor {
     versionMismatch,
     downloadUrl:
       valid && !versionMismatch
-        ? `/downloads/reborn-print-bridge-${version || "latest"}.apk${cacheBust}`
+        ? `/downloads/${opts.filename.replace(".apk", "")}-${version || "latest"}.apk${cacheBust}`
         : null,
     message: valid
       ? versionMismatch

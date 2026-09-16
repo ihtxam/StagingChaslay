@@ -375,7 +375,7 @@ export class StaffService {
     }
   }
 
-  /** Storekeeper staff should use the mobile intake app, not the merchant panel. */
+  /** Storekeeper staff land on mobile intake unless their role also grants panel/inventory access. */
   static async syncStorekeeperLoginHome(merchantId: string) {
     const db = getDb();
     const staffRows = await db.query.merchantStaff.findMany({
@@ -388,6 +388,12 @@ export class StaffService {
     for (const member of staffRows) {
       const role = roleById.get(member.roleId);
       if (!role || role.name.trim().toLowerCase() !== "storekeeper") continue;
+      const perms = applyRolePermissionPolicy(role.name, parsePermissions(role.permissions));
+      const hasPanelAccess =
+        perms.includes("ACCESS_PANEL") ||
+        perms.includes("MANAGE_INVENTORY") ||
+        perms.includes("MANAGE_PRODUCTS");
+      if (hasPanelAccess) continue;
       if (normalizeStaffLoginHome(member.loginHome) === "pos") continue;
       await db
         .update(schema.merchantStaff)
@@ -446,8 +452,8 @@ export class StaffService {
   }
 
   /**
-   * Strip full panel access from the system Storekeeper role.
-   * Mobile intake only — inventory managers should use a different role.
+   * Ensure the system Storekeeper role always includes STOREKEEPER_INTAKE.
+   * Merchants may grant optional panel/inventory permissions on top — do not reset them.
    */
   static async enforceStorekeeperPanelRestrictions(merchantId: string) {
     await this.ensureStorekeeperSystemRole(merchantId);
@@ -455,16 +461,17 @@ export class StaffService {
     const roles = await db.query.merchantRoles.findMany({
       where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
     });
-    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
-    const expected = template ? encodePermissions(template.permissions) : encodePermissions(["STOREKEEPER_INTAKE"]);
     for (const role of roles) {
       if (role.name.trim().toLowerCase() !== "storekeeper") continue;
-      if (role.permissions !== expected) {
-        await db
-          .update(schema.merchantRoles)
-          .set({ permissions: expected, updatedAt: new Date() })
-          .where(eq(schema.merchantRoles.id, role.id));
-      }
+      const perms = parsePermissions(role.permissions);
+      if (perms.includes("STOREKEEPER_INTAKE")) continue;
+      await db
+        .update(schema.merchantRoles)
+        .set({
+          permissions: encodePermissions([...perms, "STOREKEEPER_INTAKE"]),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.merchantRoles.id, role.id));
     }
     await this.syncStorekeeperLoginHome(merchantId);
   }

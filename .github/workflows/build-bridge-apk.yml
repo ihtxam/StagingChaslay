@@ -31,12 +31,12 @@ jobs:
             fi
           } >> print-agent-android/local.properties
           if [[ -n "${ADYEN_SDK_API_KEY:-}" || -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
-            echo "Adyen SDK keys present — Tap to Pay APK will be built"
+            echo "Adyen SDK keys present — Tap to Pay APK will include NFC SDK"
           else
-            echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
+            echo "WARNING: ADYEN_SDK_API_KEY secret is empty — Tap to Pay APK will be a stub without NFC SDK"
           fi
 
-      - name: Build APK in Android container
+      - name: Build APKs in Android container
         run: |
           set -euo pipefail
           mkdir -p backend/public/downloads
@@ -59,18 +59,22 @@ jobs:
                   -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
               fi
               chmod +x ./gradlew
-              ./gradlew assembleRelease --no-daemon --no-build-cache -g /tmp/gradle-home
-              APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
-              test -n "$APK"
-              cp -f "$APK" /out/reborn-print-bridge.apk
+              ./gradlew assemblePrintRelease assembleTapToPayRelease --no-daemon --no-build-cache -g /tmp/gradle-home
+              PRINT_APK="$(find app/build/outputs/apk/print/release -name "*.apk" | head -1)"
+              TTP_APK="$(find app/build/outputs/apk/tapToPay/release -name "*.apk" | head -1)"
+              test -n "$PRINT_APK"
+              test -n "$TTP_APK"
+              cp -f "$PRINT_APK" /out/reborn-print-bridge-print.apk
+              cp -f "$TTP_APK" /out/reborn-print-bridge.apk
             '
 
-      - name: Verify APK version matches build.gradle
+      - name: Verify APK versions match build.gradle
         run: |
           BRIDGE_VERSION="$(grep -E 'versionName\s*=' print-agent-android/app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
-          APK_VERSION="$(python3 - <<'PY'
-          import re, zipfile
-          with zipfile.ZipFile("backend/public/downloads/reborn-print-bridge.apk") as z:
+          for APK in backend/public/downloads/reborn-print-bridge.apk backend/public/downloads/reborn-print-bridge-print.apk; do
+            APK_VERSION="$(python3 - <<'PY' "$APK"
+          import re, sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
               data = z.read("AndroidManifest.xml")
           vers = set()
           for i in range(len(data) - 6):
@@ -87,26 +91,41 @@ jobs:
           print(sorted(vers)[-1] if vers else "")
           PY
           )"
-          echo "gradle=$BRIDGE_VERSION apk=$APK_VERSION"
-          test "$APK_VERSION" = "$BRIDGE_VERSION"
+            echo "$APK gradle=$BRIDGE_VERSION apk=$APK_VERSION"
+            test "$APK_VERSION" = "$BRIDGE_VERSION"
+          done
 
-      - name: Update download manifest
+      - name: Update download manifests
         run: |
           BRIDGE_VERSION="$(grep -E 'versionName\s*=' print-agent-android/app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
           python3 - <<PY
           import json, datetime
           from pathlib import Path
-          manifest = Path("backend/public/downloads/reborn-print-bridge.json")
-          data = json.loads(manifest.read_text())
-          data["version"] = "$BRIDGE_VERSION"
-          data["builtAt"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-          data["signed"] = True
-          manifest.write_text(json.dumps(data, indent=2) + "\n")
+          built_at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+          for name, edition, has_ttp in [
+              ("reborn-print-bridge", "tapToPay", True),
+              ("reborn-print-bridge-print", "print", False),
+          ]:
+              manifest = Path(f"backend/public/downloads/{name}.json")
+              data = json.loads(manifest.read_text()) if manifest.exists() else {}
+              data.update({
+                  "name": name,
+                  "version": "$BRIDGE_VERSION",
+                  "apkFile": f"{name}.apk",
+                  "builtAt": built_at,
+                  "platform": "android",
+                  "edition": edition,
+                  "hasTapToPay": has_ttp,
+                  "signed": True,
+              })
+              manifest.write_text(json.dumps(data, indent=2) + "\n")
           PY
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: reborn-print-bridge-apk
-          path: backend/public/downloads/reborn-print-bridge.apk
+          name: reborn-print-bridge-apks
+          path: |
+            backend/public/downloads/reborn-print-bridge.apk
+            backend/public/downloads/reborn-print-bridge-print.apk
           retention-days: 30

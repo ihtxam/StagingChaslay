@@ -1,5 +1,5 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle, LogOut, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -9,10 +9,10 @@ import WebPosPinModal from '@/components/WebPosPinModal';
 import BarcodeScanModal from '@/components/storekeeper/BarcodeScanModal';
 import {
   normalizeLabelOptions,
-  parseLabelHeightMm,
-  parseLabelWidthMm,
   printLabelsViaAgentOrQueue,
+  type LabelHeightMm,
   type LabelPrintOptions,
+  type LabelWidthMm,
 } from '@/lib/barcode-labels';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
@@ -113,6 +113,7 @@ export default function StorekeeperApp() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinMode, setPinMode] = useState<'gate' | 'switch'>('gate');
   const [licensed, setLicensed] = useState<boolean | null>(null);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>(FALLBACK_UNITS);
   const [barcode, setBarcode] = useState('');
@@ -158,7 +159,15 @@ export default function StorekeeperApp() {
       hasPermission(effectivePerms, 'ACCESS_PANEL', false));
   const clockedIn = !!pinStaff || managerPanelAccess;
   const showBackToPanel = canReturnToInventoryPanel;
-  const showLogout = !showBackToPanel && user?.role === 'staff';
+  const unitOptions = units.length ? units : FALLBACK_UNITS;
+
+  const handleLogout = useCallback(() => {
+    clearWebPosStaffSession();
+    notifyWebPosStaffSessionChanged();
+    setPinStaff(null);
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const returnToPanel = useCallback(() => {
     if (pinStaff) {
@@ -175,16 +184,20 @@ export default function StorekeeperApp() {
     }
   }, [pinStaff, navigate, effectivePerms, actingAsOwner]);
 
-  const apiHeaders = staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined;
-
-  const unitOptions = units.length ? units : FALLBACK_UNITS;
+  const apiHeaders = useMemo(
+    () => (staffAccessToken ? { 'X-WebPos-Staff-Access': staffAccessToken } : undefined),
+    [staffAccessToken]
+  );
+  const bootstrapToastShownRef = useRef(false);
 
   const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
 
   const loadBootstrap = useCallback(async () => {
     if (!clockedIn) return;
+    setBootstrapLoading(true);
     try {
       const res = await api.get('/merchant/storekeeper/bootstrap', { headers: apiHeaders });
+      bootstrapToastShownRef.current = false;
       setLicensed(res.data.enabled !== false);
       setCategories(res.data.categories || []);
       const loadedUnits = (res.data.units || []).length ? res.data.units : FALLBACK_UNITS;
@@ -193,8 +206,10 @@ export default function StorekeeperApp() {
       const label = res.data.labelPrint || {};
       setLabelOpts({
         storeName: String(res.data.storeName || '').trim(),
-        widthMm: parseLabelWidthMm(label.widthMm),
-        heightMm: parseLabelHeightMm(label.heightMm),
+        widthMm: (Number(label.widthMm) === 58 ? 58 : 40) as LabelWidthMm,
+        heightMm: ([20, 25, 30, 40] as const).includes(label.heightMm)
+          ? (label.heightMm as LabelHeightMm)
+          : 20,
         showStoreName: label.showStoreName !== false,
         showProductName: label.showProductName !== false,
         showBarcodeNumber: label.showBarcodeNumber !== false,
@@ -202,21 +217,33 @@ export default function StorekeeperApp() {
         showSku: label.showSku === true,
       });
       setPosPrintSettings(res.data.posPrintSettings || null);
-      if (loadedUnits[0]?.code) {
-        setUnit((u) => (loadedUnits.some((x: Unit) => u && x.code === u) ? u : loadedUnits[0].code));
-      }
+      if (loadedUnits[0]?.code) setUnit((u) => u || loadedUnits[0].code);
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setLicensed(
         code === 'STOREKEEPER_ADDON_REQUIRED' || code === 'INVENTORY_ADDON_REQUIRED' ? false : null
       );
-      setUnits(FALLBACK_UNITS);
+      if (
+        code !== 'STOREKEEPER_ADDON_REQUIRED' &&
+        code !== 'INVENTORY_ADDON_REQUIRED' &&
+        !bootstrapToastShownRef.current
+      ) {
+        bootstrapToastShownRef.current = true;
+        toast.error(message || t('storekeeperBootstrapFailed'));
+      }
+    } finally {
+      setBootstrapLoading(false);
     }
-  }, [clockedIn, apiHeaders]);
+  }, [clockedIn, apiHeaders, t]);
 
   useEffect(() => {
     void loadBootstrap();
   }, [loadBootstrap]);
+
+  useEffect(() => {
+    bootstrapToastShownRef.current = false;
+  }, [staffAccessToken]);
 
   const applyBarcode = useCallback(
     async (code: string) => {
@@ -274,6 +301,7 @@ export default function StorekeeperApp() {
       } catch {
         setExistingItem(null);
         setSuggestion(null);
+        toast.error(t('storekeeperLookupFailed'));
       } finally {
         setLookupBusy(false);
       }
@@ -366,7 +394,6 @@ export default function StorekeeperApp() {
         storeName: labelOpts.storeName || storeName,
         showPrice: target.price ? true : labelOpts.showPrice,
       });
-      let unconfirmed = '';
       const mode = await printLabelsViaAgentOrQueue(
         [
           {
@@ -378,20 +405,11 @@ export default function StorekeeperApp() {
         ],
         opts,
         posPrintSettings,
-        {
-          retryLocally: false,
-          onUnconfirmed: (warning) => {
-            unconfirmed = warning;
-          },
-        }
+        { retryLocally: false }
       );
-      if (unconfirmed) {
-        toast(unconfirmed, { icon: '⚠️', duration: 15000 });
-      } else {
-        toast.success(
-          mode === 'queued' ? t('storekeeperPrintLabelQueued') : t('barcodePrinted')
-        );
-      }
+      toast.success(
+        mode === 'queued' ? t('storekeeperPrintLabelQueued') : t('barcodePrinted')
+      );
       setPendingLabel(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('barcodePrintFailed');
@@ -494,16 +512,19 @@ export default function StorekeeperApp() {
             setPinOpen(true);
           }}
         >
-          {t('webposPinClockIn')}
+          {t('webPosPinClockIn')}
         </button>
         <WebPosPinModal
           open={pinOpen}
           mode={pinMode}
           onClose={() => setPinOpen(false)}
+          onLeave={canReturnToInventoryPanel ? () => returnToPanel() : undefined}
+          onLogout={user?.role === 'staff' ? handleLogout : undefined}
           onSuccess={(session) => {
             saveWebPosStaffSession(session);
             setPinStaff(session);
             setPinOpen(false);
+            void loadBootstrap();
           }}
         />
       </div>
@@ -516,6 +537,15 @@ export default function StorekeeperApp() {
         <h1 className="text-lg font-bold">{t('storekeeperTitle')}</h1>
         <p className="mt-2 text-sm muted">{t('storekeeperUpsellBody')}</p>
         <p className="mt-2 text-xs muted">{t('storekeeperUpsellHint')}</p>
+      </div>
+    );
+  }
+
+  if (bootstrapLoading && licensed === null) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 p-6 text-center">
+        <Package className="text-teal-700" size={40} />
+        <p className="text-sm muted">{t('loading')}</p>
       </div>
     );
   }
@@ -557,20 +587,6 @@ export default function StorekeeperApp() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {showLogout ? (
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-muted)]"
-              onClick={() => {
-                logout();
-                navigate('/login', { replace: true });
-              }}
-              aria-label={t('logout')}
-              title={t('logout')}
-            >
-              <LogOut size={20} />
-            </button>
-          ) : null}
           <button
             type="button"
             className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm ${
@@ -868,10 +884,13 @@ export default function StorekeeperApp() {
         open={pinOpen}
         mode={pinMode}
         onClose={() => setPinOpen(false)}
+        onLeave={canReturnToInventoryPanel ? () => returnToPanel() : undefined}
+        onLogout={user?.role === 'staff' ? handleLogout : undefined}
         onSuccess={(session) => {
           saveWebPosStaffSession(session);
           setPinStaff(session);
           setPinOpen(false);
+          void loadBootstrap();
         }}
       />
     </div>

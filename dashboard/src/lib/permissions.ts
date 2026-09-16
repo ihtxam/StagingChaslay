@@ -188,6 +188,11 @@ export function isReportsPanelPath(path: string): boolean {
   return path === '/merchant/reports' || path.startsWith('/merchant/reports/');
 }
 
+export function isInventoryPanelPath(path: string): boolean {
+  const normalized = path.replace(/\/$/, '') || '/merchant';
+  return normalized === '/merchant/inventory' || normalized.startsWith('/merchant/inventory/');
+}
+
 export function canOpenReportsPanel(permissions: Permission[] | undefined, isOwner: boolean): boolean {
   if (isOwner) return true;
   return (
@@ -215,10 +220,12 @@ export function resolvePanelRoutePermissions(path: string): Permission[] | null 
   return [];
 }
 
-/** Catalog, orders, and/or reports — limited back office without full ACCESS_PANEL. */
 export function isLimitedBackOfficePath(path: string): boolean {
   return (
-    isCatalogPanelPath(path) || isOrdersPanelPath(path) || isReportsPanelPath(path)
+    isCatalogPanelPath(path) ||
+    isOrdersPanelPath(path) ||
+    isReportsPanelPath(path) ||
+    isInventoryPanelPath(path)
   );
 }
 
@@ -234,10 +241,10 @@ export function backOfficeHomePath(
     return '/merchant';
   }
   if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
   if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
   if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
   if (isOrderCenterOnlyStaff(permissions, isOwner)) return orderCenterHomePath();
-  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
   if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
@@ -349,6 +356,8 @@ export function isStorekeeperRestrictedStaff(
   if (isOwner) return false;
   if (!hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return false;
   if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return false;
   return true;
 }
 
@@ -901,7 +910,9 @@ export function getEffectivePanelAccess(opts: {
   canOpenOrders: boolean;
   /** Sales reports / EOD (VIEW_REPORTS or END_OF_DAY). */
   canOpenReports: boolean;
-  /** At least one back-office page (panel, menu, orders, or reports). */
+  /** Inventory module pages. */
+  canOpenInventory: boolean;
+  /** At least one back-office page (panel, menu, orders, inventory, or reports). */
   canOpenBackOffice: boolean;
   pinActive: boolean;
 } {
@@ -917,6 +928,7 @@ export function getEffectivePanelAccess(opts: {
     const canOpenOrders =
       ownerEffective || hasPermission(opts.jwtPermissions, 'VIEW_ORDER_HISTORY', false);
     const canOpenReports = canOpenReportsPanel(opts.jwtPermissions, ownerEffective);
+    const canOpenInventory = hasPermission(opts.jwtPermissions, 'MANAGE_INVENTORY', false);
     return {
       permissions: opts.jwtPermissions,
       isOwner: ownerEffective,
@@ -924,8 +936,9 @@ export function getEffectivePanelAccess(opts: {
       canOpenCatalog,
       canOpenOrders,
       canOpenReports,
+      canOpenInventory,
       canOpenBackOffice:
-        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
+        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports || canOpenInventory,
       pinActive: false,
     };
   };
@@ -944,6 +957,7 @@ export function getEffectivePanelAccess(opts: {
     const canOpenCatalog = hasPermission(permissions, 'MANAGE_PRODUCTS', false);
     const canOpenOrders = hasPermission(permissions, 'VIEW_ORDER_HISTORY', false);
     const canOpenReports = canOpenReportsPanel(permissions, false);
+    const canOpenInventory = hasPermission(permissions, 'MANAGE_INVENTORY', false);
     return {
       permissions,
       isOwner: false,
@@ -951,8 +965,9 @@ export function getEffectivePanelAccess(opts: {
       canOpenCatalog,
       canOpenOrders,
       canOpenReports,
+      canOpenInventory,
       canOpenBackOffice:
-        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports,
+        canOpenPanel || canOpenCatalog || canOpenOrders || canOpenReports || canOpenInventory,
       pinActive: true,
     };
   }

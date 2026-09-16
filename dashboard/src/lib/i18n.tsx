@@ -1757,6 +1757,15 @@ const en: Dict = {
     'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Download Bridge Reborn (Android)',
+  printBridgeEditionHint: 'Choose the edition for this tablet. Both use the same app — installing one replaces the other.',
+  downloadPrintBridgePrintOnly: 'Print only',
+  downloadPrintBridgeTapToPay: 'Print + Tap to Pay',
+  installPrintBridgePrintOnly: 'Install print-only Bridge',
+  installPrintBridgeTapToPay: 'Install Tap to Pay Bridge',
+  printBridgePrintOnlyHint:
+    'Background printing only (~5 MB). Use on kitchen tablets or counters without contactless payments. No NFC / Adyen SDK.',
+  printBridgeTapToPayHint:
+    'Full build with NFC Tap to Pay (~150 MB). Use on POS tablets that take card payments in WebPOS.',
   installPrintBridge: 'Install Bridge Reborn',
   installPrintBridgeUpdate: 'Install update',
   printBridgeAlreadyInstalled: 'Bridge Reborn is installed on this tablet (v{version}). Open the Bridge app — do not download again unless updating.',
@@ -2722,6 +2731,7 @@ const en: Dict = {
   webPosPinTitle: 'Switch user',
   webPosPinGateTitle: 'Enter staff PIN',
   webPosPinGateHint: 'PIN unlocks this register for your shift. Enter 4–8 digits; submits automatically.',
+  webPosPinClockIn: 'Clock in with PIN',
   webPosPinHint: 'Enter 4–8 digits',
   webPosPinInvalid: 'Invalid PIN',
   webPosPinErrorTitle: 'Could not unlock register',
@@ -3246,7 +3256,7 @@ const en: Dict = {
     'Includes catalog access. End of day can be enabled for own-sales EOD from POS. Company reports stay blocked unless you grant View reports / View all sales.',
   staffRoleStorekeeper: 'Storekeeper (mobile intake)',
   staffRoleStorekeeperHint:
-    'Opens the mobile storekeeper app after PIN login — scan barcodes and receive stock. No full panel access.',
+    'Mobile stock intake after PIN login. You can also grant inventory or panel access for backend product and barcode management.',
   staffRoleKiosk: 'Kiosk operator',
   staffRoleKioskHint:
     'Opens kiosk setup only — configure sliders, payment methods, test connections, and launch customer mode. No full panel access.',
@@ -3757,6 +3767,8 @@ const en: Dict = {
   storekeeperRecent: 'Recent intakes',
   storekeeperOnlineFound: 'Product found online — review and save',
   storekeeperOnlineNotFound: 'Barcode not in your stock or online database — enter details manually',
+  storekeeperBootstrapFailed: 'Could not load storekeeper data — check your connection and try again',
+  storekeeperLookupFailed: 'Barcode lookup failed — try again or enter details manually',
   storekeeperPackageSize: 'Package: {size}',
   storekeeperCost: 'Purchase cost (CHF)',
   storekeeperSalePrice: 'Sale price (CHF)',
@@ -5673,6 +5685,16 @@ const fr: Dict = {
     'Installez Reborn Print Agent une seule fois sur le PC caisse. L’agent démarre avec Windows — plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
+  printBridgeEditionHint:
+    'Choisissez l’édition pour cette tablette. Même application — l’une remplace l’autre à l’installation.',
+  downloadPrintBridgePrintOnly: 'Impression seule',
+  downloadPrintBridgeTapToPay: 'Impression + Tap to Pay',
+  installPrintBridgePrintOnly: 'Installer Bridge impression seule',
+  installPrintBridgeTapToPay: 'Installer Bridge Tap to Pay',
+  printBridgePrintOnlyHint:
+    'Impression en arrière-plan uniquement (~5 Mo). Pour cuisine ou comptoir sans paiement sans contact.',
+  printBridgeTapToPayHint:
+    'Version complète avec Tap to Pay NFC (~150 Mo). Pour les tablettes POS avec paiement carte.',
   installPrintBridge: 'Installer Bridge Reborn',
   installPrintBridgeUpdate: 'Installer la mise à jour',
   printBridgeAlreadyInstalled:
@@ -6642,6 +6664,7 @@ const fr: Dict = {
   webPosPinTitle: 'Changer d’utilisateur',
   webPosPinGateTitle: 'Entrez le code PIN',
   webPosPinGateHint: 'Le PIN déverrouille la caisse pour votre session. Saisissez 4 à 8 chiffres ; validation automatique.',
+  webPosPinClockIn: 'Pointer avec le PIN',
   webPosPinHint: 'Saisissez 4 à 8 chiffres',
   webPosPinInvalid: 'Code PIN invalide',
   webPosPinErrorTitle: 'Impossible de déverrouiller la caisse',
@@ -7130,7 +7153,7 @@ const fr: Dict = {
     'Inclut l’accès catalogue. Fin de journée possible pour l’EOD personnel depuis la caisse. Rapports entreprise bloqués sans Voir les rapports / toutes les ventes.',
   staffRoleStorekeeper: 'Magasinier (réception mobile)',
   staffRoleStorekeeperHint:
-    'Ouvre l’app magasinier après le PIN — scan des codes-barres et réception stock. Pas d’accès au panneau.',
+    'Réception stock mobile après PIN. Vous pouvez aussi accorder l’inventaire ou le panneau pour gérer produits et codes-barres.',
   staffRoleKiosk: 'Opérateur borne',
   staffRoleKioskHint:
     'Accès à la configuration borne uniquement — sliders, paiements, tests de connexion et lancement du mode client. Pas d’accès au panneau complet.',
@@ -7623,6 +7646,8 @@ const fr: Dict = {
   storekeeperRecent: 'Réceptions récentes',
   storekeeperOnlineFound: 'Produit trouvé en ligne — vérifiez et enregistrez',
   storekeeperOnlineNotFound: 'Code absent du stock et de la base en ligne — saisissez les détails',
+  storekeeperBootstrapFailed: 'Impossible de charger les données magasinier — vérifiez la connexion',
+  storekeeperLookupFailed: 'Recherche du code-barres échouée — réessayez ou saisissez manuellement',
   storekeeperPackageSize: 'Conditionnement : {size}',
   storekeeperCost: 'Coût d’achat (CHF)',
   storekeeperSalePrice: 'Prix de vente (CHF)',
@@ -9537,6 +9562,16 @@ const de: Dict = {
     'Reborn Print Agent einmal auf dem Kassen-PC installieren. Der Agent startet mit Windows — start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
+  printBridgeEditionHint:
+    'Edition für diese Tablette wählen. Gleiche App — Installation ersetzt die andere Edition.',
+  downloadPrintBridgePrintOnly: 'Nur Druck',
+  downloadPrintBridgeTapToPay: 'Druck + Tap to Pay',
+  installPrintBridgePrintOnly: 'Nur-Druck-Bridge installieren',
+  installPrintBridgeTapToPay: 'Tap-to-Pay-Bridge installieren',
+  printBridgePrintOnlyHint:
+    'Nur Hintergrunddruck (~5 MB). Für Küche oder Theke ohne kontaktlose Zahlung.',
+  printBridgeTapToPayHint:
+    'Voller Build mit NFC Tap to Pay (~150 MB). Für POS-Tablets mit Kartenzahlung in WebPOS.',
   installPrintBridge: 'Bridge Reborn installieren',
   installPrintBridgeUpdate: 'Update installieren',
   printBridgeAlreadyInstalled:
@@ -10506,6 +10541,7 @@ const de: Dict = {
   webPosPinTitle: 'Benutzer wechseln',
   webPosPinGateTitle: 'Mitarbeiter-PIN eingeben',
   webPosPinGateHint: 'Die PIN entsperrt die Kasse für Ihre Sitzung. 4–8 Ziffern eingeben; automatische Bestätigung.',
+  webPosPinClockIn: 'Mit PIN einstempeln',
   webPosPinHint: '4–8 Ziffern eingeben',
   webPosPinInvalid: 'Ungültige PIN',
   webPosPinErrorTitle: 'Kasse konnte nicht entsperrt werden',
@@ -10994,7 +11030,7 @@ const de: Dict = {
     'Enthält Katalogzugang. Tagesabschluss für eigenen EOD an der Kasse möglich. Unternehmensberichte ohne Berichte-/Alle-Verkäufe-Recht gesperrt.',
   staffRoleStorekeeper: 'Lagerist (mobile Buchung)',
   staffRoleStorekeeperHint:
-    'Öffnet die mobile Lageristen-App nach PIN-Login — Barcodes scannen und Bestand buchen. Kein volles Panel.',
+    'Mobile Wareneingabe nach PIN. Optional Inventar- oder Panel-Zugriff für Produkte und Barcodes im Backend.',
   staffRoleKiosk: 'Kiosk-Betreiber',
   staffRoleKioskHint:
     'Nur Kiosk-Einrichtung — Slider, Zahlungsarten, Verbindungstests und Start des Kundenmodus. Kein volles Panel.',
@@ -11487,6 +11523,8 @@ const de: Dict = {
   storekeeperRecent: 'Letzte Buchungen',
   storekeeperOnlineFound: 'Produkt online gefunden — prüfen und speichern',
   storekeeperOnlineNotFound: 'Barcode weder im Bestand noch online — manuell eingeben',
+  storekeeperBootstrapFailed: 'Lageristen-Daten konnten nicht geladen werden — Verbindung prüfen',
+  storekeeperLookupFailed: 'Barcode-Suche fehlgeschlagen — erneut versuchen oder manuell eingeben',
   storekeeperPackageSize: 'Packung: {size}',
   storekeeperCost: 'Einkaufspreis (CHF)',
   storekeeperSalePrice: 'Verkaufspreis (CHF)',

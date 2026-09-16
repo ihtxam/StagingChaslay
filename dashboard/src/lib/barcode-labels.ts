@@ -116,8 +116,8 @@ export function buildLabelEscPos(product: LabelProduct, opts: LabelPrintOptions)
   const barH = o.heightMm <= 20 ? 48 : o.heightMm <= 25 ? 60 : o.heightMm <= 30 ? 72 : 88;
   parts.push(escposCode128(product.barcode, barH, o.widthMm === 40 ? 1 : 2));
   if (o.showBarcodeNumber) parts.push(line(product.barcode));
-  parts.push(new Uint8Array([0x1b, 0x64, 0x02]));
-  parts.push(new Uint8Array([0x1d, 0x56, 0x41, 0x00]));
+  // Single full cut — avoid extra feed that advances a blank label on thermal printers.
+  parts.push(new Uint8Array([0x1d, 0x56, 0x00]));
   parts.push(left);
   return concatBytes(...parts);
 }
@@ -201,12 +201,16 @@ export function printLabelsHtml(products: LabelProduct[], opts: LabelPrintOption
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
   const pages: string[] = [];
+  let pageIndex = 0;
+  const totalPages = printable.reduce((n, p) => n + o.copies, 0);
   for (const product of printable) {
     for (let c = 0; c < o.copies; c++) {
+      pageIndex += 1;
       const svg = barcodeSvg(product.barcode, { height: o.heightMm <= 20 ? 28 : 40, width: o.widthMm === 40 ? 120 : 160 });
       const meta = labelMetaLine(product, o);
+      const pageBreak = pageIndex < totalPages ? ' page-break-after: always;' : '';
       pages.push(`
-        <div class="label">
+        <div class="label" style="${pageBreak}">
           ${o.showStoreName && o.storeName ? `<div class="store">${escapeHtml(o.storeName)}</div>` : ''}
           ${o.showProductName ? `<div class="name">${escapeHtml(product.name)}</div>` : ''}
           ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ''}
@@ -220,7 +224,7 @@ export function printLabelsHtml(products: LabelProduct[], opts: LabelPrintOption
       @page { size: ${o.widthMm}mm ${o.heightMm}mm; margin: 1.5mm; }
       * { box-sizing: border-box; }
       body { margin: 0; font-family: system-ui, sans-serif; color: #111; }
-      .label { width: ${o.widthMm}mm; height: ${o.heightMm}mm; padding: 1mm; page-break-after: always;
+      .label { width: ${o.widthMm}mm; height: ${o.heightMm}mm; padding: 1mm;
         display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
       .store { font-size: 8px; font-weight: 700; letter-spacing: .02em; }
       .name { font-size: 10px; font-weight: 600; line-height: 1.15; }
