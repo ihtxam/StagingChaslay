@@ -3,6 +3,9 @@ import { getDb, schema } from "@/db";
 import { roundMoney2 } from "@/lib/money";
 import type { VoucherDiscountType, VoucherUsageType } from "@/db/schema";
 
+export type VoucherOrderType = "takeaway" | "delivery" | "dine_in";
+const VOUCHER_ORDER_TYPES = new Set<VoucherOrderType>(["takeaway", "delivery", "dine_in"]);
+
 export type VoucherInput = {
   code: string;
   name?: string | null;
@@ -12,6 +15,7 @@ export type VoucherInput = {
   discountType?: VoucherDiscountType;
   discountValue: number;
   minOrderAmount?: number;
+  orderTypes?: string[] | null;
   validFrom?: string | Date | null;
   validTo?: string | Date | null;
   isActive?: boolean;
@@ -20,6 +24,22 @@ export type VoucherInput = {
 export class VoucherService {
   static normalizeCode(code: string): string {
     return code.trim().toUpperCase();
+  }
+
+  static normalizeOrderTypes(input?: string[] | null): VoucherOrderType[] {
+    if (!Array.isArray(input)) return [];
+    return input.filter((t): t is VoucherOrderType => VOUCHER_ORDER_TYPES.has(t as VoucherOrderType));
+  }
+
+  static allowsOrderType(
+    voucher: { orderTypes?: string[] | null },
+    orderType?: string | null
+  ): boolean {
+    const types = this.normalizeOrderTypes(voucher.orderTypes);
+    if (types.length === 0) return true;
+    const ch = String(orderType || "").trim().toLowerCase();
+    if (ch === "pickup") return types.includes("takeaway");
+    return types.includes(ch as VoucherOrderType);
   }
 
   static async list(merchantId: string) {
@@ -84,6 +104,7 @@ export class VoucherService {
         discountType,
         discountValue: String(discountValue),
         minOrderAmount: String(Math.max(0, Number(input.minOrderAmount) || 0)),
+        orderTypes: this.normalizeOrderTypes(input.orderTypes),
         validFrom: input.validFrom ? new Date(input.validFrom) : null,
         validTo: input.validTo ? new Date(input.validTo) : null,
         isActive: input.isActive !== false,
@@ -127,6 +148,9 @@ export class VoucherService {
     }
     if (input.minOrderAmount !== undefined) {
       patch.minOrderAmount = String(Math.max(0, Number(input.minOrderAmount) || 0));
+    }
+    if (input.orderTypes !== undefined) {
+      patch.orderTypes = this.normalizeOrderTypes(input.orderTypes);
     }
     if (input.validFrom !== undefined) {
       patch.validFrom = input.validFrom ? new Date(input.validFrom) : null;
@@ -208,7 +232,8 @@ export class VoucherService {
     merchantId: string,
     code: string,
     subtotal: number,
-    customerId?: string
+    customerId?: string,
+    orderType?: string | null
   ) {
     const normalized = this.normalizeCode(code);
     if (!normalized) throw new Error("Enter a voucher code");
@@ -219,6 +244,9 @@ export class VoucherService {
     });
     if (!voucher) throw new Error("Invalid voucher code");
     if (!voucher.isActive) throw new Error("This voucher is no longer active");
+    if (!this.allowsOrderType(voucher, orderType)) {
+      throw new Error("This voucher is not valid for this order type");
+    }
 
     const now = new Date();
     if (voucher.validFrom && now < new Date(voucher.validFrom)) {
@@ -321,6 +349,7 @@ export class VoucherService {
       discountType: v.discountType,
       discountValue: Number(v.discountValue),
       minOrderAmount: Number(v.minOrderAmount || 0),
+      orderTypes: this.normalizeOrderTypes((v as { orderTypes?: string[] | null }).orderTypes),
       validFrom: v.validFrom,
       validTo: v.validTo,
       isActive: v.isActive,

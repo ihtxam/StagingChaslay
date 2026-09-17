@@ -1,6 +1,10 @@
+import { useParams } from 'react-router-dom';
+import { resolveShopKey } from '@/lib/shop-cart';
+import ShopFooter from '@/components/shop/ShopFooter';
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 
+/** 4-column shop footer when the shop key is known; compact fallback otherwise. */
 export default function ShopStorefrontFooter({
   basePath,
   merchantName,
@@ -11,7 +15,17 @@ export default function ShopStorefrontFooter({
   className?: string;
 }) {
   const { t } = useI18n();
+  const { merchantSlug } = useParams<{ merchantSlug?: string }>();
+  const shopKey = resolveShopKey(merchantSlug);
   const menuPath = `${basePath}/menu`.replace(/\/+/g, '/');
+
+  if (shopKey) {
+    return (
+      <div className={className}>
+        <ShopFooter shopKey={shopKey} />
+      </div>
+    );
+  }
 
   return (
     <footer className={`shop-storefront-footer border-t border-stone-200 bg-white ${className}`}>

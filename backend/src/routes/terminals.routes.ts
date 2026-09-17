@@ -48,6 +48,7 @@ router.get("/", async (req: Request, res: Response) => {
         clientId: settings.adyenClientId,
         hmacKeyMasked: settings.adyenHmacKeyMasked,
         hmacKeySet: settings.adyenHmacKeySet,
+        liveUrlPrefix: settings.adyenLiveUrlPrefix || "",
         webhookUrl,
       },
     });
@@ -62,12 +63,13 @@ router.get("/", async (req: Request, res: Response) => {
  */
 router.put("/adyen-credentials", async (req: Request, res: Response) => {
   try {
-    const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey } = req.body;
+    const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix } = req.body;
     const settings = await MerchantSettingsService.updateMerchantSettings(req.merchantId!, {
       adyenMerchantAccount,
       adyenApiKey,
       adyenClientId,
       adyenHmacKey,
+      adyenLiveUrlPrefix,
     });
     res.json({
       success: true,
@@ -78,6 +80,7 @@ router.put("/adyen-credentials", async (req: Request, res: Response) => {
         clientId: settings.adyenClientId,
         hmacKeyMasked: settings.adyenHmacKeyMasked,
         hmacKeySet: settings.adyenHmacKeySet,
+        liveUrlPrefix: settings.adyenLiveUrlPrefix || "",
         webhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId!, req),
       },
     });

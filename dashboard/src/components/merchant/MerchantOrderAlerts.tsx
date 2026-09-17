@@ -8,9 +8,10 @@ import {
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
+import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
+import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isTerminalOrderStatus } from '@/lib/order-management';
 import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
@@ -200,7 +201,21 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         }
       }
 
+      for (const id of [...unactionedRef.current]) {
+        const row = online.find((o) => o.id === id);
+        if (!row) {
+          unactionedRef.current.delete(id);
+          continue;
+        }
+        if (autoAccept) {
+          if (isTerminalOrderStatus(row.status)) unactionedRef.current.delete(id);
+        } else if (!isAwaitingApproval(row.status)) {
+          unactionedRef.current.delete(id);
+        }
+      }
+
       setQueue((prev) => prev.filter((o) => unactionedRef.current.has(o.id)));
+      if (unactionedRef.current.size === 0) stopOrderAlertLoop();
     } catch {
       /* ignore poll errors */
     }
@@ -239,10 +254,13 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   );
 
   const acceptOrder = useCallback(
-    async (order: OnlineOrder) => {
+    async (order: OnlineOrder, prepMinutes?: number) => {
       setBusy(true);
       try {
-        await api.post(`/merchant/orders/${order.id}/action`, { action: 'accept' });
+        await api.post(`/merchant/orders/${order.id}/action`, {
+          action: 'accept',
+          ...(typeof prepMinutes === 'number' ? { etaAdjustMinutes: prepMinutes } : {}),
+        });
         try {
           await printOrderCenterTickets(order.id, order.orderSource, order.fulfillmentChannel);
         } catch {
@@ -273,15 +291,30 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
   const current = queue[0] ?? null;
   const acknowledgeOnly = autoAccept && !!current && !isAwaitingApproval(current.status);
+  /**
+   * ETA / prep minutes: shop delivery + pickup awaiting approval.
+   * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).
+   * Same rule as WebPOS new-order alerts.
+   */
+  const useEtaModal =
+    !!current && !acknowledgeOnly && isDeliveryOrPickupShopOrder(current);
 
-  return (
+  return useEtaModal ? (
+    <OrderAcceptWithEtaModal
+      order={current}
+      queueCount={queue.length}
+      busy={busy}
+      onAccept={(o, mins) => void acceptOrder(o, mins)}
+      onReject={(o) => void rejectOrder(o)}
+    />
+  ) : (
     <WebPosNewOrderAlertModal
       order={current}
       queueCount={queue.length}
       busy={busy}
       acknowledgeOnly={acknowledgeOnly}
       onAcknowledge={acknowledgeOrder}
-      onAccept={acknowledgeOnly ? undefined : (o) => void acceptOrder(o)}
+      onAccept={acknowledgeOnly ? undefined : (o) => void acceptOrder(o, 30)}
       onReject={acknowledgeOnly ? undefined : (o) => void rejectOrder(o)}
     />
   );

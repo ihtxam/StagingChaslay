@@ -14,6 +14,7 @@ export type SettingsTabId =
   | 'kds'
   | 'ods'
   | 'customerDisplay'
+  | 'fiscal'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -549,6 +550,18 @@ export function buildSettingsSearchIndex(
       id: 'kiosk-setup',
       tab: 'kiosk',
       keywords: ['kiosk', 'self order', 'attract', 'slider', t('kioskNav')],
+    },
+    {
+      id: 'fiscal-fiskaly',
+      tab: 'fiscal',
+      keywords: [
+        'fiscal',
+        'fiskaly',
+        'tse',
+        'nf525',
+        'kassensichv',
+        t('settingsFiscal'),
+      ],
     },
     {
       id: 'email-smtp',

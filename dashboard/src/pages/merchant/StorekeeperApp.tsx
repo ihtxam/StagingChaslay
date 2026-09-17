@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle, LogOut, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -158,7 +158,10 @@ export default function StorekeeperApp() {
       hasPermission(effectivePerms, 'ACCESS_PANEL', false));
   const clockedIn = !!pinStaff || managerPanelAccess;
   const showBackToPanel = canReturnToInventoryPanel;
-  const showLogout = !showBackToPanel && user?.role === 'staff';
+  const pinLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   const returnToPanel = useCallback(() => {
     if (pinStaff) {
@@ -495,6 +498,7 @@ export default function StorekeeperApp() {
             setPinStaff(session);
             setPinOpen(false);
           }}
+          onLogout={pinLogout}
         />
       </div>
     );
@@ -547,20 +551,6 @@ export default function StorekeeperApp() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {showLogout ? (
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-sm hover:bg-[var(--bg-muted)]"
-              onClick={() => {
-                logout();
-                navigate('/login', { replace: true });
-              }}
-              aria-label={t('logout')}
-              title={t('logout')}
-            >
-              <LogOut size={20} />
-            </button>
-          ) : null}
           <button
             type="button"
             className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm ${
@@ -863,6 +853,7 @@ export default function StorekeeperApp() {
           setPinStaff(session);
           setPinOpen(false);
         }}
+        onLogout={pinLogout}
       />
     </div>
   );

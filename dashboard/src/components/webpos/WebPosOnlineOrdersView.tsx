@@ -201,6 +201,7 @@ export default function WebPosOnlineOrdersView({
             disabled={busy}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
             onClick={() => {
+              // ETA / prep minutes for shop delivery+pickup awaiting approval only.
               if (isDeliveryOrPickupShopOrder(o)) {
                 setEtaAcceptOrder(o);
               } else {

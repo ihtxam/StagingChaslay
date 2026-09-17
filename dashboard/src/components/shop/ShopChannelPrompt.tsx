@@ -8,6 +8,7 @@ import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { buildScheduleDays, buildScheduleDayForDate, type StoreHours } from '@/lib/shop-hours';
 import { useI18n } from '@/lib/i18n';
+import { SHOP_INPUT_CLASS } from '@/lib/shop-input';
 
 type ChannelOption = {
   id: ShopChannel;
@@ -440,7 +441,7 @@ export default function ShopChannelPrompt({
                 <ShopAddressAutocomplete
                   shopKey={shopKey}
                   value={street}
-                  className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                  className={SHOP_INPUT_CLASS}
                   onChange={(next) => {
                     setStreet(next);
                     setDeliveryInfo(null);
@@ -472,7 +473,7 @@ export default function ShopChannelPrompt({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
-                    className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className={SHOP_INPUT_CLASS}
                     placeholder={t('shopHouseNumber')}
                     value={houseNumber}
                     onChange={(e) => {
@@ -482,7 +483,7 @@ export default function ShopChannelPrompt({
                     }}
                   />
                   <input
-                    className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className={SHOP_INPUT_CLASS}
                     placeholder={t('shopFloor')}
                     value={floor}
                     onChange={(e) => {

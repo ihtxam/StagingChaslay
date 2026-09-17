@@ -320,6 +320,9 @@ export class DeliveryTrackingService {
 
   static async assignDriver(merchantId: string, orderId: string, staffId: string | null) {
     await this.ensureSchema();
+    if (String(orderId).startsWith("held:")) {
+      throw new Error("Held POS tickets cannot be assigned to a driver");
+    }
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),

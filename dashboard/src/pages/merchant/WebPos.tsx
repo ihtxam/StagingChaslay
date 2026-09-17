@@ -9,6 +9,7 @@ import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
+import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
 import {
   buildKitchenPrintJobs,
   buildKitchenCrossStationFooters,
@@ -109,6 +110,7 @@ import {
   shouldAutoPrintReceipt,
   cacheMerchantAutoPrintSettings,
 } from '@/lib/webpos-print-relay';
+import { shouldSkipAutoPrint } from '@/lib/webpos-print-targets';
 import { printOrderLabelViaAgent } from '@/lib/order-labels';
 import {
   buildPrinterProfileUpdate,
@@ -1721,8 +1723,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   /** Bookings tab + reservation alerts — restaurant only when module is on. */
   const reservationsPosUiEnabled = !isRetail && !!merchant?.reservationsEnabled;
-  const giftCardsEditionOk =
-    editionAllows('pos_gift_cards') || editionAllows('gift_cards');
+  const giftCardsEditionOk = isGiftCardsLicensed({
+    giftCardAddonEnabled: merchant?.giftCardAddonEnabled === true,
+    editionFeatures,
+    features: editionFeatures,
+  });
   // Counter / takeaway / delivery / open table or tab → Send.
   // When tables are off, always offer Send (fast-food walk-in).
   const showSend =
@@ -6928,7 +6933,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
         const skipThermal =
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
-        if (!skipThermal && shouldAutoPrintReceipt(printSettings)) {
+        if (
+          !skipThermal &&
+          shouldAutoPrintReceipt(printSettings) &&
+          !shouldSkipAutoPrint({
+            roleTargets: printersForRole(printSettings, 'receipt'),
+            fallbackName: printerName,
+            livePrinters: printers,
+            printersReady,
+            agentOk,
+          })
+        ) {
           // Don't hold collect-payment success UI on Print Agent paced sleeps (~4–5s on USB).
           void printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl).catch(
             (e: unknown) => notifyPrintError(e, 'webPosPrintFailed')
@@ -9612,6 +9627,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     deliveryAutoAccept &&
     !!currentNewOrderAlert &&
     !isAwaitingApproval(currentNewOrderAlert.status);
+  /**
+   * ETA / prep minutes: shop delivery + pickup awaiting approval.
+   * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).
+   */
   const newOrderAlertUseEtaModal =
     !!currentNewOrderAlert &&
     !newOrderAlertAcknowledgeOnly &&
@@ -11435,7 +11454,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">{t('webPosEodReport')}</h3>
-            <p className="mt-1 text-sm text-slate-600">Choose company-wide or an individual waiter.</p>
+            <p className="mt-1 text-sm text-slate-600">{t('webPosEodPickerHint')}</p>
             <EodIncludeProductsCheckbox
               className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
               checked={eodIncludeProductsSold}
@@ -11452,7 +11471,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   });
                 }}
               >
-                Company-wide
+                {t('webPosEodCompanyWide')}
               </button>
               {panelStaff.map((s) => (
                 <button

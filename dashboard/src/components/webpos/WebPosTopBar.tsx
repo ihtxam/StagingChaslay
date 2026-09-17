@@ -19,7 +19,7 @@ import {
   Vault,
   ArrowDownUp,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
@@ -684,6 +684,9 @@ export function WebPosSettingsDropdown({
             {t('webPosEnterFullscreen')}
           </button>
         </div>
+        {fullscreenActive ? (
+          <OnScreenKeyboardToggle className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50" />
+        ) : null}
         {onOpenCustomerDisplay ? (
           <button
             type="button"

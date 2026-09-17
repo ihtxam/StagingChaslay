@@ -188,6 +188,11 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   adyen_recurring_detail_reference:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
   support_code: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS support_code varchar(16)",
+  adyen_live_url_prefix:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_live_url_prefix varchar(255)",
+  gift_card_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
+  fiskaly_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -221,6 +226,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   delivery_longitude: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_longitude numeric(10,7)",
   delivery_tracking_token:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_tracking_token varchar(64)",
+  orders_fiskaly_signature:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fiskaly_signature jsonb",
+  vouchers_order_types:
+    "ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb",
   delivery_driver_pay_mode:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_driver_pay_mode varchar(20) NOT NULL DEFAULT 'both'",
   delivery_driver_hourly_rate:
@@ -1223,6 +1232,7 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS closed_reason varchar(40)`,
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
   `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
+  `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1377,6 +1387,10 @@ export async function ensureUberEatsAddonColumn(): Promise<void> {
 export async function ensureStorekeeperAddonColumn(): Promise<void> {
   await runPatch("storekeeper_addon_enabled");
   await ensureMerchantTables();
+}
+
+export async function ensureGiftCardAddonColumn(): Promise<void> {
+  await runPatch("gift_card_addon_enabled");
 }
 
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
