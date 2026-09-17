@@ -3,20 +3,20 @@ import axios from 'axios';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { clearCart } from '@/lib/shop-cart';
-
-type PaymentSession = {
-  id: string;
-  sessionData: string;
-  clientKey: string;
-  environment: string;
-};
+import {
+  adyenLocaleFor,
+  formatAdyenError,
+  mountAdyenDropin,
+  normalizeAdyenPaymentSession,
+  type AdyenPaymentSession,
+} from '@/lib/adyen-checkout';
 
 type Props = {
   open: boolean;
   shopKey: string;
   orderId: string;
   total: number;
-  session: PaymentSession | null;
+  session: AdyenPaymentSession | null;
   demoMode?: boolean;
   demoError?: string;
   onClose: () => void;
@@ -34,55 +34,62 @@ export default function ShopPaymentModal({
   onClose,
   onPaid,
 }: Props) {
-  const { t } = useI18n();
-  const dropinRef = useRef<HTMLDivElement>(null);
+  const { t, locale } = useI18n();
+  const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
   const [payMsg, setPayMsg] = useState('');
+  const sessionId = session?.id || '';
+  const sessionData = session?.sessionData || '';
+  const clientKey = session?.clientKey || '';
+  const normalized = normalizeAdyenPaymentSession(session);
 
   useEffect(() => {
     if (!open) {
       dropinMounted.current = false;
       setPayMsg('');
+      setDropinEl(null);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!open || !session?.sessionData || !session.clientKey || !dropinRef.current) return;
-    if (dropinMounted.current) return;
+    if (!open || demoMode || !normalized || !dropinEl || dropinMounted.current) return;
     let cancelled = false;
 
     void (async () => {
       try {
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        if (cancelled || !dropinRef.current) return;
-        const checkout = await AdyenCheckout({
-          environment: session.environment === 'live' ? 'live' : 'test',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
-          onPaymentCompleted: async () => {
+        await mountAdyenDropin({
+          session: normalized,
+          container: dropinEl,
+          locale: adyenLocaleFor(locale),
+          credentialSource: 'merchant',
+          onPaymentCompleted: async (result) => {
+            if (cancelled) return;
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
-              resultCode: 'Authorised',
+              resultCode: result?.resultCode || 'Authorised',
             });
             sessionStorage.removeItem(`manupos_pay_${orderId}`);
             clearCart(shopKey);
             onPaid();
           },
-          onError: (err: { message?: string }) =>
-            setPayMsg(err.message || t('shopPaymentFailed')),
-        } as any);
-        checkout.create('dropin').mount(dropinRef.current);
-        dropinMounted.current = true;
-      } catch {
-        setPayMsg(t('shopCardFormUnavailable'));
+          onError: (err) => {
+            if (!cancelled) {
+              setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopPaymentFailed'));
+            }
+          },
+        });
+        if (!cancelled) dropinMounted.current = true;
+      } catch (err) {
+        if (!cancelled) {
+          setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopCardFormUnavailable'));
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [open, session, shopKey, orderId, onPaid, t]);
+  }, [open, demoMode, sessionId, sessionData, clientKey, dropinEl, shopKey, orderId, onPaid, t, locale]);
 
   if (!open) return null;
 
@@ -98,7 +105,7 @@ export default function ShopPaymentModal({
         </div>
         <div className="overflow-y-auto px-5 py-4">
           <p className="text-center text-3xl font-bold tabular-nums mb-4">CHF {total.toFixed(2)}</p>
-          {demoMode ? (
+          {demoMode || !normalized ? (
             <div className="space-y-3">
               <p className="text-sm text-amber-800">{demoError || t('shopCardNotConfigured')}</p>
               <button
@@ -117,7 +124,7 @@ export default function ShopPaymentModal({
               </button>
             </div>
           ) : (
-            <div ref={dropinRef} />
+            <div ref={setDropinEl} />
           )}
           {payMsg ? <p className="mt-3 text-sm text-stone-600">{payMsg}</p> : null}
         </div>

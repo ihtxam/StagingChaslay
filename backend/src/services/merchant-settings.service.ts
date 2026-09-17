@@ -46,6 +46,7 @@ import {
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
+import { isValidAdyenClientKey } from "@/lib/adyen-checkout-env";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -552,7 +553,15 @@ export class MerchantSettingsService {
       patch.deliveryPerOrderFee = n.toFixed(2);
     }
     if (updates.adyenMerchantAccount !== undefined) patch.adyenMerchantAccount = updates.adyenMerchantAccount;
-    if (updates.adyenClientId !== undefined) patch.adyenClientId = updates.adyenClientId;
+    if (updates.adyenClientId !== undefined) {
+      const clientKey = String(updates.adyenClientId || "").trim();
+      if (clientKey && !isValidAdyenClientKey(clientKey)) {
+        throw new Error(
+          "Client key must start with test_ or live_. Use the Client Key from Adyen Customer Area → Developers → Client settings — not the API key (AQE…)."
+        );
+      }
+      patch.adyenClientId = clientKey || null;
+    }
     if (updates.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!updates.tapToPayEnabled;
     if (updates.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
     if (updates.adyenLiveRegion !== undefined) {

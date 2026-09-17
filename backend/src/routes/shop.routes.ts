@@ -39,8 +39,24 @@ import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
 import { TableSessionService } from "@/services/table-session.service";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
 import { normalizeShopSiteSettings, resolveShopDocumentSeo } from "@/lib/shop-site-settings";
+import {
+  shopAdyenCardReady,
+  shopOrderPaymentReturnUrl,
+  shopTablePaymentReturnUrl,
+  resolveShopCheckoutOrigin,
+} from "@/lib/shop-public-url";
 
 const router = Router();
+
+function shopCheckoutRequestMeta(req: Request) {
+  const body = (req.body || {}) as { origin?: string; shopPath?: string };
+  return {
+    origin: typeof body.origin === "string" ? body.origin : "",
+    shopPath: typeof body.shopPath === "string" ? body.shopPath : "",
+    headerOrigin: String(req.get("origin") || ""),
+    referer: String(req.get("referer") || ""),
+  };
+}
 
 type ShopExtraSelection = { id: string; name?: string; price?: number };
 type ShopComboSelectionInput = {
@@ -722,7 +738,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         payment: {
           cash: true,
           card: true,
-          cardReady: !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId),
+          cardReady: shopAdyenCardReady(merchant),
           currency: "CHF",
         },
         loyalty: ShopLoyaltyService.programFromMerchant(merchant),
@@ -1285,15 +1301,26 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
     }
     const total = unpaid.reduce((s, o) => s + Number(o.total || 0), 0);
     const anchor = unpaid[0]!;
-    const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-    const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/table/${tableId}?paid=1&s=${encodeURIComponent(sessionToken)}`;
-    const { AdyenService } = await import("@/services/adyen.service");
+    const meta = shopCheckoutRequestMeta(req);
+    const checkoutOrigin = resolveShopCheckoutOrigin(
+      merchant,
+      meta.origin,
+      meta.headerOrigin,
+      meta.referer
+    );
+    const returnUrl = shopTablePaymentReturnUrl(merchant, tableId, {
+      origin: meta.origin,
+      shopPath: meta.shopPath,
+      sessionToken,
+      extraCandidates: [meta.headerOrigin, meta.referer],
+    });
     const paySession = await AdyenService.initializePaymentSession(
       merchant.id,
       anchor.id,
       total,
       "CHF",
-      returnUrl
+      returnUrl,
+      checkoutOrigin
     );
     res.json({
       success: true,
@@ -1303,9 +1330,8 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
       paymentSession: {
         id: paySession.id,
         sessionData: paySession.sessionData,
-        clientKey: merchant.adyenClientId,
-        environment:
-          (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+        clientKey: paySession.clientKey || merchant.adyenClientId,
+        environment: paySession.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
       },
     });
   } catch (error) {
@@ -1871,7 +1897,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
-    const cardReady = !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId);
+    const cardReady = shopAdyenCardReady(merchant);
     res.json({
       success: true,
       options: {
@@ -1881,7 +1907,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
         cardReady,
         currency: "CHF",
         clientKey: cardReady ? merchant.adyenClientId : null,
-        environment: (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+        environment: AdyenService.environmentFromClientKey(merchant.adyenClientId),
         cardFeeFixed: Number(merchant.onlineCardFeeFixed || 0) || 0,
         cardFeePercent: Number(merchant.onlineCardFeePercent || 0) || 0,
       },
@@ -1952,6 +1978,8 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         shippingZip: body.shippingZip,
         shippingCity: body.shippingCity,
         shippingCountry: body.shippingCountry,
+        origin: body.origin,
+        shopPath: body.shopPath,
       }
     );
 
@@ -2975,21 +3003,31 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let paymentSession: unknown = null;
     if (payMethod === "card" && preCardTotal > 0) {
       try {
-        const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-        const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
+        const meta = shopCheckoutRequestMeta(req);
+        const checkoutOrigin = resolveShopCheckoutOrigin(
+          merchant,
+          meta.origin,
+          meta.headerOrigin,
+          meta.referer
+        );
+        const returnUrl = shopOrderPaymentReturnUrl(merchant, order.id, {
+          origin: meta.origin,
+          shopPath: meta.shopPath,
+          extraCandidates: [meta.headerOrigin, meta.referer],
+        });
         const session = await AdyenService.initializePaymentSession(
           merchant.id,
           order.id,
           parseFloat(finalOrder.total.toString()),
           "CHF",
-          returnUrl
+          returnUrl,
+          checkoutOrigin
         );
         paymentSession = {
           id: session.id,
           sessionData: session.sessionData,
-          clientKey: merchant.adyenClientId,
-          environment:
-            (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+          clientKey: session.clientKey || merchant.adyenClientId,
+          environment: session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
         };
       } catch (e) {
         // Card selected but Swisspayout not ready — keep order awaiting_payment; client can retry or switch
@@ -3128,23 +3166,33 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       return res.json({ success: true, alreadyPaid: true });
     }
 
-    const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-    const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
+    const meta = shopCheckoutRequestMeta(req);
+    const checkoutOrigin = resolveShopCheckoutOrigin(
+      merchant,
+      meta.origin,
+      meta.headerOrigin,
+      meta.referer
+    );
+    const returnUrl = shopOrderPaymentReturnUrl(merchant, order.id, {
+      origin: meta.origin,
+      shopPath: meta.shopPath,
+      extraCandidates: [meta.headerOrigin, meta.referer],
+    });
     const session = await AdyenService.initializePaymentSession(
       merchant.id,
       order.id,
       parseFloat(order.total.toString()),
       "CHF",
-      returnUrl
+      returnUrl,
+      checkoutOrigin
     );
     res.json({
       success: true,
       paymentSession: {
         id: session.id,
         sessionData: session.sessionData,
-        clientKey: merchant.adyenClientId,
-        environment:
-          (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+        clientKey: session.clientKey || merchant.adyenClientId,
+        environment: session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
       },
     });
   } catch (error) {

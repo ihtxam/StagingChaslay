@@ -46,6 +46,7 @@ import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
+import { normalizeAdyenPaymentSession, shopCheckoutOriginPayload } from '@/lib/adyen-checkout';
 
 type WhenMode = 'asap' | 'later';
 type FieldErrors = {
@@ -1107,6 +1108,7 @@ export default function CheckoutPage() {
           voucherCode: draft.voucherCode?.trim() || undefined,
           giftCardCode: draft.giftCardCode?.trim() || undefined,
           locationSlug: locSlug || undefined,
+          ...shopCheckoutOriginPayload(shopBasePath(shopKey, locSlug)),
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -1116,16 +1118,24 @@ export default function CheckoutPage() {
       const payCard = !pointsCoverFullOrder && draft.paymentMethod === 'card';
       if (payCard) {
         const session = res.data.paymentSession;
+        const normalized = normalizeAdyenPaymentSession(session);
         setPaymentOrderId(order.id);
         setPaymentTotal(Number(order.total) || total);
-        if (session?.sessionData && session?.clientKey) {
-          setPaymentSession(session);
+        if (normalized) {
+          setPaymentSession(normalized);
           setPaymentDemoMode(false);
           setPaymentDemoError('');
+          try {
+            sessionStorage.setItem(`manupos_pay_${order.id}`, JSON.stringify(normalized));
+          } catch {
+            /* ignore */
+          }
         } else {
           setPaymentSession(null);
           setPaymentDemoMode(true);
-          setPaymentDemoError(t('shopCardNotConfigured'));
+          setPaymentDemoError(
+            (session && typeof session.error === 'string' && session.error) || t('shopCardNotConfigured')
+          );
         }
         setPaymentModalOpen(true);
         return;

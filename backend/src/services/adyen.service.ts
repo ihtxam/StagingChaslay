@@ -1,6 +1,12 @@
 import axios from "axios";
 import { getDb, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
+import {
+  checkoutApiBase,
+  environmentFromClientKey,
+  formatAdyenSessionError,
+  type AdyenCheckoutEnvironment,
+} from "@/lib/adyen-checkout-env";
 
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
@@ -8,6 +14,17 @@ const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 
 export class AdyenService {
+  static environmentFromClientKey(clientKey?: string | null): AdyenCheckoutEnvironment {
+    return environmentFromClientKey(clientKey);
+  }
+
+  static checkoutApiBase(clientKey?: string | null): string {
+    return checkoutApiBase(clientKey);
+  }
+
+  static formatSessionError(error: unknown): string {
+    return formatAdyenSessionError(error);
+  }
   /**
    * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
    * Legacy per-terminal credential overrides are still honored if present.
@@ -62,43 +79,62 @@ export class AdyenService {
   }
 
   /**
-   * Initialize payment session
+   * Initialize Checkout /sessions for Drop-in (online shop + gift cards).
+   * API base and Drop-in environment follow the merchant client key (test_ / live_),
+   * not platform ADYEN_ENVIRONMENT. Do not send clientKey in the session body.
    */
   static async initializePaymentSession(
     merchantId: string,
     orderId: string,
     amount: number,
-    currency: string = "USD",
-    returnUrl?: string
+    currency: string = "CHF",
+    returnUrl?: string,
+    origin?: string
   ) {
     try {
       const creds = await this.resolveCredentials(merchantId);
+      const environment = this.environmentFromClientKey(creds.clientId);
+      const apiBase = this.checkoutApiBase(creds.clientId);
 
-      const response = await axios.post(
-        `${ADYEN_API_BASE}/sessions`,
-        {
-          amount: {
-            value: Math.round(amount * 100), // Convert to cents
-            currency,
-          },
-          merchantAccount: creds.merchantAccount,
-          reference: `${merchantId}-${orderId}`,
-          returnUrl: returnUrl || `${process.env.APP_URL}/payment/return`,
-          channel: "Web",
-          countryCode: "CH",
+      const sessionPayload: Record<string, unknown> = {
+        amount: {
+          value: Math.round(amount * 100),
+          currency,
         },
-        {
-          headers: {
-            "x-api-key": creds.apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+        merchantAccount: creds.merchantAccount,
+        reference: `${merchantId}-${orderId}`,
+        returnUrl: returnUrl || `${process.env.APP_URL || process.env.PUBLIC_APP_URL}/payment/return`,
+        channel: "Web",
+        countryCode: "CH",
+      };
+      const checkoutOrigin = String(origin || "").trim();
+      if (/^https?:\/\//i.test(checkoutOrigin)) {
+        sessionPayload.origin = checkoutOrigin.replace(/\/+$/, "");
+      }
 
-      return response.data;
+      const response = await axios.post(`${apiBase}/sessions`, sessionPayload, {
+        headers: {
+          "x-api-key": creds.apiKey,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const id = response.data?.id;
+      const sessionData = response.data?.sessionData;
+      if (!id || !sessionData) {
+        throw new Error("Adyen session response was incomplete");
+      }
+
+      return {
+        ...response.data,
+        id,
+        sessionData,
+        clientKey: creds.clientId,
+        environment,
+      };
     } catch (error) {
       console.error("Error initializing payment session:", error);
-      throw error;
+      throw new Error(this.formatSessionError(error));
     }
   }
 

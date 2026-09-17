@@ -85,6 +85,19 @@ function buildCorsOrigins(): string[] {
   return [...new Set([...defaults, ...extra])];
 }
 
+function isPermittedCorsOrigin(origin: string, allowed: string[]): boolean {
+  if (allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true") return true;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (host === "chaslay.com" || host.endsWith(".chaslay.com")) return true;
+    if (host === "rebornsense.com" || host.endsWith(".rebornsense.com")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
@@ -94,7 +107,7 @@ app.use(
     origin: (origin, callback) => {
       const allowed = buildCorsOrigins();
       // Allow mobile apps / same-origin / curl (no Origin header)
-      if (!origin || allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true") {
+      if (!origin || isPermittedCorsOrigin(origin, allowed)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));

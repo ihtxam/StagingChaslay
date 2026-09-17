@@ -451,6 +451,9 @@ const en: Dict = {
   merchantAccount: 'Merchant account',
   apiKey: 'API key',
   clientId: 'Client ID',
+  adyenClientKey: 'Client key',
+  adyenClientKeyHint:
+    'From Adyen Customer Area → Developers → Client settings. Must start with test_ or live_ — not the API key (AQE…). Add shop.chaslay.com, app.chaslay.com, and any custom shop domain as allowed origins.',
   rfidReader: 'RFID card reader',
   tapCard: 'Tap RFID card',
   giftCard: 'Gift card',
@@ -3497,7 +3500,7 @@ const en: Dict = {
   perm_STOREKEEPER_INTAKE: 'Storekeeper mobile intake (barcode scan & receive stock)',
   perm_MANAGE_KIOSK: 'Manage self-order kiosk',
   adyenSettingsHint:
-    'One Swisspayout merchant account and API key for the online shop and all payment terminals.',
+    'One Swisspayout merchant account, Checkout API key, and client key (test_… or live_…) for the online shop and all payment terminals.',
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
   swisspayoutCreateAccount: 'Create an account now',
   adyenSaved: 'Swisspayout credentials saved',
@@ -4540,6 +4543,9 @@ const fr: Dict = {
   merchantAccount: 'Compte marchand',
   apiKey: 'Clé API',
   clientId: 'ID client',
+  adyenClientKey: 'Clé client',
+  adyenClientKeyHint:
+    'Dans Adyen Customer Area → Developers → Client settings. Doit commencer par test_ ou live_ — pas la clé API (AQE…). Ajoutez shop.chaslay.com, app.chaslay.com et tout domaine boutique personnalisé comme origines autorisées.',
   rfidReader: 'Lecteur RFID',
   tapCard: 'Présenter la carte RFID',
   giftCard: 'Carte cadeau',
@@ -7460,7 +7466,7 @@ const fr: Dict = {
   perm_MANAGE_KIOSK: 'Gérer la borne de commande',
   notes: 'Notes',
   adyenSettingsHint:
-    'Un seul compte marchand et clé API Swisspayout pour la boutique en ligne et tous les terminaux.',
+    'Un seul compte marchand, clé API Checkout et clé client Swisspayout (test_… ou live_…) pour la boutique en ligne et tous les terminaux.',
   swisspayoutNoAccount: "Vous n'avez pas de compte Swisspayout ?",
   swisspayoutCreateAccount: 'Créer un compte maintenant',
   adyenSaved: 'Identifiants Swisspayout enregistrés',
@@ -8481,6 +8487,9 @@ const de: Dict = {
   merchantAccount: 'Händlerkonto',
   apiKey: 'API-Schlüssel',
   clientId: 'Client-ID',
+  adyenClientKey: 'Client-Schlüssel',
+  adyenClientKeyHint:
+    'Aus Adyen Customer Area → Developers → Client settings. Muss mit test_ oder live_ beginnen — nicht der API-Schlüssel (AQE…). Fügen Sie shop.chaslay.com, app.chaslay.com und jede Shop-Custom-Domain als erlaubte Origins hinzu.',
   rfidReader: 'RFID-Kartenleser',
   tapCard: 'RFID-Karte tippen',
   giftCard: 'Geschenkkarte',
@@ -11401,7 +11410,7 @@ const de: Dict = {
   perm_MANAGE_KIOSK: 'Selbstbestell-Kiosk verwalten',
   notes: 'Notizen',
   adyenSettingsHint:
-    'Ein Swisspayout-Händlerkonto und API-Schlüssel für Online-Shop und alle Zahlungsterminals.',
+    'Ein Swisspayout-Händlerkonto, Checkout-API-Schlüssel und Client-Schlüssel (test_… oder live_…) für Online-Shop und alle Zahlungsterminals.',
   swisspayoutNoAccount: 'Noch kein Swisspayout-Konto?',
   swisspayoutCreateAccount: 'Jetzt Konto erstellen',
   adyenSaved: 'Swisspayout-Zugangsdaten gespeichert',

@@ -8,6 +8,12 @@ import { shopDocumentTitle } from '@/lib/brand';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { roundMoney2 } from '@/lib/money';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
+import {
+  adyenLocaleFor,
+  formatAdyenError,
+  mountAdyenDropin,
+  shopCheckoutOriginPayload,
+} from '@/lib/adyen-checkout';
 
 type OrderItem = {
   id: string;
@@ -79,7 +85,7 @@ function isOrderEtaComplete(status: string) {
 }
 
 export default function OrderConfirmationPage() {
-  const { t, formatDateTime } = useI18n();
+  const { t, formatDateTime, locale } = useI18n();
   const { merchantSlug, orderId = '' } = useParams<{ merchantSlug?: string; orderId?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const [searchParams] = useSearchParams();
@@ -108,7 +114,7 @@ export default function OrderConfirmationPage() {
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [payMsg, setPayMsg] = useState('');
-  const dropinRef = useRef<HTMLDivElement>(null);
+  const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
   const load = useCallback(async () => {
@@ -213,7 +219,9 @@ export default function OrderConfirmationPage() {
 
     void (async () => {
       try {
-        const res = await axios.post(`/api/shop/${shopKey}/orders/${orderId}/payment-session`, {});
+        const res = await axios.post(`/api/shop/${shopKey}/orders/${orderId}/payment-session`, {
+          ...shopCheckoutOriginPayload(shopBasePath(shopKey)),
+        });
         if (res.data.alreadyPaid) {
           await load();
           return;
@@ -228,47 +236,42 @@ export default function OrderConfirmationPage() {
   }, [wantPay, needsPayment, shopKey, orderId, load]);
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinRef.current || dropinMounted.current) {
+    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
       return;
     }
     let cancelled = false;
 
     void (async () => {
       try {
-        // CSS is optional for Drop-in styling; ignore module typing
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        if (cancelled || !dropinRef.current) return;
-
-        const checkout = await AdyenCheckout({
-          environment: session.environment === 'live' ? 'live' : 'test',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
-          onPaymentCompleted: async () => {
+        await mountAdyenDropin({
+          session,
+          container: dropinEl,
+          locale: adyenLocaleFor(locale),
+          credentialSource: 'merchant',
+          onPaymentCompleted: async (result) => {
+            if (cancelled) return;
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
-              resultCode: 'Authorised',
+              resultCode: result?.resultCode || 'Authorised',
             });
             sessionStorage.removeItem(`manupos_pay_${orderId}`);
             clearCart(shopKey);
             await load();
           },
-          onError: (err: { message?: string }) =>
-            setPayMsg(err.message || t('shopPaymentFailed')),
-        } as any);
-
-        checkout.create('dropin').mount(dropinRef.current);
-        dropinMounted.current = true;
-      } catch {
+          onError: (err) =>
+            setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopPaymentFailed')),
+        });
+        if (!cancelled) dropinMounted.current = true;
+      } catch (err) {
         setDemoMode(true);
-        setPayMsg(t('shopCardFormUnavailable'));
+        setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopCardFormUnavailable'));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [session, shopKey, orderId, load]);
+  }, [session, dropinEl, shopKey, orderId, load, t, locale]);
 
   const confirmDemoPayment = async () => {
     setPaying(true);
@@ -485,7 +488,7 @@ export default function OrderConfirmationPage() {
             <p className="text-sm text-stone-600">
               {t('shopAmountDue')}: <strong>{money(order.total)}</strong>
             </p>
-            {session && !demoMode && <div ref={dropinRef} className="min-h-[120px]" />}
+            {session && !demoMode && <div ref={setDropinEl} className="min-h-[120px]" />}
             {(demoMode || !session) && (
               <button
                 type="button"

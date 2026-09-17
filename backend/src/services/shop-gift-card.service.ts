@@ -14,6 +14,11 @@ import {
 import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenService } from "@/services/adyen.service";
 import { EmailService } from "@/services/email.service";
+import { shopAdyenCardReady } from "@/lib/adyen-checkout-env";
+import {
+  shopGiftCardPaymentReturnUrl,
+  resolveShopCheckoutOrigin,
+} from "@/lib/shop-public-url";
 
 export type GiftDeliveryType = "digital" | "physical";
 
@@ -100,6 +105,8 @@ export class ShopGiftCardService {
     merchant: {
       id: string;
       slug?: string | null;
+      subdomain?: string | null;
+      customDomain?: string | null;
       name: string;
       adyenMerchantAccount?: string | null;
       adyenApiKey?: string | null;
@@ -120,6 +127,8 @@ export class ShopGiftCardService {
       shippingCity?: string;
       shippingCountry?: string;
       paymentMethod?: "card";
+      origin?: string;
+      shopPath?: string;
     }
   ) {
     const settings = this.settingsFromMerchant(merchant);
@@ -176,32 +185,35 @@ export class ShopGiftCardService {
       })
       .returning();
 
-    const cardReady = !!(
-      merchant.adyenMerchantAccount &&
-      merchant.adyenApiKey &&
-      merchant.adyenClientId
-    );
+    const cardReady = shopAdyenCardReady(merchant);
 
     let paymentSession: Record<string, unknown> | null = null;
     if (cardReady) {
       try {
-        const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-        const returnUrl = `https://${domain}/shop/${merchant.slug || slug}/gift-cards/confirm/${purchase.id}?paid=1`;
+        const shopMerchant = {
+          slug: merchant.slug || slug,
+          subdomain: merchant.subdomain,
+          customDomain: merchant.customDomain,
+        };
+        const checkoutOrigin = resolveShopCheckoutOrigin(shopMerchant, input.origin);
+        const returnUrl = shopGiftCardPaymentReturnUrl(shopMerchant, purchase.id, {
+          origin: input.origin,
+          shopPath: input.shopPath,
+        });
         const session = await AdyenService.initializePaymentSession(
           merchant.id,
           purchase.id,
           check.amount,
           "CHF",
-          returnUrl
+          returnUrl,
+          checkoutOrigin
         );
         paymentSession = {
           id: session.id,
           sessionData: session.sessionData,
-          clientKey: merchant.adyenClientId,
+          clientKey: session.clientKey || merchant.adyenClientId,
           environment:
-            (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live"
-              ? "live"
-              : "test",
+            session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
         };
       } catch (e) {
         paymentSession = {
@@ -211,7 +223,8 @@ export class ShopGiftCardService {
       }
     } else {
       paymentSession = {
-        error: "Card payments not configured",
+        error:
+          "Card payments are not ready. In Settings → Payments, set merchant account, Checkout API key, and client key (test_… or live_… — not the API key).",
         demoConfirmAvailable: true,
       };
     }

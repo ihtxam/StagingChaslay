@@ -4,9 +4,15 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug } from '@/lib/shop-cart';
+import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import {
+  adyenLocaleFor,
+  formatAdyenError,
+  mountAdyenDropin,
+  shopCheckoutOriginPayload,
+} from '@/lib/adyen-checkout';
 import ShopProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
@@ -51,7 +57,7 @@ type PaymentSession = {
 };
 
 export default function TableOrderPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { merchantSlug, tableId, locationSlug: routeLocationSlug } = useParams<{
     merchantSlug: string;
     tableId: string;
@@ -83,7 +89,7 @@ export default function TableOrderPage() {
   const [demoMode, setDemoMode] = useState(false);
   const [payMsg, setPayMsg] = useState('');
   const [paying, setPaying] = useState(false);
-  const dropinRef = useRef<HTMLDivElement | null>(null);
+  const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
   const loadSession = useCallback(async () => {
@@ -129,6 +135,7 @@ export default function TableOrderPage() {
       try {
         const res = await axios.post(`/api/shop/${shopKey}/table/${tableId}/payment-session`, {
           tableSessionToken: sessionToken,
+          ...shopCheckoutOriginPayload(shopBasePath(shopKey, locationSlug)),
         });
         if (res.data.alreadyPaid) {
           await loadSession();
@@ -146,48 +153,44 @@ export default function TableOrderPage() {
   }, [payOpen, payAtTableEnabled, shopKey, tableId, sessionToken, loadSession, t]);
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinRef.current || dropinMounted.current) {
+    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
       return;
     }
     let cancelled = false;
 
     void (async () => {
       try {
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        if (cancelled || !dropinRef.current) return;
-
-        const checkout = await AdyenCheckout({
-          environment: session.environment === 'live' ? 'live' : 'test',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
-          onPaymentCompleted: async () => {
+        await mountAdyenDropin({
+          session,
+          container: dropinEl,
+          locale: adyenLocaleFor(locale),
+          credentialSource: 'merchant',
+          onPaymentCompleted: async (result) => {
+            if (cancelled) return;
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/table/${tableId}/confirm-payment`, {
               tableSessionToken: sessionToken,
-              resultCode: 'Authorised',
+              resultCode: result?.resultCode || 'Authorised',
             });
             setPayOpen(false);
             setSession(null);
             dropinMounted.current = false;
             await loadSession();
           },
-          onError: (err: { message?: string }) =>
-            setPayMsg(err.message || t('shopPaymentFailed')),
-        } as Parameters<typeof AdyenCheckout>[0]);
-
-        checkout.create('dropin').mount(dropinRef.current);
-        dropinMounted.current = true;
-      } catch {
+          onError: (err) =>
+            setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopPaymentFailed')),
+        });
+        if (!cancelled) dropinMounted.current = true;
+      } catch (err) {
         setDemoMode(true);
-        setPayMsg(t('shopCardFormUnavailable'));
+        setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopCardFormUnavailable'));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [session, shopKey, tableId, sessionToken, loadSession, t]);
+  }, [session, dropinEl, shopKey, tableId, sessionToken, loadSession, t, locale]);
 
   const confirmDemoPayment = async () => {
     setPaying(true);
@@ -416,7 +419,7 @@ export default function TableOrderPage() {
                 {t('tableOrderPayAmount').replace('{amount}', runningTotal.toFixed(2))}
               </p>
               {payMsg ? <p className="mt-2 text-sm text-amber-700">{payMsg}</p> : null}
-              <div ref={dropinRef} className="mt-4 min-h-[120px]" />
+              <div ref={setDropinEl} className="mt-4 min-h-[120px]" />
               {demoMode ? (
                 <button
                   type="button"

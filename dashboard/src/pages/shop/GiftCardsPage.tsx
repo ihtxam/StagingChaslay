@@ -9,6 +9,13 @@ import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import {
+  adyenLocaleFor,
+  formatAdyenError,
+  mountAdyenDropin,
+  normalizeAdyenPaymentSession,
+  shopCheckoutOriginPayload,
+} from '@/lib/adyen-checkout';
 
 type GiftSettings = {
   enabled: boolean;
@@ -57,7 +64,7 @@ export default function GiftCardsPage() {
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [payMsg, setPayMsg] = useState('');
-  const dropinRef = useRef<HTMLDivElement>(null);
+  const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
   useEffect(() => {
@@ -117,6 +124,7 @@ export default function GiftCardsPage() {
         shippingZip: deliveryType === 'physical' ? shippingZip : undefined,
         shippingCity: deliveryType === 'physical' ? shippingCity : undefined,
         shippingCountry: deliveryType === 'physical' ? 'CH' : undefined,
+        ...shopCheckoutOriginPayload(base),
       });
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
@@ -148,16 +156,16 @@ export default function GiftCardsPage() {
   }, [shopKey, purchaseId, base, t]);
 
   useEffect(() => {
-    if (!session?.id || !dropinRef.current || dropinMounted.current) return;
+    const normalized = normalizeAdyenPaymentSession(session);
+    if (!normalized || !dropinEl || dropinMounted.current) return;
     dropinMounted.current = true;
     const mount = async () => {
       try {
-        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
-        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-        const checkout = await AdyenCheckout({
-          environment: session.environment as 'test' | 'live',
-          clientKey: session.clientKey,
-          session: { id: session.id, sessionData: session.sessionData },
+        await mountAdyenDropin({
+          session: normalized,
+          container: dropinEl,
+          locale: adyenLocaleFor(locale),
+          credentialSource: 'merchant',
           onPaymentCompleted: async () => {
             try {
               await axios.post(
@@ -169,15 +177,16 @@ export default function GiftCardsPage() {
               setPayMsg(t('shopGiftCardConfirmPending'));
             }
           },
-          onError: () => setPayMsg(t('actionFailed')),
+          onError: (err) =>
+            setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('actionFailed')),
         });
-        checkout.create('dropin').mount(dropinRef.current!);
-      } catch {
-        setPayMsg(t('shopGiftCardPayLoadFailed'));
+      } catch (err) {
+        setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopGiftCardPayLoadFailed'));
+        dropinMounted.current = false;
       }
     };
     void mount();
-  }, [session, shopKey, purchaseId, base, t]);
+  }, [session, dropinEl, shopKey, purchaseId, base, t, locale]);
 
   if (loading) {
     return (
@@ -432,7 +441,7 @@ export default function GiftCardsPage() {
                 {t('shopGiftCardDemoConfirm')}
               </button>
             )}
-            <div ref={dropinRef} />
+            <div ref={setDropinEl} />
           </div>
         )}
       </main>

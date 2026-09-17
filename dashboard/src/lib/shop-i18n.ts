@@ -221,7 +221,8 @@ export const shopEn: Record<string, string> = {
   shopCashPayHint: 'Pay the courier or at the counter.',
   shopCardAdyen: 'Card payment',
   shopCardReady: 'Secure online card payment via Swisspayout.',
-  shopCardNotReady: 'Online card payment - Swisspayout credentials will be used when configured.',
+  shopCardNotReady:
+    'Online card payment is not ready. In Settings → Payments, set merchant account, Checkout API key, and client key (test_… or live_… — not the API key in the client key field).',
   shopReviewOrder: 'Review order',
   shopReviewPlace: 'Review & place order',
   shopType: 'Type',
@@ -409,7 +410,8 @@ export const shopEn: Record<string, string> = {
   shopSelected: 'Selected',
   shopIncreaseQty: 'Increase quantity',
   shopDecreaseQty: 'Decrease quantity',
-  shopCardNotConfigured: 'Card payments are not configured for this shop - you can confirm with the demo button.',
+  shopCardNotConfigured:
+    'Card payment could not start. Check Swisspayout merchant account, API key, and client key (test_ or live_) in Settings → Payments, and add this shop domain as an allowed origin on the client key.',
   shopCardFormUnavailable: 'Card payment form unavailable - use demo confirm below.',
   shopUpdateFailed: 'Update failed',
   shopCouldNotSaveAddress: 'Could not save address',
@@ -704,7 +706,8 @@ export const shopFr: Record<string, string> = {
   shopCashPayHint: 'Payez le livreur ou au comptoir.',
   shopCardAdyen: 'Paiement par carte',
   shopCardReady: 'Paiement par carte sécurisé via Swisspayout.',
-  shopCardNotReady: 'Paiement par carte - les identifiants Swisspayout seront utilisés une fois configurés.',
+  shopCardNotReady:
+    'Paiement par carte non prêt. Dans Paramètres → Paiements, renseignez le compte marchand, la clé API Checkout et la clé client (test_… ou live_… — pas la clé API dans le champ clé client).',
   shopReviewOrder: 'Vérifier la commande',
   shopReviewPlace: 'Vérifier et commander',
   shopType: 'Type',
@@ -890,7 +893,8 @@ export const shopFr: Record<string, string> = {
   shopSelected: 'Sélectionné',
   shopIncreaseQty: 'Augmenter la quantité',
   shopDecreaseQty: 'Diminuer la quantité',
-  shopCardNotConfigured: 'Paiement par carte non configuré - vous pouvez confirmer avec le bouton démo.',
+  shopCardNotConfigured:
+    'Le paiement par carte n’a pas pu démarrer. Vérifiez le compte marchand Swisspayout, la clé API et la clé client (test_ ou live_) dans Paramètres → Paiements, et ajoutez ce domaine boutique comme origine autorisée sur la clé client.',
   shopCardFormUnavailable: 'Formulaire de paiement carte indisponible - utilisez la confirmation démo ci-dessous.',
   shopUpdateFailed: 'Échec de la mise à jour',
   shopCouldNotSaveAddress: 'Impossible d’enregistrer l’adresse',
@@ -1188,7 +1192,8 @@ export const shopDe: Record<string, string> = {
   shopCashPayHint: 'Zahlen Sie dem Kurier oder an der Theke.',
   shopCardAdyen: 'Kartenzahlung',
   shopCardReady: 'Sichere Online-Kartenzahlung über Swisspayout.',
-  shopCardNotReady: 'Kartenzahlung - Swisspayout-Zugangsdaten des Händlers werden verwendet, sobald konfiguriert.',
+  shopCardNotReady:
+    'Kartenzahlung ist nicht bereit. Unter Einstellungen → Zahlungen Händlerkonto, Checkout-API-Schlüssel und Client-Schlüssel (test_… oder live_… — nicht den API-Schlüssel im Client-Schlüssel-Feld) hinterlegen.',
   shopReviewOrder: 'Bestellung prüfen',
   shopReviewPlace: 'Prüfen & bestellen',
   shopType: 'Art',
@@ -1374,7 +1379,8 @@ export const shopDe: Record<string, string> = {
   shopSelected: 'Ausgewählt',
   shopIncreaseQty: 'Menge erhöhen',
   shopDecreaseQty: 'Menge verringern',
-  shopCardNotConfigured: 'Kartenzahlung nicht konfiguriert - Sie können mit dem Demo-Button bestätigen.',
+  shopCardNotConfigured:
+    'Kartenzahlung konnte nicht starten. Prüfen Sie Swisspayout-Händlerkonto, API-Schlüssel und Client-Schlüssel (test_ oder live_) unter Einstellungen → Zahlungen, und fügen Sie diese Shop-Domain als erlaubte Origin beim Client-Schlüssel hinzu.',
   shopCardFormUnavailable: 'Kartenformular nicht verfügbar - Demo-Bestätigung unten verwenden.',
   shopUpdateFailed: 'Aktualisierung fehlgeschlagen',
   shopCouldNotSaveAddress: 'Adresse konnte nicht gespeichert werden',

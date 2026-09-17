@@ -2964,11 +2964,13 @@ export default function Settings() {
                         placeholder="Reborn_COM"
                       />
                     </Field>
-                    <Field label={t('clientId')}>
+                    <Field label={t('adyenClientKey')} hint={t('adyenClientKeyHint')}>
                       <input
                         className="input"
                         value={clientId}
                         onChange={(e) => setClientId(e.target.value)}
+                        placeholder="test_… or live_…"
+                        autoComplete="off"
                       />
                     </Field>
                     <div className="sm:col-span-2">
