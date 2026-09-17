@@ -84,6 +84,42 @@ function showCheckoutError(message: string | null | undefined) {
   toast.error(text);
 }
 
+type ShopAppliedOffer = {
+  offerId?: string;
+  name?: string;
+  badgeLabel?: string | null;
+  discount?: number;
+  offerType?: string;
+  description?: string | null;
+};
+
+function parseBuyGetLabel(label: string): { buy: number; get: number } | null {
+  const m = String(label || '').match(/(\d+)\s*\+\s*(\d+)/);
+  if (!m) return null;
+  const buy = Number(m[1]);
+  const get = Number(m[2]);
+  if (!Number.isFinite(buy) || !Number.isFinite(get) || buy < 1 || get < 1) return null;
+  return { buy, get };
+}
+
+function bestBogoProduct(
+  items: { name: string; quantity: number; loyaltyReward?: boolean }[],
+  buy: number,
+  get: number
+) {
+  const group = buy + get;
+  let best: { name: string; quantity: number; sets: number; free: number } | null = null;
+  for (const item of items) {
+    if (item.loyaltyReward) continue;
+    const qty = Math.max(0, Number(item.quantity) || 0);
+    const sets = Math.floor(qty / group);
+    if (!best || sets > best.sets || (sets === best.sets && qty > best.quantity)) {
+      best = { name: item.name, quantity: qty, sets, free: sets * get };
+    }
+  }
+  return best;
+}
+
 export default function CheckoutPage() {
   const { t, setLocale, locale, formatDateTime } = useI18n();
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
@@ -130,7 +166,7 @@ export default function CheckoutPage() {
   const [giftCardBalance, setGiftCardBalance] = useState(0);
   const [giftCardLookupError, setGiftCardLookupError] = useState<string | null>(null);
   const [giftCardsEnabled, setGiftCardsEnabled] = useState(false);
-  const [offerLabels, setOfferLabels] = useState<string[]>([]);
+  const [appliedOffers, setAppliedOffers] = useState<ShopAppliedOffer[]>([]);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [saveLabel, setSaveLabel] = useState<(typeof ADDRESS_LABELS)[number]>('home');
@@ -252,7 +288,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!shopKey || !draft.items.length) {
       setOfferDiscount(0);
-      setOfferLabels([]);
+      setAppliedOffers([]);
       return;
     }
     let cancelled = false;
@@ -277,34 +313,34 @@ export default function CheckoutPage() {
           })),
         });
         if (cancelled) return;
+        const appliedRaw = Array.isArray(res.data.applied) ? res.data.applied : [];
+        const activeRaw = Array.isArray(res.data.activeOffers) ? res.data.activeOffers : [];
+        const mapped: ShopAppliedOffer[] = appliedRaw.map((a: ShopAppliedOffer) => {
+          const meta = (activeRaw as Array<ShopAppliedOffer & { id?: string }>).find(
+            (o) => o.id && o.id === a.offerId
+          );
+          return {
+            offerId: a.offerId,
+            name: a.name || meta?.name || '',
+            badgeLabel: a.badgeLabel || meta?.badgeLabel || null,
+            discount: Number(a.discount) || 0,
+            offerType: a.offerType || meta?.offerType,
+            description: meta?.description || a.description || null,
+          };
+        });
         // Cart lines already include deal prices - don't subtract the same offer again
         if (hasBaked) {
           setOfferDiscount(0);
-          const badges = [
-            ...new Set(
-              draft.items.map((i) => i.offerBadge).filter((b): b is string => !!b)
-            ),
-          ];
-          setOfferLabels(
-            badges.length
-              ? badges
-              : (res.data.applied || []).map(
-                  (a: { name: string; badgeLabel?: string }) => a.badgeLabel || a.name
-                )
-          );
+          setAppliedOffers([]);
         } else {
           setOfferDiscount(Number(res.data.discount) || 0);
-          setOfferLabels(
-            (res.data.applied || []).map(
-              (a: { name: string; badgeLabel?: string }) => a.badgeLabel || a.name
-            )
-          );
+          setAppliedOffers(mapped);
         }
       } catch (err) {
         console.warn('[shop] offers preview failed', err);
         if (!cancelled) {
           setOfferDiscount(0);
-          setOfferLabels([]);
+          setAppliedOffers([]);
         }
       }
     })();
@@ -1212,6 +1248,35 @@ export default function CheckoutPage() {
     </>
   );
 
+  const explainAppliedOffer = (offer: ShopAppliedOffer, items = draft.items) => {
+    const badge = String(offer.badgeLabel || offer.name || '');
+    const parsed = parseBuyGetLabel(badge);
+    if (parsed) {
+      const best = bestBogoProduct(items, parsed.buy, parsed.get);
+      if (best?.name && best.sets > 0) {
+        return t('shopOfferExplainBogo', {
+          buy: parsed.buy,
+          get: parsed.get,
+          product: best.name,
+          sets: best.sets,
+          free: best.free,
+        });
+      }
+      if (best?.name) {
+        return t('shopOfferExplainBogoOn', {
+          buy: parsed.buy,
+          get: parsed.get,
+          product: best.name,
+        });
+      }
+      return t('shopOfferExplainBogoGeneric', { buy: parsed.buy, get: parsed.get });
+    }
+    const name = String(offer.name || offer.badgeLabel || '').trim();
+    if (offer.description && name) return `${name} — ${offer.description}`;
+    if (name) return t('shopOfferExplainNamed', { name });
+    return t('shopOffer');
+  };
+
   const renderCartItems = () =>
     draft.items.length === 0 ? (
       <p className="text-sm text-stone-500">{t('shopNoItems')}</p>
@@ -1219,6 +1284,23 @@ export default function CheckoutPage() {
     <ul className="text-sm space-y-4">
       {groupCartForDisplay(draft.items).map((block) => {
         if (block.kind === 'offer') {
+          const paidQty = block.lines
+            .filter((l) => l.price > 0)
+            .reduce((s, l) => s + l.quantity, 0);
+          const freeQty = block.lines
+            .filter((l) => l.price === 0)
+            .reduce((s, l) => s + l.quantity, 0);
+          const bakedExplain = explainAppliedOffer(
+            {
+              name: block.offerName,
+              badgeLabel: block.offerBadge,
+            },
+            block.lines
+          );
+          const bakedFallback =
+            paidQty + freeQty > 0
+              ? t('shopOfferExplainBaked', { paid: paidQty, free: freeQty })
+              : '';
           return (
             <li
               key={block.offerInstanceId}
@@ -1230,6 +1312,9 @@ export default function CheckoutPage() {
                     {block.offerBadge || t('shopOffer')}
                   </span>
                   <p className="mt-1 font-semibold text-sm">{block.offerName}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-amber-900/80">
+                    {bakedExplain || bakedFallback}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1314,9 +1399,26 @@ export default function CheckoutPage() {
   const renderCartTotals = () => (
     <div className="text-sm space-y-1">
       {offerDiscount > 0 && (
-        <div className="flex justify-between text-amber-800">
-          <span>{offerLabels.join(', ') || t('shopOffer')}</span>
-          <span>- CHF {offerDiscount.toFixed(2)}</span>
+        <div className="space-y-1.5 py-0.5">
+          {(appliedOffers.length ? appliedOffers : [{ name: t('shopOffer'), discount: offerDiscount }]).map(
+            (offer, idx) => {
+              const amount = appliedOffers.length === 1 ? offerDiscount : Number(offer.discount) || 0;
+              const shown = amount > 0 ? amount : offerDiscount;
+              return (
+                <div key={offer.offerId || `${offer.name || 'offer'}-${idx}`} className="space-y-0.5">
+                  <div className="flex justify-between gap-3 text-amber-800">
+                    <span className="font-medium min-w-0">
+                      {offer.badgeLabel || offer.name || t('shopOffer')}
+                    </span>
+                    <span className="shrink-0 tabular-nums">- CHF {shown.toFixed(2)}</span>
+                  </div>
+                  <p className="text-[11px] leading-snug text-amber-800/80 pr-16">
+                    {explainAppliedOffer(offer)}
+                  </p>
+                </div>
+              );
+            }
+          )}
         </div>
       )}
       {giftCardDiscount > 0 && (
@@ -1399,6 +1501,7 @@ export default function CheckoutPage() {
 
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1.15fr)_24rem] lg:items-start lg:gap-8">
         <div className="max-w-2xl space-y-8 lg:max-w-none">
+            <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">
                 {draft.channel === 'delivery'
@@ -1426,6 +1529,131 @@ export default function CheckoutPage() {
                   : ''}
               </p>
             </section>
+
+            {customer ? (
+              <p className="text-sm text-teal-800 border border-teal-100 bg-teal-50 px-3 py-2 rounded-xl">
+                {t('shopLoggedInAs')} {customer.name || customer.email}.{' '}
+                <button
+                  type="button"
+                  className="underline font-medium"
+                  onClick={() => {
+                    clearCustomerToken(shopKey);
+                    setCustomer(null);
+                    patch({ authMode: 'guest' });
+                  }}
+                >
+                  {t('shopLogOut')}
+                </button>
+              </p>
+            ) : (
+              <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
+                <h3 className="text-sm font-bold text-stone-900">{t('shopCheckoutRewardsTitleShort')}</h3>
+                <ul className="mt-2 space-y-1">
+                  {(
+                    [
+                      'shopCheckoutReward1Short',
+                      'shopCheckoutReward2Short',
+                      'shopCheckoutReward3Short',
+                    ] as const
+                  ).map((key) => (
+                    <li key={key} className="flex items-start gap-2 text-xs text-stone-700">
+                      <Check
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--shop-accent,#e11d48)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span>{t(key)}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {!showLogin ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white"
+                      onClick={() => {
+                        setShowLogin(true);
+                        setWantCreateAccount(false);
+                        setPassword('');
+                        if (draft.customerEmail) setLoginEmail(draft.customerEmail);
+                      }}
+                    >
+                      {t('shopLogIn')}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        wantCreateAccount
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
+                      }`}
+                      onClick={() => {
+                        setWantCreateAccount(true);
+                        setShowLogin(false);
+                        setPassword('');
+                      }}
+                    >
+                      {t('shopCreateAccount')}
+                    </button>
+                  </div>
+                ) : null}
+
+                {showLogin ? (
+                  <form onSubmit={onLogin} className="mt-3 space-y-2 border-t border-stone-100 pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
+                      <button
+                        type="button"
+                        className="text-xs text-stone-500 underline"
+                        onClick={() => setShowLogin(false)}
+                      >
+                        {t('cancel')}
+                      </button>
+                    </div>
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="email"
+                      placeholder={t('shopEmail')}
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="password"
+                      placeholder={t('shopPassword')}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="submit"
+                      className="w-full rounded-lg bg-stone-900 py-2 text-sm font-semibold text-white"
+                    >
+                      {t('shopLogIn')}
+                    </button>
+                  </form>
+                ) : null}
+
+                {wantCreateAccount && !showLogin ? (
+                  <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
+                    <p className="text-xs text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="password"
+                      placeholder={t('shopPasswordMin6')}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
+            </div>
 
             {showChannelPicker ? (
               <div className="space-y-2">
@@ -1610,130 +1838,6 @@ export default function CheckoutPage() {
                 )}
               </div>
               ) : null}
-
-                {customer ? (
-                  <p className="text-sm text-teal-800 border border-teal-100 bg-teal-50 px-3 py-2">
-                    {t('shopLoggedInAs')} {customer.name || customer.email}.{' '}
-                    <button
-                      type="button"
-                      className="underline font-medium"
-                      onClick={() => {
-                        clearCustomerToken(shopKey);
-                        setCustomer(null);
-                        patch({ authMode: 'guest' });
-                      }}
-                    >
-                      {t('shopLogOut')}
-                    </button>
-                  </p>
-                ) : (
-                  <div className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 shadow-sm">
-                    <h3 className="text-base font-bold text-stone-900">{t('shopCheckoutRewardsTitle')}</h3>
-                    <ul className="mt-3 space-y-2">
-                      {(
-                        [
-                          'shopCheckoutReward1',
-                          'shopCheckoutReward2',
-                          'shopCheckoutReward3',
-                        ] as const
-                      ).map((key) => (
-                        <li key={key} className="flex items-start gap-2.5 text-sm text-stone-700">
-                          <Check
-                            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--shop-accent,#e11d48)]"
-                            strokeWidth={2.5}
-                            aria-hidden
-                          />
-                          <span>{t(key)}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {!showLogin ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white"
-                          onClick={() => {
-                            setShowLogin(true);
-                            setWantCreateAccount(false);
-                            setPassword('');
-                            if (draft.customerEmail) setLoginEmail(draft.customerEmail);
-                          }}
-                        >
-                          {t('shopLogIn')}
-                        </button>
-                        <button
-                          type="button"
-                          className={`rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
-                            wantCreateAccount
-                              ? 'border-stone-900 bg-stone-900 text-white'
-                              : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
-                          }`}
-                          onClick={() => {
-                            setWantCreateAccount(true);
-                            setShowLogin(false);
-                            setPassword('');
-                          }}
-                        >
-                          {t('shopCreateAccount')}
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {showLogin ? (
-                      <form onSubmit={onLogin} className="mt-4 space-y-3 border-t border-stone-100 pt-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
-                          <button
-                            type="button"
-                            className="text-xs text-stone-500 underline"
-                            onClick={() => setShowLogin(false)}
-                          >
-                            {t('cancel')}
-                          </button>
-                        </div>
-                        <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
-                          type="email"
-                          placeholder={t('shopEmail')}
-                          value={loginEmail}
-                          onChange={(e) => setLoginEmail(e.target.value)}
-                          required
-                          autoComplete="email"
-                        />
-                        <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
-                          type="password"
-                          placeholder={t('shopPassword')}
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          required
-                          autoComplete="current-password"
-                        />
-                        <button
-                          type="submit"
-                          className="w-full rounded-lg bg-stone-900 py-2.5 text-sm font-semibold text-white"
-                        >
-                          {t('shopLogIn')}
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {wantCreateAccount && !showLogin ? (
-                      <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
-                        <p className="text-sm text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
-                        <input
-                          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2.5 text-sm"
-                          type="password"
-                          placeholder={t('shopPasswordMin6')}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          autoComplete="new-password"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )}
 
                 {draft.channel === 'delivery' && !fulfillmentLocked && (
                   <div className="space-y-3 border-t border-stone-100 pt-4">
@@ -2202,12 +2306,6 @@ export default function CheckoutPage() {
               <p className="text-sm font-semibold text-stone-900">{t('shopOffers')}</p>
                 {renderDiscountControls()}
             </section>
-
-            {offerDiscount > 0 ? (
-              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 px-3 py-2">
-                {(offerLabels.join(', ') || t('shopOffer')) + `: - CHF ${offerDiscount.toFixed(2)}`}
-              </p>
-            ) : null}
 
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">{t('shopPickupNote')}</h2>
