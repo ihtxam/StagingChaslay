@@ -1,4 +1,7 @@
 import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
+import { looksLikeLabelPrinterName } from './printer-kind';
+
+export { looksLikeLabelPrinterName } from './printer-kind';
 
 /**
  * Reborn Windows Print Agent (localhost).
@@ -97,8 +100,14 @@ function paperWidthHint(name: string): '58' | '80' | null {
 
 export function looksLikeThermal80mm(name?: string | null): boolean {
   const n = String(name || '');
-  if (!n.trim() || isUnsuitableRawPrinter(n)) return false;
+  if (!n.trim() || isUnsuitableRawPrinter(n) || looksLikeLabelPrinterName(n)) return false;
   return /\b80\b|80mm|pos80|printer80|thermal|receipt|escpos|xp-|rp80|tm-|chaslay/i.test(n);
+}
+
+function isEscPosTicketPrinterName(name?: string | null): boolean {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  return !isUnsuitableRawPrinter(n) && !looksLikeLabelPrinterName(n);
 }
 
 function levenshtein(a: string, b: string): number {
@@ -209,7 +218,7 @@ export type PrinterResolutionHints = {
 };
 
 function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
-  const suitable = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  const suitable = printers.filter((p) => isEscPosTicketPrinterName(p.name));
   return (
     suitable.find((p) => p.isDefault) ||
     suitable.find((p) => looksLikeThermal80mm(p.name)) ||
@@ -250,6 +259,24 @@ export function resolveLivePrinterName(
   const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
   if (candidates[0]?.name) return candidates[0].name;
 
+  return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+/**
+ * Resolve a kitchen/receipt target. Never returns a label printer — ESC/POS
+ * tickets sent to Niimbot/TSPL/XP-365B feed a few mm and print nothing.
+ */
+export function resolveEscPosPrinterName(
+  configuredName: string,
+  livePrinters: AgentPrinter[],
+  hints?: PrinterResolutionHints
+): string | null {
+  const resolved = resolveLivePrinterName(configuredName, livePrinters, hints);
+  if (resolved && isEscPosTicketPrinterName(resolved)) return resolved;
+  if (!livePrinters.length) {
+    const want = String(configuredName || '').trim();
+    return isEscPosTicketPrinterName(want) ? want : null;
+  }
   return defaultLivePrinter(livePrinters)?.name || null;
 }
 

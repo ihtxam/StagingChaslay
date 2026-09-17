@@ -8,7 +8,7 @@ import {
   kitchenPrintJobHasTarget,
   printersForRole,
   resolveKitchenPaperWidthMm,
-  resolveKitchenPrintJobs,
+  resolveKitchenPrintJobsWithFallback,
   resolveReceiptLanguage,
   uint8ToBase64,
   type PosOrderForReceipt,
@@ -18,7 +18,7 @@ import { isRetailPosMode } from '@/lib/pos-checkout';
 import {
   isPrintAgentAvailable,
   listAgentPrinters,
-  resolveLivePrinterName,
+  resolveEscPosPrinterName,
   syncWebPosLocalPrinterName,
 } from '@/lib/print-agent';
 import {
@@ -136,23 +136,28 @@ async function printKitchenTickets(
     }
   }
 
-  const printJobs = kitchenLocalOnly
-    ? []
-    : resolveKitchenPrintJobs(receiptItems, printSettings).filter((j) => kitchenPrintJobHasTarget(j));
-  const fallbackLocal =
-    resolveLivePrinterName(
-      localStorage.getItem('manupos_webpos_printer') || '',
-      livePrinters
-    ) ||
-    localStorage.getItem('manupos_webpos_printer') ||
-    '';
-  const targets =
-    printJobs.length > 0
-      ? printJobs
+  const storedLocal = localStorage.getItem('manupos_webpos_printer') || '';
+  const fallbackLocal = resolveEscPosPrinterName(storedLocal, livePrinters) || storedLocal;
+  const kitchenJobs = resolveKitchenPrintJobsWithFallback(receiptItems, printSettings, {
+    receiptPrinterName: fallbackLocal,
+  }).filter((j) => kitchenPrintJobHasTarget(j));
+  const paperFallback = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
+  const targets = kitchenLocalOnly
+    ? [
+        {
+          printerName: fallbackLocal || kitchenJobs[0]?.printerName || '',
+          portName: kitchenJobs[0]?.portName,
+          matchHint: kitchenJobs[0]?.matchHint,
+          paperWidthMm: paperFallback,
+          items: receiptItems,
+        },
+      ]
+    : kitchenJobs.length > 0
+      ? kitchenJobs
       : [
           {
             printerName: fallbackLocal,
-            paperWidthMm: resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80),
+            paperWidthMm: paperFallback,
             items: receiptItems,
           },
         ];
@@ -160,12 +165,12 @@ async function printKitchenTickets(
   for (const job of targets) {
     if (!job.items.length) continue;
     const configuredName = (job.printerName || '').trim();
-    const resolvedName = resolveLivePrinterName(configuredName, livePrinters, {
+    const resolvedName = resolveEscPosPrinterName(configuredName, livePrinters, {
       portName: job.portName,
       matchHint: job.matchHint,
     });
     if (!resolvedName) continue;
-    const paper = job.paperWidthMm ?? resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
+    const paper = job.paperWidthMm ?? paperFallback;
     const escpos = generateKitchenTicketEscPos({
       ...kitchenOpts,
       items: job.items,
@@ -178,19 +183,21 @@ async function printKitchenTickets(
       configuredName,
       printers: livePrinters,
       retryLocally: kitchenLocalOnly ? true : resolvePrintRetryLocally(agentOnline),
+      jobKind: 'kitchen',
+      jobLabel: kitchenOpts.orderNumber ? `Kitchen · ${kitchenOpts.orderNumber}` : 'Kitchen',
     });
     printedAny = true;
   }
 
   if (!printedAny && receiptItems.length > 0) {
-    const paper = resolveKitchenPaperWidthMm(printSettings, printSettings?.paperWidthMm || 80);
+    const paper = paperFallback;
     const escpos = generateKitchenTicketEscPos({
       ...kitchenOpts,
       items: receiptItems,
       paperWidthMm: paper,
     });
     const configuredName = fallbackLocal;
-    const resolvedName = resolveLivePrinterName(configuredName, livePrinters) || configuredName;
+    const resolvedName = resolveEscPosPrinterName(configuredName, livePrinters) || configuredName;
     if (!resolvedName) return;
     await printKitchenViaAgentOrQueue({
       printerName: resolvedName,
@@ -199,6 +206,8 @@ async function printKitchenTickets(
       configuredName,
       printers: livePrinters,
       retryLocally: kitchenLocalOnly ? true : resolvePrintRetryLocally(agentOnline),
+      jobKind: 'kitchen',
+      jobLabel: kitchenOpts.orderNumber ? `Kitchen · ${kitchenOpts.orderNumber}` : 'Kitchen',
     });
   }
 }
@@ -306,6 +315,8 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
         printerName: printer.name || undefined,
         dataBase64: uint8ToBase64(escpos),
         orderId,
+        jobKind: 'receipt',
+        jobLabel: 'order-notification',
       });
     }
   }
@@ -371,6 +382,8 @@ export async function processAutoPrintReservationJob(
     await printViaAgentOrQueue({
       printerName: printer.name || undefined,
       dataBase64: uint8ToBase64(escpos),
+      jobKind: 'kitchen',
+      jobLabel: 'reservation',
     });
   }
 }

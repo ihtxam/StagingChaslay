@@ -102,6 +102,8 @@ export async function printDeliveryReceiptForOrder(
       printerName: printer.name || undefined,
       dataBase64: uint8ToBase64(escpos),
       orderId,
+      jobKind: 'receipt',
+      jobLabel: 'delivery-slip',
     });
   }
 }
@@ -157,6 +159,8 @@ export async function printDeliverySlipForOrder(
       printerName: printer.name || undefined,
       dataBase64: uint8ToBase64(escpos),
       orderId,
+      jobKind: 'receipt',
+      jobLabel: 'delivery-slip',
     });
   }
 }

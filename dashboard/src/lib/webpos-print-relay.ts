@@ -7,8 +7,10 @@ import {
   isPrintAgentAvailable,
   listAgentPrinters,
   looksLikeBluetoothOrComPrinter,
+  looksLikeLabelPrinterName,
   printViaAgent,
   resolveLivePrinterName,
+  resolveEscPosPrinterName,
   settleAfterBluetoothKitchenPrint,
   syncWebPosLocalPrinterName,
   type AgentPrinter,
@@ -192,6 +194,22 @@ export function resolvePrintRetryLocally(agentOnline: boolean): boolean {
   return isLocalPrintStation(agentOnline);
 }
 
+async function retargetEscPosPrinter(
+  printerName: string | undefined,
+  livePrinters?: AgentPrinter[]
+): Promise<string | undefined> {
+  const want = String(printerName || '').trim();
+  let list = livePrinters;
+  if (!list) {
+    try {
+      list = await listAgentPrinters();
+    } catch {
+      list = [];
+    }
+  }
+  return resolveEscPosPrinterName(want, list) || undefined;
+}
+
 /**
  * Print via local Print Agent when available; otherwise queue for the main till hub.
  * On local failure (or agent down with retryLocally), persists the job for 8s auto-retry.
@@ -214,6 +232,15 @@ export async function printViaAgentOrQueue(opts: {
   lineIds?: string[];
   sourceDeviceId?: string;
 }): Promise<'local' | 'queued'> {
+  let printerName = opts.printerName;
+  if (opts.jobKind === 'kitchen' || opts.jobKind === 'receipt' || opts.jobKind === 'eod') {
+    printerName = await retargetEscPosPrinter(opts.printerName);
+    if (!printerName || looksLikeLabelPrinterName(printerName)) {
+      throw new Error(
+        'Kitchen/receipt tickets cannot print on a label printer. Assign a receipt or kitchen printer in Settings → Receipts & printers.'
+      );
+    }
+  }
   const retryLocally = opts.retryLocally !== false && !isKioskPrintContext();
   const persistLocal = (error: unknown) => {
     if (!opts.dataBase64) return;
@@ -221,7 +248,7 @@ export async function printViaAgentOrQueue(opts: {
       kind: opts.jobKind,
       label: opts.jobLabel,
       dataBase64: opts.dataBase64,
-      printerName: opts.printerName,
+      printerName,
       text: opts.text,
       orderId: opts.orderId,
       lineIds: opts.lineIds,
@@ -237,7 +264,7 @@ export async function printViaAgentOrQueue(opts: {
   if (canPrintLocally) {
     try {
       await printViaAgent({
-        printerName: opts.printerName,
+        printerName,
         dataBase64: opts.dataBase64,
         text: opts.text,
       });
@@ -260,6 +287,7 @@ export async function printViaAgentOrQueue(opts: {
 
   await enqueueEscPosPrintJob({
     ...opts,
+    printerName,
     sourceDeviceId: opts.sourceDeviceId || (isKioskPrintContext() ? kioskDeviceId() : undefined),
   });
   return 'queued';
@@ -275,14 +303,17 @@ export async function printKitchenViaAgentOrQueue(
     configuredName?: string | null;
   }
 ): Promise<'local' | 'queued'> {
-  const mode = await printViaAgentOrQueue(opts);
+  const printerName =
+    (await retargetEscPosPrinter(opts.printerName, opts.printers)) ||
+    (looksLikeLabelPrinterName(opts.printerName) ? undefined : opts.printerName);
+  const mode = await printViaAgentOrQueue({ ...opts, printerName, jobKind: 'kitchen' });
   const printerRef =
     opts.printers?.find(
       (p) =>
-        p.name === opts.printerName ||
+        p.name === printerName ||
         p.name === opts.configuredName ||
         p.matchHint === opts.configuredName
-    ) || opts.printers?.find((p) => p.name === opts.printerName) || opts.configuredName || opts.printerName;
+    ) || opts.printers?.find((p) => p.name === printerName) || opts.configuredName || printerName;
   const isBt = looksLikeBluetoothOrComPrinter(printerRef);
   const agentHealth = isBt ? await getPrintAgentHealth().catch(() => ({ ok: false })) : null;
   const skipCutFollowUp = isBt && agentSupportsBtCutTrailer(agentHealth);
@@ -290,8 +321,8 @@ export async function printKitchenViaAgentOrQueue(
     // USB/network and legacy BT: separate cut job so the blade runs after the ticket body.
     await new Promise((resolve) => setTimeout(resolve, 150));
     try {
-      await printViaAgentOrQueue({
-        printerName: opts.printerName,
+    await printViaAgentOrQueue({
+        printerName,
         dataBase64: uint8ToBase64(escposKitchenCut()),
         orderId: opts.orderId,
         retryLocally: opts.retryLocally,
@@ -456,7 +487,11 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
         try {
           const configuredPrinter = String(p.printerName || '').trim();
           const resolvedPrinter =
-            resolveLivePrinterName(configuredPrinter, livePrinters) || configuredPrinter || undefined;
+            relayKind === 'kitchen' || relayKind === 'receipt' || relayKind === 'eod'
+              ? resolveEscPosPrinterName(configuredPrinter, livePrinters) || undefined
+              : resolveLivePrinterName(configuredPrinter, livePrinters) ||
+                configuredPrinter ||
+                undefined;
           await printViaAgent({
             printerName: resolvedPrinter,
             dataBase64: p.dataBase64,
