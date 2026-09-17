@@ -10,6 +10,7 @@ export type SettingsTabId =
   | 'reservations'
   | 'pos'
   | 'payments'
+  | 'fiscal'
   | 'receipt'
   | 'kds'
   | 'ods'
@@ -523,12 +524,52 @@ export function buildSettingsSearchIndex(
     {
       id: 'receipt-print',
       tab: 'receipt',
-      keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
+      keywords: [
+        'receipt',
+        'printer',
+        'kitchen',
+        'ticket',
+        'receipts',
+        'printers',
+        t('settingsReceipt'),
+        t('settingsNavReceipt'),
+      ],
     },
     {
       id: 'barcode-labels',
       tab: 'receipt',
       keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
+    },
+    {
+      id: 'order-labels',
+      tab: 'receipt',
+      keywords: [
+        'order label',
+        'order labels',
+        'print order labels',
+        'print label',
+        'print labels',
+        'print label on send',
+        'label on send',
+        'auto print',
+        'auto-print',
+        'auto print label',
+        'butcher',
+        'weigh',
+        'sticker',
+        'étiquette',
+        'etiquette',
+        'étiquettes commande',
+        'etikett',
+        'etiketten',
+        'bestell-etiketten',
+        t('orderLabelsTitle'),
+        t('orderLabelEnabled'),
+        t('autoPrintOrderLabelOnSend'),
+        t('autoPrintOrderLabelOnHold'),
+        t('settingsReceipt'),
+        t('settingsNavReceipt'),
+      ],
     },
     {
       id: 'inventory-addon',
@@ -564,6 +605,11 @@ export function buildSettingsSearchIndex(
         t('settingsEmail'),
         t('settingsBrevo'),
       ],
+    },
+    {
+      id: 'email-brevo',
+      tab: 'email',
+      keywords: ['brevo', 'sendinblue', 'api key', 'newsletter', t('settingsBrevo')],
     },
     {
       id: 'language-panel',

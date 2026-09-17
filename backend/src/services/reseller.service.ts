@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { AuthService } from "@/services/auth.service";
 import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
-import { attachLicenseRelations, LicenseAdminService } from "@/services/license-admin.service";
+import { LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
@@ -371,6 +371,7 @@ export class ResellerService {
         signageScreenLimit: schema.merchants.signageScreenLimit,
         kdsAddonEnabled: schema.merchants.kdsAddonEnabled,
         odsAddonEnabled: schema.merchants.odsAddonEnabled,
+        kioskAddonEnabled: schema.merchants.kioskAddonEnabled,
         justEatAddonEnabled: schema.merchants.justEatAddonEnabled,
         uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
         panelNavHidden: schema.merchants.panelNavHidden,
@@ -390,6 +391,7 @@ export class ResellerService {
       signageScreenLimit: normalizeSignageScreenLimit(r.signageScreenLimit),
       kdsAddonEnabled: r.kdsAddonEnabled === true,
       odsAddonEnabled: r.odsAddonEnabled === true,
+      kioskAddonEnabled: r.kioskAddonEnabled === true,
       deliveryPlatformsAddonEnabled:
         r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
     }));
@@ -422,6 +424,7 @@ export class ResellerService {
       odsAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -468,6 +471,7 @@ export class ResellerService {
         odsAddonEnabled: input.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
+        kioskAddonEnabled: input.kioskAddonEnabled,
       }
     );
     return created;
@@ -626,13 +630,13 @@ export class ResellerService {
     ];
     if (opts?.status) clauses.push(eq(schema.licenses.status, opts.status));
 
-    const licenses = await db.query.licenses.findMany({
+    return db.query.licenses.findMany({
       where: and(...clauses),
+      with: { merchant: true, device: true },
       limit,
       offset,
       orderBy: desc(schema.licenses.createdAt),
     });
-    return attachLicenseRelations(licenses);
   }
 
   /** Issue device seats from reseller pool to an owned merchant. */
@@ -725,9 +729,9 @@ export class ResellerService {
     const db = getDb();
     const license = await db.query.licenses.findFirst({
       where: eq(schema.licenses.id, licenseId),
+      with: { merchant: true },
     });
-    const [attached] = license ? await attachLicenseRelations([license]) : [];
-    if (!attached || attached.merchant?.resellerId !== resellerId) {
+    if (!license || license.merchant?.resellerId !== resellerId) {
       throw new Error("License not found");
     }
     return LicenseAdminService.revokeLicense(licenseId);
@@ -737,9 +741,9 @@ export class ResellerService {
     const db = getDb();
     const license = await db.query.licenses.findFirst({
       where: eq(schema.licenses.id, licenseId),
+      with: { merchant: true },
     });
-    const [attached] = license ? await attachLicenseRelations([license]) : [];
-    if (!attached || attached.merchant?.resellerId !== resellerId) {
+    if (!license || license.merchant?.resellerId !== resellerId) {
       throw new Error("License not found");
     }
     return LicenseAdminService.extendLicense(licenseId, additionalDays);

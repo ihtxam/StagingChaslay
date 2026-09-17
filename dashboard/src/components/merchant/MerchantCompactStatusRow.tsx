@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Menu, Moon, RefreshCw, Sun } from 'lucide-react';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { useFullscreenActive } from '@/hooks/useFullscreenActive';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AcceptingMenu from '@/components/AcceptingMenu';
@@ -52,6 +54,7 @@ export default function MerchantCompactStatusRow({
   );
   const platformUi = usePlatformMessagesUi();
   const { theme, toggleTheme } = useTheme();
+  const fullscreenActive = useFullscreenActive();
 
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
@@ -147,6 +150,13 @@ export default function MerchantCompactStatusRow({
       >
         {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
       </button>
+
+      {fullscreenActive ? (
+        <OnScreenKeyboardToggle
+          className="inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0"
+          iconSize={14}
+        />
+      ) : null}
 
       {impersonating ? (
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-amber-950 dark:bg-amber-950/50 dark:text-amber-100">

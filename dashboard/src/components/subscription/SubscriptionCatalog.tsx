@@ -24,6 +24,7 @@ type Plan = {
     kds?: boolean;
     ods?: boolean;
     kiosk?: boolean;
+    giftCards?: boolean;
     signageScreenLimit?: number;
   } | null;
   features?: string[] | null;
@@ -68,6 +69,7 @@ const emptyPlan = {
   includedKds: false,
   includedOds: false,
   includedKiosk: false,
+  includedGiftCards: false,
   signageScreenLimit: 2,
   featuresText: '',
   isActive: true,
@@ -162,6 +164,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
       includedKds: !!plan.includedAddons?.kds,
       includedOds: !!plan.includedAddons?.ods,
       includedKiosk: !!plan.includedAddons?.kiosk,
+      includedGiftCards: !!plan.includedAddons?.giftCards,
       signageScreenLimit: plan.includedAddons?.signageScreenLimit ?? 2,
       featuresText: (plan.features || []).join('\n'),
       isActive: plan.isActive,
@@ -199,6 +202,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
           kds: planForm.includedKds,
           ods: planForm.includedOds,
           kiosk: planForm.includedKiosk,
+          giftCards: planForm.includedGiftCards,
           signageScreenLimit: planForm.includedSignage ? Number(planForm.signageScreenLimit) || 2 : undefined,
         },
         features: planForm.featuresText
@@ -678,6 +682,16 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                     />
                     Self-order kiosk
                   </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planForm.includedGiftCards}
+                      onChange={(e) =>
+                        setPlanForm({ ...planForm, includedGiftCards: e.target.checked })
+                      }
+                    />
+                    Gift cards
+                  </label>
                   {planForm.includedSignage ? (
                     <label className="flex items-center gap-2">
                       Screens
@@ -766,6 +780,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
                   <option value="kds">Kitchen display (KDS)</option>
                   <option value="ods">Order display (ODS)</option>
                   <option value="kiosk">Self-order kiosk</option>
+                  <option value="gift_cards">Gift cards</option>
                   <option value="just_eat">Just Eat integration</option>
                   <option value="uber_eats">Uber Eats integration</option>
                   <option value="extra_pos_post">Extra POS station</option>

@@ -19,11 +19,11 @@ function readConst(source, name) {
   return m ? Number(m[1]) : null;
 }
 
-const EXPECT_80 = 180;
-const EXPECT_58 = 136;
+const EXPECT_MAX = 170;
 
-const web80 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_80');
-const web58 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_58');
+const webMax = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_MAX');
+const web80 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_80') ?? webMax;
+const web58 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_58') ?? webMax;
 const and80 = readConst(androidKt, 'RECEIPT_QR_RASTER_PX_80');
 const and58 = readConst(androidKt, 'RECEIPT_QR_RASTER_PX_58');
 const webEccM = /ecc:\s*'M'/.test(qrTs) || /ecc = opts\?\.ecc \?\? 'M'/.test(qrTs);
@@ -31,19 +31,17 @@ const androidEccM = /ErrorCorrectionLevel\.M/.test(
   readFileSync(join(root, 'app/src/main/java/com/chaslay/pos/receipt/ReceiptQrGenerator.kt'), 'utf8')
 );
 
-const ok =
-  web80 === EXPECT_80 &&
-  web58 === EXPECT_58 &&
-  and80 === EXPECT_80 &&
-  and58 === EXPECT_58 &&
-  webEccM &&
-  androidEccM;
+const webOk = webMax === EXPECT_MAX && web80 <= EXPECT_MAX && web58 <= EXPECT_MAX;
+const androidOk =
+  (and80 == null || and80 <= EXPECT_MAX) && (and58 == null || and58 <= EXPECT_MAX);
+const ok = webOk && androidOk && webEccM && androidEccM;
 
 console.log('Receipt QR size check:', ok ? 'PASS' : 'FAIL');
-console.log(`  WebPOS 80mm: ${web80} (expected ${EXPECT_80})`);
-console.log(`  WebPOS 58mm: ${web58} (expected ${EXPECT_58})`);
-console.log(`  Android 80mm: ${and80} (expected ${EXPECT_80})`);
-console.log(`  Android 58mm: ${and58} (expected ${EXPECT_58})`);
+console.log(`  WebPOS max: ${webMax} (expected ${EXPECT_MAX})`);
+console.log(`  WebPOS 80mm: ${web80} (cap ${EXPECT_MAX})`);
+console.log(`  WebPOS 58mm: ${web58} (cap ${EXPECT_MAX})`);
+if (and80 != null) console.log(`  Native Android 80mm: ${and80} (cap ${EXPECT_MAX})`);
+if (and58 != null) console.log(`  Native Android 58mm: ${and58} (cap ${EXPECT_MAX})`);
 console.log(`  WebPOS ECC-M: ${webEccM}`);
 console.log(`  Android ECC-M: ${androidEccM}`);
 

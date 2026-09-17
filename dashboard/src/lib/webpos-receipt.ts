@@ -16,6 +16,7 @@ import {
   escposCode128,
   generateReceiptQrRasterEscPos,
   escposQrCode,
+  receiptQrEscPosModuleSize,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
@@ -372,6 +373,14 @@ export type WebPosReceipt = {
   splitLabel?: string | null;
   notes?: string;
   receiptUrl?: string;
+  /** Fiskaly fiscal signature from push-sales (DE/FR). */
+  fiskalySignature?: {
+    country?: string;
+    qrCodeData?: string | null;
+    signature?: string | null;
+    txNumber?: string | number | null;
+    txId?: string | null;
+  } | null;
   includeQr?: boolean;
   /** When false, skip delivery directions QR even for delivery channel. */
   deliveryDirectionsQr?: boolean;
@@ -1184,8 +1193,27 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  // QR label + graphic embedded by buildReceiptEscPos (digital receipt only).
-  const hasDigitalQr = tx.includeQr !== false && !!(tx.receiptUrl || tx.id);
+  const fiscalQr = tx.fiskalySignature?.qrCodeData?.trim();
+  if (fiscalQr) {
+    r += thin + '\n';
+    r += centerLine(L.fiscalQrTitle, width) + '\n';
+    if (tx.fiskalySignature?.txNumber != null && String(tx.fiskalySignature.txNumber).trim()) {
+      r +=
+        padLine(`${L.fiscalTxNumber}:`, String(tx.fiskalySignature.txNumber).slice(0, width - 16), width) +
+        '\n';
+    }
+    if (tx.fiskalySignature?.signature?.trim()) {
+      const sig = tx.fiskalySignature.signature.trim();
+      r += `${L.fiscalSignature}:\n`;
+      for (let i = 0; i < sig.length; i += width) {
+        r += sig.slice(i, i + width) + '\n';
+      }
+    }
+  }
+
+  // QR label + graphic embedded by buildReceiptEscPos (fiscal QR preferred, else digital receipt).
+  const hasDigitalQr =
+    tx.includeQr !== false && !!(fiscalQr || tx.receiptUrl || tx.id);
   if (hasDigitalQr) {
     r += thin + '\n';
   }
@@ -1786,9 +1814,8 @@ export function escposKitchenTicketEnd(): Uint8Array {
  */
 export function escposKitchenCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x05, // ESC d 5 — short feed before cut
+    0x1b, 0x64, 0x02, // ESC d 2 — short feed before cut
     0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
-    0x0a, 0x0a,
   ]);
 }
 
@@ -2152,7 +2179,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   const period = report.label?.trim()
     ? report.label
     : report.periodFrom && report.periodTo
-      ? `${report.periodFrom} to ${report.periodTo}`
+      ? `${report.periodFrom}${L.periodRangeTo}${report.periodTo}`
       : report.label || '';
 
   let r = '';
@@ -2167,7 +2194,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   if (report.scopeStaffName?.trim()) {
     r +=
       centerLine(
-        `${L.mySales || 'My sales'}: ${report.scopeStaffName.trim()}`.slice(0, width),
+        `${L.mySales}: ${report.scopeStaffName.trim()}`.slice(0, width),
         width
       ) + '\n';
   }
@@ -2186,7 +2213,7 @@ export function generateEodReportText(report: EodReportPrint): string {
     ? report.vatRows
     : [
         {
-          label: 'Total',
+          label: L.total,
           net: Number(report.netTotal ?? brut - report.taxTotal),
           tva: report.taxTotal,
           brut,
@@ -2198,7 +2225,7 @@ export function generateEodReportText(report: EodReportPrint): string {
   if (report.vatRows?.length) {
     r +=
       vatCols(
-        'Total',
+        L.total,
         two(report.netTotal ?? brut - report.taxTotal),
         two(report.taxTotal),
         two(brut),
@@ -2301,12 +2328,14 @@ export function generateEodReportText(report: EodReportPrint): string {
     r += thin + '\n';
     r += centerLine(L.cashDrawer, width) + '\n';
     r += thin + '\n';
+    const timeLocale =
+      report.language === 'fr' ? 'fr-CH' : report.language === 'de' ? 'de-CH' : 'en-GB';
     const movementTime = (iso?: string | null) => {
       if (!iso) return '';
       const d = new Date(iso);
       if (!Number.isFinite(d.getTime())) return '';
       try {
-        return d.toLocaleTimeString('en-GB', {
+        return d.toLocaleTimeString(timeLocale, {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
@@ -2492,7 +2521,6 @@ export function textToEscPos(
   const init = new Uint8Array([0x1b, 0x40]);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
-  const feed = new Uint8Array([0x1b, 0x64, 0x04]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
     parts.push(alignCenter, logoBytes, alignLeft);
@@ -2510,7 +2538,7 @@ export function textToEscPos(
       parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
   }
-  parts.push(feed, escposFeedAndCut());
+  parts.push(escposFeedAndCut());
   return concatBytes(...parts);
 }
 
@@ -2519,6 +2547,8 @@ export async function buildReceiptEscPos(
   text: string,
   opts: {
     qrData?: string;
+    /** When set, used for thermal QR instead of qrData (KassenSichV). */
+    fiscalQrData?: string;
     /** @deprecated Directions QR removed — kept for call-site compat, ignored. */
     deliveryQrData?: string;
     language?: ReceiptLang | string;
@@ -2534,13 +2564,14 @@ export async function buildReceiptEscPos(
   const langCode = String(opts.language || 'en').toLowerCase().slice(0, 2);
   const lang: ReceiptLang = langCode === 'fr' || langCode === 'de' ? langCode : 'en';
   const L = receiptLabels(lang);
-  const qrData = opts.qrData?.trim();
+  const qrData = (opts.fiscalQrData || opts.qrData)?.trim();
 
   let qrRaster: Uint8Array | null = null;
 
   if (qrData) {
+    const qrModuleSize = receiptQrEscPosModuleSize(qrData, paper);
     if (opts.fastQr !== false) {
-      qrRaster = escposQrCode(qrData, paper === 58 ? 5 : 5);
+      qrRaster = escposQrCode(qrData, qrModuleSize);
     } else {
       qrRaster =
         (await buildLabeledReceiptQrRasterEscPos({
@@ -2549,7 +2580,7 @@ export async function buildReceiptEscPos(
           paperWidthMm: paper,
         })) ||
         (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-        escposQrCode(qrData, paper === 58 ? 5 : 5);
+        escposQrCode(qrData, qrModuleSize);
     }
   }
 

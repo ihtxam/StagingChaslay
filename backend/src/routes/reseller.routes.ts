@@ -195,6 +195,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odsAddonEnabled,
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
+      kioskAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -226,6 +227,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odsAddonEnabled: odsAddonEnabled === true,
       deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
       storekeeperAddonEnabled: storekeeperAddonEnabled === true,
+      kioskAddonEnabled: kioskAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {

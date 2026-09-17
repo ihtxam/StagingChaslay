@@ -11,8 +11,13 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import com.rebornsense.printbridge.BridgeAlarmWatchdog
 import com.rebornsense.printbridge.MainActivity
+import com.rebornsense.printbridge.fleet.FleetPreferences
+import com.rebornsense.printbridge.fleet.FleetSetupActivity
+import com.rebornsense.printbridge.fleet.KioskController
 import com.rebornsense.printbridge.PrintBridgeLauncher
+import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
@@ -41,6 +46,7 @@ class PrintBridgeService : Service() {
             it.start(NanoTimeout, false)
         }
         refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
+        BridgeAlarmWatchdog.arm(applicationContext)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -52,11 +58,22 @@ class PrintBridgeService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (PrinterPreferences.isAutoStartEnabled(this)) {
+            PrintBridgeLauncher.ensureRunning(this)
+            BridgeAlarmWatchdog.scheduleImmediate(this, delayMs = 1_500L)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         refreshHandler.removeCallbacks(refreshRunnable)
         server?.stop()
         server = null
         queue.stop()
+        if (PrinterPreferences.isAutoStartEnabled(this)) {
+            BridgeAlarmWatchdog.scheduleImmediate(this, delayMs = 2_000L)
+        }
         super.onDestroy()
     }
 
@@ -78,14 +95,18 @@ class PrintBridgeService : Service() {
         val launch = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            if (FleetPreferences.isKioskEnabled(this)) {
+                Intent(this, FleetSetupActivity::class.java)
+            } else {
+                Intent(this, MainActivity::class.java)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val needsSetup = !OemSetupPreferences.isWizardCompleted(this)
-        val body = if (needsSetup) {
-            getString(R.string.notification_setup_needed)
-        } else {
-            getString(R.string.notification_body)
+        val body = when {
+            needsSetup -> getString(R.string.notification_setup_needed)
+            FleetPreferences.isKioskEnabled(this) -> getString(R.string.fleet_notification_kiosk)
+            else -> getString(R.string.notification_body)
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))

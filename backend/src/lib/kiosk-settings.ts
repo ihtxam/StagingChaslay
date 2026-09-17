@@ -182,6 +182,25 @@ function normalizeKioskLayout(value: unknown): KioskLayout {
   return String(value || "").toLowerCase() === "grocery" ? "grocery" : "restaurant";
 }
 
+/** Retail stores always use grocery / retail kiosk — no restaurant layout option. */
+export function applyBusinessModuleToKioskSettings(
+  settings: KioskSettings,
+  businessModule?: string | null
+): KioskSettings {
+  if (String(businessModule || "").trim().toLowerCase() !== "retail") return settings;
+  const alreadyGrocery = settings.kioskLayout === "grocery";
+  const nav = String(settings.categoryNav || "").toLowerCase();
+  return {
+    ...settings,
+    kioskLayout: "grocery",
+    categoryNav: alreadyGrocery && nav === "left" ? "left" : "bottom",
+  };
+}
+
+export function kioskLayoutLockedToRetail(businessModule?: string | null): boolean {
+  return String(businessModule || "").trim().toLowerCase() === "retail";
+}
+
 function normalizeCategoryNav(value: unknown, layout?: unknown): KioskCategoryNav {
   const raw = String(value || "").toLowerCase();
   if (normalizeKioskLayout(layout) === "grocery") {

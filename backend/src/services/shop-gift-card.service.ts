@@ -12,8 +12,13 @@ import {
   buildGiftCardRedeemUrl,
 } from "@/lib/gift-card-code";
 import { GiftCardService } from "@/services/gift-card.service";
+import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { AdyenService } from "@/services/adyen.service";
 import { EmailService } from "@/services/email.service";
+import {
+  shopAdyenCardReady,
+  shopGiftCardPaymentReturnUrl,
+} from "@/lib/shop-public-url";
 
 export type GiftDeliveryType = "digital" | "physical";
 
@@ -48,14 +53,15 @@ export class ShopGiftCardService {
   }
 
   /** Public shop settings — no auth required */
-  static publicSettings(settings: GiftCardSettings) {
+  static publicSettings(settings: GiftCardSettings, licensed = true) {
     const digital =
       settings.digitalVoucherEnabled !== false && settings.onlinePurchaseEnabled !== false;
     const physical = settings.physicalPostEnabled === true && settings.onlinePurchaseEnabled !== false;
+    const available = licensed && this.isOnlineEnabled(settings) && (digital || physical);
     return {
-      enabled: this.isOnlineEnabled(settings) && (digital || physical),
-      digitalVoucherEnabled: digital,
-      physicalPostEnabled: physical,
+      enabled: available,
+      digitalVoucherEnabled: licensed && digital,
+      physicalPostEnabled: licensed && physical,
       presetDenominations: settings.presetDenominations,
       minAmount: settings.minAmount,
       maxAmount: settings.maxAmount,
@@ -63,10 +69,20 @@ export class ShopGiftCardService {
     };
   }
 
+  static async publicSettingsForMerchant(merchant: {
+    id: string;
+    giftCardSettings?: unknown;
+  }) {
+    const licensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
+    return this.publicSettings(this.settingsFromMerchant(merchant), licensed);
+  }
+
   /** Public balance lookup — returns balance + masked holder email */
   static async lookupPublicBalance(merchantId: string, code: string) {
     const settings = await GiftCardService.getSettings(merchantId);
     if (!settings.enabled) throw new Error("Gift cards are not available");
+    const licensed = await merchantHasGiftCardsLicense(merchantId).catch(() => false);
+    if (!licensed) throw new Error("Gift cards are not available");
 
     const card = await GiftCardService.lookup(merchantId, code);
     if (card.status !== "active") throw new Error("Card is not active");
@@ -100,6 +116,8 @@ export class ShopGiftCardService {
     merchant: {
       id: string;
       slug?: string | null;
+      subdomain?: string | null;
+      customDomain?: string | null;
       name: string;
       adyenMerchantAccount?: string | null;
       adyenApiKey?: string | null;
@@ -125,6 +143,10 @@ export class ShopGiftCardService {
     const settings = this.settingsFromMerchant(merchant);
     if (!this.isOnlineEnabled(settings)) {
       throw new Error("Online gift card purchase is not enabled");
+    }
+    const licensed = await merchantHasGiftCardsLicense(merchant.id).catch(() => false);
+    if (!licensed) {
+      throw new Error("Gift cards addon is not enabled");
     }
 
     const deliveryType: GiftDeliveryType =
@@ -176,17 +198,19 @@ export class ShopGiftCardService {
       })
       .returning();
 
-    const cardReady = !!(
-      merchant.adyenMerchantAccount &&
-      merchant.adyenApiKey &&
-      merchant.adyenClientId
-    );
+    const cardReady = shopAdyenCardReady(merchant);
 
     let paymentSession: Record<string, unknown> | null = null;
     if (cardReady) {
       try {
-        const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-        const returnUrl = `https://${domain}/shop/${merchant.slug || slug}/gift-cards/confirm/${purchase.id}?paid=1`;
+        const returnUrl = shopGiftCardPaymentReturnUrl(
+          {
+            slug: merchant.slug || slug,
+            subdomain: merchant.subdomain,
+            customDomain: merchant.customDomain,
+          },
+          purchase.id
+        );
         const session = await AdyenService.initializePaymentSession(
           merchant.id,
           purchase.id,
@@ -199,19 +223,18 @@ export class ShopGiftCardService {
           sessionData: session.sessionData,
           clientKey: merchant.adyenClientId,
           environment:
-            (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live"
-              ? "live"
-              : "test",
+            session.environment ||
+            AdyenService.environmentFromClientKey(merchant.adyenClientId),
         };
       } catch (e) {
         paymentSession = {
-          error: e instanceof Error ? e.message : "Adyen not configured",
-          demoConfirmAvailable: true,
+          error: e instanceof Error ? e.message : "Adyen payment session failed",
         };
       }
     } else {
       paymentSession = {
-        error: "Card payments not configured",
+        error:
+          "Card payments are not configured. Add Adyen in Settings → Payments (merchant account, API key, and client key).",
         demoConfirmAvailable: true,
       };
     }
@@ -337,6 +360,22 @@ ${purchase.shippingZip} ${purchase.shippingCity}</p>
       .returning();
 
     return { purchase: updatedPurchase, card, alreadyFulfilled: false };
+  }
+
+  static async markPurchasePaymentFailed(merchantId: string, purchaseId: string) {
+    const db = getDb();
+    const purchase = await db.query.giftCardPurchases.findFirst({
+      where: and(
+        eq(schema.giftCardPurchases.id, purchaseId),
+        eq(schema.giftCardPurchases.merchantId, merchantId)
+      ),
+    });
+    if (!purchase) return;
+    if (purchase.paymentStatus === "completed") return;
+    await db
+      .update(schema.giftCardPurchases)
+      .set({ paymentStatus: "failed", updatedAt: new Date() })
+      .where(eq(schema.giftCardPurchases.id, purchase.id));
   }
 
   /** Merchant: list online purchases awaiting physical shipment */

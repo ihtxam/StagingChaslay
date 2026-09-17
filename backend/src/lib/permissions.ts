@@ -37,37 +37,14 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export function parsePermissions(raw?: string | null): Permission[] {
   if (!raw) return [];
-  const seen = new Set<Permission>();
-  for (const part of raw.split(",")) {
-    const key = part.trim();
-    if ((PERMISSIONS as readonly string[]).includes(key)) {
-      seen.add(key as Permission);
-    }
-  }
-  return PERMISSIONS.filter((p) => seen.has(p));
-}
-
-/**
- * Accept the role-editor payload (array or comma-separated string) and keep only
- * known permission keys. Unknown keys are dropped; known keys are not rewritten.
- */
-export function normalizePermissions(input: unknown): Permission[] {
-  if (input == null) return [];
-  if (Array.isArray(input)) {
-    return parsePermissions(
-      input
-        .map((v) => String(v ?? "").trim())
-        .filter(Boolean)
-        .join(",")
-    );
-  }
-  if (typeof input === "string") return parsePermissions(input);
-  return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is Permission => (PERMISSIONS as readonly string[]).includes(s));
 }
 
 export function encodePermissions(perms: Permission[]): string {
-  const set = new Set(perms);
-  return PERMISSIONS.filter((p) => set.has(p)).join(",");
+  return [...new Set(perms)].join(",");
 }
 
 export function hasPermission(granted: readonly string[] | undefined, required: Permission): boolean {
@@ -121,7 +98,6 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "MANAGE_BILLING",
       "END_OF_DAY",
       "MANAGE_INVENTORY",
-      "GANDOLA_PURGE",
     ],
   },
   {
@@ -198,18 +174,18 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
     permissions: ["MANAGE_KIOSK"],
   },
   {
-    /** Handheld / Chrome order center PWA — live online orders, print, daily summary. No panel. */
-    name: "Order center operator",
+    /** Hidden bulk delete of completed cash sales from POS history and reports. */
+    name: "gandola",
     isSystem: true,
-    sortOrder: 57,
-    permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
-  },
-  {
-    /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
-    name: "Storekeeper",
-    isSystem: true,
-    sortOrder: 55,
-    permissions: ["STOREKEEPER_INTAKE"],
+    sortOrder: 58,
+    permissions: [
+      "USE_WEBPOS",
+      "VIEW_ORDER_HISTORY",
+      "VIEW_ALL_SALES",
+      "VIEW_REPORTS",
+      "END_OF_DAY",
+      "GANDOLA_PURGE",
+    ],
   },
 ];
 
@@ -280,8 +256,6 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
   "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
   "/merchant/kiosk": ["MANAGE_KIOSK", "MANAGE_SETTINGS"],
-  "/merchant/order-center": ["VIEW_ORDER_HISTORY"],
-  "/merchant/order-hub": ["VIEW_ORDER_HISTORY"],
 };
 
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
@@ -297,7 +271,6 @@ export const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[] = [
   "DELIVERY_ORDERS",
   "VIEW_DELIVERY_TRACKING",
   "MANAGE_KIOSK",
-  "VIEW_ORDER_HISTORY",
 ];
 
 const WAITER_PRIVILEGED_BLOCKED: Permission[] = [
@@ -437,12 +410,13 @@ export function waiterRestrictedHomePath(granted: readonly string[] | undefined)
   return "/merchant/pos";
 }
 
-/**
- * Runtime policy for issued JWTs / staff sessions.
- * Storekeeper stays locked to intake. Waiter templates keep merchant-saved
- * permissions so Users & roles checkboxes round-trip to the database.
- */
+/** Strip privileged permissions from system Waiter roles before issuing JWTs. */
 export function applyRolePermissionPolicy(roleName: string, permissions: Permission[]): Permission[] {
+  const kind = waiterSystemKind(roleName);
+  if (kind) {
+    const blocked = new Set(waiterBlockedPermissions(kind));
+    return permissions.filter((p) => !blocked.has(p));
+  }
   if (roleName.trim().toLowerCase() === "storekeeper") {
     const blocked = new Set(storekeeperBlockedPermissions());
     return permissions.filter((p) => !blocked.has(p));

@@ -7,11 +7,12 @@ import {
   applyRolePermissionPolicy,
   encodePermissions,
   hasAnyPermission,
-  normalizePermissions,
   parsePermissions,
   STAFF_MERCHANT_ENTRY_PERMISSIONS,
   toAndroidPermissions,
+  waiterBlockedPermissions,
   waiterSystemKind,
+  storekeeperBlockedPermissions,
   type Permission,
 } from "@/lib/permissions";
 import {
@@ -20,16 +21,6 @@ import {
   normalizeStaffLoginHome,
   type StaffLoginHome,
 } from "@/lib/staff-login-home";
-
-/** Skip expensive role seeding/enforcement on every staff list (once per process per merchant). */
-const defaultRolesReady = new Set<string>();
-
-/** Default POS PIN for the first manager provisioned on new merchant signup. Change in Users & roles. */
-export const DEFAULT_MANAGER_PIN = "0000";
-
-export function invalidateDefaultRolesCache(merchantId: string) {
-  defaultRolesReady.delete(merchantId);
-}
 
 export class StaffService {
   /** Staff row exists with a POS PIN but no email/password hash for /login. */
@@ -50,11 +41,6 @@ export class StaffService {
 
   static async ensureDefaultRoles(merchantId: string) {
     const db = getDb();
-    if (defaultRolesReady.has(merchantId)) {
-      return db.query.merchantRoles.findMany({
-        where: eq(schema.merchantRoles.merchantId, merchantId),
-      });
-    }
     const existing = await db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
@@ -84,158 +70,15 @@ export class StaffService {
       }
     }
     await this.ensureStorekeeperSystemRole(merchantId);
-    await this.removeGandolaSystemRole(merchantId);
+    await this.ensureGandolaSystemRole(merchantId);
     // Existing Manager roles that already see company reports keep VIEW_ALL_SALES.
     await this.ensureManagerViewAllSales(merchantId);
-    await this.ensureManagerGandolaPurge(merchantId);
-    // Waiters: keep merchant-saved permissions; only align POS login home.
+    // Waiters: never panel / drawer / company sales. Menu + orders stay role-assigned.
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
-    await this.ensureCashierRolePermissions(merchantId);
-    await this.syncCashierLoginHome(merchantId);
-    defaultRolesReady.add(merchantId);
     return db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
-  }
-
-  /**
-   * Provision the merchant's first Manager staff row (POS PIN + full panel role).
-   * Idempotent: skips when any staff already exist.
-   * Default PIN is 0000 (stored for display in Users & roles).
-   */
-  static async ensureDefaultManagerStaff(merchantId: string, displayName: string) {
-    const db = getDb();
-    await this.ensureDefaultRoles(merchantId);
-
-    const existingStaff = await db.query.merchantStaff.findFirst({
-      where: eq(schema.merchantStaff.merchantId, merchantId),
-      columns: { id: true },
-    });
-    if (existingStaff) return null;
-
-    const managerRole = await db.query.merchantRoles.findFirst({
-      where: and(
-        eq(schema.merchantRoles.merchantId, merchantId),
-        sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
-      ),
-    });
-    if (!managerRole) {
-      console.warn(`[staff] Manager role missing for merchant ${merchantId}`);
-      return null;
-    }
-
-    const name = "Manager";
-    try {
-      return await this.createStaff(merchantId, {
-        name,
-        roleId: managerRole.id,
-        pin: DEFAULT_MANAGER_PIN,
-        loginHome: "panel",
-      });
-    } catch (error) {
-      console.warn(
-        `[staff] Default manager provisioning failed for merchant ${merchantId}:`,
-        error instanceof Error ? error.message : error
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Ensure a Manager staff row exists and has the default POS PIN (0000) when unset.
-   * Repairs older merchants that had staff before auto-provisioning existed.
-   */
-  static async ensureManagerPosPin(merchantId: string) {
-    await this.ensureDefaultRoles(merchantId);
-    const db = getDb();
-    const managerRole = await db.query.merchantRoles.findFirst({
-      where: and(
-        eq(schema.merchantRoles.merchantId, merchantId),
-        sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
-      ),
-    });
-    if (!managerRole) return;
-
-    let staffRows = await db.query.merchantStaff.findMany({
-      where: eq(schema.merchantStaff.merchantId, merchantId),
-    });
-    const active = staffRows.filter((s) => s.isActive);
-    if (!active.length) {
-      await this.ensureDefaultManagerStaff(merchantId, "Manager");
-      return;
-    }
-
-    let managerStaff = active.find((s) => s.roleId === managerRole.id);
-    if (!managerStaff) {
-      try {
-        await this.createStaff(merchantId, {
-          name: "Manager",
-          roleId: managerRole.id,
-          pin: DEFAULT_MANAGER_PIN,
-          loginHome: "panel",
-        });
-        staffRows = await db.query.merchantStaff.findMany({
-          where: eq(schema.merchantStaff.merchantId, merchantId),
-        });
-        managerStaff = staffRows.find((s) => s.isActive && s.roleId === managerRole.id);
-      } catch {
-        /* staff limit — only repair if the shop has no PINs at all */
-        if (active.some((s) => s.pinHash)) return;
-        managerStaff = active.length === 1 ? active[0] : undefined;
-      }
-    }
-
-    if (!managerStaff) return;
-
-    const hasDefaultPin =
-      !!managerStaff.pinHash &&
-      (await AuthService.comparePassword(DEFAULT_MANAGER_PIN, managerStaff.pinHash));
-    if (hasDefaultPin) {
-      if (managerStaff.pinDisplay !== DEFAULT_MANAGER_PIN) {
-        await db
-          .update(schema.merchantStaff)
-          .set({ pinDisplay: DEFAULT_MANAGER_PIN, updatedAt: new Date() })
-          .where(eq(schema.merchantStaff.id, managerStaff.id));
-      }
-      return;
-    }
-
-    const shouldRepairPin =
-      !managerStaff.pinHash ||
-      managerStaff.pinDisplay === DEFAULT_MANAGER_PIN ||
-      !active.some((s) => s.pinHash);
-    if (!shouldRepairPin) return;
-
-    try {
-      await this.assignStaffPin(merchantId, managerStaff.id, DEFAULT_MANAGER_PIN);
-    } catch (error) {
-      console.warn(
-        `[staff] Default manager PIN repair failed for merchant ${merchantId}:`,
-        error instanceof Error ? error.message : error
-      );
-    }
-  }
-
-  private static normalizePinInput(pin: unknown): string {
-    return String(pin ?? "")
-      .trim()
-      .replace(/\D/g, "");
-  }
-
-  private static async assignStaffPin(merchantId: string, staffId: string, pin: string) {
-    const db = getDb();
-    await this.assertPinUnique(merchantId, pin, staffId);
-    await db
-      .update(schema.merchantStaff)
-      .set({
-        pinHash: await AuthService.hashPassword(pin),
-        pinDisplay: pin,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId))
-      );
   }
 
   /** Re-seed the Storekeeper system role if it was deleted or stripped. */
@@ -277,46 +120,41 @@ export class StaffService {
     }
   }
 
-  /** Remove deprecated gandola system role; reassign staff to Manager when possible. */
-  static async removeGandolaSystemRole(merchantId: string) {
+  /** Re-seed the gandola system role if it was deleted or stripped. */
+  static async ensureGandolaSystemRole(merchantId: string) {
     const db = getDb();
+    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "gandola");
+    if (!template) return;
     const roles = await db.query.merchantRoles.findMany({
       where: eq(schema.merchantRoles.merchantId, merchantId),
     });
-    const gandola = roles.find((r) => r.name.trim().toLowerCase() === "gandola");
-    if (!gandola) return;
-    const manager = roles.find((r) => r.name.trim().toLowerCase() === "manager");
-    if (manager) {
-      await db
-        .update(schema.merchantStaff)
-        .set({ roleId: manager.id, updatedAt: new Date() })
-        .where(
-          and(
-            eq(schema.merchantStaff.merchantId, merchantId),
-            eq(schema.merchantStaff.roleId, gandola.id)
-          )
-        );
+    const existing = roles.find((r) => r.name.trim().toLowerCase() === "gandola");
+    if (!existing) {
+      await db.insert(schema.merchantRoles).values({
+        merchantId,
+        name: template.name,
+        permissions: encodePermissions(template.permissions),
+        isSystem: template.isSystem,
+        sortOrder: template.sortOrder,
+      });
+      return;
     }
-    await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, gandola.id));
-  }
-
-  /** Grant GANDOLA_PURGE to system Manager roles (cash order purge via search 5× tap). */
-  static async ensureManagerGandolaPurge(merchantId: string) {
-    const db = getDb();
-    const roles = await db.query.merchantRoles.findMany({
-      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
-    });
-    for (const role of roles) {
-      if (!role.name.trim().toLowerCase().startsWith("manager")) continue;
-      const perms = parsePermissions(role.permissions);
-      if (perms.includes("GANDOLA_PURGE")) continue;
+    const expected = encodePermissions(template.permissions);
+    if (
+      !existing.isSystem ||
+      existing.sortOrder !== template.sortOrder ||
+      existing.permissions !== expected
+    ) {
       await db
         .update(schema.merchantRoles)
         .set({
-          permissions: encodePermissions([...perms, "GANDOLA_PURGE"]),
+          name: template.name,
+          permissions: expected,
+          isSystem: true,
+          sortOrder: template.sortOrder,
           updatedAt: new Date(),
         })
-        .where(eq(schema.merchantRoles.id, role.id));
+        .where(eq(schema.merchantRoles.id, existing.id));
     }
   }
 
@@ -347,10 +185,26 @@ export class StaffService {
   }
 
   /**
-   * Align floor-waiter login home. Do not rewrite role permissions — merchants
-   * can grant extra access on Users & roles and those checkboxes must persist.
+   * Strip full panel / company sales from system Waiter templates.
+   * Menu, orders, and own-sales EOD (END_OF_DAY) stay as assigned on the Roles page.
    */
   static async enforceWaiterFloorRestrictions(merchantId: string) {
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
+    });
+    for (const role of roles) {
+      const kind = waiterSystemKind(role.name);
+      if (!kind) continue;
+      const blocked = waiterBlockedPermissions(kind);
+      const perms = parsePermissions(role.permissions);
+      const next = perms.filter((p) => !blocked.includes(p));
+      if (next.length === perms.length) continue;
+      await db
+        .update(schema.merchantRoles)
+        .set({ permissions: encodePermissions(next), updatedAt: new Date() })
+        .where(eq(schema.merchantRoles.id, role.id));
+    }
     await this.syncFloorWaiterLoginHome(merchantId);
   }
 
@@ -396,55 +250,6 @@ export class StaffService {
     }
   }
 
-  /** Cashiers and other register-first staff should land on WebPOS after email login. */
-  static async syncCashierLoginHome(merchantId: string) {
-    const db = getDb();
-    const staffRows = await db.query.merchantStaff.findMany({
-      where: eq(schema.merchantStaff.merchantId, merchantId),
-    });
-    const roles = await db.query.merchantRoles.findMany({
-      where: eq(schema.merchantRoles.merchantId, merchantId),
-    });
-    const roleById = new Map(roles.map((r) => [r.id, r]));
-    for (const member of staffRows) {
-      const role = roleById.get(member.roleId);
-      if (!role) continue;
-      const perms = applyRolePermissionPolicy(role.name, parsePermissions(role.permissions));
-      const isCashierRole = role.name.trim().toLowerCase() === "cashier";
-      const hasPos = perms.includes("USE_WEBPOS") || perms.includes("MANAGE_TABLES");
-      const hasBackend =
-        perms.includes("ACCESS_PANEL") ||
-        perms.includes("MANAGE_PRODUCTS") ||
-        perms.includes("MANAGE_INVENTORY");
-      if (!isCashierRole && !(hasPos && !hasBackend)) continue;
-      if (normalizeStaffLoginHome(member.loginHome) === "pos") continue;
-      await db
-        .update(schema.merchantStaff)
-        .set({ loginHome: "pos", updatedAt: new Date() })
-        .where(eq(schema.merchantStaff.id, member.id));
-    }
-  }
-
-  /** Restore Cashier system role permissions (USE_WEBPOS, etc.) if stripped in older installs. */
-  static async ensureCashierRolePermissions(merchantId: string) {
-    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "cashier");
-    if (!template) return;
-    const db = getDb();
-    const role = await db.query.merchantRoles.findFirst({
-      where: and(
-        eq(schema.merchantRoles.merchantId, merchantId),
-        sql`lower(trim(${schema.merchantRoles.name})) = 'cashier'`
-      ),
-    });
-    if (!role) return;
-    const expected = encodePermissions(template.permissions);
-    if (role.permissions === expected) return;
-    await db
-      .update(schema.merchantRoles)
-      .set({ permissions: expected, updatedAt: new Date() })
-      .where(eq(schema.merchantRoles.id, role.id));
-  }
-
   /**
    * Strip full panel access from the system Storekeeper role.
    * Mobile intake only — inventory managers should use a different role.
@@ -483,7 +288,6 @@ export class StaffService {
     roleId: string,
     updates: { name?: string; permissions?: Permission[] }
   ) {
-    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const role = await db.query.merchantRoles.findFirst({
       where: and(eq(schema.merchantRoles.id, roleId), eq(schema.merchantRoles.merchantId, merchantId)),
@@ -497,7 +301,7 @@ export class StaffService {
       patch.name = name;
     }
     if (updates.permissions !== undefined) {
-      patch.permissions = encodePermissions(normalizePermissions(updates.permissions));
+      patch.permissions = encodePermissions(updates.permissions);
     }
 
     const [row] = await db
@@ -515,7 +319,6 @@ export class StaffService {
   }
 
   static async createRole(merchantId: string, name: string, permissions: Permission[]) {
-    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const trimmed = name.trim().slice(0, 100);
     if (!trimmed) throw new Error("Role name is required");
@@ -525,7 +328,7 @@ export class StaffService {
       .values({
         merchantId,
         name: trimmed,
-        permissions: encodePermissions(normalizePermissions(permissions)),
+        permissions: encodePermissions(permissions),
         isSystem: false,
         sortOrder: 100,
       })
@@ -534,7 +337,6 @@ export class StaffService {
   }
 
   static async deleteRole(merchantId: string, roleId: string) {
-    invalidateDefaultRolesCache(merchantId);
     const db = getDb();
     const role = await db.query.merchantRoles.findFirst({
       where: and(eq(schema.merchantRoles.id, roleId), eq(schema.merchantRoles.merchantId, merchantId)),
@@ -550,22 +352,9 @@ export class StaffService {
     await db.delete(schema.merchantRoles).where(eq(schema.merchantRoles.id, roleId));
   }
 
-  /** Re-create the default manager when a merchant has zero staff (recovery after accidental deletes). */
-  static async ensureMerchantHasStaff(merchantId: string) {
-    const db = getDb();
-    const existingStaff = await db.query.merchantStaff.findFirst({
-      where: eq(schema.merchantStaff.merchantId, merchantId),
-      columns: { id: true },
-    });
-    if (!existingStaff) {
-      await this.ensureDefaultManagerStaff(merchantId, "Manager");
-    }
-    await this.ensureManagerPosPin(merchantId);
-  }
-
   static async listStaff(merchantId: string) {
+    await this.ensureDefaultRoles(merchantId);
     const db = getDb();
-    await this.ensureMerchantHasStaff(merchantId);
     const staff = await db.query.merchantStaff.findMany({
       where: eq(schema.merchantStaff.merchantId, merchantId),
       orderBy: asc(schema.merchantStaff.name),
@@ -824,20 +613,6 @@ export class StaffService {
 
   static async deleteStaff(merchantId: string, staffId: string) {
     const db = getDb();
-    const staff = await db.query.merchantStaff.findFirst({
-      where: and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId)),
-      columns: { id: true },
-    });
-    if (!staff) throw new Error("Staff member not found");
-
-    const [{ total }] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(schema.merchantStaff)
-      .where(eq(schema.merchantStaff.merchantId, merchantId));
-    if ((total ?? 0) <= 1) {
-      throw new Error("Cannot remove the last user. At least one staff account must remain.");
-    }
-
     await db
       .delete(schema.merchantStaff)
       .where(and(eq(schema.merchantStaff.id, staffId), eq(schema.merchantStaff.merchantId, merchantId)));
@@ -845,8 +620,7 @@ export class StaffService {
 
   static async verifyPin(merchantId: string, pin: string) {
     const db = getDb();
-    await this.ensureManagerPosPin(merchantId);
-    const normalized = this.normalizePinInput(pin);
+    const normalized = pin.trim();
     if (!normalized) throw new Error("PIN is required");
     if (normalized.length < 4 || normalized.length > 8) {
       throw new Error("PIN must be 4-8 digits");
@@ -888,7 +662,6 @@ export class StaffService {
       name: staff.name,
       roleName: role?.name || "Staff",
       permissions,
-      authEpoch: await AuthService.getMerchantAuthEpoch(merchantId),
     });
     return {
       id: staff.id,

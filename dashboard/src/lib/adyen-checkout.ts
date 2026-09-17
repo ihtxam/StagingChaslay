@@ -5,6 +5,8 @@ export type AdyenPaymentSession = {
   environment?: string;
 };
 
+export type AdyenCredentialSource = 'merchant' | 'platform';
+
 export type MountAdyenDropinOptions = {
   session: AdyenPaymentSession;
   container: HTMLElement;
@@ -12,6 +14,8 @@ export type MountAdyenDropinOptions = {
   onError?: (err: { message?: string }) => void;
   locale?: string;
   countryCode?: string;
+  /** Merchant shop / gift cards use Settings → Payments; billing uses Superadmin platform Adyen. */
+  credentialSource?: AdyenCredentialSource;
 };
 
 /** Normalize checkout API payload (camelCase or snake_case). */
@@ -26,13 +30,23 @@ export function normalizeAdyenPaymentSession(raw: unknown): AdyenPaymentSession 
   return { id, sessionData, clientKey, environment };
 }
 
-function explainAdyenUnauthorized(raw: string, context?: 'dropin' | 'checkout'): string {
+function explainAdyenUnauthorized(
+  raw: string,
+  context?: 'dropin' | 'checkout',
+  source: AdyenCredentialSource = 'platform'
+): string {
   const envHint = raw.includes('live') ? 'LIVE' : 'TEST';
   const keyPrefix = envHint === 'LIVE' ? 'live_' : 'test_';
   const where =
     context === 'dropin'
       ? 'Adyen Drop-in could not load the payment session (Unauthorized).'
       : 'Adyen checkout was rejected (Unauthorized).';
+  if (source === 'merchant') {
+    return (
+      `${where} The merchant API key, merchant account, and client key must all belong to the same ${envHint} Adyen account. ` +
+      `In Settings → Payments: use the Web service API key (AQE…), merchant account name, and client key (${keyPrefix}…).`
+    );
+  }
   return (
     `${where} The platform API key, merchant account, and client key must all belong to the same ${envHint} Adyen account. ` +
     `In Superadmin → Settings → Payment (Adyen): use the Web service API key (AQE…), merchant account name, and client key (${keyPrefix}…). ` +
@@ -40,7 +54,11 @@ function explainAdyenUnauthorized(raw: string, context?: 'dropin' | 'checkout'):
   );
 }
 
-export function formatAdyenError(err: unknown, context?: 'dropin' | 'checkout'): string {
+export function formatAdyenError(
+  err: unknown,
+  context?: 'dropin' | 'checkout',
+  source: AdyenCredentialSource = 'platform'
+): string {
   let raw = '';
   if (err instanceof Error) raw = err.message;
   else if (typeof err === 'string') raw = err;
@@ -62,7 +80,7 @@ export function formatAdyenError(err: unknown, context?: 'dropin' | 'checkout'):
   }
 
   if (/unauthorized/i.test(raw) || /HTTP Status Response - Unauthorized/i.test(raw)) {
-    return explainAdyenUnauthorized(raw, context);
+    return explainAdyenUnauthorized(raw, context, source);
   }
   return raw;
 }
@@ -101,10 +119,15 @@ export async function mountAdyenDropin({
   onError,
   locale = 'de-CH',
   countryCode = 'CH',
+  credentialSource = 'platform',
 }: MountAdyenDropinOptions): Promise<void> {
   const clientKey = session.clientKey?.trim();
   if (!clientKey) {
-    throw new Error('Missing Adyen client key. Set it in Superadmin → Settings → Payment (Adyen).');
+    throw new Error(
+      credentialSource === 'merchant'
+        ? 'Missing Adyen client key. Set it in Settings → Payments.'
+        : 'Missing Adyen client key. Set it in Superadmin → Settings → Payment (Adyen).'
+    );
   }
   if (clientKey.startsWith('AQE') || (!clientKey.startsWith('test_') && !clientKey.startsWith('live_'))) {
     throw new Error(
@@ -133,18 +156,18 @@ export async function mountAdyenDropin({
         onError?.({ message: `Payment failed (${result?.resultCode || 'unknown'})` });
       },
       onError: (error: unknown) => {
-        onError?.({ message: formatAdyenError(error, 'dropin') });
+        onError?.({ message: formatAdyenError(error, 'dropin', credentialSource) });
       },
     });
   } catch (err) {
     throw new Error(
-      `Adyen Checkout init failed (${environment}, key ${clientKey.slice(0, 8)}…): ${formatAdyenError(err, 'dropin')}`
+      `Adyen Checkout init failed (${environment}, key ${clientKey.slice(0, 8)}…): ${formatAdyenError(err, 'dropin', credentialSource)}`
     );
   }
 
   try {
     checkout.create('dropin').mount(container);
   } catch (err) {
-    throw new Error(`Adyen Drop-in mount failed: ${formatAdyenError(err, 'dropin')}`);
+    throw new Error(`Adyen Drop-in mount failed: ${formatAdyenError(err, 'dropin', credentialSource)}`);
   }
 }

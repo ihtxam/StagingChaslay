@@ -99,6 +99,8 @@ type Props = {
   requireTableForDineIn?: boolean;
   /** Hold current cart without kitchen send (retail / direct sale). */
   onHoldOrder?: () => void;
+  /** Print weighed-order sticker with scannable barcode (retail / butcher). */
+  onPrintOrderLabel?: () => void;
   /** Move whole open table order to another table. */
   onMoveTable?: () => void;
   /** Move selected cart line to another table. */
@@ -247,6 +249,7 @@ export default function WebPosCartPanel({
   tablesEnabled = true,
   requireTableForDineIn = true,
   onHoldOrder,
+  onPrintOrderLabel,
   onMoveTable,
   onMoveDish,
   onBillDiscount,
@@ -679,6 +682,21 @@ export default function WebPosCartPanel({
                   }}
                 >
                   {t('webPosHoldOrder')}
+                </button>
+              ) : null}
+              {onPrintOrderLabel ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={cartMenuItemClass}
+                  disabled={!hasItems || busy}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onPrintOrderLabel();
+                  }}
+                >
+                  <Printer size={18} className="shrink-0 text-stone-500" />
+                  {t('webPosPrintOrderLabel')}
                 </button>
               ) : null}
               {onMoveTable ? (
@@ -1121,8 +1139,12 @@ export default function WebPosCartPanel({
           className={`shrink-0 grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
             isRetail
               ? isPage && onBack
-                ? 'grid-cols-[auto_1fr_1fr]'
-                : 'grid-cols-2'
+                ? onPrintOrderLabel
+                  ? 'grid-cols-[auto_1fr_1fr_1fr]'
+                  : 'grid-cols-[auto_1fr_1fr]'
+                : onPrintOrderLabel
+                  ? 'grid-cols-3'
+                  : 'grid-cols-2'
               : isPage && onBack
                 ? 'grid-cols-[auto_1fr_1fr_1fr]'
                 : 'grid-cols-3'
@@ -1141,6 +1163,17 @@ export default function WebPosCartPanel({
           ) : null}
           {isRetail ? (
             <>
+              {onPrintOrderLabel ? (
+                <button
+                  type="button"
+                  disabled={!hasItems || busy}
+                  onClick={onPrintOrderLabel}
+                  className={`${actionBtn()} inline-flex items-center justify-center gap-1.5 bg-stone-200 text-stone-800 hover:bg-stone-300`}
+                >
+                  <Printer size={actionIcon} aria-hidden />
+                  <span className="truncate text-xs sm:text-sm">{t('webPosPrintOrderLabel')}</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={!hasItems || busy}

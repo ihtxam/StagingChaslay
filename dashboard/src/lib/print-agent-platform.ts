@@ -8,6 +8,7 @@ import { compareAgentVersion, isBridgeVersion } from '@/lib/print-agent';
 const PRINT_AGENT_SETUP_FILE = 'reborn-print-agent-setup.exe';
 const PRINT_AGENT_MANIFEST = 'reborn-print-agent.json';
 const PRINT_BRIDGE_MANIFEST = 'reborn-print-bridge.json';
+const PRINT_BRIDGE_PRINT_MANIFEST = 'reborn-print-bridge-print.json';
 
 export type DownloadManifest = {
   success?: boolean;
@@ -42,6 +43,14 @@ export function printBridgeDownloadUrl(): string {
   return `${api}/downloads/reborn-print-bridge.apk`;
 }
 
+export function printBridgePrintDownloadUrl(): string {
+  const api = apiOrigin();
+  if (!api || api.startsWith('/')) {
+    return '/downloads/reborn-print-bridge-print.apk';
+  }
+  return `${api}/downloads/reborn-print-bridge-print.apk`;
+}
+
 /** Open Bridge APK install on Android (package installer) instead of saving duplicate files. */
 export function openPrintBridgeApkInstall(url?: string): void {
   if (typeof window === 'undefined') return;
@@ -71,6 +80,14 @@ export function printBridgeManifestUrl(): string {
     return `/downloads/${PRINT_BRIDGE_MANIFEST}`;
   }
   return `${api}/downloads/${PRINT_BRIDGE_MANIFEST}`;
+}
+
+export function printBridgePrintManifestUrl(): string {
+  const api = apiOrigin();
+  if (!api || api.startsWith('/')) {
+    return `/downloads/${PRINT_BRIDGE_PRINT_MANIFEST}`;
+  }
+  return `${api}/downloads/${PRINT_BRIDGE_PRINT_MANIFEST}`;
 }
 
 export function printAgentManifestUrl(): string {
@@ -117,6 +134,13 @@ export async function fetchPrintBridgeManifest(): Promise<DownloadManifest> {
   return fetchDownloadManifest(
     printBridgeManifestUrl(),
     'Bridge Reborn download is not available on this server yet.'
+  );
+}
+
+export async function fetchPrintBridgePrintManifest(): Promise<DownloadManifest> {
+  return fetchDownloadManifest(
+    printBridgePrintManifestUrl(),
+    'Bridge Reborn (print only) download is not available on this server yet.'
   );
 }
 

@@ -89,6 +89,98 @@ env_get() {
   grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//' || true
 }
 
+env_set_key() {
+  # env_set_key KEY VALUE file — upsert one KEY=VALUE line (preserves other lines)
+  local key="$1" value="$2" file="$3"
+  [[ -n "$key" && -n "$file" ]] || return 0
+  python3 - "$key" "$value" "$file" <<'PY'
+import os, re, sys
+key, value, path = sys.argv[1:4]
+lines = []
+if os.path.isfile(path):
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+out, seen = [], False
+for line in lines:
+    matched = re.match(r"^([A-Z0-9_]+)=", line)
+    if matched and matched.group(1) == key:
+        out.append(f"{key}={value}")
+        seen = True
+    else:
+        out.append(line)
+if not seen:
+    out.append(f"{key}={value}")
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(out).rstrip() + "\n")
+PY
+}
+
+resolve_adyen_sdk_config() {
+  # Resolve Adyen POS Mobile SDK keys from secrets file and/or shell env.
+  # ADYEN_SDK_API_KEY_TEST is accepted as an alias for the test key.
+  local shell_key="${ADYEN_SDK_API_KEY:-}"
+  local shell_test="${ADYEN_SDK_API_KEY_TEST:-}"
+  local shell_live="${ADYEN_SDK_API_KEY_LIVE:-}"
+  local shell_env="${ADYEN_SDK_ENV:-}"
+
+  ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY_TEST "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$shell_key"
+  [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$shell_test"
+
+  ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] || ADYEN_SDK_API_KEY_LIVE="$shell_live"
+
+  ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$ENV_FILE")"
+  [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="$shell_env"
+
+  # Optional sidecar file for SDK keys (easier to edit on VPS without touching main env):
+  # /root/chaslay-secrets/adyen-sdk.env
+  local adyen_sidecar="${SECRETS_DIR}/adyen-sdk.env"
+  if [[ -f "$adyen_sidecar" ]]; then
+    [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_API_KEY" ]] || ADYEN_SDK_API_KEY="$(env_get ADYEN_SDK_API_KEY_TEST "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] || ADYEN_SDK_API_KEY_LIVE="$(env_get ADYEN_SDK_API_KEY_LIVE "$adyen_sidecar")"
+    [[ -n "$ADYEN_SDK_ENV" ]] || ADYEN_SDK_ENV="$(env_get ADYEN_SDK_ENV "$adyen_sidecar")"
+  fi
+
+  if [[ -z "$ADYEN_SDK_ENV" ]]; then
+    if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
+      ADYEN_SDK_ENV="test"
+    elif [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      ADYEN_SDK_ENV="live"
+    else
+      ADYEN_SDK_ENV="test"
+    fi
+  elif [[ -n "$ADYEN_SDK_API_KEY_LIVE" && -z "$ADYEN_SDK_API_KEY" && "$ADYEN_SDK_ENV" == "test" ]]; then
+    # Stale test env with live-only keys must not produce a print-only APK.
+    ADYEN_SDK_ENV="live"
+  fi
+}
+
+persist_adyen_sdk_secrets() {
+  # Persist resolved keys into $ENV_FILE when supplied via shell env (one-time bootstrap).
+  [[ -f "$ENV_FILE" ]] || return 0
+  if [[ -n "$ADYEN_SDK_API_KEY" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY "$ENV_FILE")" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY_TEST "$ENV_FILE")" ]]; then
+    if [[ -n "${ADYEN_SDK_API_KEY_TEST:-}" ]]; then
+      env_set_key ADYEN_SDK_API_KEY_TEST "$ADYEN_SDK_API_KEY" "$ENV_FILE"
+    else
+      env_set_key ADYEN_SDK_API_KEY "$ADYEN_SDK_API_KEY" "$ENV_FILE"
+    fi
+    echo "Persisted Adyen test SDK key to $ENV_FILE"
+  fi
+  if [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]] \
+    && [[ -z "$(env_get ADYEN_SDK_API_KEY_LIVE "$ENV_FILE")" ]]; then
+    env_set_key ADYEN_SDK_API_KEY_LIVE "$ADYEN_SDK_API_KEY_LIVE" "$ENV_FILE"
+    echo "Persisted Adyen live SDK key to $ENV_FILE"
+  fi
+  if [[ -n "$ADYEN_SDK_ENV" ]] && [[ -z "$(env_get ADYEN_SDK_ENV "$ENV_FILE")" ]]; then
+    env_set_key ADYEN_SDK_ENV "$ADYEN_SDK_ENV" "$ENV_FILE"
+  fi
+}
+
 ensure_env_production() {
   local jwt dbpass adminpass legacy_jwt legacy_admin legacy_dburl
 
@@ -517,12 +609,31 @@ if [[ ! -f "$SETUP_EXE" ]] || [[ "$(wc -c < "$SETUP_EXE" | tr -d " ")" -lt 10000
   echo "WARNING: $SETUP_EXE missing or too small - Windows will report a corrupted download"
 fi
 
-echo "=== Build Print Bridge Android APK ==="
+echo "=== Build Print Bridge Android APKs (print + Tap to Pay) ==="
 BRIDGE_APK="$DOWNLOADS_DIR/reborn-print-bridge.apk"
+BRIDGE_PRINT_APK="$DOWNLOADS_DIR/reborn-print-bridge-print.apk"
 BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/build.gradle.kts" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
 [[ -n "$BRIDGE_VERSION" ]] || BRIDGE_VERSION="0.0.0"
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  BRIDGE_LOCAL_PROPS="$REPO_DIR/print-agent-android/local.properties"
+  resolve_adyen_sdk_config
+  persist_adyen_sdk_secrets
+  {
+    echo "adyenEnv=${ADYEN_SDK_ENV}"
+    if [[ -n "$ADYEN_SDK_API_KEY" ]]; then
+      echo "adyenSdkApiKey=${ADYEN_SDK_API_KEY}"
+    fi
+    if [[ -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      echo "adyenSdkApiKeyLive=${ADYEN_SDK_API_KEY_LIVE}"
+    fi
+  } > "$BRIDGE_LOCAL_PROPS"
+  if [[ -n "$ADYEN_SDK_API_KEY" || -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+    echo "Adyen SDK keys present — Tap to Pay APK will be built"
+  else
+    echo "WARNING: No Adyen SDK keys in $ENV_FILE (ADYEN_SDK_API_KEY / ADYEN_SDK_API_KEY_TEST / ADYEN_SDK_API_KEY_LIVE) — APK will be print-only (no Tap to Pay)"
+    echo "  Add POS Mobile SDK keys from Adyen Customer Area and redeploy."
+  fi
   if docker run --rm \
     -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
     -e "GRADLE_USER_HOME=/tmp/gradle-home" \
@@ -531,7 +642,7 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
-      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.workers.max=1 -Xmx2048m -XX:MaxMetaspaceSize=512m"
       rm -rf /project/.gradle /project/app/build /tmp/gradle-home /tmp/gradle-project-cache
       mkdir -p /opt/android-sdk/.android /tmp/gradle-home /tmp/gradle-project-cache
       if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
@@ -543,14 +654,18 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
       fi
       chmod +x ./gradlew
       ./gradlew --stop 2>/dev/null || true
-      ./gradlew assembleRelease --no-daemon --no-build-cache \
+      ./gradlew assemblePrintRelease assembleTapToPayRelease --no-daemon --no-build-cache \
         -g /tmp/gradle-home \
         --project-cache-dir=/tmp/gradle-project-cache
-      APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
-      test -n "$APK"
-      cp -f "$APK" /out/reborn-print-bridge.apk
+      PRINT_APK="$(find app/build/outputs/apk/print/release -name "*.apk" | head -1)"
+      TTP_APK="$(find app/build/outputs/apk/tapToPay/release -name "*.apk" | head -1)"
+      test -n "$PRINT_APK"
+      test -n "$TTP_APK"
+      cp -f "$PRINT_APK" /out/reborn-print-bridge-print.apk
+      cp -f "$TTP_APK" /out/reborn-print-bridge.apk
+      head -c 2 /out/reborn-print-bridge-print.apk | grep -q PK
       head -c 2 /out/reborn-print-bridge.apk | grep -q PK
-      ls -la /out/reborn-print-bridge.apk
+      ls -la /out/reborn-print-bridge*.apk
     '; then
     printf '%s\n' \
       "{" \
@@ -559,9 +674,23 @@ if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
       "  \"apkFile\": \"reborn-print-bridge.apk\"," \
       "  \"builtAt\": \"${BUILT_AT}\"," \
       "  \"platform\": \"android\"," \
+      "  \"edition\": \"tapToPay\"," \
+      "  \"hasTapToPay\": true," \
       "  \"signed\": false" \
       "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
+    printf '%s\n' \
+      "{" \
+      "  \"name\": \"reborn-print-bridge-print\"," \
+      "  \"version\": \"${BRIDGE_VERSION}\"," \
+      "  \"apkFile\": \"reborn-print-bridge-print.apk\"," \
+      "  \"builtAt\": \"${BUILT_AT}\"," \
+      "  \"platform\": \"android\"," \
+      "  \"edition\": \"print\"," \
+      "  \"hasTapToPay\": false," \
+      "  \"signed\": false" \
+      "}" > "$DOWNLOADS_DIR/reborn-print-bridge-print.json"
     echo "Print Bridge APK ready: $BRIDGE_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_APK" | tr -d " ") bytes)"
+    echo "Print-only Bridge APK ready: $BRIDGE_PRINT_APK v${BRIDGE_VERSION} ($(wc -c < "$BRIDGE_PRINT_APK" | tr -d " ") bytes)"
     # Verify baked-in APK version matches build.gradle (manifest JSON alone is not enough).
     APK_VERSION="$(
       python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
@@ -588,10 +717,19 @@ PY
       echo "ERROR: APK versionName=$APK_VERSION but build.gradle has $BRIDGE_VERSION"
       exit 1
     fi
+    if [[ -n "$ADYEN_SDK_API_KEY" || -n "$ADYEN_SDK_API_KEY_LIVE" ]]; then
+      APK_BYTES="$(wc -c < "$BRIDGE_APK" | tr -d " ")"
+      if [[ "$APK_BYTES" -lt 10000000 ]]; then
+        echo "ERROR: Adyen SDK keys were set but APK is only ${APK_BYTES} bytes (expected >10MB with Tap to Pay bundled)."
+        echo "  Check print-agent-android/local.properties adyenEnv matches your key type (live vs test)."
+        exit 1
+      fi
+      echo "Tap-to-Pay APK verified: ${APK_BYTES} bytes"
+    fi
   else
     echo "WARNING: Print Bridge APK build failed. Android download will 404 until rebuilt."
-    echo "  Manual: cd print-agent-android && ./gradlew assembleRelease"
-    echo "  Then copy app/build/outputs/apk/release/*.apk to $BRIDGE_APK"
+    echo "  Manual: cd print-agent-android && ./gradlew assemblePrintRelease assembleTapToPayRelease"
+    echo "  Then copy app/build/outputs/apk/*/release/*.apk to $DOWNLOADS_DIR/"
     if [[ -f "$BRIDGE_APK" ]]; then
       STALE_APK_VERSION="$(
         python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
@@ -654,6 +792,9 @@ PY
 fi
 if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
   echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"
+fi
+if [[ ! -f "$BRIDGE_PRINT_APK" ]] || ! head -c 2 "$BRIDGE_PRINT_APK" | grep -q PK; then
+  echo "WARNING: $BRIDGE_PRINT_APK missing or not a valid APK (expected PK zip header)"
 fi
 
 compose_project_name() {
@@ -958,6 +1099,15 @@ if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; t
   echo "WARNING: print-bridge download is not a valid APK (expected PK / >100KB) or not published yet"
 else
   echo "print-bridge download OK (PK zip/APK)"
+fi
+BRIDGE_PRINT_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-bridge-print.apk" || true)"
+BRIDGE_PRINT_LEN="$(printf '%s' "$BRIDGE_PRINT_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
+BRIDGE_PRINT_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-print-bridge-print.apk" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+echo "print-bridge-print download: Content-Length=${BRIDGE_PRINT_LEN:-?} magic=${BRIDGE_PRINT_MAGIC:-?}"
+if [[ "${BRIDGE_PRINT_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_PRINT_LEN:-0}" -lt 100000 ]]; then
+  echo "WARNING: print-only bridge download is not a valid APK (expected PK / >100KB) or not published yet"
+else
+  echo "print-only bridge download OK (PK zip/APK)"
 fi
 echo
 

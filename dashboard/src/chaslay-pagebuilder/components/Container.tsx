@@ -4,7 +4,6 @@
 import React from 'react';
 import { useNode, Element } from '@craftjs/core';
 import { ContainerProps } from '@/chaslay-pagebuilder/types/homepage-builder';
-import { useStorefront } from '../StorefrontContext';
 import { Label } from '@/chaslay-pagebuilder/ui/label';
 import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/chaslay-pagebuilder/ui/select';
@@ -196,7 +195,6 @@ export const RootContainer: React.FC<ContainerProps> = (props) => {
   const {
     connectors: { connect },
   } = useNode();
-  const { isStorefront } = useStorefront();
 
   return (
     <div
@@ -205,11 +203,7 @@ export const RootContainer: React.FC<ContainerProps> = (props) => {
       }}
       style={{
         width: '100%',
-        minHeight: isStorefront
-          ? 0
-          : Number(props.minHeight) === 0
-            ? 0
-            : '100vh',
+        minHeight: Number(props.minHeight) === 0 ? 0 : '100vh',
         background: props.background || '#ffffff',
       }}
     >

@@ -10,7 +10,6 @@ import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
 import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
-import { useStorefrontHours } from '../utils/use-storefront-hours';
 
 export interface HoursClassicProps {
   title?: string;
@@ -47,19 +46,10 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
   };
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
-  const { tr, trText } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
-  const liveHours = useStorefrontHours();
-  const rows = liveHours.length
-    ? liveHours
-    : hours.map((item, dayIndex) => ({
-        day: item.day,
-        time: item.open ? item.time : trText('Closed'),
-        open: item.open,
-        dayIndex,
-        isToday: dayIndex === (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1),
-      }));
-  const todayRow = rows.find((r) => r.isToday) || rows[0];
+  const today = new Date().getDay();
+  const todayIndex = today === 0 ? 6 : today - 1;
 
   return (
     <section
@@ -81,21 +71,21 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
             <h2 style={{ fontSize: '36px', fontWeight: 700 }}>{tr('title')}</h2>
           </div>
           {mergedProps.showStatus && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 20px', borderRadius: '24px', backgroundColor: todayRow?.open ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 600 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 20px', borderRadius: '24px', backgroundColor: hours[todayIndex].open ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 600 }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#fff' }} />
-              {todayRow?.open ? trText('Open Now') : trText('Closed')}
+              {hours[todayIndex].open ? trText('Open Now') : trText('Closed')}
             </span>
           )}
         </div>
 
         <div style={{ backgroundColor: '#f8f9fa', borderRadius: '16px', overflow: 'hidden' }}>
-          {rows.map((item, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '18px 24px', borderBottom: i < rows.length - 1 ? '1px solid #e9ecef' : 'none', backgroundColor: item.isToday ? `${mergedProps.accentColor}15` : 'transparent' }}>
-              <span style={{ fontWeight: item.isToday ? 700 : 500 }}>
-                {liveHours.length ? item.day : trText(item.day)}
-                {item.isToday && <span style={{ marginLeft: '10px', fontSize: '12px', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '2px 10px', borderRadius: '12px' }}>{trText('Today')}</span>}
+          {hours.map((item, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '18px 24px', borderBottom: i < hours.length - 1 ? '1px solid #e9ecef' : 'none', backgroundColor: i === todayIndex ? `${mergedProps.accentColor}15` : 'transparent' }}>
+              <span style={{ fontWeight: i === todayIndex ? 700 : 500 }}>
+                {trText(item.day)}
+                {i === todayIndex && <span style={{ marginLeft: '10px', fontSize: '12px', backgroundColor: mergedProps.accentColor, color: '#fff', padding: '2px 10px', borderRadius: '12px' }}>{trText('Today')}</span>}
               </span>
-              <span style={{ color: item.open ? mergedProps.textColor : '#ef4444', fontWeight: item.open ? 400 : 600 }}>{liveHours.length ? item.time : trText(item.time)}</span>
+              <span style={{ color: item.open ? mergedProps.textColor : '#ef4444', fontWeight: item.open ? 400 : 600 }}>{trText(item.time)}</span>
             </div>
           ))}
         </div>

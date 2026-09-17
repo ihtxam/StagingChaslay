@@ -35,10 +35,21 @@ export class EditionEntitlementsService {
       columns: { businessCategory: true },
     });
     const module = normalizeBusinessModule(merchant?.businessCategory);
-    if (module === "retail" && !features.includes("pos_scale")) {
-      return [...features, "pos_scale"];
+    let next = features;
+    if (module === "retail" && !next.includes("pos_scale")) {
+      next = [...next, "pos_scale"];
     }
-    return features;
+    try {
+      const { readGiftCardAddonEnabled } = await import("@/lib/gift-card-addon");
+      const giftOn = await readGiftCardAddonEnabled(merchantId);
+      if (giftOn) {
+        if (!next.includes("gift_cards")) next = [...next, "gift_cards"];
+        if (!next.includes("pos_gift_cards")) next = [...next, "pos_gift_cards"];
+      }
+    } catch {
+      /* addon column optional on older schemas */
+    }
+    return next;
   }
 
   static async require(

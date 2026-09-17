@@ -17,7 +17,7 @@ import { relations, sql } from "drizzle-orm";
 import type { PosPrintSettings } from "../lib/pos-print-settings";
 import type { TableQrSettings } from "../lib/table-qr-settings";
 import type { KioskSettings } from "../lib/kiosk-settings";
-import type { CustomerDisplaySettings } from "../lib/customer-display-settings";
+import type { FiskalySettings, FiskalySignature } from "../lib/fiskaly-settings";
 
 // ============================================================================
 // SUPERADMIN & AUTHENTICATION
@@ -117,8 +117,6 @@ export const merchants = pgTable(
     address: text("address"),
     city: varchar("city", { length: 100 }),
     country: varchar("country", { length: 100 }),
-    /** Human support reference for DB lookup — e.g. CH-001, UK-042 */
-    supportCode: varchar("support_code", { length: 16 }),
     vatNumber: varchar("vat_number", { length: 50 }),
     vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("0"),
     // Channel-specific tax rates (%). Fall back to vatRate when null/0 unused.
@@ -189,11 +187,6 @@ export const merchants = pgTable(
     storeHours: json("store_hours").$type<Record<string, Record<string, Array<{ open: string; close: string }>>>>().default({}),
     shopLogoUrl: varchar("shop_logo_url", { length: 500 }),
     shopBannerUrl: varchar("shop_banner_url", { length: 500 }),
-    /**
-     * Global online-shop appearance / SEO:
-     * { brandColor, metaTitle: {en,fr,de,it}, metaDescription, gaMeasurementId, faviconUrl }
-     */
-    shopSiteSettings: json("shop_site_settings").$type<Record<string, unknown> | null>(),
     latitude: decimal("latitude", { precision: 10, scale: 7 }),
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     pickupEtaMinutes: integer("pickup_eta_minutes").default(25),
@@ -317,11 +310,6 @@ export const merchants = pgTable(
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
      */
     kioskSettings: json("kiosk_settings").$type<KioskSettings | null>(),
-    /**
-     * Customer-facing display (CDS) for dual-screen tills:
-     * { accessToken, promoSlides, slideIntervalSec, theme, enabled }
-     */
-    customerDisplaySettings: json("customer_display_settings").$type<CustomerDisplaySettings | null>(),
     /** Paid Just Eat / JET Connect order integration addon. */
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
@@ -411,6 +399,11 @@ export const merchants = pgTable(
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
     deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Fiskaly fiscal compliance (SIGN DE / SIGN FR):
+     * { enabled, environment, de: { apiKey, apiSecret, tssId, clientId, ... }, fr: { ... } }
+     */
+    fiskalySettings: json("fiskaly_settings").$type<FiskalySettings | null>(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
     /** Incremented to invalidate all merchant/staff JWTs and force re-login. */
     authEpoch: integer("auth_epoch").default(0).notNull(),
@@ -448,7 +441,6 @@ export const merchants = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("merchants_email_idx").on(table.email),
-    supportCodeIdx: uniqueIndex("merchants_support_code_idx").on(table.supportCode),
     statusIdx: index("merchants_status_idx").on(table.status),
     slugIdx: uniqueIndex("merchants_slug_idx").on(table.slug),
     subdomainIdx: uniqueIndex("merchants_subdomain_idx").on(table.subdomain),
@@ -1146,8 +1138,6 @@ export const products = pgTable(
       .$type<{ channels: string[] }>()
       .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
-    /** Product IDs suggested in online shop cart upsell slider */
-    similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1424,6 +1414,8 @@ export const orders = pgTable(
     paymentBreakdown: json("payment_breakdown").$type<
       Array<{ method: string; amount: number }> | null
     >(),
+    /** Fiskaly fiscal signature payload (DE KassenSichV QR / FR NF525). */
+    fiskalySignature: json("fiskaly_signature").$type<FiskalySignature | null>(),
   },
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
@@ -2161,7 +2153,6 @@ export type EmailSendType =
   | "password_reset"
   | "merchant_invite"
   | "platform_shop_order"
-  | "platform_shop_status"
   | "marketing_test"
   | "invoice"
   | "alert";
@@ -2610,15 +2601,6 @@ export const giftCardPurchases = pgTable(
     message: text("message"),
     paymentMethod: varchar("payment_method", { length: 20 }).default("card").notNull(),
     paymentStatus: varchar("payment_status", { length: 30 }).default("awaiting_payment").notNull(),
-    /** digital = email voucher with QR/barcode; physical = card shipped by post */
-    deliveryType: varchar("delivery_type", { length: 20 }).default("digital").notNull(),
-    shippingAddress: text("shipping_address"),
-    shippingZip: varchar("shipping_zip", { length: 20 }),
-    shippingCity: varchar("shipping_city", { length: 120 }),
-    shippingCountry: varchar("shipping_country", { length: 2 }).default("CH"),
-    /** pending_shipment | shipped | digital_sent */
-    fulfillmentStatus: varchar("fulfillment_status", { length: 30 }),
-    shippedAt: timestamp("shipped_at"),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     cardId: uuid("card_id").references(() => giftCards.id, { onDelete: "set null" }),
     fulfilledAt: timestamp("fulfilled_at"),
@@ -2764,8 +2746,6 @@ export const offers = pgTable(
     channels: json("channels").$type<string[]>().default([]).notNull(),
     categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
-    /** Empty = all POS users; otherwise only these staff see the offer on POS. */
-    staffIds: json("staff_ids").$type<string[]>().default([]).notNull(),
     scheduleMode: varchar("schedule_mode", { length: 20 }).default("always").notNull(),
     daysOfWeek: json("days_of_week").$type<string[]>().default([]).notNull(),
     timeStart: varchar("time_start", { length: 5 }),
@@ -3376,7 +3356,7 @@ export const emailSendLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "set null" }),
-    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | mailco | sendgrid
+    provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | sendgrid
     source: varchar("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
     emailType: varchar("email_type", { length: 50 }).notNull().default("general"),
     recipient: varchar("recipient", { length: 255 }).notNull(),
@@ -3479,8 +3459,9 @@ export const posCashMovements = pgTable(
   })
 );
 
+
 // ============================================================================
-// INVENTORY (storekeeper / stock units & categories)
+// INVENTORY
 // ============================================================================
 
 export const inventorySuppliers = pgTable(
@@ -3917,7 +3898,7 @@ export const platformShopOrders = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
-    status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | accepted | processing | shipped | fulfilled | cancelled
+    status: varchar("status", { length: 30 }).notNull().default("pending"), // pending | paid | cancelled | fulfilled
     paymentStatus: varchar("payment_status", { length: 30 }).notNull().default("pending"),
     subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
     discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -3930,7 +3911,6 @@ export const platformShopOrders = pgTable(
     adyenPspReference: varchar("adyen_psp_reference", { length: 255 }),
     adyenResultCode: varchar("adyen_result_code", { length: 50 }),
     paidAt: timestamp("paid_at"),
-    trackingUrl: varchar("tracking_url", { length: 500 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -30,6 +30,7 @@ import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
 import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
+import fiskalyRoutes from "@/routes/fiskaly.routes";
 import { setLocationContext } from "@/middleware/location.middleware";
 import type { ReportPreset } from "@/services/pos-reports.service";
 
@@ -1643,12 +1644,17 @@ router.get("/settings", async (req: Request, res: Response) => {
     const { AdyenMerchantWebhookService } = await import(
       "@/services/adyen-merchant-webhook.service"
     );
+    const { AdyenPayAtXService } = await import("@/services/adyen-pay-at-x.service");
 
     res.json({
       success: true,
       settings: {
         ...settings,
         adyenWebhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(merchantId, req),
+        adyenTerminalEventWebhookUrl: AdyenPayAtXService.terminalWebhookUrlFromRequest(
+          merchantId,
+          req
+        ),
       },
     });
   } catch (error) {
@@ -1739,6 +1745,8 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       webposExpressEnabled: merchant.webposExpressEnabled,
     });
     const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
+    const { merchantHasGiftCardsLicense } = await import("@/lib/gift-card-addon");
+    const giftCardLicensed = await merchantHasGiftCardsLicense(merchantId).catch(() => false);
 
     const { WebPosEntitlementService } = await import("@/services/webpos-entitlement.service");
     const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
@@ -1768,10 +1776,14 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           card: merchant.webposCardEnabled !== false,
           terminal: merchant.webposTerminalEnabled !== false && terminalReady,
           tap_to_pay: tapToPayReady,
-          giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
+          giftCard:
+            giftCardLicensed &&
+            merchant.webposGiftCardEnabled === true &&
+            giftCardSettings.enabled,
           invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
         },
         giftCardSettings,
+        giftCardAddonEnabled: giftCardLicensed,
         loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
           merchant
         ),
@@ -2795,6 +2807,20 @@ router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/pay-at-x/active", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { AdyenPayAtXService } = await import("@/services/adyen-pay-at-x.service");
+    const sessions = await AdyenPayAtXService.listActiveSessions(merchantId);
+    res.json({ success: true, sessions });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list Pay at X sessions",
+    });
+  }
+});
+
 router.get("/pos/held", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
@@ -2804,6 +2830,19 @@ router.get("/pos/held", async (req: Request, res: Response) => {
     res.json({ success: true, held });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list held orders" });
+  }
+});
+
+router.get("/pos/held/:id", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const { PosOrdersService } = await import("@/services/pos-orders.service");
+    const held = await PosOrdersService.resumeHeld(merchantId, req.params.id);
+    res.json({ success: true, held });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Held order not found";
+    res.status(msg.includes("not found") ? 404 : 400).json({ error: msg });
   }
 });
 
@@ -3429,5 +3468,6 @@ router.use(posSessionsRoutes);
 router.use(locationsRoutes);
 router.use(hqRoutes);
 router.use("/client-errors", clientErrorsRoutes);
+router.use("/fiskaly", fiskalyRoutes);
 
 export default router;

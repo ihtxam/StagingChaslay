@@ -2,12 +2,57 @@ import axios from "axios";
 import { getDb, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
 
-const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
+const ADYEN_API_BASE_TEST =
+  process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
+const ADYEN_API_BASE_LIVE =
+  process.env.ADYEN_API_BASE_LIVE ||
+  process.env.PLATFORM_ADYEN_API_BASE_LIVE ||
+  "https://checkout-live.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 
+export type AdyenCheckoutEnvironment = "live" | "test";
+
 export class AdyenService {
+  /** Derive live/test from Drop-in client key prefix (test_ / live_). */
+  static environmentFromClientKey(clientKey?: string | null): AdyenCheckoutEnvironment {
+    return String(clientKey || "")
+      .trim()
+      .startsWith("live_")
+      ? "live"
+      : "test";
+  }
+
+  static checkoutApiBase(clientKey?: string | null): string {
+    return this.environmentFromClientKey(clientKey) === "live"
+      ? ADYEN_API_BASE_LIVE
+      : ADYEN_API_BASE_TEST;
+  }
+
+  static formatSessionError(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const data = error.response?.data as
+        | { message?: string; errorCode?: string; errorType?: string }
+        | undefined;
+      const detail =
+        data?.message ||
+        data?.errorCode ||
+        (typeof data === "string" ? data : undefined) ||
+        error.message;
+      if (status === 401 || /unauthorized/i.test(String(detail))) {
+        return (
+          "Adyen rejected the API key (Unauthorized). Use the Checkout Web service API key from the same " +
+          "Adyen account as the merchant account and client key (test_… or live_…). " +
+          "The client key field must not contain the API key."
+        );
+      }
+      return detail || "Adyen payment session failed";
+    }
+    if (error instanceof Error) return error.message;
+    return "Adyen payment session failed";
+  }
   /**
    * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
    * Legacy per-terminal credential overrides are still honored if present.
@@ -73,9 +118,11 @@ export class AdyenService {
   ) {
     try {
       const creds = await this.resolveCredentials(merchantId);
+      const apiBase = this.checkoutApiBase(creds.clientId);
+      const environment = this.environmentFromClientKey(creds.clientId);
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/sessions`,
+        `${apiBase}/sessions`,
         {
           amount: {
             value: Math.round(amount * 100), // Convert to cents
@@ -95,10 +142,10 @@ export class AdyenService {
         }
       );
 
-      return response.data;
+      return { ...response.data, environment };
     } catch (error) {
       console.error("Error initializing payment session:", error);
-      throw error;
+      throw new Error(this.formatSessionError(error));
     }
   }
 
@@ -125,7 +172,7 @@ export class AdyenService {
       }
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments`,
+        `${ADYEN_API_BASE_TEST}/payments`,
         {
           amount: {
             value: Math.round(amount * 100),
@@ -164,9 +211,10 @@ export class AdyenService {
   ) {
     try {
       const creds = await this.resolveCredentials(merchantId, terminalId);
+      const apiBase = this.checkoutApiBase(creds.clientId);
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments`,
+        `${apiBase}/payments`,
         {
           amount: {
             value: Math.round(amount * 100),
@@ -286,7 +334,7 @@ export class AdyenService {
       }
 
       const response = await axios.get(
-        `${ADYEN_API_BASE}/payments/${reference}`,
+        `${ADYEN_API_BASE_TEST}/payments/${reference}`,
         {
           headers: {
             "x-api-key": ADYEN_API_KEY,
@@ -331,7 +379,7 @@ export class AdyenService {
       const refundAmount = amount || parseFloat(transaction.amount.toString());
 
       const response = await axios.post(
-        `${ADYEN_API_BASE}/payments/${transaction.adyenReference}/refunds`,
+        `${ADYEN_API_BASE_TEST}/payments/${transaction.adyenReference}/refunds`,
         {
           amount: {
             value: Math.round(refundAmount * 100),

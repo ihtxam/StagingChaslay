@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, FileText, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
@@ -31,26 +30,25 @@ import {
   orderListPrimaryLabel,
   orderStatusBadgeClass,
   resolveOrderCustomerDisplay,
+  todayIso,
   type MerchantOrder,
 } from '@/lib/order-management';
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
-import { computeMerchandiseTotals } from '@/lib/money';
-import { applyBillDiscountToTotals } from '@/lib/webpos-bill-discount';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
 import { toastPrintError } from '@/lib/webpos-print-toast';
-import { formatOrderNotesForDisplay, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdown';
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
-import WebPosCancelModal, { type CancelReasonOption } from '@/components/webpos/WebPosCancelModal';
-import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
   settingsDash,
 } from '@/components/settings/SettingsReportUi';
+import SalesAdjustmentModal from '@/components/webpos/SalesAdjustmentModal';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
+import SecretGandolaTapButton from '@/components/SecretGandolaTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
 import {
   isGandolaPurgeEligible,
@@ -58,8 +56,6 @@ import {
 } from '@/lib/gandola-purge';
 import { hasPermission, type Permission } from '@/lib/permissions';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
-import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
-import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import { useAuthStore } from '@/store/auth';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
@@ -98,17 +94,7 @@ function isHeldListRow(order: MerchantOrder): boolean {
 function heldToMerchantOrder(h: HeldRow): MerchantOrder {
   const meta = parseHeldCartJson(h.cartJson);
   const lines = meta.cart || [];
-  const taxRate = Number(meta.taxRate) || 0;
-  const vatIncluded = meta.vatIncludedInPrice !== false;
-  const merch = computeMerchandiseTotals(
-    lines.map((l) => ({
-      lineTotal: Number(l.lineTotal || 0),
-      taxable: l.taxable !== false,
-    })),
-    taxRate,
-    vatIncluded
-  );
-  const withDisc = applyBillDiscountToTotals(merch, meta.billDiscount, vatIncluded, 0.05);
+  const total = lines.reduce((s, l) => s + Number(l.lineTotal || 0), 0);
   const ch = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
   const tabShout = meta.tabNumber ? `#${String(meta.tabNumber).replace(/^#/, '')}` : null;
   return {
@@ -122,11 +108,9 @@ function heldToMerchantOrder(h: HeldRow): MerchantOrder {
     status: h.status === 'sent_to_kitchen' ? 'preparing' : 'pending',
     paymentStatus: 'awaiting_payment',
     paymentMethod: 'pay_later',
-    total: withDisc.total,
-    subtotal: withDisc.subtotal,
-    taxAmount: withDisc.tax,
-    taxRate,
-    discountAmount: withDisc.discount,
+    total,
+    subtotal: total,
+    taxAmount: 0,
     refundAmount: 0,
     staffName: h.staffName || null,
     tableLabel: meta.tableLabel,
@@ -416,6 +400,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const { t, formatDateTime, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const canSalesAdjust =
+    jwtIsOwner ||
+    hasPermission(user?.permissions as Permission[] | undefined, 'VIEW_ALL_SALES', false);
   const canGandolaPurge =
     jwtIsOwner ||
     hasPermission(user?.permissions as Permission[] | undefined, 'GANDOLA_PURGE', false);
@@ -426,13 +413,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [selected, setSelected] = useState<MerchantOrder | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  const [datePreset, setDatePreset] = useState<ReportPreset>('today');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const { from: dateFrom, to: dateTo } = useMemo(
-    () => resolveReportPresetRange(datePreset, customFrom, customTo),
-    [datePreset, customFrom, customTo]
-  );
+  const [dateFrom, setDateFrom] = useState(todayIso);
+  const [dateTo, setDateTo] = useState(todayIso);
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
@@ -454,13 +436,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     vatNumber?: string;
     vatRate?: string;
     taxIncludedInPrice?: boolean;
-    vatAfterDiscount?: boolean;
     shopLogoUrl?: string;
     latitude?: number | null;
     longitude?: number | null;
   } | null>(null);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [salesAdjOpen, setSalesAdjOpen] = useState(false);
   const [purgeMode, setPurgeMode] = useState(false);
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
@@ -469,9 +451,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [collectOpen, setCollectOpen] = useState(false);
   const [refundFor, setRefundFor] = useState<MerchantOrder | null>(null);
   const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
-  const [cancelReasons, setCancelReasons] = useState<CancelReasonOption[]>([]);
-  const [cancelFor, setCancelFor] = useState<MerchantOrder | null>(null);
-  const [cancelBusy, setCancelBusy] = useState(false);
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
     order: MerchantOrder;
@@ -507,7 +486,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         vatNumber: s.vatNumber,
         vatRate: s.vatRate,
         taxIncludedInPrice: s.taxIncludedInPrice,
-        vatAfterDiscount: s.vatAfterDiscount !== false,
         shopLogoUrl: s.shopLogoUrl,
         latitude: s.latitude != null ? Number(s.latitude) : null,
         longitude: s.longitude != null ? Number(s.longitude) : null,
@@ -548,7 +526,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         setOrders((ordersRes.data.orders || []) as MerchantOrder[]);
         setHeldRows((heldRes.data.held || []) as HeldRow[]);
         setRefundReasons(ordersRes.data.refundReasons || []);
-        setCancelReasons(ordersRes.data.cancelReasons || []);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('ordersLoadFailed'));
@@ -785,32 +762,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     }
   };
 
-  const doCancelOrder = async (reason: string, reasonId: string) => {
-    if (!cancelFor || cancelBusy) return;
-    const orderSnapshot = cancelFor;
-    setCancelBusy(true);
-    try {
-      if (isOnlineShopOrder(orderSnapshot)) {
-        await api.post(`/merchant/orders/${orderSnapshot.id}/action`, {
-          action: 'cancel',
-          rejectReason: reasonId || reason,
-        });
-      } else {
-        await api.post(`/merchant/pos/orders/${orderSnapshot.id}/cancel`, {
-          reason: reasonId || reason,
-        });
-      }
-      toast.success(t('webPosOrderCancelled'));
-      setCancelFor(null);
-      if (selected?.id === orderSnapshot.id) setSelected(null);
-      void load();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosCancelFailed'));
-    } finally {
-      setCancelBusy(false);
-    }
-  };
-
   const doRefund = async (payload: {
     refundKind: 'referenced' | 'goodwill';
     mode: 'full' | 'items';
@@ -922,9 +873,8 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   };
 
   const clearFilters = () => {
-    setDatePreset('today');
-    setCustomFrom('');
-    setCustomTo('');
+    setDateFrom(todayIso());
+    setDateTo(todayIso());
     setStatusFilter('all');
     setPaymentFilter('all');
     setChannelFilter('all');
@@ -944,16 +894,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     staffFilter !== 'all' ||
     invoicePayFilter !== 'all' ||
     search.trim() !== '' ||
-    (!showingInvoices && datePreset !== 'today');
-
-  useEffect(() => {
-    if (!selected) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [selected]);
+    (!showingInvoices && (dateFrom !== todayIso() || dateTo !== todayIso()));
 
   if (loading && orders.length === 0) {
     return <div className="text-center py-10 muted text-sm">{t('ordersLoading')}</div>;
@@ -976,22 +917,34 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         </button>
       </div>
 
-      {!showingInvoices ? (
-        <ReportDatePresetFilter
-          preset={datePreset}
-          onPresetChange={setDatePreset}
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomFromChange={setCustomFrom}
-          onCustomToChange={setCustomTo}
-          onApplyCustom={() => void load()}
-        />
-      ) : null}
-
       <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-2.5 sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
-          {canGandolaPurge ? (
+          {showingInvoices ? null : (
+            <>
+              <input
+                type="date"
+                className={`${compactControl} w-[8.5rem] shrink-0`}
+                value={dateFrom}
+                aria-label={t('ordersFilterFrom')}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <input
+                type="date"
+                className={`${compactControl} w-[8.5rem] shrink-0`}
+                value={dateTo}
+                aria-label={t('ordersFilterTo')}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </>
+          )}
+          {canSalesAdjust ? (
             <SecretSearchTapButton
+              onUnlock={() => setSalesAdjOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
+            />
+          ) : null}
+          {canGandolaPurge ? (
+            <SecretGandolaTapButton
               onUnlock={enterPurgeMode}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)] hover:bg-[var(--bg-elevated)] active:scale-95"
             />
@@ -1167,9 +1120,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
             : orderListPrimaryLabel(order) || order.id.slice(0, 8);
           const heldKitchen = isHeldListRow(order);
           const invoicePaid = isPaidOrder(order);
-          const invoiceCancelled =
-            String(order.status || '').toLowerCase() === 'cancelled' ||
-            String(order.paymentStatus || '').toLowerCase() === 'cancelled';
           const purgeSelected = purgeMode && selectedPurgeIds.has(order.id);
           return (
             <article
@@ -1228,9 +1178,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 {isInvoiceOrder(order) ? (
                   <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-indigo-800">
                     {showingInvoices
-                      ? invoiceCancelled
-                        ? t('orderStatusCancelled')
-                        : invoicePaid
+                      ? invoicePaid
                         ? t('invoiceStatusPaid')
                         : t('invoiceStatusUnpaid')
                       : t('webPosInvoice')}
@@ -1282,19 +1230,16 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         })}
       </div>
 
-      {selected
-        ? createPortal(
+      {selected ? (
         <div
-          className="fixed inset-0 z-[300] flex justify-end bg-black/40"
-          role="dialog"
-          aria-modal="true"
+          className="fixed inset-0 z-50 flex justify-end bg-black/40"
           onClick={() => setSelected(null)}
         >
           <div
-            className="flex h-[100svh] max-h-[100svh] w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
+            className="flex h-full w-full max-w-md flex-col bg-[var(--bg-elevated)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))]">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3.5">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-extrabold">
                   {formatOrderNumberDisplay(selected.orderNumber) || selected.id.slice(0, 8)}
@@ -1382,15 +1327,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     {formatDateTime(selected.scheduledFor)}
                   </p>
                 ) : null}
-                {(() => {
-                  const displayNotes = formatOrderNotesForDisplay(selected.notes);
-                  return displayNotes ? (
-                    <p>
-                      <span className="text-[var(--text-muted)]">{t('ordersNotes')}:</span>{' '}
-                      {displayNotes}
-                    </p>
-                  ) : null;
-                })()}
+                {selected.notes ? (
+                  <p>
+                    <span className="text-[var(--text-muted)]">{t('ordersNotes')}:</span> {selected.notes}
+                  </p>
+                ) : null}
                 {selected.cancelReason ? (
                   <p className="text-rose-700">
                     {t('webPosCancelReason')}: {selected.cancelReason}
@@ -1445,24 +1386,20 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </li>
                 ))}
               </ul>
-              <div className="border-t border-[var(--border)] pt-3">
-                <OrderDetailTotals
-                  order={selected}
-                  taxIncludedInPrice={merchant?.taxIncludedInPrice === true}
-                  vatAfterDiscount={merchant?.vatAfterDiscount !== false}
-                />
+              <p className="text-right text-sm font-extrabold tabular-nums">
+                Total CHF {Number(selected.total).toFixed(2)}
                 {Number(selected.refundAmount || 0) > 0 ? (
-                  <p className="mt-1 text-right text-xs font-semibold text-rose-700 tabular-nums">
+                  <span className="block text-xs font-semibold text-rose-700">
                     {t('webPosRefundRemaining').replace(
                       '{amount}',
                       `CHF ${Math.max(0, Number(selected.total) - Number(selected.refundAmount || 0)).toFixed(2)}`
                     )}
-                  </p>
+                  </span>
                 ) : null}
-              </div>
+              </p>
             </div>
 
-            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3.5">
               <div className="mb-2.5 flex items-center gap-2">
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -1659,7 +1596,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   <button
                     type="button"
                     disabled={actionBusy}
-                    onClick={() => setCancelFor(selected)}
+                    onClick={() => void runOrderAction(selected, 'cancel')}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                   >
                     {t('webPosCancelOrder')}
@@ -1687,20 +1624,12 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               </div>
             </div>
           </div>
-        </div>,
-        document.body
-      )
-        : null}
-      <WebPosCancelModal
-        open={!!cancelFor}
-        scope="order"
-        reasons={cancelReasons}
-        busy={cancelBusy}
-        onClose={() => {
-          if (cancelBusy) return;
-          setCancelFor(null);
-        }}
-        onConfirm={(reason, reasonId) => void doCancelOrder(reason, reasonId)}
+        </div>
+      ) : null}
+      <SalesAdjustmentModal
+        open={salesAdjOpen}
+        onClose={() => setSalesAdjOpen(false)}
+        onApplied={() => void load()}
       />
 
       <WebPosRefundModal

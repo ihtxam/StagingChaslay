@@ -3,9 +3,11 @@ import { concatBytes, escposCode128 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
-import { renderNiimbotLabelPng } from '@/lib/niimbot-label';
-import { buildLabelTspl } from '@/lib/tspl-label';
-import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import {
+  labelPrinterUsesNiimbot,
+  renderNiimbotLabelPng,
+} from '@/lib/niimbot-label';
+import { buildLabelTspl, labelPrinterUsesTspl } from '@/lib/tspl-label';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
@@ -156,12 +158,11 @@ export async function printLabelsViaAgentOrQueue(
       'No label printer configured. Open Settings → Receipts & printers, add your LuckyDoor or Niimbot, and enable Labels.'
     );
   }
-  const portName =
-    ((settings?.printers || []).find((p) => p.name === printerName) as { portName?: string | null } | undefined)
-      ?.portName || null;
-  const protocol = resolveLabelPrintProtocol(settings, printerName);
+  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
+  const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
+  const useTspl = !useNiimbot && labelPrinterUsesTspl(settings, printerName);
 
-  if (protocol === 'tspl') {
+  if (useTspl) {
     const chunks: Uint8Array[] = [];
     for (const product of printable) {
       chunks.push(buildLabelTspl(product, o));
@@ -177,7 +178,7 @@ export async function printLabelsViaAgentOrQueue(
     });
   }
 
-  if (protocol === 'niimbot') {
+  if (useNiimbot) {
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
         const rendered = await renderNiimbotLabelPng(product, o);

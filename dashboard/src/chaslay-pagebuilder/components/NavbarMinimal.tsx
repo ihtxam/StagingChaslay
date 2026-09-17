@@ -14,7 +14,7 @@ import { normalizeLink } from '../utils/normalizeLink';
 import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
-import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
+import { StorefrontNavbarLang } from '../StorefrontNavbarLang';
 
 interface MenuItem {
   label: string;
@@ -74,25 +74,26 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
       >
         <div className="shop-page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
-          <div className="shop-navbar-logo-slot">
-            <ShopNavbarLogoRow
-              logoImageUrl={mergedProps.logoImageUrl}
-              logoText={logoText}
-              logoWidth={mergedProps.logoWidth}
-              logoHeight={mergedProps.logoHeight}
-              textColor={mergedProps.textColor}
-              logoTextStyle={{ fontSize: '18px', fontWeight: 400, letterSpacing: '4px' }}
-            />
+          <div>
+            {mergedProps.logoImageUrl ? (
+              <BuilderImage src={mergedProps.logoImageUrl} alt={logoText} style={{ width: `${mergedProps.logoWidth}px`, height: `${mergedProps.logoHeight}px`, objectFit: 'contain' }} />
+            ) : (
+              <span style={{ fontSize: '18px', fontWeight: 400, color: mergedProps.textColor, letterSpacing: '4px' }}>{logoText}</span>
+            )}
           </div>
 
-          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '40px' }}>
+          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <NavbarDesktopLinks
               menuItems={menuItems}
               textColor={mergedProps.textColor || '#1a1a2e'}
               className=""
             />
+            <StorefrontNavbarLang />
           </div>
 
+          <div className="navbar-mobile-lang">
+            <StorefrontNavbarLang />
+          </div>
           <NavbarMobileMenu
             menuItems={menuItems}
             textColor={mergedProps.textColor || '#1a1a2e'}

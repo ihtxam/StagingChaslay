@@ -143,11 +143,10 @@ function Split-CutSuffix {
 }
 
 function Get-BtCutTrailer {
-  # Match dashboard escposKitchenCut() — one feed + one full cut (no stacked partial cuts).
+  # Match dashboard escposKitchenCut() — one short feed + one full cut.
     return [byte[]](
-        0x1B, 0x64, 0x05,
-        0x1D, 0x56, 0x00,
-        0x0A, 0x0A
+        0x1B, 0x64, 0x02,
+        0x1D, 0x56, 0x00
     )
 }
 

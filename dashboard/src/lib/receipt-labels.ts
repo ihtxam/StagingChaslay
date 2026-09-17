@@ -28,6 +28,10 @@ export type ReceiptLabels = {
   postalCode: string;
   forWhen: string;
   nonFiscalTicket: string;
+  /** KassenSichV / NF525 fiscal QR block title */
+  fiscalQrTitle: string;
+  fiscalSignature: string;
+  fiscalTxNumber: string;
   thankYou: string;
   kitchen: string;
   /** Kitchen void / cancel ticket title */
@@ -44,6 +48,8 @@ export type ReceiptLabels = {
   endOfShift: string;
   mySales: string;
   reportPeriod: string;
+  /** Connector between period from/to dates, e.g. " to " */
+  periodRangeTo: string;
   salesSummary: string;
   salesCount: string;
   revenue: string;
@@ -73,6 +79,9 @@ export type ReceiptLabels = {
   /** Unused leftover; Pay Later receipts always name one collected tender. */
   or: string;
   invoice: string;
+  bankTransfer: string;
+  giftCard: string;
+  mixed: string;
   totalItems: string;
   vatIncludedNote: string;
   tip: string;
@@ -127,6 +136,9 @@ const EN: ReceiptLabels = {
   postalCode: 'Postal code',
   forWhen: 'For',
   nonFiscalTicket: 'Non-fiscal ticket',
+  fiscalQrTitle: 'Fiscal receipt (TSE)',
+  fiscalSignature: 'TSE signature',
+  fiscalTxNumber: 'TSE transaction',
   thankYou: 'Thank you',
   kitchen: 'KITCHEN',
   cancelledTicket: 'CANCELLED',
@@ -142,6 +154,7 @@ const EN: ReceiptLabels = {
   endOfShift: 'END OF SHIFT',
   mySales: 'My sales',
   reportPeriod: 'Report Period',
+  periodRangeTo: ' to ',
   salesSummary: 'SALES SUMMARY',
   salesCount: 'Sales',
   revenue: 'Revenue',
@@ -169,6 +182,9 @@ const EN: ReceiptLabels = {
   payLater: 'Pay Later',
   or: 'or',
   invoice: 'Invoice',
+  bankTransfer: 'Bank transfer',
+  giftCard: 'Gift card',
+  mixed: 'Mixed',
   totalItems: 'Items',
   vatIncludedNote: 'VAT included in prices',
   tip: 'Tip',
@@ -222,6 +238,9 @@ const FR: ReceiptLabels = {
   postalCode: 'Code postal',
   forWhen: 'Pour',
   nonFiscalTicket: 'Ticket non fiscal',
+  fiscalQrTitle: 'Recu fiscal',
+  fiscalSignature: 'Signature fiscale',
+  fiscalTxNumber: 'Transaction fiscale',
   thankYou: 'Merci',
   kitchen: 'CUISINE',
   cancelledTicket: 'ANNULE',
@@ -237,6 +256,7 @@ const FR: ReceiptLabels = {
   endOfShift: 'FIN DE SHIFT',
   mySales: 'Mes ventes',
   reportPeriod: 'Periode du rapport',
+  periodRangeTo: ' au ',
   salesSummary: 'RESUME DES VENTES',
   salesCount: 'Ventes',
   revenue: "Chiffre d'affaires",
@@ -264,6 +284,9 @@ const FR: ReceiptLabels = {
   payLater: 'Paiement différé',
   or: 'ou',
   invoice: 'Facture',
+  bankTransfer: 'Virement bancaire',
+  giftCard: 'Carte cadeau',
+  mixed: 'Mixte',
   totalItems: 'Articles',
   vatIncludedNote: 'TVA incluse dans les prix',
   tip: 'Pourboire',
@@ -317,6 +340,9 @@ const DE: ReceiptLabels = {
   postalCode: 'PLZ',
   forWhen: 'Fuer',
   nonFiscalTicket: 'Kein Fiskalbeleg',
+  fiscalQrTitle: 'Fiskalbeleg (TSE)',
+  fiscalSignature: 'TSE-Signatur',
+  fiscalTxNumber: 'TSE-Transaktion',
   thankYou: 'Danke',
   kitchen: 'KUECHE',
   cancelledTicket: 'STORNIERT',
@@ -332,6 +358,7 @@ const DE: ReceiptLabels = {
   endOfShift: 'SCHICHTENDE',
   mySales: 'Meine Verkaeufe',
   reportPeriod: 'Berichtszeitraum',
+  periodRangeTo: ' bis ',
   salesSummary: 'VERKAUFSUEBERSICHT',
   salesCount: 'Verkaeufe',
   revenue: 'Umsatz',
@@ -359,6 +386,9 @@ const DE: ReceiptLabels = {
   payLater: 'Später zahlen',
   or: 'oder',
   invoice: 'Rechnung',
+  bankTransfer: 'Bankueberweisung',
+  giftCard: 'Geschenkkarte',
+  mixed: 'Gemischt',
   totalItems: 'Artikel',
   vatIncludedNote: 'MwSt. im Preis enthalten',
   tip: 'Trinkgeld',
@@ -442,9 +472,9 @@ export function paymentLabel(labels: ReceiptLabels, method?: string | null): str
   if (m === 'terminal') return labels.terminal;
   if (m === 'pay_later') return formatPayLaterPaymentLabel(labels);
   if (m === 'invoice') return labels.invoice || 'Invoice';
-  if (m === 'bank_transfer') return 'Bank transfer';
-  if (m === 'gift_card') return 'Gift card';
-  if (m === 'mixed') return 'Mixed';
+  if (m === 'bank_transfer') return labels.bankTransfer;
+  if (m === 'gift_card') return labels.giftCard;
+  if (m === 'mixed') return labels.mixed;
   return String(method || '').toUpperCase();
 }
 
