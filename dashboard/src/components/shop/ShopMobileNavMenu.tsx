@@ -10,16 +10,18 @@ type MenuLink = { label: string; to: string; onClick?: () => void };
 export default function ShopMobileNavMenu({
   accountPath,
   links = [],
+  loggedIn = false,
 }: {
   accountPath: string;
   links?: MenuLink[];
+  loggedIn?: boolean;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
     <div className="flex items-center gap-1.5">
-      <ShopNavActions accountPath={accountPath} iconOnlyLogin />
+      <ShopNavActions accountPath={accountPath} iconOnlyLogin loggedIn={loggedIn} />
       <div className="relative">
         <button
           type="button"
