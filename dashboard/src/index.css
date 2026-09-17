@@ -2233,12 +2233,12 @@ html.shop-shell #root {
 }
 
 .shop-checkout-sticky-bar__order.is-ready {
-  background: var(--color-primary, var(--shop-accent, #e11d48));
+  background: rgb(5 150 105);
 }
 
 .shop-checkout-sticky-bar__order.is-pending {
-  background: var(--color-primary, var(--shop-accent, #e11d48));
-  opacity: 0.45;
+  background: rgb(251 113 133);
+  opacity: 0.55;
 }
 
 .shop-checkout-sticky-bar__order:disabled {
