@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import axios from 'axios';
 import ZipCityFields from '@/components/shop/ZipCityFields';
+import ShopAddressAutocomplete from '@/components/shop/ShopAddressAutocomplete';
 import ShopDeliveryZoneBadges from '@/components/shop/ShopDeliveryZoneBadges';
 import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
@@ -187,34 +188,48 @@ export default function ShopChannelPrompt({
   const mapEmbedUrl =
     mapLat != null && mapLng != null
       ? `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=15&output=embed`
-      : fullAddress.trim() && zipCode
-        ? `https://maps.google.com/maps?q=${encodeURIComponent(`${fullAddress}, ${zipCode} ${city} Switzerland`)}&z=15&output=embed`
+        : fullAddress.trim() && zipCode
+          ? `https://maps.google.com/maps?q=${encodeURIComponent(`${fullAddress}, ${zipCode} ${city}`)}&z=15&output=embed`
         : mapLat != null && mapLng != null
           ? `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=14&output=embed`
           : null;
 
-  const verifyDelivery = async () => {
-    if (!fullAddress.trim()) {
+  const verifyDelivery = async (override?: {
+    lat?: number;
+    lng?: number;
+    zipCode?: string;
+    city?: string;
+    address?: string;
+  }) => {
+    const line = (override?.address ?? fullAddress).trim();
+    if (!line) {
       setError(t('shopEnterDeliveryAddress'));
       return;
     }
     if (!shopKey) return;
+    const zip = override?.zipCode ?? zipCode;
+    const town = override?.city ?? city;
     setChecking(true);
     setError(null);
     try {
-      const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
-        query: `${fullAddress}, ${zipCode} ${city} Switzerland`,
-      });
-      const nextLat = geoRes.data.found ? Number(geoRes.data.lat) : undefined;
-      const nextLng = geoRes.data.found ? Number(geoRes.data.lng) : undefined;
-      if (nextLat != null && nextLng != null) {
-        setLat(nextLat);
-        setLng(nextLng);
+      const geoQuery = [line, zip, town].filter(Boolean).join(', ');
+      let nextLat = override?.lat ?? lat;
+      let nextLng = override?.lng ?? lng;
+      if (nextLat == null || nextLng == null) {
+        const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
+          query: geoQuery,
+        });
+        nextLat = geoRes.data.found ? Number(geoRes.data.lat) : undefined;
+        nextLng = geoRes.data.found ? Number(geoRes.data.lng) : undefined;
+        if (nextLat != null && nextLng != null) {
+          setLat(nextLat);
+          setLng(nextLng);
+        }
       }
       const res = await axios.post(`/api/shop/${shopKey}/check-delivery`, {
         lat: nextLat,
         lng: nextLng,
-        zipCode,
+        zipCode: zip,
         subtotal,
       });
       setDeliveryInfo(res.data);
@@ -422,14 +437,37 @@ export default function ShopChannelPrompt({
                   )}
                 </div>
 
-                <input
-                  className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-                  placeholder={t('shopSearchAddress')}
+                <ShopAddressAutocomplete
+                  shopKey={shopKey}
                   value={street}
-                  onChange={(e) => {
-                    setStreet(e.target.value);
+                  className="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                  onChange={(next) => {
+                    setStreet(next);
                     setDeliveryInfo(null);
                     setError(null);
+                    setLat(undefined);
+                    setLng(undefined);
+                  }}
+                  onPick={(s) => {
+                    const nextStreet = s.street || s.displayAddress.split(',')[0] || street;
+                    const nextHouse = s.houseNumber || houseNumber;
+                    const nextZip = s.postcode || zipCode;
+                    const nextCity = s.city || city;
+                    setStreet(nextStreet);
+                    if (s.houseNumber) setHouseNumber(s.houseNumber);
+                    if (s.postcode) setZipCode(s.postcode);
+                    if (s.city) setCity(s.city);
+                    setLat(s.latitude);
+                    setLng(s.longitude);
+                    setDeliveryInfo(null);
+                    setError(null);
+                    void verifyDelivery({
+                      lat: s.latitude,
+                      lng: s.longitude,
+                      zipCode: nextZip,
+                      city: nextCity,
+                      address: [nextStreet, nextHouse].filter(Boolean).join(' '),
+                    });
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">

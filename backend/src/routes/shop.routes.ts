@@ -21,6 +21,7 @@ import { ChaslayPagebuilderService } from "@/services/chaslay-pagebuilder.servic
 import { normalizeComboSlots } from "@/lib/combo";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
+import { autocompleteAddress } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
@@ -696,6 +697,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         cmsTheme,
         address: merchant.address,
         city: merchant.city,
+        country: merchant.country,
         phone: merchant.phone,
         latitude: merchant.latitude,
         longitude: merchant.longitude,
@@ -1419,6 +1421,38 @@ router.get("/:slug/postal-suggest", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/shop/:slug/address-suggest?q=
+ * Street autocomplete via LocationService (Photon, Nominatim fallback).
+ */
+router.get("/:slug/address-suggest", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant || !merchant.shopEnabled) {
+      return res.status(404).json({ error: "Shop not found" });
+    }
+    const q = String(req.query.q || "").trim();
+    if (q.length < 3) {
+      return res.json({ success: true, suggestions: [] });
+    }
+    const lang = String(req.query.lang || "").trim().slice(0, 2) || undefined;
+    const suggestions = await autocompleteAddress({
+      q,
+      countryCode: merchant.country,
+      lat: merchant.latitude != null ? Number(merchant.latitude) : null,
+      lng: merchant.longitude != null ? Number(merchant.longitude) : null,
+      lang,
+      limit: 8,
+    });
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Address lookup failed",
+      suggestions: [],
+    });
+  }
+});
+
+/**
  * POST /api/shop/:slug/geocode
  * Body: { query }
  */
@@ -1431,7 +1465,7 @@ router.post("/:slug/geocode", async (req: Request, res: Response) => {
     const query = String(req.body.query || "").trim();
     if (!query) return res.status(400).json({ error: "query required" });
 
-    const result = await geocodeQuery(query);
+    const result = await geocodeQuery(query, { countryCode: merchant.country });
     if (!result.found) {
       return res.json({ success: true, found: false });
     }
@@ -2714,8 +2748,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         deliveryLng = String(lngNum);
       } else if (addressText) {
         try {
-          const geo = await geocodeQuery(addressText);
-          if (geo?.lat != null && geo?.lng != null) {
+          const geo = await geocodeQuery(addressText, { countryCode: merchant.country });
+          if (geo.found) {
             deliveryLat = String(geo.lat);
             deliveryLng = String(geo.lng);
           }
