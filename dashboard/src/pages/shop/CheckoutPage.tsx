@@ -40,9 +40,11 @@ import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
+import { SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
-import { ArrowLeft, Check, ShoppingBag } from 'lucide-react';
+import { Check, ShoppingBag } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -1505,22 +1507,18 @@ export default function CheckoutPage() {
       theme={cmsTheme}
       site={shopSite}
       pageTitle={merchant?.name}
+      logoUrl={merchant?.shopLogoUrl}
       className="min-h-dvh"
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >
     <div className="min-h-dvh">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
-      <header className="bg-white border-b border-stone-200">
-        <div className="shop-page-content flex h-14 items-center">
-          <Link
-            to={menuPath}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 hover:text-stone-950"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
-            {t('shopBackToShop')}
-          </Link>
-        </div>
-      </header>
+      <ShopMinimalHeader
+        basePath={shopBasePath(shopKey, locSlug)}
+        merchantName={merchant?.name}
+        logoUrl={merchant?.shopLogoUrl}
+        loggedIn={!!customer}
+      />
 
       <div className="shop-page-content py-8 pb-32 lg:pb-10">
         <div className="mb-6">
@@ -1594,91 +1592,6 @@ export default function CheckoutPage() {
                     </li>
                   ))}
                 </ul>
-
-                {!showLogin ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white"
-                      onClick={() => {
-                        setShowLogin(true);
-                        setWantCreateAccount(false);
-                        setPassword('');
-                        if (draft.customerEmail) setLoginEmail(draft.customerEmail);
-                      }}
-                    >
-                      {t('shopLogIn')}
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                        wantCreateAccount
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
-                      }`}
-                      onClick={() => {
-                        setWantCreateAccount(true);
-                        setShowLogin(false);
-                        setPassword('');
-                      }}
-                    >
-                      {t('shopCreateAccount')}
-                    </button>
-                  </div>
-                ) : null}
-
-                {showLogin ? (
-                  <form onSubmit={onLogin} className="mt-3 space-y-2 border-t border-stone-100 pt-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="font-semibold text-sm">{t('shopLogIn')}</h2>
-                      <button
-                        type="button"
-                        className="text-xs text-stone-500 underline"
-                        onClick={() => setShowLogin(false)}
-                      >
-                        {t('cancel')}
-                      </button>
-                    </div>
-                    <input
-                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
-                      type="email"
-                      placeholder={t('shopEmail')}
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                      autoComplete="email"
-                    />
-                    <input
-                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
-                      type="password"
-                      placeholder={t('shopPassword')}
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full rounded-lg bg-stone-900 py-2 text-sm font-semibold text-white"
-                    >
-                      {t('shopLogIn')}
-                    </button>
-                  </form>
-                ) : null}
-
-                {wantCreateAccount && !showLogin ? (
-                  <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
-                    <p className="text-xs text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
-                    <input
-                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
-                      type="password"
-                      placeholder={t('shopPasswordMin6')}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </div>
-                ) : null}
               </div>
             )}
             </div>
@@ -2001,15 +1914,15 @@ export default function CheckoutPage() {
                 <span className="text-xs text-rose-500">{t('shopAllFieldsRequired')}</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
+                <label className="space-y-1">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopFirstName')}</span>
                   <input
                     ref={firstNameRef}
-                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
+                    className={`${SHOP_INPUT_CLASS} ${
                       fieldErrors.customerFirstName || fieldErrors.customerName
                         ? 'border-rose-500'
-                        : 'border-stone-300'
+                        : ''
                     }`}
-                    placeholder={t('shopFirstName')}
                     value={firstName}
                     onChange={(e) => {
                       setFirstName(e.target.value);
@@ -2027,16 +1940,16 @@ export default function CheckoutPage() {
                   {fieldErrors.customerFirstName ? (
                     <p className="text-sm text-rose-600">{fieldErrors.customerFirstName}</p>
                   ) : null}
-                </div>
-                <div className="space-y-1">
+                </label>
+                <label className="space-y-1">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopLastName')}</span>
                   <input
                     ref={lastNameRef}
-                    className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
+                    className={`${SHOP_INPUT_CLASS} ${
                       fieldErrors.customerLastName || fieldErrors.customerName
                         ? 'border-rose-500'
-                        : 'border-stone-300'
+                        : ''
                     }`}
-                    placeholder={t('shopLastName')}
                     value={lastName}
                     onChange={(e) => {
                       setLastName(e.target.value);
@@ -2054,42 +1967,124 @@ export default function CheckoutPage() {
                   {fieldErrors.customerLastName ? (
                     <p className="text-sm text-rose-600">{fieldErrors.customerLastName}</p>
                   ) : null}
-                </div>
+                </label>
               </div>
               {fieldErrors.customerName ? (
                 <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
               ) : null}
               <div className="space-y-2">
-                <input
-                  className={`w-full rounded-md border bg-white px-3 py-2.5 text-sm ${
-                    fieldErrors.customerEmail ? 'border-rose-500' : 'border-stone-300'
-                  }`}
-                  type="email"
-                  placeholder={t('shopEmail')}
-                  value={draft.customerEmail}
-                  onChange={(e) => {
-                    patch({ customerEmail: e.target.value });
-                    if (!showLogin) setLoginEmail(e.target.value);
-                    if (fieldErrors.customerEmail) {
-                      setFieldErrors((prev) => ({ ...prev, customerEmail: undefined }));
-                    }
-                  }}
-                />
+                <label className="block space-y-1">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
+                  <input
+                    className={`${SHOP_INPUT_CLASS} ${
+                      fieldErrors.customerEmail ? 'border-rose-500' : ''
+                    }`}
+                    type="email"
+                    value={draft.customerEmail}
+                    onChange={(e) => {
+                      patch({ customerEmail: e.target.value });
+                      if (!showLogin) setLoginEmail(e.target.value);
+                      if (fieldErrors.customerEmail) {
+                        setFieldErrors((prev) => ({ ...prev, customerEmail: undefined }));
+                      }
+                    }}
+                  />
+                </label>
                 {fieldErrors.customerEmail ? (
                   <p className="text-sm text-rose-600">{fieldErrors.customerEmail}</p>
                 ) : null}
-                <ShopPhoneField
-                  value={draft.customerPhone}
-                  invalid={!!fieldErrors.customerPhone}
-                  placeholder={t('shopPhone')}
-                  localInputRef={phoneLocalRef}
-                  onChange={(full) => {
-                    patch({ customerPhone: full });
-                    if (fieldErrors.customerPhone) {
-                      setFieldErrors((prev) => ({ ...prev, customerPhone: undefined }));
-                    }
-                  }}
-                />
+                {!customer ? (
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-stone-800">
+                      <input
+                        type="checkbox"
+                        checked={wantCreateAccount}
+                        onChange={(e) => {
+                          setWantCreateAccount(e.target.checked);
+                          if (e.target.checked) setShowLogin(false);
+                          else setPassword('');
+                        }}
+                      />
+                      {t('shopCreateAccountFaster')}
+                    </label>
+                    {wantCreateAccount ? (
+                      <input
+                        className={SHOP_INPUT_CLASS}
+                        type="password"
+                        placeholder={t('shopPasswordMin6')}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                    ) : null}
+                    <p className="text-right text-sm text-stone-600">
+                      {t('shopHaveAccount')}{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-[var(--color-primary,#e11d48)] underline-offset-2 hover:underline"
+                        onClick={() => {
+                          setShowLogin(true);
+                          setWantCreateAccount(false);
+                          setPassword('');
+                          if (draft.customerEmail) setLoginEmail(draft.customerEmail);
+                        }}
+                      >
+                        {t('shopLogIn')}
+                      </button>
+                    </p>
+                    {showLogin ? (
+                      <form onSubmit={onLogin} className="space-y-2 rounded-xl border border-stone-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">{t('shopLogIn')}</h3>
+                          <button
+                            type="button"
+                            className="text-xs text-stone-500 underline"
+                            onClick={() => setShowLogin(false)}
+                          >
+                            {t('cancel')}
+                          </button>
+                        </div>
+                        <input
+                          className={SHOP_INPUT_CLASS}
+                          type="email"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          required
+                          autoComplete="email"
+                        />
+                        <input
+                          className={SHOP_INPUT_CLASS}
+                          type="password"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          required
+                          autoComplete="current-password"
+                        />
+                        <button
+                          type="submit"
+                          className="w-full rounded-xl bg-[var(--color-primary,#e11d48)] py-2 text-sm font-semibold text-white"
+                        >
+                          {t('shopLogIn')}
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                ) : null}
+                <label className="block space-y-1">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
+                  <ShopPhoneField
+                    value={draft.customerPhone}
+                    invalid={!!fieldErrors.customerPhone}
+                    placeholder={t('shopPhone')}
+                    localInputRef={phoneLocalRef}
+                    onChange={(full) => {
+                      patch({ customerPhone: full });
+                      if (fieldErrors.customerPhone) {
+                        setFieldErrors((prev) => ({ ...prev, customerPhone: undefined }));
+                      }
+                    }}
+                  />
+                </label>
                 {fieldErrors.customerPhone ? (
                   <p className="text-sm text-rose-600">{fieldErrors.customerPhone}</p>
                 ) : null}
@@ -2338,7 +2333,7 @@ export default function CheckoutPage() {
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-stone-900">{t('shopPickupNote')}</h2>
               <textarea
-                className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                className={SHOP_INPUT_CLASS}
                 rows={2}
                 placeholder={t('shopPickupNotePlaceholder')}
                 value={draft.notes}
@@ -2349,18 +2344,20 @@ export default function CheckoutPage() {
 
         <aside className="mt-8 hidden lg:block lg:mt-0">
           <div className="shop-checkout-desktop-cart space-y-3">
-            <Link
-              to={menuPath}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
-            >
-              {t('shopAddMoreItems')}
-            </Link>
             <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
               <div>
-                <h2 className="mb-3 flex items-center gap-2 text-base font-bold tracking-tight">
-                  <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
-                  {t('shopYourCart')}
-                </h2>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                    <ShoppingBag className="h-5 w-5 text-[var(--color-primary,#e11d48)]" strokeWidth={1.8} />
+                    {t('shopYourCart')}
+                  </h2>
+                  <Link
+                    to={menuPath}
+                    className="text-xs font-semibold text-[var(--color-primary,#e11d48)] underline-offset-2 hover:underline"
+                  >
+                    {t('shopAddMoreItems')}
+                  </Link>
+                </div>
                 <div className="max-h-[min(52vh,28rem)] overflow-y-auto pr-1">{renderCartItems()}</div>
               </div>
               <div className="border-t border-stone-100 pt-3">{renderCartTotals()}</div>

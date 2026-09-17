@@ -1,6 +1,5 @@
 import type { SitePageLink } from '../StorefrontContext';
 import { isContactNavLink, isHomeNavLink, isShopMenuNavLink } from '../storefront-href';
-import { DEFAULT_SMOOTH_SCROLL_MENU } from './default-nav-menu';
 
 export type NavbarMenuItem = { label: string; link: string };
 
@@ -36,15 +35,11 @@ export function isStorefrontContactNavItem(item: NavbarMenuItem): boolean {
 }
 
 /**
- * Public homepage + shop top bar: keep only Home, Menu, Contact.
- * Drops About / À propos, Reviews / Avis, gallery, hours, and extra CMS pages.
+ * Public shop top bar is logo + language + Login only (PDF 1.1).
+ * Home / Menu / Cart live in the shop footer, not this strip.
  */
-export function constrainStorefrontTopNav(items: NavbarMenuItem[] | undefined | null): NavbarMenuItem[] {
-  const list = Array.isArray(items) ? items : [];
-  const home = list.find(isStorefrontHomeNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[0];
-  const menu = list.find(isStorefrontMenuNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[1];
-  const contact = list.find(isStorefrontContactNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[2];
-  return [home, menu, contact];
+export function constrainStorefrontTopNav(_items?: NavbarMenuItem[] | null): NavbarMenuItem[] {
+  return [];
 }
 
 /** Build header links from published builder pages (homepage + extra pages + menu). */

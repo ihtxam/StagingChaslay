@@ -21,11 +21,7 @@ const longMenu = [
 ];
 
 const constrained = constrainStorefrontTopNav(longMenu);
-assert.equal(constrained.length, 3);
-assert.deepEqual(
-  constrained.map((i) => i.link),
-  ['#home', '#menu', '#contact']
-);
+assert.equal(constrained.length, 0);
 
 const fr = constrainStorefrontTopNav([
   { label: 'Accueil', link: '#home' },
@@ -34,11 +30,7 @@ const fr = constrainStorefrontTopNav([
   { label: 'Avis', link: '#testimonials' },
   { label: 'Contact', link: '#contact' },
 ]);
-assert.equal(fr.length, 3);
-assert.equal(fr[0].label, 'Accueil');
-assert.equal(fr[1].label, 'Menu');
-assert.equal(fr[2].label, 'Contact');
-assert.ok(!fr.some((i) => /propos|avis|about|testimonial/i.test(`${i.label} ${i.link}`)));
+assert.equal(fr.length, 0);
 
 assert.equal(isStorefrontHomeNavItem({ label: 'Startseite', link: '/' }), true);
 assert.equal(isStorefrontMenuNavItem({ label: 'Menü', link: '/shop/demo/menu' }), true);
@@ -46,9 +38,6 @@ assert.equal(isStorefrontContactNavItem({ label: 'Kontakt', link: '#contact' }),
 assert.equal(isStorefrontHomeNavItem({ label: 'À propos', link: '#about' }), false);
 
 const empty = constrainStorefrontTopNav([]);
-assert.deepEqual(
-  empty.map((i) => i.label),
-  ['Home', 'Menu', 'Contact']
-);
+assert.deepEqual(empty, []);
 
 console.log('navbar-site-nav tests passed');

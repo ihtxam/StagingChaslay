@@ -94,13 +94,13 @@ export function localizedShopCopy(
 export function resolveShopDocumentSeo(
   site: ShopSiteSettings | null | undefined,
   locale: string,
-  fallbacks?: { title?: string | null; description?: string | null }
+  fallbacks?: { title?: string | null; description?: string | null; logoUrl?: string | null }
 ): { title: string; description: string; faviconUrl: string | null } {
   return {
     title: localizedShopCopy(site?.metaTitle, locale) || String(fallbacks?.title || '').trim(),
     description:
       localizedShopCopy(site?.metaDescription, locale) || String(fallbacks?.description || '').trim(),
-    faviconUrl: site?.faviconUrl || null,
+    faviconUrl: site?.faviconUrl || String(fallbacks?.logoUrl || '').trim() || null,
   };
 }
 

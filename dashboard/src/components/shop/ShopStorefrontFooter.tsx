@@ -4,7 +4,7 @@ import ShopFooter from '@/components/shop/ShopFooter';
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 
-/** 4-column shop footer when the shop key is known; compact fallback otherwise. */
+/** Shop footer when the shop key is known; compact fallback otherwise. */
 export default function ShopStorefrontFooter({
   basePath,
   merchantName,

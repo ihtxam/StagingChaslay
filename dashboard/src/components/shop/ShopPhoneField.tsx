@@ -49,7 +49,7 @@ export default function ShopPhoneField({
 
   return (
     <div
-      className={`flex overflow-hidden rounded-md border bg-white ${
+      className={`flex overflow-hidden rounded-xl border bg-white ${
         invalid ? 'border-rose-500' : 'border-stone-300'
       } ${className || ''}`}
     >

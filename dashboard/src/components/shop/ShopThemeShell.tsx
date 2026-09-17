@@ -22,6 +22,8 @@ type Props = {
   /** Page/builder SEO used only when Online Shop meta is empty. */
   pageTitle?: string | null;
   pageDescription?: string | null;
+  /** Restaurant logo used as favicon when none is uploaded. */
+  logoUrl?: string | null;
   /** Override shop UI language (Chaslay builder locale). */
   language?: string;
   className?: string;
@@ -100,6 +102,7 @@ export default function ShopThemeShell({
   site,
   pageTitle,
   pageDescription,
+  logoUrl,
   language,
   className = '',
   style,
@@ -130,6 +133,7 @@ export default function ShopThemeShell({
     const seo = resolveShopDocumentSeo(site, lang, {
       title: pageTitle,
       description: pageDescription,
+      logoUrl,
     });
     if (seo.title) document.title = seo.title;
     applyNamedMeta('description', seo.description || null);
@@ -139,11 +143,11 @@ export default function ShopThemeShell({
     applyPropertyMeta('og:title', seo.title || null);
     applyPropertyMeta('og:description', seo.description || null);
     applyPropertyMeta('og:type', seo.title || seo.description ? 'website' : null);
-    if (site) {
-      applyFavicon(seo.faviconUrl || DEFAULT_SHOP_FAVICON);
-      applyGtag(site.gaMeasurementId);
+    if (site || logoUrl) {
+      applyFavicon(seo.faviconUrl || logoUrl || DEFAULT_SHOP_FAVICON);
+      if (site) applyGtag(site.gaMeasurementId);
     }
-  }, [site, lang, pageTitle, pageDescription]);
+  }, [site, lang, pageTitle, pageDescription, logoUrl]);
 
   const primary = site?.brandColor;
   useEffect(() => {

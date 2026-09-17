@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
+import { formatShopPhoneDisplay } from '@/lib/shop-phone-format';
 import { useI18n } from '@/lib/i18n';
 
 type ShopFooterInfo = {
@@ -65,17 +66,19 @@ export default function ShopFooter({ shopKey }: Props) {
   const description =
     String(info.description || '').trim() ||
     t('shopFooterAboutFallback', { shopName: info.name });
+  const phoneDisplay = formatShopPhoneDisplay(info.phone);
+  const phoneTel = String(info.phone || '').replace(/\s+/g, '');
 
   const linkClass =
-    'text-sm text-stone-600 hover:text-stone-900 transition-colors underline-offset-2 hover:underline';
+    'text-sm text-[#666666] hover:text-stone-900 transition-colors underline-offset-2 hover:underline';
 
   return (
-    <footer className="mt-auto border-t border-stone-200 bg-stone-50 text-stone-700">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+    <footer className="mt-auto border-t border-stone-200 bg-white text-stone-700">
+      <div className="mx-auto max-w-6xl px-6 py-10 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 border-b border-stone-200 pb-8 lg:grid-cols-3 lg:gap-8">
           <div>
             <h2 className="text-base font-bold text-stone-900">{info.name}</h2>
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">{description}</p>
+            <p className="mt-3 text-sm leading-relaxed text-[#666666]">{description}</p>
           </div>
 
           <div>
@@ -83,7 +86,7 @@ export default function ShopFooter({ shopKey }: Props) {
             <ul className="mt-3 space-y-2">
               <li>
                 <Link to={basePath || '/'} className={linkClass}>
-                  {t('shopFooterWelcome')}
+                  {t('shopHome')}
                 </Link>
               </li>
               <li>
@@ -101,7 +104,7 @@ export default function ShopFooter({ shopKey }: Props) {
 
           <div>
             <h2 className="text-base font-bold text-stone-900">{t('shopContact')}</h2>
-            <ul className="mt-3 space-y-2 text-sm text-stone-600">
+            <ul className="mt-3 space-y-2 text-sm text-[#666666]">
               {addressLine ? <li>{addressLine}</li> : null}
               {info.email ? (
                 <li>
@@ -110,39 +113,23 @@ export default function ShopFooter({ shopKey }: Props) {
                   </a>
                 </li>
               ) : null}
-              {info.phone ? (
+              {phoneDisplay ? (
                 <li>
-                  <a href={`tel:${info.phone.replace(/\s+/g, '')}`} className={linkClass}>
-                    {info.phone}
+                  <a href={`tel:${phoneTel}`} className={linkClass}>
+                    {phoneDisplay}
                   </a>
                 </li>
               ) : null}
             </ul>
           </div>
-
-          <div>
-            <h2 className="text-base font-bold text-stone-900">{t('shopFooterLegalNotice')}</h2>
-            <ul className="mt-3 space-y-2">
-              <li>
-                <Link to={`${basePath}/pages/privacy-policy`} className={linkClass}>
-                  {t('shopFooterPrivacyPolicy')}
-                </Link>
-              </li>
-            </ul>
-          </div>
         </div>
 
-        <div className="mt-10 border-t border-stone-200 pt-6 text-center text-xs text-stone-500 sm:text-sm">
+        <div className="pt-6 text-center text-xs text-stone-500 sm:text-sm">
           <p>
             {t('shopFooterCopyright', { year: String(year), shopName: info.name })}{' '}
-            <a
-              href="https://rebornsense.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-stone-600 hover:text-stone-900 underline-offset-2 hover:underline"
-            >
-              {t('shopFooterPoweredBy')}
-            </a>
+            <Link to={`${basePath}/pages/privacy-policy`} className="underline-offset-2 hover:underline">
+              {t('shopFooterPrivacyPolicy')}
+            </Link>
           </p>
         </div>
       </div>
