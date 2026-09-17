@@ -5,6 +5,7 @@ import {
 import { canAccessBusinessModuleRoute, type BusinessModule } from './business-module';
 import { isStandalonePwa } from './pwa';
 import { normalizeStaffLoginHome, type StaffLoginHome } from './staff-login-home';
+import { isPlatformNotificationsPath } from './platform-notifications';
 
 export type Permission =
   | 'USE_POS'
@@ -46,8 +47,27 @@ export function permissionsForMerchantAddon(
   return permissions.filter((p) => p !== 'MANAGE_KIOSK');
 }
 
+/** Bind role-editor checkboxes to saved keys (array or comma-separated, trim unknown). */
+export function normalizeRolePermissions(raw: unknown): Permission[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(',')
+      : [];
+  const set = new Set(
+    list
+      .map((s) => String(s).trim())
+      .filter((p): p is Permission => ALL_PERMISSIONS.includes(p as Permission))
+  );
+  return ALL_PERMISSIONS.filter((p) => set.has(p));
+}
+
 export function isKioskOperatorRoleName(name: string): boolean {
   return name.trim().toLowerCase() === 'kiosk operator';
+}
+
+export function isOrderCenterOperatorRoleName(name: string): boolean {
+  return name.trim().toLowerCase() === 'order center operator';
 }
 
 export function isGandolaRoleName(name: string): boolean {
@@ -109,6 +129,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/newsletter': ['MANAGE_ONLINE_SHOP'],
   '/merchant/online-shop': ['MANAGE_ONLINE_SHOP'],
   '/merchant/website': ['MANAGE_ONLINE_SHOP'],
+  '/merchant/chaslay-page-builder': ['MANAGE_ONLINE_SHOP'],
   '/merchant/floor-plan': ['MANAGE_TABLES'],
   '/merchant/tables': ['MANAGE_TABLES'],
   '/merchant/tables/settings': ['MANAGE_TABLES'],
@@ -123,6 +144,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
+  '/merchant/notifications': [],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],
   '/merchant/inventory/home': ['MANAGE_INVENTORY'],
@@ -218,7 +240,9 @@ export function backOfficeHomePath(
   if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
   if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
   if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
+  if (isOrderCenterOnlyStaff(permissions, isOwner)) return orderCenterHomePath();
   if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';
 }
@@ -253,6 +277,7 @@ export function staffRoleDisplayName(name: string, t: (key: string) => string): 
   if (n.includes('menu editor') || n.includes('menu-editor')) return t('staffRoleWaiterMenu');
   if (n === 'storekeeper') return t('staffRoleStorekeeper');
   if (n === 'kiosk operator') return t('staffRoleKiosk');
+  if (n === 'order center operator') return t('staffRoleOrderCenter');
   if (n === 'gandola') return t('staffRoleGandola');
   return name;
 }
@@ -266,6 +291,10 @@ export function canAccessRoute(
 ): boolean {
   if (!canAccessBusinessModuleRoute(path, businessModule)) return false;
   if (!canAccessEditionRoute(path, editionFeatures ?? null)) return false;
+  if (isPlatformNotificationsPath(path)) return true;
+  if (isOrderCenterOnlyStaff(permissions, isOwner)) {
+    return isOrderCenterPanelPath(path);
+  }
   if (isOwner) return true;
   const required = resolvePanelRoutePermissions(path);
   if (required === null) return false;
@@ -429,10 +458,63 @@ export function isKioskHomeLocation(pathname: string, search = ''): boolean {
   return path === '/merchant/settings' && isKioskSettingsTab(search);
 }
 
+/** Order center PWA only — live online orders, print, history, daily report. No full panel. */
+export function isOrderCenterOnlyStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  if (!hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return false;
+  if (hasPermission(permissions, 'ACCESS_PANEL', false)) return false;
+  if (hasPermission(permissions, 'USE_WEBPOS', false)) return false;
+  if (hasPermission(permissions, 'USE_POS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_TABLES', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_PRODUCTS', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return false;
+  if (hasPermission(permissions, 'MANAGE_SETTINGS', false)) return false;
+  return true;
+}
+
+export function isOrderCenterRestrictedStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  return isOrderCenterOnlyStaff(permissions, isOwner);
+}
+
+export function isOrderCenterPanelPath(pathname: string): boolean {
+  const path = pathname.replace(/\/$/, '') || '/merchant';
+  return path === '/merchant/order-center' || path === '/merchant/order-hub';
+}
+
+export function orderCenterHomePath(): string {
+  return '/merchant/order-center';
+}
+
+export function isOrderCenterHomeLocation(pathname: string): boolean {
+  return isOrderCenterPanelPath(pathname);
+}
+
 /** Register POS / waiter — PIN session restricts panel access on these routes only. */
 export function isPosFloorPath(pathname: string): boolean {
   const path = pathname.replace(/\/$/, '') || '/merchant';
   return path === '/merchant/pos' || path === '/merchant/waiter' || path.startsWith('/merchant/pos/');
+}
+
+/** KüBBan setup pill + WebPOS first-run tour — managers/owners only (not cashiers). */
+export function canSeeMerchantOnboarding(opts: {
+  jwtPermissions: Permission[] | undefined;
+  jwtIsOwner: boolean;
+  authRole?: string | null;
+  pinSession: WebPosStaffSession | null;
+}): boolean {
+  if (opts.pinSession) {
+    return hasPermission(opts.pinSession.permissions, 'ACCESS_PANEL', false);
+  }
+  const ownerEffective = opts.jwtIsOwner && opts.authRole !== 'staff';
+  return (
+    ownerEffective || hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false)
+  );
 }
 
 /** JWT user may open the merchant back office (owner or panel staff). */
@@ -452,6 +534,23 @@ export function jwtHasPanelAccess(
   );
 }
 
+/** Cashier / register staff — WebPOS first, not merchant dashboard or order center. */
+export function isRegisterFirstStaff(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return false;
+  const hasPos =
+    hasPermission(permissions, 'USE_WEBPOS', false) ||
+    hasPermission(permissions, 'MANAGE_TABLES', false);
+  if (!hasPos) return false;
+  return (
+    !hasPermission(permissions, 'ACCESS_PANEL', false) &&
+    !hasPermission(permissions, 'MANAGE_PRODUCTS', false) &&
+    !hasPermission(permissions, 'MANAGE_INVENTORY', false)
+  );
+}
+
 /** Floor waiter — tables/POS only, no merchant back office (pos-only template). */
 export function isFloorWaiterStaff(
   permissions: Permission[] | undefined,
@@ -465,14 +564,14 @@ export function isFloorWaiterStaff(
   );
 }
 
-/** Staff may open merchant back office only when login destination allows panel access. */
+/** Staff may open merchant back office when their role grants panel/catalog/orders access. */
 export function canStaffOpenBackOffice(
   permissions: Permission[] | undefined,
-  loginHome?: StaffLoginHome | string | null,
+  _loginHome?: StaffLoginHome | string | null,
   isOwner = false
 ): boolean {
   if (isOwner) return true;
-  if (normalizeStaffLoginHome(loginHome) === 'pos') return false;
+  if (jwtHasPanelAccess(permissions, false, 'staff')) return true;
   if (isFloorWaiterStaff(permissions, false)) return false;
   if (isStorekeeperRestrictedStaff(permissions, false)) return false;
   if (isWaiterRestrictedStaff(permissions, false)) {
@@ -482,6 +581,15 @@ export function canStaffOpenBackOffice(
     );
   }
   return jwtHasPanelAccess(permissions, false, 'staff');
+}
+
+/** JWT holder may leave POS for merchant back office (loginHome does not block return navigation). */
+export function canJwtReturnToPanel(
+  jwtPermissions: Permission[] | undefined,
+  isOwner: boolean,
+  authRole?: string | null
+): boolean {
+  return jwtHasPanelAccess(jwtPermissions, isOwner, authRole);
 }
 
 /**
@@ -831,9 +939,9 @@ export function getEffectivePanelAccess(opts: {
     const pinHasPanelAccess = hasPermission(permissions, 'ACCESS_PANEL', false);
     const onPosFloor = opts.pathname ? isPosFloorPath(opts.pathname) : false;
     const managerJwt = jwtHasPanelAccess(opts.jwtPermissions, opts.isOwner, opts.authRole);
-    // Restore JWT panel access only when the clocked-in PIN user also has ACCESS_PANEL
+    // Restore JWT panel access when the clocked-in PIN user also has ACCESS_PANEL
     // (manager on their own PIN). Owner/manager JWT must never bypass a restricted cashier/waiter PIN.
-    if (managerJwt && !onPosFloor && pinHasPanelAccess) {
+    if (managerJwt && pinHasPanelAccess) {
       return { ...jwtAccess(), pinActive: true };
     }
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);
