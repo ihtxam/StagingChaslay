@@ -61,7 +61,7 @@ Outputs:
 
 - Uses [`pkg`](https://github.com/vercel/pkg) to bundle Node + `server.js` into a single Windows x64 EXE.
 - `win-raw-print.ps1` is embedded and extracted next to the installed EXE.
-- `--install` copies files to `%LOCALAPPDATA%\RebornPrintAgent` and adds a `HKCU\...\Run` startup entry.
+- `--install` copies files to `%LOCALAPPDATA%\RebornPrintAgent`, writes a hidden VBS launcher, adds `HKCU\...\Run`, and registers a 1-minute watchdog task.
 - Setup filename containing `setup` triggers install-on-launch automatically.
 
 ## Limitations
@@ -69,13 +69,13 @@ Outputs:
 - **Windows only** (RAW Win32 print API).
 - EXE is **unsigned** unless you codesign it (SmartScreen may warn).
 - Binds to `127.0.0.1` only — not exposed on the LAN.
-- Not a Windows Service by default (per-user Startup is enough for WebPOS on the cashier PC). To run as a service, wrap the installed EXE with NSSM or Task Scheduler (SYSTEM).
+- Runs as a **hidden per-user background process** (no CMD window). Login Startup uses a VBS launcher (`window style 0`); a Task Scheduler watchdog restarts it every minute if `127.0.0.1:9101` is down. A full Windows Service is not required.
 - **OneNote / Microsoft Print to PDF / XPS** are rejected for RAW ESC/POS (they cannot render receipt bytes). Use a thermal receipt printer.
 - Printer names with accents (e.g. French *Protégé*) are passed via a UTF-8 file to `OpenPrinterW` so they are not mangled to `?`.
 
 ### Install UX
 
-- Setup EXE shows a **MessageBox** on success or failure, then exits (no CMD window left open).
+- Setup EXE shows a **MessageBox** on success or failure, then exits. The agent itself never shows a console — closing a black window cannot stop printing after this version.
 - If a previous agent is running, setup stops it first so the EXE can be updated (avoids `EBUSY`).
 - Log file: `%LOCALAPPDATA%\RebornPrintAgent\install.log`
 

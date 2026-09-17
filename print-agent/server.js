@@ -20,9 +20,18 @@ const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
 const { printNiimbotLabel, extractComPort, extractWindowsUsbPort } = require("./niimbot-client");
+const {
+  HIDDEN_LAUNCHER,
+  WATCHDOG_VBS,
+  buildHiddenLauncherVbs,
+  buildWatchdogVbs,
+  hiddenStartupCommand,
+  watchdogTaskCreateArgs,
+  watchdogTaskDeleteArgs,
+} = require("./windows-native");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.4";
+const VERSION = "1.10.5";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -598,11 +607,36 @@ $b = [System.IO.File]::ReadAllText('${bodyFile.replace(/'/g, "''")}', [System.Te
   }
 }
 
-async function setStartup(enabled, exePath) {
+function writeNativeLaunchers(dir, exePath) {
+  fs.writeFileSync(path.join(dir, HIDDEN_LAUNCHER), buildHiddenLauncherVbs(exePath), "utf8");
+  fs.writeFileSync(path.join(dir, WATCHDOG_VBS), buildWatchdogVbs(exePath, PORT), "utf8");
+}
+
+async function setWatchdogTask(enabled, vbsPath) {
+  if (!isWindows()) return;
+  if (enabled) {
+    try {
+      await execFileAsync("schtasks", watchdogTaskCreateArgs(vbsPath), {
+        windowsHide: true,
+        timeout: 15000,
+      });
+      appendInstallLog(`Registered watchdog task ${watchdogTaskCreateArgs(vbsPath)[2]}`);
+    } catch (e) {
+      appendInstallLog(`Watchdog task not registered: ${e.message || e}`);
+    }
+    return;
+  }
+  await execFileAsync("schtasks", watchdogTaskDeleteArgs(), {
+    windowsHide: true,
+    timeout: 15000,
+  }).catch(() => {});
+}
+
+async function setStartup(enabled, launchCommand) {
   if (!isWindows()) return;
   const runKey = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
   if (enabled) {
-    const quoted = `"${exePath}"`;
+    const quoted = String(launchCommand || "");
     await execFileAsync("reg", ["add", runKey, "/v", RUN_VALUE_NAME, "/t", "REG_SZ", "/d", quoted, "/f"], {
       windowsHide: true,
     });
@@ -664,6 +698,10 @@ async function doInstall() {
     appendInstallLog(`Wrote start-agent.cmd (dev fallback)`);
   }
 
+  const nativeExe = fs.existsSync(targetExe) ? targetExe : path.join(dir, "start-agent.cmd");
+  writeNativeLaunchers(dir, nativeExe);
+  appendInstallLog(`Wrote ${HIDDEN_LAUNCHER} and ${WATCHDOG_VBS}`);
+
   const ps1Scripts = ["win-raw-print.ps1", "win-raw-print-worker.ps1", "win-niimbot-print.ps1"];
   for (const ps1Name of ps1Scripts) {
     const ps1Src = path.join(__dirname, ps1Name);
@@ -694,8 +732,12 @@ async function doInstall() {
   }
 
   const launchPath = fs.existsSync(targetExe) ? targetExe : path.join(dir, "start-agent.cmd");
-  await setStartup(true, launchPath);
-  appendInstallLog(`Registered Startup: ${launchPath}`);
+  const hiddenVbs = path.join(dir, HIDDEN_LAUNCHER);
+  const watchdogVbs = path.join(dir, WATCHDOG_VBS);
+  const startupCmd = fs.existsSync(hiddenVbs) ? hiddenStartupCommand(hiddenVbs) : `"${launchPath}"`;
+  await setStartup(true, startupCmd);
+  appendInstallLog(`Registered hidden Startup: ${startupCmd}`);
+  await setWatchdogTask(true, watchdogVbs);
 
   // Start agent in background if not already listening
   let running = false;
@@ -705,7 +747,9 @@ async function doInstall() {
     appendInstallLog(`Agent already healthy on port ${PORT}`);
   } else {
     const spawnArgs = launchPath.toLowerCase().endsWith(".exe") ? ["--run"] : [];
-    const child = spawn(launchPath, spawnArgs, {
+    const spawnCmd = fs.existsSync(hiddenVbs) ? "wscript.exe" : launchPath;
+    const spawnCmdArgs = fs.existsSync(hiddenVbs) ? ["//nologo", hiddenVbs] : spawnArgs;
+    const child = spawn(spawnCmd, spawnCmdArgs, {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
@@ -721,9 +765,10 @@ async function doInstall() {
   if (running) {
     await retireLegacyInstall();
     const msg =
-      `Reborn Print Agent installed and running on port ${PORT}.\n\n` +
+      `Reborn Print Agent installed and running silently on port ${PORT}.\n\n` +
       `Installed to:\n${dir}\n\n` +
-      `It will also start automatically when you log in to Windows.\n\n` +
+      `There is no black CMD window. It starts when you log in to Windows and restarts automatically if it stops.\n` +
+      `Keep using WebPOS in the browser — do not look for or close a console.\n\n` +
       `Log: ${installLogPath()}`;
     console.log(msg);
     appendInstallLog("Install success (running)");
@@ -747,9 +792,10 @@ async function doInstall() {
 
 async function doUninstall() {
   await setStartup(false);
-  appendInstallLog("Uninstall: removed Startup entry");
+  await setWatchdogTask(false);
+  appendInstallLog("Uninstall: removed Startup entry and watchdog task");
   const msg =
-    "Removed Windows Startup entry.\n" +
+    "Removed Windows Startup entry and background watchdog.\n" +
     `Files remain in ${installDir()} — delete that folder manually if desired.`;
   console.log(msg);
   await showMessage("Reborn Print Agent", msg);
@@ -758,10 +804,10 @@ async function doUninstall() {
 function printHelp() {
   console.log(`Reborn Print Agent v${VERSION}
 Usage:
-  --install      Install permanently and register Windows Startup
-  --uninstall    Remove Startup registration
+  --install      Install permanently (hidden Startup + watchdog, no CMD window)
+  --uninstall    Remove Startup registration and watchdog
   --help         Show this help
-  (no flags)     Run the local print HTTP server on port ${PORT}
+  (no flags)     Run the local print HTTP server on port ${PORT} (silent when packaged)
 `);
 }
 
@@ -1334,7 +1380,11 @@ function startCloudRelayPoller() {
   void drainCloudPrintJobs();
 }
 
-function startServer() {
+async function startServer() {
+  if (isWindows() && isPkg) {
+    await hideConsoleForUi();
+  }
+
   const app = express();
 
   app.use(
@@ -1375,6 +1425,8 @@ function startServer() {
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
+        "silent-native",
+        "watchdog",
       ],
     });
   });
@@ -1617,7 +1669,7 @@ function startServer() {
     }
   });
 
-  app.listen(PORT, "127.0.0.1", () => {
+  const server = app.listen(PORT, "127.0.0.1", () => {
     console.log(`Reborn Print Agent v${VERSION} listening on http://127.0.0.1:${PORT}`);
     if (!isWindows()) {
       console.warn("Warning: RAW thermal printing is only supported on Windows.");
@@ -1628,12 +1680,19 @@ function startServer() {
     }
     if (readCloudRelay()) startCloudRelayPoller();
   });
+  server.on("error", (err) => {
+    if (err && err.code === "EADDRINUSE") {
+      appendInstallLog(`Port ${PORT} already in use — another agent is running. Exiting quietly.`);
+      process.exit(0);
+    }
+    throw err;
+  });
 }
 
 (async () => {
   await runCli();
   // If CLI installed/uninstalled it already exited. Otherwise start the server.
-  startServer();
+  await startServer();
 })().catch(async (err) => {
   console.error(err);
   appendInstallLog(`Fatal: ${err.message || err}`);

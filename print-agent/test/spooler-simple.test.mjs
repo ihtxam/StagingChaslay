@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.4";
+const VERSION = "1.10.5";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.4 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.5 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -36,6 +36,10 @@ test("print-agent version is 1.10.4 in package.json, server.js, and download man
   assert.match(server, /printViaWorker/);
   assert.match(server, /enqueuePrint/);
   assert.match(server, /timeout: 180000/);
+  assert.match(server, /silent-native/);
+  assert.match(server, /windows-native/);
+  assert.match(server, /hideConsoleForUi/);
+  assert.match(server, /setWatchdogTask/);
 });
 
 function extractPsFunction(src, name) {

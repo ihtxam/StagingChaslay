@@ -1795,7 +1795,7 @@ const en: Dict = {
   kitchenPrintRetryIntervalSec: 'Seconds between retries',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Install Reborn Print Agent once on the till PC. It starts with Windows — no need to re-run start.bat. Use a thermal ESC/POS printer (not OneNote/PDF).',
+    'Install Reborn Print Agent once on the till PC. It runs silently in the background (no black window) and starts with Windows. Use a thermal ESC/POS or LuckyDoor/Niimbot label printer (not OneNote/PDF).',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Download Bridge Reborn (Android)',
   installPrintBridge: 'Install Bridge Reborn',
@@ -1806,13 +1806,13 @@ const en: Dict = {
   printBridgeInstallSteps:
     '1) Android Settings → Apps → Bridge Reborn → Uninstall. 2) Files / Downloads → delete every reborn-print-bridge*.apk. 3) Come back here and tap Install — Chrome must save a NEW file named reborn-print-bridge-0.4.0.apk. 4) Open that new file, then open the Bridge app. The green header must say v0.4.0. If it still says 0.3.9 you installed an old file from Downloads.',
   printAgentInstallSteps:
-    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
+    'Run the setup EXE once. A confirmation dialog appears when install succeeds (port 9101). The agent runs in the background with no CMD window — do not look for or close a console. Files install to %LOCALAPPDATA%\\RebornPrintAgent and start with Windows.',
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'No Print Agent detected on this device.',
   printAgentChecking: 'Checking for Print Agent…',
   printAgentNotResponding:
-    'Print Agent is not responding — make sure it is running on this PC (port 9101), then click Refresh printers.',
+    'Print Agent is not responding. Re-run the setup EXE (it installs silently — no black window). If you previously closed a CMD window, that stopped printing; the new agent restarts itself automatically.',
   printAgentConnectedUnknown: 'Print Agent is running (version unknown).',
   printBridgeNotInstalled: 'Bridge Reborn not installed on this device.',
   printBridgeNotResponding:
@@ -3760,7 +3760,7 @@ const en: Dict = {
   cmsOrderOnline: 'Order online',
   printRoleLabels: 'Labels',
   barcodeLabelsTitle: 'Barcode labels',
-  barcodeLabelsHint: 'Default size and fields for Code128 product labels. Assign a Labels printer role under printer profiles. LuckyDoor EML-400L uses TSPL via Print Agent; Niimbot K3/B21 uses the Niimbot protocol.',
+  barcodeLabelsHint: 'Default size and fields for Code128 product labels. In Windows, the LuckyDoor USB printer must appear under Printers, then enable the Labels role on that name. LuckyDoor EML-400L uses TSPL via Print Agent; Niimbot K3/B21 uses the Niimbot protocol. If Print Agent is not running, labels will not print.',
   orderLabelsTitle: 'Order labels',
   orderLabelsHint:
     'Print a small label when holding or sending an order. Assign a Labels printer under printer profiles (Niimbot or LuckyDoor TSPL).',
@@ -5831,7 +5831,7 @@ const fr: Dict = {
   kitchenPrintRetryIntervalSec: 'Secondes entre les tentatives',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Installez Reborn Print Agent une seule fois sur le PC caisse. L’agent démarre avec Windows — plus besoin de relancer start.bat. Utilisez une imprimante tickets ESC/POS (pas OneNote/PDF).',
+    'Installez Reborn Print Agent une seule fois sur le PC caisse. Il tourne en arrière-plan (pas de fenêtre noire) et démarre avec Windows. Utilisez une imprimante tickets ESC/POS ou étiquettes LuckyDoor/Niimbot (pas OneNote/PDF).',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
   installPrintBridge: 'Installer Bridge Reborn',
@@ -5843,13 +5843,13 @@ const fr: Dict = {
   printBridgeInstallSteps:
     'Installez l’APK, autorisez USB et Bluetooth, choisissez l’imprimante dans l’assistant (intégrée, USB, BT ou LAN), puis ouvrez WebPOS dans Chrome quand Bridge Reborn est prêt (port 9101).',
   printAgentInstallSteps:
-    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). Fichiers dans %LOCALAPPDATA%\\RebornPrintAgent.',
+    'Exécutez le setup une fois. Une boîte de dialogue confirme le succès (port 9101). L’agent tourne en arrière-plan sans fenêtre CMD — ne cherchez pas et ne fermez pas de console. Fichiers dans %LOCALAPPDATA%\\RebornPrintAgent.',
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Aucun Print Agent détecté sur cet appareil.',
   printAgentChecking: 'Recherche du Print Agent…',
   printAgentNotResponding:
-    'Le Print Agent ne répond pas — assurez-vous qu’il est lancé sur ce PC (port 9101), puis cliquez sur Actualiser les imprimantes.',
+    'Le Print Agent ne répond pas. Relancez le setup (installation silencieuse, sans fenêtre noire). Si vous aviez fermé une fenêtre CMD, cela arrêtait l’impression ; le nouvel agent redémarre tout seul.',
   printAgentConnectedUnknown: 'Print Agent en cours d’exécution (version inconnue).',
   printBridgeNotInstalled: 'Bridge Reborn non installé sur cet appareil.',
   printBridgeNotResponding:
@@ -7746,7 +7746,7 @@ const fr: Dict = {
   cmsOrderOnline: 'Commander',
   printRoleLabels: 'Étiquettes',
   barcodeLabelsTitle: 'Étiquettes code-barres',
-  barcodeLabelsHint: 'Taille et champs par défaut des étiquettes Code128. Assignez le rôle Étiquettes à une imprimante. LuckyDoor EML-400L utilise TSPL via l’agent d’impression ; Niimbot utilise son propre protocole.',
+  barcodeLabelsHint: 'Taille et champs par défaut des étiquettes Code128. Sous Windows, l’imprimante USB LuckyDoor doit apparaître dans Imprimantes, puis activez le rôle Étiquettes. LuckyDoor EML-400L utilise TSPL via l’agent d’impression ; Niimbot utilise son propre protocole. Sans Print Agent, rien ne s’imprime.',
   orderLabelsTitle: 'Étiquettes de commande',
   orderLabelsHint:
     'Imprimez une petite étiquette à la mise en attente ou à l’envoi. Assignez le rôle Étiquettes (Niimbot ou LuckyDoor TSPL).',
@@ -9816,7 +9816,7 @@ const de: Dict = {
   kitchenPrintRetryIntervalSec: 'Sekunden zwischen Versuchen',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Reborn Print Agent einmal auf dem Kassen-PC installieren. Der Agent startet mit Windows — start.bat nicht mehr nötig. ESC/POS-Bondrucker verwenden (nicht OneNote/PDF).',
+    'Reborn Print Agent einmal auf dem Kassen-PC installieren. Er läuft unsichtbar im Hintergrund (kein schwarzes Fenster) und startet mit Windows. ESC/POS-Bondrucker oder LuckyDoor/Niimbot-Etikettendrucker verwenden (nicht OneNote/PDF).',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
   installPrintBridge: 'Bridge Reborn installieren',
@@ -9828,13 +9828,13 @@ const de: Dict = {
   printBridgeInstallSteps:
     'APK installieren, USB und Bluetooth erlauben, Drucker im Assistenten wählen (integriert, USB, BT oder LAN), dann WebPOS in Chrome öffnen, wenn Bridge Reborn bereit ist (Port 9101).',
   printAgentInstallSteps:
-    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Dateien in %LOCALAPPDATA%\\RebornPrintAgent.',
+    'Setup-EXE einmal ausführen. Ein Dialog bestätigt den Erfolg (Port 9101). Der Agent läuft im Hintergrund ohne CMD-Fenster — kein Konsolenfenster suchen oder schliessen. Dateien in %LOCALAPPDATA%\\RebornPrintAgent.',
   printAgentVersionStatusLabel: 'Print Agent',
   printBridgeVersionStatusLabel: 'Bridge Reborn',
   printAgentNotDetected: 'Kein Print Agent auf diesem Gerät erkannt.',
   printAgentChecking: 'Print Agent wird gesucht…',
   printAgentNotResponding:
-    'Print Agent antwortet nicht — stellen Sie sicher, dass er auf diesem PC läuft (Port 9101), und klicken Sie auf Drucker aktualisieren.',
+    'Print Agent antwortet nicht. Setup-EXE erneut ausführen (läuft unsichtbar, kein schwarzes Fenster). Ein zuvor geschlossenes CMD-Fenster hat den Druck gestoppt; der neue Agent startet sich selbst neu.',
   printAgentConnectedUnknown: 'Print Agent läuft (Version unbekannt).',
   printBridgeNotInstalled: 'Bridge Reborn ist auf diesem Gerät nicht installiert.',
   printBridgeNotResponding:
@@ -11731,7 +11731,7 @@ const de: Dict = {
   cmsOrderOnline: 'Online bestellen',
   printRoleLabels: 'Etiketten',
   barcodeLabelsTitle: 'Barcode-Etiketten',
-  barcodeLabelsHint: 'Standardgrösse und Felder für Code128-Etiketten. Weisen Sie einer Druckerrolle «Etiketten» zu. LuckyDoor EML-400L nutzt TSPL über den Druckagenten; Niimbot hat ein eigenes Protokoll.',
+  barcodeLabelsHint: 'Standardgrösse und Felder für Code128-Etiketten. Unter Windows muss der LuckyDoor-USB-Drucker unter Drucker erscheinen; dann Rolle «Etiketten» aktivieren. LuckyDoor EML-400L nutzt TSPL über den Druckagenten; Niimbot hat ein eigenes Protokoll. Ohne Print Agent wird nicht gedruckt.',
   orderLabelsTitle: 'Bestell-Etiketten',
   orderLabelsHint:
     'Kleines Etikett beim Halten oder Senden einer Bestellung. Weisen Sie einer Druckerrolle «Etiketten» zu (Niimbot oder LuckyDoor TSPL).',
