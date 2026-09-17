@@ -41,6 +41,7 @@ import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
+import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
 import { ArrowLeft, Check, ShoppingBag } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
@@ -580,6 +581,12 @@ export default function CheckoutPage() {
     () => withDeliveryMinOrderStatus(deliveryInfo, subtotal),
     [deliveryInfo, subtotal]
   );
+  const minOrderThreshold = draft.channel === 'delivery'
+    ? Number(effectiveDeliveryInfo?.zone?.minOrderAmount || 0)
+    : 0;
+  const freeDeliveryThreshold = draft.channel === 'delivery'
+    ? Number(effectiveDeliveryInfo?.zone?.freeDeliveryMinOrder || 0)
+    : 0;
   const deliveryFee = roundMoney2(
     draft.channel === 'delivery' ? Number(effectiveDeliveryInfo?.zone?.deliveryFee || 0) : 0
   );
@@ -1408,6 +1415,13 @@ export default function CheckoutPage() {
 
   const renderCartTotals = () => (
     <div className="text-sm space-y-1">
+      <ShopCartThresholdSlot
+        className="mb-2"
+        channel={draft.channel}
+        subtotal={subtotal}
+        minOrder={minOrderThreshold}
+        freeDeliveryFrom={freeDeliveryThreshold}
+      />
       {offerDiscount > 0 && (
         <div className="space-y-1.5 py-0.5">
           {(appliedOffers.length ? appliedOffers : [{ name: t('shopOffer'), discount: offerDiscount }]).map(

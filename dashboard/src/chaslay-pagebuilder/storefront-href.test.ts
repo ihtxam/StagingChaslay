@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  isContactNavLink,
   isHomeNavLink,
   isShopMenuNavLink,
   resolveStorefrontHref,
@@ -22,6 +23,11 @@ assert.equal(isHomeNavLink('#home'), true);
 assert.equal(isHomeNavLink('/'), true);
 assert.equal(isHomeNavLink('/home'), true);
 assert.equal(isHomeNavLink('#about'), false);
+
+assert.equal(isContactNavLink('#contact'), true);
+assert.equal(isContactNavLink('/contact'), true);
+assert.equal(isContactNavLink('/shop/demo/contact'), true);
+assert.equal(isContactNavLink('#about'), false);
 
 assert.equal(resolveStorefrontHref('#menu', base, true), `${base}/menu`);
 assert.equal(resolveStorefrontHref('/menu', base, true), `${base}/menu`);

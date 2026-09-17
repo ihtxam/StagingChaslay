@@ -2079,6 +2079,27 @@ html.shop-shell #root {
   }
 }
 
+.shop-mobile-cart-stack {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 45;
+}
+
+.shop-mobile-cart-stack__progress {
+  padding: 0.5rem 1rem 0;
+  background: #fff;
+}
+
+.shop-mobile-cart-stack__progress:empty,
+.shop-mobile-cart-stack__progress:not(:has(*)) {
+  display: none;
+}
+
+.shop-mobile-cart-stack .shop-mobile-cart-bar {
+  position: relative;
+}
+
 .shop-mobile-cart-bar {
   position: fixed;
   inset-inline: 0;

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { resolveTranslatedProp } from './resolve-translated-prop';
 import { translateSectionCopy } from './section-copy';
-import { resolveNavbarMenuItems, type NavbarMenuItem } from './navbar-site-nav';
+import { constrainStorefrontTopNav, resolveNavbarMenuItems, type NavbarMenuItem } from './navbar-site-nav';
 
 export function useNavbarDisplay(
   props: Record<string, unknown>,
@@ -12,7 +12,7 @@ export function useNavbarDisplay(
   const { isStorefront, sitePages, locale, defaultLanguage } = useStorefront();
   const menuItems = useMemo(() => {
     const items = resolveNavbarMenuItems(configuredItems, sitePages, useSitePagesNav, isStorefront);
-    return items.map((item, i) => {
+    const translated = items.map((item, i) => {
       const fromProp = resolveTranslatedProp(props, `menuItems_${i}_label`, locale, defaultLanguage);
       const loc = String(locale || defaultLanguage).toLowerCase().slice(0, 2);
       const def = String(defaultLanguage || 'en').toLowerCase().slice(0, 2);
@@ -22,6 +22,11 @@ export function useNavbarDisplay(
         label: hasOverride ? fromProp : translateSectionCopy(fromProp || item.label, locale, defaultLanguage),
       };
     });
+    if (!isStorefront) return translated;
+    return constrainStorefrontTopNav(translated).map((item) => ({
+      ...item,
+      label: translateSectionCopy(item.label, locale, defaultLanguage),
+    }));
   }, [configuredItems, sitePages, useSitePagesNav, isStorefront, props, locale, defaultLanguage]);
   const t = (key: string) => {
     const resolved = resolveTranslatedProp(props, key, locale, defaultLanguage);
