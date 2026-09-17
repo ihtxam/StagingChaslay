@@ -62,6 +62,7 @@ import {
   currentChannelClose,
   findNextOpen,
   formatNextOpenLabel,
+  isShopHoursSoonWindow,
   type StoreHours,
 } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
@@ -960,7 +961,7 @@ export default function OrderingPage() {
     closedFallback: string
   ) => {
     if (open) {
-      if (close && close.minutes <= 90) {
+      if (close && isShopHoursSoonWindow(close.minutes)) {
         return `${t('shopOpenNow')} · ${t('shopClosingSoon').replace('{n}', String(Math.max(1, close.minutes)))}`;
       }
       if (close) {
@@ -970,7 +971,7 @@ export default function OrderingPage() {
     }
     if (nextOpen && nextOpen.dayOffset === 0) {
       const mins = Math.max(1, Math.round((nextOpen.at.getTime() - nowTick) / 60_000));
-      if (mins <= 90) {
+      if (isShopHoursSoonWindow(mins)) {
         const opening = t('shopOpeningIn').replace('{n}', String(mins));
         return allowScheduledOrders ? `${opening} · ${t('shopPreOrderAvailable')}` : opening;
       }

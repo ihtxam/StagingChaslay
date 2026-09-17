@@ -7,8 +7,10 @@ import {
   buildScheduleDays,
   currentChannelClose,
   isChannelOpenAt,
+  isShopHoursSoonWindow,
   minutesUntilChannelClose,
   minutesUntilChannelOpen,
+  SHOP_HOURS_SOON_WINDOW_MINUTES,
   zonedLocalDate,
   type StoreHours,
 } from './shop-hours.ts';
@@ -83,5 +85,11 @@ assert.deepEqual(currentChannelClose(hours, 'takeaway', midday), {
   labelHm: '23:00',
 });
 assert.equal(minutesUntilChannelOpen(hours, 'takeaway', midday), null);
+
+assert.equal(SHOP_HOURS_SOON_WINDOW_MINUTES, 30);
+assert.equal(isShopHoursSoonWindow(30), true);
+assert.equal(isShopHoursSoonWindow(31), false);
+assert.equal(isShopHoursSoonWindow(20), true);
+assert.equal(isShopHoursSoonWindow(90), false);
 
 console.log('shop-hours.test.ts OK');

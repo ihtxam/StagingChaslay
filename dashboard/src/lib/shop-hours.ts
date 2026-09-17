@@ -336,6 +336,13 @@ export function findNextOpen(
   return null;
 }
 
+/** Countdown copy ("Closing soon" / "Opening in") only in this last window. */
+export const SHOP_HOURS_SOON_WINDOW_MINUTES = 30;
+
+export function isShopHoursSoonWindow(minutes: number | null | undefined): boolean {
+  return minutes != null && Number.isFinite(minutes) && minutes >= 0 && minutes <= SHOP_HOURS_SOON_WINDOW_MINUTES;
+}
+
 /** Minutes until the next opening today, or null if closed until a later day. */
 export function minutesUntilChannelOpen(
   storeHours: StoreHours | null | undefined,
