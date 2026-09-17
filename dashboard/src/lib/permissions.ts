@@ -162,6 +162,10 @@ export function isOrdersPanelPath(path: string): boolean {
   );
 }
 
+export function isInventoryPanelPath(path: string): boolean {
+  return path === '/merchant/inventory' || path.startsWith('/merchant/inventory/');
+}
+
 export function isReportsPanelPath(path: string): boolean {
   return path === '/merchant/reports' || path.startsWith('/merchant/reports/');
 }

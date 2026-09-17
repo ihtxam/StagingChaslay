@@ -7,10 +7,23 @@ import {
   labelPrinterUsesNiimbot,
   renderNiimbotLabelPng,
 } from '@/lib/niimbot-label';
+import { buildLabelTspl, labelPrinterUsesTspl } from '@/lib/tspl-label';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
-export type LabelHeightMm = 20 | 25 | 30 | 40;
-export type LabelWidthMm = 40 | 58;
+export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
+export const LABEL_HEIGHTS_MM = [20, 25, 30, 40, 50, 80, 150] as const;
+export type LabelWidthMm = (typeof LABEL_WIDTHS_MM)[number];
+export type LabelHeightMm = (typeof LABEL_HEIGHTS_MM)[number];
+
+export function parseLabelWidthMm(value: unknown): LabelWidthMm {
+  const n = Number(value);
+  return (LABEL_WIDTHS_MM as readonly number[]).includes(n) ? (n as LabelWidthMm) : 40;
+}
+
+export function parseLabelHeightMm(value: unknown): LabelHeightMm {
+  const n = Number(value);
+  return (LABEL_HEIGHTS_MM as readonly number[]).includes(n) ? (n as LabelHeightMm) : 20;
+}
 
 export type LabelPrintOptions = {
   storeName?: string;
@@ -87,11 +100,10 @@ export function normalizeLabelOptions(raw?: Partial<LabelPrintOptions> | null): 
   storeName: string;
   copies: number;
 } {
-  const h = Number(raw?.heightMm);
   return {
     storeName: String(raw?.storeName || '').trim().slice(0, 80),
-    widthMm: Number(raw?.widthMm) === 58 ? 58 : 40,
-    heightMm: (h === 25 || h === 30 || h === 40 ? h : 20) as LabelHeightMm,
+    widthMm: parseLabelWidthMm(raw?.widthMm),
+    heightMm: parseLabelHeightMm(raw?.heightMm),
     showStoreName: raw?.showStoreName !== false,
     showProductName: raw?.showProductName !== false,
     showBarcodeNumber: raw?.showBarcodeNumber !== false,
@@ -116,8 +128,8 @@ export function buildLabelEscPos(product: LabelProduct, opts: LabelPrintOptions)
   const barH = o.heightMm <= 20 ? 48 : o.heightMm <= 25 ? 60 : o.heightMm <= 30 ? 72 : 88;
   parts.push(escposCode128(product.barcode, barH, o.widthMm === 40 ? 1 : 2));
   if (o.showBarcodeNumber) parts.push(line(product.barcode));
-  // Single full cut — avoid extra feed that advances a blank label on thermal printers.
-  parts.push(new Uint8Array([0x1d, 0x56, 0x00]));
+  parts.push(new Uint8Array([0x1b, 0x64, 0x02]));
+  parts.push(new Uint8Array([0x1d, 0x56, 0x41, 0x00]));
   parts.push(left);
   return concatBytes(...parts);
 }
@@ -132,11 +144,7 @@ export async function printLabelsViaAgentOrQueue(
   products: LabelProduct[],
   opts: LabelPrintOptions,
   settings?: PosPrintSettingsClient | null,
-  relayOpts?: {
-    retryLocally?: boolean;
-    /** Called once when the transport accepted the job but cannot confirm it printed. */
-    onUnconfirmed?: (warning: string) => void;
-  }
+  relayOpts?: { retryLocally?: boolean }
 ): Promise<'local' | 'queued' | 'browser'> {
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
@@ -147,31 +155,45 @@ export async function printLabelsViaAgentOrQueue(
   const printerName = labelProfile?.name?.trim();
   if (!printerName) {
     throw new Error(
-      'No label printer configured. Open Settings → Receipts & printers, add your Niimbot, and enable Labels.'
+      'No label printer configured. Open Settings → Receipts & printers, add your LuckyDoor or Niimbot, and enable Labels.'
     );
   }
   const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
   const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
+  const useTspl = !useNiimbot && labelPrinterUsesTspl(settings, printerName);
+
+  if (useTspl) {
+    const chunks: Uint8Array[] = [];
+    for (const product of printable) {
+      chunks.push(buildLabelTspl(product, o));
+    }
+    const data = concatBytes(...chunks);
+    return await printViaAgentOrQueue({
+      dataBase64: toBase64(data),
+      printerName,
+      text: printable.map((p) => p.barcode).join(', '),
+      retryLocally: relayOpts?.retryLocally,
+      jobKind: 'other',
+      jobLabel: 'barcode-label-tspl',
+    });
+  }
 
   if (useNiimbot) {
-    let unconfirmed = '';
     for (const product of printable) {
       for (let c = 0; c < o.copies; c++) {
         const rendered = await renderNiimbotLabelPng(product, o);
-        const res = await printNiimbotLabelViaAgent({
+        await printNiimbotLabelViaAgent({
           printerName,
           portName,
           bitmapBase64: rendered.bitmapBase64,
           widthPx: rendered.widthPx,
           heightPx: rendered.heightPx,
         });
-        if (res.warning && !unconfirmed) unconfirmed = res.warning;
         if (printable.length > 1 || o.copies > 1) {
           await new Promise((r) => setTimeout(r, 400));
         }
       }
     }
-    if (unconfirmed) relayOpts?.onUnconfirmed?.(unconfirmed);
     return 'local';
   }
 
@@ -201,16 +223,12 @@ export function printLabelsHtml(products: LabelProduct[], opts: LabelPrintOption
   const o = normalizeLabelOptions(opts);
   const printable = products.filter((p) => String(p.barcode || '').trim()).slice(0, 200);
   const pages: string[] = [];
-  let pageIndex = 0;
-  const totalPages = printable.reduce((n, p) => n + o.copies, 0);
   for (const product of printable) {
     for (let c = 0; c < o.copies; c++) {
-      pageIndex += 1;
       const svg = barcodeSvg(product.barcode, { height: o.heightMm <= 20 ? 28 : 40, width: o.widthMm === 40 ? 120 : 160 });
       const meta = labelMetaLine(product, o);
-      const pageBreak = pageIndex < totalPages ? ' page-break-after: always;' : '';
       pages.push(`
-        <div class="label" style="${pageBreak}">
+        <div class="label">
           ${o.showStoreName && o.storeName ? `<div class="store">${escapeHtml(o.storeName)}</div>` : ''}
           ${o.showProductName ? `<div class="name">${escapeHtml(product.name)}</div>` : ''}
           ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ''}
@@ -224,7 +242,7 @@ export function printLabelsHtml(products: LabelProduct[], opts: LabelPrintOption
       @page { size: ${o.widthMm}mm ${o.heightMm}mm; margin: 1.5mm; }
       * { box-sizing: border-box; }
       body { margin: 0; font-family: system-ui, sans-serif; color: #111; }
-      .label { width: ${o.widthMm}mm; height: ${o.heightMm}mm; padding: 1mm;
+      .label { width: ${o.widthMm}mm; height: ${o.heightMm}mm; padding: 1mm; page-break-after: always;
         display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
       .store { font-size: 8px; font-weight: 700; letter-spacing: .02em; }
       .name { font-size: 10px; font-weight: 600; line-height: 1.15; }

@@ -1,3 +1,5 @@
+import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
+
 /**
  * Reborn Windows Print Agent (localhost).
  * Electron desktop also exposes window.manuposDesktop (legacy API name).
@@ -155,6 +157,21 @@ function scoreDeviceMatch(configured: string, candidate: string): number {
   return 0;
 }
 
+function normalizeComPortLabel(port?: string | null): string {
+  const raw = String(port || '')
+    .trim()
+    .toUpperCase()
+    .replace(/^\\\\\.\\/i, '');
+  const m = raw.match(/^(COM\d+)$/);
+  return m ? m[1] : raw;
+}
+
+function findAgentPrinterByPort(port: string, printers: AgentPrinter[]): AgentPrinter | null {
+  const want = normalizeComPortLabel(port);
+  if (!want) return null;
+  return printers.find((p) => normalizeComPortLabel(p.portName) === want) || null;
+}
+
 /** Map a saved Windows name to the live queue name (exact, case, or device-key match). */
 export function resolveAgentPrinterName(
   configuredName: string,
@@ -166,9 +183,9 @@ export function resolveAgentPrinterName(
   if (exact) return exact.name;
   const ci = printers.find((p) => p.name.toLowerCase() === want.toLowerCase());
   if (ci) return ci.name;
-  const wantPort = want.toUpperCase().match(/^COM\d+$/)?.[0] || '';
-  if (wantPort) {
-    const byPort = printers.find((p) => String(p.portName || '').toUpperCase() === wantPort);
+  const wantPort = normalizeComPortLabel(want.match(/^COM\d+$/)?.[0] || want);
+  if (wantPort.startsWith('COM')) {
+    const byPort = findAgentPrinterByPort(wantPort, printers);
     if (byPort) return byPort.name;
   }
   const scored = printers
@@ -184,6 +201,78 @@ export function resolveAgentPrinterName(
     .filter((x) => x.score >= 12)
     .sort((a, b) => b.score - a.score);
   return scored[0]?.p.name || null;
+}
+
+export type PrinterResolutionHints = {
+  portName?: string | null;
+  matchHint?: string | null;
+};
+
+function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
+  const suitable = printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  return (
+    suitable.find((p) => p.isDefault) ||
+    suitable.find((p) => looksLikeThermal80mm(p.name)) ||
+    suitable[0] ||
+    null
+  );
+}
+
+/**
+ * Resolve a saved printer profile to the current Windows queue name.
+ * Falls back to stored COM port / match hint, similarity heal, then default printer.
+ */
+export function resolveLivePrinterName(
+  configuredName: string,
+  livePrinters: AgentPrinter[],
+  hints?: PrinterResolutionHints
+): string | null {
+  const want = String(configuredName || '').trim();
+  if (!livePrinters.length) return want || null;
+
+  if (want) {
+    const resolved = resolveAgentPrinterName(want, livePrinters);
+    if (resolved) return resolved;
+  }
+
+  const byPort = findAgentPrinterByPort(hints?.portName, livePrinters);
+  if (byPort) return byPort.name;
+
+  const hint = String(hints?.matchHint || '').trim();
+  if (hint) {
+    const byHint = resolveAgentPrinterName(hint, livePrinters);
+    if (byHint) return byHint;
+  }
+
+  const heal = suggestPrinterAutoHeal(want || hint, livePrinters);
+  if (heal) return heal.name;
+
+  const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
+  if (candidates[0]?.name) return candidates[0].name;
+
+  return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
+
+/** Clear or remap stale localStorage till printer when Windows renames a queue. */
+export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string | null {
+  if (typeof localStorage === 'undefined' || !livePrinters.length) return null;
+  let stored = '';
+  try {
+    stored = String(localStorage.getItem(WEBPOS_PRINTER_STORAGE_KEY) || '').trim();
+  } catch {
+    return null;
+  }
+  if (!stored) return null;
+  const resolved = resolveLivePrinterName(stored, livePrinters);
+  if (!resolved || resolved === stored) return null;
+  try {
+    localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, resolved);
+  } catch {
+    /* ignore */
+  }
+  return resolved;
 }
 
 /** Dedupe agent enumeration by exact Windows queue name. */
@@ -224,11 +313,14 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
   let changed = false;
   const next = profiles.map((p) => {
     const name = String(p.name || '').trim();
-    if (!name) return p;
-    const resolved = resolveAgentPrinterName(name, livePrinters);
+    if (!name && !String(p.portName || '').trim()) return p;
+    const resolved = resolveLivePrinterName(name, livePrinters, {
+      portName: p.portName,
+      matchHint: p.matchHint,
+    });
     if (resolved) {
-      if (resolved === name) return p;
       const picked = livePrinters.find((ap) => ap.name === resolved);
+      if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
       changed = true;
       return {
         ...p,
@@ -237,31 +329,23 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
         matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
       };
     }
-    const heal = suggestPrinterAutoHeal(name, livePrinters);
-    if (heal) {
-      changed = true;
-      return {
-        ...p,
-        name: heal.name,
-        portName: heal.portName ?? p.portName ?? null,
-        matchHint: heal.matchHint ?? heal.driverName ?? p.matchHint ?? null,
-      };
-    }
     changed = true;
     return { ...p, name: '' };
   });
   return { profiles: next, changed };
 }
 
-/** Drop saved profiles that no longer map to a live Windows queue. */
 export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
   livePrinters: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
   const next = profiles.filter((p) => {
     const name = String(p.name || '').trim();
-    if (!name) return false;
-    return !!resolveAgentPrinterName(name, livePrinters);
+    if (!name && !String(p.portName || '').trim()) return false;
+    return !!resolveLivePrinterName(name, livePrinters, {
+      portName: p.portName,
+      matchHint: p.matchHint,
+    });
   });
   return { profiles: next, changed: next.length !== profiles.length };
 }
@@ -282,14 +366,21 @@ export function reconcileAndPrunePosPrinterProfiles<T extends PosPrinterProfileL
 /** Agent is up but the stored Windows name is gone (rename / 1801). */
 export function isConfiguredPrinterMissing(
   configuredName: string,
-  printers: Array<{ name: string }>,
-  opts?: { agentOk?: boolean; printersReady?: boolean }
+  printers: Array<{ name: string; portName?: string; matchHint?: string }>,
+  opts?: {
+    agentOk?: boolean;
+    printersReady?: boolean;
+    portName?: string | null;
+    matchHint?: string | null;
+  }
 ): boolean {
   const name = String(configuredName || '').trim();
-  if (!name) return false;
+  const portName = opts?.portName;
+  const matchHint = opts?.matchHint;
+  if (!name && !String(portName || '').trim()) return false;
   if (opts?.agentOk === false) return false;
   if (opts?.printersReady === false) return false;
-  return !resolveAgentPrinterName(name, printers as AgentPrinter[]);
+  return !resolveLivePrinterName(name, printers as AgentPrinter[], { portName, matchHint });
 }
 
 /** Close matches for a missing name (e.g. GLPrinter80 → chaslay80). */
@@ -343,10 +434,17 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
 /** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
 export const MIN_PRINT_AGENT_VERSION = '1.9.5';
 
-const BT_COM_PRINTER_RE =
-  /com\d+|bth|bthenum|bluetooth|ble\b|rfcomm|cpbt|serial over|rpp|innerprinter|pos-?58|pos-?80|mtp-|spp|xprinter|gprinter|gainscha|rongta|munbyn|58mm|80mm|thermal|escpos|zj|printer_/i;
+/**
+ * 1.10.13 drops the bogus 0x54 prologue bytes, stops guessing the black-pixel
+ * counts, and adds the one-click COM port probe. Older builds cannot diagnose
+ * a blank label at all.
+ */
+export const MIN_NIIMBOT_AGENT_VERSION = '1.10.13';
 
-/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. */
+const BT_COM_PRINTER_RE =
+  /com\d+|bthenum|\bbth\b|bluetooth|\bble\b|rfcomm|cpbt|serial over|bluetoothprinter|\bbt_/i;
+
+/** Pause after a BT/COM kitchen job so the printer can cut before the next ticket. USB skips this. */
 export const BLUETOOTH_KITCHEN_SETTLE_MS = 1800;
 
 export function looksLikeBluetoothOrComPrinter(
@@ -354,12 +452,18 @@ export function looksLikeBluetoothOrComPrinter(
 ): boolean {
   if (!printer) return false;
   if (typeof printer === 'object' && printer.connectionType === 'bluetooth') return true;
-  if (typeof printer === 'string') return BT_COM_PRINTER_RE.test(printer);
-  return BT_COM_PRINTER_RE.test(
-    [printer.name, printer.portName, printer.driverName, printer.matchHint, printer.connectionType]
-      .filter(Boolean)
-      .join(' ')
-  );
+  const blob =
+    typeof printer === 'string'
+      ? printer
+      : [printer.portName, printer.connectionType, printer.name, printer.driverName, printer.matchHint]
+          .filter(Boolean)
+          .join(' ');
+  // USB001 / USBPRINT / LPT are fast RAW. Do not match "XP-80" / "Receipt" / "80mm" as Bluetooth —
+  // that used to add BLUETOOTH_KITCHEN_SETTLE_MS (1.8s) on top of paced USB drain sleeps (~4–5s).
+  if (/\busb\d+\b|\busb00|usbprint|\bdot4\b|\blpt\d*\b/i.test(blob) && !BT_COM_PRINTER_RE.test(blob)) {
+    return false;
+  }
+  return BT_COM_PRINTER_RE.test(blob);
 }
 
 export async function settleAfterBluetoothKitchenPrint(
@@ -498,6 +602,10 @@ export function isPrintAgentVersionOutdated(
   return compareAgentVersion(installed, MIN_PRINT_AGENT_VERSION) < 0;
 }
 
+function isGenericPrintFailedToast(msg: string): boolean {
+  return /^print failed( for '[^']+')?\.?$/i.test(String(msg || '').trim());
+}
+
 /** Collapse PowerShell / Win32 dumps into a one-line Reborn message. */
 export function friendlyPrintAgentError(raw: unknown, printerName?: string): string {
   const msg = collectPrintErrorText(raw);
@@ -511,6 +619,42 @@ export function friendlyPrintAgentError(raw: unknown, printerName?: string): str
     return name ? `Printer '${name}' not found or disconnected` : 'Print failed';
   }
   return msg.length > 220 ? 'Print failed' : msg;
+}
+
+/** Toast for Niimbot label jobs — keep the agent's real reason, plus version when generic. */
+export function formatNiimbotLabelError(opts: {
+  agentMessage?: string;
+  printerName?: string;
+  httpStatus?: number;
+  health?: PrintAgentHealth | null;
+}): string {
+  const name = String(opts.printerName || '').trim() || 'Niimbot';
+  const ver = String(opts.health?.version || '').trim();
+  const features = opts.health?.features || [];
+  const hasNiimbot = features.includes('niimbot-label');
+  const missingRoute =
+    opts.httpStatus === 404 ||
+    opts.httpStatus === 405 ||
+    (opts.health?.ok === true && ver && !hasNiimbot);
+
+  if (missingRoute) {
+    return `Label print failed: Print Agent ${ver || 'on this till'} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings → Receipts & printers.`;
+  }
+
+  const raw = String(opts.agentMessage || '').trim();
+  if (raw && !isGenericPrintFailedToast(raw) && !isNoisyPrintAgentDump(raw) && raw.length <= 280) {
+    return raw;
+  }
+  const friendly = raw ? friendlyPrintAgentError(raw, name) : '';
+  if (friendly && !isGenericPrintFailedToast(friendly)) return friendly;
+
+  const stale =
+    ver && !isBridgeVersion(ver) && compareAgentVersion(ver, MIN_NIIMBOT_AGENT_VERSION) < 0;
+  if (stale) {
+    return `Label print failed for '${name}'. Print Agent v${ver} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings.`;
+  }
+  const verBit = ver ? ` Agent v${ver}.` : '';
+  return `Label print failed for '${name}'.${verBit} Check http://127.0.0.1:9101/health (need v${MIN_NIIMBOT_AGENT_VERSION}+), printer is on, labels loaded, and NIIMBOT.exe is closed.`;
 }
 
 async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
@@ -623,32 +767,13 @@ async function agentFetchWithTimeout(
   }
 }
 
-const HEALTH_CACHE_MS = 4000;
-let healthCache: { at: number; health: PrintAgentHealth } | null = null;
-
-function rememberPrintAgentHealth(health: PrintAgentHealth): PrintAgentHealth {
-  healthCache = { at: Date.now(), health };
-  return health;
-}
-
-/** Drop cached /health so the next probe hits the agent. */
-export function invalidatePrintAgentHealthCache(): void {
-  healthCache = null;
-}
-
-export async function getPrintAgentHealth(
-  retries = 0,
-  timeoutMs = 4000
-): Promise<PrintAgentHealth> {
-  if (retries === 0 && healthCache && Date.now() - healthCache.at < HEALTH_CACHE_MS) {
-    return healthCache.health;
-  }
+export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth> {
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
-      return rememberPrintAgentHealth({ ok: !!s.running });
+      return { ok: !!s.running };
     } catch {
-      return rememberPrintAgentHealth({ ok: true });
+      return { ok: true };
     }
   }
   try {
@@ -656,7 +781,7 @@ export async function getPrintAgentHealth(
     let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {
       try {
-        const data = (await agentFetchWithTimeout('/health', undefined, timeoutMs)) as {
+        const data = (await agentFetchWithTimeout('/health')) as {
           ok?: boolean;
           version?: unknown;
           platform?: unknown;
@@ -666,13 +791,13 @@ export async function getPrintAgentHealth(
         const features = Array.isArray(data.features)
           ? data.features.map((f: unknown) => String(f))
           : undefined;
-        return rememberPrintAgentHealth({
+        return {
           ok: !!data.ok,
           version: data.version != null ? String(data.version) : undefined,
           platform: data.platform != null ? String(data.platform) : undefined,
           features,
           printerReady: data.printerReady === true,
-        });
+        };
       } catch (e) {
         lastErr = e;
         if (i + 1 < attempts) {
@@ -682,30 +807,97 @@ export async function getPrintAgentHealth(
     }
     throw lastErr;
   } catch {
-    return rememberPrintAgentHealth({ ok: false });
+    return { ok: false };
   }
 }
 
-/** Availability check used at checkout — one short probe, cached for a few seconds. */
+const PRINT_AGENT_OK_TTL_MS = 30_000;
+let printAgentLastOkAt = 0;
+
+/** Skip repeated /health probes after a recent successful print on this tab. */
+export function markPrintAgentRecentSuccess(): void {
+  printAgentLastOkAt = Date.now();
+}
+
 export async function isPrintAgentAvailable(): Promise<boolean> {
-  const health = await getPrintAgentHealth(0, 1500);
+  if (printAgentLastOkAt > 0 && Date.now() - printAgentLastOkAt < PRINT_AGENT_OK_TTL_MS) {
+    return true;
+  }
+  const health = isAndroidTabletDevice()
+    ? await getPrintAgentHealth(2)
+    : await probePrintAgentHealth(3);
+  if (health.ok) markPrintAgentRecentSuccess();
   return health.ok;
+}
+
+const CLOUD_RELAY_PAIR_COOLDOWN_MS = 60_000;
+const CLOUD_RELAY_MAX_BACKOFF_MS = 5 * 60_000;
+
+let cloudRelayPairState: {
+  token: string;
+  apiBase: string;
+  ok: boolean;
+  failCount: number;
+  nextAttemptAt: number;
+} | null = null;
+
+/** Clear cached pair state when auth changes (logout / new login). */
+export function resetPrintAgentCloudRelayPairing(): void {
+  cloudRelayPairState = null;
 }
 
 /** Push API base + JWT so the Print Agent can drain till jobs while the browser is minimized. */
 export async function pairPrintAgentCloudRelay(): Promise<boolean> {
   if (typeof window === 'undefined' || window.manuposDesktop) return false;
-  const token = localStorage.getItem('token');
+  const token = String(localStorage.getItem('token') || '').trim();
   if (!token) return false;
-  const env = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL) || '';
-  const apiBase = (env || `${window.location.origin}/api`).replace(/\/$/, '');
+  const apiBase = resolveAbsoluteApiBaseUrl();
+  if (!/^https?:\/\//i.test(apiBase)) return false;
+
+  const now = Date.now();
+  if (
+    cloudRelayPairState &&
+    cloudRelayPairState.token === token &&
+    cloudRelayPairState.apiBase === apiBase &&
+    cloudRelayPairState.ok
+  ) {
+    return true;
+  }
+  if (
+    cloudRelayPairState &&
+    cloudRelayPairState.token === token &&
+    cloudRelayPairState.apiBase === apiBase &&
+    !cloudRelayPairState.ok &&
+    now < cloudRelayPairState.nextAttemptAt
+  ) {
+    return false;
+  }
+
   try {
-    const data = await agentFetch('/cloud-relay', {
+    const res = await fetch(`${PRINT_AGENT_URL}/cloud-relay`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiBase, token }),
     });
-    return !!data?.ok;
+    if (!res.ok) {
+      const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+      const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+      cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
+      return false;
+    }
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    if (!data?.ok) {
+      const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+      const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+      cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
+      return false;
+    }
+    cloudRelayPairState = { token, apiBase, ok: true, failCount: 0, nextAttemptAt: 0 };
+    return true;
   } catch {
+    const failCount = (cloudRelayPairState?.failCount ?? 0) + 1;
+    const backoff = Math.min(CLOUD_RELAY_PAIR_COOLDOWN_MS * failCount, CLOUD_RELAY_MAX_BACKOFF_MS);
+    cloudRelayPairState = { token, apiBase, ok: false, failCount, nextAttemptAt: now + backoff };
     return false;
   }
 }
@@ -732,6 +924,9 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
 export type PrintViaAgentResult = {
   ok: true;
   printer?: string;
+  /** Set when the transport accepted the bytes but cannot confirm they printed. */
+  unconfirmed?: boolean;
+  warning?: string;
 };
 
 export async function printViaAgent(opts: {
@@ -757,6 +952,7 @@ export async function printViaAgent(opts: {
     if (res.printer && isUnsuitableRawPrinter(res.printer)) {
       throw new Error(unsuitableRawPrinterMessage(res.printer));
     }
+    markPrintAgentRecentSuccess();
     return { ok: true, printer: res.printer };
   }
   const data = await agentFetch(
@@ -774,7 +970,120 @@ export async function printViaAgent(opts: {
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
+  markPrintAgentRecentSuccess();
   return { ok: true, printer: data?.printer };
+}
+
+export async function printNiimbotLabelViaAgent(opts: {
+  printerName?: string | null;
+  portName?: string | null;
+  bitmapBase64: string;
+  widthPx: number;
+  heightPx: number;
+  density?: number;
+}): Promise<PrintViaAgentResult> {
+  const name = opts.printerName?.trim() || '';
+  if (name && isUnsuitableRawPrinter(name)) {
+    throw new Error(unsuitableRawPrinterMessage(name));
+  }
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const method = 'POST';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label`, {
+      method,
+      headers,
+      body: JSON.stringify({
+        printerName: opts.printerName || undefined,
+        portName: opts.portName || undefined,
+        bitmapBase64: opts.bitmapBase64,
+        widthPx: opts.widthPx,
+        heightPx: opts.heightPx,
+        density: opts.density,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const health = await getPrintAgentHealth(0).catch(() => null);
+      throw new Error(
+        formatNiimbotLabelError({
+          agentMessage: collectPrintErrorText(err) || `Print agent HTTP ${res.status}`,
+          printerName: name,
+          httpStatus: res.status,
+          health,
+        })
+      );
+    }
+    const data = await res.json();
+    return {
+      ok: true,
+      printer: data?.printer,
+      unconfirmed: Boolean(data?.unconfirmed),
+      warning: typeof data?.warning === 'string' ? data.warning : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `Label print timed out. Check the Niimbot is on, labels are loaded, and Print Agent is running (v${MIN_NIIMBOT_AGENT_VERSION}+).`
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export type NiimbotComProbe = {
+  ok: boolean;
+  version?: string;
+  supported?: boolean;
+  error?: string | null;
+  text: string;
+  summary?: string[];
+};
+
+/**
+ * Runs the Print Agent's port diagnosis. Returns readable text for the merchant
+ * to screenshot; the agent itself never throws, so only transport errors surface.
+ */
+export async function probeNiimbotComPorts(): Promise<NiimbotComProbe> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label/com-probe`, {
+      signal: controller.signal,
+    });
+    if (res.status === 404) {
+      return {
+        ok: false,
+        text: `This Print Agent is too old to diagnose ports. Install v${MIN_NIIMBOT_AGENT_VERSION}+ from Settings → Receipts & printers, then run the diagnosis again.`,
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, text: `Print Agent returned HTTP ${res.status} for the port diagnosis.` };
+    }
+    const data = await res.json();
+    return {
+      ok: Boolean(data?.ok),
+      version: data?.version,
+      supported: data?.supported,
+      error: data?.error ?? null,
+      text: typeof data?.text === 'string' && data.text ? data.text : JSON.stringify(data, null, 2),
+      summary: Array.isArray(data?.summary) ? data.summary.map(String) : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { ok: false, text: 'Port diagnosis timed out after 2 minutes.' };
+    }
+    return {
+      ok: false,
+      text: `Could not reach the Print Agent at ${PRINT_AGENT_URL}. Start it on this till, then retry.`,
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */
@@ -916,6 +1225,56 @@ function scoreDeviceName(want: string, have: string): number {
   return 0;
 }
 
+function scaleDeviceTextBlob(device: ScaleDevice): string {
+  return [
+    device.name,
+    device.caption,
+    device.manufacturer,
+    device.pnpDeviceId,
+    device.port,
+    device.usbAddress,
+    device.connectionType,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Generic Windows Bluetooth serial ports (not Aclas scales). */
+export function isGenericBluetoothSerialDevice(device: ScaleDevice): boolean {
+  const blob = scaleDeviceTextBlob(device).toLowerCase();
+  const pnp = String(device.pnpDeviceId || '').toLowerCase();
+  if (
+    /standard.*serial.*bluetooth|seriell.*bluetooth|serial\s+over\s+bluetooth|standardmäßige\s+seriell/i.test(
+      blob
+    )
+  ) {
+    return true;
+  }
+  if (/microsoft/.test(blob) && /bluetooth|bth|seriell|serial/.test(blob)) {
+    return true;
+  }
+  if (/bthenum|rfcomm|bluetoothserial|bt_spp|bthmodem/i.test(pnp)) {
+    return true;
+  }
+  return false;
+}
+
+/** True when a serial/USB device looks like an Aclas scale (CH340 USB-serial, brand name, Bridge usb: address). */
+export function isLikelyScaleDevice(device: ScaleDevice): boolean {
+  if (isUsbScaleAddress(device.port) || isUsbScaleAddress(device.usbAddress)) {
+    return true;
+  }
+  if (isGenericBluetoothSerialDevice(device)) {
+    return false;
+  }
+  const blob = scaleDeviceTextBlob(device).toLowerCase();
+  const pnp = String(device.pnpDeviceId || '').toLowerCase();
+  if (/aclas/i.test(blob)) return true;
+  if (/ch340|ch341|ch30|usb[-\s]?serial/i.test(blob)) return true;
+  if (/vid_1a86/i.test(pnp)) return true;
+  return false;
+}
+
 /** Windows COM ports from Print Agent (Aclas USB-serial → COMx). */
 export async function listScalePorts(): Promise<string[]> {
   const { ports } = await listScaleDevices();
@@ -926,24 +1285,28 @@ export async function listScaleDevices(): Promise<{ ports: string[]; devices: Sc
   try {
     const data = await agentFetch('/scale/ports');
     const devices: ScaleDevice[] = Array.isArray(data?.devices)
-      ? data.devices.map((d: any) => {
-          const port = String(d.port || d.usbAddress || d.name || '');
-          const usbAddress = d.usbAddress ? String(d.usbAddress) : isUsbScaleAddress(port) ? port : undefined;
-          return {
-            port: isUsbScaleAddress(port) ? port : formatScalePortLabel(port),
-            caption: d.caption ? String(d.caption) : undefined,
-            manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
-            pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
-            name: d.name ? String(d.name) : undefined,
-            usbAddress,
-            connectionType: d.connectionType ? String(d.connectionType) : undefined,
-            hasPermission: d.hasPermission === true,
-          };
-        })
+      ? data.devices
+          .map((d: any) => {
+            const port = String(d.port || d.usbAddress || d.name || '');
+            const usbAddress = d.usbAddress
+              ? String(d.usbAddress)
+              : isUsbScaleAddress(port)
+                ? port
+                : undefined;
+            return {
+              port: isUsbScaleAddress(port) ? port : formatScalePortLabel(port),
+              caption: d.caption ? String(d.caption) : undefined,
+              manufacturer: d.manufacturer ? String(d.manufacturer) : undefined,
+              pnpDeviceId: d.pnpDeviceId ? String(d.pnpDeviceId) : undefined,
+              name: d.name ? String(d.name) : undefined,
+              usbAddress,
+              connectionType: d.connectionType ? String(d.connectionType) : undefined,
+              hasPermission: d.hasPermission === true,
+            };
+          })
+          .filter(isLikelyScaleDevice)
       : [];
-    const ports = Array.isArray(data?.ports)
-      ? data.ports.map((p: unknown) => formatScalePortLabel(String(p)))
-      : devices.map((d) => d.port).filter(Boolean);
+    const ports = devices.map((d) => d.port).filter(Boolean);
     return { ports, devices };
   } catch (e: any) {
     const msg = String(e?.message || '');
