@@ -10,7 +10,7 @@ export default function ShopUtilityTopBar({
 }) {
   return (
     <div
-      className={`shop-utility-topbar relative z-[60] overflow-visible border-b border-stone-200 bg-white/95 backdrop-blur-sm ${className}`}
+      className={`shop-utility-topbar border-b border-stone-200 bg-white/95 backdrop-blur-sm ${className}`}
     >
       <div className="flex h-10 items-center justify-end gap-2 px-4 sm:px-6">{children}</div>
     </div>

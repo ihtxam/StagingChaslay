@@ -30,6 +30,8 @@ export default function ChaslayStorefrontNavbar({
   const [navbarState, setNavbarState] = useState(null);
   const [sitePages, setSitePages] = useState([]);
   const [contact, setContact] = useState(null);
+  const [merchantDisplayName, setMerchantDisplayName] = useState(null);
+  const [storeHours, setStoreHours] = useState(null);
 
   useEffect(() => {
     if (!shopKey) {
@@ -53,6 +55,8 @@ export default function ChaslayStorefrontNavbar({
         onPresenceRef.current?.(Boolean(extracted));
         const m = page?.merchant;
         if (m) {
+          setMerchantDisplayName(m.name || null);
+          setStoreHours(m.storeHours || null);
           setContact({
             phone: m.phone,
             email: m.email,
@@ -86,10 +90,8 @@ export default function ChaslayStorefrontNavbar({
 
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || !navbarState) {
-      document.documentElement.style.removeProperty('--shop-header-height');
-      return;
-    }
+    if (!el || !navbarState) return;
+    if (el.closest('.shop-top-shell')) return;
     const apply = () => {
       document.documentElement.style.setProperty('--shop-header-height', `${el.offsetHeight}px`);
     };
@@ -98,7 +100,9 @@ export default function ChaslayStorefrontNavbar({
     ro?.observe(el);
     return () => {
       ro?.disconnect();
-      document.documentElement.style.removeProperty('--shop-header-height');
+      if (!el.closest('.shop-top-shell')) {
+        document.documentElement.style.removeProperty('--shop-header-height');
+      }
     };
   }, [navbarState]);
 
@@ -113,6 +117,9 @@ export default function ChaslayStorefrontNavbar({
         defaultLanguage={defaultLanguage}
         sitePages={sitePages}
         contact={contact}
+        merchantDisplayName={merchantDisplayName}
+        accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
+        storeHours={storeHours}
         surface="shop"
       >
         <div className="chaslay-pagebuilder-root chaslay-storefront-page chaslay-navbar-only">

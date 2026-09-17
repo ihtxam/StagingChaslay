@@ -14,10 +14,10 @@ import { concatBytes, escposCode128 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
-import { labelPrinterUsesNiimbot, labelPixelSize } from '@/lib/niimbot-label';
-import { labelPrinterUsesTspl } from '@/lib/tspl-label';
+import { labelPixelSize } from '@/lib/niimbot-label';
 import { buildTsplCommandList, encodeTsplCommands } from '@/lib/tspl-label-core';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
 import JsBarcode from 'jsbarcode';
 
 function toBase64(bytes: Uint8Array): string {
@@ -70,8 +70,7 @@ export function buildOrderLabelEscPos(data: OrderLabelData, opts: LabelPrintOpti
   const barH = o.heightMm <= 20 ? 48 : o.heightMm <= 25 ? 60 : o.heightMm <= 30 ? 72 : 88;
   parts.push(escposCode128(data.barcode, barH, o.widthMm === 40 ? 1 : 2));
   if (o.showBarcodeNumber) parts.push(line(data.barcode));
-  parts.push(new Uint8Array([0x1b, 0x64, 0x02]));
-  parts.push(new Uint8Array([0x1d, 0x56, 0x41, 0x00]));
+  parts.push(new Uint8Array([0x1b, 0x64, 0x04]));
   parts.push(left);
   return concatBytes(...parts);
 }
@@ -142,7 +141,6 @@ async function renderNiimbotOrderLabelPng(
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgData)}`;
   await new Promise<void>((resolve) => {
     img.onload = () => {
-      const barH = Math.max(24, Math.round((heightPx - y - pad) * 0.55));
       const scale = Math.min(1, innerW / Math.max(img.width, 1));
       const w = Math.max(1, Math.round(img.width * scale));
       const h = Math.max(1, Math.round(img.height * scale));
@@ -245,11 +243,12 @@ export async function printOrderLabelViaAgent(
       'No label printer configured. Open Settings → Receipts & printers, add your label printer, and enable Labels.'
     );
   }
-  const portName = (settings?.printers || []).find((p) => p.name === printerName)?.portName || null;
-  const useNiimbot = labelPrinterUsesNiimbot(settings, printerName);
-  const useTspl = !useNiimbot && labelPrinterUsesTspl(settings, printerName);
+  const portName =
+    ((settings?.printers || []).find((p) => p.name === printerName) as { portName?: string | null } | undefined)
+      ?.portName || null;
+  const protocol = resolveLabelPrintProtocol(settings, printerName);
 
-  if (useTspl) {
+  if (protocol === 'tspl') {
     const payload = buildOrderLabelTspl(data, labelOpts);
     return await printViaAgentOrQueue({
       dataBase64: toBase64(payload),
@@ -261,7 +260,7 @@ export async function printOrderLabelViaAgent(
     });
   }
 
-  if (useNiimbot) {
+  if (protocol === 'niimbot') {
     const rendered = await renderNiimbotOrderLabelPng(data, labelOpts);
     await printNiimbotLabelViaAgent({
       printerName,

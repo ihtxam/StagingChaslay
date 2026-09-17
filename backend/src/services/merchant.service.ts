@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { getDb, schema } from "@/db";
-import { eq, and, like, desc, or, lt, gt, inArray } from "drizzle-orm";
+import { eq, and, like, desc, or, lt, gt, inArray, isNull } from "drizzle-orm";
 import { AuthService } from "./auth.service";
 import { generateSyncApiKey } from "./chaslay-compat.service";
 import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
@@ -52,6 +52,7 @@ import {
   readKioskAddonEnabledMap,
   writeKioskAddonEnabled,
 } from "@/lib/kiosk-addon";
+import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
 import {
   isStorekeeperAddonEnabled,
   writeStorekeeperAddonEnabled,
@@ -112,7 +113,8 @@ export class MerchantService {
         ? or(
             like(schema.merchants.name, `%${search}%`),
             like(schema.merchants.email, `%${search}%`),
-            like(schema.merchants.slug, `%${search}%`)
+            like(schema.merchants.slug, `%${search}%`),
+            like(schema.merchants.supportCode, `%${search}%`)
           )
         : undefined;
 
@@ -181,6 +183,7 @@ export class MerchantService {
           address: m.address,
           city: m.city,
           country: m.country,
+          supportCode: m.supportCode,
           slug: m.slug,
           shopEnabled: m.shopEnabled,
           status: m.status,
@@ -374,6 +377,9 @@ export class MerchantService {
 
       const lockedModule = normalizeBusinessModule(options?.businessCategory);
 
+      const merchantCountry = country || "CH";
+      const supportCode = await assignMerchantSupportCode(db, merchantCountry);
+
       const merchant = await db
         .insert(schema.merchants)
         .values({
@@ -384,7 +390,8 @@ export class MerchantService {
           phone,
           address,
           city,
-          country: country || "CH",
+          country: merchantCountry,
+          supportCode,
           slug: slug || null,
           shopEnabled: options?.shopEnabled ?? true,
           status: options?.status || "trial",
@@ -415,14 +422,6 @@ export class MerchantService {
         await EditionService.applyEditionDefaultsToMerchant(created.id, options.editionId, {
           businessCategory: lockedModule || options?.businessCategory,
         });
-        const edition = await EditionService.getById(options.editionId);
-        if (edition?.features) {
-          const { PackageProvisioningService } = await import("./package-provisioning.service");
-          await PackageProvisioningService.applyEditionFeatureAddons(
-            created.id,
-            edition.features as import("@/lib/edition-features").EditionFeatureKey[] | null
-          );
-        }
       } else if (lockedModule) {
         const modulePatch = businessModuleMerchantPatch(lockedModule, {});
         await db
@@ -502,11 +501,6 @@ export class MerchantService {
         await writeJustEatAddonEnabled(created.id, true);
         await writeUberEatsAddonEnabled(created.id, true);
       }
-      const kioskOn = await readKioskAddonEnabled(created.id).catch(() => false);
-      if (kioskOn) {
-        const { KioskService } = await import("./kiosk.service");
-        await KioskService.readSettingsForMerchant(created.id);
-      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -532,8 +526,6 @@ export class MerchantService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        kioskAddonEnabled: kioskOn,
-        kioskEnabled: kioskOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -996,16 +988,16 @@ export class MerchantService {
       const now = new Date();
       const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
 
-      const licenses = await db.query.licenses.findMany({
-        where: and(
-          eq(schema.licenses.status, "active"),
-          lt(schema.licenses.expiresAt, thresholdDate),
-          gt(schema.licenses.expiresAt, now)
-        ),
-        with: {
-          merchant: true,
-        },
-      });
+      const { attachLicenseRelations } = await import("@/services/license-admin.service");
+      const licenses = await attachLicenseRelations(
+        await db.query.licenses.findMany({
+          where: and(
+            eq(schema.licenses.status, "active"),
+            lt(schema.licenses.expiresAt, thresholdDate),
+            gt(schema.licenses.expiresAt, now)
+          ),
+        })
+      );
 
       return licenses.map((l) => ({
         merchant: l.merchant,
@@ -1016,5 +1008,31 @@ export class MerchantService {
       console.error("Error getting merchants with expiring licenses:", error);
       throw error;
     }
+  }
+
+  /** Assign support codes (CH-001, UK-002, …) to merchants missing one. */
+  static async backfillSupportCodes(): Promise<{ assigned: number; skipped: number }> {
+    const db = getDb();
+    const rows = await db.query.merchants.findMany({
+      where: isNull(schema.merchants.supportCode),
+      columns: { id: true, country: true, supportCode: true },
+      orderBy: [schema.merchants.createdAt],
+    });
+
+    let assigned = 0;
+    let skipped = 0;
+    for (const row of rows) {
+      if (row.supportCode) {
+        skipped += 1;
+        continue;
+      }
+      const supportCode = await assignMerchantSupportCode(db, row.country);
+      await db
+        .update(schema.merchants)
+        .set({ supportCode, updatedAt: new Date() })
+        .where(eq(schema.merchants.id, row.id));
+      assigned += 1;
+    }
+    return { assigned, skipped };
   }
 }

@@ -14,36 +14,27 @@ object OemSetupPreferences {
     private const val KEY_WEBPOS_ORIGIN = "webpos_origin"
 
     /**
-     * Clears wizard completion only on reinstall (fresh installTime), not on APK updates.
-     * Merchants should not redo battery/autostart steps every time Bridge is upgraded.
+     * Clears wizard completion when the app was updated or reinstalled so merchants
+     * see setup again after installing a new APK from the panel.
      */
     fun syncInstalledVersion(context: Context) {
         val versionCode = currentVersionCode(context)
         val installTime = currentFirstInstallTime(context)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val storedVersion = prefs.getInt(KEY_SETUP_VERSION_CODE, -1)
         val storedInstallTime = prefs.getLong(KEY_FIRST_INSTALL_TIME, -1L)
 
-        if (storedInstallTime == -1L) {
-            prefs.edit()
-                .putInt(KEY_SETUP_VERSION_CODE, versionCode)
-                .putLong(KEY_FIRST_INSTALL_TIME, installTime)
-                .apply()
-            return
-        }
+        val firstRun = storedVersion == -1
+        val versionChanged = !firstRun && storedVersion != versionCode
+        val reinstalled = storedInstallTime != -1L && storedInstallTime != installTime
 
-        val reinstalled = storedInstallTime != installTime
-        if (reinstalled) {
-            prefs.edit()
-                .putInt(KEY_SETUP_VERSION_CODE, versionCode)
-                .putLong(KEY_FIRST_INSTALL_TIME, installTime)
-                .putBoolean(KEY_WIZARD_COMPLETED, false)
-                .apply()
-            return
-        }
+        if (!firstRun && !versionChanged && !reinstalled) return
 
-        if (prefs.getInt(KEY_SETUP_VERSION_CODE, -1) != versionCode) {
-            prefs.edit().putInt(KEY_SETUP_VERSION_CODE, versionCode).apply()
-        }
+        prefs.edit()
+            .putInt(KEY_SETUP_VERSION_CODE, versionCode)
+            .putLong(KEY_FIRST_INSTALL_TIME, installTime)
+            .putBoolean(KEY_WIZARD_COMPLETED, false)
+            .apply()
     }
 
     private fun currentVersionCode(context: Context): Int {

@@ -4,9 +4,7 @@ import {
   verifyAdyenNotificationHmac,
   type AdyenNotificationRequestItem,
 } from "@/lib/adyen-webhook-hmac";
-import { giftCardPurchaseIdFromAdyenReference } from "@/lib/shop-public-url";
 import { AdyenService } from "@/services/adyen.service";
-import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 
 type Merchant = typeof schema.merchants.$inferSelect;
 
@@ -239,20 +237,6 @@ export class AdyenMerchantWebhookService {
       return;
     }
 
-    const giftPurchaseId = giftCardPurchaseIdFromAdyenReference(merchantId, merchantReference);
-    if (giftPurchaseId) {
-      try {
-        await ShopGiftCardService.confirmPurchasePayment(
-          merchantId,
-          giftPurchaseId,
-          pspReference || undefined
-        );
-      } catch (err) {
-        console.warn("[adyen-webhook] gift card purchase fulfillment failed:", err);
-      }
-      return;
-    }
-
     if (merchantReference) {
       try {
         await AdyenService.recordPaymentTransactionByClientRef(
@@ -313,19 +297,13 @@ export class AdyenMerchantWebhookService {
     merchantReference: string,
   ): Promise<void> {
     const order = await this.findOrderByReference(merchantId, merchantReference);
-    if (order) {
-      if (order.paymentStatus === "completed" || order.paymentStatus === "paid") return;
-      const db = getDb();
-      await db
-        .update(schema.orders)
-        .set({ paymentStatus: "failed" })
-        .where(eq(schema.orders.id, order.id));
-      return;
-    }
+    if (!order) return;
+    if (order.paymentStatus === "completed" || order.paymentStatus === "paid") return;
 
-    const giftPurchaseId = giftCardPurchaseIdFromAdyenReference(merchantId, merchantReference);
-    if (giftPurchaseId) {
-      await ShopGiftCardService.markPurchasePaymentFailed(merchantId, giftPurchaseId);
-    }
+    const db = getDb();
+    await db
+      .update(schema.orders)
+      .set({ paymentStatus: "failed" })
+      .where(eq(schema.orders.id, order.id));
   }
 }

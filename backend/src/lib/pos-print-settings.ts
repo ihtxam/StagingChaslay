@@ -106,11 +106,11 @@ export type PosPrintSettings = {
   labelShowBarcodeNumber?: boolean;
   labelShowPrice?: boolean;
   labelShowSku?: boolean;
-  /** Enable weighed-order sticker labels (butcher / retail counter). */
+  /** Enable order labels (kitchen/order stickers) in WebPOS. */
   orderLabelEnabled?: boolean;
-  /** Print order label automatically when holding a cart at POS. */
+  /** Auto-print order labels when an order is held. */
   autoPrintOrderLabelOnHold?: boolean;
-  /** On POS Send, hold the order and print a label instead of a kitchen ticket (butcher). */
+  /** Auto-print order labels when an order is sent to kitchen. */
   autoPrintOrderLabelOnSend?: boolean;
 };
 

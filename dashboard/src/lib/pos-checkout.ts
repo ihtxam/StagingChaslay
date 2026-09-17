@@ -52,8 +52,6 @@ export type PosCheckoutSettings = {
   expressCheckoutEnabled: boolean;
   /** Show POS toast notifications. Off by default. */
   showPosToasts: boolean;
-  /** Adyen Pay at table / terminal-initiated split payments. */
-  payAtXEnabled?: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -148,6 +146,5 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
     expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
     showPosToasts: src.showPosToasts === true,
-    payAtXEnabled: src.payAtXEnabled === true,
   };
 }

@@ -27,6 +27,9 @@ export type StorefrontContextValue = {
   defaultLanguage: string;
   sitePages: SitePageLink[];
   contact: MerchantContact | null;
+  merchantDisplayName: string | null;
+  accountPath: string;
+  storeHours: import('@/lib/shop-hours').StoreHours | null;
   surface: StorefrontSurface;
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
@@ -42,6 +45,9 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   defaultLanguage: 'en',
   sitePages: [],
   contact: null,
+  merchantDisplayName: null,
+  accountPath: '',
+  storeHours: null,
   surface: 'home',
   shopHref: defaultShopHref,
   pageHref: () => '#',
@@ -54,6 +60,9 @@ export function StorefrontProvider({
   defaultLanguage = 'en',
   sitePages = [],
   contact = null,
+  merchantDisplayName = null,
+  accountPath = '',
+  storeHours = null,
   surface = 'home',
   children,
 }: {
@@ -63,6 +72,9 @@ export function StorefrontProvider({
   defaultLanguage?: string;
   sitePages?: SitePageLink[];
   contact?: MerchantContact | null;
+  merchantDisplayName?: string | null;
+  accountPath?: string;
+  storeHours?: import('@/lib/shop-hours').StoreHours | null;
   surface?: StorefrontSurface;
   children: React.ReactNode;
 }) {
@@ -87,6 +99,9 @@ export function StorefrontProvider({
         defaultLanguage,
         sitePages,
         contact,
+        merchantDisplayName,
+        accountPath: accountPath || `${basePath}/account`.replace(/\/+/g, '/'),
+        storeHours,
         surface,
         shopHref,
         pageHref,

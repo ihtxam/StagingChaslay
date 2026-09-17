@@ -5,12 +5,10 @@ import { Gift, Mail, Package } from 'lucide-react';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
+import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
-import {
-  formatAdyenError,
-  mountAdyenDropin,
-  normalizeAdyenPaymentSession,
-} from '@/lib/adyen-checkout';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 
 type GiftSettings = {
   enabled: boolean;
@@ -25,10 +23,10 @@ type GiftSettings = {
 type DeliveryType = 'digital' | 'physical';
 
 type PaymentSession = {
-  id?: string;
-  sessionData?: string;
-  clientKey?: string;
-  environment?: string;
+  id: string;
+  sessionData: string;
+  clientKey: string;
+  environment: string;
   error?: string;
   demoConfirmAvailable?: boolean;
 };
@@ -37,6 +35,7 @@ export default function GiftCardsPage() {
   const { t, locale } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const base = shopBasePath(shopKey);
 
   const [merchant, setMerchant] = useState<any>(null);
@@ -63,7 +62,9 @@ export default function GiftCardsPage() {
 
   useEffect(() => {
     if (!shopKey) return;
-    document.title = shopDocumentTitle('Gift cards', merchant?.name);
+    if (!localizedShopCopy(shopSite?.metaTitle, locale)) {
+      document.title = shopDocumentTitle('Gift cards');
+    }
     (async () => {
       try {
         const [shopRes, gcRes] = await Promise.all([
@@ -84,7 +85,7 @@ export default function GiftCardsPage() {
         setLoading(false);
       }
     })();
-  }, [shopKey, merchant?.name, t]);
+  }, [shopKey, merchant?.name, t, shopSite?.metaTitle, locale]);
 
   const resolvedAmount = useMemo(() => {
     if (amount === -1) {
@@ -119,19 +120,9 @@ export default function GiftCardsPage() {
       });
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
-      const rawSession = res.data?.paymentSession || null;
-      const normalized = normalizeAdyenPaymentSession(rawSession);
-      setSession(
-        normalized
-          ? { ...normalized, environment: normalized.environment || 'test' }
-          : rawSession
-      );
-      if (normalized) {
-        setPayMsg('');
-      } else if (rawSession?.demoConfirmAvailable && !rawSession?.id) {
+      setSession(res.data?.paymentSession || null);
+      if (res.data?.paymentSession?.demoConfirmAvailable && !res.data?.paymentSession?.id) {
         setPayMsg(t('shopGiftCardDemoPayHint'));
-      } else if (rawSession?.error) {
-        setPayMsg(String(rawSession.error));
       }
     } catch (err: any) {
       setError(err?.response?.data?.error || t('actionFailed'));
@@ -157,56 +148,36 @@ export default function GiftCardsPage() {
   }, [shopKey, purchaseId, base, t]);
 
   useEffect(() => {
-    const sessionId = session?.id;
-    const sessionData = session?.sessionData;
-    const clientKey = session?.clientKey;
-    if (!sessionId || !sessionData || !clientKey || !dropinRef.current || dropinMounted.current) {
-      return;
-    }
+    if (!session?.id || !dropinRef.current || dropinMounted.current) return;
     dropinMounted.current = true;
-    let cancelled = false;
-    const adyenLocale = locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-US';
     const mount = async () => {
       try {
-        await mountAdyenDropin({
-          session: {
-            id: sessionId,
-            sessionData,
-            clientKey,
-            environment: session?.environment,
-          },
-          container: dropinRef.current!,
-          locale: adyenLocale,
-          credentialSource: 'merchant',
-          onPaymentCompleted: async (result) => {
-            if (cancelled) return;
+        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
+        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
+        const checkout = await AdyenCheckout({
+          environment: session.environment as 'test' | 'live',
+          clientKey: session.clientKey,
+          session: { id: session.id, sessionData: session.sessionData },
+          onPaymentCompleted: async () => {
             try {
               await axios.post(
                 `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}/confirm-payment`,
-                { resultCode: result?.resultCode || 'Authorised' }
+                {}
               );
               window.location.href = `${base}/gift-cards/confirm/${purchaseId}`;
             } catch {
               setPayMsg(t('shopGiftCardConfirmPending'));
             }
           },
-          onError: (err) => {
-            if (!cancelled) {
-              setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('actionFailed'));
-            }
-          },
+          onError: () => setPayMsg(t('actionFailed')),
         });
-      } catch (err) {
-        if (!cancelled) {
-          setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopGiftCardPayLoadFailed'));
-        }
+        checkout.create('dropin').mount(dropinRef.current!);
+      } catch {
+        setPayMsg(t('shopGiftCardPayLoadFailed'));
       }
     };
     void mount();
-    return () => {
-      cancelled = true;
-    };
-  }, [session, shopKey, purchaseId, base, t, locale]);
+  }, [session, shopKey, purchaseId, base, t]);
 
   if (loading) {
     return (
@@ -230,6 +201,7 @@ export default function GiftCardsPage() {
   }
 
   return (
+    <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle="Gift cards" className="min-h-screen">
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
       <header className="border-b border-stone-200 bg-white">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
@@ -465,5 +437,6 @@ export default function GiftCardsPage() {
         )}
       </main>
     </div>
+    </ShopThemeShell>
   );
 }

@@ -26,7 +26,6 @@ import {
   Tv,
   TabletSmartphone,
   Copy,
-  FileCheck,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -35,6 +34,7 @@ import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
+import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
@@ -45,6 +45,9 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
 } from '@/lib/webpos-receipt';
+import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
+import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
+import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -64,22 +67,21 @@ import {
   listAgentPrinters,
   listScaleDevices,
   printViaAgent,
-  probeNiimbotComPorts,
   probePrintAgentHealth,
   reconcilePosPrinterProfiles,
+  reconcileAndPrunePosPrinterProfiles,
+  printNiimbotLabelViaAgent,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
 import {
   fetchPrintBridgeManifest,
-  fetchPrintBridgePrintManifest,
   fetchPrintAgentManifest,
   isAndroidDevice,
   isBridgeAlreadyInstalled,
   openPrintBridgeApkInstall,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
-  printBridgePrintDownloadUrl,
   preferredPrintCompanion,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
@@ -98,7 +100,6 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
-import SettingsFiscalTab from './settings/SettingsFiscalTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
@@ -189,7 +190,6 @@ interface SettingsData {
     actionButtonSize?: 'sm' | 'md' | 'lg';
     expressCheckoutEnabled?: boolean;
     showPosToasts?: boolean;
-    payAtXEnabled?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -219,36 +219,10 @@ interface SettingsData {
   adyenHmacKeyMasked?: string | null;
   adyenHmacKeySet?: boolean;
   adyenWebhookUrl?: string | null;
-  adyenTerminalEventWebhookUrl?: string | null;
   adyenLiveEnvironment?: boolean;
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
   tapToPayEnabled?: boolean;
-  fiskalySettings?: {
-    enabled?: boolean;
-    environment?: 'test' | 'live';
-    de?: {
-      apiKeyMasked?: string | null;
-      apiKeySet?: boolean;
-      apiSecretMasked?: string | null;
-      apiSecretSet?: boolean;
-      tssId?: string | null;
-      clientId?: string | null;
-      clientSerial?: string | null;
-      adminPinSet?: boolean;
-    };
-    fr?: {
-      apiKeyMasked?: string | null;
-      apiKeySet?: boolean;
-      apiSecretMasked?: string | null;
-      apiSecretSet?: boolean;
-      unitId?: string | null;
-      systemId?: string | null;
-      taxpayerId?: string | null;
-      locationId?: string | null;
-      siren?: string | null;
-    };
-  } | null;
   emailSmtpSettings?: {
     enabled?: boolean;
     host?: string | null;
@@ -327,13 +301,16 @@ interface SettingsData {
     scaleDeviceId?: string | null;
     scaleUsbAddress?: string | null;
     scaleEnabled?: boolean;
-    labelWidthMm?: 40 | 58;
-    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelWidthMm?: 40 | 58 | 80 | 100;
+    labelHeightMm?: 20 | 25 | 30 | 40 | 50 | 80 | 150;
     labelShowStoreName?: boolean;
     labelShowProductName?: boolean;
     labelShowBarcodeNumber?: boolean;
     labelShowPrice?: boolean;
     labelShowSku?: boolean;
+    orderLabelEnabled?: boolean;
+    autoPrintOrderLabelOnHold?: boolean;
+    autoPrintOrderLabelOnSend?: boolean;
     printers?: Array<{
       id: string;
       name: string;
@@ -381,10 +358,10 @@ type TabId =
   | 'reservations'
   | 'pos'
   | 'payments'
-  | 'fiscal'
   | 'receipt'
   | 'kds'
   | 'ods'
+  | 'customerDisplay'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -402,7 +379,6 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'reservations',
   'pos',
   'payments',
-  'fiscal',
   'receipt',
   'kds',
   'ods',
@@ -439,7 +415,6 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'locations') return 'business';
     if (q && SETTINGS_TAB_IDS.includes(q as TabId)) return q as TabId;
     if (q === 'payments') return 'payments';
-    if (q === 'fiscal') return 'fiscal';
     if (q === 'tables') return 'tables';
     const section = params.get('section');
     if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
@@ -626,17 +601,6 @@ export default function Settings() {
     const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
     return `${base}/webhooks/adyen/${merchantId}`;
   }, [settings?.adyenWebhookUrl, settings?.id, adyen.webhookUrl, user?.merchantId, user?.role, user?.id]);
-  const adyenTerminalEventWebhookUrl = useMemo(() => {
-    if (settings?.adyenTerminalEventWebhookUrl) return settings.adyenTerminalEventWebhookUrl;
-    const merchantId =
-      settings?.id ||
-      user?.merchantId ||
-      (user?.role === 'merchant' ? user?.id : undefined);
-    if (!merchantId) return '';
-    const env = import.meta.env.VITE_API_URL as string | undefined;
-    const base = env ? env.replace(/\/$/, '') : `${window.location.origin}/api`;
-    return `${base}/webhooks/adyen-terminal/${merchantId}`;
-  }, [settings?.adyenTerminalEventWebhookUrl, settings?.id, user?.merchantId, user?.role, user?.id]);
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -684,13 +648,10 @@ export default function Settings() {
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
-  const [printBridgePrintManifest, setPrintBridgePrintManifest] = useState<DownloadManifest | null>(null);
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
-  const [niimbotProbeText, setNiimbotProbeText] = useState('');
-  const [probingNiimbotPorts, setProbingNiimbotPorts] = useState(false);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
   const [scanningScalePorts, setScanningScalePorts] = useState(false);
   const [scalePortsScanned, setScalePortsScanned] = useState(false);
@@ -723,10 +684,15 @@ export default function Settings() {
         { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
-        { id: 'fiscal' as const, label: t('settingsFiscal'), navLabel: t('settingsNavFiscal'), icon: FileCheck },
         { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
+        {
+          id: 'customerDisplay' as const,
+          label: t('cdsSettingsTitle'),
+          navLabel: t('settingsNavCds'),
+          icon: Tv,
+        },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -789,27 +755,15 @@ export default function Settings() {
     [businessModule, jwtIsOwner, settings, user?.permissions]
   );
 
-  const showFiscalSettings = useMemo(() => {
-    const c = String(settings?.country || '').trim().toUpperCase();
-    return (
-      c === 'DE' ||
-      c === 'GERMANY' ||
-      c === 'DEUTSCHLAND' ||
-      c === 'FR' ||
-      c === 'FRANCE'
-    );
-  }, [settings?.country]);
-
   const visibleTabs = useMemo(
     () =>
       tabs.filter((item) => {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && isRetailMerchant) return false;
-        if (item.id === 'fiscal' && !showFiscalSettings) return false;
         return true;
       }),
-    [canOpenSettingsTab, isRetailMerchant, showFiscalSettings, showTablesSettings, tabs]
+    [canOpenSettingsTab, isRetailMerchant, showTablesSettings, tabs]
   );
 
   const selectTab = useCallback(
@@ -1112,15 +1066,12 @@ export default function Settings() {
   }, [tab, loadEmailUsage]);
 
   useEffect(() => {
-    void Promise.all([
-      fetchPrintBridgeManifest(),
-      fetchPrintBridgePrintManifest(),
-      fetchPrintAgentManifest(),
-    ]).then(([bridge, bridgePrint, agent]) => {
-      setPrintBridgeManifest(bridge);
-      setPrintBridgePrintManifest(bridgePrint);
-      setPrintAgentManifest(agent);
-    });
+    void Promise.all([fetchPrintBridgeManifest(), fetchPrintAgentManifest()]).then(
+      ([bridge, agent]) => {
+        setPrintBridgeManifest(bridge);
+        setPrintAgentManifest(agent);
+      }
+    );
   }, []);
 
   const refreshPrintAgentPrinters = useCallback(async () => {
@@ -1145,15 +1096,19 @@ export default function Settings() {
       setAgentPrinters(list);
       setSettings((prev) => {
         if (!prev?.posPrintSettings?.printers?.length) return prev;
-        const { profiles, changed } = reconcilePosPrinterProfiles(
+        const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(
           prev.posPrintSettings.printers,
           list
         );
         if (!changed) return prev;
-        return {
+        const nextSettings = {
           ...prev,
           posPrintSettings: { ...prev.posPrintSettings, printers: profiles },
         };
+        void api
+          .put('/merchant/settings', { posPrintSettings: nextSettings.posPrintSettings })
+          .catch(() => undefined);
+        return nextSettings;
       });
     } catch {
       setPrintAgentOk(false);
@@ -1180,15 +1135,41 @@ export default function Settings() {
       }
       setTestingPrinterId(profile.id);
       try {
-        const escpos = buildPrinterTestEscPos({
-          merchantName: settings?.name,
-          printerName: name,
-        });
-        await printViaAgent({
-          printerName: name,
-          dataBase64: uint8ToBase64(escpos),
-          text: `TEST PRINT\n${settings?.name || ''}\n${name}\n`,
-        });
+        const protocol = resolveLabelPrintProtocol(settings?.posPrintSettings, name);
+        if (protocol === 'niimbot') {
+          const widthMm = parseLabelWidthMm(settings?.posPrintSettings?.labelWidthMm);
+          const heightMm = parseLabelHeightMm(settings?.posPrintSettings?.labelHeightMm);
+          await printNiimbotLabelViaAgent({
+            printerName: name,
+            portName: (settings?.posPrintSettings?.printers || []).find((p) => p.name === name)?.portName || null,
+            bitmapBase64: '',
+            widthPx: Math.max(8, Math.round(widthMm * 8)),
+            heightPx: Math.max(8, Math.round(heightMm * 8)),
+            testPattern: true,
+          });
+        } else if (protocol === 'tspl') {
+          const tspl = buildTsplTestLabel({
+            printerName: name,
+            storeName: settings?.name,
+            widthMm: parseLabelWidthMm(settings?.posPrintSettings?.labelWidthMm),
+            heightMm: parseLabelHeightMm(settings?.posPrintSettings?.labelHeightMm),
+          });
+          await printViaAgent({
+            printerName: name,
+            dataBase64: uint8ToBase64(tspl),
+            text: `TSPL TEST\n${settings?.name || ''}\n${name}\n`,
+          });
+        } else {
+          const escpos = buildPrinterTestEscPos({
+            merchantName: settings?.name,
+            printerName: name,
+          });
+          await printViaAgent({
+            printerName: name,
+            dataBase64: uint8ToBase64(escpos),
+            text: `TEST PRINT\n${settings?.name || ''}\n${name}\n`,
+          });
+        }
         toast.success(t('testPrinterOk').replace('{name}', name));
       } catch (error: unknown) {
         const msg =
@@ -1200,23 +1181,8 @@ export default function Settings() {
         setTestingPrinterId(null);
       }
     },
-    [printAgentOk, settings?.name, t]
+    [printAgentOk, settings?.name, settings?.posPrintSettings, t]
   );
-
-  /**
-   * One click, one screenshot: every serial port, every open attempt with the
-   * real Windows error, and every print queue, as plain text.
-   */
-  const runNiimbotPortDiagnosis = useCallback(async () => {
-    setProbingNiimbotPorts(true);
-    setNiimbotProbeText(t('niimbotProbeRunning'));
-    try {
-      const probe = await probeNiimbotComPorts();
-      setNiimbotProbeText(probe.text);
-    } finally {
-      setProbingNiimbotPorts(false);
-    }
-  }, [t]);
 
   const refreshScalePorts = useCallback(async () => {
     setScanningScalePorts(true);
@@ -1484,6 +1450,9 @@ export default function Settings() {
         autoPrintKitchen: ps.autoPrintKitchen !== false,
         autoPrintReservations: ps.autoPrintReservations !== false,
         autoPrintOnlineOrdersOnArrival: ps.autoPrintOnlineOrdersOnArrival === true,
+        orderLabelEnabled: ps.orderLabelEnabled === true,
+        autoPrintOrderLabelOnHold: ps.autoPrintOrderLabelOnHold !== false,
+        autoPrintOrderLabelOnSend: ps.autoPrintOrderLabelOnSend === true,
         waiterTillBellEnabled: ps.waiterTillBellEnabled !== false,
         kitchenPrintRetryEnabled: ps.kitchenPrintRetryEnabled !== false,
         kitchenPrintRetryAttempts: Math.min(20, Math.max(1, Number(ps.kitchenPrintRetryAttempts) || 5)),
@@ -1502,11 +1471,8 @@ export default function Settings() {
           !!ps.scaleUsbAddress?.trim() ||
           ps.scaleEnabled === true,
         printers,
-        labelWidthMm: ps.labelWidthMm === 58 ? 58 : 40,
-        labelHeightMm:
-          ps.labelHeightMm === 25 || ps.labelHeightMm === 30 || ps.labelHeightMm === 40
-            ? ps.labelHeightMm
-            : 20,
+        labelWidthMm: parseLabelWidthMm(ps.labelWidthMm),
+        labelHeightMm: parseLabelHeightMm(ps.labelHeightMm),
         labelShowStoreName: ps.labelShowStoreName !== false,
         labelShowProductName: ps.labelShowProductName !== false,
         labelShowBarcodeNumber: ps.labelShowBarcodeNumber !== false,
@@ -3317,68 +3283,8 @@ export default function Settings() {
                       </tbody>
                     </table>
                   </div>
-
-                  <div className="mt-6 space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-4">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={settings?.posCheckoutSettings?.payAtXEnabled === true}
-                        onChange={(e) =>
-                          setSettings((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  posCheckoutSettings: {
-                                    ...(prev.posCheckoutSettings || {}),
-                                    payAtXEnabled: e.target.checked,
-                                  },
-                                }
-                              : prev
-                          )
-                        }
-                      />
-                      {t('payAtXEnabled')}
-                    </label>
-                    <p className="text-xs text-[var(--text-muted)]">{t('payAtXEnabledHint')}</p>
-                    {adyenTerminalEventWebhookUrl ? (
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-[var(--text)]">
-                          {t('adyenTerminalEventWebhookUrl')}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
-                            {adyenTerminalEventWebhookUrl}
-                          </code>
-                          <button
-                            type="button"
-                            className="btn-secondary shrink-0"
-                            aria-label={t('copied')}
-                            onClick={() => {
-                              void navigator.clipboard
-                                .writeText(adyenTerminalEventWebhookUrl)
-                                .then(
-                                  () => toast.success(t('copied')),
-                                  () => toast.error(t('copyFailed'))
-                                );
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <p className="text-xs text-[var(--text-muted)]">{t('payAtXSetupHint')}</p>
-                      </div>
-                    ) : null}
-                  </div>
                 </Section>
             </div>
-          )}
-
-          {tab === 'fiscal' && (
-            <SettingsFiscalTab
-              settings={settings}
-              onSettingsChange={(next) => setSettings((prev) => (prev ? { ...prev, ...next } : prev))}
-            />
           )}
 
           {tab === 'email' && (
@@ -3429,16 +3335,26 @@ export default function Settings() {
                   </label>
                 </div>
                 {settings.emailDeliveryMode !== 'own' ? (
-                  <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm">
-                    <p className="font-medium">{t('platformEmailUsageTitle')}</p>
-                    <p className="mt-1 muted">
-                      {t('platformEmailUsageToday')}: {platformEmailUsage?.today ?? 0}
-                      {platformEmailUsage?.period?.day ? ` · ${platformEmailUsage.period.day}` : ''}
-                    </p>
-                    <p className="muted">
-                      {t('platformEmailUsageMonth')}: {platformEmailUsage?.thisMonth ?? 0}
-                      {platformEmailUsage?.period?.month ? ` · ${platformEmailUsage.period.month}` : ''}
-                    </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm">
+                      <p className="font-medium">{t('platformEmailUsageTitle')}</p>
+                      <p className="mt-1 muted">
+                        {t('platformEmailUsageToday')}: {platformEmailUsage?.today ?? 0}
+                        {platformEmailUsage?.period?.day ? ` · ${platformEmailUsage.period.day}` : ''}
+                      </p>
+                      <p className="muted">
+                        {t('platformEmailUsageMonth')}: {platformEmailUsage?.thisMonth ?? 0}
+                        {platformEmailUsage?.period?.month ? ` · ${platformEmailUsage.period.month}` : ''}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
+                      <p className="font-medium">{t('platformEmailSenderTitle')}</p>
+                      <p className="mt-1 text-teal-900/90">{t('platformEmailSenderHint')}</p>
+                      <p className="mt-2 font-medium">
+                        {settings.name || t('shopName')} · {settings.email || '—'}
+                      </p>
+                      <p className="mt-1 text-xs text-teal-800/80">{t('platformEmailReplyHint')}</p>
+                    </div>
                   </div>
                 ) : null}
               </Section>
@@ -3633,318 +3549,8 @@ export default function Settings() {
               </Section>
               </div>
 
-              <div
-                id="email-brevo"
-                className={
-                  isSectionHighlight('email-brevo')
-                    ? 'rounded-xl ring-2 ring-teal-500/40'
-                    : undefined
-                }
-              >
-              <Section icon={Mail} accent={settingsDash.info} title={t('settingsBrevo')} description={t('settingsBrevoHint')}>
-                <p className="text-xs muted -mt-1">{t('settingsBrevoPriorityHint')}</p>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!!settings.emailBrevoSettings?.enabled}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        emailBrevoSettings: {
-                          ...(settings.emailBrevoSettings || {}),
-                          enabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium block">{t('brevoEnabled')}</span>
-                    <span className="text-xs muted">{t('brevoEnabledHint')}</span>
-                  </span>
-                </label>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field
-                    label={t('brevoApiKey')}
-                    hint={
-                      settings.emailBrevoSettings?.apiKeySet
-                        ? `${t('brevoApiKeySetHint')} ${settings.emailBrevoSettings.apiKeyMasked || ''}`
-                        : t('brevoApiKeyCreateHint')
-                    }
-                  >
-                    <input
-                      className="input"
-                      type="password"
-                      value={brevoApiKey}
-                      onChange={(e) => setBrevoApiKey(e.target.value)}
-                      placeholder={
-                        settings.emailBrevoSettings?.apiKeySet ? '••••••••' : 'xkeysib-…'
-                      }
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <Field label={t('smtpFromEmail')}>
-                    <input
-                      className="input"
-                      type="email"
-                      value={settings.emailBrevoSettings?.fromEmail || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailBrevoSettings: {
-                            ...(settings.emailBrevoSettings || {}),
-                            fromEmail: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="noreply@yourshop.ch"
-                    />
-                  </Field>
-                  <Field label={t('smtpFromName')} hint={t('brevoSenderNameHint')}>
-                    <input
-                      className="input bg-[var(--bg-muted)]"
-                      value={settings.name || ''}
-                      readOnly
-                      aria-readonly
-                    />
-                  </Field>
-                  <Field label={t('brevoDailyLimit')} hint={t('brevoLimitHint')}>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      value={settings.emailBrevoSettings?.dailyLimit ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setSettings({
-                          ...settings,
-                          emailBrevoSettings: {
-                            ...(settings.emailBrevoSettings || {}),
-                            dailyLimit: raw === '' ? null : Number(raw) || null,
-                          },
-                        });
-                      }}
-                      placeholder="e.g. 300"
-                    />
-                  </Field>
-                  <Field label={t('brevoMonthlyLimit')} hint={t('brevoLimitHint')}>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      value={settings.emailBrevoSettings?.monthlyLimit ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setSettings({
-                          ...settings,
-                          emailBrevoSettings: {
-                            ...(settings.emailBrevoSettings || {}),
-                            monthlyLimit: raw === '' ? null : Number(raw) || null,
-                          },
-                        });
-                      }}
-                      placeholder="e.g. 5000"
-                    />
-                  </Field>
-                </div>
-
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-3 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{t('brevoUsageTitle')}</p>
-                    <button
-                      type="button"
-                      className="btn-secondary text-xs"
-                      onClick={async () => {
-                        try {
-                          const usageRes = await api.get('/merchant/marketing/brevo-usage');
-                          setBrevoUsage(usageRes.data.usage || null);
-                          toast.success(t('brevoUsageRefreshed'));
-                        } catch (error: any) {
-                          toast.error(error.response?.data?.error || t('brevoUsageFailed'));
-                        }
-                      }}
-                    >
-                      {t('brevoRefreshUsage')}
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
-                    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide muted">
-                        {t('brevoToday')}
-                        {brevoUsage?.dailyPeriod ? ` · ${brevoUsage.dailyPeriod}` : ''}
-                      </p>
-                      <p className="mt-0.5 font-semibold tabular-nums">
-                        {brevoUsage?.dailySent ?? settings.emailBrevoSettings?.dailySent ?? 0}
-                        {brevoUsage?.dailyLimit != null ||
-                        settings.emailBrevoSettings?.dailyLimit != null
-                          ? ` / ${
-                              brevoUsage?.dailyLimit ??
-                              settings.emailBrevoSettings?.dailyLimit
-                            }`
-                          : ` · ${t('brevoNoLocalLimit')}`}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide muted">
-                        {t('brevoThisMonth')}
-                        {brevoUsage?.monthlyPeriod ? ` · ${brevoUsage.monthlyPeriod}` : ''}
-                      </p>
-                      <p className="mt-0.5 font-semibold tabular-nums">
-                        {brevoUsage?.monthlySent ??
-                          settings.emailBrevoSettings?.monthlySent ??
-                          0}
-                        {brevoUsage?.monthlyLimit != null ||
-                        settings.emailBrevoSettings?.monthlyLimit != null
-                          ? ` / ${
-                              brevoUsage?.monthlyLimit ??
-                              settings.emailBrevoSettings?.monthlyLimit
-                            }`
-                          : ` · ${t('brevoNoLocalLimit')}`}
-                      </p>
-                    </div>
-                  </div>
-                  {brevoUsage?.account?.planCredits != null ? (
-                    <p className="text-xs muted">
-                      {t('brevoAccountCredits')}:{' '}
-                      <span className="font-medium text-[var(--text)]">
-                        {brevoUsage.account.planCredits}
-                      </span>
-                      {brevoUsage.account.planType
-                        ? ` (${brevoUsage.account.planType})`
-                        : ''}
-                    </p>
-                  ) : null}
-                  {brevoUsage?.account?.error ? (
-                    <p className="text-xs text-amber-800">{brevoUsage.account.error}</p>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap gap-2 items-end">
-                  <Field label={t('smtpTestTo')}>
-                    <input
-                      className="input"
-                      type="email"
-                      value={testEmailTo}
-                      onChange={(e) => setTestEmailTo(e.target.value)}
-                      placeholder={settings.email || 'you@example.com'}
-                    />
-                  </Field>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={testingEmail}
-                    onClick={async () => {
-                      if (settings.emailSmtpSettings?.enabled) {
-                        toast.error(t('brevoTestSmtpBlocks'));
-                        return;
-                      }
-                      setTestingEmail(true);
-                      try {
-                        await api.put('/merchant/settings', {
-                          emailBrevoSettings: {
-                            enabled: true,
-                            apiKey: brevoApiKey || undefined,
-                            fromEmail: settings.emailBrevoSettings?.fromEmail || '',
-                            fromName: settings.name || '',
-                            dailyLimit: settings.emailBrevoSettings?.dailyLimit ?? null,
-                            monthlyLimit: settings.emailBrevoSettings?.monthlyLimit ?? null,
-                          },
-                        });
-                        await api.post('/merchant/marketing/test-email', {
-                          to: testEmailTo || settings.email,
-                        });
-                        toast.success(t('smtpTestSent'));
-                        setBrevoApiKey('');
-                        const usageRes = await api.get('/merchant/marketing/brevo-usage');
-                        setBrevoUsage(usageRes.data.usage || null);
-                        const refreshed = await api.get('/merchant/settings');
-                        if (refreshed.data?.settings) setSettings(refreshed.data.settings);
-                      } catch (error: any) {
-                        toast.error(error.response?.data?.error || t('smtpTestFailed'));
-                      } finally {
-                        setTestingEmail(false);
-                      }
-                    }}
-                  >
-                    {testingEmail ? t('saving') : t('brevoSendTest')}
-                  </button>
-                </div>
-              </Section>
-              </div>
               </>
               ) : null}
-
-              <Section icon={Mail} accent={settingsDash.warning} title={t('reorderReminder')} description={t('reorderReminderHint')}>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!!settings.marketingSettings?.reorderReminderEnabled}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderEnabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium block">{t('reorderReminderEnable')}</span>
-                    <span className="text-xs muted">{t('reorderReminderEnableHint')}</span>
-                  </span>
-                </label>
-                <Field label={t('reorderReminderDays')}>
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={settings.marketingSettings?.reorderReminderDays ?? 5}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderDays: Number(e.target.value) || 5,
-                        },
-                      })
-                    }
-                  />
-                </Field>
-                <Field label={t('reorderReminderSubject')}>
-                  <input
-                    className="input"
-                    value={settings.marketingSettings?.reorderReminderSubject || ''}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderSubject: e.target.value,
-                        },
-                      })
-                    }
-                    placeholder="We miss you - order again from {{businessName}}"
-                  />
-                </Field>
-                <Field label={t('reorderReminderBody')} hint={t('newsletterPlaceholders')}>
-                  <textarea
-                    className="input min-h-[10rem] font-mono text-xs"
-                    value={settings.marketingSettings?.reorderReminderBody || ''}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderBody: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </Field>
-              </Section>
 
               <SettingsSaveBar saving={saving} />
             </form>
@@ -4140,9 +3746,7 @@ export default function Settings() {
                               );
                               const fd = new FormData();
                               fd.append('file', resized);
-                              const res = await api.post('/merchant/media', fd, {
-                                headers: { 'Content-Type': 'multipart/form-data' },
-                              });
+                              const res = await api.post('/merchant/media', fd);
                               const url = res.data.url as string;
                               setSettings({
                                 ...settings,
@@ -4533,97 +4137,52 @@ export default function Settings() {
                       </a>
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' ? (
-                      <div className="flex w-full max-w-2xl flex-col gap-3">
-                        <p className="text-sm text-[var(--muted)] m-0">{t('printBridgeEditionHint')}</p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-                            <p className="m-0 text-sm font-semibold text-[var(--text)]">
-                              {t('downloadPrintBridgePrintOnly')}
-                            </p>
-                            <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
-                              {t('printBridgePrintOnlyHint')}
-                            </p>
-                            {printBridgePrintManifest?.available === false ? (
-                              <p className="text-xs text-amber-800 m-0">{printBridgePrintManifest.message}</p>
-                            ) : isAndroidDevice() ? (
-                              <button
-                                type="button"
-                                className="btn-primary inline-flex w-full justify-center"
-                                onClick={() =>
-                                  openPrintBridgeApkInstall(
-                                    printBridgePrintManifest?.downloadUrl || printBridgePrintDownloadUrl()
-                                  )
-                                }
-                              >
-                                {t('installPrintBridgePrintOnly')}
-                              </button>
-                            ) : (
-                              <a
-                                className="btn-primary inline-flex w-full justify-center"
-                                href={
-                                  printBridgePrintManifest?.downloadUrl || printBridgePrintDownloadUrl()
-                                }
-                              >
-                                {t('downloadPrintBridgePrintOnly')}
-                              </a>
+                      printBridgeManifest?.versionMismatch ? (
+                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                          {t('printBridgeApkNotPublished')
+                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
+                            .replace(
+                              '{declaredVersion}',
+                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
                             )}
-                          </div>
-                          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-                            <p className="m-0 text-sm font-semibold text-[var(--text)]">
-                              {t('downloadPrintBridgeTapToPay')}
-                            </p>
-                            <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
-                              {t('printBridgeTapToPayHint')}
-                            </p>
-                            {printBridgeManifest?.versionMismatch ? (
-                              <p className="text-xs text-amber-900 m-0">
-                                {t('printBridgeApkNotPublished')
-                                  .replace('{apkVersion}', String(printBridgeManifest.version || ''))
-                                  .replace(
-                                    '{declaredVersion}',
-                                    String(
-                                      printBridgeManifest.declaredVersion ||
-                                        printBridgeManifest.version ||
-                                        ''
-                                    )
-                                  )}
-                              </p>
-                            ) : printBridgeManifest?.available === false ? (
-                              <p className="text-xs text-amber-800 m-0">
-                                {printBridgeManifest.message ||
-                                  'Tap to Pay APK is not published on this server yet.'}
-                              </p>
-                            ) : isAndroidDevice() ? (
-                              <button
-                                type="button"
-                                className="btn-secondary inline-flex w-full justify-center"
-                                onClick={() =>
-                                  openPrintBridgeApkInstall(
-                                    printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                                  )
-                                }
-                              >
-                                {t('installPrintBridgeTapToPay')}
-                              </button>
-                            ) : (
-                              <a
-                                className="btn-secondary inline-flex w-full justify-center"
-                                href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                              >
-                                {t('downloadPrintBridgeTapToPay')}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                        {isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) ? (
-                          <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                            {t('printBridgeAlreadyInstalled').replace(
-                              '{version}',
-                              installedPrintCompanionVersion || ''
-                            )}
-                          </p>
-                        ) : null}
-                      </div>
+                        </p>
+                      ) : printBridgeManifest?.available === false ? (
+                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          {printBridgeManifest.message ||
+                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
+                        </p>
+                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
+                        printBridgeManifest?.version &&
+                        compareAgentVersion(
+                          String(installedPrintCompanionVersion || ''),
+                          String(printBridgeManifest.version)
+                        ) >= 0 ? (
+                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                          {t('printBridgeAlreadyInstalled').replace(
+                            '{version}',
+                            installedPrintCompanionVersion || ''
+                          )}
+                        </p>
+                      ) : isAndroidDevice() ? (
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex"
+                          onClick={() =>
+                            openPrintBridgeApkInstall(
+                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
+                            )
+                          }
+                        >
+                          {t('installPrintBridge')}
+                        </button>
+                      ) : (
+                        <a
+                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
+                        >
+                          {t('downloadPrintBridge')}
+                        </a>
+                      )
                     ) : null}
                   </div>
                   <div className="space-y-1">
@@ -4726,15 +4285,15 @@ export default function Settings() {
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={p.name}
+                          value={savedNameMissing ? '' : p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
                             const picked = agentPrinters.find((ap) => ap.name === e.target.value);
                             printers[idx] = {
                               ...p,
                               name: e.target.value,
-                              portName: picked?.portName || p.portName || null,
-                              matchHint: picked?.matchHint || picked?.driverName || p.matchHint || null,
+                              portName: picked?.portName || null,
+                              matchHint: picked?.matchHint || picked?.driverName || null,
                             };
                             setSettings({
                               ...settings,
@@ -4742,13 +4301,7 @@ export default function Settings() {
                             });
                           }}
                         >
-                          {p.name && !agentPrinters.some((ap) => ap.name === p.name) ? (
-                            <option value={p.name}>
-                              {p.name}
-                              {p.portName ? ` · ${p.portName}` : ''}
-                              {` — ${t('webPosPrinterSavedOffline')}`}
-                            </option>
-                          ) : null}
+                          <option value="">{t('webPosDefaultPrinter')}</option>
                           {agentPrinters.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (
@@ -4779,6 +4332,9 @@ export default function Settings() {
                     </Field>
                     {p.name && isUnsuitableRawPrinter(p.name) ? (
                       <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+                    ) : null}
+                    {p.name && isTsplLabelPrinterName(p.name) ? (
+                      <p className="text-xs leading-snug text-[var(--muted)] m-0">{t('barcodeTsplPrinterHint')}</p>
                     ) : null}
                     {savedNameMissing ? (
                       <div className="space-y-1.5">
@@ -4910,40 +4466,88 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
+              </Section>
 
-                <div className="mt-4 space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
-                  <div className="text-sm font-medium">{t('niimbotProbeTitle')}</div>
-                  <p className="text-xs text-[var(--muted)]">{t('niimbotProbeHint')}</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className="btn-secondary inline-flex items-center gap-2 text-sm"
-                      disabled={probingNiimbotPorts}
-                      onClick={() => void runNiimbotPortDiagnosis()}
-                    >
-                      <Printer size={14} />
-                      {probingNiimbotPorts ? t('loading') : t('niimbotProbeRun')}
-                    </button>
-                    {niimbotProbeText && !probingNiimbotPorts ? (
-                      <button
-                        type="button"
-                        className="text-xs underline"
-                        onClick={() => {
-                          void navigator.clipboard
-                            ?.writeText(niimbotProbeText)
-                            .then(() => toast.success(t('copied')))
-                            .catch(() => toast.error(t('niimbotProbeCopyFailed')));
-                        }}
-                      >
-                        {t('niimbotProbeCopy')}
-                      </button>
-                    ) : null}
-                  </div>
-                  {niimbotProbeText ? (
-                    <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-[var(--surface-2,#f5f5f5)] p-2 text-[11px] leading-snug">
-                      {niimbotProbeText}
-                    </pre>
-                  ) : null}
+              <Section
+                id="order-labels"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('orderLabelsTitle')}
+                description={t('orderLabelsHint')}
+                highlight={isSectionHighlight('order-labels')}
+              >
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posPrintSettings?.orderLabelEnabled === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          orderLabelEnabled: e.target.checked,
+                          ...(e.target.checked ? {} : { autoPrintOrderLabelOnSend: false }),
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('orderLabelEnabled')}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                      {t('orderLabelEnabledHint')}
+                    </span>
+                  </span>
+                </label>
+                <div className="mt-3 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                  <p className="text-xs text-[var(--text-muted)]">{t('orderLabelAutoPrintHint')}</p>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnHold !== false}
+                      disabled={settings.posPrintSettings?.orderLabelEnabled !== true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnHold: e.target.checked,
+                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintOrderLabelOnHold')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintOrderLabelOnHoldHint')}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintOrderLabelOnSend === true}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintOrderLabelOnSend: e.target.checked,
+                            ...(e.target.checked ? { orderLabelEnabled: true } : {}),
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintOrderLabelOnSend')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintOrderLabelOnSendHint')}
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </Section>
 
@@ -4960,31 +4564,33 @@ export default function Settings() {
                   <SettingsField label={t('barcodeLabelWidth')}>
                     <select
                       className="input"
-                      value={settings.posPrintSettings?.labelWidthMm === 58 ? 58 : 40}
+                      value={parseLabelWidthMm(settings.posPrintSettings?.labelWidthMm)}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            labelWidthMm: Number(e.target.value) === 58 ? 58 : 40,
+                            labelWidthMm: parseLabelWidthMm(e.target.value),
                           },
                         })
                       }
                     >
                       <option value={40}>40 mm</option>
                       <option value={58}>58 mm</option>
+                      <option value={80}>80 mm</option>
+                      <option value={100}>100 mm (4 inch)</option>
                     </select>
                   </SettingsField>
                   <SettingsField label={t('barcodeLabelHeight')}>
                     <select
                       className="input"
-                      value={settings.posPrintSettings?.labelHeightMm || 20}
+                      value={parseLabelHeightMm(settings.posPrintSettings?.labelHeightMm)}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
                           posPrintSettings: {
                             ...(settings.posPrintSettings || {}),
-                            labelHeightMm: Number(e.target.value) as 20 | 25 | 30 | 40,
+                            labelHeightMm: parseLabelHeightMm(e.target.value),
                           },
                         })
                       }
@@ -4993,6 +4599,9 @@ export default function Settings() {
                       <option value={25}>25 mm</option>
                       <option value={30}>30 mm</option>
                       <option value={40}>40 mm</option>
+                      <option value={50}>50 mm</option>
+                      <option value={80}>80 mm</option>
+                      <option value={150}>150 mm</option>
                     </select>
                   </SettingsField>
                 </div>
@@ -5049,6 +4658,13 @@ export default function Settings() {
             </div>
           )}
 
+          {tab === 'customerDisplay' && (
+            <div className="space-y-5">
+              <SettingsPageHeader title={t('cdsSettingsTitle')} subtitle={t('cdsSettingsHint')} />
+              <CdsSettingsPanel />
+            </div>
+          )}
+
           {tab === 'signage' && (
             <div className="space-y-5">
               <SignagePage embedded />
@@ -5059,268 +4675,6 @@ export default function Settings() {
             <div className="space-y-5">
               <KioskSettingsPage embedded />
             </div>
-          )}
-
-          {tab === 'email' && (
-            <form onSubmit={onSave} className="space-y-5">
-              <Section title={t('settingsSmtp')} description={t('settingsSmtpHint')}>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!!settings.emailSmtpSettings?.enabled}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        emailSmtpSettings: {
-                          ...(settings.emailSmtpSettings || {}),
-                          enabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium block">{t('smtpEnabled')}</span>
-                    <span className="text-xs muted">{t('smtpEnabledHint')}</span>
-                  </span>
-                </label>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label={t('smtpHost')}>
-                    <input
-                      className="input"
-                      value={settings.emailSmtpSettings?.host || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailSmtpSettings: {
-                            ...(settings.emailSmtpSettings || {}),
-                            host: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="smtp.example.com"
-                    />
-                  </Field>
-                  <Field label={t('smtpPort')}>
-                    <input
-                      className="input"
-                      type="number"
-                      value={settings.emailSmtpSettings?.port ?? 587}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailSmtpSettings: {
-                            ...(settings.emailSmtpSettings || {}),
-                            port: Number(e.target.value) || 587,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label={t('smtpUser')}>
-                    <input
-                      className="input"
-                      value={settings.emailSmtpSettings?.user || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailSmtpSettings: {
-                            ...(settings.emailSmtpSettings || {}),
-                            user: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field
-                    label={t('smtpPassword')}
-                    hint={
-                      settings.emailSmtpSettings?.passwordSet
-                        ? t('smtpPasswordSetHint')
-                        : undefined
-                    }
-                  >
-                    <input
-                      className="input"
-                      type="password"
-                      value={smtpPassword}
-                      onChange={(e) => setSmtpPassword(e.target.value)}
-                      placeholder={settings.emailSmtpSettings?.passwordSet ? '••••••••' : ''}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <Field label={t('smtpFromEmail')}>
-                    <input
-                      className="input"
-                      type="email"
-                      value={settings.emailSmtpSettings?.fromEmail || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailSmtpSettings: {
-                            ...(settings.emailSmtpSettings || {}),
-                            fromEmail: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label={t('smtpFromName')}>
-                    <input
-                      className="input"
-                      value={settings.emailSmtpSettings?.fromName || ''}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          emailSmtpSettings: {
-                            ...(settings.emailSmtpSettings || {}),
-                            fromName: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={!!settings.emailSmtpSettings?.secure}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        emailSmtpSettings: {
-                          ...(settings.emailSmtpSettings || {}),
-                          secure: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  {t('smtpSecure')}
-                </label>
-                <div className="flex flex-wrap gap-2 items-end">
-                  <Field label={t('smtpTestTo')}>
-                    <input
-                      className="input"
-                      type="email"
-                      value={testEmailTo}
-                      onChange={(e) => setTestEmailTo(e.target.value)}
-                      placeholder={settings.email || 'you@example.com'}
-                    />
-                  </Field>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={testingEmail}
-                    onClick={async () => {
-                      setTestingEmail(true);
-                      try {
-                        await api.put('/merchant/settings', {
-                          emailSmtpSettings: {
-                            enabled: !!settings.emailSmtpSettings?.enabled,
-                            host: settings.emailSmtpSettings?.host || '',
-                            port: Number(settings.emailSmtpSettings?.port) || 587,
-                            secure: !!settings.emailSmtpSettings?.secure,
-                            user: settings.emailSmtpSettings?.user || '',
-                            password: smtpPassword || undefined,
-                            fromEmail: settings.emailSmtpSettings?.fromEmail || '',
-                            fromName: settings.emailSmtpSettings?.fromName || '',
-                          },
-                        });
-                        await api.post('/merchant/marketing/test-email', {
-                          to: testEmailTo || settings.email,
-                        });
-                        toast.success(t('smtpTestSent'));
-                        setSmtpPassword('');
-                      } catch (error: any) {
-                        toast.error(error.response?.data?.error || t('smtpTestFailed'));
-                      } finally {
-                        setTestingEmail(false);
-                      }
-                    }}
-                  >
-                    {testingEmail ? t('saving') : t('smtpSendTest')}
-                  </button>
-                </div>
-              </Section>
-
-              <Section title={t('reorderReminder')} description={t('reorderReminderHint')}>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!!settings.marketingSettings?.reorderReminderEnabled}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderEnabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium block">{t('reorderReminderEnable')}</span>
-                    <span className="text-xs muted">{t('reorderReminderEnableHint')}</span>
-                  </span>
-                </label>
-                <Field label={t('reorderReminderDays')}>
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={settings.marketingSettings?.reorderReminderDays ?? 5}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderDays: Number(e.target.value) || 5,
-                        },
-                      })
-                    }
-                  />
-                </Field>
-                <Field label={t('reorderReminderSubject')}>
-                  <input
-                    className="input"
-                    value={settings.marketingSettings?.reorderReminderSubject || ''}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderSubject: e.target.value,
-                        },
-                      })
-                    }
-                    placeholder="We miss you — order again from {{businessName}}"
-                  />
-                </Field>
-                <Field label={t('reorderReminderBody')} hint={t('newsletterPlaceholders')}>
-                  <textarea
-                    className="input min-h-[10rem] font-mono text-xs"
-                    value={settings.marketingSettings?.reorderReminderBody || ''}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        marketingSettings: {
-                          ...(settings.marketingSettings || {}),
-                          reorderReminderBody: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </Field>
-              </Section>
-
-              <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </div>
-            </form>
           )}
 
           {tab === 'language' && (

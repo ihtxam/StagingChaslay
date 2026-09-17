@@ -1,5 +1,8 @@
 /** Built-in FR/DE/IT fallbacks for default English builder copy. */
 
+/** Default template / seed copy is authored in English in the page builder. */
+export const BUILDER_COPY_SOURCE_LOCALE = 'en';
+
 type LocaleMap = { fr: string; de: string; it: string };
 
 const PHRASES: Record<string, LocaleMap> = {
@@ -8,7 +11,20 @@ const PHRASES: Record<string, LocaleMap> = {
   'About Us': { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   About: { fr: 'À propos', de: 'Über uns', it: 'Chi siamo' },
   Gallery: { fr: 'Galerie', de: 'Galerie', it: 'Galleria' },
+  'Our Gallery': { fr: 'Notre galerie', de: 'Unsere Galerie', it: 'La nostra galleria' },
+  'Photo Gallery': { fr: 'Galerie photos', de: 'Fotogalerie', it: 'Galleria fotografica' },
   Testimonials: { fr: 'Avis', de: 'Bewertungen', it: 'Recensioni' },
+  'Customer Reviews': { fr: 'Avis clients', de: 'Kundenbewertungen', it: 'Recensioni clienti' },
+  'What Our Guests Say': { fr: 'Ce que disent nos clients', de: 'Was unsere Gäste sagen', it: 'Cosa dicono i nostri ospiti' },
+  'Featured Review': { fr: 'Avis en vedette', de: 'Ausgewählte Bewertung', it: 'Recensione in evidenza' },
+  'Food Critic': { fr: 'Critique gastronomique', de: 'Restaurantkritiker', it: 'Critico gastronomico' },
+  'Regular Customer': { fr: 'Client régulier', de: 'Stammkunde', it: 'Cliente abituale' },
+  'Local Foodie': { fr: 'Gourmet local', de: 'Lokal Gourmet', it: 'Foodie locale' },
+  'Loyal Patrons since 2019': {
+    fr: 'Clients fidèles depuis 2019',
+    de: 'Stammgäste seit 2019',
+    it: 'Clienti fedeli dal 2019',
+  },
   'Opening Hours': { fr: "Heures d'ouverture", de: 'Öffnungszeiten', it: 'Orari di apertura' },
   Hours: { fr: 'Horaires', de: 'Öffnungszeiten', it: 'Orari' },
   HOURS: { fr: 'HORAIRES', de: 'ÖFFNUNGSZEITEN', it: 'ORARI' },
@@ -35,6 +51,25 @@ const PHRASES: Record<string, LocaleMap> = {
     it: 'Scopri le nostre specialità',
   },
   'Our Story': { fr: 'Notre histoire', de: 'Unsere Geschichte', it: 'La nostra storia' },
+  Phone: { fr: 'Téléphone', de: 'Telefon', it: 'Telefono' },
+  Email: { fr: 'E-mail', de: 'E-Mail', it: 'E-mail' },
+  Address: { fr: 'Adresse', de: 'Adresse', it: 'Indirizzo' },
+  All: { fr: 'Tout', de: 'Alle', it: 'Tutto' },
+  'Passion on every plate': {
+    fr: 'La passion dans chaque assiette',
+    de: 'Leidenschaft auf jedem Teller',
+    it: 'Passione in ogni piatto',
+  },
+  'Fresh ingredients, unforgettable flavours': {
+    fr: 'Ingrédients frais, saveurs inoubliables',
+    de: 'Frische Zutaten, unvergessliche Aromen',
+    it: 'Ingredienti freschi, sapori indimenticabili',
+  },
+  'Chef specials and guest favourites': {
+    fr: 'Spécialités du chef et coups de cœur',
+    de: 'Chef-Spezialitäten und Gästefavoriten',
+    it: 'Specialità dello chef e preferiti degli ospiti',
+  },
   'Welcome to Our Restaurant': {
     fr: 'Bienvenue dans notre restaurant',
     de: 'Willkommen in unserem Restaurant',
@@ -58,6 +93,27 @@ const PHRASES: Record<string, LocaleMap> = {
     it: 'Prenota la tua esperienza culinaria',
   },
   'Visit Us': { fr: 'Venez nous voir', de: 'Besuchen Sie uns', it: 'Venite a trovarci' },
+  'Find Us': { fr: 'Nous trouver', de: 'So finden Sie uns', it: 'Dove siamo' },
+  'Serving delicious food since 2020. Visit us for an unforgettable dining experience.': {
+    fr: 'Cuisine délicieuse depuis 2020. Venez vivre une expérience inoubliable.',
+    de: 'Seit 2020 servieren wir köstliches Essen. Besuchen Sie uns für ein unvergessliches Erlebnis.',
+    it: 'Serviamo piatti deliziosi dal 2020. Venite per un\'esperienza indimenticabile.',
+  },
+  'Mon-Fri: 11am-10pm': { fr: 'Lun-ven : 11h-22h', de: 'Mo-Fr: 11-22 Uhr', it: 'Lun-ven: 11-22' },
+  'Sat-Sun: 10am-11pm': { fr: 'Sam-dim : 10h-23h', de: 'Sa-So: 10-23 Uhr', it: 'Sab-dom: 10-23' },
+  'Follow Us': { fr: 'Suivez-nous', de: 'Folgen Sie uns', it: 'Seguici' },
+  'Get in Touch': { fr: 'Contactez-nous', de: 'Kontakt aufnehmen', it: 'Contattaci' },
+  'Subscribe': { fr: "S'abonner", de: 'Abonnieren', it: 'Iscriviti' },
+  'Subscribe to our newsletter': {
+    fr: 'Abonnez-vous à notre newsletter',
+    de: 'Abonnieren Sie unseren Newsletter',
+    it: 'Iscriviti alla nostra newsletter',
+  },
+  'Enter your email': {
+    fr: 'Entrez votre e-mail',
+    de: 'E-Mail eingeben',
+    it: 'Inserisci la tua email',
+  },
   'We look forward to serving you': {
     fr: 'Nous avons hâte de vous servir',
     de: 'Wir freuen uns auf Ihren Besuch',
@@ -103,11 +159,11 @@ function localeKey(locale: string): 'fr' | 'de' | 'it' | null {
   return null;
 }
 
-export function translateSectionCopy(text: string, locale: string, defaultLanguage = 'en'): string {
+export function translateSectionCopy(text: string, locale: string, _defaultLanguage = 'en'): string {
   if (!text) return text;
   const loc = localeKey(locale);
-  const def = String(defaultLanguage || 'en').toLowerCase().slice(0, 2);
-  if (!loc || loc === def) return text;
+  const source = BUILDER_COPY_SOURCE_LOCALE;
+  if (!loc || loc === source) return text;
   const exact = PHRASES[text]?.[loc];
   if (exact) return exact;
   let out = text;

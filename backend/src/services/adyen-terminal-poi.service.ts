@@ -2,14 +2,6 @@ import axios from "axios";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
-  buildDisplayMessageRequestBody,
-  buildInputMenuRequestBody,
-  buildInputTextRequestBody,
-  buildSplitPaymentRequestBody,
-  parseSplitPaymentResponse,
-  type SplitPaymentParseResult,
-} from "@/lib/adyen-poi-builders";
-import {
   parsePaymentReceipts,
   type AdyenTerminalReceipt,
 } from "@/lib/adyen-receipt";
@@ -31,7 +23,7 @@ type AdyenApiError = {
   title?: string;
 };
 
-export type TerminalContext = {
+type TerminalContext = {
   apiKey: string;
   merchantAccount: string;
   terminalId: string;
@@ -472,13 +464,13 @@ function parseReversalResponse(body: string): TerminalPoiResult {
   }
 }
 
-async function postSync<T = TerminalPoiResult>(
+async function postSync(
   apiKey: string,
   url: string,
   body: Record<string, unknown>,
   triedLegacy: boolean,
-  parseFn: (body: string) => T = parsePaymentResponse as (body: string) => T
-): Promise<T> {
+  parseFn: (body: string) => TerminalPoiResult = parsePaymentResponse
+): Promise<TerminalPoiResult> {
   try {
     const response = await axios.post(url, body, {
       headers: {
@@ -516,7 +508,7 @@ function looksLikeClientKey(key: string): boolean {
   );
 }
 
-export async function resolveTerminalContext(
+async function resolveTerminalContext(
   merchantId: string,
   opts: { terminalId?: string; currency?: string } = {}
 ): Promise<TerminalContext | TerminalPoiResult> {
@@ -563,11 +555,11 @@ export async function resolveTerminalContext(
   };
 }
 
-export async function executeSync<T = TerminalPoiResult>(
+async function executeSync(
   ctx: TerminalContext,
   body: Record<string, unknown>,
-  parseFn: (body: string) => T
-): Promise<T> {
+  parseFn: (body: string) => TerminalPoiResult
+): Promise<TerminalPoiResult> {
   if (ctx.useLegacy) {
     return postSync(ctx.apiKey, legacySyncUrl(ctx.live), body, true, parseFn);
   }
@@ -579,14 +571,7 @@ export async function executeSync<T = TerminalPoiResult>(
     ctx.terminalId
   );
   const cloudResult = await postSync(ctx.apiKey, cloudUrl, body, false, parseFn);
-  const err = cloudResult as TerminalPoiResult;
-  if (
-    typeof err === "object" &&
-    err &&
-    "status" in err &&
-    err.status === "error" &&
-    shouldRetryLegacy(err.message || "")
-  ) {
+  if (cloudResult.status === "error" && shouldRetryLegacy(cloudResult.message || "")) {
     return postSync(ctx.apiKey, legacySyncUrl(ctx.live), body, true, parseFn);
   }
   return cloudResult;
@@ -670,86 +655,5 @@ export class AdyenTerminalPoiService {
       ctxOrErr.terminalId
     );
     return executeSync(ctxOrErr, body, parsePaymentResponse);
-  }
-
-  static async sendSplitPayment(
-    merchantId: string,
-    opts: {
-      terminalId: string;
-      currency?: string;
-      requestedAmount: number;
-      paidAmount: number;
-      saleTransactionId: string;
-      saleTransactionTimestamp: string;
-    }
-  ): Promise<SplitPaymentParseResult> {
-    const ctxOrErr = await resolveTerminalContext(merchantId, {
-      terminalId: opts.terminalId,
-      currency: opts.currency,
-    });
-    if ("status" in ctxOrErr) {
-      return { status: "error", message: ctxOrErr.message || "Terminal context error" };
-    }
-
-    const body = buildSplitPaymentRequestBody({
-      amount: opts.requestedAmount,
-      paidAmount: opts.paidAmount,
-      currency: ctxOrErr.currency,
-      saleId: ctxOrErr.saleId,
-      poiId: ctxOrErr.terminalId,
-      saleTransactionId: opts.saleTransactionId,
-      saleTransactionTimestamp: opts.saleTransactionTimestamp,
-      splitPaymentFlag: true,
-    });
-
-    return executeSync(ctxOrErr, body, (responseBody) => parseSplitPaymentResponse(responseBody));
-  }
-
-  static async sendInputRequest(
-    merchantId: string,
-    opts: {
-      terminalId: string;
-      mode: "text" | "menu";
-      prompt: string;
-      subtitle?: string;
-      placeholder?: string;
-      menuEntries?: Array<{ label: string; sublabel?: string }>;
-    }
-  ): Promise<TerminalPoiResult> {
-    const ctxOrErr = await resolveTerminalContext(merchantId, { terminalId: opts.terminalId });
-    if ("status" in ctxOrErr) return ctxOrErr;
-
-    const body =
-      opts.mode === "menu"
-        ? buildInputMenuRequestBody({
-            saleId: ctxOrErr.saleId,
-            poiId: ctxOrErr.terminalId,
-            title: opts.prompt,
-            subtitle: opts.subtitle,
-            entries: opts.menuEntries || [],
-          })
-        : buildInputTextRequestBody({
-            saleId: ctxOrErr.saleId,
-            poiId: ctxOrErr.terminalId,
-            prompt: opts.prompt,
-            placeholder: opts.placeholder,
-          });
-
-    return executeSync(ctxOrErr, body, () => ({ status: "approved" }));
-  }
-
-  static async sendDisplayMessage(
-    merchantId: string,
-    opts: { terminalId: string; message: string }
-  ): Promise<TerminalPoiResult> {
-    const ctxOrErr = await resolveTerminalContext(merchantId, { terminalId: opts.terminalId });
-    if ("status" in ctxOrErr) return ctxOrErr;
-
-    const body = buildDisplayMessageRequestBody({
-      saleId: ctxOrErr.saleId,
-      poiId: ctxOrErr.terminalId,
-      message: opts.message,
-    });
-    return executeSync(ctxOrErr, body, () => ({ status: "approved" }));
   }
 }

@@ -150,7 +150,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                       borderRadius: '10px',
                     }}
                   >
-                    {trText('Today')}
+                    Today
                   </span>
                 )}
               </span>

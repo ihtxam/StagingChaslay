@@ -3,13 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from '
 import toast, { Toaster, ToastBar } from 'react-hot-toast';
 import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
-import { isShopPathHubHost } from '@/lib/brand';
+import { isPanelAppHost, isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
-import ShopFooter from '@/components/shop/ShopFooter';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
@@ -59,10 +58,15 @@ function isWebPosRoute(pathname: string): boolean {
   );
 }
 
+function isShopCheckoutRoute(pathname: string) {
+  return /\/checkout(?:\/|$)/.test(pathname);
+}
+
 /** WebPOS uses center-top toasts so they do not cover the right-side menu. */
 function AppToaster() {
   const { pathname } = useLocation();
   const webPos = isWebPosRoute(pathname);
+  const shopCheckout = isShopCheckoutRoute(pathname);
   const [showPosToasts, setShowPosToasts] = useState(readShowPosToasts);
 
   useEffect(() => {
@@ -80,8 +84,14 @@ function AppToaster() {
 
   return (
     <Toaster
-      position={webPos ? 'top-center' : 'top-right'}
-      containerClassName={webPos ? 'webpos-toast-container' : undefined}
+      position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
+      containerClassName={
+        webPos
+          ? 'webpos-toast-container'
+          : shopCheckout
+            ? 'shop-checkout-toast-container'
+            : undefined
+      }
       containerStyle={
         webPos
           ? {
@@ -94,7 +104,18 @@ function AppToaster() {
               transform: 'translateX(-50%)',
               zIndex: 60,
             }
-          : undefined
+          : shopCheckout
+            ? {
+                top: 'auto',
+                bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+                left: '50%',
+                right: 'auto',
+                width: 'min(92vw, 22rem)',
+                transform: 'translateX(-50%)',
+                zIndex: 60,
+                pointerEvents: 'none',
+              }
+            : undefined
       }
       toastOptions={{
         duration: 3500,
@@ -133,18 +154,13 @@ function ShopRoutes({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider storageKey={storageKey}>
       <ShopLocaleSync shopKey={shopKey} />
-      <div className="flex min-h-dvh flex-col">
-        <div className="flex-1 min-h-0">
-          <Suspense
-            fallback={
-              <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
-            }
-          >
-            {children}
-          </Suspense>
-        </div>
-        {shopKey ? <ShopFooter shopKey={shopKey} /> : null}
-      </div>
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
+        }
+      >
+        {children}
+      </Suspense>
     </I18nProvider>
   );
 }
@@ -163,8 +179,14 @@ const DEV_PANEL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 function hostParts() {
   const host = window.location.hostname.toLowerCase();
   if (DEV_PANEL_HOSTS.has(host)) return { host, kind: 'main' as const, label: '' };
+  // app.* / admin.* are always the merchant panel — even when VITE_PUBLIC_DOMAIN was baked wrong.
+  if (isPanelAppHost(host)) return { host, kind: 'main' as const, label: '' };
+  if (host.startsWith('status.')) return { host, kind: 'status' as const, label: 'status' };
   // Path shop hub: shop.chaslay.com/{slug}, order.rebornsense.com/{slug}, legacy shop.*
   if (isShopPathHubHost(host)) return { host, kind: 'shop_hub' as const, label: 'shop' };
+  if (host.startsWith('api.') || host.startsWith('pay.')) {
+    return { host, kind: 'reserved' as const, label: host.split('.')[0] || 'api' };
+  }
   if (host === MAIN_HOST) return { host, kind: 'main' as const, label: '' };
   if (!host.endsWith(`.${MAIN_HOST}`)) return { host, kind: 'custom_domain' as const, label: host };
   const label = host.slice(0, -(MAIN_HOST.length + 1));
@@ -441,7 +463,7 @@ function App() {
             }
           />
           <Route
-            path="/shop/:merchantSlug/l/:locationSlug/register"
+            path="/shop/:merchantSlug/forgot-password"
             element={
               <ShopRoutes>
                 <AccountPage />
@@ -485,6 +507,7 @@ function App() {
           {shopHub && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
               <Route
@@ -536,50 +559,10 @@ function App() {
                 }
               />
               <Route
-                path="/:merchantSlug/l/:locationSlug/menu"
-                element={
-                  <ShopRoutes>
-                    <OrderingPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/:merchantSlug/l/:locationSlug/checkout"
-                element={
-                  <ShopRoutes>
-                    <CheckoutPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/:merchantSlug/l/:locationSlug/order/:orderId"
-                element={
-                  <ShopRoutes>
-                    <OrderConfirmationPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/:merchantSlug/l/:locationSlug/register"
+                path="/:merchantSlug/forgot-password"
                 element={
                   <ShopRoutes>
                     <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/:merchantSlug/l/:locationSlug/account"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/:merchantSlug/l/:locationSlug"
-                element={
-                  <ShopRoutes>
-                    <ShopEntry />
                   </ShopRoutes>
                 }
               />
@@ -639,14 +622,6 @@ function App() {
                   </ShopRoutes>
                 }
               />
-              <Route
-                path="*"
-                element={
-                  <ShopRoutes>
-                    <ShopEntry />
-                  </ShopRoutes>
-                }
-              />
             </>
           )}
 
@@ -654,6 +629,7 @@ function App() {
           {merchantSubdomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
@@ -705,50 +681,10 @@ function App() {
                 }
               />
               <Route
-                path="/l/:locationSlug/menu"
-                element={
-                  <ShopRoutes>
-                    <OrderingPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/checkout"
-                element={
-                  <ShopRoutes>
-                    <CheckoutPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/order/:orderId"
-                element={
-                  <ShopRoutes>
-                    <OrderConfirmationPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/register"
+                path="/forgot-password"
                 element={
                   <ShopRoutes>
                     <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/account"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug"
-                element={
-                  <ShopRoutes>
-                    <ShopEntry />
                   </ShopRoutes>
                 }
               />
@@ -815,6 +751,7 @@ function App() {
           {customDomain && (
             <>
               <Route path="/login" element={<PanelLoginRedirect />} />
+              <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/signin" element={<PanelLoginRedirect />} />
               <Route
@@ -866,50 +803,10 @@ function App() {
                 }
               />
               <Route
-                path="/l/:locationSlug/menu"
-                element={
-                  <ShopRoutes>
-                    <OrderingPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/checkout"
-                element={
-                  <ShopRoutes>
-                    <CheckoutPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/order/:orderId"
-                element={
-                  <ShopRoutes>
-                    <OrderConfirmationPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/register"
+                path="/forgot-password"
                 element={
                   <ShopRoutes>
                     <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug/account"
-                element={
-                  <ShopRoutes>
-                    <AccountPage />
-                  </ShopRoutes>
-                }
-              />
-              <Route
-                path="/l/:locationSlug"
-                element={
-                  <ShopRoutes>
-                    <ShopEntry />
                   </ShopRoutes>
                 }
               />

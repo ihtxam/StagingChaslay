@@ -22,15 +22,6 @@ router.get("/:token/config", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/:token/state", async (req: Request, res: Response) => {
-  try {
-    const state = await CdsService.liveStateForToken(req.params.token);
-    res.json({ success: true, state });
-  } catch (error) {
-    handleError(res, error, "Failed to load customer display state", 500);
-  }
-});
-
 export default router;
 
 /** Merchant-authenticated CDS settings */
@@ -63,14 +54,5 @@ cdsMerchantRouter.post("/settings/rotate-token", async (req: Request, res: Respo
     res.json({ success: true, settings });
   } catch (error) {
     handleError(res, error, "Failed to rotate token");
-  }
-});
-
-cdsMerchantRouter.post("/push", async (req: Request, res: Response) => {
-  try {
-    const state = await CdsService.pushLiveState(req.merchantId!, req.body?.state);
-    res.json({ success: true, state });
-  } catch (error) {
-    handleError(res, error, "Failed to push customer display state");
   }
 });

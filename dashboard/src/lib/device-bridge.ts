@@ -62,10 +62,8 @@ export async function syncBridgeWebPosOrigin(): Promise<void> {
 
 /** Extend /health with tap-to-pay capability flags from Device Bridge ≥ 0.3.0 */
 export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 1500);
   try {
-    const res = await fetch(bridgeUrl('/health'), { method: 'GET', signal: controller.signal });
+    const res = await fetch(bridgeUrl('/health'), { method: 'GET' });
     if (!res.ok) return { ok: false };
     const data = (await res.json()) as Record<string, unknown>;
     return {
@@ -81,8 +79,6 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
     };
   } catch {
     return { ok: false };
-  } finally {
-    window.clearTimeout(timer);
   }
 }
 

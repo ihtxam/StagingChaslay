@@ -117,10 +117,8 @@ function MerchantsPage() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
-    kioskAddonEnabled: false,
     deliveryPlatformsAddonEnabled: false,
     storekeeperAddonEnabled: false,
-    giftCardAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -133,10 +131,8 @@ function MerchantsPage() {
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
-    kioskAddonEnabled: boolean;
     deliveryPlatformsAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
-    giftCardAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -292,7 +288,6 @@ function MerchantsPage() {
         kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
         odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
         storekeeperAddonEnabled: !!merchant.storekeeperAddonEnabled,
-        giftCardAddonEnabled: !!merchant.giftCardAddonEnabled,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       });
       toast.success(t('resellerOpenMerchant'));
@@ -315,10 +310,8 @@ function MerchantsPage() {
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
-        kioskAddonEnabled: !!limitsFor.kioskAddonEnabled,
         deliveryPlatformsAddonEnabled: !!limitsFor.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
-        giftCardAddonEnabled: !!limitsFor.giftCardAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -656,20 +649,6 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
-                checked={!!form.giftCardAddonEnabled}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, giftCardAddonEnabled: e.target.checked }))
-                }
-              />
-              <span>
-                <span className="font-medium block">{t('giftCard')}</span>
-                <span className="text-xs text-stone-500">{t('giftCardAddonReadOnly')}</span>
-              </span>
-            </label>
-            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
                 checked={!!form.signageAddonEnabled}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, signageAddonEnabled: e.target.checked }))
@@ -702,18 +681,6 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
-              </span>
-            </label>
-            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={!!form.kioskAddonEnabled}
-                onChange={(e) => setForm((f) => ({ ...f, kioskAddonEnabled: e.target.checked }))}
-              />
-              <span>
-                <span className="font-medium block">{t('kioskNav')}</span>
-                <span className="text-xs text-stone-500">{t('kioskAddonReadOnly')}</span>
               </span>
             </label>
             <label className="sm:col-span-2 flex items-start gap-2 text-sm">
@@ -853,13 +820,11 @@ function MerchantsPage() {
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                         kdsAddonEnabled: m.kdsAddonEnabled === true,
                         odsAddonEnabled: m.odsAddonEnabled === true,
-                        kioskAddonEnabled: m.kioskAddonEnabled === true,
                         deliveryPlatformsAddonEnabled:
                           m.deliveryPlatformsAddonEnabled === true ||
                           m.justEatAddonEnabled === true ||
                           m.uberEatsAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
-                        giftCardAddonEnabled: m.giftCardAddonEnabled === true,
                       })
                     }
                   >
@@ -1029,20 +994,6 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
-                checked={!!limitsFor.giftCardAddonEnabled}
-                onChange={(e) =>
-                  setLimitsFor({ ...limitsFor, giftCardAddonEnabled: e.target.checked })
-                }
-              />
-              <span>
-                <span className="font-medium block">{t('giftCard')}</span>
-                <span className="text-xs text-stone-500">{t('giftCardAddonReadOnly')}</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
                 checked={!!limitsFor.signageAddonEnabled}
                 onChange={(e) =>
                   setLimitsFor({ ...limitsFor, signageAddonEnabled: e.target.checked })
@@ -1079,20 +1030,6 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={!!limitsFor.kioskAddonEnabled}
-                onChange={(e) =>
-                  setLimitsFor({ ...limitsFor, kioskAddonEnabled: e.target.checked })
-                }
-              />
-              <span>
-                <span className="font-medium block">{t('kioskNav')}</span>
-                <span className="text-xs text-stone-500">{t('kioskAddonReadOnly')}</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">

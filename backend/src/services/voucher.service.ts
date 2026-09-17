@@ -1,9 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { roundMoney2 } from "@/lib/money";
-import type { VoucherDiscountType, VoucherOrderType, VoucherUsageType } from "@/db/schema";
-
-const VOUCHER_ORDER_TYPES: VoucherOrderType[] = ["takeaway", "dine_in", "delivery"];
+import type { VoucherDiscountType, VoucherUsageType } from "@/db/schema";
 
 export type VoucherInput = {
   code: string;
@@ -14,8 +12,6 @@ export type VoucherInput = {
   discountType?: VoucherDiscountType;
   discountValue: number;
   minOrderAmount?: number;
-  /** Empty or omitted = all order types. */
-  orderTypes?: VoucherOrderType[];
   validFrom?: string | Date | null;
   validTo?: string | Date | null;
   isActive?: boolean;
@@ -24,36 +20,6 @@ export type VoucherInput = {
 export class VoucherService {
   static normalizeCode(code: string): string {
     return code.trim().toUpperCase();
-  }
-
-  /** Empty array means the voucher applies to all order types. */
-  static normalizeOrderTypes(input?: string[] | null): VoucherOrderType[] {
-    if (!Array.isArray(input)) return [];
-    const allowed = new Set(VOUCHER_ORDER_TYPES);
-    return input.filter((t): t is VoucherOrderType => allowed.has(t as VoucherOrderType));
-  }
-
-  static isOrderTypeAllowed(
-    voucher: { orderTypes?: string[] | null },
-    orderType?: string | null
-  ): boolean {
-    const types = this.normalizeOrderTypes(voucher.orderTypes);
-    if (!types.length) return true;
-    if (!orderType) return false;
-    return types.includes(orderType as VoucherOrderType);
-  }
-
-  static orderTypeLabel(orderType: VoucherOrderType): string {
-    switch (orderType) {
-      case "takeaway":
-        return "Pickup";
-      case "delivery":
-        return "Delivery";
-      case "dine_in":
-        return "Dine-in";
-      default:
-        return orderType;
-    }
   }
 
   static async list(merchantId: string) {
@@ -118,7 +84,6 @@ export class VoucherService {
         discountType,
         discountValue: String(discountValue),
         minOrderAmount: String(Math.max(0, Number(input.minOrderAmount) || 0)),
-        orderTypes: this.normalizeOrderTypes(input.orderTypes),
         validFrom: input.validFrom ? new Date(input.validFrom) : null,
         validTo: input.validTo ? new Date(input.validTo) : null,
         isActive: input.isActive !== false,
@@ -162,9 +127,6 @@ export class VoucherService {
     }
     if (input.minOrderAmount !== undefined) {
       patch.minOrderAmount = String(Math.max(0, Number(input.minOrderAmount) || 0));
-    }
-    if (input.orderTypes !== undefined) {
-      patch.orderTypes = this.normalizeOrderTypes(input.orderTypes);
     }
     if (input.validFrom !== undefined) {
       patch.validFrom = input.validFrom ? new Date(input.validFrom) : null;
@@ -246,8 +208,7 @@ export class VoucherService {
     merchantId: string,
     code: string,
     subtotal: number,
-    customerId?: string,
-    orderType?: string | null
+    customerId?: string
   ) {
     const normalized = this.normalizeCode(code);
     if (!normalized) throw new Error("Enter a voucher code");
@@ -270,16 +231,6 @@ export class VoucherService {
     const minOrder = Number(voucher.minOrderAmount || 0);
     if (minOrder > 0 && subtotal < minOrder) {
       throw new Error(`Minimum order amount is CHF ${minOrder.toFixed(2)}`);
-    }
-
-    if (!this.isOrderTypeAllowed(voucher, orderType)) {
-      const types = this.normalizeOrderTypes(voucher.orderTypes);
-      const labels = types.map((t) => this.orderTypeLabel(t)).join(", ");
-      throw new Error(
-        labels
-          ? `This voucher is only valid for ${labels} orders`
-          : "This voucher is not valid for this order type"
-      );
     }
 
     const usageType = voucher.usageType as VoucherUsageType;
@@ -370,7 +321,6 @@ export class VoucherService {
       discountType: v.discountType,
       discountValue: Number(v.discountValue),
       minOrderAmount: Number(v.minOrderAmount || 0),
-      orderTypes: this.normalizeOrderTypes(v.orderTypes),
       validFrom: v.validFrom,
       validTo: v.validTo,
       isActive: v.isActive,

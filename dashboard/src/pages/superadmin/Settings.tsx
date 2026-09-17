@@ -91,8 +91,7 @@ export default function Settings() {
   const [emailUsage, setEmailUsage] = useState<EmailUsageSummary | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
-  const [sendingMailcoTestEmail, setSendingMailcoTestEmail] = useState(false);
-  const [sendingBrevoTestEmail, setSendingBrevoTestEmail] = useState(false);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const load = async () => {
     try {
@@ -241,23 +240,21 @@ export default function Settings() {
     }
   };
 
-  const sendPlatformTestEmail = async (provider: 'mailco' | 'brevo') => {
+  const sendPlatformTestEmail = async () => {
     const to = testEmailTo.trim();
     if (!to.includes('@')) {
-      toast.error(t('loginEmailInvalid'));
+      toast.error('Enter a valid email address');
       return;
     }
-    const setSending =
-      provider === 'mailco' ? setSendingMailcoTestEmail : setSendingBrevoTestEmail;
-    setSending(true);
+    setSendingTestEmail(true);
     try {
-      await api.post('/superadmin/email/test', { to, provider });
-      toast.success(t('smtpTestSent'));
+      await api.post('/superadmin/email/test', { to });
+      toast.success('Test email sent');
       await refreshEmailUsage();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || t('smtpTestFailed'));
+      toast.error(err.response?.data?.error || 'Test email failed');
     } finally {
-      setSending(false);
+      setSendingTestEmail(false);
     }
   };
 
@@ -434,7 +431,8 @@ export default function Settings() {
               >
                 mailco.ch
               </a>
-              ). Brevo remains configured as fallback and for merchants on their own Brevo account.
+              ). Customers see the merchant business name as sender; Reply-To is set to the merchant
+              shop email so replies go to them. Brevo remains configured as fallback.
             </p>
           </div>
           <button
@@ -634,27 +632,9 @@ export default function Settings() {
               placeholder={mailco?.apiKeySet ? 'Leave blank to keep current' : 'mail_live_…'}
             />
           </label>
-          <div className="md:col-span-2 flex flex-wrap items-end gap-3">
+          <div className="md:col-span-2">
             <button type="submit" className="btn btn-primary" disabled={savingMailco}>
-              {savingMailco ? t('saving') : 'Save mailco settings'}
-            </button>
-            <label className="flex-1 min-w-[200px]">
-              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
-              <input
-                className="input mt-1"
-                type="email"
-                value={testEmailTo}
-                onChange={(e) => setTestEmailTo(e.target.value)}
-                placeholder="you@example.com"
-              />
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={sendingMailcoTestEmail}
-              onClick={() => sendPlatformTestEmail('mailco')}
-            >
-              {sendingMailcoTestEmail ? t('saving') : t('smtpSendTest')}
+              {savingMailco ? 'Saving…' : 'Save mailco settings'}
             </button>
           </div>
         </form>
@@ -699,7 +679,7 @@ export default function Settings() {
               {savingBrevo ? 'Saving…' : 'Save Brevo settings'}
             </button>
             <label className="flex-1 min-w-[200px]">
-              <span className="text-sm font-medium">{t('smtpTestTo')}</span>
+              <span className="text-sm font-medium">Send test to</span>
               <input
                 className="input mt-1"
                 type="email"
@@ -711,10 +691,10 @@ export default function Settings() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={sendingBrevoTestEmail}
-              onClick={() => sendPlatformTestEmail('brevo')}
+              disabled={sendingTestEmail}
+              onClick={sendPlatformTestEmail}
             >
-              {sendingBrevoTestEmail ? t('saving') : t('smtpSendTest')}
+              {sendingTestEmail ? 'Sending…' : 'Send test'}
             </button>
           </div>
         </form>
