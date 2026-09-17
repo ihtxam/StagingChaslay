@@ -204,9 +204,9 @@ function extractWindowsUsbPort(...values) {
 function normalizeComPort(port) {
   const raw = String(port || "").trim();
   if (!raw) return "";
-  const stripped = raw.replace(/^\\\\\.\\/i, "").toUpperCase();
+  const stripped = raw.replace(/^\\\\\.\\/i, "").replace(/:+$/, "").toUpperCase();
   const m = stripped.match(/^COM(\d+)$/);
-  if (!m) return raw;
+  if (!m) return raw.replace(/:+$/, "");
   const num = parseInt(m[1], 10);
   const com = `COM${num}`;
   return num >= 10 ? `\\\\.\\${com}` : com;

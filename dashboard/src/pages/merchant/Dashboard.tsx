@@ -54,6 +54,7 @@ import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
 import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
+import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
 import { APP_PANEL_TITLE } from '@/lib/brand';
 import PlatformMessagesProvider, {
   PlatformStatusBannerSlot,
@@ -1315,9 +1316,11 @@ function MerchantShell() {
 export default function MerchantDashboard() {
   return (
     <I18nProvider>
-      <PlatformMessagesProvider>
-        <MerchantShell />
-      </PlatformMessagesProvider>
+      <OnScreenKeyboardProvider>
+        <PlatformMessagesProvider>
+          <MerchantShell />
+        </PlatformMessagesProvider>
+      </OnScreenKeyboardProvider>
     </I18nProvider>
   );
 }

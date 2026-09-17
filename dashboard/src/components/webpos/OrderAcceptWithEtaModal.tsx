@@ -44,7 +44,9 @@ export default function OrderAcceptWithEtaModal({
       setPrepMinutes(30);
     }
     return () => {
-      if (!order) stopOrderAlertLoop();
+      // Always stop on cleanup. Depending on `order` here is stale (the effect
+      // key is order?.id) so `if (!order)` never ran after accept and beeps continued.
+      stopOrderAlertLoop();
     };
   }, [order?.id]);
 

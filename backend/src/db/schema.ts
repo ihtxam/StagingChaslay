@@ -228,6 +228,8 @@ export const merchants = pgTable(
     tapToPayEnabled: boolean("tap_to_pay_enabled").default(false).notNull(),
     /** Adyen Terminal API: test vs live environment */
     adyenLiveEnvironment: boolean("adyen_live_environment").default(false).notNull(),
+    /** Adyen Checkout live URL prefix from Customer Area (Developers → API URLs) */
+    adyenLiveUrlPrefix: varchar("adyen_live_url_prefix", { length: 255 }),
     /** Adyen cloud device region: EU | US | AU | APSE */
     adyenLiveRegion: varchar("adyen_live_region", { length: 10 }).default("EU").notNull(),
     /** Use legacy Terminal API sync URL instead of Cloud Device API */
@@ -253,6 +255,10 @@ export const merchants = pgTable(
      * { enabled, presetDenominations, minAmount, maxAmount, reloadEnabled, customAmountEnabled }
      */
     giftCardSettings: json("gift_card_settings").$type<Record<string, unknown> | null>(),
+    /** Paid gift cards addon (reseller/superadmin extra). */
+    giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
+    /** Fiskaly SIGN DE / SIGN FR merchant credentials */
+    fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
     /** Fixed CHF surcharge added to online card checkouts */
     onlineCardFeeFixed: decimal("online_card_fee_fixed", { precision: 10, scale: 2 }).default("0"),
     /** Percent surcharge on (subtotal+tax+delivery+tip) for online card checkouts */
@@ -1365,6 +1371,8 @@ export const orders = pgTable(
     /** Serialized Adyen Terminal API CashierReceipt JSON */
     adyenCashierReceiptJson: text("adyen_cashier_receipt_json"),
     notes: text("notes"),
+    /** Fiskaly KassenSichV / NF525 signature payload for the receipt */
+    fiskalySignature: json("fiskaly_signature").$type<Record<string, unknown> | null>(),
     shippingAddress: text("shipping_address"),
     /** Geocoded destination for delivery map (shop checkout / assign). */
     deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
@@ -2812,6 +2820,8 @@ export const vouchers = pgTable(
     discountType: varchar("discount_type", { length: 20 }).notNull().default("percent"),
     discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+    /** Empty = all channels. Otherwise takeaway | delivery | dine_in. */
+    orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validTo: timestamp("valid_to", { withTimezone: true }),
     isActive: boolean("is_active").default(true).notNull(),

@@ -1337,6 +1337,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   </p>
                 ) : null}
                 {isDeliveryOrder(selected) &&
+                !isHeldListRow(selected) &&
                 !['cancelled', 'refunded', 'completed'].includes(selected.status) ? (
                   <OrderDeliveryPanel
                     order={selected}
@@ -1357,6 +1358,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                       void load();
                     }}
                   />
+                ) : null}
+                {isDeliveryOrder(selected) && isHeldListRow(selected) ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {t('ordersHeldNoDriver')}
+                  </p>
                 ) : null}
                 {isInvoiceOrder(selected) ? (
                   <p>

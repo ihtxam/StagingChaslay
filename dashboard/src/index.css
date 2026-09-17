@@ -1858,6 +1858,22 @@ button {
   overflow: visible;
 }
 
+.shop-themed .shop-input,
+.shop-themed input.shop-input,
+.shop-themed textarea.shop-input,
+.shop-themed select.shop-input {
+  background-color: #fff;
+  color: #1c1917;
+  border-color: var(--shop-border, #d6d3d1);
+}
+
+.shop-themed .shop-input::placeholder,
+.shop-themed input.shop-input::placeholder,
+.shop-themed textarea.shop-input::placeholder {
+  color: #78716c;
+  opacity: 1;
+}
+
 .shop-btn-primary {
   background: var(--shop-accent, #0d9488);
   color: #fff;

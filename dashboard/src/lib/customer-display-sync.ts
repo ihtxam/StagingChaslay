@@ -1,3 +1,5 @@
+import api, { publicApi } from '@/lib/api';
+
 export type CustomerDisplayLine = {
   name: string;
   qty: number;
@@ -84,15 +86,39 @@ function isCustomerDisplayStateMessage(data: unknown): data is CustomerDisplaySt
   );
 }
 
-export function publishCustomerDisplayState(token: string, state: CustomerDisplayState): void {
-  if (!token || typeof BroadcastChannel === 'undefined') return;
+export async function pushCustomerDisplayStateToServer(
+  state: CustomerDisplayState
+): Promise<void> {
+  await api.post('/merchant/cds/push', { state });
+}
+
+export async function fetchCustomerDisplayState(
+  token: string
+): Promise<CustomerDisplayState | null> {
+  const code = String(token || '').trim();
+  if (!code) return null;
   try {
-    const channel = new BroadcastChannel(cdsChannelName(token));
-    channel.postMessage(state);
-    channel.close();
+    const res = await publicApi.get(`/cds/${encodeURIComponent(code)}/state`);
+    const state = res.data?.state;
+    return isCustomerDisplayStateMessage(state) ? state : null;
   } catch {
-    /* ignore */
+    return null;
   }
+}
+
+export function publishCustomerDisplayState(token: string, state: CustomerDisplayState): void {
+  const trimmed = String(token || '').trim();
+  if (!trimmed) return;
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel(cdsChannelName(trimmed));
+      channel.postMessage(state);
+      channel.close();
+    } catch {
+      /* ignore */
+    }
+  }
+  void pushCustomerDisplayStateToServer(state).catch(() => undefined);
 }
 
 /** CDS → POS: ask the till to republish the latest cart + locale. */
@@ -112,17 +138,29 @@ export function subscribeCustomerDisplayState(
   token: string,
   onState: (state: CustomerDisplayState) => void
 ): () => void {
-  if (!token || typeof BroadcastChannel === 'undefined') return () => undefined;
+  const trimmed = String(token || '').trim();
+  if (!trimmed) return () => undefined;
   let channel: BroadcastChannel | null = null;
-  try {
-    channel = new BroadcastChannel(cdsChannelName(token));
-    channel.onmessage = (ev: MessageEvent<unknown>) => {
-      if (isCustomerDisplayStateMessage(ev.data)) onState(ev.data);
-    };
-  } catch {
-    return () => undefined;
+  let pollId: number | null = null;
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      channel = new BroadcastChannel(cdsChannelName(trimmed));
+      channel.onmessage = (ev: MessageEvent<unknown>) => {
+        if (isCustomerDisplayStateMessage(ev.data)) onState(ev.data);
+      };
+    } catch {
+      channel = null;
+    }
   }
+  const poll = () => {
+    void fetchCustomerDisplayState(trimmed).then((state) => {
+      if (state) onState(state);
+    });
+  };
+  poll();
+  pollId = window.setInterval(poll, 2500);
   return () => {
+    if (pollId != null) window.clearInterval(pollId);
     try {
       channel?.close();
     } catch {

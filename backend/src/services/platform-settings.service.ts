@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { liveCheckoutApiBase } from "@/lib/adyen-checkout-env";
 
 export const PLATFORM_ADYEN_KEYS = {
   apiKey: "adyen_api_key",
@@ -94,11 +95,7 @@ export function adyenDropinEnvironment(clientKey: string): "live" | "test" {
 
 function adyenCheckoutApiBase(dropinEnv: "live" | "test"): string {
   if (dropinEnv === "live") {
-    return (
-      process.env.PLATFORM_ADYEN_API_BASE ||
-      process.env.ADYEN_API_BASE_LIVE ||
-      "https://checkout-live.adyen.com/v71"
-    );
+    return liveCheckoutApiBase();
   }
   return (
     process.env.PLATFORM_ADYEN_API_BASE ||

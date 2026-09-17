@@ -18,8 +18,8 @@ export class AdyenService {
     return environmentFromClientKey(clientKey);
   }
 
-  static checkoutApiBase(clientKey?: string | null): string {
-    return checkoutApiBase(clientKey);
+  static checkoutApiBase(clientKey?: string | null, liveUrlPrefix?: string | null): string {
+    return checkoutApiBase(clientKey, liveUrlPrefix);
   }
 
   static formatSessionError(error: unknown): string {
@@ -65,6 +65,8 @@ export class AdyenService {
     const merchantAccount =
       terminal?.adyenMerchantAccount || merchant?.adyenMerchantAccount || ADYEN_MERCHANT_ACCOUNT;
     const clientId = terminal?.adyenClientId || merchant?.adyenClientId || ADYEN_CLIENT_ID;
+    const liveUrlPrefix =
+      (merchant as { adyenLiveUrlPrefix?: string | null } | undefined)?.adyenLiveUrlPrefix || null;
 
     if (!apiKey || !merchantAccount) {
       throw new Error("Swisspayout credentials not configured for this merchant");
@@ -74,6 +76,7 @@ export class AdyenService {
       apiKey,
       merchantAccount,
       clientId,
+      liveUrlPrefix,
       terminalId: terminal?.terminalId || terminalId,
     };
   }
@@ -94,7 +97,7 @@ export class AdyenService {
     try {
       const creds = await this.resolveCredentials(merchantId);
       const environment = this.environmentFromClientKey(creds.clientId);
-      const apiBase = this.checkoutApiBase(creds.clientId);
+      const apiBase = this.checkoutApiBase(creds.clientId, creds.liveUrlPrefix);
 
       const sessionPayload: Record<string, unknown> = {
         amount: {

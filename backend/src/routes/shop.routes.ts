@@ -25,6 +25,7 @@ import { autocompleteAddress } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
+import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   filterCatalogForChannel,
@@ -1843,7 +1844,8 @@ router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
       merchant.id,
       code,
       subtotal,
-      authCustomer.customerId
+      authCustomer.customerId,
+      req.body?.orderType || req.body?.fulfillmentChannel || req.body?.channel
     );
     res.json({ success: true, ...result });
   } catch (error) {
@@ -1959,6 +1961,17 @@ router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => 
   try {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const licensed = await merchantHasGiftCardsLicense(merchant.id);
+    if (!licensed) {
+      return res.json({
+        success: true,
+        settings: ShopGiftCardService.publicSettings({
+          ...ShopGiftCardService.settingsFromMerchant(merchant),
+          enabled: false,
+          onlinePurchaseEnabled: false,
+        }),
+      });
+    }
     res.json({
       success: true,
       settings: ShopGiftCardService.publicSettings(
@@ -1994,6 +2007,9 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
   try {
     const merchant = await resolveMerchant(req.params.slug);
     if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!(await merchantHasGiftCardsLicense(merchant.id))) {
+      return res.status(403).json({ error: "Gift cards are not enabled for this shop" });
+    }
 
     const body = req.body || {};
     const deliveryType =
@@ -2517,7 +2533,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           merchant.id,
           trimmedVoucher,
           voucherBase,
-          authCustomer.customerId
+          authCustomer.customerId,
+          String(req.body?.fulfillmentChannel || req.body?.channel || req.body?.orderType || "")
         );
         voucherDiscount = roundMoney2(Math.min(validated.discount, voucherBase));
         appliedVoucher = {

@@ -5,6 +5,13 @@ import { useI18n } from '@/lib/i18n';
 
 type VoucherUsageType = 'single_use' | 'multi_use' | 'customer';
 type VoucherDiscountType = 'percent' | 'fixed';
+type VoucherOrderType = 'takeaway' | 'dine_in' | 'delivery';
+
+const ORDER_TYPE_OPTIONS: { id: VoucherOrderType; labelKey: string }[] = [
+  { id: 'takeaway', labelKey: 'voucherOrderTypePickup' },
+  { id: 'delivery', labelKey: 'voucherOrderTypeDelivery' },
+  { id: 'dine_in', labelKey: 'voucherOrderTypeDineIn' },
+];
 
 type Voucher = {
   id: string;
@@ -17,6 +24,7 @@ type Voucher = {
   discountType: VoucherDiscountType;
   discountValue: number;
   minOrderAmount: number;
+  orderTypes: VoucherOrderType[];
   validFrom?: string | null;
   validTo?: string | null;
   isActive: boolean;
@@ -36,6 +44,7 @@ const emptyForm = () => ({
   minOrderAmount: '',
   validFrom: '',
   validTo: '',
+  orderTypes: [] as VoucherOrderType[],
   isActive: true,
 });
 
@@ -79,6 +88,25 @@ export default function Vouchers() {
     [t]
   );
 
+  const formatOrderTypes = (types: VoucherOrderType[] | undefined) => {
+    if (!types?.length) return t('voucherOrderTypesAll');
+    return types
+      .map((id) => {
+        const opt = ORDER_TYPE_OPTIONS.find((o) => o.id === id);
+        return opt ? t(opt.labelKey) : id;
+      })
+      .join(', ');
+  };
+
+  const toggleOrderType = (id: VoucherOrderType) => {
+    setForm((f) => ({
+      ...f,
+      orderTypes: f.orderTypes.includes(id)
+        ? f.orderTypes.filter((t) => t !== id)
+        : [...f.orderTypes, id],
+    }));
+  };
+
   const discountValueInputProps = useMemo(
     () =>
       form.discountType === 'percent'
@@ -105,6 +133,7 @@ export default function Vouchers() {
       minOrderAmount: v.minOrderAmount > 0 ? String(v.minOrderAmount) : '',
       validFrom: v.validFrom ? v.validFrom.slice(0, 16) : '',
       validTo: v.validTo ? v.validTo.slice(0, 16) : '',
+      orderTypes: v.orderTypes || [],
       isActive: v.isActive,
     });
   };
@@ -128,6 +157,7 @@ export default function Vouchers() {
         minOrderAmount: form.minOrderAmount ? Number(form.minOrderAmount) : 0,
         validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : null,
         validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
+        orderTypes: form.orderTypes,
         isActive: form.isActive,
       };
       if (editingId) {
@@ -295,6 +325,26 @@ export default function Vouchers() {
             />
           </label>
         </div>
+        <div>
+          <p className="muted text-sm mb-1">{t('voucherOrderTypes')}</p>
+          <p className="text-xs muted mb-2">{t('voucherOrderTypesHint')}</p>
+          <div className="flex flex-wrap gap-2">
+            {ORDER_TYPE_OPTIONS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`rounded-full px-3 py-1 text-xs border ${
+                  form.orderTypes.includes(c.id)
+                    ? 'bg-stone-900 text-white border-stone-900'
+                    : 'bg-white border-stone-300'
+                }`}
+                onClick={() => toggleOrderType(c.id)}
+              >
+                {t(c.labelKey)}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -322,6 +372,7 @@ export default function Vouchers() {
               <th className="py-2 pr-3">{t('voucherCode')}</th>
               <th className="py-2 pr-3">{t('voucherDiscount')}</th>
               <th className="py-2 pr-3">{t('voucherUsageType')}</th>
+              <th className="py-2 pr-3">{t('voucherOrderTypes')}</th>
               <th className="py-2 pr-3">{t('voucherRedemptions')}</th>
               <th className="py-2 pr-3">{t('status')}</th>
               <th className="py-2" />
@@ -330,13 +381,13 @@ export default function Vouchers() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center muted">
+                <td colSpan={7} className="py-6 text-center muted">
                   {t('loading')}
                 </td>
               </tr>
             ) : vouchers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center muted">
+                <td colSpan={7} className="py-6 text-center muted">
                   {t('voucherNoneYet')}
                 </td>
               </tr>
@@ -350,6 +401,7 @@ export default function Vouchers() {
                       : `CHF ${v.discountValue.toFixed(2)}`}
                   </td>
                   <td className="py-3 pr-3">{usageLabels[v.usageType] || v.usageType}</td>
+                  <td className="py-3 pr-3">{formatOrderTypes(v.orderTypes)}</td>
                   <td className="py-3 pr-3">
                     {v.redemptionCount}
                     {v.usageType === 'multi_use' ? ` / ${v.maxRedemptions}` : ''}

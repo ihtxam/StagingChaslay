@@ -169,6 +169,7 @@ function scoreDeviceMatch(configured: string, candidate: string): number {
 function normalizeComPortLabel(port?: string | null): string {
   const raw = String(port || '')
     .trim()
+    .replace(/:+$/, '')
     .toUpperCase()
     .replace(/^\\\\\.\\/i, '');
   const m = raw.match(/^(COM\d+)$/);

@@ -1810,7 +1810,12 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
             const { EditionEntitlementsService } = await import(
               "@/services/edition-entitlements.service"
             );
-            return await EditionEntitlementsService.getFeatures(merchantId);
+            const feats = await EditionEntitlementsService.getFeatures(merchantId);
+            if (feats == null) return null;
+            if ((merchant as { giftCardAddonEnabled?: boolean }).giftCardAddonEnabled) {
+              return Array.from(new Set([...feats, "gift_cards", "pos_gift_cards"]));
+            }
+            return feats;
           } catch {
             return null;
           }

@@ -33,6 +33,7 @@ import {
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { getFiskalyPublic, mergeFiskalySettings, type FiskalySettings } from "@/lib/fiskaly-settings";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
@@ -156,6 +157,10 @@ export class MerchantSettingsService {
         const extra: typeof feats = [];
         if (inventoryOn) extra.push("inventory");
         if (signage.enabled) extra.push("digital_signage");
+        if ((merchant as { giftCardAddonEnabled?: boolean }).giftCardAddonEnabled) {
+          extra.push("gift_cards");
+          extra.push("pos_gift_cards");
+        }
         editionFeatures = [...withoutPaid, ...extra];
       }
     } catch {
@@ -281,8 +286,13 @@ export class MerchantSettingsService {
       adyenHmacKeySet: !!merchant.adyenHmacKey,
       tapToPayEnabled: merchant.tapToPayEnabled === true,
       adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
+      adyenLiveUrlPrefix: (merchant as { adyenLiveUrlPrefix?: string | null }).adyenLiveUrlPrefix || "",
       adyenLiveRegion: merchant.adyenLiveRegion || "EU",
       adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
+      giftCardAddonEnabled: !!(merchant as { giftCardAddonEnabled?: boolean }).giftCardAddonEnabled,
+      fiskalySettings: getFiskalyPublic(
+        (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
+      ),
       webposExpressEnabled: merchant.webposExpressEnabled !== false,
       webposCashEnabled: merchant.webposCashEnabled !== false,
       webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -391,8 +401,10 @@ export class MerchantSettingsService {
       adyenHmacKey?: string;
       tapToPayEnabled?: boolean;
       adyenLiveEnvironment?: boolean;
+      adyenLiveUrlPrefix?: string;
       adyenLiveRegion?: string;
       adyenUseLegacyEndpoint?: boolean;
+      fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
       webposExpressEnabled?: boolean;
       webposCashEnabled?: boolean;
       webposCardEnabled?: boolean;
@@ -564,12 +576,31 @@ export class MerchantSettingsService {
     }
     if (updates.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!updates.tapToPayEnabled;
     if (updates.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
+    if (updates.adyenLiveUrlPrefix !== undefined) {
+      const prefix = String(updates.adyenLiveUrlPrefix || "")
+        .trim()
+        .replace(/^https?:\/\//, "")
+        .replace(/-checkout-live.*$/i, "")
+        .replace(/\/.*$/, "")
+        .replace(/:+$/, "")
+        .slice(0, 255);
+      patch.adyenLiveUrlPrefix = prefix || null;
+    }
     if (updates.adyenLiveRegion !== undefined) {
       const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
       patch.adyenLiveRegion = ["EU", "US", "AU", "APSE"].includes(region) ? region : "EU";
     }
     if (updates.adyenUseLegacyEndpoint !== undefined) {
       patch.adyenUseLegacyEndpoint = !!updates.adyenUseLegacyEndpoint;
+    }
+    if (updates.fiskalySettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      patch.fiskalySettings = mergeFiskalySettings(
+        (current as { fiskalySettings?: FiskalySettings | null } | undefined)?.fiskalySettings,
+        updates.fiskalySettings
+      );
     }
     if (updates.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!updates.webposExpressEnabled;
     if (updates.webposCashEnabled !== undefined) patch.webposCashEnabled = !!updates.webposCashEnabled;

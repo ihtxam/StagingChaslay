@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Clock,
   CreditCard,
+  FileCheck,
   Globe2,
   Languages,
   Mail,
@@ -35,6 +36,7 @@ import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVer
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
+import SettingsFiscalTab from '@/pages/merchant/settings/SettingsFiscalTab';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
@@ -222,10 +224,12 @@ interface SettingsData {
   adyenHmacKeyMasked?: string | null;
   adyenHmacKeySet?: boolean;
   adyenWebhookUrl?: string | null;
+  adyenLiveUrlPrefix?: string | null;
   adyenLiveEnvironment?: boolean;
   adyenLiveRegion?: string;
   adyenUseLegacyEndpoint?: boolean;
   tapToPayEnabled?: boolean;
+  fiskalySettings?: Record<string, unknown> | null;
   emailSmtpSettings?: {
     enabled?: boolean;
     host?: string | null;
@@ -339,6 +343,7 @@ interface AdyenCreds {
   apiKeySet?: boolean;
   hmacKeyMasked?: string | null;
   hmacKeySet?: boolean;
+  liveUrlPrefix?: string | null;
   webhookUrl?: string | null;
 }
 
@@ -365,6 +370,7 @@ type TabId =
   | 'kds'
   | 'ods'
   | 'customerDisplay'
+  | 'fiscal'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -386,6 +392,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'kds',
   'ods',
   'customerDisplay',
+  'fiscal',
   'signage',
   'kiosk',
   'email',
@@ -608,6 +615,7 @@ export default function Settings() {
   }, [settings?.adyenWebhookUrl, settings?.id, adyen.webhookUrl, user?.merchantId, user?.role, user?.id]);
   const [merchantAccount, setMerchantAccount] = useState('');
   const [clientId, setClientId] = useState('');
+  const [liveUrlPrefix, setLiveUrlPrefix] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [hmacKey, setHmacKey] = useState('');
   const [cardFeeFixed, setCardFeeFixed] = useState('0');
@@ -698,6 +706,7 @@ export default function Settings() {
           navLabel: t('settingsNavCds'),
           icon: Tv,
         },
+        { id: 'fiscal' as const, label: t('settingsFiscal'), navLabel: t('settingsNavFiscal'), icon: FileCheck },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -922,12 +931,16 @@ export default function Settings() {
     if (a.clientId != null && a.clientId !== '') {
       setClientId(a.clientId);
     }
+    if (a.liveUrlPrefix != null) {
+      setLiveUrlPrefix(a.liveUrlPrefix);
+    }
   }, []);
 
   const adyenCredsFromSettings = useCallback((s: SettingsData): AdyenCreds => {
     return {
       merchantAccount: s.adyenMerchantAccount,
       clientId: s.adyenClientId,
+      liveUrlPrefix: s.adyenLiveUrlPrefix || '',
       apiKeyMasked: s.adyenApiKeyMasked,
       apiKeySet: s.adyenApiKeySet,
       hmacKeyMasked: s.adyenHmacKeyMasked,
@@ -1350,6 +1363,7 @@ export default function Settings() {
         adyenApiKey: apiKey || undefined,
         adyenClientId: clientId,
         adyenHmacKey: hmacKey || undefined,
+        adyenLiveUrlPrefix: liveUrlPrefix,
       });
       const a = response.data.adyen || {};
       applyAdyenCreds(a);
@@ -1401,6 +1415,7 @@ export default function Settings() {
         bankName: settings.bankName || null,
         bankAccountHolder: settings.bankAccountHolder || null,
         adyenLiveEnvironment: !!settings.adyenLiveEnvironment,
+        adyenLiveUrlPrefix: liveUrlPrefix || settings.adyenLiveUrlPrefix || '',
         adyenLiveRegion: settings.adyenLiveRegion || 'EU',
         adyenUseLegacyEndpoint: !!settings.adyenUseLegacyEndpoint,
         tapToPayEnabled: settings.tapToPayEnabled === true,
@@ -2973,6 +2988,17 @@ export default function Settings() {
                         autoComplete="off"
                       />
                     </Field>
+                    <div className="sm:col-span-2">
+                      <Field label={t('adyenLiveUrlPrefix')} hint={t('adyenLiveUrlPrefixHint')}>
+                        <input
+                          className="input"
+                          value={liveUrlPrefix}
+                          onChange={(e) => setLiveUrlPrefix(e.target.value)}
+                          placeholder="1797a841fbb37ca7-Chaslay"
+                          autoComplete="off"
+                        />
+                      </Field>
+                    </div>
                     <div className="sm:col-span-2">
                       <Field
                         label={t('apiKey')}
@@ -4724,6 +4750,13 @@ export default function Settings() {
               <SettingsPageHeader title={t('cdsSettingsTitle')} subtitle={t('cdsSettingsHint')} />
               <CdsSettingsPanel />
             </div>
+          )}
+
+          {tab === 'fiscal' && (
+            <SettingsFiscalTab
+              settings={settings}
+              onSettingsChange={(next) => setSettings((prev) => (prev ? { ...prev, ...next } : prev))}
+            />
           )}
 
           {tab === 'signage' && (

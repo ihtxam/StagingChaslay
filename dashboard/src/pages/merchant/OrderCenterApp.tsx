@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/auth';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
   isAwaitingApproval,
+  isDeliveryOrPickupShopOrder,
   isOnlineShopOrder,
 } from '@/lib/order-management';
 import {
@@ -554,7 +555,17 @@ export default function OrderCenterApp() {
               type="button"
               disabled={busyId === o.id}
               className="btn-primary inline-flex flex-1 min-w-[7rem] items-center justify-center gap-2 py-3"
-              onClick={() => setAcceptEtaOrder(o)}
+              onClick={() => {
+                // ETA / prep minutes for shop delivery+pickup awaiting approval; not dine-in/kiosk.
+                if (isDeliveryOrPickupShopOrder(o)) {
+                  setAcceptEtaOrder(o);
+                } else {
+                  void runAction(o.id, 'accept', {
+                    orderSource: o.orderSource,
+                    fulfillmentChannel: o.fulfillmentChannel,
+                  });
+                }
+              }}
             >
               <Check className="h-5 w-5" />
               {t('accept')}

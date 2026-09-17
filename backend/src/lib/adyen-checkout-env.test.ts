@@ -5,8 +5,11 @@ import assert from "node:assert/strict";
 import {
   checkoutApiBase,
   environmentFromClientKey,
+  isUnprefixedLiveCheckoutHost,
   isValidAdyenClientKey,
+  LIVE_CHECKOUT_PREFIX_REQUIRED,
   liveCheckoutApiBase,
+  normalizeLiveUrlPrefix,
   shopAdyenCardReady,
   testCheckoutApiBase,
 } from "./adyen-checkout-env.ts";
@@ -38,29 +41,72 @@ assert.equal(
   false
 );
 
+assert.equal(isUnprefixedLiveCheckoutHost("https://checkout-live.adyen.com/checkout/v71"), true);
+assert.equal(
+  isUnprefixedLiveCheckoutHost(
+    "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71"
+  ),
+  false
+);
+assert.equal(normalizeLiveUrlPrefix("https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com"), "1797a841fbb37ca7-Chaslay");
+assert.equal(normalizeLiveUrlPrefix("1797a841fbb37ca7-Chaslay"), "1797a841fbb37ca7-Chaslay");
+
 const prevApiBase = process.env.ADYEN_API_BASE;
 const prevLive = process.env.ADYEN_API_BASE_LIVE;
 const prevPrefix = process.env.ADYEN_LIVE_URL_PREFIX;
+const prevPrefixAlt = process.env.ADYEN_LIVE_ENDPOINT_PREFIX;
+const prevPlatformPrefix = process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX;
+const prevPlatformLive = process.env.PLATFORM_ADYEN_API_BASE_LIVE;
 delete process.env.ADYEN_API_BASE;
 delete process.env.ADYEN_API_BASE_LIVE;
 delete process.env.ADYEN_LIVE_URL_PREFIX;
+delete process.env.ADYEN_LIVE_ENDPOINT_PREFIX;
+delete process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX;
+delete process.env.PLATFORM_ADYEN_API_BASE_LIVE;
 
 assert.equal(testCheckoutApiBase(), "https://checkout-test.adyen.com/v71");
-assert.equal(liveCheckoutApiBase(), "https://checkout-live.adyen.com/checkout/v71");
+assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
+  assert.ok(err instanceof Error);
+  assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
+  return true;
+});
 assert.equal(checkoutApiBase("test_xxx"), "https://checkout-test.adyen.com/v71");
-assert.equal(checkoutApiBase("live_xxx"), "https://checkout-live.adyen.com/checkout/v71");
+assert.throws(() => checkoutApiBase("live_xxx"), (err: unknown) => {
+  assert.ok(err instanceof Error);
+  assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
+  return true;
+});
 
 process.env.ADYEN_API_BASE = "https://checkout-test.adyen.com/v71";
-assert.equal(
-  checkoutApiBase("live_xxx"),
-  "https://checkout-live.adyen.com/checkout/v71",
-  "live client key must not reuse ADYEN_API_BASE when it is the test host"
+assert.throws(
+  () => checkoutApiBase("live_xxx"),
+  (err: unknown) => {
+    assert.ok(err instanceof Error);
+    assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
+    return true;
+  },
+  "live client key must not reuse ADYEN_API_BASE when it is the test host, and must not fall back to checkout-live.adyen.com"
 );
+
+process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyen.com/checkout/v71";
+assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
+  assert.ok(err instanceof Error);
+  assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
+  return true;
+});
+delete process.env.ADYEN_API_BASE_LIVE;
 
 process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-Chaslay";
 assert.equal(
   liveCheckoutApiBase(),
   "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71"
+);
+
+delete process.env.ADYEN_LIVE_URL_PREFIX;
+assert.equal(
+  liveCheckoutApiBase("1797a841fbb37ca7-Chaslay"),
+  "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71",
+  "merchant adyenLiveUrlPrefix is used when env prefix is unset"
 );
 
 if (prevApiBase === undefined) delete process.env.ADYEN_API_BASE;
@@ -69,5 +115,11 @@ if (prevLive === undefined) delete process.env.ADYEN_API_BASE_LIVE;
 else process.env.ADYEN_API_BASE_LIVE = prevLive;
 if (prevPrefix === undefined) delete process.env.ADYEN_LIVE_URL_PREFIX;
 else process.env.ADYEN_LIVE_URL_PREFIX = prevPrefix;
+if (prevPrefixAlt === undefined) delete process.env.ADYEN_LIVE_ENDPOINT_PREFIX;
+else process.env.ADYEN_LIVE_ENDPOINT_PREFIX = prevPrefixAlt;
+if (prevPlatformPrefix === undefined) delete process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX;
+else process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX = prevPlatformPrefix;
+if (prevPlatformLive === undefined) delete process.env.PLATFORM_ADYEN_API_BASE_LIVE;
+else process.env.PLATFORM_ADYEN_API_BASE_LIVE = prevPlatformLive;
 
 console.log("adyen-checkout-env.test.ts OK");
