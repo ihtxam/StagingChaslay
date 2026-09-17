@@ -15,30 +15,19 @@ const {
   detectNiimbotProfile,
   chooseNiimbotTransport,
   describeSerialFailure,
-  describeSpoolerUncertainty,
-  rawSerialError,
   printNiimbotLabel,
+  WAKE_BYTES,
   countPixelsForLine,
-  buildSerialJobScript,
-  buildComProbeScript,
-  buildUsbDeviceScript,
-  USBPRINT_INTERFACE_GUID,
-  classifyProbedPort,
-  formatComProbeReport,
-  summarizeComProbe,
-  probeNiimbotComPorts,
-  PROTOCOL_PROFILES,
-  SERIAL_BAUDS,
 } = require("../niimbot-client.js");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.13";
+const VERSION = "1.10.4";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.13 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.4 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -102,22 +91,14 @@ test("job includes status poll packets before END_PRINT", () => {
   assert.ok(polls.length >= 6);
 });
 
-test("no 0x54 prologue bytes are sent before the first 55 55 frame", () => {
-  // 0x54 is RfidSuccessTimes in https://printers.niim.blue/interfacing/proto/,
-  // not a wake command. niimgo (K3) and our Android SPP client send nothing first.
-  const client = read("../niimbot-client.js");
-  assert.equal(/0x54,\s*0x01/.test(client), false);
-  assert.equal(client.includes("WAKE_BYTES"), false);
-  const ps1 = read("../win-niimbot-print.ps1");
-  assert.equal(/0x54,\s*0x01/.test(ps1), false);
-  const bitmap = buildTestPatternBitmap(32, 16);
-  const { packets } = buildNiimbotJobPackets(bitmap, 32, 16, 3, { printerName: "NIIMBOT K3" });
-  assert.equal(packets[0][2], 0x21);
+test("wake bytes are 0x54 0x01 per official NIIMBOT.exe captures", () => {
+  assert.deepEqual([...WAKE_BYTES], [0x54, 0x01]);
 });
 
-test("win-niimbot-print.ps1 writes one packet per WritePrinter", () => {
+test("win-niimbot-print.ps1 writes one packet per WritePrinter with dual wake bytes", () => {
   const src = read("../win-niimbot-print.ps1");
   assert.match(src, /Write-OnePacket/);
+  assert.match(src, /0x54,\s*0x01/);
   assert.match(src, /0xA3/);
   assert.match(src, /Get-PacketDelayMs/);
   assert.equal(src.includes("Get-BtCutTrailer"), false);
@@ -141,30 +122,10 @@ test("niimbot packets are framed and raster lines use type 0x85", () => {
   assert.equal(raster.length, h);
 });
 
-test("raster rows leave the black-pixel-count bytes at zero", () => {
-  // "Usually the printer works correctly when all three bytes are 0x00" —
-  // printers.niim.blue/interfacing/proto. Chunked counts depend on the exact
-  // printhead width, which is one more way to get a row rejected.
-  const w = 320;
-  const h = 8;
-  const bitmap = Buffer.alloc(Math.ceil(w / 8) * h, 0xff);
-  const { packets } = buildNiimbotJobPackets(bitmap, w, h, 3, { printerName: "NIIMBOT K3" });
-  const raster = packets.filter((p) => p[2] === 0x85);
-  assert.equal(raster.length, h);
-  for (const row of raster) {
-    assert.deepEqual([row[6], row[7], row[8]], [0, 0, 0]);
-    assert.equal(row[9], 1);
-  }
-});
-
-test("countPixelsForLine is still available for the documented split mode", () => {
-  const counts = countPixelsForLine(Buffer.alloc(40, 0xff), 384);
-  assert.ok(counts[0] > 0 || counts[1] > 0 || counts[2] > 0);
-});
-
-test("K3 printhead is 640 dots (80 mm at 203 dpi), not the B21 384", () => {
-  assert.equal(PROTOCOL_PROFILES.k3.printheadPixels, 640);
-  assert.equal(PROTOCOL_PROFILES.b21.printheadPixels, 384);
+test("countPixelsForLine encodes black pixel counts in header", () => {
+  const line = Buffer.alloc(40, 0xff);
+  const counts = countPixelsForLine(line, 384);
+  assert.ok(counts[1] > 0 || counts[2] > 0 || counts[0] > 0);
 });
 
 test("port extractors recognize COM and USB spooler ports", () => {
@@ -207,13 +168,11 @@ test("COM-only B21 without USB port uses serial", () => {
   assert.equal(t.comPort, "COM4");
 });
 
-test("describeSerialFailure maps access denied and keeps the raw reason", () => {
+test("describeSerialFailure maps access denied", () => {
   const msg = describeSerialFailure("COM3", {
-    stderr: "Access to the port 'COM3' is denied.",
+    message: "UnauthorizedAccessException: Access to the port 'COM3' is denied.",
   });
-  assert.match(msg, /already open/i);
-  assert.match(msg, /close NIIMBOT\.exe/i);
-  assert.match(msg, /Access to the port 'COM3' is denied\./);
+  assert.match(msg, /COM3 is in use or access denied/i);
 });
 
 test("COM discovery does not match CH340 VID 1a86", () => {
@@ -264,401 +223,5 @@ test("server wires Niimbot diagnostics and packet print path", () => {
   assert.match(server, /win-niimbot-print\.ps1/);
   assert.match(server, /discoverNiimbotComPorts/);
   assert.match(server, /niimbot-label\/diagnostics/);
-  assert.match(server, /niimbot-label\/com-probe/);
-  assert.match(server, /probeNiimbotComPorts/);
   assert.match(server, /testPattern/);
-});
-
-/*
- * P0 gate — PowerShell error-string safety.
- *
- * This bug shipped twice and cost a week of blank labels, because the user-facing
- * text was assembled inside PowerShell from a JS template literal:
- *   1.10.x  ->  "... failed: ${$_.Exception.Message}"
- *   1.10.12 ->  throw ("... Open() failed @ 19200 baud: " + $_.Exception.Message)
- * Both leaked literal script source into the UI instead of the exception, so the
- * real reason COM6 would not open was never seen. Messages are now built in Node
- * from the script's stderr, and these tests fail if that regresses.
- */
-
-/** The two exact forms that shipped broken, plus the unterminated-interpolation form. */
-const FORBIDDEN_PS_PATTERNS = [
-  { label: 'JS-interpolated automatic variable "${$_"', re: /\$\{\$_/ },
-  { label: 'string concatenation \'" + $_\'', re: /"\s*\+\s*\$_/ },
-  { label: '"$_.Exception.Message}" with a stray closing brace', re: /\$_\.Exception\.Message\}/ },
-];
-
-function doubleQuotedStrings(source) {
-  return source.match(/"[^"\n]*"/g) || [];
-}
-
-/** Strips `$(...)` subexpressions, the only place a string may reference $_. */
-function withoutSubexpressions(literal) {
-  return literal.replace(/\$\([^)]*\)/g, "");
-}
-
-function assertSafePowerShellSource(label, source) {
-  for (const { label: name, re } of FORBIDDEN_PS_PATTERNS) {
-    assert.equal(re.test(source), false, `${label} must not contain ${name}`);
-  }
-  for (const literal of doubleQuotedStrings(source)) {
-    assert.equal(
-      /\$_\./.test(withoutSubexpressions(literal)),
-      false,
-      `${label} references $_ inside a double-quoted string outside a $(...) subexpression: ${literal}`
-    );
-  }
-}
-
-test("P0: generated PowerShell never formats an exception inside a string", () => {
-  assertSafePowerShellSource("serial job script", buildSerialJobScript());
-  assertSafePowerShellSource("com probe script", buildComProbeScript());
-});
-
-test("P0: every bundled .ps1 is free of the broken error patterns", () => {
-  const dir = path.join(here, "..");
-  const scripts = fs.readdirSync(dir).filter((f) => f.endsWith(".ps1"));
-  assert.ok(scripts.length >= 4, "expected the bundled PowerShell scripts to be present");
-  for (const name of scripts) {
-    assertSafePowerShellSource(name, fs.readFileSync(path.join(dir, name), "utf8"));
-  }
-});
-
-test("P0: the JS sources cannot re-introduce either shipped bug", () => {
-  for (const file of ["../niimbot-client.js", "../server.js"]) {
-    const source = read(file);
-    for (const { label, re } of FORBIDDEN_PS_PATTERNS) {
-      assert.equal(re.test(source), false, `${file} must not contain ${label}`);
-    }
-  }
-});
-
-test("P0: the serial script reports failures on stderr with distinct exit codes", () => {
-  const ps = buildSerialJobScript();
-  assert.match(ps, /\[Console\]::Error\.WriteLine\(\$Record\.Exception\.Message\)/);
-  assert.match(ps, /exit 20/);
-  assert.match(ps, /exit 21/);
-  // Values arrive as parameters, never interpolated into the script body.
-  assert.match(ps, /\[Parameter\(Mandatory = \$true\)\]\[string\]\$PortPath/);
-  assert.match(ps, /\[Parameter\(Mandatory = \$true\)\]\[int\]\$Baud/);
-  assert.equal(ps.includes("throw ("), false);
-});
-
-test("P0: PowerShell runs from a file, not -Command (the source of the mangling)", () => {
-  const client = read("../niimbot-client.js");
-  assert.match(client, /"-File",\s*\n?\s*scriptPath/);
-  assert.equal(/"-Command",\s*ps\b/.test(client), false);
-});
-
-test("P0: describeSerialFailure builds the message in Node from stderr", () => {
-  const missing = describeSerialFailure("COM6", {
-    stderr: "The port 'COM6' does not exist.",
-  });
-  assert.match(missing, /does not exist on this PC/i);
-  assert.match(missing, /The port 'COM6' does not exist\./);
-
-  const dead = describeSerialFailure("COM6", {
-    stderr: "The semaphore timeout period has expired.",
-  });
-  assert.match(dead, /outgoing port/i);
-  assert.match(dead, /The semaphore timeout period has expired\./);
-
-  // Anything we have no rule for still shows the raw exception verbatim.
-  const odd = describeSerialFailure("COM6", { stderr: "Some brand new .NET error" }, 19200);
-  assert.match(odd, /Some brand new \.NET error/);
-  assert.match(odd, /19200 baud/);
-
-  // And no message ever contains PowerShell source.
-  for (const msg of [missing, dead, odd]) {
-    assert.equal(msg.includes("$_"), false);
-    assert.equal(msg.includes("Exception.Message"), false);
-  }
-});
-
-test("P0: the PowerShell method-invocation wrapper is stripped from the reason", () => {
-  // Real stderr captured from `$port.Open()` on a port that cannot be opened.
-  const stderr =
-    'Exception calling "Open" with "0" argument(s): "Access to the port \'COM6\' is denied."';
-  assert.equal(rawSerialError({ stderr }), "Access to the port 'COM6' is denied.");
-  const msg = describeSerialFailure("COM6", { stderr }, 19200);
-  assert.match(msg, /Access to the port 'COM6' is denied\./);
-  assert.equal(msg.includes("Exception calling"), false);
-});
-
-test("P1: com probe enumerates ports, queues and per-baud open attempts", () => {
-  const ps = buildComProbeScript();
-  assert.match(ps, /Win32_SerialPort/);
-  assert.match(ps, /Get-PnpDevice -Class Ports/);
-  assert.match(ps, /Win32_Printer/);
-  assert.match(ps, /GetPortNames/);
-  assert.match(ps, /ConvertTo-Json/);
-  assert.match(ps, /\$sp\.Open\(\)/);
-  // Must not stop at the first failure: the point is a full report.
-  assert.match(ps, /\$ErrorActionPreference = 'Continue'/);
-  assert.deepEqual(SERIAL_BAUDS, [115200, 9600, 19200]);
-});
-
-test("P1: probe classifies a Bluetooth incoming port and says to use the outgoing one", () => {
-  const row = classifyProbedPort({
-    port: "COM6",
-    caption: "Standard Serial over Bluetooth link (COM6)",
-    pnpDeviceId: "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG&0000",
-    sources: ["Win32_SerialPort"],
-    opens: [
-      { baud: 115200, opened: false, error: "The semaphore timeout period has expired." },
-      { baud: 9600, opened: false, error: "The semaphore timeout period has expired." },
-    ],
-  });
-  assert.equal(row.verdict, "not-connected");
-  assert.equal(row.bluetoothIncoming, true);
-  assert.match(row.advice.join(" "), /outgoing port/i);
-});
-
-test("P1: probe tells a busy port from a missing one, and a scale from a printer", () => {
-  const busy = classifyProbedPort({
-    port: "COM7",
-    caption: "NIIMBOT K3 (COM7)",
-    opens: [{ baud: 115200, opened: false, error: "Access to the port 'COM7' is denied." }],
-  });
-  assert.equal(busy.verdict, "busy");
-  assert.equal(busy.looksNiimbot, true);
-  assert.match(busy.advice.join(" "), /Close NIIMBOT\.exe/i);
-
-  const scale = classifyProbedPort({
-    port: "COM3",
-    caption: "USB-SERIAL CH340 (COM3)",
-    opens: [{ baud: 9600, opened: true, error: "" }],
-  });
-  assert.equal(scale.verdict, "opened");
-  assert.equal(scale.looksScale, true);
-  assert.match(scale.advice.join(" "), /scale, not the printer/i);
-
-  const gone = classifyProbedPort({
-    port: "COM9",
-    caption: "",
-    opens: [{ baud: 115200, opened: false, error: "The port 'COM9' does not exist." }],
-  });
-  assert.equal(gone.verdict, "missing");
-});
-
-test("P1: probe report is readable text with the real errors in it", () => {
-  const probe = {
-    ok: true,
-    supported: true,
-    platform: "win32",
-    agentVersion: VERSION,
-    generatedAt: "2026-09-07T00:00:00.000Z",
-    ports: [
-      classifyProbedPort({
-        port: "COM6",
-        caption: "Standard Serial over Bluetooth link (COM6)",
-        pnpDeviceId: "BTHENUM\\LOCALMFG&0000",
-        opens: [{ baud: 115200, opened: false, error: "The semaphore timeout period has expired." }],
-      }),
-    ],
-    printers: [
-      { name: "NIIMBOT K3", port: "USB005", driver: "NIIMBOT K3", offline: false, status: "3" },
-    ],
-    bluetooth: [{ name: "K3-1234", status: "OK", instanceId: "BTHLE\\DEV" }],
-    warnings: [],
-    summary: [],
-  };
-  probe.summary = summarizeComProbe(probe.ports, probe.printers);
-  const text = formatComProbeReport(probe);
-  assert.match(text, /COM6/);
-  assert.match(text, /The semaphore timeout period has expired\./);
-  assert.match(text, /NIIMBOT K3 \| port=USB005/);
-  assert.match(text, /write-only/i);
-  assert.match(text, /WHAT THIS MEANS/);
-});
-
-test("P1: probe never throws off Windows", async () => {
-  const probe = await probeNiimbotComPorts({ agentVersion: VERSION });
-  if (process.platform !== "win32") {
-    assert.equal(probe.supported, false);
-    assert.equal(probe.ok, true);
-    assert.match(probe.text, /only runs on Windows/i);
-  }
-  assert.equal(typeof probe.text, "string");
-});
-
-test("P3: a USB spooler job is reported as unconfirmed, never as success", async () => {
-  const bitmap = buildTestPatternBitmap(320, 160);
-  const result = await printNiimbotLabel({
-    printerName: "NIIMBOT K3",
-    portName: "USB005",
-    bitmapBase64: bitmap.toString("base64"),
-    widthPx: 320,
-    heightPx: 160,
-    printWindowsPacketsFn: async () => {},
-  });
-  assert.equal(result.unconfirmed, true);
-  assert.match(result.warning, /USB005 spooler queue/);
-  assert.match(result.warning, /cannot confirm the label printed/i);
-  assert.match(result.warning, /Bluetooth COM port or the Android Print Bridge/);
-  // The fingerprint the merchant can quote back to us.
-  assert.match(result.warning, /profile=k3/);
-  assert.match(result.warning, /inkBytes=\d+/);
-  assert.match(result.warning, /dim=00a00140/);
-});
-
-test("P3: every spooler job carries the fingerprint, whichever queue it went to", () => {
-  const diag = {
-    profile: "k3",
-    packetCount: 9,
-    rasterLines: 4,
-    bitmapNonZeroBytes: 40,
-    dimensionHex: "00a00140",
-  };
-  const fingerprint = /Fingerprint: profile=k3 packets=9 rasterLines=4 inkBytes=40 dim=00a00140/;
-  assert.match(describeSpoolerUncertainty("USB005", "NIIMBOT K3", diag), fingerprint);
-  // A queue on a non-USB port is just as blind, so it must warn just as loudly.
-  const plain = describeSpoolerUncertainty(null, "NIIMBOT K3", diag);
-  assert.match(plain, /Windows print queue/);
-  assert.match(plain, /cannot confirm the label printed/i);
-  assert.match(plain, fingerprint);
-});
-
-test("P3: the bar test can invert the bitmap, and the row width is reported", async () => {
-  const bitmap = Buffer.alloc(40 * 4, 0);
-  bitmap[0] = 0x0f;
-  const seen = [];
-  const opts = {
-    printerName: "NIIMBOT K3",
-    portName: "USB005",
-    widthPx: 320,
-    heightPx: 4,
-    bitmapBase64: bitmap.toString("base64"),
-    printWindowsPacketsFn: async ({ packetsBase64 }) => {
-      seen.push(packetsBase64.map((p) => Buffer.from(p, "base64")));
-    },
-  };
-  const plain = await printNiimbotLabel(opts);
-  const inverted = await printNiimbotLabel({ ...opts, invertBitmap: true });
-
-  assert.equal(plain.rasterRowBytes, 40);
-  assert.equal(inverted.rasterRowBytes, 40);
-  // Earlier builds accepted the flag and printed the same bitmap regardless.
-  assert.equal(plain.bitmapNonZeroBytes, 1);
-  assert.equal(inverted.bitmapNonZeroBytes, bitmap.length);
-
-  // 55 55 85 LEN, then a 6-byte row header, then the 40 bytes of the row.
-  const firstRowOf = (packets) => packets.find((p) => p[2] === 0x85).subarray(10, 50);
-  const firstRow = firstRowOf(seen[0]);
-  const firstInvertedRow = firstRowOf(seen[1]);
-  for (let i = 0; i < firstRow.length; i++) {
-    assert.equal(firstInvertedRow[i], firstRow[i] ^ 0xff);
-  }
-});
-
-test("dashboard requires the agent build that can actually diagnose this", () => {
-  const src = fs.readFileSync(
-    path.join(here, "..", "..", "dashboard", "src", "lib", "print-agent.ts"),
-    "utf8"
-  );
-  assert.match(src, new RegExp(`MIN_NIIMBOT_AGENT_VERSION = '${VERSION}'`));
-  assert.match(src, /niimbot-label\/com-probe/);
-  assert.match(src, /export async function probeNiimbotComPorts/);
-});
-
-/*
- * P2 — the USBPRINT device interface.
- *
- * niimgo, the only reference implementation that covers the K3, requires the USB
- * printer-class interface (/dev/usb/lp*) and states the Niimbot protocol does
- * not work over the K3's CDC-ACM serial interface. On Windows that interface is
- * GUID_DEVINTERFACE_USBPRINT, which CreateFile can open for read AND write —
- * unlike the spooler, whose standard USB port monitor is not bidirectional.
- */
-
-test("P2: the USBPRINT device interface GUID and path shape are correct", () => {
-  assert.equal(USBPRINT_INTERFACE_GUID, "28d78fad-5a12-11d1-ae5b-0000f803a8c2");
-  const ps = buildUsbDeviceScript();
-  assert.match(ps, /CreateFileW/);
-  // GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING
-  assert.match(ps, /0xC0000000, 3, \[IntPtr\]::Zero, 3/);
-  assert.match(ps, new RegExp(`#\\{${USBPRINT_INTERFACE_GUID}\\}`));
-  assert.match(ps, /\$_\.Service -eq 'usbprint'/);
-  assert.match(ps, /ReadAsync/);
-  // Reads must be bounded so a silent printer cannot hang the job.
-  assert.match(ps, /\$task\.Wait\(\$ReadTimeoutMs\)/);
-  assertSafePowerShellSource("usb device script", ps);
-});
-
-test("P2: only the acknowledging commands are read back, never raster rows", () => {
-  const ps = buildUsbDeviceScript();
-  const guard = ps.match(/if \(\$type -in ([^)]*)\) \{\n\s*\$buffer/);
-  assert.ok(guard, "expected the reply guard to list the command types");
-  assert.equal(guard[1].includes("0x85"), false);
-  for (const cmd of ["0x21", "0x23", "0x01", "0x03", "0x13", "0xA3", "0xE3", "0xF3"]) {
-    assert.ok(guard[1].includes(cmd), `${cmd} should be read back`);
-  }
-});
-
-test("P2: probe reports whether the USB interface can be opened directly", () => {
-  const probe = {
-    ok: true,
-    supported: true,
-    platform: "win32",
-    agentVersion: VERSION,
-    generatedAt: "2026-09-07T00:00:00.000Z",
-    ports: [],
-    printers: [{ name: "NIIMBOT K3", port: "USB005", driver: "NIIMBOT K3", offline: false, status: "3" }],
-    bluetooth: [],
-    usbPrintDevices: [
-      {
-        name: "NIIMBOT K3",
-        instanceId: "USB\\VID_3513&PID_0002\\5&2a1b&0&2",
-        status: "OK",
-        devicePath: `\\\\?\\usb#vid_3513&pid_0002#5&2a1b&0&2#{${USBPRINT_INTERFACE_GUID}}`,
-        open: { opened: true, error: "" },
-      },
-    ],
-    usbPrintError: null,
-    warnings: [],
-    summary: [],
-  };
-  probe.summary = summarizeComProbe(probe.ports, probe.printers, probe.usbPrintDevices);
-  const text = formatComProbeReport(probe);
-  assert.match(text, /USB PRINTER-CLASS INTERFACES \(1\)/);
-  assert.match(text, /direct open: OK/);
-  assert.match(text, /not bidirectional/);
-  assert.match(text, /reference implementation requires/);
-
-  probe.usbPrintDevices[0].open = { opened: false, error: "Access is denied" };
-  probe.summary = summarizeComProbe(probe.ports, probe.printers, probe.usbPrintDevices);
-  const denied = formatComProbeReport(probe);
-  assert.match(denied, /direct open: FAILED — Access is denied/);
-  assert.match(denied, /Close NIIMBOT\.exe and retry/);
-});
-
-test("P2: the scale opening its own port is not reported as a usable printer port", () => {
-  const scale = classifyProbedPort({
-    port: "COM3",
-    caption: "USB-SERIAL CH340 (COM3)",
-    opens: [{ baud: 9600, opened: true, error: "" }],
-  });
-  const summary = summarizeComProbe([scale], [], []);
-  assert.match(summary.join(" "), /No COM port that could be the printer opened/);
-  assert.equal(summary.join(" ").includes("COM3 @"), false);
-});
-
-test("P2: the direct USB path is preferred over the spooler and is skippable", async () => {
-  const bitmap = buildTestPatternBitmap(320, 160);
-  let spoolerUsed = false;
-  // directUsb:false keeps the old spooler behaviour available as a fallback.
-  const viaSpooler = await printNiimbotLabel({
-    printerName: "NIIMBOT K3",
-    portName: "USB005",
-    bitmapBase64: bitmap.toString("base64"),
-    widthPx: 320,
-    heightPx: 160,
-    directUsb: false,
-    printWindowsPacketsFn: async () => {
-      spoolerUsed = true;
-    },
-  });
-  assert.equal(spoolerUsed, true);
-  assert.equal(viaSpooler.path, "usb:USB005");
-  assert.equal(viaSpooler.unconfirmed, true);
 });

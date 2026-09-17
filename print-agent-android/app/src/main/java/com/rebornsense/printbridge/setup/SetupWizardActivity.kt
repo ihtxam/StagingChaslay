@@ -40,7 +40,7 @@ class SetupWizardActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_setup_wizard)
-        steps = OemSetupSteps.forDevice(this)
+        steps = OemSetupSteps.forDevice()
         stepIndex = savedInstanceState?.getInt(STATE_STEP_INDEX) ?: firstIncompleteStepIndex()
 
         findViewById<TextView>(R.id.wizardDeviceLabel).text =
@@ -112,14 +112,11 @@ class SetupWizardActivity : AppCompatActivity() {
                 skipBtn.visibility = if (step.id == "done") View.GONE else View.VISIBLE
                 nextBtn.visibility = View.VISIBLE
                 nextBtn.text = when (step.id) {
-                    "done" -> getString(R.string.oem_step_finish_bridge)
+                    "done" -> getString(R.string.oem_step_open_webpos)
                     "tap_to_pay" -> getString(R.string.oem_step_open_webpos)
                     else -> getString(R.string.oem_step_next)
                 }
-                if (step.id == "done") {
-                    statusText.visibility = View.VISIBLE
-                    statusText.text = getString(R.string.oem_step_done_body)
-                } else if (step.id == "tap_to_pay") {
+                if (step.id == "tap_to_pay") {
                     statusText.visibility = View.VISIBLE
                     statusText.text = if (OemSetupPreferences.isTapToPayDeviceRegistered(this)) {
                         getString(R.string.oem_step_tap_to_pay_done)
@@ -206,9 +203,9 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.START_BRIDGE -> ensureBridgeRunningWithPermission()
             OemSetupAction.INSTRUCTION_ONLY -> {
                 if (step.id == "tap_to_pay") {
-                    openRebornPosApp("tapToPaySetup=1")
+                    openWebPosTapToPaySetup()
                 } else if (step.id == "done") {
-                    openRebornPosApp()
+                    openWebPos()
                 } else {
                     onNextAction()
                 }
@@ -218,12 +215,15 @@ class SetupWizardActivity : AppCompatActivity() {
 
     private fun onNextAction() {
         val step = currentStep()
-        if (step.id == "tap_to_pay") {
-            openRebornPosApp("tapToPaySetup=1")
-            return
-        }
-        if (step.id == "done") {
-            finishWizard()
+        if (step.id == "done" || step.id == "tap_to_pay") {
+            if (step.id == "done") {
+                openWebPos()
+            } else {
+                openWebPosTapToPaySetup()
+            }
+            if (step.id == "done") {
+                finishWizard()
+            }
             return
         }
         goToNextStep()
@@ -325,21 +325,39 @@ class SetupWizardActivity : AppCompatActivity() {
         healthPollRunnable = null
     }
 
-    /** Open the installed Reborn PWA when possible; fall back to the POS URL in the default browser. */
-    private fun openRebornPosApp(extraQuery: String? = null) {
-        val base = resolveWebPosUrl()
-        val url = if (extraQuery.isNullOrBlank()) {
-            base
-        } else if (base.contains("?")) {
-            "$base&$extraQuery"
-        } else {
-            "$base?$extraQuery"
+    private fun openWebPos() {
+        val webPosUrl = resolveWebPosUrl()
+        val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
+            ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
+        if (launch != null) {
+            launch.data = Uri.parse(webPosUrl)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
+            return
         }
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webPosUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addCategory(Intent.CATEGORY_BROWSABLE)
+        })
+    }
+
+    private fun openWebPosTapToPaySetup() {
+        openWebPosWithQuery("tapToPaySetup=1")
+    }
+
+    private fun openWebPosWithQuery(query: String) {
+        val base = resolveWebPosUrl()
+        val url = if (base.contains("?")) "$base&$query" else "$base?$query"
+        val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
+            ?: packageManager.getLaunchIntentForPackage("com.chrome.beta")
+        if (launch != null) {
+            launch.data = Uri.parse(url)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
+            return
         }
-        startActivity(intent)
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
     }
 
     private fun resolveWebPosUrl(): String {

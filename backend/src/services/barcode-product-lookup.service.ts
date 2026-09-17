@@ -151,30 +151,22 @@ async function lookupOpenFacts(
 ): Promise<BarcodeLookupSuggestion | null> {
   const code = normalizeBarcode(barcode);
   if (code.length < 8) return null;
-
-  const tryUrl = async (path: string): Promise<BarcodeLookupSuggestion | null> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    try {
-      const res = await fetch(`${baseUrl}${path}`, {
-        signal: controller.signal,
-        headers: { "User-Agent": OPEN_FACTS_USER_AGENT, Accept: "application/json" },
-      });
-      if (!res.ok) return null;
-      const data = (await res.json()) as { status?: number; product?: OpenFactsProduct };
-      if (data.status !== 1 || !data.product) return null;
-      return suggestionFromOpenFactsProduct(code, data.product, source);
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  return (
-    (await tryUrl(`/api/v2/product/${code}.json`)) ||
-    (await tryUrl(`/api/v0/product/${code}.json`))
-  );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${baseUrl}/api/v2/product/${code}.json`, {
+      signal: controller.signal,
+      headers: { "User-Agent": OPEN_FACTS_USER_AGENT },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { status?: number; product?: OpenFactsProduct };
+    if (data.status !== 1 || !data.product) return null;
+    return suggestionFromOpenFactsProduct(code, data.product, source);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function readPath(obj: unknown, path: string): unknown {

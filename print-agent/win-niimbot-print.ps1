@@ -149,9 +149,10 @@ try {
             throw "StartPagePrinter failed for '$PrinterName' (Win32=$err)."
         }
 
-        # No prologue bytes. 0x54 is RfidSuccessTimes in the protocol reference
-        # (https://printers.niim.blue/interfacing/proto/), not a wake command, and
-        # no reference implementation sends anything before the first 55 55 frame.
+        # Wake bytes — official NIIMBOT.exe sends 0x54 0x01 before framed packets.
+        Write-OnePacket -Handle $handle -Data ([byte[]](0x54, 0x01)) -Printer $PrinterName
+        Start-Sleep -Milliseconds 120
+
         foreach ($pkt in $packets) {
             Write-OnePacket -Handle $handle -Data $pkt -Printer $PrinterName
             $delay = Get-PacketDelayMs -Packet $pkt

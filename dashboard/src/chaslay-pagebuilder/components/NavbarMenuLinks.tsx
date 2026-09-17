@@ -5,11 +5,11 @@ import React, { useState } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
-import { StorefrontNavCart } from '../StorefrontNavCart';
 import {
   DEFAULT_SMOOTH_SCROLL_MENU,
   type NavbarMenuItem,
 } from '../utils/default-nav-menu';
+import ShopNavActions from '@/components/shop/ShopNavActions';
 
 export type { NavbarMenuItem };
 export { DEFAULT_SMOOTH_SCROLL_MENU };
@@ -45,7 +45,6 @@ export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Pro
           {item.label}
         </a>
       ))}
-      <StorefrontNavCart color={textColor} />
     </div>
   );
 }
@@ -65,7 +64,7 @@ export function NavbarMobileMenu({
   buttonColor?: string;
   showButton?: boolean;
 }) {
-  const { shopHref, isStorefront, surface } = useStorefront();
+  const { shopHref, isStorefront, surface, accountPath } = useStorefront();
   const [open, setOpen] = useState(false);
 
   const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
@@ -82,29 +81,34 @@ export function NavbarMobileMenu({
 
   return (
     <>
-      <button
-        type="button"
-        className="navbar-mobile-toggle"
-        aria-label="Open menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        style={{ display: 'none', padding: '8px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2">
-          {open ? (
-            <>
-              <line x1="6" y1="6" x2="18" y2="18" />
-              <line x1="18" y1="6" x2="6" y2="18" />
-            </>
-          ) : (
-            <>
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </>
-          )}
-        </svg>
-      </button>
+      <div className="navbar-mobile-controls" style={{ display: 'none', alignItems: 'center', gap: '6px' }}>
+        {isStorefront && accountPath ? (
+          <ShopNavActions accountPath={accountPath} iconOnlyLogin />
+        ) : null}
+        <button
+          type="button"
+          className="navbar-mobile-toggle"
+          aria-label="Open menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          style={{ padding: '8px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2">
+            {open ? (
+              <>
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </>
+            )}
+          </svg>
+        </button>
+      </div>
       {open ? (
         <div
           className="navbar-mobile-drawer"

@@ -1027,22 +1027,12 @@ export default function Products() {
         printLabelsHtml(payload, opts);
       } else {
         const settingsRes = await api.get('/merchant/settings').catch(() => null);
-        let unconfirmed = '';
         const modeUsed = await printLabelsViaAgentOrQueue(
           payload,
           opts,
-          settingsRes?.data?.settings?.posPrintSettings,
-          {
-            onUnconfirmed: (warning) => {
-              unconfirmed = warning;
-            },
-          }
+          settingsRes?.data?.settings?.posPrintSettings
         );
-        if (unconfirmed) {
-          toast(unconfirmed, { icon: '⚠️', duration: 15000 });
-        } else {
-          toast.success(modeUsed === 'browser' ? t('barcodePrintedBrowser') : t('barcodePrinted'));
-        }
+        toast.success(modeUsed === 'browser' ? t('barcodePrintedBrowser') : t('barcodePrinted'));
       }
       setPrintOpen(false);
     } catch (error: any) {

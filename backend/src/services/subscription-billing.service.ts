@@ -10,7 +10,6 @@ import { SubscriptionAddonsService } from "@/services/subscription-addons.servic
 import { PackageProvisioningService } from "@/services/package-provisioning.service";
 import { readStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { readKioskAddonEnabled } from "@/lib/kiosk-addon";
-import { readGiftCardAddonEnabled } from "@/lib/gift-card-addon";
 
 export type BillingCycle = "monthly" | "yearly";
 
@@ -72,7 +71,6 @@ export class SubscriptionBillingService {
 
     const storekeeperOn = await readStorekeeperAddonEnabled(merchantId).catch(() => false);
     const kioskOn = await readKioskAddonEnabled(merchantId).catch(() => false);
-    const giftCardOn = await readGiftCardAddonEnabled(merchantId).catch(() => false);
 
     return {
       merchant: {
@@ -94,7 +92,6 @@ export class SubscriptionBillingService {
         odsAddonEnabled: merchant.odsAddonEnabled,
         kioskAddonEnabled: kioskOn,
         storekeeperAddonEnabled: storekeeperOn,
-        giftCardAddonEnabled: giftCardOn,
       },
       currentPlan,
       plans,

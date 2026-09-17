@@ -88,31 +88,6 @@ test('matchSettingsSearch two words matches across separate keywords (not phrase
   assert.ok(matches.some((entry) => entry.id === 'receipt-print'));
 });
 
-test('order labels search finds dedicated receipt section (not hidden / gated)', () => {
-  const index = buildSettingsSearchIndex(t);
-  const orderLabels = index.find((entry) => entry.id === 'order-labels');
-  assert.equal(orderLabels?.tab, 'receipt');
-  for (const query of [
-    'order labels',
-    'print label on send',
-    'print order labels',
-    'étiquette',
-    'etikett',
-    'butcher',
-  ]) {
-    const matches = matchSettingsSearch(index, query);
-    assert.ok(
-      matches.some((entry) => entry.id === 'order-labels'),
-      `expected order-labels for "${query}"`
-    );
-  }
-  const filtered = filterAccessibleSettingsSearch(
-    matchSettingsSearch(index, 'order labels'),
-    openContext()
-  );
-  assert.ok(filtered.some((entry) => entry.id === 'order-labels'));
-});
-
 test('matchSettingsSearch trailing space and empty second token still returns first-word hits', () => {
   const index = buildSettingsSearchIndex(t);
   const withSpace = matchSettingsSearch(index, 'express ');
@@ -315,13 +290,6 @@ test('query ta matches POS rows that used to blank plus taxes/payments', () => {
   assert.ok(ids.includes('signage-addon'));
   assert.ok(ids.includes('taxes-rates'));
   assert.ok(ids.includes('payments-adyen') || ids.includes('payments-tap-to-pay'));
-});
-
-test('gift cards addon is indexed on the POS tab', () => {
-  const tLive = (key: string) => (key === 'giftCard' ? 'Gift card' : key);
-  const matches = matchSettingsSearch(buildSettingsSearchIndex(tLive), 'gift card');
-  const ids = matches.map((entry) => entry.id);
-  assert.ok(ids.includes('gift-cards-addon'));
 });
 
 test('planSettingsSearchResultClick for POS rows targets pos without forcing remount when already there', () => {

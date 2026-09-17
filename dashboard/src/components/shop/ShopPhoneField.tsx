@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type RefObject } from 'react';
 
 const DIAL_CODES = [
   { iso: 'CH', dial: '+41' },
@@ -33,9 +33,17 @@ type Props = {
   invalid?: boolean;
   placeholder?: string;
   className?: string;
+  localInputRef?: RefObject<HTMLInputElement | null>;
 };
 
-export default function ShopPhoneField({ value, onChange, invalid, placeholder, className }: Props) {
+export default function ShopPhoneField({
+  value,
+  onChange,
+  invalid,
+  placeholder,
+  className,
+  localInputRef,
+}: Props) {
   const parts = useMemo(() => splitPhone(value), [value]);
   const known = DIAL_CODES.some((c) => c.dial === parts.dial);
 
@@ -62,12 +70,15 @@ export default function ShopPhoneField({ value, onChange, invalid, placeholder, 
         ))}
       </select>
       <input
+        ref={localInputRef}
         className="min-w-0 flex-1 px-3 py-2 text-sm outline-none"
         type="tel"
         inputMode="tel"
+        autoComplete="tel-national"
         placeholder={placeholder}
         value={parts.local}
         onChange={(e) => onChange(`${parts.dial}${e.target.value.replace(/^\s+/, '')}`)}
+        onInput={(e) => onChange(`${parts.dial}${e.currentTarget.value.replace(/^\s+/, '')}`)}
       />
     </div>
   );

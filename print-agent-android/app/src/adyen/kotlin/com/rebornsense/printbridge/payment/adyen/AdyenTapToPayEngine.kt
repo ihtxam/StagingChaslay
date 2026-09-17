@@ -58,10 +58,10 @@ class AdyenTapToPayEngine : TapToPayEngine {
         TapToPayConfig.authToken = params.authToken
 
         return try {
-            withContext(Dispatchers.Main) { InPersonPayments.warmUp() }.getOrElse {
+            withContext(Dispatchers.IO) { InPersonPayments.warmUp() }.getOrElse {
                 return TapToPayRegisterOutcome(ok = false, message = "Warm-up failed: ${it.message}")
             }
-            val installationId = withContext(Dispatchers.Main) { InPersonPayments.getInstallationId() }
+            val installationId = withContext(Dispatchers.IO) { InPersonPayments.getInstallationId() }
                 .getOrElse {
                     return TapToPayRegisterOutcome(ok = false, message = "Registration failed: ${it.message}")
                 }

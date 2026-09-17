@@ -19,8 +19,7 @@ import {
   Vault,
   ArrowDownUp,
 } from 'lucide-react';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
-import { useFullscreenActive } from '@/hooks/useFullscreenActive';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
@@ -54,6 +53,18 @@ export function readWebPosFullscreenPreference(): boolean {
   } catch {
     return true;
   }
+}
+
+function useFullscreenActive() {
+  const [active, setActive] = useState(
+    () => typeof document !== 'undefined' && !!document.fullscreenElement
+  );
+  useEffect(() => {
+    const onChange = () => setActive(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  return active;
 }
 
 export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
@@ -280,7 +291,6 @@ export default function WebPosTopBar({
   onSyncNow,
 }: Props) {
   const { t } = useI18n();
-  const fullscreenActive = useFullscreenActive();
   const inCheckout = posView === 'checkout' || posView === 'success';
 
   const bellBadgeCount = notificationCount ?? onlinePendingCount;
@@ -450,12 +460,6 @@ export default function WebPosTopBar({
             >
               <Vault size={17} />
             </button>
-          ) : null}
-
-          {fullscreenActive ? (
-            <OnScreenKeyboardToggle
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
-            />
           ) : null}
 
           <div className="relative" ref={settingsRef}>

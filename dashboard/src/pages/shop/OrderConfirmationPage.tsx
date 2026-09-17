@@ -8,11 +8,6 @@ import { shopDocumentTitle } from '@/lib/brand';
 import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
 import { roundMoney2 } from '@/lib/money';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import {
-  formatAdyenError,
-  mountAdyenDropin,
-  normalizeAdyenPaymentSession,
-} from '@/lib/adyen-checkout';
 
 type OrderItem = {
   id: string;
@@ -205,8 +200,8 @@ export default function OrderConfirmationPage() {
     try {
       const cached = sessionStorage.getItem(`manupos_pay_${orderId}`);
       if (cached) {
-        const parsed = normalizeAdyenPaymentSession(JSON.parse(cached));
-        if (parsed) {
+        const parsed = JSON.parse(cached) as PaymentSession;
+        if (parsed.sessionData && parsed.clientKey) {
           setSession(parsed);
           setDemoMode(false);
           return;
@@ -223,17 +218,11 @@ export default function OrderConfirmationPage() {
           await load();
           return;
         }
-        const parsed = normalizeAdyenPaymentSession(res.data.paymentSession);
-        if (!parsed) {
-          setDemoMode(true);
-          setPayMsg(t('shopCardFormUnavailable'));
-          return;
-        }
-        setSession(parsed);
+        setSession(res.data.paymentSession);
         setDemoMode(false);
       } catch (e: any) {
         setDemoMode(true);
-        setPayMsg(formatAdyenError(e?.response?.data?.error || e, 'checkout') || t('shopCardNotConfigured'));
+        setPayMsg(e.response?.data?.error || t('shopCardNotConfigured'));
       }
     })();
   }, [wantPay, needsPayment, shopKey, orderId, load]);
@@ -246,10 +235,15 @@ export default function OrderConfirmationPage() {
 
     void (async () => {
       try {
+        // CSS is optional for Drop-in styling; ignore module typing
+        await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
+        const AdyenCheckout = (await import('@adyen/adyen-web')).default;
         if (cancelled || !dropinRef.current) return;
-        await mountAdyenDropin({
-          session,
-          container: dropinRef.current,
+
+        const checkout = await AdyenCheckout({
+          environment: session.environment === 'live' ? 'live' : 'test',
+          clientKey: session.clientKey,
+          session: { id: session.id, sessionData: session.sessionData },
           onPaymentCompleted: async () => {
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
@@ -259,19 +253,22 @@ export default function OrderConfirmationPage() {
             clearCart(shopKey);
             await load();
           },
-          onError: (err) => setPayMsg(err.message || t('shopPaymentFailed')),
-        });
-        if (!cancelled) dropinMounted.current = true;
-      } catch (err) {
+          onError: (err: { message?: string }) =>
+            setPayMsg(err.message || t('shopPaymentFailed')),
+        } as any);
+
+        checkout.create('dropin').mount(dropinRef.current);
+        dropinMounted.current = true;
+      } catch {
         setDemoMode(true);
-        setPayMsg(formatAdyenError(err, 'dropin') || t('shopCardFormUnavailable'));
+        setPayMsg(t('shopCardFormUnavailable'));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [session, shopKey, orderId, load, t]);
+  }, [session, shopKey, orderId, load]);
 
   const confirmDemoPayment = async () => {
     setPaying(true);

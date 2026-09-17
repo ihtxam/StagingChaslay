@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { KioskPromoSlide } from '@/lib/kiosk-api';
-import { useI18n } from '@/lib/i18n';
 
 type Props = {
   slides: KioskPromoSlide[];
@@ -18,16 +17,15 @@ export default function CdsPromoSlider({
   fullWidth = false,
   className = '',
 }: Props) {
-  const { t } = useI18n();
   const items = useMemo(() => {
     if (slides.length) return slides;
     return [
       {
-        title: merchantName || t('cdsWelcomeTitle'),
-        subtitle: t('cdsWelcomeSubtitle'),
+        title: merchantName || 'Welcome',
+        subtitle: 'Thank you for visiting',
       },
     ];
-  }, [slides, merchantName, t]);
+  }, [slides, merchantName]);
 
   const [index, setIndex] = useState(0);
   const active = items[index % items.length];

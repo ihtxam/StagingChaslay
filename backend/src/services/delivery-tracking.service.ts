@@ -1,25 +1,19 @@
-import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { ensureMerchantTables } from "@/lib/ensure-merchant-schema";
 
 const STALE_MS = 3 * 60 * 1000;
 
-const ORDER_UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/** Reject held-cart list ids (held:uuid) and other non-order identifiers before DB lookup. */
-function assertPersistedOrderId(orderId: string): void {
-  const id = String(orderId || "").trim();
-  if (!id) throw new Error("Order ID is required");
-  if (id.startsWith("held:")) {
-    throw new Error(
-      "Held tickets are not orders yet — submit or pay in POS before assigning a driver"
-    );
-  }
-  if (!ORDER_UUID_RE.test(id)) {
-    throw new Error("Invalid order ID");
-  }
+/** Shop/3P payloads sometimes store Delivery / DELIVERY instead of delivery. */
+export function isDeliveryFulfillmentChannel(channel?: string | null): boolean {
+  const s = String(channel || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return s === "delivery" || s === "deliver" || s.startsWith("delivery");
 }
+
+const deliveryChannelSql = sql`lower(coalesce(${schema.orders.fulfillmentChannel}, '')) in ('delivery', 'deliver')`;
 
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
@@ -161,7 +155,7 @@ export class DeliveryTrackingService {
     const activeOrders = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
-        eq(schema.orders.fulfillmentChannel, "delivery"),
+        deliveryChannelSql,
         inArray(schema.orders.status, ["ready", "out_for_delivery"]),
         inArray(schema.orders.assignedDeliveryStaffId, staffIds)
       ),
@@ -203,7 +197,7 @@ export class DeliveryTrackingService {
     const rows = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchantId),
-        eq(schema.orders.fulfillmentChannel, "delivery"),
+        deliveryChannelSql,
         or(
           eq(schema.orders.status, "ready"),
           eq(schema.orders.status, "out_for_delivery"),
@@ -304,7 +298,6 @@ export class DeliveryTrackingService {
 
   /** Ensure delivery orders have a tracking / driver-scan token. */
   static async ensureDeliveryTrackingToken(merchantId: string, orderId: string): Promise<string> {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -312,7 +305,7 @@ export class DeliveryTrackingService {
       columns: { deliveryTrackingToken: true, fulfillmentChannel: true },
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     if (order.deliveryTrackingToken) return order.deliveryTrackingToken;
@@ -326,14 +319,13 @@ export class DeliveryTrackingService {
   }
 
   static async assignDriver(merchantId: string, orderId: string, staffId: string | null) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Only delivery orders can be assigned to a driver");
     }
 
@@ -341,17 +333,21 @@ export class DeliveryTrackingService {
       const staff = await db.query.merchantStaff.findFirst({
         where: and(
           eq(schema.merchantStaff.id, staffId),
-          eq(schema.merchantStaff.merchantId, merchantId),
-          eq(schema.merchantStaff.isActive, true)
+          eq(schema.merchantStaff.merchantId, merchantId)
         ),
       });
       if (!staff) throw new Error("Staff member not found");
+      if (staff.isActive === false) throw new Error("Staff member is inactive");
     }
 
-    await db
-      .update(schema.orders)
-      .set({ assignedDeliveryStaffId: staffId })
-      .where(eq(schema.orders.id, orderId));
+    try {
+      await db
+        .update(schema.orders)
+        .set({ assignedDeliveryStaffId: staffId })
+        .where(eq(schema.orders.id, orderId));
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : "Failed to assign driver");
+    }
 
     await this.ensureDeliveryTrackingToken(merchantId, orderId);
 
@@ -365,14 +361,13 @@ export class DeliveryTrackingService {
     orderId: string,
     token: string
   ) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
     });
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     const expected = order.deliveryTrackingToken || (await this.ensureDeliveryTrackingToken(merchantId, orderId));
@@ -434,7 +429,6 @@ export class DeliveryTrackingService {
     orderId: string,
     token: string
   ) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -452,7 +446,7 @@ export class DeliveryTrackingService {
         estimatedReadyAt: true,
       },
     });
-    if (!order || order.fulfillmentChannel !== "delivery") {
+    if (!order || !isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Order not found");
     }
     if (!order.deliveryTrackingToken || order.deliveryTrackingToken !== token) {
@@ -526,7 +520,6 @@ export class DeliveryTrackingService {
 
   /** Driver marks assigned delivery complete. */
   static async completeDeliveryAsDriver(merchantId: string, staffId: string, orderId: string) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -536,7 +529,7 @@ export class DeliveryTrackingService {
     if (order.assignedDeliveryStaffId !== staffId) {
       throw new Error("This delivery is not assigned to you");
     }
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     await this.advanceDeliveryForDriver(merchantId, orderId);
@@ -553,7 +546,6 @@ export class DeliveryTrackingService {
 
   /** Driver starts delivery — mark ready (if needed) and out for delivery. */
   static async startDeliveryAsDriver(merchantId: string, staffId: string, orderId: string) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({
@@ -563,7 +555,7 @@ export class DeliveryTrackingService {
     if (order.assignedDeliveryStaffId !== staffId) {
       throw new Error("This delivery is not assigned to you");
     }
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
     if (["cancelled", "refunded", "completed"].includes(String(order.status))) {
@@ -578,7 +570,6 @@ export class DeliveryTrackingService {
    * Pending orders must be accepted at the till first (unless auto-accepted).
    */
   static async advanceDeliveryForDriver(merchantId: string, orderId: string) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const { OrderService } = await import("@/services/order.service");
@@ -590,7 +581,7 @@ export class DeliveryTrackingService {
 
     let order = await read();
     if (!order) throw new Error("Order not found");
-    if (order.fulfillmentChannel !== "delivery") {
+    if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
       throw new Error("Not a delivery order");
     }
 
@@ -617,7 +608,6 @@ export class DeliveryTrackingService {
 
   /** Latest driver ping for an order (merchant orders board). */
   static async getDriverPingForOrder(merchantId: string, orderId: string) {
-    assertPersistedOrderId(orderId);
     await this.ensureSchema();
     const db = getDb();
     const order = await db.query.orders.findFirst({

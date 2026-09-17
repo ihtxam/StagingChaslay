@@ -133,25 +133,10 @@ export function requirePermission(...required: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (req.user?.role === "merchant") return next();
     if (req.user?.role === "staff") {
-      const granted = effectiveStaffPermissions(req);
+      const granted = req.user.permissions || [];
       if (required.some((p) => granted.includes(p))) return next();
       return res.status(403).json({ error: "Permission denied" });
     }
     return res.status(403).json({ error: "Authentication required" });
   };
-}
-
-/** Merge PIN session JWT (X-WebPos-Staff-Access) over login JWT for floor staff actions. */
-function effectiveStaffPermissions(req: Request): string[] {
-  const base = req.user?.permissions || [];
-  const pinHeader = String(req.headers["x-webpos-staff-access"] || "").trim();
-  if (!pinHeader) return base;
-  try {
-    const pinUser = AuthService.verifyToken(pinHeader) as JWTPayload;
-    if (pinUser.merchantId && pinUser.merchantId !== req.user?.merchantId) return base;
-    if (pinUser.role !== "staff" || !Array.isArray(pinUser.permissions)) return base;
-    return pinUser.permissions;
-  } catch {
-    return base;
-  }
 }

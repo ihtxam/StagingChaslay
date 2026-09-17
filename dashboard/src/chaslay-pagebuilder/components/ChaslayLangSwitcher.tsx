@@ -18,17 +18,16 @@ function toShopLocale(code: string): Locale | null {
 export default function ChaslayLangSwitcher({
   className = '',
   menuPlacement = 'bottom',
-  locale: localeProp,
+  locale,
   onLocaleChange,
 }: {
   className?: string;
   menuPlacement?: 'top' | 'bottom';
-  locale?: ChaslayLocale;
-  onLocaleChange?: (code: ChaslayLocale) => void;
+  locale: ChaslayLocale;
+  onLocaleChange: (code: ChaslayLocale) => void;
 }) {
   const { languages } = useBuilderLanguage();
-  const { locale: shopLocale, setLocale, t } = useI18n();
-  const locale = localeProp || (shopLocale as ChaslayLocale);
+  const { setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +55,9 @@ export default function ChaslayLangSwitcher({
 
   const pickLocale = (code: string) => {
     const normalized = code.toLowerCase().slice(0, 2) as ChaslayLocale;
-    onLocaleChange?.(normalized);
-    const nextShopLocale = toShopLocale(normalized);
-    if (nextShopLocale) setLocale(nextShopLocale);
+    onLocaleChange(normalized);
+    const shopLocale = toShopLocale(normalized);
+    if (shopLocale) setLocale(shopLocale);
     setOpen(false);
   };
 
@@ -78,7 +77,7 @@ export default function ChaslayLangSwitcher({
       {open ? (
         <ul
           role="listbox"
-          className={`absolute right-0 z-[80] min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
+          className={`absolute right-0 z-40 min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
             menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
           }`}
         >

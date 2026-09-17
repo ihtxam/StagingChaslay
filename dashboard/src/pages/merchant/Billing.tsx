@@ -24,8 +24,6 @@ type Plan = {
     signage?: boolean;
     kds?: boolean;
     ods?: boolean;
-    kiosk?: boolean;
-    giftCards?: boolean;
   } | null;
 };
 
@@ -53,7 +51,6 @@ type MerchantBilling = {
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
   kioskAddonEnabled?: boolean;
-  giftCardAddonEnabled?: boolean;
   justEatAddonEnabled?: boolean;
   uberEatsAddonEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;

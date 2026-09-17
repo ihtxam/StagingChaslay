@@ -50,7 +50,7 @@ export default function ShopLangSwitcher({
       {open ? (
         <ul
           role="listbox"
-          className={`absolute right-0 z-[80] min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
+          className={`absolute right-0 z-40 min-w-full overflow-hidden border border-stone-200 bg-white shadow-sm ${
             menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
           }`}
         >

@@ -1,5 +1,6 @@
 import { APP_NAME } from '@/lib/brand';
 import {
+  isPrintAgentAvailable,
   isUnsuitableRawPrinter,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
@@ -52,13 +53,14 @@ async function printReceiptText(
       ? targets.map((x) => x.name)
       : [opts.fallbackPrinterName || localStorage.getItem('manupos_webpos_printer') || ''];
   const named = names.map((n) => (n || '').trim()).filter(Boolean);
-  if (named.length === 0) {
-    throw new Error('No receipt printer is configured');
-  }
-  if (named.every((n) => isUnsuitableRawPrinter(n))) {
+  if (named.length > 0 && named.every((n) => isUnsuitableRawPrinter(n))) {
     throw new Error(
       unsuitableRawPrinterMessage(named[0] || '') || 'Receipt printer is not suitable for thermal print'
     );
+  }
+  const agentOk = await isPrintAgentAvailable();
+  if (!agentOk && named.length === 0) {
+    throw new Error('Print agent is not running and no receipt printer is configured');
   }
   const paper = targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
   const lang = resolveReceiptLanguage(opts.printSettings, opts.locale);

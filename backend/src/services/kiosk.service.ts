@@ -7,14 +7,7 @@ import {
   ensureKioskSettingsColumn,
   queryRaw,
 } from "@/lib/ensure-merchant-schema";
-import { normalizeBusinessModule } from "@/lib/business-module";
-import { isRetailPosMode } from "@/lib/pos-checkout-settings";
-import {
-  applyBusinessModuleToKioskSettings,
-  kioskLayoutLockedToRetail,
-  normalizeKioskSettings,
-  type KioskSettings,
-} from "@/lib/kiosk-settings";
+import { normalizeKioskSettings, type KioskSettings } from "@/lib/kiosk-settings";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
@@ -34,63 +27,18 @@ type MerchantRow = {
   slug: string;
   shop_enabled?: boolean;
   shopEnabled?: boolean;
-  business_category?: string | null;
-  businessCategory?: string | null;
-  pos_checkout_settings?: unknown;
-  posCheckoutSettings?: unknown;
   kiosk_settings?: unknown;
   kioskSettings?: unknown;
 };
 
-async function readMerchantBusinessModule(merchantId: string) {
-  const rows = await queryRaw<{
-    business_category: string | null;
-    pos_checkout_settings: unknown;
-  }>(
-    `SELECT business_category, pos_checkout_settings FROM merchants WHERE id = $1 LIMIT 1`,
-    [merchantId]
-  );
-  return resolveMerchantBusinessModule(rows[0]);
-}
-
-function resolveMerchantBusinessModule(
-  row?: {
-    business_category?: string | null;
-    businessCategory?: string | null;
-    pos_checkout_settings?: unknown;
-    posCheckoutSettings?: unknown;
-  } | null
-) {
-  const locked = normalizeBusinessModule(row?.business_category ?? row?.businessCategory);
-  if (locked) return locked;
-  if (isRetailPosMode(row?.pos_checkout_settings ?? row?.posCheckoutSettings)) return "retail" as const;
-  return null;
-}
-
-function resolveMerchantKioskSettings(
-  raw: unknown,
-  businessModule?: string | null
-): KioskSettings {
-  return applyBusinessModuleToKioskSettings(normalizeKioskSettings(raw), businessModule);
-}
-
-async function persistKioskSettings(merchantId: string, settings: KioskSettings) {
-  const db = getDb();
-  await db
-    .update(schema.merchants)
-    .set({ kioskSettings: settings, updatedAt: new Date() })
-    .where(eq(schema.merchants.id, merchantId));
-}
-
 async function loadMerchantByToken(token: string): Promise<{
   merchant: MerchantRow;
   settings: KioskSettings;
-  businessModule: ReturnType<typeof resolveMerchantBusinessModule>;
 }> {
   await ensureKioskAddonColumn();
   await ensureKioskSettingsColumn();
   const rows = await queryRaw<MerchantRow>(
-    `SELECT id, name, slug, shop_enabled, business_category, pos_checkout_settings, kiosk_settings
+    `SELECT id, name, slug, shop_enabled, kiosk_settings
      FROM merchants
      WHERE kiosk_settings IS NOT NULL
        AND kiosk_settings->>'accessToken' = $1
@@ -101,15 +49,14 @@ async function loadMerchantByToken(token: string): Promise<{
   if (!merchant) throw new Error("Kiosk not found");
   const enabled = await readKioskAddonEnabled(merchant.id);
   if (!enabled) throw new KioskLicenseError();
-  const businessModule = resolveMerchantBusinessModule(merchant);
-  const settings = resolveMerchantKioskSettings(merchant.kiosk_settings, businessModule);
+  const settings = normalizeKioskSettings(merchant.kiosk_settings);
   if (settings.accessToken !== token) throw new Error("Kiosk not found");
-  return { merchant, settings, businessModule };
+  return { merchant, settings };
 }
 
 export class KioskService {
   static async getPublicConfig(token: string) {
-    const { merchant, settings, businessModule } = await loadMerchantByToken(token);
+    const { merchant, settings } = await loadMerchantByToken(token);
     const shopEnabled = merchant.shop_enabled ?? merchant.shopEnabled;
     if (!shopEnabled) throw new Error("Shop is not enabled for this merchant");
 
@@ -159,7 +106,6 @@ export class KioskService {
             : settings.categoryNav === "top"
               ? "top"
               : "left",
-        kioskLayoutLocked: kioskLayoutLockedToRetail(businessModule),
       },
       tables,
     };
@@ -403,41 +349,34 @@ export class KioskService {
     };
   }
 
-  static async readBusinessModule(merchantId: string) {
-    return readMerchantBusinessModule(merchantId);
-  }
-
   static async readSettingsForMerchant(merchantId: string): Promise<KioskSettings> {
     await ensureKioskSettingsColumn();
-    const businessModule = await readMerchantBusinessModule(merchantId);
     const rows = await queryRaw<{ kiosk_settings: unknown }>(
       `SELECT kiosk_settings FROM merchants WHERE id = $1 LIMIT 1`,
       [merchantId]
     );
     if (rows[0]?.kiosk_settings == null) {
-      const defaults = resolveMerchantKioskSettings(null, businessModule);
-      await persistKioskSettings(merchantId, defaults);
+      const defaults = normalizeKioskSettings(null);
+      const db = getDb();
+      await db
+        .update(schema.merchants)
+        .set({ kioskSettings: defaults, updatedAt: new Date() })
+        .where(eq(schema.merchants.id, merchantId));
       return defaults;
     }
-    const stored = normalizeKioskSettings(rows[0]?.kiosk_settings);
-    const settings = applyBusinessModuleToKioskSettings(stored, businessModule);
-    if (
-      kioskLayoutLockedToRetail(businessModule) &&
-      (stored.kioskLayout !== "grocery" ||
-        (stored.categoryNav !== "left" && stored.categoryNav !== "bottom"))
-    ) {
-      await persistKioskSettings(merchantId, settings);
-    }
-    return settings;
+    return normalizeKioskSettings(rows[0]?.kiosk_settings);
   }
 
   static async writeSettingsForMerchant(merchantId: string, raw: unknown): Promise<KioskSettings> {
     await ensureKioskSettingsColumn();
-    const businessModule = await readMerchantBusinessModule(merchantId);
     const existing = await this.readSettingsForMerchant(merchantId);
-    const incoming = resolveMerchantKioskSettings({ ...existing, ...(raw as object) }, businessModule);
+    const incoming = normalizeKioskSettings({ ...existing, ...(raw as object) });
     incoming.accessToken = existing.accessToken || incoming.accessToken;
-    await persistKioskSettings(merchantId, incoming);
+    const db = getDb();
+    await db
+      .update(schema.merchants)
+      .set({ kioskSettings: incoming, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
     return incoming;
   }
 

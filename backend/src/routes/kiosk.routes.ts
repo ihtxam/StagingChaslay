@@ -2,7 +2,6 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { readKioskAddonEnabled, writeKioskAddonEnabled } from "@/lib/kiosk-addon";
-import { kioskLayoutLockedToRetail } from "@/lib/kiosk-settings";
 import { KioskLicenseError, KioskService } from "@/services/kiosk.service";
 import { isAllowedImageMime, saveMerchantImage } from "@/services/media-upload.service";
 
@@ -76,13 +75,10 @@ router.post("/:token/verify-admin-pin", async (req: Request, res: Response) => {
     if (!KioskService.verifyAdminPin(settings, pin)) {
       return res.status(403).json({ error: "Invalid admin code" });
     }
-    const businessModule = await KioskService.readBusinessModule(merchant.id);
     res.json({
       success: true,
       adminUrl: `/kiosk/${req.params.token}/admin`,
       merchantSlug: merchant.slug,
-      businessModule,
-      kioskLayoutLocked: kioskLayoutLockedToRetail(businessModule),
     });
   } catch (error) {
     handleError(res, error, "Verification failed");
@@ -106,13 +102,7 @@ router.post("/:token/admin-settings", async (req: Request, res: Response) => {
     if (!KioskService.verifyAdminPin(settings, pin)) {
       return res.status(403).json({ error: "Invalid admin code" });
     }
-    const businessModule = await KioskService.readBusinessModule(merchant.id);
-    res.json({
-      success: true,
-      settings,
-      businessModule,
-      kioskLayoutLocked: kioskLayoutLockedToRetail(businessModule),
-    });
+    res.json({ success: true, settings });
   } catch (error) {
     handleError(res, error, "Failed to load admin settings", 500);
   }
@@ -188,14 +178,7 @@ kioskMerchantRouter.get("/settings", async (req: Request, res: Response) => {
     const merchantId = req.merchantId!;
     const enabled = await readKioskAddonEnabled(merchantId);
     const settings = await KioskService.readSettingsForMerchant(merchantId);
-    const businessModule = await KioskService.readBusinessModule(merchantId);
-    res.json({
-      success: true,
-      enabled,
-      settings,
-      businessModule,
-      kioskLayoutLocked: kioskLayoutLockedToRetail(businessModule),
-    });
+    res.json({ success: true, enabled, settings });
   } catch (error) {
     handleError(res, error, "Failed to load kiosk settings", 500);
   }

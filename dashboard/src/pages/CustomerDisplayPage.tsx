@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicApi } from '@/lib/api';
 import CdsPromoSlider from '@/components/customer-display/CdsPromoSlider';
 import {
-  fetchCustomerDisplayState,
   isCustomerDisplayLocale,
   persistCdsLocale,
   requestCustomerDisplayState,
@@ -48,7 +47,6 @@ export default function CustomerDisplayPage() {
   const [syncToken, setSyncToken] = useState('');
   const [error, setError] = useState('');
   const [cart, setCart] = useState<CustomerDisplayState>(IDLE_STATE);
-  const lastAppliedAt = useRef(0);
 
   const applyPosLocale = useCallback(
     (next: unknown) => {
@@ -83,42 +81,21 @@ export default function CustomerDisplayPage() {
     void loadConfig();
   }, [loadConfig]);
 
-  const applyRemoteState = useCallback(
-    (state: CustomerDisplayState) => {
-      const at = Number(state.updatedAt) || 0;
-      if (at < lastAppliedAt.current) return;
-      lastAppliedAt.current = at;
-      setCart(state);
-      applyPosLocale(state.locale);
-    },
-    [applyPosLocale]
-  );
-
   useEffect(() => {
     const channelToken = syncToken || token;
     if (!channelToken) return;
-
-    const unsubscribe = subscribeCustomerDisplayState(channelToken, applyRemoteState);
-
-    const pullFromServer = () => {
-      void fetchCustomerDisplayState(channelToken).then((state) => {
-        if (state) applyRemoteState(state);
-      });
-    };
-
+    const unsubscribe = subscribeCustomerDisplayState(channelToken, (state) => {
+      setCart(state);
+      applyPosLocale(state.locale);
+    });
+    // Ask POS for the latest cart + locale on connect / refresh.
     requestCustomerDisplayState(channelToken);
     const retry = window.setTimeout(() => requestCustomerDisplayState(channelToken), 400);
-
-    pullFromServer();
-    const pollMs = cart.phase === 'thankyou' || cart.phase === 'payment' ? 800 : 2000;
-    const poll = window.setInterval(pullFromServer, pollMs);
-
     return () => {
       unsubscribe();
       window.clearTimeout(retry);
-      window.clearInterval(poll);
     };
-  }, [syncToken, token, applyRemoteState, cart.phase]);
+  }, [syncToken, token, applyPosLocale]);
 
   const theme = config?.settings.theme === 'dark' ? 'dark' : 'light';
   const hasLines = cart.lines.length > 0;
@@ -136,12 +113,7 @@ export default function CustomerDisplayPage() {
       ? 'bg-slate-900/80 border-slate-800'
       : 'bg-white border-slate-200';
 
-  const slides = useMemo(() => {
-    const raw = config?.settings.promoSlides || [];
-    return raw.filter(
-      (s) => s.imageUrl || s.title || s.subtitle || s.overlayText
-    );
-  }, [config?.settings.promoSlides]);
+  const slides = config?.settings.promoSlides || [];
 
   const headline = useMemo(() => {
     if (showThankYou) return t('cdsThankYouTitle');

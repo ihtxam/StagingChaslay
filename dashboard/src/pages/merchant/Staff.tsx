@@ -4,11 +4,12 @@ import api from '@/lib/api';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
-import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, isKioskOperatorRoleName, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, staffRoleDisplayName, permissionsForMerchantAddon, normalizeRolePermissions, isKioskOperatorRoleName, isGandolaRoleName, type Permission } from '@/lib/permissions';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login-home';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
+import { PasswordInput } from '@/components/PasswordInput';
 
 type RoleRow = {
   id: string;
@@ -57,7 +58,13 @@ const emptyCreateForm = {
   loginHome: 'panel' as 'panel' | 'pos',
 };
 
-export default function StaffPage({ embedded = false }: { embedded?: boolean }) {
+export default function StaffPage({
+  embedded = false,
+  kioskLicensed: kioskLicensedProp,
+}: {
+  embedded?: boolean;
+  kioskLicensed?: boolean;
+}) {
   const { t } = useI18n();
   const { locations, load: loadLocations } = useLocationStore();
   const authUser = useAuthStore((s) => s.user);
@@ -74,7 +81,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [editForm, setEditForm] = useState<StaffEditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-  const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [kioskLicensed, setKioskLicensed] = useState(kioskLicensedProp ?? false);
 
   const [staffForm, setStaffForm] = useState(emptyCreateForm);
 
@@ -83,31 +90,50 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
     [kioskLicensed]
   );
   const visibleRoles = useMemo(
-    () => roles.filter((r) => kioskLicensed || !isKioskOperatorRoleName(r.name)),
+    () =>
+      roles.filter(
+        (r) =>
+          (kioskLicensed || !isKioskOperatorRoleName(r.name)) && !isGandolaRoleName(r.name)
+      ),
     [roles, kioskLicensed]
   );
+
+  useEffect(() => {
+    if (kioskLicensedProp != null) setKioskLicensed(kioskLicensedProp);
+  }, [kioskLicensedProp]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rolesRes, staffRes, settingsRes] = await Promise.all([
+      const requests: Promise<unknown>[] = [
         api.get('/merchant/roles'),
         api.get('/merchant/staff'),
-        api.get('/merchant/settings').catch(() => ({ data: { settings: {} } })),
-      ]);
-      setRoles(rolesRes.data.roles || []);
-      setStaff(staffRes.data.staff || []);
-      const s = settingsRes.data?.settings || {};
-      setKioskLicensed(isKioskLicensed(s));
-      if (!staffForm.roleId && rolesRes.data.roles?.[0]?.id) {
-        setStaffForm((f) => ({ ...f, roleId: rolesRes.data.roles[0].id }));
+      ];
+      if (kioskLicensedProp == null) {
+        requests.push(api.get('/merchant/settings').catch(() => ({ data: { settings: {} } })));
       }
+      const [rolesRes, staffRes, settingsRes] = (await Promise.all(requests)) as [
+        { data: { roles?: RoleRow[] } },
+        { data: { staff?: StaffRow[] } },
+        { data: { settings?: Record<string, unknown> } } | undefined,
+      ];
+      const rolesList = rolesRes.data.roles || [];
+      setRoles(rolesList);
+      setStaff(staffRes.data.staff || []);
+      if (kioskLicensedProp == null && settingsRes) {
+        const s = settingsRes.data?.settings || {};
+        setKioskLicensed(isKioskLicensed(s));
+      }
+      setStaffForm((f) => {
+        if (f.roleId || !rolesList[0]?.id) return f;
+        return { ...f, roleId: rolesList[0].id };
+      });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('staffLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [staffForm.roleId, t]);
+  }, [kioskLicensedProp, t]);
 
   useEffect(() => {
     void load();
@@ -115,14 +141,14 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
 
   const openRoleEdit = (role: RoleRow) => {
     setEditingRole(role);
-    setRolePerms(role.permissions as Permission[]);
+    setRolePerms(permissionsForMerchantAddon(normalizeRolePermissions(role.permissions), kioskLicensed));
   };
 
   const saveRole = async () => {
     if (!editingRole) return;
     try {
       await api.put(`/merchant/roles/${editingRole.id}`, {
-        permissions: permissionsForMerchantAddon(rolePerms, kioskLicensed),
+        permissions: permissionsForMerchantAddon(normalizeRolePermissions(rolePerms), kioskLicensed),
       });
       toast.success(t('staffRoleUpdated'));
       setEditingRole(null);
@@ -273,6 +299,10 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
   };
 
   const removeStaff = async (id: string) => {
+    if (staff.length <= 1) {
+      toast.error(t('staffCannotRemoveLast'));
+      return;
+    }
     if (!confirm(t('staffRemoveConfirm'))) return;
     try {
       await api.delete(`/merchant/staff/${id}`);
@@ -407,9 +437,8 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
               </label>
               <label className="block text-sm">
                 {t('password')}
-                <input
-                  className="input mt-1"
-                  type="password"
+                <PasswordInput
+                  wrapperClassName="mt-1"
                   autoComplete="new-password"
                   minLength={8}
                   value={staffForm.password}
@@ -496,7 +525,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
             </div>
           ) : null}
 
-          <div className="card !p-0 table-scroll">
+          <div className="hidden sm:block card !p-0 table-scroll">
             <table className="w-full text-sm min-w-[560px]">
               <thead className="bg-[var(--bg-muted)] text-left">
                 <tr>
@@ -552,6 +581,48 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                       >
                         {t('edit')}
                       </button>
+                      {staff.length > 1 ? (
+                        <button
+                          type="button"
+                          className="text-red-600 text-xs"
+                          onClick={() => void removeStaff(s.id)}
+                        >
+                          {t('remove')}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-xs text-[var(--text-muted)]"
+                          title={t('staffCannotRemoveLast')}
+                        >
+                          {t('staffLastUser')}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="sm:hidden space-y-2">
+            {staff.map((s) => (
+              <div key={s.id} className="card p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{s.name}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {staffRoleDisplayName(s.roleName, t)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      className="text-[var(--text)] text-xs font-medium underline-offset-2 hover:underline"
+                      onClick={() => openStaffEdit(s)}
+                    >
+                      {t('edit')}
+                    </button>
+                    {staff.length > 1 ? (
                       <button
                         type="button"
                         className="text-red-600 text-xs"
@@ -559,11 +630,41 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                       >
                         {t('remove')}
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    ) : null}
+                  </div>
+                </div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <div>
+                    <dt className="text-[var(--text-muted)]">{t('staffPinCol')}</dt>
+                    <dd className="font-mono tabular-nums tracking-wider">
+                      {s.pin ? (
+                        s.pin
+                      ) : s.pinSet ? (
+                        <span title={t('staffPinHiddenHint')}>{t('staffPinHidden')}</span>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">{t('staffPanelCol')}</dt>
+                    <dd className="truncate">
+                      {s.canAccessPanel || s.email ? s.email || t('yes') : t('no')}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-[var(--text-muted)]">{t('staffLoginHomeCol')}</dt>
+                    <dd>
+                      {s.canAccessPanel || s.email
+                        ? s.loginHome === 'pos'
+                          ? t('staffLoginHomePos')
+                          : t('staffLoginHomePanel')
+                        : '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
           </div>
         </div>
       ) : (
@@ -589,8 +690,8 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                 {role.name.trim().toLowerCase() === 'kiosk operator' ? (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleKioskHint')}</p>
                 ) : null}
-                {role.name.trim().toLowerCase() === 'gandola' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleGandolaHint')}</p>
+                {role.name.trim().toLowerCase() === 'order center operator' ? (
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleOrderCenterHint')}</p>
                 ) : null}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
@@ -705,9 +806,8 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
               </label>
               <label className="block text-sm">
                 {t('staffNewPassword')}
-                <input
-                  className="input mt-1"
-                  type="password"
+                <PasswordInput
+                  wrapperClassName="mt-1"
                   autoComplete="new-password"
                   minLength={8}
                   placeholder={
@@ -865,6 +965,22 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
               {t('staffEditRole').replace('{name}', staffRoleDisplayName(editingRole.name, t))}
             </h3>
             <p className="mb-3 text-xs text-[var(--text-muted)]">{t('staffRoleBackOfficeHint')}</p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => setRolePerms([...visiblePermissions])}
+              >
+                {t('selectAll')}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => setRolePerms([])}
+              >
+                {t('deselectAll')}
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
               {visiblePermissions.map((p) => (
                 <label key={p} className="flex items-center gap-2 text-xs">
@@ -872,9 +988,12 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean }) 
                     type="checkbox"
                     checked={rolePerms.includes(p)}
                     onChange={(e) =>
-                      setRolePerms((prev) =>
-                        e.target.checked ? [...prev, p] : prev.filter((x) => x !== p)
-                      )
+                      setRolePerms((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(p);
+                        else next.delete(p);
+                        return visiblePermissions.filter((key) => next.has(key));
+                      })
                     }
                   />
                   {t(`perm_${p}`)}

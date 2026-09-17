@@ -8,13 +8,6 @@ import {
   normalizeCustomerDisplaySettings,
   type CustomerDisplaySettings,
 } from "@/lib/customer-display-settings";
-import {
-  getCdsLiveState,
-  normalizeCdsLiveState,
-  setCdsLiveState,
-  sweepExpiredCdsLiveState,
-  type CdsLiveState,
-} from "@/lib/cds-live-state";
 import { allocateDisplayShortCode } from "@/lib/display-short-code";
 
 type MerchantRow = {
@@ -139,20 +132,5 @@ export class CdsService {
       .set({ customerDisplaySettings: settings, updatedAt: new Date() })
       .where(eq(schema.merchants.id, merchantId));
     return settings;
-  }
-
-  static async pushLiveState(merchantId: string, raw: unknown): Promise<CdsLiveState> {
-    const settings = await this.getSettings(merchantId);
-    if (!settings.enabled) throw new Error("Customer display is disabled");
-    const state = normalizeCdsLiveState(raw);
-    if (!state) throw new Error("Invalid customer display state");
-    setCdsLiveState(settings.accessToken, merchantId, state);
-    return state;
-  }
-
-  static async liveStateForToken(accessKey: string): Promise<CdsLiveState | null> {
-    sweepExpiredCdsLiveState();
-    const { settings } = await loadMerchantByAccessKey(accessKey);
-    return getCdsLiveState(settings.accessToken);
   }
 }

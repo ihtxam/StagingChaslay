@@ -25,14 +25,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
-import com.rebornsense.printbridge.BridgeAlarmWatchdog
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSettingsNavigator
 import com.rebornsense.printbridge.setup.OemSetupPreferences
-import com.rebornsense.printbridge.fleet.FleetSetupActivity
-import com.rebornsense.printbridge.fleet.KioskController
 import com.rebornsense.printbridge.setup.SetupWizardActivity
 import com.rebornsense.printbridge.BuildConfig
 
@@ -108,19 +105,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
         findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
-        findViewById<Button>(R.id.fleetSetupBtn).setOnClickListener {
-            startActivity(Intent(this, FleetSetupActivity::class.java))
-        }
-        findViewById<View>(R.id.serviceStatusCard).setOnClickListener {
-            if (BridgePermissions.needsNotificationPermission(this)) {
-                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-            } else {
-                PrintBridgeLauncher.ensureRunning(this)
-                updateServiceStatus()
-            }
-        }
         updateOemSetupBanner()
-        updateFleetSetupBanner()
         updateTapToPayDiagnostics()
         // Wizard waits until permission dialogs finish so USB/Bluetooth prompts are not hidden.
     }
@@ -129,7 +114,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshPrinters()
         updateOemSetupBanner()
-        updateFleetSetupBanner()
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
@@ -161,7 +145,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun needsSetupAttention(): Boolean {
         return !OemSetupPreferences.isWizardCompleted(this) ||
-            !OemSettingsNavigator.isBatteryOptimizationDisabled(this)
+            !OemSettingsNavigator.isBatteryOptimizationDisabled(this) ||
+            !BridgeHealthChecker.isHealthy()
     }
 
     private fun openOemSetupWizard() {
@@ -181,20 +166,6 @@ class MainActivity : AppCompatActivity() {
                 DeviceProfiler.detect().displayName,
             )
         }
-    }
-
-    private fun updateFleetSetupBanner() {
-        val banner = findViewById<View>(R.id.fleetSetupBanner)
-        val isOwner = KioskController.isDeviceOwner(this)
-        banner.visibility = View.VISIBLE
-        findViewById<TextView>(R.id.fleetSetupBannerSummary).text =
-            if (isOwner) {
-                getString(
-                    R.string.fleet_setup_subtitle,
-                )
-            } else {
-                getString(R.string.fleet_setup_banner)
-            }
     }
 
     private fun updateTapToPayDiagnostics() {
@@ -296,20 +267,11 @@ class MainActivity : AppCompatActivity() {
             serviceCard.visibility = View.VISIBLE
         } else {
             statusText.text = getString(R.string.status_starting)
-            val needsNotifications = BridgePermissions.needsNotificationPermission(this)
-            hintText.text = if (needsNotifications) {
-                getString(R.string.oem_step_bridge_notification_required)
-            } else {
-                getString(R.string.oem_step_bridge_pending)
-            }
-            serviceStatusText.text = if (needsNotifications) {
-                getString(R.string.status_service_notification_required)
-            } else {
-                getString(R.string.status_service_stopped)
-            }
+            hintText.text = getString(R.string.oem_step_bridge_pending)
+            serviceStatusText.text = getString(R.string.status_service_stopped)
             serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
             serviceCard.visibility = View.VISIBLE
-            PrintBridgeLauncher.ensureRunning(this)
+            PrintBridgeLauncher.start(this)
         }
         updateTapToPayDiagnostics()
     }
@@ -321,10 +283,8 @@ class MainActivity : AppCompatActivity() {
             PrinterPreferences.setAutoStartEnabled(this, isChecked)
             if (isChecked) {
                 startBridge()
-                BridgeAlarmWatchdog.arm(this)
                 Toast.makeText(this, R.string.auto_start_enabled_toast, Toast.LENGTH_SHORT).show()
             } else {
-                BridgeAlarmWatchdog.disarm(this)
                 Toast.makeText(this, R.string.auto_start_disabled_toast, Toast.LENGTH_SHORT).show()
             }
         }

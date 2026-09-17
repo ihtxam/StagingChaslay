@@ -38,14 +38,14 @@ import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
+import {
+  normalizeCustomerDisplaySettings,
+  type CustomerDisplaySettings,
+} from "@/lib/customer-display-settings";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
-import {
-  getFiskalyPublic,
-  mergeFiskalySettings,
-  type FiskalySettings,
-} from "@/lib/fiskaly-settings";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -241,6 +241,9 @@ export class MerchantSettingsService {
       storeHours: merchant.storeHours || {},
       shopLogoUrl: merchant.shopLogoUrl,
       shopBannerUrl: merchant.shopBannerUrl,
+      shopSiteSettings: normalizeShopSiteSettings(
+        (merchant as { shopSiteSettings?: unknown }).shopSiteSettings
+      ),
       latitude: merchant.latitude,
       longitude: merchant.longitude,
       pickupEtaMinutes: merchant.pickupEtaMinutes,
@@ -296,10 +299,10 @@ export class MerchantSettingsService {
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
-      deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
-      fiskalySettings: getFiskalyPublic(
-        (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
+      customerDisplaySettings: normalizeCustomerDisplaySettings(
+        (merchant as { customerDisplaySettings?: unknown }).customerDisplaySettings
       ),
+      deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
@@ -365,6 +368,7 @@ export class MerchantSettingsService {
       storeHours?: Record<string, unknown>;
       shopLogoUrl?: string | null;
       shopBannerUrl?: string | null;
+      shopSiteSettings?: ShopSiteSettings | Partial<ShopSiteSettings> | null;
       latitude?: number | string | null;
       longitude?: number | string | null;
       pickupEtaMinutes?: number;
@@ -405,8 +409,8 @@ export class MerchantSettingsService {
       posPrintSettings?: PosPrintSettings | null;
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
+      customerDisplaySettings?: CustomerDisplaySettings | Partial<CustomerDisplaySettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
-      fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
       inventoryExpiryAlertDays?: number;
@@ -490,6 +494,27 @@ export class MerchantSettingsService {
     if (updates.storeHours !== undefined) patch.storeHours = updates.storeHours;
     if (updates.shopLogoUrl !== undefined) patch.shopLogoUrl = updates.shopLogoUrl;
     if (updates.shopBannerUrl !== undefined) patch.shopBannerUrl = updates.shopBannerUrl;
+    if (updates.shopSiteSettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { shopSiteSettings: true },
+      });
+      const existing = normalizeShopSiteSettings(current?.shopSiteSettings);
+      const incoming = updates.shopSiteSettings && typeof updates.shopSiteSettings === "object"
+        ? updates.shopSiteSettings
+        : {};
+      const incomingObj = incoming as Partial<ShopSiteSettings>;
+      patch.shopSiteSettings = normalizeShopSiteSettings({
+        ...existing,
+        ...incoming,
+        metaTitle:
+          incomingObj.metaTitle !== undefined ? incomingObj.metaTitle : existing.metaTitle,
+        metaDescription:
+          incomingObj.metaDescription !== undefined
+            ? incomingObj.metaDescription
+            : existing.metaDescription,
+      });
+    }
     if (updates.latitude !== undefined) {
       patch.latitude = updates.latitude === null || updates.latitude === "" ? null : String(updates.latitude);
     }
@@ -695,17 +720,20 @@ export class MerchantSettingsService {
         patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
       }
     }
-    if (updates.fiskalySettings !== undefined) {
+    if (updates.customerDisplaySettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
-        columns: { fiskalySettings: true },
+        columns: { customerDisplaySettings: true },
       });
-      patch.fiskalySettings = mergeFiskalySettings(
-        (current as { fiskalySettings?: FiskalySettings | null })?.fiskalySettings,
-        updates.fiskalySettings
-      );
+      const existing = normalizeCustomerDisplaySettings(current?.customerDisplaySettings);
+      const incoming = normalizeCustomerDisplaySettings({
+        ...existing,
+        ...(updates.customerDisplaySettings as object),
+      });
+      incoming.accessToken = existing.accessToken || incoming.accessToken;
+      incoming.shortCode = existing.shortCode || incoming.shortCode;
+      patch.customerDisplaySettings = incoming;
     }
-
     if (updates.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),

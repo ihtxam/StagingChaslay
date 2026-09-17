@@ -24,7 +24,6 @@ export interface User {
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
-  giftCardAddonEnabled?: boolean;
   maxLocations?: number;
 }
 
@@ -138,7 +137,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
         signageAddonEnabled: !!(user.signageAddonEnabled || user.signageEnabled),
         storekeeperAddonEnabled: !!user.storekeeperAddonEnabled,
-        giftCardAddonEnabled: !!user.giftCardAddonEnabled,
         maxLocations: Math.max(0, Number(user.maxLocations ?? 1)),
       };
 
