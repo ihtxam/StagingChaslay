@@ -1,4 +1,4 @@
-import { isTsplLabelPrinterName } from '@/lib/tspl-label-core';
+import { isTsplLabelPrinterName } from './tspl-label-core';
 
 export type LabelPrintProtocol = 'niimbot' | 'tspl' | 'escpos';
 
