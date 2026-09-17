@@ -42,6 +42,15 @@ export function isHomeNavLink(link: string | undefined | null): boolean {
   return path === '/' || path === '/home';
 }
 
+/** Whether a CMS/nav link points at the contact section or page. */
+export function isContactNavLink(link: string | undefined | null): boolean {
+  const raw = String(link || '').trim().toLowerCase();
+  if (raw === '#contact') return true;
+  if (!raw || raw === '#') return false;
+  const path = pathOnly(raw);
+  return path === '/contact' || path.endsWith('/contact');
+}
+
 export function resolveStorefrontHref(
   link: string | undefined | null,
   basePath: string,

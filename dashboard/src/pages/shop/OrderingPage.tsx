@@ -48,7 +48,7 @@ import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
-import ShopCartThresholdProgress from '@/components/shop/ShopCartThresholdProgress';
+import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
 import ShopCartSimilarProducts from '@/components/shop/ShopCartSimilarProducts';
 import ShopProductDetailModal from '@/components/shop/ShopProductDetailModal';
 import ShopHorizontalScroll from '@/components/shop/ShopHorizontalScroll';
@@ -1452,26 +1452,12 @@ export default function OrderingPage() {
       </div>
 
       <div className="border-t border-stone-200 px-5 py-4 space-y-3">
-        {channel === 'delivery' && minOrderThreshold > 0 ? (
-          <ShopCartThresholdProgress
-            subtotal={cartTotal}
-            threshold={minOrderThreshold}
-            progressKey="shopMinOrderProgress"
-            unlockedKey="shopMinOrderUnlocked"
-            remainingKey="shopMinOrderRemaining"
-            variant="min"
-          />
-        ) : null}
-        {channel === 'delivery' && freeDeliveryThreshold > 0 ? (
-          <ShopCartThresholdProgress
-            subtotal={cartTotal}
-            threshold={freeDeliveryThreshold}
-            progressKey="shopFreeDeliveryProgress"
-            unlockedKey="shopFreeDeliveryUnlocked"
-            remainingKey="shopMinOrderRemaining"
-            variant="free"
-          />
-        ) : null}
+        <ShopCartThresholdSlot
+          channel={channel}
+          subtotal={cartTotal}
+          minOrder={minOrderThreshold}
+          freeDeliveryFrom={freeDeliveryThreshold}
+        />
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
         <div className="flex items-center justify-between gap-3">
@@ -1513,7 +1499,7 @@ export default function OrderingPage() {
             <div className="shop-page-content flex h-14 items-center justify-between gap-2 shop-navbar-mobile-row">
               <Link
                 to={shopBasePath(shopKey, locSlug) || '/'}
-                className="shop-navbar-logo-row flex min-w-0 flex-1 items-center gap-2"
+                className="shop-navbar-logo-row flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:max-w-[40%]"
                 aria-label={merchant?.name || t('shopBackToMenu')}
               >
                 {merchant?.shopLogoUrl ? (
@@ -1533,9 +1519,17 @@ export default function OrderingPage() {
                   </span>
                 ) : null}
               </Link>
+              <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
+                <Link to={shopBasePath(shopKey, locSlug) || '/'}>{t('shopHome')}</Link>
+                <Link to={`${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/')}>{t('shopMenu')}</Link>
+                <Link to={`${shopBasePath(shopKey, locSlug) || ''}#contact`}>{t('shopContact')}</Link>
+              </nav>
               <ShopMobileNavMenu
                 accountPath={accountPath}
                 links={[
+                  { label: t('shopHome'), to: shopBasePath(shopKey, locSlug) || '/' },
+                  { label: t('shopMenu'), to: `${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/') },
+                  { label: t('shopContact'), to: `${shopBasePath(shopKey, locSlug) || ''}#contact` },
                   ...(showGiftCards
                     ? [{ label: t('shopGiftCardTitle'), to: giftCardsPath }]
                     : []),
@@ -1733,7 +1727,7 @@ export default function OrderingPage() {
         </div>
       </div>
 
-      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-28 md:pb-6' : ''}`}>
+      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-40 md:pb-6' : ''}`}>
         {!menuSearchQuery.trim() && popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
@@ -1901,24 +1895,34 @@ export default function OrderingPage() {
       {itemCount > 0 ? <CartIconButton /> : null}
 
       {itemCount > 0 ? (
-        <div className="shop-mobile-cart-bar md:hidden">
-          <button
-            type="button"
-            className="shop-mobile-cart-bar__icon"
-            onClick={openSideCart}
-            aria-label={`${t('shopBasketCount')} (${itemCount})`}
-          >
-            <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
-            <span className="shop-mobile-cart-bar__badge">{itemCount > 99 ? '99+' : itemCount}</span>
-          </button>
-          <button
-            type="button"
-            disabled={checkoutDisabled}
-            onClick={goCheckout}
-            className="shop-mobile-cart-bar__cta"
-          >
-            {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
-          </button>
+        <div className="shop-mobile-cart-stack md:hidden">
+          <div className="shop-mobile-cart-stack__progress">
+            <ShopCartThresholdSlot
+              channel={channel}
+              subtotal={cartTotal}
+              minOrder={minOrderThreshold}
+              freeDeliveryFrom={freeDeliveryThreshold}
+            />
+          </div>
+          <div className="shop-mobile-cart-bar">
+            <button
+              type="button"
+              className="shop-mobile-cart-bar__icon"
+              onClick={openSideCart}
+              aria-label={`${t('shopBasketCount')} (${itemCount})`}
+            >
+              <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
+              <span className="shop-mobile-cart-bar__badge">{itemCount > 99 ? '99+' : itemCount}</span>
+            </button>
+            <button
+              type="button"
+              disabled={checkoutDisabled}
+              onClick={goCheckout}
+              className="shop-mobile-cart-bar__cta"
+            >
+              {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
+            </button>
+          </div>
         </div>
       ) : null}
 

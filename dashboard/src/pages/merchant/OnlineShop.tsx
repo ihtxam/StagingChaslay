@@ -39,6 +39,7 @@ interface Zone {
   polygon: LngLatTuple[];
   minOrderAmount: string;
   deliveryFee: string;
+  freeDeliveryMinOrder?: string | null;
   estimatedMinutes?: number | null;
   color?: string | null;
   isActive: boolean;
@@ -74,6 +75,7 @@ function resetZoneForm() {
     zoneName: '',
     minOrder: '20',
     deliveryFee: '5',
+    freeDelivery: '0',
     eta: '45',
     color: '#0d9488',
     zipCodes: '',
@@ -93,6 +95,7 @@ export default function OnlineShop() {
   const [zoneName, setZoneName] = useState('');
   const [minOrder, setMinOrder] = useState('20');
   const [deliveryFee, setDeliveryFee] = useState('5');
+  const [zoneFreeDelivery, setZoneFreeDelivery] = useState('0');
   const [eta, setEta] = useState('45');
   const [color, setColor] = useState('#0d9488');
   const [zipCodes, setZipCodes] = useState('');
@@ -383,6 +386,7 @@ export default function OnlineShop() {
     setZoneName(reset.zoneName);
     setMinOrder(reset.minOrder);
     setDeliveryFee(reset.deliveryFee);
+    setZoneFreeDelivery(reset.freeDelivery);
     setEta(reset.eta);
     setColor(reset.color);
     setZipCodes(reset.zipCodes);
@@ -396,6 +400,7 @@ export default function OnlineShop() {
     setZoneName(zone.name);
     setMinOrder(String(zone.minOrderAmount ?? '0'));
     setDeliveryFee(String(zone.deliveryFee ?? '0'));
+    setZoneFreeDelivery(String(zone.freeDeliveryMinOrder ?? '0'));
     setEta(String(zone.estimatedMinutes ?? 45));
     setColor(zone.color || '#0d9488');
     setZipCodes((zone.zipCodes || []).join(', '));
@@ -432,6 +437,7 @@ export default function OnlineShop() {
         name: zoneName,
         minOrderAmount: Number(minOrder),
         deliveryFee: Number(deliveryFee),
+        freeDeliveryMinOrder: Number(zoneFreeDelivery),
         estimatedMinutes: Number(eta),
         color,
         zipCodes: zipCodes
@@ -1114,6 +1120,14 @@ export default function OnlineShop() {
           <input
             className="input"
             type="number"
+            step="0.01"
+            placeholder="Free delivery from CHF"
+            value={zoneFreeDelivery}
+            onChange={(e) => setZoneFreeDelivery(e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
             placeholder="ETA minutes"
             value={eta}
             onChange={(e) => setEta(e.target.value)}
@@ -1153,6 +1167,7 @@ export default function OnlineShop() {
               <th className="py-2">Zone</th>
               <th className="py-2">Min order</th>
               <th className="py-2">Fee</th>
+              <th className="py-2">Free delivery</th>
               <th className="py-2">ETA</th>
               <th className="py-2"></th>
             </tr>
@@ -1160,7 +1175,7 @@ export default function OnlineShop() {
           <tbody>
             {zones.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-gray-500">
+                <td colSpan={6} className="py-6 text-gray-500">
                   No zones yet - draw one on the map.
                 </td>
               </tr>
@@ -1181,6 +1196,11 @@ export default function OnlineShop() {
                 </td>
                 <td className="py-3">CHF {Number(z.minOrderAmount).toFixed(2)}</td>
                 <td className="py-3">CHF {Number(z.deliveryFee).toFixed(2)}</td>
+                <td className="py-3">
+                  {Number(z.freeDeliveryMinOrder || 0) > 0
+                    ? `CHF ${Number(z.freeDeliveryMinOrder).toFixed(2)}`
+                    : '—'}
+                </td>
                 <td className="py-3">{z.estimatedMinutes || 45} min</td>
                 <td className="py-3 text-right space-x-3">
                   <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditZone(z)}>

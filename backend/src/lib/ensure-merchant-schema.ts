@@ -575,6 +575,7 @@ const TABLE_PATCHES: string[] = [
   )`,
   `ALTER TABLE delivery_zip_rules ADD COLUMN IF NOT EXISTS city varchar(255)`,
   `ALTER TABLE delivery_zip_rules ADD COLUMN IF NOT EXISTS free_delivery_min_order numeric(10,2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE delivery_zones ADD COLUMN IF NOT EXISTS free_delivery_min_order numeric(10,2) NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS delivery_zip_rules_merchant_id_idx ON delivery_zip_rules (merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,

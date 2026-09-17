@@ -37,6 +37,7 @@ router.post("/", async (req: Request, res: Response) => {
       zipCodes,
       minOrderAmount,
       deliveryFee,
+      freeDeliveryMinOrder,
       estimatedMinutes,
       color,
       isActive,
@@ -59,6 +60,7 @@ router.post("/", async (req: Request, res: Response) => {
         zipCodes: Array.isArray(zipCodes) ? zipCodes.map(String) : [],
         minOrderAmount: String(minOrderAmount ?? 0),
         deliveryFee: String(deliveryFee ?? 0),
+        freeDeliveryMinOrder: String(freeDeliveryMinOrder ?? 0),
         estimatedMinutes: estimatedMinutes ?? 45,
         color: color || "#0d9488",
         isActive: isActive !== false,
@@ -91,6 +93,9 @@ router.put("/:id", async (req: Request, res: Response) => {
     }
     if (req.body.minOrderAmount !== undefined) patch.minOrderAmount = String(req.body.minOrderAmount);
     if (req.body.deliveryFee !== undefined) patch.deliveryFee = String(req.body.deliveryFee);
+    if (req.body.freeDeliveryMinOrder !== undefined) {
+      patch.freeDeliveryMinOrder = String(req.body.freeDeliveryMinOrder);
+    }
     if (req.body.estimatedMinutes !== undefined) patch.estimatedMinutes = req.body.estimatedMinutes;
     if (req.body.color !== undefined) patch.color = req.body.color;
     if (req.body.isActive !== undefined) patch.isActive = !!req.body.isActive;

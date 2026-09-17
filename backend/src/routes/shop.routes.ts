@@ -1382,6 +1382,7 @@ router.get("/:slug/delivery-zones", async (req: Request, res: Response) => {
         polygon: z.polygon,
         minOrderAmount: z.minOrderAmount,
         deliveryFee: z.deliveryFee,
+        freeDeliveryMinOrder: z.freeDeliveryMinOrder,
         estimatedMinutes: z.estimatedMinutes,
         color: z.color,
       })),

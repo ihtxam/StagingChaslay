@@ -1,13 +1,9 @@
 export type NavbarMenuItem = { label: string; link: string };
 
-/** Default single-page smooth-scroll nav — links must match SECTION_ANCHORS on sections. */
+/** Default storefront top bar — Home, Menu, Contact only. */
 export const DEFAULT_SMOOTH_SCROLL_MENU: NavbarMenuItem[] = [
   { label: 'Home', link: '#home' },
   { label: 'Menu', link: '#menu' },
-  { label: 'About Us', link: '#about' },
-  { label: 'Gallery', link: '#gallery' },
-  { label: 'Testimonials', link: '#testimonials' },
-  { label: 'Opening Hours', link: '#opening-hours' },
   { label: 'Contact', link: '#contact' },
 ];
 

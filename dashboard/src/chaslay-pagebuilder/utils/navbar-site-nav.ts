@@ -1,6 +1,51 @@
 import type { SitePageLink } from '../StorefrontContext';
+import { isContactNavLink, isHomeNavLink, isShopMenuNavLink } from '../storefront-href';
+import { DEFAULT_SMOOTH_SCROLL_MENU } from './default-nav-menu';
 
 export type NavbarMenuItem = { label: string; link: string };
+
+const HOME_LABELS = new Set(['home', 'accueil', 'start', 'startseite']);
+const MENU_LABELS = new Set(['menu', 'menü', 'our menu', 'notre menu', 'unsere speisekarte']);
+const CONTACT_LABELS = new Set([
+  'contact',
+  'contact us',
+  'contactez-nous',
+  'kontakt',
+  'contatti',
+  'contattaci',
+]);
+
+function normLabel(label: string | undefined | null): string {
+  return String(label || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+export function isStorefrontHomeNavItem(item: NavbarMenuItem): boolean {
+  return isHomeNavLink(item.link) || HOME_LABELS.has(normLabel(item.label));
+}
+
+export function isStorefrontMenuNavItem(item: NavbarMenuItem): boolean {
+  return isShopMenuNavLink(item.link) || MENU_LABELS.has(normLabel(item.label));
+}
+
+export function isStorefrontContactNavItem(item: NavbarMenuItem): boolean {
+  return isContactNavLink(item.link) || CONTACT_LABELS.has(normLabel(item.label));
+}
+
+/**
+ * Public homepage + shop top bar: keep only Home, Menu, Contact.
+ * Drops About / À propos, Reviews / Avis, gallery, hours, and extra CMS pages.
+ */
+export function constrainStorefrontTopNav(items: NavbarMenuItem[] | undefined | null): NavbarMenuItem[] {
+  const list = Array.isArray(items) ? items : [];
+  const home = list.find(isStorefrontHomeNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[0];
+  const menu = list.find(isStorefrontMenuNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[1];
+  const contact = list.find(isStorefrontContactNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[2];
+  return [home, menu, contact];
+}
 
 /** Build header links from published builder pages (homepage + extra pages + menu). */
 export function buildSiteNavMenuItems(

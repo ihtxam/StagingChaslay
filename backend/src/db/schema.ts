@@ -2444,6 +2444,7 @@ export const deliveryZones = pgTable(
     zipCodes: json("zip_codes").$type<string[]>().default([]),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
     deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0").notNull(),
+    freeDeliveryMinOrder: decimal("free_delivery_min_order", { precision: 10, scale: 2 }).default("0").notNull(),
     estimatedMinutes: integer("estimated_minutes").default(45),
     color: varchar("color", { length: 20 }).default("#0d9488"),
     isActive: boolean("is_active").default(true).notNull(),
