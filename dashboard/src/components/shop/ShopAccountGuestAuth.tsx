@@ -2,6 +2,8 @@ import { FormEvent, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ShopAuthShell from '@/components/shop/ShopAuthShell';
+import ShopPhoneField from '@/components/shop/ShopPhoneField';
+import { SHOP_BTN_PRIMARY_CLASS, SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { joinShopPath } from '@/lib/shop-paths';
 import { saveCustomerToken } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
@@ -17,7 +19,7 @@ type Props = {
 export default function ShopAccountGuestAuth({
   shopKey,
   base,
-  merchantName = 'Shop',
+  merchantName = '',
   logoUrl,
   onAuthed,
 }: Props) {
@@ -118,10 +120,10 @@ export default function ShopAccountGuestAuth({
         <h2 className="text-lg font-bold text-stone-900 mb-2">{t('shopResetPasswordHeading')}</h2>
         <p className="text-sm text-stone-500 mb-4">{t('shopResetPasswordHint')}</p>
         <form onSubmit={onForgot} className="space-y-3">
-          <label className="block text-sm font-medium text-stone-700">
-            {t('shopEmail')}
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
             <input
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
+              className={SHOP_INPUT_CLASS}
               type="email"
               placeholder="m@example.com"
               value={resetEmail}
@@ -131,11 +133,7 @@ export default function ShopAccountGuestAuth({
           </label>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-[var(--shop-accent,#e11d48)] py-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
+          <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
             {busy ? t('shopLoading') : t('shopSendResetLink')}
           </button>
         </form>
@@ -170,66 +168,70 @@ export default function ShopAccountGuestAuth({
       {isRegister ? (
         <form onSubmit={onRegister} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-              placeholder={t('shopFirstName')}
-              value={registerFirstName}
-              onChange={(e) => setRegisterFirstName(e.target.value)}
-            />
-            <input
-              className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-              placeholder={t('shopLastName')}
-              value={registerLastName}
-              onChange={(e) => setRegisterLastName(e.target.value)}
-            />
+            <label className="block">
+              <span className={SHOP_LABEL_CLASS}>{t('shopFirstName')}</span>
+              <input
+                className={SHOP_INPUT_CLASS}
+                value={registerFirstName}
+                onChange={(e) => setRegisterFirstName(e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className={SHOP_LABEL_CLASS}>{t('shopLastName')}</span>
+              <input
+                className={SHOP_INPUT_CLASS}
+                value={registerLastName}
+                onChange={(e) => setRegisterLastName(e.target.value)}
+              />
+            </label>
           </div>
-          <input
-            className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-            type="email"
-            placeholder="you@example.com"
-            value={registerEmail}
-            onChange={(e) => setRegisterEmail(e.target.value)}
-            required
-          />
-          <input
-            className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-            placeholder={t('shopPhone')}
-            value={registerPhone}
-            onChange={(e) => setRegisterPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))}
-          />
-          <input
-            className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-            type="password"
-            placeholder={t('shopPasswordMin6')}
-            value={registerPassword}
-            onChange={(e) => setRegisterPassword(e.target.value)}
-            required
-            minLength={6}
-          />
-          <input
-            className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
-            type="password"
-            placeholder={t('shopConfirmPassword')}
-            value={registerPassword2}
-            onChange={(e) => setRegisterPassword2(e.target.value)}
-            required
-            minLength={6}
-          />
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
+            <input
+              className={SHOP_INPUT_CLASS}
+              type="email"
+              value={registerEmail}
+              onChange={(e) => setRegisterEmail(e.target.value)}
+              required
+            />
+          </label>
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
+            <ShopPhoneField value={registerPhone} onChange={setRegisterPhone} />
+          </label>
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopPassword')}</span>
+            <input
+              className={SHOP_INPUT_CLASS}
+              type="password"
+              value={registerPassword}
+              onChange={(e) => setRegisterPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </label>
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopConfirmPassword')}</span>
+            <input
+              className={SHOP_INPUT_CLASS}
+              type="password"
+              value={registerPassword2}
+              onChange={(e) => setRegisterPassword2(e.target.value)}
+              required
+              minLength={6}
+            />
+          </label>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-[var(--shop-accent,#e11d48)] py-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
+          <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
             {busy ? t('shopLoading') : t('shopCreateAccount')}
           </button>
         </form>
       ) : (
         <form onSubmit={onLogin} className="space-y-3">
-          <label className="block text-sm font-medium text-stone-700">
-            {t('shopEmail')}
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
             <input
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
+              className={SHOP_INPUT_CLASS}
               type="email"
               placeholder="you@example.com"
               value={loginEmail}
@@ -239,7 +241,7 @@ export default function ShopAccountGuestAuth({
           </label>
           <div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-sm font-medium text-stone-700">{t('shopPassword')}</label>
+              <span className={SHOP_LABEL_CLASS + ' mb-0'}>{t('shopPassword')}</span>
               <Link
                 to={joinShopPath(base, 'forgot-password')}
                 className="text-xs text-stone-500 hover:text-stone-800"
@@ -248,7 +250,7 @@ export default function ShopAccountGuestAuth({
               </Link>
             </div>
             <input
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm"
+              className={`mt-1 ${SHOP_INPUT_CLASS}`}
               type="password"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
@@ -256,11 +258,7 @@ export default function ShopAccountGuestAuth({
             />
           </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-[var(--shop-accent,#e11d48)] py-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
+          <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
             {busy ? t('shopLoading') : t('shopLogIn')}
           </button>
         </form>

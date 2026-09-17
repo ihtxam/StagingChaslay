@@ -85,6 +85,7 @@ export function NavbarMobileMenu({
         {isStorefront && accountPath ? (
           <ShopNavActions accountPath={accountPath} iconOnlyLogin />
         ) : null}
+        {menuItems?.length ? (
         <button
           type="button"
           className="navbar-mobile-toggle"
@@ -108,8 +109,9 @@ export function NavbarMobileMenu({
             )}
           </svg>
         </button>
+        ) : null}
       </div>
-      {open ? (
+      {open && menuItems?.length ? (
         <div
           className="navbar-mobile-drawer"
           style={{

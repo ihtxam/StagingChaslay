@@ -2154,7 +2154,7 @@ html.shop-shell #root {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: rgb(28 25 23);
+  background: var(--color-primary, var(--shop-accent, #e11d48));
   padding-inline: 0.25rem;
   font-size: 0.65rem;
   font-weight: 700;
@@ -2214,7 +2214,7 @@ html.shop-shell #root {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: rgb(28 25 23);
+  background: var(--color-primary, var(--shop-accent, #e11d48));
   padding-inline: 0.25rem;
   font-size: 0.65rem;
   font-weight: 700;
@@ -2233,12 +2233,12 @@ html.shop-shell #root {
 }
 
 .shop-checkout-sticky-bar__order.is-ready {
-  background: rgb(5 150 105);
+  background: var(--color-primary, var(--shop-accent, #e11d48));
 }
 
 .shop-checkout-sticky-bar__order.is-pending {
-  background: rgb(251 113 133);
-  opacity: 0.55;
+  background: var(--color-primary, var(--shop-accent, #e11d48));
+  opacity: 0.45;
 }
 
 .shop-checkout-sticky-bar__order:disabled {
@@ -2267,6 +2267,19 @@ html.shop-shell select {
 html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden'])::placeholder,
 html.shop-shell textarea::placeholder {
   color: rgb(120 113 108);
+}
+
+html.shop-shell input[type='radio'],
+html.shop-shell input[type='checkbox'] {
+  accent-color: var(--color-primary, var(--shop-accent, #e11d48));
+}
+
+html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden']):focus,
+html.shop-shell textarea:focus,
+html.shop-shell select:focus {
+  outline: none;
+  border-color: var(--color-primary, var(--shop-accent, #e11d48));
+  box-shadow: 0 0 0 1px var(--color-primary, var(--shop-accent, #e11d48));
 }
 
 .shop-sticky-category-bar .shop-category-scroll {

@@ -30,7 +30,9 @@ export default function ShopCartThresholdProgress({
   const met = subtotal >= threshold;
   const pct = met ? 100 : Math.min(100, Math.round((subtotal / threshold) * 100));
   const remaining = Math.max(0, threshold - subtotal);
-  const barColor = met ? 'bg-emerald-500' : variant === 'free' ? 'bg-sky-500' : 'bg-emerald-500';
+  const barColor = met
+    ? 'bg-[var(--color-primary,#e11d48)]'
+    : 'bg-[var(--color-primary,#e11d48)] opacity-80';
 
   return (
     <div

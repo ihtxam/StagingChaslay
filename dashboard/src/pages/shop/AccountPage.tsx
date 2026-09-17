@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   clearCustomerToken,
@@ -16,8 +16,12 @@ import {
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopAccountGuestAuth from '@/components/shop/ShopAccountGuestAuth';
+import ShopPhoneField from '@/components/shop/ShopPhoneField';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import { SHOP_BTN_PRIMARY_CLASS, SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 
 type LoyaltyReward = {
   id: string;
@@ -73,6 +77,7 @@ export default function AccountPage() {
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
   const base = shopBasePath(shopKey) || '/';
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
   const [customer, setCustomer] = useState<any>(null);
@@ -359,30 +364,28 @@ export default function AccountPage() {
   const programOn = !!loyalty?.program?.enabled;
 
   return (
+    <ShopThemeShell
+      theme={cmsTheme}
+      site={shopSite}
+      pageTitle={merchantInfo?.name}
+      logoUrl={merchantInfo?.shopLogoUrl}
+      className="min-h-screen"
+      style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
+    >
     <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
-      <header className="sticky top-0 z-20 bg-white border-b border-stone-200">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <Link to={base} className="text-sm font-semibold underline underline-offset-2">
-            ← {t('shopBackToMenu')}
-          </Link>
-          <div className="flex items-center gap-3">
-            <ShopLangSwitcher />
-            {customer ? (
-              <span className="text-xs font-bold bg-teal-800 text-white px-2.5 py-1 rounded-full">
-                {t('shopPointsChip').replace('{n}', String(pointsBalance))}
-              </span>
-            ) : null}
-            <span className="font-bold text-sm">{t('shopMyAccount')}</span>
-          </div>
-        </div>
-      </header>
+      <ShopMinimalHeader
+        basePath={base}
+        merchantName={merchantInfo?.name}
+        logoUrl={merchantInfo?.shopLogoUrl}
+        loggedIn={!!customer}
+      />
 
       <main className={customer ? 'max-w-2xl mx-auto px-4 py-6 space-y-5' : ''}>
         {!customer ? (
           <ShopAccountGuestAuth
             shopKey={shopKey}
             base={base}
-            merchantName={merchantInfo?.name || 'Shop'}
+            merchantName={merchantInfo?.name || ''}
             logoUrl={merchantInfo?.shopLogoUrl}
             onAuthed={async (token) => {
               setLoading(true);
@@ -493,49 +496,51 @@ export default function AccountPage() {
               )}
             </section>
 
-            <section className="bg-white border border-stone-200 p-5 space-y-3">
+            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="font-bold text-lg">{t('shopMyAccount')}</h2>
-                <span className="text-sm font-semibold text-teal-800">
+                <h2 className="font-bold text-lg">{t('shopMyProfile')}</h2>
+                <span className="text-sm font-semibold text-[var(--color-primary,#e11d48)]">
                   {t('shopPointsChip').replace('{n}', String(pointsBalance))}
                 </span>
               </div>
               <form onSubmit={onSaveProfile} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  className="border border-stone-300 px-3 py-2 text-sm"
-                  placeholder={t('shopFirstName')}
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
-                <input
-                  className="border border-stone-300 px-3 py-2 text-sm"
-                  placeholder={t('shopLastName')}
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                />
-                <input
-                  className="border border-stone-300 px-3 py-2 text-sm sm:col-span-2"
-                  value={customer.email || ''}
-                  disabled
-                />
-                <input
-                  className="border border-stone-300 px-3 py-2 text-sm sm:col-span-2"
-                  placeholder={t('shopPhone')}
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+                <label className="block">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopFirstName')}</span>
+                  <input
+                    className={SHOP_INPUT_CLASS}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopLastName')}</span>
+                  <input
+                    className={SHOP_INPUT_CLASS}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
+                  <input className={SHOP_INPUT_CLASS} value={customer.email || ''} disabled />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
+                  <ShopPhoneField value={phone} onChange={setPhone} />
+                </label>
                 {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
                 <button
                   type="submit"
                   disabled={saving}
-                  className="sm:col-span-2 bg-stone-900 text-white py-2.5 font-semibold disabled:opacity-40"
+                  className={`sm:col-span-2 ${SHOP_BTN_PRIMARY_CLASS}`}
                 >
                   {saving ? t('shopLoading') : t('shopSaveProfile')}
                 </button>
               </form>
+            </section>
 
-              <div className="border-t border-stone-100 pt-3 space-y-3">
-                <h3 className="font-semibold text-sm">{t('shopSavedAddresses')}</h3>
+            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-3">
+              <h2 className="font-bold text-lg">{t('shopSavedAddresses')}</h2>
                 {addresses.length === 0 ? (
                   <p className="text-sm text-stone-500">{t('shopNewAddress')}</p>
                 ) : (
@@ -585,42 +590,39 @@ export default function AccountPage() {
                       </button>
                     ))}
                   </div>
-                  <input
-                    className="border border-stone-300 px-3 py-2 text-sm sm:col-span-2"
-                    placeholder={t('shopStreetAddress')}
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    required
-                  />
-                  <input
-                    className="border border-stone-300 px-3 py-2 text-sm"
-                    placeholder={t('shopZip')}
-                    value={newZip}
-                    onChange={(e) => setNewZip(e.target.value)}
-                  />
-                  <input
-                    className="border border-stone-300 px-3 py-2 text-sm"
-                    placeholder={t('shopCity')}
-                    value={newCity}
-                    onChange={(e) => setNewCity(e.target.value)}
-                  />
+                  <label className="block sm:col-span-2">
+                    <span className={SHOP_LABEL_CLASS}>{t('shopStreetAddress')}</span>
+                    <input
+                      className={SHOP_INPUT_CLASS}
+                      value={newAddress}
+                      onChange={(e) => setNewAddress(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={SHOP_LABEL_CLASS}>{t('shopZip')}</span>
+                    <input
+                      className={SHOP_INPUT_CLASS}
+                      value={newZip}
+                      onChange={(e) => setNewZip(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={SHOP_LABEL_CLASS}>{t('shopCity')}</span>
+                    <input
+                      className={SHOP_INPUT_CLASS}
+                      value={newCity}
+                      onChange={(e) => setNewCity(e.target.value)}
+                    />
+                  </label>
                   <button
                     type="submit"
                     disabled={savingAddress}
-                    className="sm:col-span-2 border border-stone-900 px-3 py-2 text-sm font-semibold disabled:opacity-40"
+                    className={`sm:col-span-2 ${SHOP_BTN_PRIMARY_CLASS}`}
                   >
                     {savingAddress ? t('shopSavingAddress') : t('shopSaveAddress')}
                   </button>
                 </form>
-              </div>
-
-              <button
-                type="button"
-                onClick={logout}
-                className="text-sm font-semibold underline underline-offset-2 text-stone-700"
-              >
-                {t('shopLogOut')}
-              </button>
             </section>
 
             <section className="bg-white border border-stone-200 p-5 space-y-3">
@@ -657,9 +659,20 @@ export default function AccountPage() {
                 </ul>
               )}
             </section>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={logout}
+                className="w-full rounded-xl border border-stone-300 bg-white py-2.5 text-sm font-semibold text-stone-800"
+              >
+                {t('shopLogOut')}
+              </button>
+            </div>
           </>
         )}
       </main>
     </div>
+    </ShopThemeShell>
   );
 }

@@ -23,8 +23,10 @@ assert.equal(seo.faviconUrl, '/uploads/icon.png');
 const fallback = resolveShopDocumentSeo(null, 'en', {
   title: 'Builder Home',
   description: 'Page copy',
+  logoUrl: '/logo.png',
 });
 assert.equal(fallback.title, 'Builder Home');
 assert.equal(fallback.description, 'Page copy');
+assert.equal(fallback.faviconUrl, '/logo.png');
 
 console.log('shop-site-settings.test.ts OK');

@@ -39,7 +39,7 @@ import ShopComboWizard, {
 } from '@/components/shop/ShopComboWizard';
 import { Bike, Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
-import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
+import ShopNavActions from '@/components/shop/ShopNavActions';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
@@ -1188,11 +1188,9 @@ export default function OrderingPage() {
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
-  const giftCardsPath = `${shopBasePath(shopKey, locSlug)}/gift-cards`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
-  const showGiftCards = !!merchant?.giftCards?.enabled;
 
   const scrollToCategory = (id: string) => {
     categoryScrollLock.current = true;
@@ -1482,7 +1480,7 @@ export default function OrderingPage() {
   );
 
   return (
-    <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle={merchant?.name} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
+    <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle={merchant?.name} logoUrl={merchant?.shopLogoUrl} className="min-h-screen" style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}>
     <div className="min-h-screen">
       <ShopVacationPopup vacation={merchant?.vacation} shopKey={shopKey} />
       <ShopTopShell>
@@ -1506,10 +1504,10 @@ export default function OrderingPage() {
                   <img
                     src={merchant.shopLogoUrl}
                     alt=""
-                    className="shop-navbar-logo-image h-9 w-auto max-w-[4.5rem] shrink-0 object-contain"
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-stone-900 text-xs font-bold text-white">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-900 text-xs font-bold text-white">
                     {(merchant?.name || 'M').slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -1519,23 +1517,7 @@ export default function OrderingPage() {
                   </span>
                 ) : null}
               </Link>
-              <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
-                <Link to={shopBasePath(shopKey, locSlug) || '/'}>{t('shopHome')}</Link>
-                <Link to={`${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/')}>{t('shopMenu')}</Link>
-                <Link to={`${shopBasePath(shopKey, locSlug) || ''}#contact`}>{t('shopContact')}</Link>
-              </nav>
-              <ShopMobileNavMenu
-                accountPath={accountPath}
-                links={[
-                  { label: t('shopHome'), to: shopBasePath(shopKey, locSlug) || '/' },
-                  { label: t('shopMenu'), to: `${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/') },
-                  { label: t('shopContact'), to: `${shopBasePath(shopKey, locSlug) || ''}#contact` },
-                  ...(showGiftCards
-                    ? [{ label: t('shopGiftCardTitle'), to: giftCardsPath }]
-                    : []),
-                  { label: t('shopStoreInfo'), onClick: () => setInfoOpen(true) },
-                ]}
-              />
+              <ShopNavActions accountPath={accountPath} />
             </div>
           </header>
         )}
