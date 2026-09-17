@@ -81,7 +81,13 @@ async function printReceiptText(
     if (label && isUnsuitableRawPrinter(label)) {
       throw new Error(unsuitableRawPrinterMessage(label));
     }
-    await printViaAgentOrQueue({ printerName: label || undefined, dataBase64, text });
+    await printViaAgentOrQueue({
+      printerName: label || undefined,
+      dataBase64,
+      text,
+      jobKind: 'receipt',
+      jobLabel: 'receipt',
+    });
   }
 }
 

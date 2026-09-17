@@ -17,7 +17,7 @@ import {
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
 } from '@/lib/webpos-print-relay';
-import { isPrintAgentAvailable, listAgentPrinters, resolveLivePrinterName } from '@/lib/print-agent';
+import { isPrintAgentAvailable, listAgentPrinters, resolveEscPosPrinterName } from '@/lib/print-agent';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
 
 export async function printWaiterKitchen(opts: {
@@ -103,7 +103,7 @@ export async function printWaiterKitchen(opts: {
       printJobs.map(async (job) => {
         const configuredName = (job.printerName || '').trim();
         const resolvedName =
-          resolveLivePrinterName(configuredName, livePrinters, {
+          resolveEscPosPrinterName(configuredName, livePrinters, {
             portName: job.portName,
             matchHint: job.matchHint,
           }) || configuredName;

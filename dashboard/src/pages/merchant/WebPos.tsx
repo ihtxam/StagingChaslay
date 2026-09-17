@@ -88,7 +88,10 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
+  resolveEscPosPrinterName,
   resolveLivePrinterName,
+  looksLikeLabelPrinterName,
+  looksLikeThermal80mm,
   suggestPrinterAutoHeal,
   sanitizeScaleUsbAddress,
   syncWebPosLocalPrinterName,
@@ -2103,12 +2106,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!trimmed) {
           if (!list.length) return current;
           const def =
-            list.find((p) => p.isDefault && !isUnsuitableRawPrinter(p.name)) ||
-            list.find((p) => !isUnsuitableRawPrinter(p.name)) ||
-            list[0];
+            list.find(
+              (p) => p.isDefault && !isUnsuitableRawPrinter(p.name) && !looksLikeLabelPrinterName(p.name)
+            ) ||
+            list.find((p) => looksLikeThermal80mm(p.name)) ||
+            list.find((p) => !isUnsuitableRawPrinter(p.name) && !looksLikeLabelPrinterName(p.name));
           return def?.name || current;
         }
-        return resolveLivePrinterName(trimmed, list) || '';
+        return resolveEscPosPrinterName(trimmed, list) || resolveLivePrinterName(trimmed, list) || '';
       });
       setPrintSettings((ps) => {
         if (!ps?.printers?.length) return ps;
@@ -5762,7 +5767,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const kitchenProfile = resolveKitchenPrinterTarget(printSettings, { receiptPrinterName: printerName });
       const configuredKitchenName = (kitchenProfile?.printerName || '').trim();
       const resolvedKitchenName =
-        resolveLivePrinterName(configuredKitchenName, printers, {
+        resolveEscPosPrinterName(configuredKitchenName, printers, {
           portName: kitchenProfile?.portName,
           matchHint: kitchenProfile?.matchHint,
         }) || configuredKitchenName;
@@ -7390,7 +7395,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const configured = (name || '').trim();
         const label =
           configured && printers.length > 0
-            ? resolveLivePrinterName(configured, printers) || ''
+            ? resolveEscPosPrinterName(configured, printers) || ''
             : configured;
         return label;
       })
@@ -7766,7 +7771,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const jobKey = kitchenPrintJobKey(job);
         const configuredName = (job.printerName || '').trim();
         const resolvedName =
-          resolveLivePrinterName(configuredName, printers, {
+          resolveEscPosPrinterName(configuredName, printers, {
             portName: job.portName,
             matchHint: job.matchHint,
           }) || configuredName;

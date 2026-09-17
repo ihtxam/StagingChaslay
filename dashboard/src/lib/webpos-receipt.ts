@@ -36,6 +36,7 @@ import {
   type AdyenTerminalReceipt,
 } from '@/lib/adyen-receipt';
 import { adjustReceiptVatForDiscount } from '@/lib/tax-discount';
+import { looksLikeLabelPrinterName } from './printer-kind';
 
 /** Where the kitchen ticket was printed from */
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
@@ -2715,7 +2716,11 @@ export function printersForRole(
   role: 'receipt' | 'kitchen' | 'eod' | 'labels'
 ): Array<{ name: string; paperWidthMm: 58 | 80 }> {
   const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
-  const list = (settings?.printers || []).filter((p) => p.enabled !== false && p.name);
+  const list = (settings?.printers || []).filter((p) => {
+    if (p.enabled === false || !p.name) return false;
+    if (role !== 'labels' && looksLikeLabelPrinterName(p.name)) return false;
+    return true;
+  });
   const matched = list.filter((p) => {
     if (role === 'receipt') return !!p.printReceipts;
     if (role === 'kitchen') return !!p.printKitchenTickets;
@@ -2827,7 +2832,12 @@ function enabledKitchenPrinterProfiles(
   settings: PosPrintSettingsClient | null | undefined
 ): NonNullable<PosPrintSettingsClient['printers']> {
   return (settings?.printers || []).filter(
-    (p) => p.enabled !== false && p.printKitchenTickets && (p.name || p.portName)
+    (p) =>
+      p.enabled !== false &&
+      p.printKitchenTickets &&
+      (p.name || p.portName) &&
+      !looksLikeLabelPrinterName(p.name) &&
+      !looksLikeLabelPrinterName(p.portName)
   );
 }
 
@@ -2838,7 +2848,13 @@ export function resolveKitchenPrinterTarget(
 ): Pick<KitchenPrintJob, 'printerName' | 'portName' | 'matchHint' | 'paperWidthMm'> | null {
   const list = (settings?.printers || []).filter((p) => p.enabled !== false);
 
-  const kitchen = list.find((p) => p.printKitchenTickets && (p.name || p.portName));
+  const kitchen = list.find(
+    (p) =>
+      p.printKitchenTickets &&
+      (p.name || p.portName) &&
+      !looksLikeLabelPrinterName(p.name) &&
+      !looksLikeLabelPrinterName(p.portName)
+  );
   if (kitchen) {
     return {
       printerName: kitchen.name || kitchen.portName || '',
@@ -2848,7 +2864,13 @@ export function resolveKitchenPrinterTarget(
     };
   }
 
-  const receipt = list.find((p) => p.printReceipts && (p.name || p.portName));
+  const receipt = list.find(
+    (p) =>
+      p.printReceipts &&
+      (p.name || p.portName) &&
+      !looksLikeLabelPrinterName(p.name) &&
+      !looksLikeLabelPrinterName(p.portName)
+  );
   const receiptName = (opts?.receiptPrinterName || '').trim();
   const name = (receipt?.name || receipt?.portName || receiptName).trim();
   if (!name) return null;
