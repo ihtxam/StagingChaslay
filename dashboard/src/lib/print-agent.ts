@@ -1077,6 +1077,24 @@ export function isUsbScaleAddress(value?: string | null): boolean {
   return v.startsWith('usb:') || v.startsWith('/dev/bus/usb');
 }
 
+/** Docs/example address that must never look like a live synced USB scale. */
+export function isPlaceholderScaleUsbAddress(value?: string | null): boolean {
+  const v = String(value || '').trim().toLowerCase();
+  if (!v) return false;
+  return (
+    v === 'usb:1234:5678' ||
+    v === 'usb:0000:0000' ||
+    v === 'usb:ffff:ffff' ||
+    v === 'usb:vid:pid'
+  );
+}
+
+export function sanitizeScaleUsbAddress(value?: string | null): string | null {
+  const v = String(value || '').trim();
+  if (!v || isPlaceholderScaleUsbAddress(v)) return null;
+  return v;
+}
+
 export function formatScaleUsbLabel(address: string): string {
   const raw = String(address || '').trim();
   if (!raw) return '';
@@ -1159,6 +1177,36 @@ export function resolveScaleDevice(
   return null;
 }
 
+/** Saved merchant scale is attached to this PC/agent right now (scan result), not just remembered. */
+export function isSavedScaleConnected(
+  saved: {
+    scaleComPort?: string | null;
+    scaleDeviceName?: string | null;
+    scaleDeviceId?: string | null;
+    scaleUsbAddress?: string | null;
+  } | null | undefined,
+  liveDevices: ScaleDevice[]
+): boolean {
+  if (!saved || !liveDevices.length) return false;
+  const usb = sanitizeScaleUsbAddress(saved.scaleUsbAddress);
+  if (usb) {
+    const byUsb = liveDevices.some(
+      (d) =>
+        sanitizeScaleUsbAddress(d.usbAddress) === usb ||
+        sanitizeScaleUsbAddress(d.port) === usb
+    );
+    if (byUsb) return true;
+  }
+  return !!resolveScaleDevice(
+    {
+      port: saved.scaleComPort,
+      name: saved.scaleDeviceName,
+      deviceId: saved.scaleDeviceId,
+    },
+    liveDevices
+  );
+}
+
 function scoreDeviceName(want: string, have: string): number {
   if (!want || !have) return 0;
   if (want === have) return 16;
@@ -1202,6 +1250,9 @@ export function isGenericBluetoothSerialDevice(device: ScaleDevice): boolean {
 
 /** True when a serial/USB device looks like an Aclas scale (CH340 USB-serial, brand name, Bridge usb: address). */
 export function isLikelyScaleDevice(device: ScaleDevice): boolean {
+  if (isPlaceholderScaleUsbAddress(device.port) || isPlaceholderScaleUsbAddress(device.usbAddress)) {
+    return false;
+  }
   if (isUsbScaleAddress(device.port) || isUsbScaleAddress(device.usbAddress)) {
     return true;
   }
@@ -1246,6 +1297,11 @@ export async function listScaleDevices(): Promise<{ ports: string[]; devices: Sc
             };
           })
           .filter(isLikelyScaleDevice)
+          .filter(
+            (d) =>
+              !isPlaceholderScaleUsbAddress(d.port) &&
+              !isPlaceholderScaleUsbAddress(d.usbAddress)
+          )
       : [];
     const ports = devices.map((d) => d.port).filter(Boolean);
     return { ports, devices };

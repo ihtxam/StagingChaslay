@@ -357,3 +357,14 @@ test('scrollToSettingsSearchSection scrolls the designated inner root only', () 
     hidden.remove();
   }
 });
+
+test('Settings.tsx SETTINGS_TAB_IDS includes customerDisplay so CDS first click stays on CDS', () => {
+  const settingsPath = join(dirname(fileURLToPath(import.meta.url)), '../Settings.tsx');
+  const src = readFileSync(settingsPath, 'utf8');
+  const idsBlock = src.match(/const SETTINGS_TAB_IDS: TabId\[] = \[([\s\S]*?)\];/);
+  assert.ok(idsBlock, 'SETTINGS_TAB_IDS must exist');
+  assert.match(idsBlock[1], /'customerDisplay'/);
+  assert.match(src, /if \(q === 'cds' \|\| q === 'customer-display' \|\| q === 'customerDisplay'\)/);
+  assert.match(src, /import CdsSettingsPanel from '@\/components\/merchant\/CdsSettingsPanel'/);
+  assert.match(src, /\{tab === 'customerDisplay' && \(/);
+});
