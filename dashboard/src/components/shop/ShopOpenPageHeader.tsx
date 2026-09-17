@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import ShopNavActions from '@/components/shop/ShopNavActions';
+import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
+import { useI18n } from '@/lib/i18n';
 
-/** Minimal header for OpenPage CMS home (logo, store name, login + language). */
+/** OpenPage CMS home top strip: rectangular logo, Home/Menu/Contact, login + language. */
 export default function ShopOpenPageHeader({
   basePath,
   merchantName,
@@ -11,13 +12,17 @@ export default function ShopOpenPageHeader({
   merchantName?: string | null;
   logoUrl?: string | null;
 }) {
-  const accountPath = `${basePath}/account`.replace(/\/+/g, '/');
+  const { t } = useI18n();
+  const home = basePath || '/';
+  const accountPath = `${home}/account`.replace(/\/+/g, '/');
+  const menuPath = `${home}/menu`.replace(/\/+/g, '/');
+  const contactPath = `${home}#contact`;
 
   return (
     <header className="border-b border-stone-200 bg-white">
       <div className="shop-page-content shop-navbar-mobile-row flex h-14 items-center justify-between gap-3">
         <Link
-          to={basePath || '/'}
+          to={home}
           className="shop-navbar-logo-row flex min-w-0 flex-1 items-center gap-2"
           aria-label={merchantName || 'Home'}
         >
@@ -25,10 +30,10 @@ export default function ShopOpenPageHeader({
             <img
               src={logoUrl}
               alt=""
-              className="h-9 w-9 shrink-0 rounded-full object-cover"
+              className="shop-navbar-logo-image h-9 w-auto max-w-[4.5rem] shrink-0 object-contain"
             />
           ) : (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-900 text-xs font-bold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-stone-900 text-xs font-bold text-white">
               {(merchantName || 'M').slice(0, 2).toUpperCase()}
             </div>
           )}
@@ -38,7 +43,19 @@ export default function ShopOpenPageHeader({
             </span>
           ) : null}
         </Link>
-        <ShopNavActions accountPath={accountPath} />
+        <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
+          <Link to={home}>{t('shopHome')}</Link>
+          <Link to={menuPath}>{t('shopMenu')}</Link>
+          <Link to={contactPath}>{t('shopContact')}</Link>
+        </nav>
+        <ShopMobileNavMenu
+          accountPath={accountPath}
+          links={[
+            { label: t('shopHome'), to: home },
+            { label: t('shopMenu'), to: menuPath },
+            { label: t('shopContact'), to: contactPath },
+          ]}
+        />
       </div>
     </header>
   );

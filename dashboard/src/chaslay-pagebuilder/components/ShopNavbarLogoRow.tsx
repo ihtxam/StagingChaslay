@@ -26,19 +26,13 @@ export function ShopNavbarLogoRow({
 
   return (
     <div className="shop-navbar-logo-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          {logoImageUrl ? (
-            <BuilderImage
-              src={logoImageUrl}
-              alt={logoText || merchantDisplayName || 'Shop'}
-              className="shop-navbar-logo-image"
-              style={{
-                width: 36,
-                height: 36,
-                objectFit: 'cover',
-                flexShrink: 0,
-                borderRadius: '9999px',
-              }}
-            />
+      {logoImageUrl ? (
+        <BuilderImage
+          src={logoImageUrl}
+          alt={logoText || merchantDisplayName || 'Shop'}
+          className="shop-navbar-logo-image"
+          style={{ width: `${logoWidth}px`, height: `${logoHeight}px`, objectFit: 'contain', flexShrink: 0 }}
+        />
       ) : (
         <span
           className="shop-navbar-logo-text"
