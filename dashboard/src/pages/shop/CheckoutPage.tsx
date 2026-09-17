@@ -817,12 +817,16 @@ export default function CheckoutPage() {
     }
     setCheckingZone(true);
     try {
-      const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
-        query: `${draft.address}, ${draft.zipCode} ${draft.city} Switzerland`,
-      });
-      const lat = geoRes.data.found ? Number(geoRes.data.lat) : undefined;
-      const lng = geoRes.data.found ? Number(geoRes.data.lng) : undefined;
-      if (lat != null && lng != null) patch({ lat, lng });
+      let lat = draft.lat;
+      let lng = draft.lng;
+      if (lat == null || lng == null) {
+        const geoRes = await axios.post(`/api/shop/${shopKey}/geocode`, {
+          query: [draft.address, draft.zipCode, draft.city].filter(Boolean).join(', '),
+        });
+        lat = geoRes.data.found ? Number(geoRes.data.lat) : undefined;
+        lng = geoRes.data.found ? Number(geoRes.data.lng) : undefined;
+        if (lat != null && lng != null) patch({ lat, lng });
+      }
       const res = await axios.post(`/api/shop/${shopKey}/check-delivery`, {
         lat,
         lng,
@@ -890,7 +894,7 @@ export default function CheckoutPage() {
       let lng = draft.lng;
       if (lat == null || lng == null) {
         const geo = await axios.post(`/api/shop/${shopKey}/geocode`, {
-          query: `${draft.address}, ${draft.zipCode} ${draft.city} Switzerland`,
+          query: [draft.address, draft.zipCode, draft.city].filter(Boolean).join(', '),
         });
         if (geo.data.found) {
           lat = Number(geo.data.lat);

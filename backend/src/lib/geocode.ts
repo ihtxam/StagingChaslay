@@ -1,14 +1,20 @@
+import { normalizeCountryCode } from "@/lib/location-service";
+
 /**
  * Nominatim forward geocode (OpenStreetMap).
  * Server-side only — respects OSM usage policy via User-Agent.
  */
 export async function geocodeQuery(
-  query: string
+  query: string,
+  opts?: { countryCode?: string | null }
 ): Promise<{ found: false } | { found: true; lat: number; lng: number; displayName?: string }> {
   const q = String(query || "").trim();
   if (!q) return { found: false };
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+  const params = new URLSearchParams({ format: "json", limit: "1", q });
+  const country = normalizeCountryCode(opts?.countryCode);
+  if (country) params.set("countrycodes", country.toLowerCase());
+  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
   const response = await fetch(url, {
     headers: {
       Accept: "application/json",
