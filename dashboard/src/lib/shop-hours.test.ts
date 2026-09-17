@@ -92,4 +92,26 @@ assert.equal(isShopHoursSoonWindow(31), false);
 assert.equal(isShopHoursSoonWindow(20), true);
 assert.equal(isShopHoursSoonWindow(90), false);
 
+const dupHours: StoreHours = {
+  takeaway: {
+    thu: [
+      { open: '11:00', close: '22:00' },
+      { open: '11:00', close: '22:00' },
+    ],
+  },
+};
+const dupNow = zonedLocalDate(2026, 9, 17, 15, 50);
+const dupDays = buildScheduleDays({
+  storeHours: dupHours,
+  channel: 'takeaway',
+  now: dupNow,
+  leadMinutes: 20,
+  intervalMinutes: 15,
+  horizonDays: 1,
+});
+const todaySlots = dupDays.find((d) => d.offset === 0)?.slots || [];
+const labels = todaySlots.map((s) => s.label);
+assert.equal(new Set(labels).size, labels.length, 'duplicate hour ranges must not yield duplicate HH:mm buttons');
+assert.equal(labels.filter((l) => l === '16:15').length, 1);
+
 console.log('shop-hours.test.ts OK');

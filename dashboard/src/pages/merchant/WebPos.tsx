@@ -90,6 +90,7 @@ import {
   resolveAgentPrinterName,
   resolveLivePrinterName,
   suggestPrinterAutoHeal,
+  sanitizeScaleUsbAddress,
   syncWebPosLocalPrinterName,
   unsuitableRawPrinterMessage,
   type AgentPrinter,
@@ -3232,7 +3233,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const healScaleUsbAddress = useCallback(
     (resolvedAddress: string) => {
       if (!scaleFeatureEnabled || !printSettings) return;
-      const want = resolvedAddress.trim();
+      const want = sanitizeScaleUsbAddress(resolvedAddress);
       if (!want) return;
       const have = (printSettings.scaleUsbAddress || '').trim();
       if (want === have) return;
@@ -6576,12 +6577,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('checkout');
   };
 
-  const currentCartOrderLink = (): CartOrderLink => ({
-    ticketDisplay: ticketDisplay?.trim() || lastKitchenTicketRef.current?.trim() || null,
-    tabNumber,
-    tableId,
-    ticketOrderNumber,
-  });
+  const currentCartOrderLink = (): CartOrderLink => {
+    const liveKitchen =
+      orderSent || cart.some((l) => l.sentToKitchen) || !!resumedHeldIdRef.current;
+    return {
+      ticketDisplay:
+        ticketDisplay?.trim() ||
+        (liveKitchen ? lastKitchenTicketRef.current?.trim() || null : null),
+      tabNumber,
+      tableId,
+      ticketOrderNumber,
+    };
+  };
 
   const orderDisplayLabel = (order: MerchantOrder) => {
     const refs = orderPublicRefs(order);
@@ -6714,6 +6721,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (splitQueue.length > 0 || splitMasterIdRef.current) return;
     const hasSent = orderSent || cart.some((l) => l.sentToKitchen);
     if (!hasSent && !resumedHeldIdRef.current && !cart.length) return;
+    // Fresh unsent cart after a paid sale must not inherit the previous ticket.
+    if (!hasSent && !resumedHeldIdRef.current && !ticketDisplay?.trim()) return;
     let cancelled = false;
     let timer: number | null = null;
     const poll = async () => {
@@ -8547,7 +8556,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (shouldPrintKitchen) {
           try {
             await printKitchenForCart(kitchenDelta, channelSnapshot, {
-              orderNumber: kitchenOrderNumber({ ticket }),
+              orderNumber: ticket.display,
               when: whenSnapshot,
               tabNumber: tabSnapshot,
               tableLabel: tableLabelSnapshot,

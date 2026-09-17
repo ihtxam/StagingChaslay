@@ -62,6 +62,8 @@ import {
   isConfiguredPrinterMissing,
   isPrintAgentAvailable,
   isPrintAgentVersionOutdated,
+  isPlaceholderScaleUsbAddress,
+  isSavedScaleConnected,
   isUnsuitableRawPrinter,
   isUsbScaleAddress,
   listAgentPrinters,
@@ -71,6 +73,7 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   printNiimbotLabelViaAgent,
+  sanitizeScaleUsbAddress,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -382,6 +385,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'receipt',
   'kds',
   'ods',
+  'customerDisplay',
   'signage',
   'kiosk',
   'email',
@@ -413,6 +417,7 @@ function parseSettingsTabFromSearch(search: string): TabId {
     const params = new URLSearchParams(search);
     const q = params.get('tab');
     if (q === 'locations') return 'business';
+    if (q === 'cds' || q === 'customer-display' || q === 'customerDisplay') return 'customerDisplay';
     if (q && SETTINGS_TAB_IDS.includes(q as TabId)) return q as TabId;
     if (q === 'payments') return 'payments';
     if (q === 'tables') return 'tables';
@@ -1464,12 +1469,11 @@ export default function Settings() {
         scaleComPort: ps.scaleComPort?.trim() || null,
         scaleDeviceName: ps.scaleDeviceName?.trim() || null,
         scaleDeviceId: ps.scaleDeviceId?.trim() || null,
-        scaleUsbAddress: ps.scaleUsbAddress?.trim() || null,
+        scaleUsbAddress: sanitizeScaleUsbAddress(ps.scaleUsbAddress),
         scaleEnabled:
           !!ps.scaleComPort?.trim() ||
           !!ps.scaleDeviceName?.trim() ||
-          !!ps.scaleUsbAddress?.trim() ||
-          ps.scaleEnabled === true,
+          !!sanitizeScaleUsbAddress(ps.scaleUsbAddress),
         printers,
         labelWidthMm: parseLabelWidthMm(ps.labelWidthMm),
         labelHeightMm: parseLabelHeightMm(ps.labelHeightMm),
@@ -1499,7 +1503,9 @@ export default function Settings() {
   const selectScalePortAndSave = async (device: ScaleDevice | string) => {
     if (!settings) return;
     const row: ScaleDevice = typeof device === 'string' ? { port: device, name: device } : device;
-    const usbAddress = String(row.usbAddress || (isUsbScaleAddress(row.port) ? row.port : '')).trim();
+    const usbAddress = sanitizeScaleUsbAddress(
+      row.usbAddress || (isUsbScaleAddress(row.port) ? row.port : '')
+    );
     if (usbAddress) {
       const deviceName = String(row.name || row.caption || '').trim();
       const nextSettings: SettingsData = {
@@ -1541,6 +1547,30 @@ export default function Settings() {
     setSavingReceipt(true);
     try {
       await persistPosPrintSettings(nextSettings, t('settingsScaleSaved'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('failedSaveReceipt'));
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
+  const clearSavedScale = async () => {
+    if (!settings) return;
+    const nextSettings: SettingsData = {
+      ...settings,
+      posPrintSettings: {
+        ...(settings.posPrintSettings || {}),
+        scaleComPort: null,
+        scaleDeviceName: null,
+        scaleDeviceId: null,
+        scaleUsbAddress: null,
+        scaleEnabled: false,
+      },
+    };
+    setSettings(nextSettings);
+    setSavingReceipt(true);
+    try {
+      await persistPosPrintSettings(nextSettings, t('settingsScaleCleared'));
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('failedSaveReceipt'));
     } finally {
@@ -3611,28 +3641,52 @@ export default function Settings() {
                   <>
                 <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
                   <div className="space-y-3">
-                    {settings.posPrintSettings?.scaleComPort ||
-                    settings.posPrintSettings?.scaleDeviceName ||
-                    settings.posPrintSettings?.scaleUsbAddress ? (
-                      <p className="text-sm m-0 text-emerald-700">
-                        {t('settingsScaleSelected')}:{' '}
-                        <span className="font-medium">
-                          {settings.posPrintSettings.scaleUsbAddress
-                            ? formatScaleDeviceLabel({
-                                port: settings.posPrintSettings.scaleUsbAddress,
-                                name: settings.posPrintSettings.scaleDeviceName || undefined,
-                                usbAddress: settings.posPrintSettings.scaleUsbAddress,
-                              })
-                            : settings.posPrintSettings.scaleDeviceName
-                              ? `${settings.posPrintSettings.scaleDeviceName}${
-                                  settings.posPrintSettings.scaleComPort
-                                    ? ` · ${formatScalePortLabel(settings.posPrintSettings.scaleComPort)}`
-                                    : ''
-                                }`
-                              : formatScalePortLabel(settings.posPrintSettings.scaleComPort || '')}
-                        </span>
-                      </p>
-                    ) : null}
+                    {(() => {
+                      const savedUsb = sanitizeScaleUsbAddress(
+                        settings.posPrintSettings?.scaleUsbAddress
+                      );
+                      const hasSaved =
+                        !!settings.posPrintSettings?.scaleComPort ||
+                        !!settings.posPrintSettings?.scaleDeviceName ||
+                        !!savedUsb;
+                      if (!hasSaved) return null;
+                      const live =
+                        scalePortsScanned &&
+                        isSavedScaleConnected(settings.posPrintSettings, scalePorts);
+                      const detail = savedUsb
+                        ? formatScaleDeviceLabel({
+                            port: savedUsb,
+                            name: settings.posPrintSettings?.scaleDeviceName || undefined,
+                            usbAddress: savedUsb,
+                          })
+                        : settings.posPrintSettings?.scaleDeviceName
+                          ? `${settings.posPrintSettings.scaleDeviceName}${
+                              settings.posPrintSettings.scaleComPort
+                                ? ` · ${formatScalePortLabel(settings.posPrintSettings.scaleComPort)}`
+                                : ''
+                            }`
+                          : formatScalePortLabel(settings.posPrintSettings?.scaleComPort || '');
+                      return (
+                        <div className="space-y-2">
+                          <p
+                            className={`text-sm m-0 ${
+                              live ? 'text-emerald-700' : 'text-[var(--text-muted)]'
+                            }`}
+                          >
+                            {live ? t('settingsScaleLiveConnected') : t('settingsScaleRemembered')}:{' '}
+                            <span className="font-medium">{detail}</span>
+                          </p>
+                          <button
+                            type="button"
+                            className="btn-secondary text-sm"
+                            onClick={() => void clearSavedScale()}
+                            disabled={savingReceipt}
+                          >
+                            {t('settingsScaleClear')}
+                          </button>
+                        </div>
+                      );
+                    })()}
                     <div className="flex flex-wrap items-center gap-3">
                       <button
                         type="button"
@@ -3658,9 +3712,10 @@ export default function Settings() {
                               formatScalePortLabel(device.port) ||
                             (!!settings.posPrintSettings?.scaleDeviceId &&
                               settings.posPrintSettings.scaleDeviceId === device.pnpDeviceId) ||
-                            (!!settings.posPrintSettings?.scaleUsbAddress &&
-                              settings.posPrintSettings.scaleUsbAddress ===
-                                (device.usbAddress || device.port));
+                            (!!sanitizeScaleUsbAddress(settings.posPrintSettings?.scaleUsbAddress) &&
+                              sanitizeScaleUsbAddress(settings.posPrintSettings?.scaleUsbAddress) ===
+                                (sanitizeScaleUsbAddress(device.usbAddress) ||
+                                  sanitizeScaleUsbAddress(device.port)));
                           return (
                             <li key={`${device.port}-${device.pnpDeviceId || device.name || ''}`}>
                               <button
@@ -3679,7 +3734,7 @@ export default function Settings() {
                                     {device.manufacturer}
                                   </span>
                                 ) : null}
-                                {selected ? ` · ${t('settingsScaleSelected')}` : ''}
+                                {selected ? ` · ${t('settingsScaleLiveConnected')}` : ''}
                               </button>
                             </li>
                           );
@@ -3692,23 +3747,27 @@ export default function Settings() {
                 </Field>
                 <Field
                   label="Scale USB address (Bridge Reborn)"
-                  hint="Stable USB address from Bridge Reborn or Android Settings → Printers & Scale. Synced on menu sync."
+                  hint={t('settingsScaleUsbHint')}
                 >
                   <input
                     className="input font-mono text-sm"
-                    value={settings.posPrintSettings?.scaleUsbAddress || ''}
+                    value={
+                      isPlaceholderScaleUsbAddress(settings.posPrintSettings?.scaleUsbAddress)
+                        ? ''
+                        : settings.posPrintSettings?.scaleUsbAddress || ''
+                    }
                     placeholder="usb:1234:5678"
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const usb = sanitizeScaleUsbAddress(e.target.value);
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
-                          scaleUsbAddress: e.target.value.trim() || null,
-                          scaleEnabled:
-                            !!e.target.value.trim() || !!settings.posPrintSettings?.scaleComPort,
+                          scaleUsbAddress: usb,
+                          scaleEnabled: !!usb || !!settings.posPrintSettings?.scaleComPort,
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                 </Field>
                   </>

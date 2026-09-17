@@ -173,6 +173,24 @@ function dayLabel(offset: number): string {
   return `+${offset} days`;
 }
 
+/** Keep one button per HH:mm (duplicate hour ranges / colliding slot sources). */
+export function uniqueScheduleSlots(
+  slots: Array<{ value: string; label: string }>
+): Array<{ value: string; label: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ value: string; label: string }> = [];
+  for (const slot of slots) {
+    const label = String(slot.label || '').trim();
+    const value = String(slot.value || '').trim();
+    const key = label || value;
+    if (!key || seen.has(key) || (value && seen.has(value))) continue;
+    seen.add(key);
+    if (value) seen.add(value);
+    out.push(slot);
+  }
+  return out;
+}
+
 /**
  * Build schedule days (today → +horizonDays) with 15-min slots inside opening hours (Zurich).
  * Today only includes slots after `now + leadMinutes`.
@@ -223,13 +241,15 @@ export function buildScheduleDays(opts: {
     if (!slots.length) continue;
 
     slots.sort((a, b) => a.value.localeCompare(b.value));
+    const unique = uniqueScheduleSlots(slots);
+    if (!unique.length) continue;
 
     days.push({
       offset,
       label: dayLabel(offset),
       weekday: noon.toLocaleDateString(locale, { weekday: 'short', timeZone: MERCHANT_TZ }),
       dateLabel: noon.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: MERCHANT_TZ }),
-      slots,
+      slots: unique,
     });
   }
 
@@ -283,13 +303,15 @@ export function buildScheduleDayForDate(opts: {
   }
   if (!slots.length) return null;
   slots.sort((a, b) => a.value.localeCompare(b.value));
+  const unique = uniqueScheduleSlots(slots);
+  if (!unique.length) return null;
 
   return {
     offset,
     label: dayLabel(offset),
     weekday: noon.toLocaleDateString(locale, { weekday: 'short', timeZone: MERCHANT_TZ }),
     dateLabel: noon.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: MERCHANT_TZ }),
-    slots,
+    slots: unique,
   };
 }
 

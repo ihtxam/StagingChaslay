@@ -17,7 +17,7 @@ import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
 import { labelPixelSize } from '@/lib/niimbot-label';
 import { buildTsplCommandList, encodeTsplCommands } from '@/lib/tspl-label-core';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
-import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import { pickPreferredLabelPrinter, resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
 import JsBarcode from 'jsbarcode';
 
 function toBase64(bytes: Uint8Array): string {
@@ -236,8 +236,8 @@ export async function printOrderLabelViaAgent(
   const data = buildOrderLabelData(heldId, lines);
   const labelOpts = labelOptionsFromPrintSettings(settings, opts?.storeName);
   const labelsPrinters = printersForRole(settings || null, 'labels');
-  const labelProfile = labelsPrinters[0];
-  const printerName = labelProfile?.name?.trim();
+  const preferred = pickPreferredLabelPrinter(settings);
+  const printerName = preferred?.name?.trim() || labelsPrinters[0]?.name?.trim();
   if (!printerName) {
     throw new Error(
       'No label printer configured. Open Settings → Receipts & printers, add your label printer, and enable Labels.'

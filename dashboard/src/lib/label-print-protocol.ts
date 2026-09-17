@@ -1,4 +1,4 @@
-import { isTsplLabelPrinterName } from '@/lib/tspl-label-core';
+import { isTsplLabelPrinterName } from './tspl-label-core';
 
 export type LabelPrintProtocol = 'niimbot' | 'tspl' | 'escpos';
 
@@ -25,8 +25,42 @@ function looksLikeEscPosReceiptPrinter(name?: string | null): boolean {
   return /pos-?80|xp-80|80mm|receipt|epson\s*tm|star\s*tsp|rpp02|thermal\s*80/.test(n);
 }
 
+function looksLikeGenericUsbLabelPort(name?: string | null): boolean {
+  return /\busb\d+\b|\busb00|usbprint/i.test(String(name || '').toLowerCase());
+}
+
 function labelRoleProfiles(settings?: LabelPrintSettings | null): LabelPrinterRow[] {
   return (settings?.printers || []).filter((p) => p.enabled !== false && p.printLabels && p.name);
+}
+
+/**
+ * Prefer a real sticker printer over a receipt profile that also has Labels ticked.
+ * Hold-order used printers[0] and sent ESC/POS to USB00x / XP-365B when a receipt
+ * printer was first in the list.
+ */
+export function pickPreferredLabelPrinter(
+  settings?: LabelPrintSettings | null
+): LabelPrinterRow | null {
+  const profiles = labelRoleProfiles(settings);
+  if (!profiles.length) return null;
+  return (
+    profiles.find((p) => isNiimbotName(p.name) || isNiimbotName(p.portName) || isNiimbotName(p.matchHint)) ||
+    profiles.find(
+      (p) =>
+        isTsplLabelPrinterName(p.name) ||
+        isTsplLabelPrinterName(p.portName) ||
+        isTsplLabelPrinterName(p.matchHint)
+    ) ||
+    profiles.find(
+      (p) =>
+        looksLikeGenericUsbLabelPort(p.name) ||
+        looksLikeGenericUsbLabelPort(p.portName) ||
+        looksLikeGenericUsbLabelPort(p.matchHint)
+    ) ||
+    profiles.find((p) => !looksLikeEscPosReceiptPrinter(p.name)) ||
+    profiles[0] ||
+    null
+  );
 }
 
 /**
@@ -39,10 +73,10 @@ export function resolveLabelPrintProtocol(
 ): LabelPrintProtocol {
   const name = String(printerName || '').trim();
   const profiles = labelRoleProfiles(settings);
+  const preferred = pickPreferredLabelPrinter(settings);
   const profile =
-    profiles.find((p) => p.name === name) ||
-    profiles.find((p) => isNiimbotName(p.name)) ||
-    profiles.find((p) => isTsplLabelPrinterName(p.name)) ||
+    (name ? profiles.find((p) => p.name === name) : null) ||
+    preferred ||
     profiles[0];
   const blob = [name, profile?.name, profile?.portName, profile?.matchHint]
     .filter(Boolean)
@@ -53,6 +87,16 @@ export function resolveLabelPrintProtocol(
   }
   if (isTsplLabelPrinterName(blob) || isTsplLabelPrinterName(name) || isTsplLabelPrinterName(profile?.name)) {
     return 'tspl';
+  }
+  if (
+    looksLikeGenericUsbLabelPort(blob) ||
+    looksLikeGenericUsbLabelPort(name) ||
+    looksLikeGenericUsbLabelPort(profile?.name) ||
+    looksLikeGenericUsbLabelPort(profile?.portName)
+  ) {
+    if (!looksLikeEscPosReceiptPrinter(profile?.name) && !looksLikeEscPosReceiptPrinter(name)) {
+      return 'tspl';
+    }
   }
   if (profile && !looksLikeEscPosReceiptPrinter(profile.name) && !looksLikeEscPosReceiptPrinter(name)) {
     return 'tspl';
