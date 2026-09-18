@@ -166,10 +166,13 @@ export function qrImageUrl(
   )}`;
 }
 
-/** Thermal receipt QR raster width — ~180px on 80mm (384-dot) paper. */
-export const RECEIPT_QR_RASTER_PX_80 = 180;
-/** 58mm thermal QR — use most of the printable width (384-dot heads). */
-export const RECEIPT_QR_RASTER_PX_58 = 200;
+/** Thermal receipt QR raster width — ~90px on 80mm (half of prior 180px default). */
+export const RECEIPT_QR_RASTER_PX_80 = 90;
+/** 58mm thermal QR — half of prior 200px default. */
+export const RECEIPT_QR_RASTER_PX_58 = 100;
+
+/** Native ESC/POS QR module size for receipt tickets (1–16; was 5). */
+export const RECEIPT_QR_ESCPOS_MODULE_SIZE = 3;
 
 /** Labeled QR canvas width in pixels (matches printable dot width). */
 export const RECEIPT_QR_CANVAS_PX_80 = 384;
@@ -314,7 +317,7 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
   if (!raw || typeof document === 'undefined') return null;
   const paper = opts.paperWidthMm ?? 80;
   const canvasWidth = receiptQrCanvasPx(paper);
-  const qrSize = opts.qrSizePx ?? (paper === 58 ? 200 : 180);
+  const qrSize = opts.qrSizePx ?? receiptQrRasterPx(paper);
   const labelLineHeight = paper === 58 ? 13 : 14;
   const gap = paper === 58 ? 4 : 6;
   try {
@@ -366,7 +369,7 @@ export async function buildDualReceiptQrRasterEscPos(opts: {
   const canvasWidth = paper === 58 ? 280 : 384;
   const gap = paper === 58 ? 10 : 16;
   const colWidth = Math.floor((canvasWidth - gap) / 2);
-  const qrSize = paper === 58 ? 108 : 136;
+  const qrSize = paper === 58 ? 54 : 68;
   const labelLineHeight = 13;
   const labelGap = 5;
   try {

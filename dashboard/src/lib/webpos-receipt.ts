@@ -16,6 +16,7 @@ import {
   escposCode128,
   generateReceiptQrRasterEscPos,
   escposQrCode,
+  RECEIPT_QR_ESCPOS_MODULE_SIZE,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
@@ -2556,7 +2557,7 @@ export async function buildReceiptEscPos(
 
   if (qrData) {
     if (opts.fastQr !== false) {
-      qrRaster = escposQrCode(qrData, paper === 58 ? 5 : 5);
+      qrRaster = escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
     } else {
       qrRaster =
         (await buildLabeledReceiptQrRasterEscPos({
@@ -2565,7 +2566,7 @@ export async function buildReceiptEscPos(
           paperWidthMm: paper,
         })) ||
         (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-        escposQrCode(qrData, paper === 58 ? 5 : 5);
+        escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
     }
   }
 

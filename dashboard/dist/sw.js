@@ -2,7 +2,7 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'reborn-shell-v10';
+const CACHE = 'reborn-shell-v11';
 
 /** Static files that must not depend on auth or SPA routing. */
 const PRECACHE = [
@@ -15,6 +15,16 @@ const PRECACHE = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
+
+function isPanelOrigin() {
+  const host = String(self.location.hostname || '').toLowerCase();
+  return (
+    host.startsWith('app.') ||
+    host.startsWith('admin.') ||
+    host === 'localhost' ||
+    host === '127.0.0.1'
+  );
+}
 
 function isCacheableAsset(pathname) {
   return (
@@ -74,6 +84,10 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('install', (event) => {
+  if (!isPanelOrigin()) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
@@ -87,6 +101,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      if (!isPanelOrigin()) {
+        await self.registration.unregister();
+        return;
+      }
       const keys = await caches.keys();
       await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
       await self.clients.claim();
@@ -95,6 +113,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (!isPanelOrigin()) return;
   const { request } = event;
   if (request.method !== 'GET') return;
 
