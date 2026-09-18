@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Search, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 
 export type WebPosCustomer = {
   id: string;
@@ -27,6 +28,7 @@ function displayName(c: WebPosCustomer) {
 
 export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props) {
   const { t } = useI18n();
+  const { open: keyboardOpen, close: closeKeyboard } = useOnScreenKeyboard();
   const [q, setQ] = useState('');
   const [list, setList] = useState<WebPosCustomer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,9 +45,10 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
 
   useEffect(() => {
     if (!open) return;
+    closeKeyboard();
     setQ('');
     setShowCreate(false);
-  }, [open]);
+  }, [open, closeKeyboard]);
 
   const load = async (search: string) => {
     setLoading(true);
@@ -98,8 +101,12 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-4">
-      <div className="flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-3 sm:p-4">
+      <div
+        className={`flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl ${
+          keyboardOpen ? 'mb-[max(10rem,36dvh)]' : ''
+        }`}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>
           <button type="button" className="rounded-lg p-2 hover:bg-[var(--bg-muted)]" onClick={onClose} aria-label={t('close')}>

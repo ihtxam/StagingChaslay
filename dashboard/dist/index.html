@@ -5,6 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <script>
       (function () {
+        var host = (location.hostname || '').toLowerCase();
+        var path = location.pathname || '';
+        var isShop =
+          /^\/shop(\/|$)/.test(path) ||
+          host.indexOf('shop.') === 0 ||
+          (!(
+            host.indexOf('app.') === 0 ||
+            host.indexOf('admin.') === 0 ||
+            host.indexOf('api.') === 0 ||
+            host.indexOf('pay.') === 0 ||
+            host.indexOf('status.') === 0 ||
+            host === 'localhost' ||
+            host === '127.0.0.1'
+          ) &&
+            host.length > 0);
+        if (!isShop) return;
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (reg) {
+                reg.unregister();
+              });
+            });
+          }
+        } catch (e) {}
+        try {
+          if (window.caches) {
+            caches.keys().then(function (keys) {
+              keys.forEach(function (key) {
+                if (String(key).indexOf('reborn-shell') === 0) caches.delete(key);
+              });
+            });
+          }
+        } catch (e2) {}
+      })();
+    </script>
+    <script>
+      (function () {
         var p = location.pathname || '';
         if (
           /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(p) ||
@@ -119,8 +157,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-v0TekDDA.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BHm_luWY.css">
+    <script type="module" crossorigin src="/assets/index-B4lqIboX.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-vVKECHgo.css">
   </head>
   <body>
     <div id="root">
@@ -138,7 +176,7 @@
         "
       >
         <div style="text-align: center; padding: 2rem">
-          <p style="font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem">Reborn</p>
+          <p id="chaslay-boot-title" style="font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem">Reborn</p>
           <p id="chaslay-boot-msg" style="margin: 0; opacity: 0.9">Loading…</p>
         </div>
       </div>
@@ -147,11 +185,34 @@
       (function () {
         var boot = document.getElementById('chaslay-boot');
         var msg = document.getElementById('chaslay-boot-msg');
+        var titleEl = document.getElementById('chaslay-boot-title');
         if (!boot || !msg) return;
+
+        var host = (location.hostname || '').toLowerCase();
+        var path = location.pathname || '';
+        var isShop =
+          /^\/shop(\/|$)/.test(path) ||
+          host.indexOf('shop.') === 0 ||
+          (!(
+            host.indexOf('app.') === 0 ||
+            host.indexOf('admin.') === 0 ||
+            host.indexOf('api.') === 0 ||
+            host.indexOf('pay.') === 0 ||
+            host.indexOf('status.') === 0 ||
+            host === 'localhost' ||
+            host === '127.0.0.1'
+          ) &&
+            host.length > 0);
+
+        if (isShop && titleEl) titleEl.textContent = '';
 
         function showOffline() {
           if (!document.getElementById('chaslay-boot') || boot.dataset.offline) return;
           boot.dataset.offline = '1';
+          if (isShop) {
+            msg.textContent = 'Couldn’t load the shop. Refresh the page.';
+            return;
+          }
           msg.textContent =
             'You are offline. Open Reborn once while online to save the app shell, then relaunch.';
         }
