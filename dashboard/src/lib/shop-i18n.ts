@@ -367,6 +367,8 @@ export const shopEn: Record<string, string> = {
   // Account & fidelity
   shopAccount: 'Account',
   shopMyAccount: 'My account',
+  shopAuthSuccessTitle: 'Welcome!',
+  shopAuthSuccessHint: 'Your account is ready. View orders, points, and saved details anytime.',
   shopPoints: 'Points',
   shopPointsBalance: 'Points balance',
   shopPointsChip: '{n} pts',
@@ -869,6 +871,8 @@ export const shopFr: Record<string, string> = {
 
   shopAccount: 'Compte',
   shopMyAccount: 'Mon compte',
+  shopAuthSuccessTitle: 'Bienvenue !',
+  shopAuthSuccessHint: 'Votre compte est prêt. Consultez vos commandes, points et informations enregistrées.',
   shopPoints: 'Points',
   shopPointsBalance: 'Solde de points',
   shopPointsChip: '{n} pts',
@@ -1375,6 +1379,8 @@ export const shopDe: Record<string, string> = {
 
   shopAccount: 'Konto',
   shopMyAccount: 'Mein Konto',
+  shopAuthSuccessTitle: 'Willkommen!',
+  shopAuthSuccessHint: 'Ihr Konto ist bereit. Bestellungen, Punkte und gespeicherte Daten jederzeit einsehen.',
   shopPoints: 'Punkte',
   shopPointsBalance: 'Punktestand',
   shopPointsChip: '{n} Pkt.',

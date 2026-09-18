@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
+import { User } from 'lucide-react';
+import { resolveShopKey, loadCustomerToken, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopGiftCardVoucher from '@/components/shop/ShopGiftCardVoucher';
 
 export default function GiftCardConfirmPage() {
@@ -15,6 +16,8 @@ export default function GiftCardConfirmPage() {
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
+  const accountPath = `${base}/account`.replace(/\/+/g, '/');
+  const loggedIn = !!loadCustomerToken(shopKey);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
 
@@ -47,13 +50,12 @@ export default function GiftCardConfirmPage() {
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="max-w-lg mx-auto px-4 py-4 flex justify-between items-center">
-          <span className="font-semibold">{t('shopGiftCardTitle')}</span>
-          <ShopLangSwitcher />
-        </div>
-      </header>
-      <main className="max-w-lg mx-auto px-4 py-12">
+      <ShopMinimalHeader
+        basePath={base}
+        merchantName={undefined}
+        loggedIn={loggedIn}
+      />
+      <main className="shop-page-content max-w-lg py-12">
         {error && <p className="text-center text-red-600">{error}</p>}
         {data && (
           <>
@@ -102,12 +104,19 @@ export default function GiftCardConfirmPage() {
               </div>
             ) : null}
 
-            <div className="text-center">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Link
                 to={`${base}/menu`}
                 className="inline-flex px-6 py-3 rounded-full bg-stone-900 text-white font-medium"
               >
                 {t('shopOrderOnline')} →
+              </Link>
+              <Link
+                to={accountPath}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-stone-300 bg-white font-medium text-stone-900"
+              >
+                <User className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                {t('shopMyAccount')}
               </Link>
             </div>
           </>

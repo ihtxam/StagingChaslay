@@ -2,11 +2,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Gift, Mail, Package } from 'lucide-react';
-import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
+import { resolveShopKey, loadCustomerToken, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
@@ -66,6 +66,7 @@ export default function GiftCardsPage() {
   const [payMsg, setPayMsg] = useState('');
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
+  const loggedIn = !!loadCustomerToken(shopKey);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -198,38 +199,36 @@ export default function GiftCardsPage() {
 
   if (!settings?.enabled) {
     return (
-      <div className="min-h-screen bg-[#faf8f5] px-4 py-12">
-        <div className="max-w-lg mx-auto text-center">
-          <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
-          <Link to={base || '/'} className="mt-4 inline-block text-stone-900 underline">
-            {t('shopBackHome')}
-          </Link>
+      <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle="Gift cards" className="min-h-screen">
+        <div className="min-h-screen bg-[#faf8f5] text-stone-900">
+          <ShopMinimalHeader
+            basePath={base}
+            merchantName={merchant?.name}
+            logoUrl={merchant?.shopLogoUrl}
+            loggedIn={loggedIn}
+          />
+          <div className="shop-page-content py-12 text-center">
+            <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
+            <Link to={base || '/'} className="mt-4 inline-block text-stone-900 underline">
+              {t('shopBackHome')}
+            </Link>
+          </div>
         </div>
-      </div>
+      </ShopThemeShell>
     );
   }
 
   return (
     <ShopThemeShell theme={cmsTheme} site={shopSite} pageTitle="Gift cards" className="min-h-screen">
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-          <Link to={base || '/'} className="font-semibold tracking-tight truncate">
-            {merchant?.name || 'Shop'}
-          </Link>
-          <div className="flex items-center gap-2">
-            <ShopLangSwitcher />
-            <Link
-              to={`${base}/menu`}
-              className="hidden sm:inline-flex px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium"
-            >
-              {t('shopOrderOnline')} →
-            </Link>
-          </div>
-        </div>
-      </header>
+      <ShopMinimalHeader
+        basePath={base}
+        merchantName={merchant?.name}
+        logoUrl={merchant?.shopLogoUrl}
+        loggedIn={loggedIn}
+      />
 
-      <main className="max-w-3xl mx-auto px-4 py-10">
+      <main className="shop-page-content max-w-3xl py-10">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-full bg-stone-900 text-white flex items-center justify-center">
             <Gift size={20} />

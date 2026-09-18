@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
+import { resolveShopKey, loadCustomerToken, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopGiftCardVoucher from '@/components/shop/ShopGiftCardVoucher';
 
 export default function GiftCardViewPage() {
@@ -11,6 +11,7 @@ export default function GiftCardViewPage() {
   const { merchantSlug, code = '' } = useParams<{ merchantSlug?: string; code?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
+  const loggedIn = !!loadCustomerToken(shopKey);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
 
@@ -24,15 +25,8 @@ export default function GiftCardViewPage() {
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="max-w-lg mx-auto px-4 py-4 flex justify-between items-center">
-          <Link to={base || '/'} className="font-semibold truncate">
-            {t('giftCard')}
-          </Link>
-          <ShopLangSwitcher />
-        </div>
-      </header>
-      <main className="max-w-lg mx-auto px-4 py-12">
+      <ShopMinimalHeader basePath={base} loggedIn={loggedIn} />
+      <main className="shop-page-content max-w-lg py-12">
         {error && <p className="text-center text-red-600">{error}</p>}
         {data && (
           <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">

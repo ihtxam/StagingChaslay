@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { Check, User } from 'lucide-react';
 import {
   clearCustomerToken,
   emptyDraft,
@@ -76,7 +77,9 @@ export default function AccountPage() {
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const base = shopBasePath(shopKey) || '/';
+  const accountPath = `${base}/account`.replace(/\/+/g, '/');
   const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
 
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,7 @@ export default function AccountPage() {
   const [newZip, setNewZip] = useState('');
   const [newCity, setNewCity] = useState('');
   const [savingAddress, setSavingAddress] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState(false);
 
   const token = shopKey ? loadCustomerToken(shopKey) : '';
 
@@ -392,6 +396,10 @@ export default function AccountPage() {
               setError('');
               try {
                 await loadAll(token);
+                setAuthSuccess(true);
+                if (/\/register\/?$/.test(pathname)) {
+                  navigate(accountPath, { replace: true });
+                }
               } catch {
                 setError(t('shopLoginFailed'));
               } finally {
@@ -401,6 +409,29 @@ export default function AccountPage() {
           />
         ) : (
           <>
+            {authSuccess ? (
+              <section className="max-w-2xl mx-auto px-4">
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                      <Check className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-emerald-950">{t('shopAuthSuccessTitle')}</p>
+                      <p className="mt-1 text-sm text-emerald-900">{t('shopAuthSuccessHint')}</p>
+                    </div>
+                  </div>
+                  <Link
+                    to={accountPath}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white sm:mt-0 sm:w-auto"
+                    onClick={() => setAuthSuccess(false)}
+                  >
+                    <User className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                    {t('shopMyAccount')}
+                  </Link>
+                </div>
+              </section>
+            ) : null}
             <section className="bg-white border border-stone-200 p-5 space-y-3">
               <div className="flex items-end justify-between gap-3">
                 <div>
