@@ -54,6 +54,7 @@ services:
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-}
       SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Reborn Admin}
       SHOP_SPA_INDEX_PATH: /app/shop-spa/index.html
+      SHOP_SPA_DASHBOARD_ORIGIN: http://dashboard
     volumes:
       - uploads_data:/app/uploads
       # Host-built print-agent EXE (gitignored). Deploy script rebuilds into this path.

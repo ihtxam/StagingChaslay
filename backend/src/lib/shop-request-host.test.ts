@@ -4,6 +4,7 @@ import { isShopPathHubHost, isShopRequestHost, shopSlugFromPath } from "./shop-r
 describe("shop-request-host", () => {
   it("detects shop path hub hosts", () => {
     expect(isShopPathHubHost("order.rebornsense.com")).toBe(true);
+    expect(isShopPathHubHost("shop.chaslay.com")).toBe(true);
     expect(isShopPathHubHost("app.rebornsense.com")).toBe(false);
   });
 

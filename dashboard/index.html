@@ -5,6 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <script>
       (function () {
+        var host = (location.hostname || '').toLowerCase();
+        var path = location.pathname || '';
+        var isShop =
+          /^\/shop(\/|$)/.test(path) ||
+          host.indexOf('shop.') === 0 ||
+          (!(
+            host.indexOf('app.') === 0 ||
+            host.indexOf('admin.') === 0 ||
+            host.indexOf('api.') === 0 ||
+            host.indexOf('pay.') === 0 ||
+            host.indexOf('status.') === 0 ||
+            host === 'localhost' ||
+            host === '127.0.0.1'
+          ) &&
+            host.length > 0);
+        if (!isShop) return;
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (reg) {
+                reg.unregister();
+              });
+            });
+          }
+        } catch (e) {}
+        try {
+          if (window.caches) {
+            caches.keys().then(function (keys) {
+              keys.forEach(function (key) {
+                if (String(key).indexOf('reborn-shell') === 0) caches.delete(key);
+              });
+            });
+          }
+        } catch (e2) {}
+      })();
+    </script>
+    <script>
+      (function () {
         var p = location.pathname || '';
         if (
           /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(p) ||

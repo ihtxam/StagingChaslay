@@ -11,6 +11,12 @@
 		redir * /openpage/ permanent
 	}
 
+	# Hashed Vite bundles must 404 when missing — never SPA-fallback to HTML
+	# (that made shop.chaslay.com look like the Reborn POS offline shell).
+	handle /assets/* {
+		file_server
+	}
+
 	handle {
 		try_files {path} /index.html
 		file_server

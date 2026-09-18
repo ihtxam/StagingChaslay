@@ -1,10 +1,9 @@
-import fs from "fs";
-import path from "path";
 import type { Request } from "express";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { ChaslayPagebuilderService } from "@/services/chaslay-pagebuilder.service";
 import { findMerchantByCustomDomainHost } from "@/lib/custom-domain-lookup";
 import { injectShopSocialSeo, type ShopSocialSeo } from "@/lib/shop-spa-html";
+import { clearShopSpaIndexCache, loadShopSpaIndexHtml } from "@/lib/shop-spa-index";
 import { resolvePublicAssetUrl } from "@/lib/public-url";
 import { resolveShopDocumentSeo, normalizeShopSiteSettings } from "@/lib/shop-site-settings";
 import {
@@ -12,26 +11,6 @@ import {
   isShopPathHubHost,
   shopSlugFromPath,
 } from "@/lib/shop-request-host";
-
-let cachedIndexHtml: string | null = null;
-
-function indexHtmlPath(): string {
-  return (
-    process.env.SHOP_SPA_INDEX_PATH ||
-    path.join(process.cwd(), "shop-spa", "index.html")
-  );
-}
-
-function loadIndexHtml(): string | null {
-  if (cachedIndexHtml) return cachedIndexHtml;
-  const file = indexHtmlPath();
-  try {
-    cachedIndexHtml = fs.readFileSync(file, "utf8");
-    return cachedIndexHtml;
-  } catch {
-    return null;
-  }
-}
 
 function publicShopSite(req: Request, merchant: { shopSiteSettings?: unknown }) {
   const site = normalizeShopSiteSettings(merchant.shopSiteSettings);
@@ -71,11 +50,11 @@ function requestCanonicalUrl(req: Request): string {
 
 export class ShopSpaService {
   static clearCache() {
-    cachedIndexHtml = null;
+    clearShopSpaIndexCache();
   }
 
   static async renderShell(req: Request): Promise<string | null> {
-    const html = loadIndexHtml();
+    const html = await loadShopSpaIndexHtml();
     if (!html) return null;
 
     const merchant = await resolveMerchantForSpa(req);
