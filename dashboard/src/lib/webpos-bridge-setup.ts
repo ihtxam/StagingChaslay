@@ -30,7 +30,8 @@ export function evaluateBridgeSetupMode(opts: {
   printSettings: PosPrintSettingsClient | null | undefined;
 }): BridgeSetupMode | null {
   const { agentOk, printersReady, printers, printerName, printSettings } = opts;
-  if (!agentOk || !printersReady) return 'bridge_offline';
+  if (!printersReady) return null;
+  if (!agentOk) return 'bridge_offline';
 
   const suitable = listSuitablePrinters(printers);
   if (!suitable.length) return 'no_printers';

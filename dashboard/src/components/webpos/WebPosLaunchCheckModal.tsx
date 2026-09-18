@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, Printer, Receipt, XCircle } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Nfc, Printer, Receipt, XCircle } from 'lucide-react';
 import {
   runWebPosConnectionChecks,
   type CheckStatus,
   type ConnectionCheckResult,
+  type WebPosPaymentCheckConfig,
 } from '@/lib/webpos-connection-check';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { useI18n } from '@/lib/i18n';
@@ -11,6 +12,8 @@ import { useI18n } from '@/lib/i18n';
 type Props = {
   open: boolean;
   printSettings: PosPrintSettingsClient | null;
+  paymentConfig?: WebPosPaymentCheckConfig | null;
+  androidProbe?: boolean;
   onContinue: () => void;
 };
 
@@ -36,6 +39,8 @@ function CheckRow({
   title: string;
   result: ConnectionCheckResult;
 }) {
+  if (result.status === 'skipped') return null;
+
   return (
     <div className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
       <StatusIcon status={result.status} />
@@ -50,7 +55,13 @@ function CheckRow({
   );
 }
 
-export default function WebPosLaunchCheckModal({ open, printSettings, onContinue }: Props) {
+export default function WebPosLaunchCheckModal({
+  open,
+  printSettings,
+  paymentConfig,
+  androidProbe = false,
+  onContinue,
+}: Props) {
   const { t } = useI18n();
   const [agent, setAgent] = useState<ConnectionCheckResult>({
     status: 'pending',
@@ -64,6 +75,14 @@ export default function WebPosLaunchCheckModal({ open, printSettings, onContinue
     status: 'pending',
     message: 'Waiting…',
   });
+  const [terminal, setTerminal] = useState<ConnectionCheckResult>({
+    status: 'pending',
+    message: 'Waiting…',
+  });
+  const [tapToPay, setTapToPay] = useState<ConnectionCheckResult>({
+    status: 'pending',
+    message: 'Waiting…',
+  });
   const [ready, setReady] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
@@ -74,16 +93,24 @@ export default function WebPosLaunchCheckModal({ open, printSettings, onContinue
     setAgent({ status: 'checking', message: t('webPosLaunchCheckAgent') });
     setReceipt({ status: 'checking', message: t('webPosLaunchCheckReceipt') });
     setKitchen({ status: 'checking', message: t('webPosLaunchCheckKitchen') });
+    setTerminal({ status: 'checking', message: t('webPosLaunchCheckTerminal') });
+    setTapToPay({ status: 'checking', message: t('webPosLaunchCheckTapToPay') });
     setReady(false);
 
-    const report = await runWebPosConnectionChecks({ printSettings });
+    const report = await runWebPosConnectionChecks({
+      printSettings,
+      androidProbe,
+      paymentConfig,
+    });
     setAgent(report.agent);
     setReceipt(report.receipt);
     setKitchen(report.kitchen);
+    setTerminal(report.terminal);
+    setTapToPay(report.tapToPay);
     setReady(report.ready);
     setRunning(false);
     return report.ready;
-  }, [printSettings, t]);
+  }, [androidProbe, paymentConfig, printSettings, t]);
 
   useEffect(() => {
     if (!open) {
@@ -112,12 +139,16 @@ export default function WebPosLaunchCheckModal({ open, printSettings, onContinue
     <div className="fixed inset-0 z-[400] flex items-center justify-center bg-stone-950/80 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-stone-100 p-6 shadow-2xl">
         <h2 className="text-xl font-bold text-stone-900">{t('webPosLaunchCheckTitle')}</h2>
-        <p className="mt-1 text-sm text-stone-600">{t('webPosLaunchCheckHint')}</p>
+        <p className="mt-1 text-sm text-stone-600">
+          {androidProbe ? t('webPosLaunchCheckHintAndroid') : t('webPosLaunchCheckHint')}
+        </p>
 
         <div className="mt-5 space-y-3">
           <CheckRow icon={Printer} title={t('webPosLaunchCheckAgentTitle')} result={agent} />
           <CheckRow icon={Receipt} title={t('webPosLaunchCheckReceiptTitle')} result={receipt} />
           <CheckRow icon={Printer} title={t('webPosLaunchCheckKitchenTitle')} result={kitchen} />
+          <CheckRow icon={CreditCard} title={t('webPosLaunchCheckTerminalTitle')} result={terminal} />
+          <CheckRow icon={Nfc} title={t('webPosLaunchCheckTapToPayTitle')} result={tapToPay} />
         </div>
 
         {ready && countdown != null ? (

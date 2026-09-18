@@ -840,12 +840,18 @@ const en: Dict = {
   orderAcceptAndPrint: 'Accept & print',
   webPosLaunchCheckTitle: 'Printer connection check',
   webPosLaunchCheckHint: 'Verifying Print Agent and configured printers before opening the register.',
+  webPosLaunchCheckHintAndroid:
+    'Verifying Bridge Reborn, printers, and payment connections before opening the register.',
   webPosLaunchCheckAgentTitle: 'Print Agent',
   webPosLaunchCheckReceiptTitle: 'Receipt printer',
   webPosLaunchCheckKitchenTitle: 'Kitchen printer',
+  webPosLaunchCheckTerminalTitle: 'Payment terminal',
+  webPosLaunchCheckTapToPayTitle: 'Tap to Pay',
   webPosLaunchCheckAgent: 'Checking Print Agent…',
   webPosLaunchCheckReceipt: 'Checking receipt printer…',
   webPosLaunchCheckKitchen: 'Checking kitchen printer…',
+  webPosLaunchCheckTerminal: 'Checking payment terminal…',
+  webPosLaunchCheckTapToPay: 'Checking Tap to Pay…',
   webPosLaunchCheckEntering: 'Entering POS in {n}s…',
   webPosLaunchCheckContinue: 'Enter POS',
   webPosLaunchCheckContinueAnyway: 'Continue anyway',
@@ -2683,6 +2689,8 @@ const en: Dict = {
     'Web POS is waiting for Bridge Reborn on this tablet. This usually takes a few seconds after reboot or app update.',
   webPosBridgeSetupOfflineBody:
     'Printing and NFC payments need Bridge Reborn running in the background. Complete the setup wizard in the Bridge app once on this tablet.',
+  webPosBridgeSetupOfflineBodyPrintOnly:
+    'Printing needs Bridge Reborn running in the background. Complete the setup wizard in the Bridge app once on this tablet.',
   webPosBridgeSetupOfflineHint:
     'You can continue taking sales without printing. Receipts and kitchen tickets will queue until Bridge is ready.',
   webPosBridgeSetupStepOpenApp: 'Open the Bridge Reborn app on this tablet',
@@ -4881,12 +4889,18 @@ const fr: Dict = {
   orderAcceptAndPrint: 'Accepter et imprimer',
   webPosLaunchCheckTitle: 'Vérification des imprimantes',
   webPosLaunchCheckHint: 'Vérification du Print Agent et des imprimantes configurées avant d’ouvrir la caisse.',
+  webPosLaunchCheckHintAndroid:
+    'Vérification de Bridge Reborn, des imprimantes et des connexions de paiement avant d’ouvrir la caisse.',
   webPosLaunchCheckAgentTitle: 'Print Agent',
   webPosLaunchCheckReceiptTitle: 'Imprimante ticket',
   webPosLaunchCheckKitchenTitle: 'Imprimante cuisine',
+  webPosLaunchCheckTerminalTitle: 'Terminal de paiement',
+  webPosLaunchCheckTapToPayTitle: 'Tap to Pay',
   webPosLaunchCheckAgent: 'Vérification du Print Agent…',
   webPosLaunchCheckReceipt: 'Vérification imprimante ticket…',
   webPosLaunchCheckKitchen: 'Vérification imprimante cuisine…',
+  webPosLaunchCheckTerminal: 'Vérification terminal de paiement…',
+  webPosLaunchCheckTapToPay: 'Vérification Tap to Pay…',
   webPosLaunchCheckEntering: 'Ouverture caisse dans {n}s…',
   webPosLaunchCheckContinue: 'Ouvrir la caisse',
   webPosLaunchCheckContinueAnyway: 'Continuer quand même',
@@ -6731,6 +6745,8 @@ const fr: Dict = {
     'Web POS attend Bridge Reborn sur cette tablette. Cela prend généralement quelques secondes après un redémarrage ou une mise à jour.',
   webPosBridgeSetupOfflineBody:
     'L’impression et les paiements NFC nécessitent Bridge Reborn en arrière-plan. Terminez l’assistant de configuration dans l’app Bridge une fois sur cette tablette.',
+  webPosBridgeSetupOfflineBodyPrintOnly:
+    'L’impression nécessite Bridge Reborn en arrière-plan. Terminez l’assistant de configuration dans l’app Bridge une fois sur cette tablette.',
   webPosBridgeSetupOfflineHint:
     'Vous pouvez continuer les ventes sans impression. Les tickets seront mis en file jusqu’à ce que Bridge soit prêt.',
   webPosBridgeSetupStepOpenApp: 'Ouvrez l’application Bridge Reborn sur cette tablette',
@@ -8877,12 +8893,18 @@ const de: Dict = {
   orderAcceptAndPrint: 'Annehmen & drucken',
   webPosLaunchCheckTitle: 'Drucker-Verbindungsprüfung',
   webPosLaunchCheckHint: 'Print Agent und konfigurierte Drucker werden vor dem Kassenstart geprüft.',
+  webPosLaunchCheckHintAndroid:
+    'Bridge Reborn, Drucker und Zahlungsverbindungen werden vor dem Kassenstart geprüft.',
   webPosLaunchCheckAgentTitle: 'Print Agent',
   webPosLaunchCheckReceiptTitle: 'Bondrucker',
   webPosLaunchCheckKitchenTitle: 'Küchendrucker',
+  webPosLaunchCheckTerminalTitle: 'Zahlungsterminal',
+  webPosLaunchCheckTapToPayTitle: 'Tap to Pay',
   webPosLaunchCheckAgent: 'Print Agent wird geprüft…',
   webPosLaunchCheckReceipt: 'Bondrucker wird geprüft…',
   webPosLaunchCheckKitchen: 'Küchendrucker wird geprüft…',
+  webPosLaunchCheckTerminal: 'Zahlungsterminal wird geprüft…',
+  webPosLaunchCheckTapToPay: 'Tap to Pay wird geprüft…',
   webPosLaunchCheckEntering: 'Kasse öffnet in {n}s…',
   webPosLaunchCheckContinue: 'Kasse öffnen',
   webPosLaunchCheckContinueAnyway: 'Trotzdem fortfahren',
@@ -10727,6 +10749,8 @@ const de: Dict = {
     'Web POS wartet auf Bridge Reborn auf diesem Tablet. Das dauert nach Neustart oder Update meist ein paar Sekunden.',
   webPosBridgeSetupOfflineBody:
     'Druck und NFC-Zahlungen benötigen Bridge Reborn im Hintergrund. Führen Sie den Einrichtungsassistenten in der Bridge-App einmal auf diesem Tablet aus.',
+  webPosBridgeSetupOfflineBodyPrintOnly:
+    'Druck benötigt Bridge Reborn im Hintergrund. Führen Sie den Einrichtungsassistenten in der Bridge-App einmal auf diesem Tablet aus.',
   webPosBridgeSetupOfflineHint:
     'Sie können weiter verkaufen ohne zu drucken. Belege und Küchentickets werden in die Warteschlange gestellt, bis Bridge bereit ist.',
   webPosBridgeSetupStepOpenApp: 'Öffnen Sie die Bridge-Reborn-App auf diesem Tablet',

@@ -978,12 +978,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [reprintBusy, setReprintBusy] = useState(false);
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const WEBPOS_LAUNCH_CHECK_KEY = 'webpos_launch_check_done';
+  const webPosLaunchCheckRequired =
+    appMode && (isWindowsDevice() || isAndroidWebPosTill());
   const [launchCheckPassed, setLaunchCheckPassed] = useState(() => {
-    if (typeof sessionStorage === 'undefined' || !isWindowsDevice()) return true;
+    if (typeof sessionStorage === 'undefined' || !webPosLaunchCheckRequired) return true;
     return !!sessionStorage.getItem(WEBPOS_LAUNCH_CHECK_KEY);
   });
   const [launchCheckOpen, setLaunchCheckOpen] = useState(() => {
-    if (typeof sessionStorage === 'undefined' || !isWindowsDevice()) return false;
+    if (typeof sessionStorage === 'undefined' || !webPosLaunchCheckRequired) return false;
     return !sessionStorage.getItem(WEBPOS_LAUNCH_CHECK_KEY);
   });
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
@@ -2184,6 +2186,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Android tablet till: auto-connect single printer or prompt when Bridge/printers need setup. */
   useEffect(() => {
     if (!isAndroidWebPosTill()) return;
+    if (!launchCheckPassed) return;
     if (!bridgeProbeComplete) return;
 
     const mode = evaluateBridgeSetupMode({
@@ -2215,7 +2218,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     setBridgeSetupMode(mode);
     setBridgeSetupOpen(true);
-  }, [agentOk, printersReady, printers, printerName, printSettings, applyBridgePrinterSetup, bridgeProbeComplete]);
+  }, [
+    agentOk,
+    printersReady,
+    printers,
+    printerName,
+    printSettings,
+    applyBridgePrinterSetup,
+    bridgeProbeComplete,
+    launchCheckPassed,
+  ]);
 
   const shiftsEnabledRef = useRef(shiftsEnabled);
   shiftsEnabledRef.current = shiftsEnabled;
@@ -2585,7 +2597,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (pinGateRequired) return;
     if (!isAndroidWebPosTill()) return;
-    if (!paymentConfig?.adyenConfigured || paymentConfig.tapToPayEnabled === false) return;
+    if (paymentConfig?.tapToPayEnabled !== true) return;
+    if (!paymentConfig?.adyenConfigured) return;
     if (readWebPosTapToPaySetupDone()) return;
     if (deviceTapToPayReady) {
       markWebPosTapToPaySetupDone();
@@ -9524,11 +9537,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     );
   }
 
-  if (appMode && isWindowsDevice() && !launchCheckPassed) {
+  if (webPosLaunchCheckRequired && !launchCheckPassed) {
     return (
       <WebPosLaunchCheckModal
         open={launchCheckOpen}
         printSettings={printSettings}
+        paymentConfig={paymentConfig}
+        androidProbe={isAndroidWebPosTill()}
         onContinue={() => {
           try {
             sessionStorage.setItem(WEBPOS_LAUNCH_CHECK_KEY, '1');
@@ -11251,6 +11266,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         printSettings={printSettings}
         checking={bridgeSetupChecking}
         starting={!bridgeProbeComplete || (bridgeSetupChecking && !agentOk)}
+        tapToPayEnabled={paymentConfig?.tapToPayEnabled === true}
         onRefresh={refreshBridgeSetup}
         onConfirm={applyBridgePrinterSetup}
         onDismiss={() => {
@@ -11269,7 +11285,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       <WebPosTapToPaySetupModal
         open={tapToPaySetupOpen}
         adyenReady={paymentConfig?.adyenConfigured === true}
-        tapToPayEnabled={paymentConfig?.tapToPayEnabled !== false}
+        tapToPayEnabled={paymentConfig?.tapToPayEnabled === true}
         onClose={() => setTapToPaySetupOpen(false)}
         onActivated={() => void refreshAgent()}
       />
