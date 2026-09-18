@@ -894,11 +894,9 @@ function formatReceiptMetaFooter(
   const orderRef = guestReceiptBottomNumber(tx);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';
   const user = tx.showStaff !== false && tx.staffName?.trim() ? tx.staffName.trim() : '';
-  const metaParts = [dateStr, channel, user].filter(Boolean);
-  let r = '';
-  if (orderRef) r += centerLine(orderRef, width) + '\n';
-  if (metaParts.length) r += centerLine(metaParts.join(' | '), width);
-  return r.trimEnd();
+  const metaParts = [dateStr, orderRef, channel, user].filter(Boolean);
+  if (!metaParts.length) return '';
+  return centerLine(metaParts.join(' | '), width);
 }
 
 function hasGiftCardPayment(tx: WebPosReceipt): boolean {

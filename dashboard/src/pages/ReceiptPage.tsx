@@ -223,13 +223,20 @@ export default function ReceiptPage() {
           )}
         </div>
         <div className="text-sm space-y-1 border-y py-3 mb-3">
-          <p>
-            <span className="text-gray-500">{t('receiptOrder')}:</span> {guestRef}
-          </p>
-          {receipt.completedAt && (
+          {(guestRef || receipt.completedAt) && (
             <p>
-              <span className="text-gray-500">{t('receiptDate')}:</span>{' '}
-              {formatDateTimeDDMMYYYY(receipt.completedAt)}
+              {receipt.completedAt ? (
+                <>
+                  <span className="text-gray-500">{t('receiptDate')}:</span>{' '}
+                  {formatDateTimeDDMMYYYY(receipt.completedAt)}
+                </>
+              ) : null}
+              {guestRef && receipt.completedAt ? ' · ' : null}
+              {guestRef ? (
+                <>
+                  <span className="text-gray-500">{t('receiptOrder')}:</span> {guestRef}
+                </>
+              ) : null}
             </p>
           )}
           {receipt.channel && (
