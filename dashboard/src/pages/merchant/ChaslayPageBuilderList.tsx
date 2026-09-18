@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Layout, Plus, Edit2, Trash2, Loader2, Pencil, Check } from 'lucide-react';
+import api from '@/lib/api';
 import {
   activateHomepageBuilder,
   createHomepageBuilder,
@@ -34,9 +35,20 @@ export default function ChaslayPageBuilderList() {
   const [activatingHomepage, setActivatingHomepage] = useState<HomepageBuilderListItem | null>(null);
   const [deactivatingHomepage, setDeactivatingHomepage] = useState<HomepageBuilderListItem | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [legacyHomepageTitle, setLegacyHomepageTitle] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchHomepages();
+    void (async () => {
+      try {
+        const res = await api.get('/merchant/cms/pages');
+        const pages = (res.data?.data || []) as Array<{ isHomepage?: boolean; status?: string; title?: string }>;
+        const home = pages.find((p) => p.isHomepage && p.status === 'published');
+        if (home?.title) setLegacyHomepageTitle(home.title);
+      } catch {
+        /* optional */
+      }
+    })();
   }, []);
 
   async function fetchHomepages() {
@@ -130,6 +142,19 @@ export default function ChaslayPageBuilderList() {
         </button>
         </div>
       </div>
+
+      {legacyHomepageTitle ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">Your live shop still uses the classic website editor.</p>
+          <p className="mt-1 text-amber-900/90">
+            Published homepage: <strong>{legacyHomepageTitle}</strong>. Edit it under{' '}
+            <Link to="/merchant/website" className="font-semibold underline underline-offset-2">
+              CMS → Website
+            </Link>
+            . Create a layout here and click <strong>Set active</strong> only when you want this new builder to replace it on the shop.
+          </p>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="flex justify-center py-16">
