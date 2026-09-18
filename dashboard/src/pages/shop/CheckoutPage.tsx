@@ -143,6 +143,7 @@ export default function CheckoutPage() {
   const [checkingZone, setCheckingZone] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [wantCreateAccount, setWantCreateAccount] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [paymentOptions, setPaymentOptions] = useState<any>(null);
@@ -951,6 +952,7 @@ export default function CheckoutPage() {
       setWantCreateAccount(false);
       setShowLogin(false);
       setPassword('');
+      setConfirmPassword('');
       patch({
         authMode: 'login',
         customerName: res.data.customer.name || '',
@@ -972,6 +974,10 @@ export default function CheckoutPage() {
       showCheckoutError(t('shopEmailPasswordRequired'));
       return false;
     }
+    if (password !== confirmPassword) {
+      showCheckoutError(t('shopPasswordsMustMatch'));
+      return false;
+    }
     try {
       const res = await axios.post(`/api/shop/${shopKey}/auth/register`, {
         email: draft.customerEmail,
@@ -985,6 +991,7 @@ export default function CheckoutPage() {
       await refreshLoyalty(res.data.token);
       setWantCreateAccount(false);
       setPassword('');
+      setConfirmPassword('');
       patch({ authMode: 'register' });
       return true;
     } catch (err: any) {
@@ -1042,6 +1049,14 @@ export default function CheckoutPage() {
     if (!resolved.phone) next.customerPhone = t('shopPhoneFieldRequired');
     if (!draft.customerEmail.trim()) {
       next.customerEmail = t('shopEmailFieldRequired');
+    }
+    if (!customer && wantCreateAccount) {
+      if (password.length < 6) next.customerEmail = next.customerEmail || t('shopEmailPasswordRequired');
+      if (password !== confirmPassword) {
+        showCheckoutError(t('shopPasswordsMustMatch'));
+        setFieldErrors(next);
+        return;
+      }
     }
     setFieldErrors(next);
     if (Object.keys(next).length) {
@@ -1216,6 +1231,66 @@ export default function CheckoutPage() {
   const tipPresets = [5, 10, 15] as const;
   const activeTipPct = tipPresets.find(
     (pct) => subtotal > 0 && Math.abs(tip - roundTo005((subtotal * pct) / 100)) < 0.02
+  );
+  const payChoiceClass = (on: boolean) =>
+    `flex min-h-[3.5rem] flex-1 items-center justify-center gap-2.5 rounded-xl border-2 px-3 py-3.5 text-base font-semibold transition ${
+      on
+        ? 'border-emerald-600 bg-emerald-100 text-emerald-950 shadow-sm ring-2 ring-emerald-500/30'
+        : 'border-stone-200 bg-white text-stone-800 hover:border-stone-400'
+    }`;
+  const payDotClass = (on: boolean) =>
+    `inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+      on ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-white'
+    }`;
+
+  const renderTipPicker = () => (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold text-stone-900">{t('shopTip')}</p>
+      <div className="grid grid-cols-4 gap-1.5">
+        {tipPresets.map((pct) => {
+          const amt = roundTo005((subtotal * pct) / 100);
+          const on = activeTipPct === pct && !customTipOpen;
+          return (
+            <button
+              key={pct}
+              type="button"
+              className={`rounded-lg border px-1 py-2 text-center text-xs font-semibold ${
+                on
+                  ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+              }`}
+              onClick={() => {
+                setCustomTipOpen(false);
+                patch({ tipAmount: amt });
+              }}
+            >
+              {pct}%
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className={`rounded-lg border px-1 py-2 text-center text-xs font-semibold ${
+            customTipOpen
+              ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
+              : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+          }`}
+          onClick={() => setCustomTipOpen(true)}
+        >
+          {t('shopCustomAmount')}
+        </button>
+      </div>
+      {customTipOpen ? (
+        <input
+          type="number"
+          min="0"
+          step="0.05"
+          className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+          value={draft.tipAmount}
+          onChange={(e) => patch({ tipAmount: roundTo005(Number(e.target.value) || 0) })}
+        />
+      ) : null}
+    </div>
   );
 
   const placeOrderDisabled =
@@ -1428,6 +1503,10 @@ export default function CheckoutPage() {
         minOrder={minOrderThreshold}
         freeDeliveryFrom={freeDeliveryThreshold}
       />
+      <div className="flex justify-between">
+        <span className="text-stone-500">{t('shopSubtotal')}</span>
+        <span>CHF {subtotal.toFixed(2)}</span>
+      </div>
       {offerDiscount > 0 && (
         <div className="space-y-1.5 py-0.5">
           {(appliedOffers.length ? appliedOffers : [{ name: t('shopOffer'), discount: offerDiscount }]).map(
@@ -1495,10 +1574,13 @@ export default function CheckoutPage() {
           </span>
         </div>
       )}
-      <div className="flex justify-between font-semibold text-base pt-2">
-        <span>{t('shopTotal')}</span>
-        <span>CHF {total.toFixed(2)}</span>
-      </div>
+    </div>
+  );
+
+  const renderGrandTotal = () => (
+    <div className="flex justify-between font-semibold text-base pt-1">
+      <span>{t('shopTotal')}</span>
+      <span>CHF {total.toFixed(2)}</span>
     </div>
   );
 
@@ -1610,25 +1692,11 @@ export default function CheckoutPage() {
                         setShowLogin(true);
                         setWantCreateAccount(false);
                         setPassword('');
+                        setConfirmPassword('');
                         if (draft.customerEmail) setLoginEmail(draft.customerEmail);
                       }}
                     >
                       {t('shopLogIn')}
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                        wantCreateAccount
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-300 bg-white text-stone-900 hover:border-stone-900'
-                      }`}
-                      onClick={() => {
-                        setWantCreateAccount(true);
-                        setShowLogin(false);
-                        setPassword('');
-                      }}
-                    >
-                      {t('shopCreateAccount')}
                     </button>
                   </div>
                 ) : null}
@@ -1670,20 +1738,6 @@ export default function CheckoutPage() {
                       {t('shopLogIn')}
                     </button>
                   </form>
-                ) : null}
-
-                {wantCreateAccount && !showLogin ? (
-                  <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
-                    <p className="text-xs text-stone-600">{t('shopCreateAccountCheckoutHint')}</p>
-                    <input
-                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
-                      type="password"
-                      placeholder={t('shopPasswordMin6')}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </div>
                 ) : null}
               </div>
             )}
@@ -2065,8 +2119,8 @@ export default function CheckoutPage() {
               {fieldErrors.customerName ? (
                 <p className="text-sm text-rose-600">{fieldErrors.customerName}</p>
               ) : null}
-              <div className="space-y-2">
-                <label className="block space-y-1">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="space-y-1 min-w-0">
                   <span className={SHOP_LABEL_CLASS}>{t('shopEmail')}</span>
                   <input
                     className={`${SHOP_INPUT_CLASS} ${
@@ -2083,10 +2137,7 @@ export default function CheckoutPage() {
                     }}
                   />
                 </label>
-                {fieldErrors.customerEmail ? (
-                  <p className="text-sm text-rose-600">{fieldErrors.customerEmail}</p>
-                ) : null}
-                <label className="block space-y-1">
+                <label className="space-y-1 min-w-0">
                   <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
                   <ShopPhoneField
                     value={draft.customerPhone}
@@ -2101,146 +2152,71 @@ export default function CheckoutPage() {
                     }}
                   />
                 </label>
-                {fieldErrors.customerPhone ? (
-                  <p className="text-sm text-rose-600">{fieldErrors.customerPhone}</p>
-                ) : null}
               </div>
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-stone-900">{t('shopPaymentDetails')}</h2>
-                {loyaltyEnabled && maxCashPoints > 0 && (
-                  <label
-                    className={`flex items-start gap-3 border p-4 cursor-pointer ${
-                      payWithPoints ? 'border-teal-800 bg-teal-50' : 'border-stone-200'
-                    }`}
-                  >
+              {fieldErrors.customerEmail ? (
+                <p className="text-sm text-rose-600">{fieldErrors.customerEmail}</p>
+              ) : null}
+              {fieldErrors.customerPhone ? (
+                <p className="text-sm text-rose-600">{fieldErrors.customerPhone}</p>
+              ) : null}
+              {!customer ? (
+                <div className="space-y-3 pt-1">
+                  <label className="flex items-start gap-2.5 cursor-pointer text-sm text-stone-800">
                     <input
-                      type="radio"
-                      name="payPrimary"
-                      checked={payWithPoints}
-                      onChange={() => {
-                        setPayWithPoints(true);
-                        patch({
-                          pointsToRedeem: maxCashPoints,
-                          paymentMethod: 'cash',
-                        });
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-600"
+                      checked={wantCreateAccount}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setWantCreateAccount(on);
+                        setShowLogin(false);
+                        if (!on) {
+                          setPassword('');
+                          setConfirmPassword('');
+                        }
                       }}
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{t('shopPayWithPoints')}</div>
-                      <p className="text-sm text-stone-600 mt-0.5">
-                        {t('shopPayWithPointsHint')
-                          .replace('{pts}', String(balanceAfterRewards))
-                          .replace('{chf}', (maxCashPoints / rate).toFixed(2))}
-                      </p>
-                      {payWithPoints && (
-                        <div className="mt-3 space-y-2">
-                          <input
-                            type="range"
-                            min={rate}
-                            max={maxCashPoints}
-                            step={rate}
-                            value={Math.max(rate, pointsToRedeem)}
-                            onChange={(e) =>
-                              patch({
-                                pointsToRedeem: Math.max(
-                                  rate,
-                                  Math.floor(Number(e.target.value) || 0)
-                                ),
-                              })
-                            }
-                            className="w-full"
-                          />
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                            <span>
-                              {t('shopPointsChip').replace('{n}', String(pointsToRedeem))}
-                            </span>
-                            <span className="font-semibold text-teal-900">
-                              - CHF {pointsDiscount.toFixed(2)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-stone-500">
-                            {t('shopRedeemHint').replace('{n}', String(rate))}
-                            {' · '}
-                            {t('shopPointsCoverFoodFees')}
-                          </p>
-                          {total > 0.001 ? (
-                            <div className="pt-2 border-t border-teal-100 space-y-2">
-                              <p className="text-xs font-medium text-stone-700">
-                                {t('shopPayRemaining')
-                                  .replace('{chf}', total.toFixed(2))}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  className={`px-3 py-1.5 text-sm border ${
-                                    draft.paymentMethod === 'cash' ||
-                                    draft.paymentMethod === 'pay_later'
-                                      ? 'border-stone-900 bg-white font-semibold'
-                                      : 'border-stone-300 bg-white'
-                                  }`}
-                                  onClick={() =>
-                                    patch({
-                                      paymentMethod:
-                                        draft.channel === 'delivery' ? 'cash' : 'pay_later',
-                                    })
-                                  }
-                                >
-                                  {draft.channel === 'delivery'
-                                    ? t('shopCashOnDelivery')
-                                    : t('shopPayLater')}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`px-3 py-1.5 text-sm border ${
-                                    draft.paymentMethod === 'card'
-                                      ? 'border-stone-900 bg-white font-semibold'
-                                      : 'border-stone-300 bg-white'
-                                  }`}
-                                  onClick={() => patch({ paymentMethod: 'card' })}
-                                >
-                                  {t('shopCardAdyen')}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-xs font-medium text-teal-900 pt-1">
-                              {t('shopPointsCoverAll')}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <span>{t('shopCreateAccountFaster')}</span>
                   </label>
-                )}
-              <label className="flex items-center gap-2.5 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  name="payPrimary"
-                  checked={cashSelected}
-                  onChange={() => {
-                    setPayWithPoints(false);
-                    patch({
-                      paymentMethod: draft.channel === 'delivery' ? 'cash' : 'pay_later',
-                      pointsToRedeem: 0,
-                    });
-                  }}
-                />
-                <span>{t('shopCash')}</span>
-              </label>
-              <label className="flex items-center gap-2.5 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  name="payPrimary"
-                  checked={cardSelected}
-                  onChange={() => {
-                    setPayWithPoints(false);
-                    patch({ paymentMethod: 'card', pointsToRedeem: 0 });
-                  }}
-                />
-                <span>{t('shopPayOnline')}</span>
-              </label>
+                  {wantCreateAccount ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="space-y-1 min-w-0">
+                        <span className={SHOP_LABEL_CLASS}>{t('shopPassword')}</span>
+                        <input
+                          className={SHOP_INPUT_CLASS}
+                          type="password"
+                          placeholder={t('shopPasswordMin6')}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          autoComplete="new-password"
+                        />
+                      </label>
+                      <label className="space-y-1 min-w-0">
+                        <span className={SHOP_LABEL_CLASS}>{t('shopConfirmPassword')}</span>
+                        <input
+                          className={SHOP_INPUT_CLASS}
+                          type="password"
+                          placeholder={t('shopConfirmPassword')}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          autoComplete="new-password"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-stone-900">{t('shopOrderInstructions')}</h2>
+              <textarea
+                className={SHOP_INPUT_CLASS}
+                rows={3}
+                placeholder={t('shopOrderInstructionsPlaceholder')}
+                value={draft.notes}
+                onChange={(e) => patch({ notes: e.target.value })}
+              />
             </section>
 
               {giftCardsEnabled && (
@@ -2295,66 +2271,148 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-stone-900">{t('shopChooseTip')}</h2>
-              <p className="text-sm text-stone-500">{t('shopStaffGrateful')}</p>
-              <div className="grid grid-cols-3 gap-2">
-                {tipPresets.map((pct) => {
-                  const amt = roundTo005((subtotal * pct) / 100);
-                  const on = activeTipPct === pct && !customTipOpen;
-                  return (
-                    <button
-                      key={pct}
-                      type="button"
-                      className={`rounded-lg border px-2 py-3 text-center ${
-                        on ? 'border-stone-900 bg-stone-50' : 'border-stone-200 bg-white'
-                      }`}
-                      onClick={() => {
-                        setCustomTipOpen(false);
-                        patch({ tipAmount: amt });
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-stone-900">{t('shopPaymentDetails')}</h2>
+                {loyaltyEnabled && maxCashPoints > 0 && (
+                  <label
+                    className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer ${
+                      payWithPoints
+                        ? 'border-emerald-600 bg-emerald-50'
+                        : 'border-stone-200 bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payPrimary"
+                      checked={payWithPoints}
+                      onChange={() => {
+                        setPayWithPoints(true);
+                        patch({
+                          pointsToRedeem: maxCashPoints,
+                          paymentMethod: 'cash',
+                        });
                       }}
-                    >
-                      <span className="block text-sm font-semibold tabular-nums">CHF {amt.toFixed(2)}</span>
-                      <span className="text-xs text-stone-500">{pct}%</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {customTipOpen ? (
-                <input
-                  type="number"
-                  min="0"
-                  step="0.05"
-                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
-                  value={draft.tipAmount}
-                  onChange={(e) => patch({ tipAmount: roundTo005(Number(e.target.value) || 0) })}
-                />
-              ) : (
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">{t('shopPayWithPoints')}</div>
+                      <p className="text-sm text-stone-600 mt-0.5">
+                        {t('shopPayWithPointsHint')
+                          .replace('{pts}', String(balanceAfterRewards))
+                          .replace('{chf}', (maxCashPoints / rate).toFixed(2))}
+                      </p>
+                      {payWithPoints && (
+                        <div className="mt-3 space-y-2">
+                          <input
+                            type="range"
+                            min={rate}
+                            max={maxCashPoints}
+                            step={rate}
+                            value={Math.max(rate, pointsToRedeem)}
+                            onChange={(e) =>
+                              patch({
+                                pointsToRedeem: Math.max(
+                                  rate,
+                                  Math.floor(Number(e.target.value) || 0)
+                                ),
+                              })
+                            }
+                            className="w-full"
+                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span>
+                              {t('shopPointsChip').replace('{n}', String(pointsToRedeem))}
+                            </span>
+                            <span className="font-semibold text-teal-900">
+                              - CHF {pointsDiscount.toFixed(2)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-500">
+                            {t('shopRedeemHint').replace('{n}', String(rate))}
+                            {' · '}
+                            {t('shopPointsCoverFoodFees')}
+                          </p>
+                          {total > 0.001 ? (
+                            <div className="pt-2 border-t border-emerald-100 space-y-2">
+                              <p className="text-xs font-medium text-stone-700">
+                                {t('shopPayRemaining')
+                                  .replace('{chf}', total.toFixed(2))}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className={payChoiceClass(
+                                    draft.paymentMethod === 'cash' ||
+                                      draft.paymentMethod === 'pay_later'
+                                  )}
+                                  onClick={() =>
+                                    patch({
+                                      paymentMethod:
+                                        draft.channel === 'delivery' ? 'cash' : 'pay_later',
+                                    })
+                                  }
+                                >
+                                  <span
+                                    className={payDotClass(
+                                      draft.paymentMethod === 'cash' ||
+                                        draft.paymentMethod === 'pay_later'
+                                    )}
+                                  />
+                                  {draft.channel === 'delivery'
+                                    ? t('shopCashOnDelivery')
+                                    : t('shopPayLater')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={payChoiceClass(draft.paymentMethod === 'card')}
+                                  onClick={() => patch({ paymentMethod: 'card' })}
+                                >
+                                  <span className={payDotClass(draft.paymentMethod === 'card')} />
+                                  {t('shopCardAdyen')}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs font-medium text-teal-900 pt-1">
+                              {t('shopPointsCoverAll')}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                )}
+              <div className="flex gap-3">
                 <button
                   type="button"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 text-sm font-medium text-stone-700"
-                  onClick={() => setCustomTipOpen(true)}
+                  className={payChoiceClass(cashSelected)}
+                  onClick={() => {
+                    setPayWithPoints(false);
+                    patch({
+                      paymentMethod: draft.channel === 'delivery' ? 'cash' : 'pay_later',
+                      pointsToRedeem: 0,
+                    });
+                  }}
                 >
-                  {t('shopCustomAmount')}
+                  <span className={payDotClass(cashSelected)} />
+                  {t('shopCash')}
                 </button>
-              )}
+                <button
+                  type="button"
+                  className={payChoiceClass(cardSelected)}
+                  onClick={() => {
+                    setPayWithPoints(false);
+                    patch({ paymentMethod: 'card', pointsToRedeem: 0 });
+                  }}
+                >
+                  <span className={payDotClass(cardSelected)} />
+                  {t('shopPayOnline')}
+                </button>
+              </div>
             </section>
-
-            <section className="space-y-2 lg:hidden">
-              <p className="text-sm font-semibold text-stone-900">{t('shopOffers')}</p>
-                {renderDiscountControls()}
-            </section>
-
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-stone-900">{t('shopPickupNote')}</h2>
-              <textarea
-                className={SHOP_INPUT_CLASS}
-                rows={2}
-                placeholder={t('shopPickupNotePlaceholder')}
-                value={draft.notes}
-                onChange={(e) => patch({ notes: e.target.value })}
-              />
+            <section className="space-y-3 lg:hidden">
+              {renderDiscountControls()}
+              {renderTipPicker()}
+              {renderGrandTotal()}
             </section>
         </div>
 
@@ -2374,9 +2432,11 @@ export default function CheckoutPage() {
                 </h2>
                 <div className="max-h-[min(52vh,28rem)] overflow-y-auto pr-1">{renderCartItems()}</div>
               </div>
-              <div className="border-t border-stone-100 pt-3">{renderCartTotals()}</div>
-              <div className="space-y-2">
+              <div className="border-t border-stone-100 pt-3 space-y-3">
+                {renderCartTotals()}
                 {renderDiscountControls()}
+                {renderTipPicker()}
+                {renderGrandTotal()}
                 <button
                   type="button"
                   className={`shop-checkout-sticky-bar__order w-full ${checkoutReady ? 'is-ready' : 'is-pending'}`}
@@ -2459,7 +2519,12 @@ export default function CheckoutPage() {
               </Link>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-4">{renderCartItems()}</div>
-            <div className="border-t border-stone-100 px-4 py-4">{renderCartTotals()}</div>
+            <div className="border-t border-stone-100 px-4 py-4 space-y-3">
+              {renderCartTotals()}
+              {renderDiscountControls()}
+              {renderTipPicker()}
+              {renderGrandTotal()}
+            </div>
           </div>
         </div>
       ) : null}
