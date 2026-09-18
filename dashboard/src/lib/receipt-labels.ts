@@ -12,6 +12,8 @@ export type ReceiptLabels = {
   tax: string;
   rounding: string;
   total: string;
+  /** EUR equivalent line under CHF total (when exchange rate is set). */
+  eurEquivalent: string;
   payment: string;
   paid: string;
   tendered: string;
@@ -114,6 +116,7 @@ const EN: ReceiptLabels = {
   tax: 'Tax',
   rounding: 'Rounding',
   total: 'TOTAL',
+  eurEquivalent: '≈ EUR',
   payment: 'Payment',
   paid: 'Paid',
   tendered: 'Tendered',
@@ -209,6 +212,7 @@ const FR: ReceiptLabels = {
   tax: 'TVA',
   rounding: 'Arrondi',
   total: 'TOTAL',
+  eurEquivalent: '≈ EUR',
   payment: 'Paiement',
   paid: 'Payé',
   tendered: 'Remis',
@@ -304,6 +308,7 @@ const DE: ReceiptLabels = {
   tax: 'MwSt.',
   rounding: 'Rundung',
   total: 'TOTAL',
+  eurEquivalent: '≈ EUR',
   payment: 'Zahlung',
   paid: 'Bezahlt',
   tendered: 'Gegeben',

@@ -1755,6 +1755,9 @@ const en: Dict = {
   receiptLanguage: 'Receipt language',
   receiptLangPanel: 'Follow panel language',
   receiptPaperWidth: 'Paper width',
+  receiptChfToEurRate: 'CHF → EUR exchange rate',
+  receiptChfToEurRateHint:
+    'Optional. When set, receipts show an EUR equivalent under the total (1 CHF = X EUR). Leave empty to hide.',
   receiptLogoUrl: 'Receipt logo URL',
   receiptLogoHint: 'Leave empty to use the shop logo. Printed on 80mm / 58mm receipts.',
   receiptHeader: 'Receipt header',
@@ -5791,6 +5794,9 @@ const fr: Dict = {
   receiptLanguage: 'Langue du reçu',
   receiptLangPanel: 'Suivre la langue du panneau',
   receiptPaperWidth: 'Largeur papier',
+  receiptChfToEurRate: 'Taux CHF → EUR',
+  receiptChfToEurRateHint:
+    'Optionnel. Si renseigné, les reçus affichent un équivalent EUR sous le total (1 CHF = X EUR). Laissez vide pour masquer.',
   receiptLogoUrl: 'URL du logo reçu',
   receiptLogoHint: 'Laissez vide pour utiliser le logo boutique. Imprimé en 80mm / 58mm.',
   receiptHeader: 'En-tête du reçu',
@@ -9777,6 +9783,9 @@ const de: Dict = {
   receiptLanguage: 'Belegsprache',
   receiptLangPanel: 'Panel-Sprache folgen',
   receiptPaperWidth: 'Papierbreite',
+  receiptChfToEurRate: 'CHF → EUR Wechselkurs',
+  receiptChfToEurRateHint:
+    'Optional. Wenn gesetzt, zeigen Belege unter dem Total einen EUR-Gegenwert (1 CHF = X EUR). Leer lassen zum Ausblenden.',
   receiptLogoUrl: 'Logo-URL für Beleg',
   receiptLogoHint: 'Leer lassen für Shop-Logo. Druck auf 80mm / 58mm.',
   receiptHeader: 'Beleg-Kopfzeile',

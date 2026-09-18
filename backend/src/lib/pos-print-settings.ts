@@ -54,6 +54,11 @@ export type PosPrintSettings = {
   paperWidthMm?: 58 | 80;
   /** Receipt language; "panel" follows panelLanguage */
   receiptLanguage?: "en" | "fr" | "de" | "panel";
+  /**
+   * Optional CHF→EUR rate for receipts (1 CHF = X EUR).
+   * When set, printed and digital receipts show an EUR equivalent under the total.
+   */
+  receiptChfToEurRate?: number | null;
   /** Override logo; empty/null falls back to shopLogoUrl */
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
@@ -182,6 +187,14 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** Parse optional receipt CHF→EUR rate; null hides the EUR line on receipts. */
+export function parseReceiptChfToEurRate(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n > 2) return null;
+  return Math.round(n * 10000) / 10000;
+}
+
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const paper = Number(src.paperWidthMm) === 58 ? 58 : 80;
@@ -295,6 +308,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     adyenReceiptDigitalOnly: src.adyenReceiptDigitalOnly === true,
     paperWidthMm: paper,
     receiptLanguage,
+    receiptChfToEurRate: parseReceiptChfToEurRate(src.receiptChfToEurRate),
     receiptLogoUrl:
       src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
         ? null

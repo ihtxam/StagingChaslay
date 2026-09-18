@@ -9,6 +9,8 @@ import {
 } from "@/lib/adyen-receipt";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { guestOrderNumber, parseOrderMetaFromNotes } from "@/lib/guest-order-number";
+import { parseReceiptChfToEurRate } from "@/lib/pos-print-settings";
+import { roundMoney2 } from "@/lib/money";
 
 const router = Router();
 
@@ -50,6 +52,7 @@ type ReceiptOrderRow = {
   taxDeliveryRate: string | number | null;
   taxIncludedInPrice: boolean | null;
   vatAfterDiscount: boolean | null;
+  posPrintSettings?: unknown;
 };
 
 type ReceiptItemRow = {
@@ -115,6 +118,7 @@ async function findReceiptOrder(ref: string): Promise<ReceiptOrderRow | null> {
         taxDeliveryRate: schema.merchants.taxDeliveryRate,
         taxIncludedInPrice: schema.merchants.taxIncludedInPrice,
         vatAfterDiscount: schema.merchants.vatAfterDiscount,
+        posPrintSettings: schema.merchants.posPrintSettings,
       })
       .from(schema.orders)
       .leftJoin(schema.merchants, eq(schema.merchants.id, schema.orders.merchantId))
@@ -322,6 +326,14 @@ router.get("/:ref", async (req: Request, res: Response) => {
       orderDisplay,
       tabNumber,
     });
+    const chfToEurRate = parseReceiptChfToEurRate(
+      order.posPrintSettings && typeof order.posPrintSettings === "object"
+        ? (order.posPrintSettings as Record<string, unknown>).receiptChfToEurRate
+        : null
+    );
+    const orderTotal = Number(order.total) || 0;
+    const eurTotal =
+      chfToEurRate != null ? roundMoney2(orderTotal * chfToEurRate) : null;
 
     res.json({
       success: true,
@@ -353,6 +365,8 @@ router.get("/:ref", async (req: Request, res: Response) => {
         total: order.total,
         tipAmount: order.tipAmount,
         roundingAmount: order.roundingAmount,
+        chfToEurRate,
+        eurTotal,
         tableLabel: order.tableLabel,
         guestCount: order.guestCount,
         notes: order.notes,

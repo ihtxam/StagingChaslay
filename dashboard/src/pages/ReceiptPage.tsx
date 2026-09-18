@@ -30,6 +30,8 @@ type Receipt = {
   tipAmount?: string | number;
   roundingAmount?: string | number;
   total: string | number;
+  chfToEurRate?: number | null;
+  eurTotal?: number | null;
   tableLabel?: string | null;
   guestCount?: number | null;
   customerName?: string | null;
@@ -55,6 +57,11 @@ type Receipt = {
 function money(v: string | number | undefined) {
   const n = typeof v === 'string' ? parseFloat(v) : Number(v || 0);
   return `CHF ${n.toFixed(2)}`;
+}
+
+function eurMoney(v: string | number | undefined | null) {
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v || 0);
+  return `EUR ${n.toFixed(2)}`;
 }
 
 function decodeSaleRef(raw: string | undefined): string {
@@ -301,6 +308,9 @@ export default function ReceiptPage() {
             />
           ) : null}
           <TotalsRow label={L.total} value={money(totals.total)} bold />
+          {receipt.eurTotal != null && receipt.chfToEurRate != null ? (
+            <TotalsRow label={L.eurEquivalent} value={eurMoney(receipt.eurTotal)} muted />
+          ) : null}
           {receipt.paymentMethod ? (
             <p className="text-gray-500 pt-1">
               {L.payment}: {paymentLabel(L, receipt.paymentMethod)}
