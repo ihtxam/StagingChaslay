@@ -2849,6 +2849,24 @@ export function printersForRole(
   return [];
 }
 
+/** True when kitchen and receipt jobs would hit the same physical printer (serialize those jobs). */
+export function receiptAndKitchenSharePrinter(
+  settings: PosPrintSettingsClient | null | undefined,
+  fallbackPrinterName?: string | null
+): boolean {
+  const kitchen = printersForRole(settings, 'kitchen')
+    .map((p) => (p.name || '').trim())
+    .filter(Boolean);
+  const receipt = printersForRole(settings, 'receipt')
+    .map((p) => (p.name || '').trim())
+    .filter(Boolean);
+  const fallback = (fallbackPrinterName || '').trim();
+  const kitchenNames = kitchen.length ? kitchen : fallback ? [fallback] : [];
+  const receiptNames = receipt.length ? receipt : fallback ? [fallback] : [];
+  if (!kitchenNames.length || !receiptNames.length) return true;
+  return kitchenNames.some((name) => receiptNames.includes(name));
+}
+
 export function filterKitchenItems(
   items: KitchenTicketItem[],
   printer: NonNullable<PosPrintSettingsClient['printers']>[number],

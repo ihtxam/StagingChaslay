@@ -37,6 +37,7 @@ import {
   nextDineInCounterNumber,
   webPosBackendOrderId,
   printersForRole,
+  receiptAndKitchenSharePrinter,
   resolveReceiptLanguage,
   buildReceiptEscPos,
   normalizeGoogleReviewUrl,
@@ -7211,15 +7212,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, extras);
       return;
     }
-    if (method === 'card' && deviceTapToPayActive) {
-      setCheckoutExtras(extras);
-      await runTapToPayPayment(undefined, extras);
-      return;
-    }
-    if (method === 'card' && isAndroidWebPosTill()) {
-      toast.error(deviceTapToPayMessage || t('webPosTapToPayNotReady'));
-      return;
-    }
     const paidAmount = totals.total;
     setBusy(true);
     try {
@@ -8615,12 +8607,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const kitchenDelta = unsentKitchenLines(cartSnapshot);
     const shouldPrintKitchen =
       (!moreSplits || splitIndex === 0) && kitchenDelta.length > 0;
-    // Offline sales have no published receipt URL yet — still print text via local Print Agent.
-    // Kitchen first, then customer receipt — avoids one long strip when both hit the same printer.
+    const shareKitchenReceiptPrinter = receiptAndKitchenSharePrinter(printSettings, printerName);
+    // Send uses fire-and-forget kitchen print; at payment, run kitchen + receipt in parallel when safe.
     if (shouldPrintKitchen || shouldPrintReceipt) {
+      const receiptBuildPromise = shouldPrintReceipt
+        ? resolveLastReceiptEscPosBase64(receiptText, {
+            qrUrl: receiptUrl,
+            deliveryQrUrl,
+            fastQr: true,
+          })
+        : null;
       void (async () => {
-        if (shouldPrintKitchen) {
-          try {
+        try {
+          if (shouldPrintKitchen && shouldPrintReceipt && shareKitchenReceiptPrinter) {
             await printKitchenForCart(kitchenDelta, channelSnapshot, {
               orderNumber: ticket.display,
               when: whenSnapshot,
@@ -8629,17 +8628,42 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               lineIds: kitchenDelta.map((l) => l.lineId),
               dedicatedKitchenOnly: method === 'pay_later',
             });
-          } catch (e: unknown) {
-            handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
-          }
-        }
-        if (shouldPrintReceipt) {
-          try {
+            const dataBase64 = receiptBuildPromise ? await receiptBuildPromise : undefined;
             await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
               singleTarget: method === 'pay_later',
+              dataBase64,
               fastQr: true,
             });
-          } catch (e: unknown) {
+            return;
+          }
+          await Promise.all([
+            shouldPrintKitchen
+              ? printKitchenForCart(kitchenDelta, channelSnapshot, {
+                  orderNumber: ticket.display,
+                  when: whenSnapshot,
+                  tabNumber: tabSnapshot,
+                  tableLabel: tableLabelSnapshot,
+                  lineIds: kitchenDelta.map((l) => l.lineId),
+                  dedicatedKitchenOnly: method === 'pay_later',
+                }).catch((e: unknown) => {
+                  handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
+                })
+              : Promise.resolve(),
+            shouldPrintReceipt
+              ? (async () => {
+                  const dataBase64 = receiptBuildPromise ? await receiptBuildPromise : undefined;
+                  await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+                    singleTarget: method === 'pay_later',
+                    dataBase64,
+                    fastQr: true,
+                  });
+                })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'))
+              : Promise.resolve(),
+          ]);
+        } catch (e: unknown) {
+          if (shouldPrintKitchen) {
+            handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
+          } else {
             notifyPrintError(e, 'webPosPrintFailed');
           }
         }
@@ -8766,16 +8790,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       await runTerminalPayment(undefined, adjusted);
       return;
     }
-    if (adjusted.method === 'card' && deviceTapToPayActive) {
-      setPaymentMethod('card');
-      await runTapToPayPayment(undefined, adjusted);
-      return;
-    }
-    if (adjusted.method === 'card' && isAndroidWebPosTill()) {
-      toast.error(deviceTapToPayMessage || t('webPosTapToPayNotReady'));
-      setPosView('checkout');
-      return;
-    }
     setBusy(true);
     try {
       await finalizeSale(adjusted.method, undefined, undefined, adjusted, true);
@@ -8816,6 +8830,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (sendToKitchen) {
         const kitchenDelta = unsentKitchenLines(cartSnapshot);
         if (kitchenDelta.length) {
+          const sentAt = Date.now();
+          const sentIds = new Set(kitchenDelta.map((l) => l.lineId));
+          const markedCart = cartSnapshot.map((l) =>
+            sentIds.has(l.lineId)
+              ? { ...l, sentToKitchen: true, sentToKitchenAt: l.sentToKitchenAt || sentAt }
+              : l
+          );
+          void persistHeldOrder(markedCart, true, { ticket }).catch(() => undefined);
           void printKitchenForCart(kitchenDelta, channelSnapshot, {
             orderNumber: kitchenOrderNumber({ ticket }),
             when: whenSnapshot,
