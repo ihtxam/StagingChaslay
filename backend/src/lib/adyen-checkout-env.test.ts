@@ -10,6 +10,7 @@ import {
   LIVE_CHECKOUT_PREFIX_REQUIRED,
   liveCheckoutApiBase,
   normalizeLiveUrlPrefix,
+  PLATFORM_ADYEN_LIVE_URL_PREFIX,
   shopAdyenCardReady,
   testCheckoutApiBase,
 } from "./adyen-checkout-env.ts";
@@ -65,27 +66,22 @@ delete process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX;
 delete process.env.PLATFORM_ADYEN_API_BASE_LIVE;
 
 assert.equal(testCheckoutApiBase(), "https://checkout-test.adyen.com/v71");
-assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
-  assert.ok(err instanceof Error);
-  assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
-  return true;
-});
+assert.equal(
+  liveCheckoutApiBase(),
+  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`,
+  "live Checkout uses the Swisspayout/Chaslay prefix when merchants do not enter an endpoint URL"
+);
 assert.equal(checkoutApiBase("test_xxx"), "https://checkout-test.adyen.com/v71");
-assert.throws(() => checkoutApiBase("live_xxx"), (err: unknown) => {
-  assert.ok(err instanceof Error);
-  assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
-  return true;
-});
+assert.equal(
+  checkoutApiBase("live_xxx"),
+  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`
+);
 
 process.env.ADYEN_API_BASE = "https://checkout-test.adyen.com/v71";
-assert.throws(
-  () => checkoutApiBase("live_xxx"),
-  (err: unknown) => {
-    assert.ok(err instanceof Error);
-    assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
-    return true;
-  },
-  "live client key must not reuse ADYEN_API_BASE when it is the test host, and must not fall back to checkout-live.adyen.com"
+assert.equal(
+  checkoutApiBase("live_xxx"),
+  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`,
+  "live client key must not reuse ADYEN_API_BASE when it is the test host"
 );
 
 process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyen.com/checkout/v71";
