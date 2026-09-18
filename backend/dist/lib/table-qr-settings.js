@@ -7,6 +7,8 @@ exports.DEFAULT_TABLE_QR_SETTINGS = {
     headerText: "MENU",
     subtitleText: "Scan me to order",
     layoutTemplate: "vertical",
+    qrAutoApprove: false,
+    qrPayAtTableEnabled: true,
 };
 const LAYOUTS = ["vertical", "horizontal", "curved"];
 function normalizeTableQrSettings(raw) {
@@ -20,6 +22,8 @@ function normalizeTableQrSettings(raw) {
         layoutTemplate: LAYOUTS.includes(layout)
             ? layout
             : exports.DEFAULT_TABLE_QR_SETTINGS.layoutTemplate,
+        qrAutoApprove: src.qrAutoApprove === true,
+        qrPayAtTableEnabled: src.qrPayAtTableEnabled !== false,
     };
 }
 //# sourceMappingURL=table-qr-settings.js.map

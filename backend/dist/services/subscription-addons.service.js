@@ -51,11 +51,13 @@ const VALID_ADDON_KEYS = new Set([
     "signage",
     "kds",
     "ods",
+    "kiosk",
     "just_eat",
     "uber_eats",
     "extra_pos_post",
     "extra_waiter_post",
     "extra_staff",
+    "extra_location",
 ]);
 class SubscriptionAddonsService {
     static async listForReseller(resellerId, includeInactive = true) {
@@ -230,6 +232,15 @@ class SubscriptionAddonsService {
                 sortOrder: 40,
             },
             {
+                name: "Self-order kiosk",
+                slug: "kiosk",
+                addonKey: "kiosk",
+                description: "Customer-facing self-order kiosk with card and cash payments",
+                priceMonthly: 29,
+                priceYearly: 290,
+                sortOrder: 35,
+            },
+            {
                 name: "Extra POS station",
                 slug: "extra-pos",
                 addonKey: "extra_pos_post",
@@ -248,6 +259,16 @@ class SubscriptionAddonsService {
                 priceYearly: 80,
                 quantity: 1,
                 sortOrder: 60,
+            },
+            {
+                name: "Extra location",
+                slug: "extra-location",
+                addonKey: "extra_location",
+                description: "One additional shop or branch location",
+                priceMonthly: 15,
+                priceYearly: 150,
+                quantity: 1,
+                sortOrder: 65,
             },
         ];
         for (const addon of defaults) {
@@ -288,6 +309,25 @@ class SubscriptionAddonsService {
                 priceMonthly: 15,
                 priceYearly: 150,
                 sortOrder: 15,
+            },
+            {
+                name: "Extra location",
+                slug: "extra-location",
+                addonKey: "extra_location",
+                description: "One additional shop or branch location",
+                priceMonthly: 15,
+                priceYearly: 150,
+                quantity: 1,
+                sortOrder: 65,
+            },
+            {
+                name: "Self-order kiosk",
+                slug: "kiosk",
+                addonKey: "kiosk",
+                description: "Customer-facing self-order kiosk with card and cash payments",
+                priceMonthly: 29,
+                priceYearly: 290,
+                sortOrder: 35,
             },
         ];
         for (const addon of missing) {

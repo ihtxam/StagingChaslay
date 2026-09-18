@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
@@ -10,6 +43,13 @@ router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
 router.use(auth_middleware_1.setMerchantContext);
 router.use((0, auth_middleware_1.requirePermission)("MANAGE_INVENTORY"));
+router.use(business_module_middleware_1.requireRetailModule);
+function denyInventoryRecipes(_req, res) {
+    return res.status(403).json({
+        error: "Recipes and consumption reports are not available in retail inventory",
+        code: "INVENTORY_RECIPES_DISABLED",
+    });
+}
 function handleError(res, error, fallback) {
     if (error instanceof inventory_service_1.InventoryLicenseError) {
         return res.status(403).json({ error: error.message, code: "INVENTORY_ADDON_REQUIRED" });
@@ -94,7 +134,6 @@ router.put("/settings", async (req, res) => {
         const license = await inventory_service_1.InventoryService.updateSettings(merchantId, {
             wasteFactor: req.body?.wasteFactor != null ? Number(req.body.wasteFactor) : undefined,
             autoReorderEmailEnabled: req.body?.autoReorderEmailEnabled != null ? !!req.body.autoReorderEmailEnabled : undefined,
-            expiryAlertDays: req.body?.expiryAlertDays != null ? Number(req.body.expiryAlertDays) : undefined,
         });
         res.json({ success: true, ...license });
     }
@@ -191,15 +230,19 @@ router.get("/expiring-soon", async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
-            return res.status(400).json({ error: "Merchant ID is required" });
+            return res.status(401).json({ error: "Merchant ID is required" });
         const data = await inventory_service_1.InventoryService.listExpiringSoon(merchantId);
         res.json({ success: true, ...data });
     }
     catch (error) {
-        handleError(res, error, "Failed to load expiring stock");
+        if (error instanceof inventory_service_1.InventoryLicenseError) {
+            return res.json({ success: true, lots: [], leadDays: 30 });
+        }
+        console.warn("expiring-soon failed:", error);
+        return res.json({ success: true, lots: [], leadDays: 30 });
     }
 });
-router.get("/usage", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
+router.get("/usage", denyInventoryRecipes, async (req, res) => {
     try {
         const days = Number(req.query.days) || 30;
         const rows = await inventory_service_1.InventoryService.usageReport(req.merchantId, days);
@@ -384,26 +427,7 @@ router.get("/purchase-report", async (req, res) => {
         handleError(res, error, "Failed to load purchase report");
     }
 });
-router.get("/dead-stock", async (req, res) => {
-    try {
-        const report = await inventory_service_1.InventoryService.deadStockReport(req.merchantId, Number(req.query.days) || 90);
-        res.json({ success: true, report });
-    }
-    catch (error) {
-        handleError(res, error, "Failed to load dead stock report");
-    }
-});
-router.post("/stop-ordering", async (req, res) => {
-    try {
-        const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
-        const result = await inventory_service_1.InventoryService.stopOrderingItems(req.merchantId, itemIds);
-        res.json({ success: true, ...result });
-    }
-    catch (error) {
-        handleError(res, error, "Failed to update items");
-    }
-});
-router.get("/cookbook", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
+router.get("/cookbook", denyInventoryRecipes, async (req, res) => {
     try {
         const entries = await inventory_service_1.InventoryService.listCookbook(req.merchantId);
         res.json({ success: true, entries });
@@ -412,7 +436,7 @@ router.get("/cookbook", business_module_middleware_1.requireRestaurantModule, as
         handleError(res, error, "Failed to load cookbook");
     }
 });
-router.get("/products/:productId/recipe", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
+router.get("/products/:productId/recipe", denyInventoryRecipes, async (req, res) => {
     try {
         const recipe = await inventory_service_1.InventoryService.getRecipe(req.merchantId, req.params.productId);
         res.json({ success: true, recipe });
@@ -421,13 +445,84 @@ router.get("/products/:productId/recipe", business_module_middleware_1.requireRe
         handleError(res, error, "Failed to load recipe");
     }
 });
-router.put("/products/:productId/recipe", business_module_middleware_1.requireRestaurantModule, async (req, res) => {
+router.put("/products/:productId/recipe", denyInventoryRecipes, async (req, res) => {
     try {
         const recipe = await inventory_service_1.InventoryService.setRecipe(req.merchantId, req.params.productId, req.body?.lines || [], req.body?.recipeYield != null ? Number(req.body.recipeYield) : undefined);
         res.json({ success: true, recipe });
     }
     catch (error) {
         handleError(res, error, "Failed to save recipe");
+    }
+});
+/** Cross-location inventory transfers */
+router.get("/transfers", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const status = req.query.status ? String(req.query.status) : undefined;
+        const transfers = await InventoryTransferService.list(req.merchantId, status);
+        res.json({ success: true, transfers });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to list transfers");
+    }
+});
+router.post("/transfers", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const body = req.body || {};
+        const transfer = await InventoryTransferService.create(req.merchantId, {
+            fromLocationId: String(body.fromLocationId || ""),
+            toLocationId: String(body.toLocationId || ""),
+            itemId: String(body.itemId || ""),
+            qty: Number(body.qty),
+            note: body.note,
+            staffId: req.user?.staffId || null,
+            staffName: req.user?.name || null,
+        });
+        res.json({ success: true, transfer });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to create transfer");
+    }
+});
+router.post("/transfers/:transferId/confirm", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const transfer = await InventoryTransferService.confirm(req.merchantId, req.params.transferId);
+        res.json({ success: true, transfer });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to confirm transfer");
+    }
+});
+router.post("/transfers/:transferId/cancel", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const transfer = await InventoryTransferService.cancel(req.merchantId, req.params.transferId);
+        res.json({ success: true, transfer });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to cancel transfer");
+    }
+});
+router.get("/location-stock/:locationId", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const stock = await InventoryTransferService.locationStockSummary(req.merchantId, req.params.locationId);
+        res.json({ success: true, stock });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to load location stock");
+    }
+});
+router.post("/backfill-location-stock", async (req, res) => {
+    try {
+        const { InventoryTransferService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory-transfer.service")));
+        const result = await InventoryTransferService.backfillDefaultLocation(req.merchantId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        handleError(res, error, "Failed to backfill location stock");
     }
 });
 exports.default = router;

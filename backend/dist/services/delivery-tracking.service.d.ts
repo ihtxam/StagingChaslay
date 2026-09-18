@@ -1,3 +1,5 @@
+/** Shop/3P payloads sometimes store Delivery / DELIVERY instead of delivery. */
+export declare function isDeliveryFulfillmentChannel(channel?: string | null): boolean;
 export type DeliveryDriverLive = {
     staffId: string;
     staffName: string;
@@ -98,6 +100,7 @@ export declare class DeliveryTrackingService {
     static completeDeliveryAsDriver(merchantId: string, staffId: string, orderId: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -130,6 +133,7 @@ export declare class DeliveryTrackingService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -142,6 +146,7 @@ export declare class DeliveryTrackingService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -178,11 +183,13 @@ export declare class DeliveryTrackingService {
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -198,7 +205,6 @@ export declare class DeliveryTrackingService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -211,6 +217,7 @@ export declare class DeliveryTrackingService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -223,6 +230,7 @@ export declare class DeliveryTrackingService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -260,11 +268,13 @@ export declare class DeliveryTrackingService {
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -280,7 +290,6 @@ export declare class DeliveryTrackingService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -293,6 +302,7 @@ export declare class DeliveryTrackingService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -305,6 +315,7 @@ export declare class DeliveryTrackingService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;

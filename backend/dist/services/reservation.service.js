@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReservationService = exports.DEFAULT_RESERVATION_SETTINGS = void 0;
 exports.normalizeReservationSettings = normalizeReservationSettings;
@@ -25,6 +58,7 @@ exports.DEFAULT_RESERVATION_SETTINGS = {
     minHoursBefore: 2,
     maxDaysAhead: 30,
     autoAccept: false,
+    autoPrintReservations: true,
     sendConfirmationEmail: true,
     sendStatusEmails: true,
     reminderEnabled: true,
@@ -58,6 +92,7 @@ function normalizeReservationSettings(raw) {
         minHoursBefore: clampInt(s.minHoursBefore, 0, 72, 2),
         maxDaysAhead: clampInt(s.maxDaysAhead, 1, 180, 30),
         autoAccept: s.autoAccept !== false && s.autoAccept !== undefined ? !!s.autoAccept : !!s.autoAccept,
+        autoPrintReservations: s.autoPrintReservations !== false,
         sendConfirmationEmail: s.sendConfirmationEmail !== false,
         sendStatusEmails: s.sendStatusEmails !== false,
         maxCoversPerSlot: s.maxCoversPerSlot == null || Number(s.maxCoversPerSlot) <= 0
@@ -404,6 +439,9 @@ class ReservationService {
         const reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
         if (Number.isNaN(reservedAt.getTime()))
             throw new Error("Invalid reservation time");
+        if (reservedAt.getTime() < Date.now() - 60000) {
+            throw new Error("Cannot book a time in the past");
+        }
         if (input.source === "web" || !input.skipSlotCheck) {
             const dateYmd = formatZurichDate(reservedAt);
             const hm = formatZurichHm(reservedAt);
@@ -436,12 +474,27 @@ class ReservationService {
         }
         const durationMinutes = settings.seatingDurationMinutes;
         const slotDeal = matchSlotDiscount(settings, reservedAt);
+        let customerId = input.customerId || null;
+        if (!customerId) {
+            try {
+                const { CustomerService } = await Promise.resolve().then(() => __importStar(require("@/services/customer.service")));
+                const customer = await CustomerService.upsertFromGuest(merchantId, {
+                    name,
+                    phone,
+                    email,
+                });
+                customerId = customer?.id || null;
+            }
+            catch (err) {
+                console.warn("Reservation customer upsert failed:", err);
+            }
+        }
         const [row] = await db
             .insert(db_1.schema.reservations)
             .values({
             merchantId,
             code: makeCode(),
-            customerId: input.customerId || null,
+            customerId,
             guestName: name,
             guestEmail: email,
             guestPhone: phone,
@@ -472,25 +525,32 @@ class ReservationService {
         else {
             await this.sendAdminNotifyEmail(merchant, row, status === "confirmed" ? "confirmed" : "received");
         }
-        if (status === "pending" || status === "confirmed") {
+        if (status === "confirmed") {
             await ReservationService.enqueuePosAlert(merchantId, row.id);
         }
         return row;
     }
-    /** WebPOS auto-print + alert via floor print job queue. */
+    /** Till auto-print via floor print job queue (Print Agent can drain without POS). */
     static async enqueuePosAlert(merchantId, reservationId) {
         try {
-            await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
-                jobType: "ESCPOS",
-                payload: {
-                    kind: "auto_print_reservation",
-                    reservationId,
-                },
-                sourceDeviceId: "reservation",
-            });
+            const { PrintJobExpandService } = await Promise.resolve().then(() => __importStar(require("@/services/print-job-expand.service")));
+            await PrintJobExpandService.enqueueReservationPrint(merchantId, reservationId);
         }
         catch (err) {
             console.warn("Reservation POS alert enqueue failed:", err);
+            try {
+                await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
+                    jobType: "ESCPOS",
+                    payload: {
+                        kind: "auto_print_reservation",
+                        reservationId,
+                    },
+                    sourceDeviceId: "reservation",
+                });
+            }
+            catch (fallbackErr) {
+                console.warn("Reservation POS alert fallback enqueue failed:", fallbackErr);
+            }
         }
     }
     static async list(merchantId, opts = {}) {
@@ -725,6 +785,9 @@ class ReservationService {
             if (Number.isNaN(reservedAt.getTime()))
                 throw new Error("Invalid reservation time");
             patch.reservedAt = reservedAt;
+        }
+        if (patch.reservedAt && new Date(reservedAt).getTime() < Date.now() - 60000) {
+            throw new Error("Cannot book a time in the past");
         }
         let partySize = Number(current.partySize) || 2;
         if (input.partySize !== undefined) {

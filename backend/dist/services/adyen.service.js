@@ -7,11 +7,21 @@ exports.AdyenService = void 0;
 const axios_1 = __importDefault(require("axios"));
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 class AdyenService {
+    static environmentFromClientKey(clientKey) {
+        return (0, adyen_checkout_env_1.environmentFromClientKey)(clientKey);
+    }
+    static checkoutApiBase(clientKey, liveUrlPrefix) {
+        return (0, adyen_checkout_env_1.checkoutApiBase)(clientKey, liveUrlPrefix);
+    }
+    static formatSessionError(error) {
+        return (0, adyen_checkout_env_1.formatAdyenSessionError)(error);
+    }
     /**
      * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
      * Legacy per-terminal credential overrides are still honored if present.
@@ -35,44 +45,65 @@ class AdyenService {
         const apiKey = terminal?.adyenApiKey || merchant?.adyenApiKey || ADYEN_API_KEY;
         const merchantAccount = terminal?.adyenMerchantAccount || merchant?.adyenMerchantAccount || ADYEN_MERCHANT_ACCOUNT;
         const clientId = terminal?.adyenClientId || merchant?.adyenClientId || ADYEN_CLIENT_ID;
+        const liveUrlPrefix = merchant?.adyenLiveUrlPrefix || null;
         if (!apiKey || !merchantAccount) {
-            throw new Error("Adyen credentials not configured for this merchant");
+            throw new Error("Swisspayout credentials not configured for this merchant");
         }
         return {
             apiKey,
             merchantAccount,
             clientId,
+            liveUrlPrefix,
             terminalId: terminal?.terminalId || terminalId,
         };
     }
     /**
-     * Initialize payment session
+     * Initialize Checkout /sessions for Drop-in (online shop + gift cards).
+     * API base and Drop-in environment follow the merchant client key (test_ / live_),
+     * not platform ADYEN_ENVIRONMENT. Do not send clientKey in the session body.
      */
-    static async initializePaymentSession(merchantId, orderId, amount, currency = "USD", returnUrl) {
+    static async initializePaymentSession(merchantId, orderId, amount, currency = "CHF", returnUrl, origin) {
         try {
             const creds = await this.resolveCredentials(merchantId);
-            const response = await axios_1.default.post(`${ADYEN_API_BASE}/sessions`, {
+            const environment = this.environmentFromClientKey(creds.clientId);
+            const apiBase = this.checkoutApiBase(creds.clientId, creds.liveUrlPrefix);
+            const sessionPayload = {
                 amount: {
-                    value: Math.round(amount * 100), // Convert to cents
+                    value: Math.round(amount * 100),
                     currency,
                 },
                 merchantAccount: creds.merchantAccount,
                 reference: `${merchantId}-${orderId}`,
-                returnUrl: returnUrl || `${process.env.APP_URL}/payment/return`,
+                returnUrl: returnUrl || `${process.env.APP_URL || process.env.PUBLIC_APP_URL}/payment/return`,
                 channel: "Web",
                 countryCode: "CH",
-                ...(creds.clientId ? { clientKey: creds.clientId } : {}),
-            }, {
+            };
+            const checkoutOrigin = String(origin || "").trim();
+            if (/^https?:\/\//i.test(checkoutOrigin)) {
+                sessionPayload.origin = checkoutOrigin.replace(/\/+$/, "");
+            }
+            const response = await axios_1.default.post(`${apiBase}/sessions`, sessionPayload, {
                 headers: {
                     "x-api-key": creds.apiKey,
                     "Content-Type": "application/json",
                 },
             });
-            return response.data;
+            const id = response.data?.id;
+            const sessionData = response.data?.sessionData;
+            if (!id || !sessionData) {
+                throw new Error("Adyen session response was incomplete");
+            }
+            return {
+                ...response.data,
+                id,
+                sessionData,
+                clientKey: creds.clientId,
+                environment,
+            };
         }
         catch (error) {
             console.error("Error initializing payment session:", error);
-            throw error;
+            throw new Error(this.formatSessionError(error));
         }
     }
     /**
@@ -81,7 +112,7 @@ class AdyenService {
     static async processCardPayment(merchantId, orderId, amount, paymentMethod, currency = "USD") {
         try {
             if (!ADYEN_API_KEY || !ADYEN_MERCHANT_ACCOUNT) {
-                throw new Error("Adyen credentials not configured");
+                throw new Error("Swisspayout credentials not configured");
             }
             const response = await axios_1.default.post(`${ADYEN_API_BASE}/payments`, {
                 amount: {
@@ -191,7 +222,7 @@ class AdyenService {
     static async getPaymentStatus(merchantId, reference) {
         try {
             if (!ADYEN_API_KEY || !ADYEN_MERCHANT_ACCOUNT) {
-                throw new Error("Adyen credentials not configured");
+                throw new Error("Swisspayout credentials not configured");
             }
             const response = await axios_1.default.get(`${ADYEN_API_BASE}/payments/${reference}`, {
                 headers: {
@@ -213,7 +244,7 @@ class AdyenService {
         const db = (0, db_1.getDb)();
         try {
             if (!ADYEN_API_KEY || !ADYEN_MERCHANT_ACCOUNT) {
-                throw new Error("Adyen credentials not configured");
+                throw new Error("Swisspayout credentials not configured");
             }
             const transaction = await db.query.paymentTransactions.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.paymentTransactions.id, transactionId), (0, drizzle_orm_1.eq)(db_1.schema.paymentTransactions.merchantId, merchantId)),

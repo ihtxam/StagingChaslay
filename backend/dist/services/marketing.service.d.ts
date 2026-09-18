@@ -40,11 +40,11 @@ export declare class MarketingService {
     }[]>;
     static listCampaigns(merchantId: string): Promise<{
         id: string;
+        title: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         merchantId: string;
-        title: string;
         subject: string;
         bodyHtml: string;
         designJson: Record<string, unknown> | null;
@@ -65,11 +65,11 @@ export declare class MarketingService {
         selectedEmails?: string[];
     }): Promise<{
         id: string;
+        title: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         merchantId: string;
-        title: string;
         subject: string;
         bodyHtml: string;
         designJson: Record<string, unknown> | null;

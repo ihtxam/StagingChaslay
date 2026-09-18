@@ -1,9 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ShopCustomerService = void 0;
+const crypto_1 = __importDefault(require("crypto"));
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const auth_service_1 = require("@/services/auth.service");
+const email_service_1 = require("@/services/email.service");
 const shop_loyalty_service_1 = require("@/services/shop-loyalty.service");
 function normalizeLabel(raw) {
     const v = String(raw || "home").trim().toLowerCase().slice(0, 40);
@@ -63,6 +68,55 @@ class ShopCustomerService {
         })
             .returning();
         return this.tokenFor(created);
+    }
+    static async requestPasswordReset(merchantId, email) {
+        const db = (0, db_1.getDb)();
+        const normalized = String(email || "").trim().toLowerCase();
+        if (!normalized || !normalized.includes("@")) {
+            throw new Error("Valid email is required");
+        }
+        const customer = await db.query.customers.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.customers.email, normalized)),
+        });
+        if (!customer?.passwordHash) {
+            return { success: true };
+        }
+        const tempPassword = crypto_1.default.randomBytes(4).toString("hex");
+        const passwordHash = await auth_service_1.AuthService.hashPassword(tempPassword);
+        await db
+            .update(db_1.schema.customers)
+            .set({ passwordHash, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.customers.id, customer.id));
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { id: true, name: true, shopLanguage: true, panelLanguage: true },
+        });
+        const shopName = String(merchant?.name || "Shop");
+        const locale = merchant?.shopLanguage || merchant?.panelLanguage || "en";
+        const subject = locale === "fr"
+            ? `${shopName} — mot de passe temporaire`
+            : locale === "de"
+                ? `${shopName} — temporäres Passwort`
+                : `${shopName} — temporary password`;
+        const body = locale === "fr"
+            ? `Voici votre mot de passe temporaire : ${tempPassword}\nConnectez-vous puis changez-le dans Mon compte.`
+            : locale === "de"
+                ? `Ihr temporäres Passwort: ${tempPassword}\nMelden Sie sich an und ändern Sie es unter Mein Konto.`
+                : `Your temporary password: ${tempPassword}\nSign in and change it under My account.`;
+        try {
+            await email_service_1.EmailService.send({
+                to: normalized,
+                subject,
+                html: `<p style="font-family:system-ui,sans-serif">${body.replace(/\n/g, "<br/>")}</p>`,
+                text: body,
+                merchantId,
+                emailType: "shop_customer",
+            });
+        }
+        catch (err) {
+            console.error("[shop-customer] password reset email failed", err);
+        }
+        return { success: true };
     }
     static async login(merchantId, email, password) {
         const db = (0, db_1.getDb)();

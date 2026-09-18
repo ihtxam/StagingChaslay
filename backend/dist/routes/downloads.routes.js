@@ -7,12 +7,13 @@ const express_1 = require("express");
 const express_2 = __importDefault(require("express"));
 const downloads_1 = require("@/lib/downloads");
 const router = (0, express_1.Router)();
-function sendBinary(res, filePath, filename, contentType) {
+function sendBinary(res, filePath, filename, contentType, disposition = "attachment") {
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
     res.setHeader("Content-Encoding", "identity");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    const cacheControl = filename.endsWith(".apk") ? "no-cache, must-revalidate" : "public, max-age=3600";
+    res.setHeader("Cache-Control", cacheControl);
     res.sendFile(filePath);
 }
 router.get("/reborn-print-bridge.json", (_req, res) => {
@@ -30,6 +31,10 @@ router.get("/reborn-print-agent.json", (_req, res) => {
 router.get("/chaslayreborn-print-agent.json", (_req, res) => {
     res.redirect(302, "/downloads/reborn-print-agent.json");
 });
+/** @deprecated legacy installer filename — redirect to Reborn download */
+router.get(`/${downloads_1.LEGACY_PRINT_AGENT_SETUP_FILE}`, (_req, res) => {
+    res.redirect(302, `/downloads/${downloads_1.PRINT_AGENT_SETUP_FILE}`);
+});
 function sendPrintAgentExe(res, downloadName) {
     const filePath = (0, downloads_1.downloadsFilePath)(downloads_1.PRINT_AGENT_SETUP_FILE);
     if (!(0, downloads_1.fileMagicOk)(filePath, "exe")) {
@@ -40,23 +45,38 @@ function sendPrintAgentExe(res, downloadName) {
 router.get(`/${downloads_1.PRINT_AGENT_SETUP_FILE}`, (_req, res) => {
     sendPrintAgentExe(res, downloads_1.PRINT_AGENT_SETUP_FILE);
 });
-router.get(`/${downloads_1.LEGACY_PRINT_AGENT_SETUP_FILE}`, (_req, res) => {
-    sendPrintAgentExe(res, downloads_1.LEGACY_PRINT_AGENT_SETUP_FILE);
-});
-router.get("/reborn-print-bridge.apk", (_req, res) => {
+function sendPrintBridgeApk(res) {
     const filePath = (0, downloads_1.downloadsFilePath)(downloads_1.PRINT_BRIDGE_APK_FILE);
-    if (!(0, downloads_1.fileMagicOk)(filePath, "apk")) {
+    const desc = (0, downloads_1.describePrintBridgeApk)();
+    if (!(0, downloads_1.fileMagicOk)(filePath, "apk") || !desc.available) {
         return res
             .status(404)
             .type("text/plain")
-            .send([
-            "Reborn Print Bridge APK is not available on this server.",
-            "",
-            "Ask your administrator to build print-agent-android/ and deploy:",
-            "  backend/public/downloads/reborn-print-bridge.apk",
-        ].join("\n"));
+            .send(desc.message ||
+            [
+                "Reborn Print Bridge APK is not available on this server.",
+                "",
+                "Ask your administrator to build print-agent-android/ and deploy:",
+                "  backend/public/downloads/reborn-print-bridge.apk",
+            ].join("\n"));
     }
-    sendBinary(res, filePath, downloads_1.PRINT_BRIDGE_APK_FILE, "application/vnd.android.package-archive");
+    const filename = `reborn-print-bridge-${desc.version || "latest"}.apk`;
+    sendBinary(res, filePath, filename, "application/vnd.android.package-archive", "attachment");
+}
+router.get("/reborn-print-bridge.apk", (_req, res) => {
+    sendPrintBridgeApk(res);
+});
+/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
+router.get("/reborn-print-bridge-:version.apk", (req, res) => {
+    const desc = (0, downloads_1.describePrintBridgeApk)();
+    const requested = String(req.params.version || "").trim();
+    if (desc.version && requested && requested !== desc.version && requested !== "latest") {
+        return res
+            .status(404)
+            .type("text/plain")
+            .send(`This server has Bridge v${desc.version}, not v${requested}. Download /downloads/reborn-print-bridge-${desc.version}.apk`);
+    }
+    sendPrintBridgeApk(res);
 });
 router.use(express_2.default.static(downloads_1.DOWNLOADS_ROOT, {
     fallthrough: true,
@@ -71,7 +91,12 @@ router.use(express_2.default.static(downloads_1.DOWNLOADS_ROOT, {
             res.setHeader("Content-Encoding", "identity");
         }
         res.setHeader("X-Content-Type-Options", "nosniff");
-        res.setHeader("Cache-Control", "public, max-age=3600");
+        if (filePath.endsWith(".apk")) {
+            res.setHeader("Cache-Control", "no-cache, must-revalidate");
+        }
+        else {
+            res.setHeader("Cache-Control", "public, max-age=3600");
+        }
     },
 }));
 router.use((_req, res) => {

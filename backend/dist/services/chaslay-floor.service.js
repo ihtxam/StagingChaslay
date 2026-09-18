@@ -139,6 +139,13 @@ class ChaslayFloorService {
             createdAt: row.createdAt?.toISOString() ?? null,
         };
     }
+    static async updatePrintJobPayload(merchantId, jobId, payload) {
+        const db = (0, db_1.getDb)();
+        await db
+            .update(db_1.schema.chaslayFloorPrintJobs)
+            .set({ payload })
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayFloorPrintJobs.id, jobId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayFloorPrintJobs.merchantId, merchantId)));
+    }
     /**
      * Atomically claim PENDING print jobs (→ PROCESSING) so overlapping pollers
      * (WebPOS 2.5s interval, multi-tab, Android MAIN_POS) cannot reprint the same job.

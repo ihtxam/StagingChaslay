@@ -66,7 +66,7 @@ class FloorPlanService {
         await db.delete(db_1.schema.floorPlans).where((0, drizzle_orm_1.eq)(db_1.schema.floorPlans.id, planId));
         return { success: true };
     }
-    /** Replace all tables on a plan (designer save). */
+    /** Replace all tables on a plan (designer save). Preserves table IDs when provided. */
     static async saveTables(merchantId, planId, tables, elements = []) {
         const db = (0, db_1.getDb)();
         const plan = await db.query.floorPlans.findFirst({
@@ -74,9 +74,14 @@ class FloorPlanService {
         });
         if (!plan)
             throw new Error("Floor plan not found");
-        await db.delete(db_1.schema.diningTables).where((0, drizzle_orm_1.eq)(db_1.schema.diningTables.floorPlanId, planId));
+        const existing = await db.query.diningTables.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.diningTables.floorPlanId, planId),
+        });
+        const existingById = new Map(existing.map((t) => [t.id, t]));
+        const keepIds = new Set();
         const rows = tables
             .map((t, idx) => ({
+            id: t.id && existingById.has(t.id) ? t.id : undefined,
             merchantId,
             floorPlanId: planId,
             label: (t.label || `T${idx + 1}`).trim(),
@@ -93,8 +98,53 @@ class FloorPlanService {
             sortOrder: t.sortOrder !== undefined ? Number(t.sortOrder) : idx,
         }))
             .filter((t) => t.label);
-        if (rows.length) {
-            await db.insert(db_1.schema.diningTables).values(rows);
+        for (const row of rows) {
+            if (row.id) {
+                keepIds.add(row.id);
+                const prior = existingById.get(row.id);
+                await db
+                    .update(db_1.schema.diningTables)
+                    .set({
+                    label: row.label,
+                    capacity: row.capacity,
+                    shape: row.shape,
+                    posX: row.posX,
+                    posY: row.posY,
+                    width: row.width,
+                    height: row.height,
+                    rotation: row.rotation,
+                    status: prior.status === "occupied" || prior.status === "reserved" ? prior.status : row.status,
+                    sortOrder: row.sortOrder,
+                    updatedAt: new Date(),
+                })
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.diningTables.id, row.id));
+            }
+            else {
+                const [inserted] = await db
+                    .insert(db_1.schema.diningTables)
+                    .values({
+                    merchantId: row.merchantId,
+                    floorPlanId: row.floorPlanId,
+                    label: row.label,
+                    capacity: row.capacity,
+                    shape: row.shape,
+                    posX: row.posX,
+                    posY: row.posY,
+                    width: row.width,
+                    height: row.height,
+                    rotation: row.rotation,
+                    status: row.status,
+                    sortOrder: row.sortOrder,
+                })
+                    .returning({ id: db_1.schema.diningTables.id });
+                if (inserted)
+                    keepIds.add(inserted.id);
+            }
+        }
+        for (const table of existing) {
+            if (!keepIds.has(table.id)) {
+                await db.delete(db_1.schema.diningTables).where((0, drizzle_orm_1.eq)(db_1.schema.diningTables.id, table.id));
+            }
         }
         const elementRows = (elements || [])
             .map((el) => ({

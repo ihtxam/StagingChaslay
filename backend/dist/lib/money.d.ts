@@ -3,6 +3,10 @@
  * Intermediate amounts use 0.01; payable totals use 0.05.
  */
 export declare function roundMoney2(amount: number): number;
+/** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */
+export declare function extractNetFromGross(gross: number, ratePercent: number): number;
+/** Extract VAT from a gross (tax-included) amount. */
+export declare function extractVatFromGross(gross: number, ratePercent: number): number;
 /** Round to nearest 0.05 CHF. */
 export declare function roundTo005(amount: number): number;
 /** Difference applied to reach 0.05 total (can be negative). */

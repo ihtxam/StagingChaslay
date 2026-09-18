@@ -15,19 +15,34 @@ export type SendEmailInput = {
     /** Category for platform usage reporting */
     emailType?: EmailSendType | string;
 };
-type EmailProvider = "smtp" | "brevo" | "sendgrid" | null;
+type EmailProvider = "smtp" | "brevo" | "mailco" | "sendgrid" | null;
 type ResolvedEmailConfig = {
     provider: EmailProvider;
     apiKey: string;
     fromEmail: string;
     fromName: string;
+    /** Customer replies go here (merchant inbox) when platform sends on their behalf. */
+    replyToEmail?: string | null;
+    replyToName?: string | null;
     source: "merchant_smtp" | "merchant_brevo" | "database" | "env" | "none";
     smtp?: MerchantSmtpSettings | null;
     merchantId?: string | null;
+    mailco?: {
+        apiBase: string;
+        templateSlug: string;
+    };
+    /** When primary is mailco, Brevo may still be used as automatic fallback. */
+    fallbackBrevo?: {
+        apiKey: string;
+        fromEmail: string;
+        fromName: string;
+    } | null;
+    /** Merchant SMTP used when platform mailco/Brevo is missing or fails. */
+    fallbackSmtp?: MerchantSmtpSettings | null;
 };
 /**
- * Prefer platform Brevo when merchant emailDeliveryMode is platform;
- * otherwise merchant SMTP, then merchant Brevo, then platform Brevo, then SendGrid.
+ * Prefer platform mailco (with Brevo fallback) when merchant emailDeliveryMode is platform;
+ * otherwise merchant SMTP, then merchant Brevo, then platform mailco/Brevo, then SendGrid.
  */
 export declare class EmailService {
     private static envBrevoApiKey;
@@ -35,6 +50,8 @@ export declare class EmailService {
     private static envFromName;
     /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
     private static merchantSenderName;
+    /** Reply address for customer-facing mail — merchant inbox, not platform noreply. */
+    private static merchantReplyTo;
     static resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig>;
     static isConfigured(merchantId?: string | null): Promise<boolean>;
     /** Roll daily/monthly counters for the current Zurich calendar periods. */
@@ -80,6 +97,9 @@ export declare class EmailService {
         apiKeySet: boolean;
         apiKeyMasked: string;
         brevoKeySet: boolean;
+        mailcoKeySet: boolean;
+        mailcoConfigured: boolean;
+        platformEmailPrimary: import("@/services/platform-settings.service").PlatformEmailPrimary;
         sendgridKeySet: boolean;
         smtpEnabled: boolean;
         usingPlatformEmail: boolean;
@@ -108,7 +128,9 @@ export declare class EmailService {
         } | null;
     }>;
     static send(input: SendEmailInput): Promise<void>;
+    private static formatReplyTo;
     private static sendViaSmtp;
+    private static sendViaMailco;
     private static sendViaBrevo;
 }
 export {};

@@ -400,6 +400,20 @@ class DeliveryPlatformService {
         const status = cfg.autoAccept ? "preparing" : "pending_approval";
         const platformNote = `[${source}:${payload.externalOrderId}]`;
         const notes = [platformNote, payload.notes].filter(Boolean).join("\n");
+        let customerId = null;
+        try {
+            const { CustomerService } = await Promise.resolve().then(() => __importStar(require("@/services/customer.service")));
+            const upserted = await CustomerService.upsertFromGuest(merchantId, {
+                name: payload.customerName,
+                phone: payload.customerPhone,
+                email: payload.customerEmail,
+                address: payload.shippingAddress,
+            });
+            customerId = upserted?.id || null;
+        }
+        catch (custErr) {
+            console.warn("Platform order customer upsert failed:", custErr);
+        }
         const [order] = await db
             .insert(db_1.schema.orders)
             .values({
@@ -421,6 +435,7 @@ class DeliveryPlatformService {
             notes,
             shippingAddress: payload.shippingAddress,
             scheduledFor: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
+            customerId,
             customerName: payload.customerName,
             customerPhone: payload.customerPhone,
             customerEmail: payload.customerEmail,
@@ -477,14 +492,45 @@ class DeliveryPlatformService {
         if (!merchant)
             return;
         const printSettings = (0, pos_print_settings_1.normalizePosPrintSettings)(merchant.posPrintSettings);
+        const bypass = opts?.independentOfMasterAutoPrint === true;
         const printKitchen = opts?.printKitchen === true &&
             !(0, pos_checkout_settings_1.isRetailPosMode)(merchant.posCheckoutSettings) &&
-            printSettings.autoPrintKitchen !== false;
-        const printReceipt = opts?.printReceipt === true && printSettings.autoPrintReceipt !== false;
+            (bypass || printSettings.autoPrintKitchen !== false);
+        const printReceipt = opts?.printReceipt === true && (bypass || printSettings.autoPrintReceipt !== false);
         const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
         const printNotification = opts?.printNotification === true;
         if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification)
             return;
+        try {
+            const { PrintJobExpandService } = await Promise.resolve().then(() => __importStar(require("@/services/print-job-expand.service")));
+            await PrintJobExpandService.enqueueOrderPrint(merchantId, orderId, {
+                printKitchen,
+                printNotification,
+                printDeliveryReceipt,
+                orderSource,
+                independentOfMasterAutoPrint: bypass,
+            });
+            if (printReceipt && !printNotification && !printDeliveryReceipt) {
+                await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
+                    jobType: "ESCPOS",
+                    payload: {
+                        kind: "auto_print_order",
+                        orderId,
+                        printKitchen: false,
+                        printReceipt: true,
+                        printDeliveryReceipt: false,
+                        printNotification: false,
+                        orderSource,
+                    },
+                    orderId,
+                    sourceDeviceId: "delivery-platform",
+                });
+            }
+            return;
+        }
+        catch (err) {
+            console.warn("Expanded auto-print enqueue failed, falling back to recipe job:", err);
+        }
         await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
             jobType: "ESCPOS",
             payload: {
@@ -495,6 +541,7 @@ class DeliveryPlatformService {
                 printDeliveryReceipt,
                 printNotification,
                 orderSource,
+                force: bypass,
             },
             orderId,
             sourceDeviceId: "delivery-platform",

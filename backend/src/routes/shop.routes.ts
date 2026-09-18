@@ -775,6 +775,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Homepage not published" });
     }
 
+    await ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
     const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
     if (chaslay?.editor_state) {
       const seo = shopSeoFromMerchant(req, merchant, chaslay.name, "");
@@ -815,52 +816,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
       });
     }
 
-    const page = await CmsService.getPublishedHomepage(merchant.id);
-    if (!page) {
-      return res.status(404).json({ error: "Homepage not published" });
-    }
-    const seo = shopSeoFromMerchant(
-      req,
-      merchant,
-      page.seoTitle || page.title,
-      page.seoDescription
-    );
-    res.json({
-      success: true,
-      data: {
-        engine: "openpage",
-        id: page.id,
-        title: page.title,
-        slug: page.slug,
-        isHomepage: page.isHomepage,
-        blocks: page.blocks || [],
-        theme: page.theme || null,
-        seoTitle: seo.seoTitle,
-        seoDescription: seo.seoDescription,
-        publishedAt: page.publishedAt,
-        merchant: {
-          id: merchant.id,
-          name: merchant.name,
-          slug: merchant.slug,
-          subdomain: merchant.subdomain,
-          customDomain: merchant.customDomain,
-          shopLogoUrl: merchant.shopLogoUrl,
-          shopBannerUrl: merchant.shopBannerUrl,
-          site: publicShopSite(req, merchant),
-          storeHours: merchant.storeHours || {},
-          address: merchant.address,
-          city: merchant.city,
-          country: merchant.country,
-          phone: merchant.phone,
-          email: merchant.email,
-          reservationsEnabled: !!merchant.reservationsEnabled,
-          acceptingOrders: merchant.acceptingOrders !== false,
-          acceptingReservations: merchant.acceptingReservations !== false,
-          vacation: vacationPublicPayload(merchant.vacationSettings),
-          language: merchant.shopLanguage || merchant.panelLanguage || "en",
-        },
-      },
-    });
+    return res.status(404).json({ error: "Homepage not published" });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load homepage" });
   }
@@ -906,6 +862,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
     const pageSlug = req.params.pageSlug;
 
     if (merchant.cmsHomepageEnabled) {
+      await ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
       const chaslayPage = await ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
       if (chaslayPage) {
         const seo = shopSeoFromMerchant(req, merchant, chaslayPage.title, "");
@@ -947,56 +904,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
       }
     }
 
-    if (pageSlug === "home") {
-      const home = await CmsService.getPublishedHomepage(merchant.id);
-      if (!home || !merchant.cmsHomepageEnabled) {
-        return res.status(404).json({ error: "Page not found" });
-      }
-      const seo = shopSeoFromMerchant(
-        req,
-        merchant,
-        home.seoTitle || home.title,
-        home.seoDescription
-      );
-      return res.json({
-        success: true,
-        data: {
-          engine: "openpage",
-          id: home.id,
-          title: home.title,
-          slug: home.slug,
-          isHomepage: home.isHomepage,
-          blocks: home.blocks || [],
-          theme: home.theme || null,
-          seoTitle: seo.seoTitle,
-          seoDescription: seo.seoDescription,
-          publishedAt: home.publishedAt,
-        },
-      });
-    }
-    const page = await CmsService.getPublishedBySlug(merchant.id, pageSlug);
-    if (!page) return res.status(404).json({ error: "Page not found" });
-    const seo = shopSeoFromMerchant(
-      req,
-      merchant,
-      page.seoTitle || page.title,
-      page.seoDescription
-    );
-    res.json({
-      success: true,
-      data: {
-        engine: "openpage",
-        id: page.id,
-        title: page.title,
-        slug: page.slug,
-        isHomepage: page.isHomepage,
-        blocks: page.blocks || [],
-        theme: page.theme || null,
-        seoTitle: seo.seoTitle,
-        seoDescription: seo.seoDescription,
-        publishedAt: page.publishedAt,
-      },
-    });
+    return res.status(404).json({ error: "Page not found" });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load page" });
   }

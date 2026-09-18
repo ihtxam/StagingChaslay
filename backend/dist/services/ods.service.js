@@ -194,6 +194,9 @@ function normalizeTheme(value) {
     const t = String(value || "light").toLowerCase();
     return exports.ODS_THEMES.includes(t) ? t : "light";
 }
+function normalizeLayout(value) {
+    return String(value || "columns").toLowerCase() === "rows" ? "rows" : "columns";
+}
 function normalizeOrderNumber(value) {
     let s = String(value || "")
         .trim()
@@ -334,6 +337,7 @@ class OdsService {
             token: newToken(),
             shortCode: await (0, display_short_code_1.allocateDisplayShortCode)(db),
             theme: normalizeTheme(input.theme),
+            layout: normalizeLayout(input.layout),
             isActive: input.isActive !== false,
         })
             .returning();
@@ -347,6 +351,8 @@ class OdsService {
             patch.name = String(input.name).trim().slice(0, 255);
         if (input.theme != null)
             patch.theme = normalizeTheme(input.theme);
+        if (input.layout != null)
+            patch.layout = normalizeLayout(input.layout);
         if (input.isActive != null)
             patch.isActive = !!input.isActive;
         const [row] = await db
@@ -670,6 +676,7 @@ class OdsService {
                 id: display.id,
                 name: display.name,
                 theme: display.theme,
+                layout: normalizeLayout(display.layout),
             },
             serverTime: new Date().toISOString(),
             preparing: filtered.preparing,

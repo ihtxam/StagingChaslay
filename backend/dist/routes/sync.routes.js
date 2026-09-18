@@ -35,11 +35,13 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
+const location_middleware_1 = require("@/middleware/location.middleware");
 const sync_service_1 = require("@/services/sync.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
 router.use(auth_middleware_1.setMerchantContext);
+router.use(location_middleware_1.setLocationContext);
 /**
  * GET /api/sync/pull?since=ISO
  * Pull catalog + terminals for offline POS.
@@ -82,7 +84,9 @@ router.post("/push-sales", async (req, res) => {
         if (!(await WebPosEntitlementService.guard(merchantId, res)))
             return;
         const sales = Array.isArray(req.body?.sales) ? req.body.sales : [];
-        const result = await sync_service_1.SyncService.pushSales(merchantId, sales);
+        const result = await sync_service_1.SyncService.pushSales(merchantId, sales, {
+            contextLocationId: req.locationId,
+        });
         res.json({ success: true, ...result });
     }
     catch (error) {

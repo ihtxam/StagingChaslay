@@ -1,7 +1,7 @@
 /** Platform settings key for reseller ? Reborn monthly price list (CHF). */
 export declare const RESELLER_BILLING_PRICES_KEY = "reseller_billing_prices";
 /** Billable add-on keys (feature prices map). */
-export type BillableFeatureKey = "online_shop" | "loyalty" | "gift_cards" | "terminals" | "website_cms" | "online_payments" | "offers" | "reservations" | "inventory" | "digital_signage" | "kds" | "ods";
+export type BillableFeatureKey = "online_shop" | "loyalty" | "gift_cards" | "terminals" | "website_cms" | "online_payments" | "offers" | "reservations" | "inventory" | "digital_signage" | "kds" | "ods" | "self_order_kiosk";
 export declare const BILLABLE_FEATURE_KEYS: BillableFeatureKey[];
 export type ResellerBillingPrices = {
     currency: string;
@@ -23,6 +23,7 @@ export declare function detectActiveBillableFeatures(merchant: {
     signageAddonEnabled?: boolean | null;
     kdsAddonEnabled?: boolean | null;
     odsAddonEnabled?: boolean | null;
+    kioskAddonEnabled?: boolean | null;
     adyenApiKey?: string | null;
     customDomain?: string | null;
     editionFeatures?: string[] | null;

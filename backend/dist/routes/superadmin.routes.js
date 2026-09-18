@@ -48,6 +48,7 @@ const subscription_addons_service_1 = require("@/services/subscription-addons.se
 const platform_reseller_service_1 = require("@/services/platform-reseller.service");
 const platform_settings_service_1 = require("@/services/platform-settings.service");
 const edition_service_1 = require("@/services/edition.service");
+const merchant_product_surface_service_1 = require("@/services/merchant-product-surface.service");
 const reseller_service_1 = require("@/services/reseller.service");
 const edition_features_1 = require("@/lib/edition-features");
 const inventory_addon_1 = require("@/lib/inventory-addon");
@@ -55,6 +56,7 @@ const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
 const router = (0, express_1.Router)();
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
@@ -253,6 +255,36 @@ router.put("/platform-settings/brevo", async (req, res) => {
     }
 });
 /**
+ * GET /api/superadmin/platform-settings/mailco
+ */
+router.get("/platform-settings/mailco", async (_req, res) => {
+    try {
+        const mailco = await platform_settings_service_1.PlatformSettingsService.getMailcoSettingsPublic();
+        res.json({ success: true, mailco });
+    }
+    catch (error) {
+        console.error("Error getting platform mailco settings:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load mailco settings",
+        });
+    }
+});
+/**
+ * PUT /api/superadmin/platform-settings/mailco
+ */
+router.put("/platform-settings/mailco", async (req, res) => {
+    try {
+        const mailco = await platform_settings_service_1.PlatformSettingsService.updateMailcoSettings(req.body || {});
+        res.json({ success: true, mailco });
+    }
+    catch (error) {
+        console.error("Error updating platform mailco settings:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to save mailco settings",
+        });
+    }
+});
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req, res) => {
@@ -269,7 +301,7 @@ router.get("/email/usage", async (_req, res) => {
     }
 });
 /**
- * POST /api/superadmin/email/test — send a test email via platform Brevo
+ * POST /api/superadmin/email/test — send a test email via platform mailco (Brevo fallback)
  */
 router.post("/email/test", async (req, res) => {
     try {
@@ -279,13 +311,17 @@ router.post("/email/test", async (req, res) => {
             return;
         }
         const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
+        const status = await EmailService.status();
         await EmailService.send({
             to,
             subject: "Reborn platform email test",
-            html: "<p>This is a test email from Reborn platform Brevo.</p>",
+            html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
             emailType: "marketing_test",
         });
-        res.json({ success: true });
+        res.json({
+            success: true,
+            provider: status.provider,
+        });
     }
     catch (error) {
         console.error("Error sending platform test email:", error);
@@ -297,6 +333,20 @@ router.post("/email/test", async (req, res) => {
 // ============================================================================
 // MERCHANT MANAGEMENT
 // ============================================================================
+/**
+ * POST /api/superadmin/merchants/backfill-support-codes
+ * Assign CH-001 / UK-001 style codes to merchants missing one.
+ */
+router.post("/merchants/backfill-support-codes", async (_req, res) => {
+    try {
+        const result = await merchant_service_1.MerchantService.backfillSupportCodes();
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Error backfilling support codes:", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Backfill failed" });
+    }
+});
 /**
  * GET /api/superadmin/merchants
  * Get all merchants with pagination
@@ -368,7 +418,7 @@ router.post("/merchants/:merchantId/impersonate", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, storekeeperAddonEnabled, } = req.body;
+        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, } = req.body;
         if (!email || !password || !businessName) {
             return res.status(400).json({ error: "Email, password, and business name are required" });
         }
@@ -385,12 +435,15 @@ router.post("/merchants", async (req, res) => {
             businessCategory,
             maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
             maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+            maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
             inventoryAddonEnabled: (0, inventory_addon_1.isInventoryAddonEnabled)(inventoryAddonEnabled),
             signageAddonEnabled: (0, signage_addon_1.isSignageAddonEnabled)(signageAddonEnabled),
             signageScreenLimit: signageScreenLimit != null ? (0, signage_addon_1.normalizeSignageScreenLimit)(signageScreenLimit) : undefined,
             kdsAddonEnabled: (0, kds_addon_1.isKdsAddonEnabled)(kdsAddonEnabled),
             odsAddonEnabled: (0, ods_addon_1.isOdsAddonEnabled)(odsAddonEnabled),
+            deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
             storekeeperAddonEnabled: (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(storekeeperAddonEnabled),
+            kioskAddonEnabled: (0, kiosk_addon_1.isKioskAddonEnabled)(kioskAddonEnabled),
         });
         res.status(201).json({
             success: true,
@@ -442,6 +495,7 @@ router.put("/merchants/:merchantId", async (req, res) => {
         const updates = req.body;
         if (updates.maxPosPosts != null ||
             updates.maxWaiterPosts != null ||
+            updates.maxLocations != null ||
             updates.inventoryAddonEnabled != null ||
             updates.inventoryEnabled != null ||
             updates.signageAddonEnabled != null ||
@@ -451,10 +505,14 @@ router.put("/merchants/:merchantId", async (req, res) => {
             updates.kdsEnabled != null ||
             updates.odsAddonEnabled != null ||
             updates.odsEnabled != null ||
-            updates.storekeeperAddonEnabled != null) {
+            updates.deliveryPlatformsAddonEnabled != null ||
+            updates.storekeeperAddonEnabled != null ||
+            updates.kioskAddonEnabled != null ||
+            updates.kioskEnabled != null) {
             await merchant_service_1.MerchantService.updatePosPostLimits(merchantId, {
                 maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
                 maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
+                maxLocations: updates.maxLocations != null ? Number(updates.maxLocations) : undefined,
                 inventoryAddonEnabled: updates.inventoryAddonEnabled != null
                     ? (0, inventory_addon_1.isInventoryAddonEnabled)(updates.inventoryAddonEnabled)
                     : updates.inventoryEnabled != null
@@ -478,12 +536,21 @@ router.put("/merchants/:merchantId", async (req, res) => {
                     : updates.odsEnabled != null
                         ? (0, ods_addon_1.isOdsAddonEnabled)(updates.odsEnabled)
                         : undefined,
+                deliveryPlatformsAddonEnabled: updates.deliveryPlatformsAddonEnabled != null
+                    ? updates.deliveryPlatformsAddonEnabled === true
+                    : undefined,
                 storekeeperAddonEnabled: updates.storekeeperAddonEnabled != null
                     ? (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(updates.storekeeperAddonEnabled)
                     : undefined,
+                kioskAddonEnabled: updates.kioskAddonEnabled != null
+                    ? (0, kiosk_addon_1.isKioskAddonEnabled)(updates.kioskAddonEnabled)
+                    : updates.kioskEnabled != null
+                        ? (0, kiosk_addon_1.isKioskAddonEnabled)(updates.kioskEnabled)
+                        : undefined,
             });
             delete updates.maxPosPosts;
             delete updates.maxWaiterPosts;
+            delete updates.maxLocations;
             delete updates.inventoryAddonEnabled;
             delete updates.inventoryEnabled;
             delete updates.signageAddonEnabled;
@@ -493,7 +560,10 @@ router.put("/merchants/:merchantId", async (req, res) => {
             delete updates.kdsEnabled;
             delete updates.odsAddonEnabled;
             delete updates.odsEnabled;
+            delete updates.deliveryPlatformsAddonEnabled;
             delete updates.storekeeperAddonEnabled;
+            delete updates.kioskAddonEnabled;
+            delete updates.kioskEnabled;
         }
         const merchant = Object.keys(updates).length > 0
             ? await merchant_service_1.MerchantService.updateMerchant(merchantId, updates)
@@ -507,6 +577,38 @@ router.put("/merchants/:merchantId", async (req, res) => {
     catch (error) {
         console.error("Error updating merchant:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update merchant" });
+    }
+});
+/**
+ * PUT /api/superadmin/merchants/:merchantId/product-surface
+ * Apply shop-only | website | shop+website | full POS package.
+ */
+router.put("/merchants/:merchantId/product-surface", async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const surface = String(req.body?.surface || "");
+        const result = await merchant_product_surface_service_1.MerchantProductSurfaceService.apply(merchantId, surface);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Error applying product surface:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to apply package" });
+    }
+});
+/**
+ * PUT /api/superadmin/merchants/:merchantId/pos-enabled
+ * Toggle POS till on/off (shop-only ↔ full POS).
+ */
+router.put("/merchants/:merchantId/pos-enabled", async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const enabled = !!req.body?.enabled;
+        const result = await merchant_product_surface_service_1.MerchantProductSurfaceService.setPosEnabled(merchantId, enabled);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Error toggling POS:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to toggle POS" });
     }
 });
 /**
@@ -588,6 +690,23 @@ router.post("/merchants/:merchantId/suspend", async (req, res) => {
     catch (error) {
         console.error("Error suspending merchant:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to suspend merchant" });
+    }
+});
+/**
+ * POST /api/superadmin/merchants/:merchantId/revoke-sessions
+ * Force logout merchant from all dashboard JWTs and POS/waiter devices.
+ */
+router.post("/merchants/:merchantId/revoke-sessions", async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        await merchant_service_1.MerchantService.revokeAllAuthSessions(merchantId);
+        res.json({ success: true, message: "All merchant sessions revoked" });
+    }
+    catch (error) {
+        console.error("Error revoking merchant sessions:", error);
+        res
+            .status(400)
+            .json({ error: error instanceof Error ? error.message : "Failed to revoke sessions" });
     }
 });
 /**
@@ -776,10 +895,9 @@ router.get("/licenses", async (req, res) => {
     }
     catch (error) {
         console.error("Error getting licenses:", error);
-        res.json({
-            success: true,
-            licenses: [],
-            pagination: { page: parseInt(req.query.page) || 1, limit: parseInt(req.query.limit) || 20 },
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : "Failed to load licenses",
         });
     }
 });
@@ -1236,6 +1354,28 @@ router.put("/platform-shop/vouchers/:voucherId", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update voucher" });
     }
 });
+router.delete("/platform-shop/vouchers/:voucherId", async (req, res) => {
+    try {
+        const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
+        const result = await PlatformShopService.deleteVoucher(req.params.voucherId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to delete voucher";
+        res.status(msg === "Voucher not found" ? 404 : 400).json({ error: msg });
+    }
+});
+router.get("/platform-shop/vouchers/:voucherId/usage", async (req, res) => {
+    try {
+        const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
+        const result = await PlatformShopService.listVoucherUsage(req.params.voucherId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to load voucher usage";
+        res.status(msg === "Voucher not found" ? 404 : 500).json({ error: msg });
+    }
+});
 router.get("/platform-shop/orders", async (_req, res) => {
     try {
         const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
@@ -1249,7 +1389,7 @@ router.get("/platform-shop/orders", async (_req, res) => {
 router.patch("/platform-shop/orders/:orderId", async (req, res) => {
     try {
         const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
-        const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status);
+        const order = await PlatformShopService.updateOrderStatus(req.params.orderId, req.body?.status, req.body?.trackingUrl);
         res.json({ success: true, order });
     }
     catch (error) {

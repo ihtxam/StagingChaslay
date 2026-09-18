@@ -4,11 +4,17 @@ import { type PosPrintSettings } from "@/lib/pos-print-settings";
 import { type PosCheckoutSettings } from "@/lib/pos-checkout-settings";
 import { type TableQrSettings } from "@/lib/table-qr-settings";
 import { type DeliveryPlatformSettings } from "@/lib/delivery-platform-settings";
+import { type FiskalySettings } from "@/lib/fiskaly-settings";
+import { type ShopSiteSettings } from "@/lib/shop-site-settings";
+import { type CustomerDisplaySettings } from "@/lib/customer-display-settings";
 export type FulfillmentChannel = "takeaway" | "dine_in" | "delivery";
 export type ChannelSelectMode = "checkout" | "popup_start" | "menu";
 export type ShopCartLayout = "hidden_slide" | "sticky_right";
 export declare class MerchantSettingsService {
     static getMerchantSettings(merchantId: string): Promise<{
+        hasPos: boolean;
+        showOrderCenter: boolean;
+        showDeliveryHub: boolean;
         id: string;
         name: string;
         email: string;
@@ -27,6 +33,10 @@ export declare class MerchantSettingsService {
         slug: string | null;
         subdomain: string | null;
         customDomain: string | null;
+        customDomainPending: string | null;
+        customDomainDnsStatus: string;
+        customDomainSslStatus: string;
+        customDomainVerifiedAt: string | null;
         cmsHomepageEnabled: boolean;
         shopEnabled: boolean;
         acceptingOrders: boolean;
@@ -35,6 +45,7 @@ export declare class MerchantSettingsService {
         pickupEnabled: boolean;
         dineInEnabled: boolean;
         deliveryEnabled: boolean;
+        deliveryMode: import("@/lib/delivery-match").DeliveryMode;
         channelSelectMode: ChannelSelectMode;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -72,6 +83,7 @@ export declare class MerchantSettingsService {
         }[]>>;
         shopLogoUrl: string | null;
         shopBannerUrl: string | null;
+        shopSiteSettings: ShopSiteSettings;
         latitude: string | null;
         longitude: string | null;
         pickupEtaMinutes: number | null;
@@ -121,8 +133,11 @@ export declare class MerchantSettingsService {
         adyenHmacKeySet: boolean;
         tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
+        adyenLiveUrlPrefix: string;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
+        giftCardAddonEnabled: boolean;
+        fiskalySettings: import("@/lib/fiskaly-settings").FiskalySettingsPublic;
         webposExpressEnabled: boolean;
         webposCashEnabled: boolean;
         webposCardEnabled: boolean;
@@ -140,6 +155,7 @@ export declare class MerchantSettingsService {
         posPrintSettings: PosPrintSettings;
         tableQrSettings: TableQrSettings;
         posCheckoutSettings: PosCheckoutSettings;
+        customerDisplaySettings: CustomerDisplaySettings;
         deliveryPlatformSettings: DeliveryPlatformSettings & {
             justEat?: import("@/lib/delivery-platform-settings").DeliveryPlatformCredentials & {
                 apiKeySet?: boolean;
@@ -162,12 +178,15 @@ export declare class MerchantSettingsService {
         editionId: string | null;
         businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
+        panelNavHidden: string[] | null | undefined;
+        shopCommissionPercent: number;
         /**
          * null = legacy full access for edition routes.
          * Inventory is a paid merchant addon — never grant it via edition JSON.
          * Inject only when the merchant column is true (for any leftover edition checks).
          */
         editionFeatures: import("../lib/edition-features").EditionFeatureKey[] | null;
+        orderCenterEnabled: boolean;
     }>;
     private static buildMerchantSettings;
     static updateMerchantSettings(merchantId: string, updates: {
@@ -195,6 +214,7 @@ export declare class MerchantSettingsService {
         pickupEnabled?: boolean;
         dineInEnabled?: boolean;
         deliveryEnabled?: boolean;
+        deliveryMode?: string;
         channelSelectMode?: ChannelSelectMode | string;
         menuShowProductImages?: boolean;
         menuShowCategoryBanners?: boolean;
@@ -208,6 +228,7 @@ export declare class MerchantSettingsService {
         storeHours?: Record<string, unknown>;
         shopLogoUrl?: string | null;
         shopBannerUrl?: string | null;
+        shopSiteSettings?: ShopSiteSettings | Partial<ShopSiteSettings> | null;
         latitude?: number | string | null;
         longitude?: number | string | null;
         pickupEtaMinutes?: number;
@@ -229,8 +250,10 @@ export declare class MerchantSettingsService {
         adyenHmacKey?: string;
         tapToPayEnabled?: boolean;
         adyenLiveEnvironment?: boolean;
+        adyenLiveUrlPrefix?: string;
         adyenLiveRegion?: string;
         adyenUseLegacyEndpoint?: boolean;
+        fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
         webposExpressEnabled?: boolean;
         webposCashEnabled?: boolean;
         webposCardEnabled?: boolean;
@@ -248,11 +271,15 @@ export declare class MerchantSettingsService {
         posPrintSettings?: PosPrintSettings | null;
         tableQrSettings?: TableQrSettings | null;
         posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
+        customerDisplaySettings?: CustomerDisplaySettings | Partial<CustomerDisplaySettings> | null;
         deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
         inventoryWasteFactor?: number;
         inventoryAutoReorderEmailEnabled?: boolean;
         inventoryExpiryAlertDays?: number;
     }): Promise<{
+        hasPos: boolean;
+        showOrderCenter: boolean;
+        showDeliveryHub: boolean;
         id: string;
         name: string;
         email: string;
@@ -271,6 +298,10 @@ export declare class MerchantSettingsService {
         slug: string | null;
         subdomain: string | null;
         customDomain: string | null;
+        customDomainPending: string | null;
+        customDomainDnsStatus: string;
+        customDomainSslStatus: string;
+        customDomainVerifiedAt: string | null;
         cmsHomepageEnabled: boolean;
         shopEnabled: boolean;
         acceptingOrders: boolean;
@@ -279,6 +310,7 @@ export declare class MerchantSettingsService {
         pickupEnabled: boolean;
         dineInEnabled: boolean;
         deliveryEnabled: boolean;
+        deliveryMode: import("@/lib/delivery-match").DeliveryMode;
         channelSelectMode: ChannelSelectMode;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -316,6 +348,7 @@ export declare class MerchantSettingsService {
         }[]>>;
         shopLogoUrl: string | null;
         shopBannerUrl: string | null;
+        shopSiteSettings: ShopSiteSettings;
         latitude: string | null;
         longitude: string | null;
         pickupEtaMinutes: number | null;
@@ -365,8 +398,11 @@ export declare class MerchantSettingsService {
         adyenHmacKeySet: boolean;
         tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
+        adyenLiveUrlPrefix: string;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
+        giftCardAddonEnabled: boolean;
+        fiskalySettings: import("@/lib/fiskaly-settings").FiskalySettingsPublic;
         webposExpressEnabled: boolean;
         webposCashEnabled: boolean;
         webposCardEnabled: boolean;
@@ -384,6 +420,7 @@ export declare class MerchantSettingsService {
         posPrintSettings: PosPrintSettings;
         tableQrSettings: TableQrSettings;
         posCheckoutSettings: PosCheckoutSettings;
+        customerDisplaySettings: CustomerDisplaySettings;
         deliveryPlatformSettings: DeliveryPlatformSettings & {
             justEat?: import("@/lib/delivery-platform-settings").DeliveryPlatformCredentials & {
                 apiKeySet?: boolean;
@@ -406,12 +443,15 @@ export declare class MerchantSettingsService {
         editionId: string | null;
         businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
+        panelNavHidden: string[] | null | undefined;
+        shopCommissionPercent: number;
         /**
          * null = legacy full access for edition routes.
          * Inventory is a paid merchant addon — never grant it via edition JSON.
          * Inject only when the merchant column is true (for any leftover edition checks).
          */
         editionFeatures: import("../lib/edition-features").EditionFeatureKey[] | null;
+        orderCenterEnabled: boolean;
     }>;
     static channelTaxRate(merchant: {
         vatRate?: string | number | null;
@@ -456,6 +496,9 @@ export declare class MerchantSettingsService {
     static getDefaultVATRate(merchantId: string): Promise<number>;
     static getVATRateByCountry(merchantId: string, country: string): Promise<number>;
     static getBusinessInfo(merchantId: string): Promise<{
+        hasPos: boolean;
+        showOrderCenter: boolean;
+        showDeliveryHub: boolean;
         id: string;
         name: string;
         email: string;
@@ -474,6 +517,10 @@ export declare class MerchantSettingsService {
         slug: string | null;
         subdomain: string | null;
         customDomain: string | null;
+        customDomainPending: string | null;
+        customDomainDnsStatus: string;
+        customDomainSslStatus: string;
+        customDomainVerifiedAt: string | null;
         cmsHomepageEnabled: boolean;
         shopEnabled: boolean;
         acceptingOrders: boolean;
@@ -482,6 +529,7 @@ export declare class MerchantSettingsService {
         pickupEnabled: boolean;
         dineInEnabled: boolean;
         deliveryEnabled: boolean;
+        deliveryMode: import("@/lib/delivery-match").DeliveryMode;
         channelSelectMode: ChannelSelectMode;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -519,6 +567,7 @@ export declare class MerchantSettingsService {
         }[]>>;
         shopLogoUrl: string | null;
         shopBannerUrl: string | null;
+        shopSiteSettings: ShopSiteSettings;
         latitude: string | null;
         longitude: string | null;
         pickupEtaMinutes: number | null;
@@ -568,8 +617,11 @@ export declare class MerchantSettingsService {
         adyenHmacKeySet: boolean;
         tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
+        adyenLiveUrlPrefix: string;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
+        giftCardAddonEnabled: boolean;
+        fiskalySettings: import("@/lib/fiskaly-settings").FiskalySettingsPublic;
         webposExpressEnabled: boolean;
         webposCashEnabled: boolean;
         webposCardEnabled: boolean;
@@ -587,6 +639,7 @@ export declare class MerchantSettingsService {
         posPrintSettings: PosPrintSettings;
         tableQrSettings: TableQrSettings;
         posCheckoutSettings: PosCheckoutSettings;
+        customerDisplaySettings: CustomerDisplaySettings;
         deliveryPlatformSettings: DeliveryPlatformSettings & {
             justEat?: import("@/lib/delivery-platform-settings").DeliveryPlatformCredentials & {
                 apiKeySet?: boolean;
@@ -609,12 +662,15 @@ export declare class MerchantSettingsService {
         editionId: string | null;
         businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
+        panelNavHidden: string[] | null | undefined;
+        shopCommissionPercent: number;
         /**
          * null = legacy full access for edition routes.
          * Inventory is a paid merchant addon — never grant it via edition JSON.
          * Inject only when the merchant column is true (for any leftover edition checks).
          */
         editionFeatures: import("../lib/edition-features").EditionFeatureKey[] | null;
+        orderCenterEnabled: boolean;
     }>;
     static updateBusinessInfo(merchantId: string, businessInfo: {
         phone?: string;
@@ -625,6 +681,9 @@ export declare class MerchantSettingsService {
         vatNumber?: string;
         vatRate?: number;
     }): Promise<{
+        hasPos: boolean;
+        showOrderCenter: boolean;
+        showDeliveryHub: boolean;
         id: string;
         name: string;
         email: string;
@@ -643,6 +702,10 @@ export declare class MerchantSettingsService {
         slug: string | null;
         subdomain: string | null;
         customDomain: string | null;
+        customDomainPending: string | null;
+        customDomainDnsStatus: string;
+        customDomainSslStatus: string;
+        customDomainVerifiedAt: string | null;
         cmsHomepageEnabled: boolean;
         shopEnabled: boolean;
         acceptingOrders: boolean;
@@ -651,6 +714,7 @@ export declare class MerchantSettingsService {
         pickupEnabled: boolean;
         dineInEnabled: boolean;
         deliveryEnabled: boolean;
+        deliveryMode: import("@/lib/delivery-match").DeliveryMode;
         channelSelectMode: ChannelSelectMode;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -688,6 +752,7 @@ export declare class MerchantSettingsService {
         }[]>>;
         shopLogoUrl: string | null;
         shopBannerUrl: string | null;
+        shopSiteSettings: ShopSiteSettings;
         latitude: string | null;
         longitude: string | null;
         pickupEtaMinutes: number | null;
@@ -737,8 +802,11 @@ export declare class MerchantSettingsService {
         adyenHmacKeySet: boolean;
         tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
+        adyenLiveUrlPrefix: string;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
+        giftCardAddonEnabled: boolean;
+        fiskalySettings: import("@/lib/fiskaly-settings").FiskalySettingsPublic;
         webposExpressEnabled: boolean;
         webposCashEnabled: boolean;
         webposCardEnabled: boolean;
@@ -756,6 +824,7 @@ export declare class MerchantSettingsService {
         posPrintSettings: PosPrintSettings;
         tableQrSettings: TableQrSettings;
         posCheckoutSettings: PosCheckoutSettings;
+        customerDisplaySettings: CustomerDisplaySettings;
         deliveryPlatformSettings: DeliveryPlatformSettings & {
             justEat?: import("@/lib/delivery-platform-settings").DeliveryPlatformCredentials & {
                 apiKeySet?: boolean;
@@ -778,12 +847,15 @@ export declare class MerchantSettingsService {
         editionId: string | null;
         businessCategory: import("@/lib/business-module").BusinessModule | null;
         resellerId: string | null;
+        panelNavHidden: string[] | null | undefined;
+        shopCommissionPercent: number;
         /**
          * null = legacy full access for edition routes.
          * Inventory is a paid merchant addon — never grant it via edition JSON.
          * Inject only when the merchant column is true (for any leftover edition checks).
          */
         editionFeatures: import("../lib/edition-features").EditionFeatureKey[] | null;
+        orderCenterEnabled: boolean;
     }>;
     static resolveByShopHost(hostOrSlug: string): Promise<{
         id: string;
@@ -801,6 +873,7 @@ export declare class MerchantSettingsService {
         address: string | null;
         city: string | null;
         country: string | null;
+        supportCode: string | null;
         vatNumber: string | null;
         vatRate: string | null;
         taxTakeawayRate: string | null;
@@ -811,11 +884,16 @@ export declare class MerchantSettingsService {
         slug: string | null;
         subdomain: string | null;
         customDomain: string | null;
+        customDomainPending: string | null;
+        customDomainDnsStatus: string | null;
+        customDomainSslStatus: string | null;
+        customDomainVerifiedAt: Date | null;
         shopEnabled: boolean;
         acceptingOrders: boolean;
         acceptingReservations: boolean;
         cmsHomepageEnabled: boolean;
         pickupEnabled: boolean;
+        deliveryMode: string;
         channelSelectMode: string;
         menuShowProductImages: boolean;
         menuShowCategoryBanners: boolean;
@@ -827,6 +905,7 @@ export declare class MerchantSettingsService {
         }[]>> | null;
         shopLogoUrl: string | null;
         shopBannerUrl: string | null;
+        shopSiteSettings: Record<string, unknown> | null;
         latitude: string | null;
         longitude: string | null;
         pickupEtaMinutes: number | null;
@@ -843,6 +922,7 @@ export declare class MerchantSettingsService {
         adyenHmacKey: string | null;
         tapToPayEnabled: boolean;
         adyenLiveEnvironment: boolean;
+        adyenLiveUrlPrefix: string | null;
         adyenLiveRegion: string;
         adyenUseLegacyEndpoint: boolean;
         webposExpressEnabled: boolean;
@@ -857,6 +937,8 @@ export declare class MerchantSettingsService {
         bankAccountHolder: string | null;
         invoiceSequence: number;
         giftCardSettings: Record<string, unknown> | null;
+        giftCardAddonEnabled: boolean;
+        fiskalySettings: Record<string, unknown> | null;
         onlineCardFeeFixed: string | null;
         onlineCardFeePercent: string | null;
         loyaltyEnabled: boolean;
@@ -881,6 +963,7 @@ export declare class MerchantSettingsService {
         odsAddonEnabled: boolean;
         kioskAddonEnabled: boolean;
         kioskSettings: import("../lib/kiosk-settings").KioskSettings | null;
+        customerDisplaySettings: CustomerDisplaySettings | null;
         justEatAddonEnabled: boolean;
         uberEatsAddonEnabled: boolean;
         storekeeperAddonEnabled: boolean;
@@ -907,6 +990,8 @@ export declare class MerchantSettingsService {
         subscriptionBillingCycle: string | null;
         adyenRecurringDetailReference: string | null;
         resellerId: string | null;
+        panelNavHidden: string[] | null;
+        shopCommissionPercent: string | null;
         editionId: string | null;
         planBillingPaid: boolean;
         passwordSetAt: Date | null;

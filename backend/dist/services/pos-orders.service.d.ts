@@ -76,6 +76,7 @@ export declare class PosOrdersService {
         externalOrderId: string | null;
         status: string;
         channel: string | null;
+        fulfillmentChannel: string | null;
         paymentMethod: string | null;
         paymentBreakdown: {
             method: string;
@@ -87,9 +88,12 @@ export declare class PosOrdersService {
         invoiceDueAt: Date | null;
         subtotal: number;
         taxAmount: number;
+        taxRate: number | undefined;
         discountAmount: number;
         tipAmount: number;
         roundingAmount: number;
+        deliveryFee: number;
+        cardFee: number;
         total: number;
         refundAmount: number;
         cancelReason: string | null;
@@ -153,6 +157,7 @@ export declare class PosOrdersService {
     static cancelOrder(merchantId: string, orderId: string, reason: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -185,6 +190,7 @@ export declare class PosOrdersService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -197,6 +203,7 @@ export declare class PosOrdersService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -230,6 +237,7 @@ export declare class PosOrdersService {
     static updatePaymentMethod(merchantId: string, orderId: string, paymentMethod: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -262,6 +270,7 @@ export declare class PosOrdersService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -274,6 +283,7 @@ export declare class PosOrdersService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -318,6 +328,7 @@ export declare class PosOrdersService {
         order: {
             id: string;
             merchantId: string;
+            locationId: string | null;
             orderNumber: string;
             customerId: string | null;
             orderType: string;
@@ -350,6 +361,7 @@ export declare class PosOrdersService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -362,6 +374,7 @@ export declare class PosOrdersService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -419,6 +432,7 @@ export declare class PosOrdersService {
         order: {
             id: string;
             merchantId: string;
+            locationId: string | null;
             orderNumber: string;
             customerId: string | null;
             orderType: string;
@@ -451,6 +465,7 @@ export declare class PosOrdersService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -463,6 +478,7 @@ export declare class PosOrdersService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -499,18 +515,27 @@ export declare class PosOrdersService {
         method: string;
         terminalReference: string | null;
     }>;
+    /**
+     * Recreate POS held rows from open KDS tickets when the hold was deleted
+     * (partial payment / stale session) but kitchen/ODS still show the ticket.
+     * Only POS shout numbers (#6893). Never clone paid sales or web-shop tickets.
+     */
+    static restoreHeldFromOpenKitchen(merchantId: string): Promise<void>;
     static listHeld(merchantId: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
         label: string | null;
         staffName: string | null;
-        staffId: string | null;
         notes: string | null;
         channel: string | null;
         cartJson: unknown;
+        closedAt: Date | null;
+        closedReason: string | null;
+        paidTotal: string | null;
     }[]>;
     static holdOrder(merchantId: string, body: {
         id?: string;
@@ -527,12 +552,15 @@ export declare class PosOrdersService {
         updatedAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
         label: string | null;
         staffName: string | null;
-        staffId: string | null;
         notes: string | null;
         channel: string | null;
         cartJson: unknown;
+        closedAt: Date | null;
+        closedReason: string | null;
+        paidTotal: string | null;
     }>;
     static deleteHeld(merchantId: string, id: string): Promise<{
         ok: boolean;
@@ -546,6 +574,12 @@ export declare class PosOrdersService {
         ticketDisplay?: string | null;
         tableId?: string | null;
         tabNumber?: string | null;
+        /** Paid amount — kitchen holds are kept when this is less than the open ticket. */
+        paidTotal?: number | null;
+        /** True when the caller confirmed no remaining kitchen items. */
+        settleKitchen?: boolean;
+        /** False for pay-later / invoice — cart total is not collected money. */
+        paymentSettled?: boolean;
     }): Promise<{
         released: number;
     }>;
@@ -565,11 +599,13 @@ export declare class PosOrdersService {
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -585,7 +621,6 @@ export declare class PosOrdersService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -598,6 +633,7 @@ export declare class PosOrdersService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -610,6 +646,7 @@ export declare class PosOrdersService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -646,12 +683,15 @@ export declare class PosOrdersService {
         updatedAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
         label: string | null;
         staffName: string | null;
-        staffId: string | null;
         notes: string | null;
         channel: string | null;
         cartJson: unknown;
+        closedAt: Date | null;
+        closedReason: string | null;
+        paidTotal: string | null;
     }>;
 }
 //# sourceMappingURL=pos-orders.service.d.ts.map

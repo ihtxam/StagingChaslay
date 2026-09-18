@@ -34,10 +34,20 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeliveryTrackingService = void 0;
+exports.isDeliveryFulfillmentChannel = isDeliveryFulfillmentChannel;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const STALE_MS = 3 * 60 * 1000;
+/** Shop/3P payloads sometimes store Delivery / DELIVERY instead of delivery. */
+function isDeliveryFulfillmentChannel(channel) {
+    const s = String(channel || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+    return s === "delivery" || s === "deliver" || s.startsWith("delivery");
+}
+const deliveryChannelSql = (0, drizzle_orm_1.sql) `lower(coalesce(${db_1.schema.orders.fulfillmentChannel}, '')) in ('delivery', 'deliver')`;
 function num(v) {
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : null;
@@ -110,7 +120,7 @@ class DeliveryTrackingService {
         const roleNameById = new Map(roles.map((r) => [r.id, r.name]));
         const staffById = new Map(staffRows.map((s) => [s.id, s]));
         const activeOrders = await db.query.orders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.orders.fulfillmentChannel, "delivery"), (0, drizzle_orm_1.inArray)(db_1.schema.orders.status, ["ready", "out_for_delivery"]), (0, drizzle_orm_1.inArray)(db_1.schema.orders.assignedDeliveryStaffId, staffIds)),
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), deliveryChannelSql, (0, drizzle_orm_1.inArray)(db_1.schema.orders.status, ["ready", "out_for_delivery"]), (0, drizzle_orm_1.inArray)(db_1.schema.orders.assignedDeliveryStaffId, staffIds)),
             columns: { assignedDeliveryStaffId: true },
         });
         const orderCountByStaff = new Map();
@@ -143,7 +153,7 @@ class DeliveryTrackingService {
         await this.ensureSchema();
         const db = (0, db_1.getDb)();
         const rows = await db.query.orders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.orders.fulfillmentChannel, "delivery"), (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.status, "ready"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "out_for_delivery"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "preparing"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "accepted"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "pending_approval"))),
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), deliveryChannelSql, (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.status, "ready"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "out_for_delivery"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "preparing"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "accepted"), (0, drizzle_orm_1.eq)(db_1.schema.orders.status, "pending_approval"))),
             orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
             limit: 80,
             columns: {
@@ -234,7 +244,7 @@ class DeliveryTrackingService {
         });
         if (!order)
             throw new Error("Order not found");
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Not a delivery order");
         }
         if (order.deliveryTrackingToken)
@@ -249,26 +259,36 @@ class DeliveryTrackingService {
     }
     static async assignDriver(merchantId, orderId, staffId) {
         await this.ensureSchema();
+        if (String(orderId).startsWith("held:")) {
+            throw new Error("Held POS tickets cannot be assigned to a driver");
+        }
         const db = (0, db_1.getDb)();
         const order = await db.query.orders.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId), (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)),
         });
         if (!order)
             throw new Error("Order not found");
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Only delivery orders can be assigned to a driver");
         }
         if (staffId) {
             const staff = await db.query.merchantStaff.findFirst({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, staffId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.isActive, true)),
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, staffId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId)),
             });
             if (!staff)
                 throw new Error("Staff member not found");
+            if (staff.isActive === false)
+                throw new Error("Staff member is inactive");
         }
-        await db
-            .update(db_1.schema.orders)
-            .set({ assignedDeliveryStaffId: staffId })
-            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId));
+        try {
+            await db
+                .update(db_1.schema.orders)
+                .set({ assignedDeliveryStaffId: staffId })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId));
+        }
+        catch (err) {
+            throw new Error(err instanceof Error ? err.message : "Failed to assign driver");
+        }
         await this.ensureDeliveryTrackingToken(merchantId, orderId);
         return { success: true, orderId, assignedDeliveryStaffId: staffId };
     }
@@ -281,7 +301,7 @@ class DeliveryTrackingService {
         });
         if (!order)
             throw new Error("Order not found");
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Not a delivery order");
         }
         const expected = order.deliveryTrackingToken || (await this.ensureDeliveryTrackingToken(merchantId, orderId));
@@ -346,7 +366,7 @@ class DeliveryTrackingService {
                 estimatedReadyAt: true,
             },
         });
-        if (!order || order.fulfillmentChannel !== "delivery") {
+        if (!order || !isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Order not found");
         }
         if (!order.deliveryTrackingToken || order.deliveryTrackingToken !== token) {
@@ -414,7 +434,7 @@ class DeliveryTrackingService {
         if (order.assignedDeliveryStaffId !== staffId) {
             throw new Error("This delivery is not assigned to you");
         }
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Not a delivery order");
         }
         await this.advanceDeliveryForDriver(merchantId, orderId);
@@ -440,7 +460,7 @@ class DeliveryTrackingService {
         if (order.assignedDeliveryStaffId !== staffId) {
             throw new Error("This delivery is not assigned to you");
         }
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Not a delivery order");
         }
         if (["cancelled", "refunded", "completed"].includes(String(order.status))) {
@@ -463,7 +483,7 @@ class DeliveryTrackingService {
         let order = await read();
         if (!order)
             throw new Error("Order not found");
-        if (order.fulfillmentChannel !== "delivery") {
+        if (!isDeliveryFulfillmentChannel(order.fulfillmentChannel)) {
             throw new Error("Not a delivery order");
         }
         let status = String(order.status || "");

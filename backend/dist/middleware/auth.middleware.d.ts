@@ -11,7 +11,7 @@ declare global {
 /**
  * Middleware to verify JWT token
  */
-export declare function verifyToken(req: Request, res: Response, next: NextFunction): Response<any, Record<string, any>> | undefined;
+export declare function verifyToken(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 /**
  * Middleware to check if user is superadmin
  */

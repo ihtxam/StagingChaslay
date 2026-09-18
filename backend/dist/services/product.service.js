@@ -60,7 +60,10 @@ class ProductService {
         }
     }
     static productListWhere(merchantId, search, categoryId) {
-        const whereConditions = [(0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId)];
+        const whereConditions = [
+            (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
+            (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true),
+        ];
         if (categoryId) {
             whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.products.categoryId, categoryId));
         }
@@ -222,6 +225,19 @@ class ProductService {
             return { success: true };
         }
         catch (error) {
+            const code = error?.code ||
+                error?.cause?.code;
+            if (code === "23503") {
+                const deactivated = await db
+                    .update(db_1.schema.products)
+                    .set({ isActive: false, updatedAt: new Date() })
+                    .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.id, productId), (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId)))
+                    .returning();
+                if (deactivated.length === 0) {
+                    throw new Error("Product not found");
+                }
+                return { success: true, deactivated: true };
+            }
             console.error("Error deleting product:", error);
             throw error;
         }

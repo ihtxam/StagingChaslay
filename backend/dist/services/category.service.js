@@ -131,6 +131,16 @@ class CategoryService {
             if (typeof patched.description === "string") {
                 patched.description = (0, text_encoding_1.repairCatalogText)(patched.description);
             }
+            if (patched.deliveryPricingEnabled !== undefined) {
+                patched.deliveryPricingEnabled = !!patched.deliveryPricingEnabled;
+            }
+            if (patched.extraDeliveryPrice !== undefined) {
+                const n = Number(patched.extraDeliveryPrice);
+                if (!Number.isFinite(n) || n < 0) {
+                    throw new Error("extraDeliveryPrice must be >= 0");
+                }
+                patched.extraDeliveryPrice = n.toFixed(2);
+            }
             const category = await db
                 .update(db_1.schema.categories)
                 .set(patched)

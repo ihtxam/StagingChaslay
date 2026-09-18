@@ -26,5 +26,11 @@ export declare function shopOrderEmailCopy(kind: ShopOrderKind, shop: string, or
     subject: string;
     body: string;
 };
+export declare function merchantNewOrderEmailCopy(shop: string, orderNumber: string, locale?: string | null): {
+    subject: string;
+    body: string;
+};
+export declare function shopOrderTrackLabel(locale?: string | null): string;
+export declare function shopOrderReadyLabel(locale?: string | null): string;
 export {};
 //# sourceMappingURL=transactional-email-labels.d.ts.map

@@ -38,6 +38,7 @@ exports.normalizeRfidUid = normalizeRfidUid;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
 const gift_card_code_1 = require("@/lib/gift-card-code");
+const brand_1 = require("@/lib/brand");
 const gift_card_settings_1 = require("@/lib/gift-card-settings");
 const membership_plans_1 = require("@/lib/membership-plans");
 const customer_service_1 = require("@/services/customer.service");
@@ -341,7 +342,9 @@ class GiftCardService {
         if (opts.type === "reload" && !settings.reloadEnabled) {
             throw new Error("Card reload is disabled");
         }
-        const check = (0, gift_card_settings_1.validateGiftAmount)(opts.amount, settings);
+        const check = (0, gift_card_settings_1.validateGiftAmount)(opts.amount, settings, {
+            allowCustomOverMax: opts.type === "sell",
+        });
         if (!check.ok)
             throw new Error(check.error);
         const amount = check.amount;
@@ -378,8 +381,9 @@ class GiftCardService {
         const activeCard = card;
         assertActive(activeCard);
         const newBalance = money(activeCard.balance) + amount;
-        if (newBalance > settings.maxAmount) {
-            throw new Error(`Balance cannot exceed CHF ${settings.maxAmount.toFixed(2)}`);
+        const balanceCap = Math.max(settings.maxAmount, opts.type === "sell" ? amount : 0);
+        if (newBalance > balanceCap + 0.001) {
+            throw new Error(`Balance cannot exceed CHF ${balanceCap.toFixed(2)}`);
         }
         const updated = await db
             .update(db_1.schema.giftCards)
@@ -527,13 +531,16 @@ class GiftCardService {
             throw new Error("A card with this number already exists");
         const parts = name.split(/\s+/).filter(Boolean);
         const customer = await customer_service_1.CustomerService.createCustomer(merchantId, email || undefined, phone || undefined, parts[0] || "Member", parts.slice(1).join(" ") || "");
+        const sellPrice = money(input.amount != null && Number(input.amount) > 0
+            ? input.amount
+            : plan.sellPrice ?? 0);
         const rows = await db
             .insert(db_1.schema.giftCards)
             .values({
             merchantId,
             cardNumber,
             cardMediaType: "physical",
-            balance: "0",
+            balance: sellPrice > 0 ? sellPrice.toFixed(2) : "0",
             status: "active",
             membershipEnabled: true,
             membershipPlanId: plan.id,
@@ -552,8 +559,11 @@ class GiftCardService {
             merchantId,
             cardId: card.id,
             transactionType: "membership_issue",
+            amount: sellPrice > 0 ? sellPrice.toFixed(2) : null,
             orderId: input.orderId || null,
-            description: `Membership sold: ${plan.label}`,
+            description: sellPrice > 0
+                ? `Membership sold: ${plan.label} CHF ${sellPrice.toFixed(2)}`
+                : `Membership sold: ${plan.label}`,
         });
         return this.enrichCard(card, settings);
     }
@@ -730,8 +740,8 @@ class GiftCardService {
         const balance = money(opts.balance);
         const redeemUrl = (0, gift_card_code_1.buildGiftCardRedeemUrl)(code);
         const shopSlug = merchant?.slug;
-        const shopGiftUrl = shopSlug && process.env.DOMAIN
-            ? `https://shop.${process.env.DOMAIN.replace(/^https?:\/\//, '')}/${shopSlug}/gift/${encodeURIComponent(code)}`
+        const shopGiftUrl = shopSlug
+            ? `https://${(0, brand_1.resolveShopPublicHost)()}/${shopSlug}/gift/${encodeURIComponent(code)}`
             : redeemUrl;
         const holder = opts.holderName?.trim();
         const subject = `${shopName} · Gift card CHF ${balance.toFixed(2)}`;

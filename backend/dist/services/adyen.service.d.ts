@@ -1,4 +1,8 @@
+import { type AdyenCheckoutEnvironment } from "@/lib/adyen-checkout-env";
 export declare class AdyenService {
+    static environmentFromClientKey(clientKey?: string | null): AdyenCheckoutEnvironment;
+    static checkoutApiBase(clientKey?: string | null, liveUrlPrefix?: string | null): string;
+    static formatSessionError(error: unknown): string;
     /**
      * Resolve Adyen credentials: merchant settings (shared for shop + terminals) → env.
      * Legacy per-terminal credential overrides are still honored if present.
@@ -7,12 +11,15 @@ export declare class AdyenService {
         apiKey: string;
         merchantAccount: string;
         clientId: string | undefined;
+        liveUrlPrefix: string | null;
         terminalId: string | undefined;
     }>;
     /**
-     * Initialize payment session
+     * Initialize Checkout /sessions for Drop-in (online shop + gift cards).
+     * API base and Drop-in environment follow the merchant client key (test_ / live_),
+     * not platform ADYEN_ENVIRONMENT. Do not send clientKey in the session body.
      */
-    static initializePaymentSession(merchantId: string, orderId: string, amount: number, currency?: string, returnUrl?: string): Promise<any>;
+    static initializePaymentSession(merchantId: string, orderId: string, amount: number, currency?: string, returnUrl?: string, origin?: string): Promise<any>;
     /**
      * Process payment with card details
      */
@@ -36,6 +43,7 @@ export declare class AdyenService {
         currency?: string;
     }): Promise<{
         id: string;
+        terminalId: string | null;
         createdAt: Date;
         status: string;
         merchantId: string;
@@ -46,7 +54,6 @@ export declare class AdyenService {
         adyenPoiTransactionTs: Date | null;
         completedAt: Date | null;
         orderId: string;
-        terminalId: string | null;
     }>;
     /** Record payment when only POS clientId is known (order may not exist yet). */
     static recordPaymentTransactionByClientRef(merchantId: string, clientRef: string, amount: number, paymentMethod: string, adyenReference: string, status?: "pending" | "captured" | "completed" | "failed", opts?: {
@@ -54,6 +61,7 @@ export declare class AdyenService {
         currency?: string;
     }): Promise<{
         id: string;
+        terminalId: string | null;
         createdAt: Date;
         status: string;
         merchantId: string;
@@ -64,7 +72,6 @@ export declare class AdyenService {
         adyenPoiTransactionTs: Date | null;
         completedAt: Date | null;
         orderId: string;
-        terminalId: string | null;
     } | null>;
     /**
      * Get payment status
@@ -87,6 +94,7 @@ export declare class AdyenService {
      */
     static getTransactionHistory(merchantId: string, page?: number, limit?: number, status?: string): Promise<{
         id: string;
+        terminalId: string | null;
         createdAt: Date;
         status: string;
         merchantId: string;
@@ -97,7 +105,6 @@ export declare class AdyenService {
         adyenPoiTransactionTs: Date | null;
         completedAt: Date | null;
         orderId: string;
-        terminalId: string | null;
     }[]>;
     /**
      * Get payment summary

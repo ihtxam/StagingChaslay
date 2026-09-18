@@ -53,6 +53,10 @@ export type PosCheckoutSettings = {
     requireTableForDineIn: boolean;
     /** Express checkout + cart action buttons (Send, Payment, Tab). */
     actionButtonSize: ActionButtonSize;
+    /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
+    expressCheckoutEnabled: boolean;
+    /** Show POS toast notifications. Off by default — they block the till. */
+    showPosToasts: boolean;
 };
 export declare const DEFAULT_POS_CHECKOUT: PosCheckoutSettings;
 export declare function isRetailPosMode(raw: unknown): boolean;

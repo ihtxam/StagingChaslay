@@ -45,6 +45,7 @@ const subscription_plans_service_1 = require("@/services/subscription-plans.serv
 const subscription_addons_service_1 = require("@/services/subscription-addons.service");
 const package_provisioning_service_1 = require("@/services/package-provisioning.service");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
 function addMonths(date, months) {
     const d = new Date(date);
     d.setMonth(d.getMonth() + months);
@@ -93,6 +94,7 @@ class SubscriptionBillingService {
         const { WebPosEntitlementService } = await Promise.resolve().then(() => __importStar(require("@/services/webpos-entitlement.service")));
         const webposEntitlement = await WebPosEntitlementService.getEntitlement(merchantId);
         const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
+        const kioskOn = await (0, kiosk_addon_1.readKioskAddonEnabled)(merchantId).catch(() => false);
         return {
             merchant: {
                 id: merchant.id,
@@ -111,6 +113,7 @@ class SubscriptionBillingService {
                 signageAddonEnabled: merchant.signageAddonEnabled,
                 kdsAddonEnabled: merchant.kdsAddonEnabled,
                 odsAddonEnabled: merchant.odsAddonEnabled,
+                kioskAddonEnabled: kioskOn,
                 storekeeperAddonEnabled: storekeeperOn,
             },
             currentPlan,
@@ -186,7 +189,6 @@ class SubscriptionBillingService {
                 channel: "Web",
                 countryCode: "CH",
                 shopperReference: merchantId,
-                clientKey: creds.clientKey,
                 storePaymentMethod: true,
                 recurringProcessingModel: "Subscription",
                 shopperInteraction: "Ecommerce",
@@ -489,7 +491,6 @@ class SubscriptionBillingService {
                 channel: "Web",
                 countryCode: "CH",
                 shopperReference: merchantId,
-                clientKey: creds.clientKey,
                 storePaymentMethod: true,
                 recurringProcessingModel: "Subscription",
                 shopperInteraction: "Ecommerce",

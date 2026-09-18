@@ -20,6 +20,7 @@ exports.BILLABLE_FEATURE_KEYS = [
     "digital_signage",
     "kds",
     "ods",
+    "self_order_kiosk",
 ];
 const DEFAULT_PRICES = {
     currency: "CHF",
@@ -37,6 +38,7 @@ const DEFAULT_PRICES = {
         digital_signage: 19,
         kds: 19,
         ods: 15,
+        self_order_kiosk: 29,
     },
 };
 function num(v, fallback) {
@@ -82,6 +84,8 @@ function detectActiveBillableFeatures(merchant) {
         out.push("kds");
     if (merchant.odsAddonEnabled)
         out.push("ods");
+    if (merchant.kioskAddonEnabled)
+        out.push("self_order_kiosk");
     return [...new Set(out)];
 }
 function monthBounds(year, month1to12) {

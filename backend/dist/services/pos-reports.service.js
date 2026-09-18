@@ -180,6 +180,10 @@ class PosReportsService {
         if (opts.channel && ["takeaway", "dine_in", "delivery"].includes(opts.channel)) {
             conditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.fulfillmentChannel, opts.channel));
         }
+        const scopeLocationId = opts.locationId ? String(opts.locationId).trim() : "";
+        if (scopeLocationId) {
+            conditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.locationId, scopeLocationId));
+        }
         const scopeStaffId = opts.staffId ? String(opts.staffId).trim() : "";
         const scopeStaffName = opts.staffName ? String(opts.staffName).trim() : "";
         if (scopeStaffId) {
@@ -257,13 +261,11 @@ class PosReportsService {
                 covers += Number(o.guestCount) || 0;
             // Payment buckets: net money kept after refunds (gift-first for split tenders).
             const netBuckets = (0, payment_breakdown_1.netPaymentBucketsAfterRefund)(money(o.total), refundAmt, o.paymentBreakdown, o.paymentMethod);
-            const sliceKey = netBuckets.size === 1
-                ? [...netBuckets.keys()][0]
-                : (0, payment_breakdown_1.normalizePaymentMethod)(o.paymentMethod || "") || "other";
-            payments[sliceKey] = payments[sliceKey] || { count: 0, total: 0 };
-            payments[sliceKey].count += 1;
             for (const [method, net] of netBuckets) {
+                if (net <= 0)
+                    continue;
                 payments[method] = payments[method] || { count: 0, total: 0 };
+                payments[method].count += 1;
                 payments[method].total += net;
             }
             if (refundAmt > 0) {
@@ -321,9 +323,13 @@ class PosReportsService {
         for (const o of cancelled) {
             cancelledTotal += money(o.total);
         }
+        let refundsOutsideSales = 0;
         for (const o of refunded) {
-            if (!completed.includes(o))
-                refundTotal += money(o.refundAmount || o.total);
+            if (!completed.includes(o)) {
+                const amt = money(o.refundAmount || o.total);
+                refundTotal += amt;
+                refundsOutsideSales += amt;
+            }
         }
         const rateFor = (ch) => {
             if (ch === "dine_in")
@@ -348,7 +354,7 @@ class PosReportsService {
         })
             .sort((a, b) => b.brut - a.brut);
         const netTotal = round2(revenue - taxTotal);
-        const grandTotal = round2(revenue + tipsTotal);
+        const grandTotal = round2(netTotal + taxTotal + tipsTotal - round2(refundsOutsideSales));
         const productsSold = [...products.values()]
             .sort((a, b) => b.total - a.total)
             .slice(0, 100)
@@ -515,18 +521,25 @@ class PosReportsService {
             tipsTotal: round2(tipsTotal),
             refundTotal: round2(refundTotal),
             cancelledTotal: round2(cancelledTotal),
-            /** Net sales + tips (money collected) */
+            /** Net (excl. VAT) + tax + tips − full refunds not already in sales */
             grandTotal,
             coversServed: covers || null,
             vatRows,
-            paymentRows: Object.entries(payments)
-                .map(([method, v]) => ({
-                method,
-                count: v.count,
-                total: round2(v.total),
-                percent: grandTotal > 0 ? round2((v.total / grandTotal) * 100) : 0,
-            }))
-                .sort((a, b) => b.total - a.total),
+            paymentRows: (() => {
+                const rows = Object.entries(payments)
+                    .map(([method, v]) => ({
+                    method,
+                    count: v.count,
+                    total: round2(v.total),
+                }))
+                    .filter((r) => r.total > 0)
+                    .sort((a, b) => b.total - a.total);
+                const paymentSum = round2(rows.reduce((s, r) => s + r.total, 0));
+                return rows.map((r) => ({
+                    ...r,
+                    percent: paymentSum > 0 ? round2((r.total / paymentSum) * 100) : 0,
+                }));
+            })(),
             refundRows: Object.entries(refundByMethod)
                 .map(([method, total]) => ({
                 method,
@@ -569,6 +582,7 @@ class PosReportsService {
             to: prevTo,
             staffId: opts.staffId,
             staffName: opts.staffName,
+            locationId: opts.locationId,
         });
         const pctChange = (cur, prev) => {
             if (!prev && !cur)
@@ -588,6 +602,9 @@ class PosReportsService {
             (0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, range.start),
             (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, range.end),
         ];
+        if (opts.locationId) {
+            conditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.locationId, String(opts.locationId)));
+        }
         const rows = await db.query.orders.findMany({
             where: (0, drizzle_orm_1.and)(...conditions),
             columns: {
@@ -704,6 +721,69 @@ class PosReportsService {
                 netSales: previous.netTotal,
                 orders: previous.salesCount,
             },
+            byLocation: await this.getLocationBreakdown(merchantId, {
+                from: range.from,
+                to: range.to,
+                staffId: opts.staffId,
+                staffName: opts.staffName,
+            }),
+        };
+    }
+    /** Revenue and order count grouped by location (org-wide analytics). */
+    static async getLocationBreakdown(merchantId, opts) {
+        const range = resolveReportRange("custom", opts.from, opts.to);
+        const db = (0, db_1.getDb)();
+        const orders = await db.query.orders.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, range.start), (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, range.end)),
+            columns: {
+                locationId: true,
+                total: true,
+                tipAmount: true,
+                refundAmount: true,
+                status: true,
+                paymentStatus: true,
+            },
+        });
+        const locations = await db.query.locations.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.locations.merchantId, merchantId),
+            columns: { id: true, name: true, slug: true, isDefault: true },
+        });
+        const nameById = new Map(locations.map((l) => [l.id, l.name]));
+        const defaultLocationId = locations.find((l) => l.isDefault)?.id ?? locations[0]?.id ?? null;
+        const completed = orders.filter((o) => isCountableSale(o));
+        const byLoc = new Map();
+        for (const o of completed) {
+            let key = o.locationId;
+            if (!key || !nameById.has(key)) {
+                key = defaultLocationId ?? key ?? "unknown";
+            }
+            const cur = byLoc.get(key) || { revenue: 0, orders: 0 };
+            cur.revenue += (0, payment_breakdown_1.netTaxableSale)(Number(o.total || 0), Number(o.tipAmount || 0), Number(o.refundAmount || 0));
+            cur.orders += 1;
+            byLoc.set(key, cur);
+        }
+        const defaultName = defaultLocationId ? nameById.get(defaultLocationId) : null;
+        return [...byLoc.entries()].map(([locationId, stats]) => ({
+            locationId,
+            name: nameById.get(locationId) || defaultName || "Unknown",
+            revenue: round2(stats.revenue),
+            orders: stats.orders,
+        }));
+    }
+    /** HQ dashboard — org-wide summary with per-location breakdown. */
+    static async getOrgAnalytics(merchantId, opts) {
+        const preset = opts.preset || "today";
+        const current = await this.getEndOfDayReport(merchantId, { preset });
+        const byLocation = await this.getLocationBreakdown(merchantId, {
+            from: current.range.from,
+            to: current.range.to,
+        });
+        return {
+            range: current.range,
+            totalRevenue: current.revenue,
+            totalOrders: current.salesCount,
+            netTotal: current.netTotal,
+            byLocation,
         };
     }
     /** Top product ids by quantity sold over the last N days (for POS "Most Sold" category). */

@@ -43,6 +43,7 @@ function getDeliveryPlatformPublic(raw) {
     const je = norm.justEat || {};
     const ue = norm.uberEats || {};
     return {
+        onlineShopAutoAccept: norm.onlineShopAutoAccept,
         justEat: {
             ...je,
             apiKey: undefined,
@@ -89,8 +90,10 @@ function mergeDeliveryPlatformSettings(prevRaw, updatesRaw) {
     return {
         justEat: mergeOne("justEat", updates.justEat),
         uberEats: mergeOne("uberEats", updates.uberEats),
-        onlineShopAutoAccept: updates.onlineShopAutoAccept !== undefined
-            ? updates.onlineShopAutoAccept === true
+        onlineShopAutoAccept: updatesRaw &&
+            typeof updatesRaw === "object" &&
+            Object.prototype.hasOwnProperty.call(updatesRaw, "onlineShopAutoAccept")
+            ? updatesRaw.onlineShopAutoAccept === true
             : prev.onlineShopAutoAccept,
     };
 }

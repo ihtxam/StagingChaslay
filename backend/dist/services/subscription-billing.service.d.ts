@@ -19,6 +19,7 @@ export declare class SubscriptionBillingService {
             signageAddonEnabled: boolean;
             kdsAddonEnabled: boolean;
             odsAddonEnabled: boolean;
+            kioskAddonEnabled: boolean;
             storekeeperAddonEnabled: boolean;
         };
         currentPlan: {
@@ -34,6 +35,7 @@ export declare class SubscriptionBillingService {
             maxPosPosts: number;
             maxWaiterPosts: number;
             maxStaff: number;
+            maxLocations: number;
             editionId: string | null;
             sortOrder: number;
             description: string | null;
@@ -45,20 +47,8 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
-            edition: {
-                id: string;
-                name: string;
-                isActive: boolean;
-                createdAt: Date;
-                updatedAt: Date;
-                ownerType: string;
-                ownerId: string | null;
-                note: string | null;
-                businessCategory: string;
-                features: string[];
-            } | null;
         } | null;
-        plans: {
+        plans: ({
             id: string;
             name: string;
             isActive: boolean;
@@ -71,6 +61,7 @@ export declare class SubscriptionBillingService {
             maxPosPosts: number;
             maxWaiterPosts: number;
             maxStaff: number;
+            maxLocations: number;
             editionId: string | null;
             sortOrder: number;
             description: string | null;
@@ -82,19 +73,9 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
-            edition: {
-                id: string;
-                name: string;
-                isActive: boolean;
-                createdAt: Date;
-                updatedAt: Date;
-                ownerType: string;
-                ownerId: string | null;
-                note: string | null;
-                businessCategory: string;
-                features: string[];
-            } | null;
-        }[];
+        } & {
+            edition: typeof schema.editions.$inferSelect | null;
+        })[];
         addons: {
             id: string;
             name: string;
@@ -173,6 +154,7 @@ export declare class SubscriptionBillingService {
                 maxPosPosts: number;
                 maxWaiterPosts: number;
                 maxStaff: number;
+                maxLocations: number;
                 editionId: string | null;
                 sortOrder: number;
                 description: string | null;
@@ -223,6 +205,7 @@ export declare class SubscriptionBillingService {
             maxPosPosts: number;
             maxWaiterPosts: number;
             maxStaff: number;
+            maxLocations: number;
             editionId: string | null;
             sortOrder: number;
             description: string | null;
@@ -234,18 +217,6 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
-            edition: {
-                id: string;
-                name: string;
-                isActive: boolean;
-                createdAt: Date;
-                updatedAt: Date;
-                ownerType: string;
-                ownerId: string | null;
-                note: string | null;
-                businessCategory: string;
-                features: string[];
-            } | null;
         };
         billingCycle: BillingCycle;
         paymentSession?: undefined;
@@ -283,6 +254,7 @@ export declare class SubscriptionBillingService {
             maxPosPosts: number;
             maxWaiterPosts: number;
             maxStaff: number;
+            maxLocations: number;
             editionId: string | null;
             sortOrder: number;
             description: string | null;
@@ -294,18 +266,6 @@ export declare class SubscriptionBillingService {
             includedAddons: schema.PackageIncludedAddons | null;
             isPublic: boolean;
             trialDays: number;
-            edition: {
-                id: string;
-                name: string;
-                isActive: boolean;
-                createdAt: Date;
-                updatedAt: Date;
-                ownerType: string;
-                ownerId: string | null;
-                note: string | null;
-                businessCategory: string;
-                features: string[];
-            } | null;
         };
         billingCycle: BillingCycle;
         paymentSession: {

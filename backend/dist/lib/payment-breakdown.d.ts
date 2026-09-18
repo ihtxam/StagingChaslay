@@ -6,9 +6,15 @@ export type PaymentTender = {
 export declare const CANONICAL_PAYMENT_METHODS: readonly ["cash", "card", "terminal", "mixed", "gift_card", "invoice", "pay_later", "bank_transfer"];
 /** Fold case, diacritics, spaces, and known aliases into one report key. */
 export declare function normalizePaymentMethod(method: string): string;
+/** Collected tender for a settled / refunded ticket.
+ * `pay_later:cash` → cash. Bare `pay_later` stays pay_later.
+ */
+export declare function collectedTenderMethod(method: string | null | undefined): string;
 export declare function paymentMethodLabelEn(method: string): string;
 /** Parse stored payment_breakdown JSON or legacy single paymentMethod. */
 export declare function parsePaymentBreakdown(raw: unknown, paymentMethod?: string | null, orderTotal?: number): PaymentTender[];
+/** Scale tender amounts proportionally so they sum to orderTotal (fixes stale oversized breakdowns). */
+export declare function scaleTendersToOrderTotal(tenders: PaymentTender[], orderTotal: number): PaymentTender[];
 export declare function paymentBreakdownTotals(tenders: PaymentTender[]): {
     giftCard: number;
     cash: number;

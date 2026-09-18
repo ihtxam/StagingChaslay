@@ -159,10 +159,10 @@ export declare class ReportExportService {
                     brut: number;
                 }[];
                 paymentRows: {
+                    percent: number;
                     method: string;
                     count: number;
                     total: number;
-                    percent: number;
                 }[];
                 refundRows: {
                     method: string;
@@ -228,6 +228,12 @@ export declare class ReportExportService {
                 netSales: number;
                 orders: number;
             };
+            byLocation: {
+                locationId: string;
+                name: string;
+                revenue: number;
+                orders: number;
+            }[];
         };
         mime: string;
     }>;
@@ -380,10 +386,10 @@ export declare class ReportExportService {
                     brut: number;
                 }[];
                 paymentRows: {
+                    percent: number;
                     method: string;
                     count: number;
                     total: number;
-                    percent: number;
                 }[];
                 refundRows: {
                     method: string;
@@ -449,6 +455,12 @@ export declare class ReportExportService {
                 netSales: number;
                 orders: number;
             };
+            byLocation: {
+                locationId: string;
+                name: string;
+                revenue: number;
+                orders: number;
+            }[];
         };
         mime: string;
     }>;

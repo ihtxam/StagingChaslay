@@ -10,6 +10,23 @@ export declare const PLATFORM_BREVO_KEYS: {
     readonly fromEmail: "brevo_from_email";
     readonly fromName: "brevo_from_name";
 };
+export declare const PLATFORM_MAILCO_KEYS: {
+    readonly apiKey: "mailco_api_key";
+    readonly fromEmail: "mailco_from_email";
+    readonly fromName: "mailco_from_name";
+    readonly apiBase: "mailco_api_base";
+    readonly templateSlug: "mailco_template_slug";
+    readonly emailPrimary: "platform_email_primary";
+};
+export type PlatformEmailPrimary = "mailco" | "brevo";
+export type PlatformMailcoSettings = {
+    apiKey?: string | null;
+    fromEmail?: string | null;
+    fromName?: string | null;
+    apiBase?: string | null;
+    templateSlug?: string | null;
+    emailPrimary?: PlatformEmailPrimary | string | null;
+};
 export type PlatformAdyenSettings = {
     apiKey?: string | null;
     merchantAccount?: string | null;
@@ -90,6 +107,59 @@ export declare class PlatformSettingsService {
         usingEnvFallback: boolean;
         configured: boolean;
         provider: string | null;
+    }>;
+    private static envMailcoApiKey;
+    private static envMailcoFromEmail;
+    private static envMailcoFromName;
+    private static envMailcoApiBase;
+    private static envMailcoTemplateSlug;
+    private static normalizeEmailPrimary;
+    static getMailcoSettings(): Promise<PlatformMailcoSettings>;
+    static getMailcoSettingsPublic(): Promise<{
+        fromEmail: string;
+        fromName: string;
+        apiBase: string;
+        templateSlug: string;
+        emailPrimary: PlatformEmailPrimary;
+        apiKeyMasked: string;
+        apiKeySet: boolean;
+        usingEnvFallback: boolean;
+        configured: boolean;
+        provider: string | null;
+    }>;
+    static updateMailcoSettings(input: {
+        apiKey?: string;
+        fromEmail?: string;
+        fromName?: string;
+        apiBase?: string;
+        templateSlug?: string;
+        emailPrimary?: string;
+    }): Promise<{
+        fromEmail: string;
+        fromName: string;
+        apiBase: string;
+        templateSlug: string;
+        emailPrimary: PlatformEmailPrimary;
+        apiKeyMasked: string;
+        apiKeySet: boolean;
+        usingEnvFallback: boolean;
+        configured: boolean;
+        provider: string | null;
+    }>;
+    static getPlatformEmailPrimary(): Promise<PlatformEmailPrimary>;
+    /** Resolved mailco credentials for platform transactional sends. */
+    static resolveMailcoCredentials(): Promise<{
+        apiKey: string;
+        fromEmail: string;
+        fromName: string;
+        apiBase: string;
+        templateSlug: string;
+    }>;
+    /** Resolved Brevo credentials for platform sends (ignores merchant overrides). */
+    static resolveBrevoCredentials(): Promise<{
+        apiKey: string;
+        fromEmail: string;
+        fromName: string;
     }>;
     /**
      * Resolve platform Adyen credentials for subscription checkout.

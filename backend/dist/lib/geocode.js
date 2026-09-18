@@ -1,15 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.geocodeQuery = geocodeQuery;
+const location_service_1 = require("@/lib/location-service");
 /**
  * Nominatim forward geocode (OpenStreetMap).
  * Server-side only — respects OSM usage policy via User-Agent.
  */
-async function geocodeQuery(query) {
+async function geocodeQuery(query, opts) {
     const q = String(query || "").trim();
     if (!q)
         return { found: false };
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const params = new URLSearchParams({ format: "json", limit: "1", q });
+    const country = (0, location_service_1.normalizeCountryCode)(opts?.countryCode);
+    if (country)
+        params.set("countrycodes", country.toLowerCase());
+    const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
     const response = await fetch(url, {
         headers: {
             Accept: "application/json",

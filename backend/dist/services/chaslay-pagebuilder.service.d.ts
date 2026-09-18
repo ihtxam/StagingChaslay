@@ -3,6 +3,8 @@ export declare class ChaslayPagebuilderService {
     private static resolvePublishedEditorState;
     /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
     private static syncHomepagePageToBuilder;
+    /** One-time bootstrap when a merchant had the classic CMS homepage but no Chaslay builder yet. */
+    static ensureBootstrappedFromLegacy(merchantId: string): Promise<boolean>;
     static list(merchantId: string): Promise<{
         id: number;
         name: string;

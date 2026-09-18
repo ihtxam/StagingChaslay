@@ -52,13 +52,18 @@ const terminals_routes_1 = __importDefault(require("@/routes/terminals.routes"))
 const tap_to_pay_routes_1 = __importDefault(require("@/routes/tap-to-pay.routes"));
 const shop_routes_1 = __importDefault(require("@/routes/shop.routes"));
 const cms_routes_1 = __importDefault(require("@/routes/cms.routes"));
+const chaslay_pagebuilder_routes_1 = __importDefault(require("@/routes/chaslay-pagebuilder.routes"));
 const rfid_readers_routes_1 = __importDefault(require("@/routes/rfid-readers.routes"));
 const delivery_zones_routes_1 = __importDefault(require("@/routes/delivery-zones.routes"));
+const delivery_zip_rules_routes_1 = __importDefault(require("@/routes/delivery-zip-rules.routes"));
 const floor_plans_routes_1 = __importDefault(require("@/routes/floor-plans.routes"));
 const reservations_routes_1 = __importDefault(require("@/routes/reservations.routes"));
 const receipts_routes_1 = __importDefault(require("@/routes/receipts.routes"));
 const kds_routes_1 = __importStar(require("@/routes/kds.routes"));
+const kiosk_routes_1 = __importStar(require("@/routes/kiosk.routes"));
 const ods_routes_1 = __importStar(require("@/routes/ods.routes"));
+const cds_routes_1 = __importStar(require("@/routes/cds.routes"));
+const fiskaly_routes_1 = __importDefault(require("@/routes/fiskaly.routes"));
 const signage_routes_1 = __importStar(require("@/routes/signage.routes"));
 const chaslay_1 = __importDefault(require("@/routes/chaslay"));
 const webhooks_routes_1 = __importDefault(require("@/routes/webhooks.routes"));
@@ -85,6 +90,8 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const brand_1 = require("@/lib/brand");
 const downloads_routes_1 = __importDefault(require("@/routes/downloads.routes"));
+const custom_domain_routes_1 = __importDefault(require("@/routes/custom-domain.routes"));
+const shop_host_middleware_1 = require("@/middleware/shop-host.middleware");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -108,6 +115,23 @@ function buildCorsOrigins() {
         .filter(Boolean);
     return [...new Set([...defaults, ...extra])];
 }
+function isPermittedCorsOrigin(origin, allowed) {
+    if (allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true")
+        return true;
+    try {
+        const host = new URL(origin).hostname.toLowerCase();
+        if (host === "localhost" || host === "127.0.0.1")
+            return true;
+        if (host === "chaslay.com" || host.endsWith(".chaslay.com"))
+            return true;
+        if (host === "rebornsense.com" || host.endsWith(".rebornsense.com"))
+            return true;
+        return false;
+    }
+    catch {
+        return false;
+    }
+}
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
@@ -115,7 +139,7 @@ app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         const allowed = buildCorsOrigins();
         // Allow mobile apps / same-origin / curl (no Origin header)
-        if (!origin || allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true") {
+        if (!origin || isPermittedCorsOrigin(origin, allowed)) {
             return callback(null, true);
         }
         return callback(new Error(`CORS blocked for origin: ${origin}`));
@@ -157,6 +181,51 @@ app.get("/health", (_req, res) => {
         timestamp: new Date().toISOString(),
     });
 });
+/** Alias for probes that expect /api/health (dashboard same-origin /api prefix). */
+app.get("/api/health", (_req, res) => {
+    res.json({
+        status: "ok",
+        service: "reborn-backend",
+        timestamp: new Date().toISOString(),
+    });
+});
+/** Idempotent DB column repair — GET or POST (browser-safe). */
+async function handleSchemaRepair(_req, res) {
+    try {
+        const result = await (0, ensure_merchant_schema_1.ensureAllMerchantSchema)();
+        const ok = result.missingAfter.length === 0 &&
+            result.ordersMissing.length === 0 &&
+            result.orderItemsMissing.length === 0 &&
+            result.productsMissing.length === 0 &&
+            result.editionsMissing.length === 0 &&
+            result.subscriptionPlansMissing.length === 0 &&
+            result.posSessionsMissing.length === 0;
+        res.status(ok ? 200 : 500).json({
+            status: ok ? "ok" : "error",
+            repaired: true,
+            missingBefore: result.missingBefore,
+            missingAfter: result.missingAfter,
+            ordersMissing: result.ordersMissing,
+            orderItemsMissing: result.orderItemsMissing,
+            productsMissing: result.productsMissing,
+            editionsMissing: result.editionsMissing,
+            subscriptionPlansMissing: result.subscriptionPlansMissing,
+            posSessionsMissing: result.posSessionsMissing,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        console.error("[schema-repair] failed:", error);
+        res.status(500).json({
+            status: "error",
+            error: error instanceof Error ? error.message : "Schema repair failed",
+        });
+    }
+}
+app.get("/health/schema-repair", handleSchemaRepair);
+app.post("/health/schema-repair", handleSchemaRepair);
+app.get("/api/health/schema-repair", handleSchemaRepair);
+app.post("/api/health/schema-repair", handleSchemaRepair);
 /** Public status page data (no auth). */
 app.get("/api/public/status", async (_req, res) => {
     const components = {
@@ -181,6 +250,7 @@ app.get("/api/public/status", async (_req, res) => {
         components,
     });
 });
+app.use(shop_host_middleware_1.shopHostMiddleware);
 app.use("/api/auth", auth_routes_1.default);
 app.use("/api/licensing", licensing_routes_1.default);
 app.use("/api/superadmin", superadmin_routes_1.default);
@@ -188,6 +258,7 @@ app.use("/api/panel", panel_routes_1.default);
 app.use("/api/reseller", reseller_routes_1.default);
 app.use("/api/reseller/support", reseller_support_routes_1.default);
 app.use("/api/merchant", merchant_routes_1.default);
+app.use("/api/merchant/custom-domain", custom_domain_routes_1.default);
 app.use("/api/merchant/support", merchant_support_routes_1.default);
 app.use("/api/merchant", staff_routes_1.default);
 app.use("/api/payment", payment_routes_1.default);
@@ -199,8 +270,10 @@ app.use("/api/terminals", terminals_routes_1.default);
 app.use("/api/tap-to-pay", tap_to_pay_routes_1.default);
 app.use("/api/shop", shop_routes_1.default);
 app.use("/api/merchant/cms", cms_routes_1.default);
+app.use("/api/merchant/chaslay-pagebuilder", chaslay_pagebuilder_routes_1.default);
 app.use("/api/rfid-readers", rfid_readers_routes_1.default);
 app.use("/api/delivery-zones", delivery_zones_routes_1.default);
+app.use("/api/delivery-zip-rules", delivery_zip_rules_routes_1.default);
 app.use("/api/merchant/floor-plans", floor_plans_routes_1.default);
 app.use("/api/merchant/reservations", reservations_routes_1.default);
 app.use("/api/merchant/offers", offers_routes_1.default);
@@ -212,8 +285,13 @@ app.use("/api/merchant/delivery", delivery_tracking_routes_1.default);
 app.use("/api/receipts", receipts_routes_1.default);
 app.use("/api/kds", kds_routes_1.default);
 app.use("/api/merchant/kds", kds_routes_1.kdsMerchantRoutes);
+app.use("/api/kiosk", kiosk_routes_1.default);
+app.use("/api/merchant/kiosk", kiosk_routes_1.kioskMerchantRouter);
 app.use("/api/ods", ods_routes_1.default);
 app.use("/api/merchant/ods", ods_routes_1.odsMerchantRoutes);
+app.use("/api/cds", cds_routes_1.default);
+app.use("/api/merchant/cds", cds_routes_1.cdsMerchantRouter);
+app.use("/api/merchant/fiskaly", fiskaly_routes_1.default);
 app.use("/api/tv", signage_routes_1.default);
 app.use("/api/merchant/signage", signage_routes_1.signageMerchantRoutes);
 app.use("/api/webhooks", webhooks_routes_1.default);
@@ -234,87 +312,96 @@ app.use((err, _req, res, _next) => {
         message: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
 });
-app.listen(PORT, () => {
-    console.log(`✅ ${brand_1.APP_NAME} API running on port ${PORT}`);
-    console.log(`🏥 Health check: /health`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
-    (0, ensure_merchant_schema_1.ensureMerchantSchemaAtStartup)();
-    (0, ensure_licenses_schema_1.ensureLicensesSchemaAtStartup)();
-    (0, ensure_subscription_schema_1.ensureSubscriptionSchemaAtStartup)();
-    void Promise.resolve().then(() => __importStar(require("@/services/platform-reseller.service"))).then(async ({ PlatformResellerService }) => {
-        try {
-            await PlatformResellerService.ensure();
-            await PlatformResellerService.migrateCatalogOwnership();
-        }
-        catch {
-            /* non-fatal at boot */
-        }
+void (async () => {
+    try {
+        console.log("[schema] applying merchant schema patches before listen…");
+        await (0, ensure_merchant_schema_1.ensureMerchantSchemaAtStartup)();
+        console.log("[schema] merchant schema patches complete");
+    }
+    catch (err) {
+        console.warn("[schema] startup patch error (continuing):", err);
+    }
+    app.listen(PORT, () => {
+        console.log(`✅ ${brand_1.APP_NAME} API running on port ${PORT}`);
+        console.log(`🏥 Health check: /health`);
+        console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
+        (0, ensure_licenses_schema_1.ensureLicensesSchemaAtStartup)();
+        (0, ensure_subscription_schema_1.ensureSubscriptionSchemaAtStartup)();
+        void Promise.resolve().then(() => __importStar(require("@/services/platform-reseller.service"))).then(async ({ PlatformResellerService }) => {
+            try {
+                await PlatformResellerService.ensure();
+                await PlatformResellerService.migrateCatalogOwnership();
+            }
+            catch {
+                /* non-fatal at boot */
+            }
+        });
+        void Promise.resolve().then(() => __importStar(require("@/services/subscription-plans.service"))).then(({ SubscriptionPlansService }) => SubscriptionPlansService.ensureDefaults().catch(() => { }));
+        void Promise.resolve().then(() => __importStar(require("@/services/subscription-addons.service"))).then(({ SubscriptionAddonsService }) => SubscriptionAddonsService.ensureDefaults()
+            .then(() => SubscriptionAddonsService.ensureMissingDefaultAddons())
+            .catch(() => { }));
+        // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
+        const tick = async () => {
+            try {
+                const result = await marketing_service_1.MarketingService.processReorderReminders();
+                if (result.sent > 0) {
+                    console.log(`[marketing] reorder reminders sent: ${result.sent}`);
+                }
+            }
+            catch (error) {
+                console.error("[marketing] reorder reminder job failed", error);
+            }
+            try {
+                const result = await reservation_service_1.ReservationService.processReminders();
+                if (result.sent > 0) {
+                    console.log(`[reservations] reminders sent: ${result.sent}`);
+                }
+            }
+            catch (error) {
+                console.error("[reservations] reminder job failed", error);
+            }
+            try {
+                const result = await reservation_service_1.ReservationService.processDailySummaries();
+                if (result.sent > 0) {
+                    console.log(`[reservations] daily summaries sent: ${result.sent}`);
+                }
+            }
+            catch (error) {
+                console.error("[reservations] daily summary job failed", error);
+            }
+            try {
+                const { PosShiftService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-shift.service")));
+                const closed = await PosShiftService.autoCloseStaleShifts();
+                if (closed > 0) {
+                    console.log(`[pos-shifts] auto-closed stale shifts: ${closed}`);
+                }
+            }
+            catch (error) {
+                console.error("[pos-shifts] auto-close job failed", error);
+            }
+            try {
+                const { ReportEmailService } = await Promise.resolve().then(() => __importStar(require("@/services/report-email.service")));
+                const result = await ReportEmailService.processScheduledReports();
+                if (result.sent > 0) {
+                    console.log(`[report-email] scheduled reports sent: ${result.sent}`);
+                }
+            }
+            catch (error) {
+                console.error("[report-email] scheduled job failed", error);
+            }
+            try {
+                const result = await subscription_billing_service_1.SubscriptionBillingService.processRecurringRenewals();
+                if (result.charged > 0 || result.failed > 0) {
+                    console.log(`[subscription] recurring renewals: charged=${result.charged} failed=${result.failed}`);
+                }
+            }
+            catch (error) {
+                console.error("[subscription] recurring renewal job failed", error);
+            }
+        };
+        setTimeout(() => void tick(), 45000);
+        setInterval(() => void tick(), 60 * 60 * 1000);
     });
-    void Promise.resolve().then(() => __importStar(require("@/services/subscription-plans.service"))).then(({ SubscriptionPlansService }) => SubscriptionPlansService.ensureDefaults().catch(() => { }));
-    void Promise.resolve().then(() => __importStar(require("@/services/subscription-addons.service"))).then(({ SubscriptionAddonsService }) => SubscriptionAddonsService.ensureDefaults()
-        .then(() => SubscriptionAddonsService.ensureMissingDefaultAddons())
-        .catch(() => { }));
-    // Reminder sweeps (~hourly). Lightweight; skips merchants without email.
-    const tick = async () => {
-        try {
-            const result = await marketing_service_1.MarketingService.processReorderReminders();
-            if (result.sent > 0) {
-                console.log(`[marketing] reorder reminders sent: ${result.sent}`);
-            }
-        }
-        catch (error) {
-            console.error("[marketing] reorder reminder job failed", error);
-        }
-        try {
-            const result = await reservation_service_1.ReservationService.processReminders();
-            if (result.sent > 0) {
-                console.log(`[reservations] reminders sent: ${result.sent}`);
-            }
-        }
-        catch (error) {
-            console.error("[reservations] reminder job failed", error);
-        }
-        try {
-            const result = await reservation_service_1.ReservationService.processDailySummaries();
-            if (result.sent > 0) {
-                console.log(`[reservations] daily summaries sent: ${result.sent}`);
-            }
-        }
-        catch (error) {
-            console.error("[reservations] daily summary job failed", error);
-        }
-        try {
-            const { PosShiftService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-shift.service")));
-            const closed = await PosShiftService.autoCloseStaleShifts();
-            if (closed > 0) {
-                console.log(`[pos-shifts] auto-closed stale shifts: ${closed}`);
-            }
-        }
-        catch (error) {
-            console.error("[pos-shifts] auto-close job failed", error);
-        }
-        try {
-            const { ReportEmailService } = await Promise.resolve().then(() => __importStar(require("@/services/report-email.service")));
-            const result = await ReportEmailService.processScheduledReports();
-            if (result.sent > 0) {
-                console.log(`[report-email] scheduled reports sent: ${result.sent}`);
-            }
-        }
-        catch (error) {
-            console.error("[report-email] scheduled job failed", error);
-        }
-        try {
-            const result = await subscription_billing_service_1.SubscriptionBillingService.processRecurringRenewals();
-            if (result.charged > 0 || result.failed > 0) {
-                console.log(`[subscription] recurring renewals: charged=${result.charged} failed=${result.failed}`);
-            }
-        }
-        catch (error) {
-            console.error("[subscription] recurring renewal job failed", error);
-        }
-    };
-    setTimeout(() => void tick(), 45000);
-    setInterval(() => void tick(), 60 * 60 * 1000);
-});
+})();
 exports.default = app;
 //# sourceMappingURL=index.js.map

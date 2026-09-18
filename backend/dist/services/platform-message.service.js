@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlatformMessageService = void 0;
+exports.buildNotificationTray = buildNotificationTray;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 function isActiveWindow(startsAt, endsAt, now = new Date()) {
@@ -29,6 +30,13 @@ function audienceMatches(msg, viewer) {
     }
     return false;
 }
+/** Build chronological tray rows (unread first-class) for the panel bell modal. */
+function buildNotificationTray(visible, dismissedIds, limit = 20) {
+    return visible.slice(0, Math.max(0, limit)).map((m) => ({
+        ...m,
+        unread: !dismissedIds.has(m.id),
+    }));
+}
 class PlatformMessageService {
     static resolveViewer(user) {
         if (!user?.id)
@@ -39,7 +47,11 @@ class PlatformMessageService {
         if (user.role === 'reseller' && user.resellerId) {
             return { role: 'reseller', viewerId: user.resellerId, resellerId: user.resellerId };
         }
-        if ((user.role === 'merchant' || user.role === 'staff') && user.merchantId) {
+        if (user.role === 'merchant') {
+            const merchantId = user.merchantId || user.id;
+            return { role: 'merchant', viewerId: merchantId, merchantId };
+        }
+        if (user.role === 'staff' && user.merchantId) {
             return { role: 'merchant', viewerId: user.merchantId, merchantId: user.merchantId };
         }
         return null;
@@ -141,7 +153,14 @@ class PlatformMessageService {
         });
         const visible = all.filter((m) => audienceMatches(m, viewer) && isActiveWindow(m.startsAt, m.endsAt, now));
         if (!visible.length) {
-            return { messages: [], banner: [], loginPopup: [], unreadCount: 0 };
+            return {
+                messages: [],
+                banner: [],
+                loginPopup: [],
+                whatsNew: [],
+                tray: [],
+                unreadCount: 0,
+            };
         }
         const ids = visible.map((m) => m.id);
         const dismissals = await db.query.platformMessageDismissals.findMany({
@@ -149,13 +168,47 @@ class PlatformMessageService {
         });
         const dismissed = new Set(dismissals.map((d) => d.messageId));
         const undismissed = visible.filter((m) => !dismissed.has(m.id));
+        const tray = buildNotificationTray(visible, dismissed, 20);
         return {
             messages: undismissed,
             banner: undismissed.filter((m) => m.showInBanner || m.kind === 'incident'),
             loginPopup: undismissed.filter((m) => m.showOnLogin && m.kind !== 'incident'),
             whatsNew: undismissed.filter((m) => m.kind === 'whats_new' || m.kind === 'announcement'),
+            tray,
             unreadCount: undismissed.length,
         };
+    }
+    static paginateHistory(items, offsetRaw, limitRaw) {
+        const offset = Math.max(0, Math.floor(Number(offsetRaw) || 0));
+        const limit = Math.min(50, Math.max(1, Math.floor(Number(limitRaw) || 20)));
+        const page = items.slice(offset, offset + limit);
+        return {
+            messages: page,
+            total: items.length,
+            offset,
+            limit,
+            hasMore: offset + page.length < items.length,
+        };
+    }
+    /** All published messages for the viewer, including dismissed and expired entries. */
+    static async getHistoryForViewer(viewer, offsetRaw, limitRaw) {
+        const db = (0, db_1.getDb)();
+        const now = new Date();
+        const all = await db.query.platformMessages.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.platformMessages.isActive, true), (0, drizzle_orm_1.or)((0, drizzle_orm_1.isNull)(db_1.schema.platformMessages.startsAt), (0, drizzle_orm_1.lte)(db_1.schema.platformMessages.startsAt, now))),
+            orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.platformMessages.createdAt)],
+            limit: 500,
+        });
+        const visible = all.filter((m) => audienceMatches(m, viewer));
+        const ids = visible.map((m) => m.id);
+        const dismissals = ids.length
+            ? await db.query.platformMessageDismissals.findMany({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.inArray)(db_1.schema.platformMessageDismissals.messageId, ids), (0, drizzle_orm_1.eq)(db_1.schema.platformMessageDismissals.viewerRole, viewer.role), (0, drizzle_orm_1.eq)(db_1.schema.platformMessageDismissals.viewerId, viewer.viewerId)),
+            })
+            : [];
+        const dismissed = new Set(dismissals.map((d) => d.messageId));
+        const stamped = visible.map((m) => ({ ...m, dismissed: dismissed.has(m.id) }));
+        return PlatformMessageService.paginateHistory(stamped, offsetRaw, limitRaw);
     }
     static async dismiss(viewer, messageId) {
         const db = (0, db_1.getDb)();

@@ -1,4 +1,5 @@
 import type { VoucherDiscountType, VoucherUsageType } from "@/db/schema";
+export type VoucherOrderType = "takeaway" | "delivery" | "dine_in";
 export type VoucherInput = {
     code: string;
     name?: string | null;
@@ -8,12 +9,17 @@ export type VoucherInput = {
     discountType?: VoucherDiscountType;
     discountValue: number;
     minOrderAmount?: number;
+    orderTypes?: string[] | null;
     validFrom?: string | Date | null;
     validTo?: string | Date | null;
     isActive?: boolean;
 };
 export declare class VoucherService {
     static normalizeCode(code: string): string;
+    static normalizeOrderTypes(input?: string[] | null): VoucherOrderType[];
+    static allowsOrderType(voucher: {
+        orderTypes?: string[] | null;
+    }, orderType?: string | null): boolean;
     static list(merchantId: string): Promise<{
         id: string;
         code: string;
@@ -29,6 +35,7 @@ export declare class VoucherService {
         discountType: string;
         discountValue: number;
         minOrderAmount: number;
+        orderTypes: VoucherOrderType[];
         validFrom: Date | null;
         validTo: Date | null;
         isActive: boolean;
@@ -51,6 +58,7 @@ export declare class VoucherService {
         discountType: string;
         discountValue: number;
         minOrderAmount: number;
+        orderTypes: VoucherOrderType[];
         validFrom: Date | null;
         validTo: Date | null;
         isActive: boolean;
@@ -73,6 +81,7 @@ export declare class VoucherService {
         discountType: string;
         discountValue: number;
         minOrderAmount: number;
+        orderTypes: VoucherOrderType[];
         validFrom: Date | null;
         validTo: Date | null;
         isActive: boolean;
@@ -95,6 +104,7 @@ export declare class VoucherService {
         discountType: string;
         discountValue: number;
         minOrderAmount: number;
+        orderTypes: VoucherOrderType[];
         validFrom: Date | null;
         validTo: Date | null;
         isActive: boolean;
@@ -124,7 +134,7 @@ export declare class VoucherService {
         discountType: string;
         discountValue: string | number;
     }, subtotal: number): number;
-    static validateForShop(merchantId: string, code: string, subtotal: number, customerId?: string): Promise<{
+    static validateForShop(merchantId: string, code: string, subtotal: number, customerId?: string, orderType?: string | null): Promise<{
         voucherId: string;
         code: string;
         name: string;

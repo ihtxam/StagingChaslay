@@ -31,9 +31,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;
@@ -72,9 +72,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;
@@ -89,9 +89,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;
@@ -115,9 +115,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;
@@ -144,9 +144,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;
@@ -194,9 +194,9 @@ export declare class SupportTicketService {
         status: string;
         resellerId: string | null;
         merchantId: string;
+        closedAt: Date | null;
         category: string;
         subject: string;
-        closedAt: Date | null;
         ticketNumber: string;
         subcategory: string | null;
         merchantVisible: boolean;

@@ -88,16 +88,28 @@ export type PosPrintSettings = {
      * Cleared once merchants save printer profiles from the panel.
      */
     kitchenExcludedCategoryIds?: string[];
-    /** Barcode label paper width (thermal / label printer) */
-    labelWidthMm?: 40 | 58;
+    /** Barcode label paper width (thermal / label printer, including 4-inch TSPL) */
+    labelWidthMm?: 40 | 58 | 80 | 100;
     /** Barcode label height presets */
-    labelHeightMm?: 20 | 25 | 30 | 40;
+    labelHeightMm?: 20 | 25 | 30 | 40 | 50 | 80 | 150;
     labelShowStoreName?: boolean;
     labelShowProductName?: boolean;
     labelShowBarcodeNumber?: boolean;
     labelShowPrice?: boolean;
     labelShowSku?: boolean;
+    /** Enable order labels (kitchen/order stickers) in WebPOS. */
+    orderLabelEnabled?: boolean;
+    /** Auto-print order labels when an order is held. */
+    autoPrintOrderLabelOnHold?: boolean;
+    /** Auto-print order labels when an order is sent to kitchen. */
+    autoPrintOrderLabelOnSend?: boolean;
 };
+export declare const LABEL_WIDTHS_MM: readonly [40, 58, 80, 100];
+export declare const LABEL_HEIGHTS_MM: readonly [20, 25, 30, 40, 50, 80, 150];
+export type LabelWidthMm = (typeof LABEL_WIDTHS_MM)[number];
+export type LabelHeightMm = (typeof LABEL_HEIGHTS_MM)[number];
+export declare function parseLabelWidthMm(value: unknown): LabelWidthMm;
+export declare function parseLabelHeightMm(value: unknown): LabelHeightMm;
 export declare const DEFAULT_POS_PRINT_SETTINGS: Required<Omit<PosPrintSettings, "receiptLogoUrl" | "printers" | "kitchenPrintRouting" | "kitchenExcludedCategoryIds">> & {
     receiptLogoUrl: string | null;
     printers: PosPrinterProfile[];

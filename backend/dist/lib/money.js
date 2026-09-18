@@ -5,6 +5,8 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.roundMoney2 = roundMoney2;
+exports.extractNetFromGross = extractNetFromGross;
+exports.extractVatFromGross = extractVatFromGross;
 exports.roundTo005 = roundTo005;
 exports.roundingAdjustment = roundingAdjustment;
 exports.splitEqual005 = splitEqual005;
@@ -12,6 +14,18 @@ function roundMoney2(amount) {
     if (!Number.isFinite(amount))
         return 0;
     return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+/** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */
+function extractNetFromGross(gross, ratePercent) {
+    if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0)
+        return roundMoney2(gross);
+    return roundMoney2(gross / (1 + ratePercent / 100));
+}
+/** Extract VAT from a gross (tax-included) amount. */
+function extractVatFromGross(gross, ratePercent) {
+    if (!Number.isFinite(gross) || gross <= 0 || ratePercent <= 0)
+        return 0;
+    return roundMoney2(gross - extractNetFromGross(gross, ratePercent));
 }
 /** Round to nearest 0.05 CHF. */
 function roundTo005(amount) {

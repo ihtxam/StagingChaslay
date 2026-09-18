@@ -11,6 +11,8 @@ export declare function businessModuleFromEditionCategory(editionCategory?: stri
 export declare const RESTAURANT_MODULE_ROUTES: string[];
 /** Panel routes visible only in retail module. */
 export declare const RETAIL_MODULE_ROUTES: string[];
+/** Retail inventory — stock only; no recipes or consumption reports. */
+export declare const RETAIL_INVENTORY_RECIPE_ROUTES: string[];
 export declare function normalizePanelPath(path: string): string;
 export declare function isRestaurantModule(module?: BusinessModule | null): boolean;
 export declare function isRetailModule(module?: BusinessModule | null): boolean;

@@ -60,7 +60,7 @@ export declare class DeliveryPlatformService {
             name: string;
             deliveryPlatformSettings: Record<string, unknown> | null;
         };
-        source: "justeat" | "ubereats";
+        source: "qr_table" | "justeat" | "ubereats";
         key: import("@/lib/delivery-platform-settings").DeliveryPlatformKey;
         cfg: import("@/lib/delivery-platform-settings").DeliveryPlatformCredentials;
     }>;
@@ -92,11 +92,13 @@ export declare class DeliveryPlatformService {
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -112,7 +114,6 @@ export declare class DeliveryPlatformService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -125,6 +126,7 @@ export declare class DeliveryPlatformService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -137,6 +139,7 @@ export declare class DeliveryPlatformService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -171,6 +174,8 @@ export declare class DeliveryPlatformService {
         printReceipt?: boolean;
         printDeliveryReceipt?: boolean;
         printNotification?: boolean;
+        /** Online shop arrival — bypass master receipt/kitchen auto-print toggles */
+        independentOfMasterAutoPrint?: boolean;
     }): Promise<void>;
     static webhookUrl(platform: string, merchantId: string): string;
 }

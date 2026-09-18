@@ -5,6 +5,7 @@ const auth_middleware_1 = require("@/middleware/auth.middleware");
 const offers_service_1 = require("@/services/offers.service");
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const report_sales_scope_1 = require("@/lib/report-sales-scope");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken, auth_middleware_1.requireMerchant, auth_middleware_1.setMerchantContext);
 router.get("/", async (req, res) => {
@@ -17,7 +18,19 @@ router.get("/", async (req, res) => {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list offers" });
     }
 });
-router.post("/", async (req, res) => {
+/** POS top-bar: waiters / delivery / POS users — no MANAGE_OFFERS required. */
+router.get("/pos", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const actor = (0, report_sales_scope_1.resolveReportActor)(req);
+        const offers = await offers_service_1.OffersService.listForPos(merchantId, actor.staffId, new Date(), actor.kind === "owner");
+        res.json({ success: true, offers });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list POS offers" });
+    }
+});
+router.post("/", (0, auth_middleware_1.requirePermission)("MANAGE_OFFERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!req.body?.name)
@@ -29,7 +42,7 @@ router.post("/", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create offer" });
     }
 });
-router.post("/ensure-category", async (req, res) => {
+router.post("/ensure-category", (0, auth_middleware_1.requirePermission)("MANAGE_OFFERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const category = await offers_service_1.OffersService.ensureOffersCategory(merchantId);
@@ -39,7 +52,7 @@ router.post("/ensure-category", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
     }
 });
-router.post("/seed-demos", async (req, res) => {
+router.post("/seed-demos", (0, auth_middleware_1.requirePermission)("MANAGE_OFFERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const db = (0, db_1.getDb)();
@@ -54,7 +67,7 @@ router.post("/seed-demos", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to seed" });
     }
 });
-router.put("/:offerId", async (req, res) => {
+router.put("/:offerId", (0, auth_middleware_1.requirePermission)("MANAGE_OFFERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const offer = await offers_service_1.OffersService.update(merchantId, req.params.offerId, req.body || {});
@@ -64,7 +77,7 @@ router.put("/:offerId", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update" });
     }
 });
-router.delete("/:offerId", async (req, res) => {
+router.delete("/:offerId", (0, auth_middleware_1.requirePermission)("MANAGE_OFFERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         await offers_service_1.OffersService.remove(merchantId, req.params.offerId);

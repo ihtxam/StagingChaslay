@@ -80,7 +80,7 @@ export declare class FloorPlanService {
     static deletePlan(merchantId: string, planId: string): Promise<{
         success: boolean;
     }>;
-    /** Replace all tables on a plan (designer save). */
+    /** Replace all tables on a plan (designer save). Preserves table IDs when provided. */
     static saveTables(merchantId: string, planId: string, tables: DiningTableInput[], elements?: FloorPlanElementInput[]): Promise<{
         id: any;
         name: any;

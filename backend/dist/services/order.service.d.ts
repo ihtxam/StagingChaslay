@@ -6,16 +6,18 @@ export declare class OrderService {
         productId: string;
         quantity: number;
         unitPrice: number;
-    }>, customerId?: string, orderType?: "pos" | "web_shop", paymentMethod?: string, discountAmount?: number, notes?: string): Promise<{
+    }>, customerId?: string, orderType?: "pos" | "web_shop", paymentMethod?: string, discountAmount?: number, notes?: string, locationId?: string | null): Promise<{
         id: string;
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -31,7 +33,6 @@ export declare class OrderService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -44,6 +45,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -56,6 +58,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -86,16 +89,18 @@ export declare class OrderService {
     /**
      * Get all orders for merchant
      */
-    static getOrders(merchantId: string, page?: number, limit?: number, status?: string, startDate?: Date, endDate?: Date): Promise<{
+    static getOrders(merchantId: string, page?: number, limit?: number, status?: string, startDate?: Date, endDate?: Date, scope?: "online" | "all"): Promise<{
         id: string;
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -111,7 +116,6 @@ export declare class OrderService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -124,6 +128,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -136,6 +141,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -183,9 +189,9 @@ export declare class OrderService {
         } | null;
         items: {
             id: string;
-            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
+            quantity: string;
             taxAmount: string;
             orderId: string;
             productName: string | null;
@@ -214,13 +220,16 @@ export declare class OrderService {
             product: {
                 id: string;
                 name: string;
+                imageUrl: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
                 merchantId: string;
                 sortOrder: number;
                 description: string | null;
-                imageUrl: string | null;
+                visibility: {
+                    channels: string[];
+                };
                 clientId: string | null;
                 categoryId: string | null;
                 sku: string | null;
@@ -267,22 +276,27 @@ export declare class OrderService {
                 allowExtras: boolean;
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
+                similarProductIds: string[] | null;
             } | null;
         }[];
     }[]>;
-    /**
-     * Get order by ID
-     */
-    static getOrderById(merchantId: string, orderId: string): Promise<{
+    /** Active online / QR / kiosk orders for Order Hub and Web POS polling. */
+    static getIncomingOrders(merchantId: string, opts?: {
+        limit?: number;
+        statuses?: string;
+        since?: Date;
+    }): Promise<{
         id: string;
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -298,7 +312,6 @@ export declare class OrderService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -311,6 +324,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -323,6 +337,201 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
+        guestCount: number | null;
+        billSplits: {
+            id: string;
+            label: string;
+            seatNumber?: number | null;
+            amount: number;
+            paymentMethod?: string;
+            paymentStatus: string;
+            paidAt?: string | null;
+        }[] | null;
+        masterOrderId: string | null;
+        splitCheckNumber: number | null;
+        syncedAt: Date | null;
+        completedAt: Date | null;
+        estimatedReadyAt: Date | null;
+        printCount: number | null;
+        cancelReason: string | null;
+        cancelledAt: Date | null;
+        refundAmount: string | null;
+        refundedAt: Date | null;
+        refundReason: string | null;
+        goodwillAmount: string | null;
+        paymentBreakdown: {
+            method: string;
+            amount: number;
+        }[] | null;
+        customer: {
+            id: string;
+            email: string | null;
+            passwordHash: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            phone: string | null;
+            merchantId: string;
+            firstName: string | null;
+            lastName: string | null;
+            defaultAddress: string | null;
+            defaultZip: string | null;
+            defaultCity: string | null;
+            loyaltyPoints: number | null;
+            totalSpent: string | null;
+            marketingOptIn: boolean;
+            lastOrderAt: Date | null;
+            lastReorderReminderAt: Date | null;
+        } | null;
+        items: {
+            id: string;
+            isOpenPrice: boolean;
+            productId: string | null;
+            quantity: string;
+            taxAmount: string;
+            orderId: string;
+            productName: string | null;
+            unitPrice: string;
+            totalPrice: string;
+            weightKg: string | null;
+            selectedExtras: {
+                id: string;
+                name: string;
+                price: number;
+            }[] | null;
+            comboSelections: {
+                slotId: string;
+                slotName: string;
+                productId: string;
+                productName: string;
+                extraPrice: number;
+                selectedExtras?: Array<{
+                    id: string;
+                    name: string;
+                    price: number;
+                }>;
+            }[] | null;
+            seatNumber: number | null;
+            refundedQuantity: string | null;
+            product: {
+                id: string;
+                name: string;
+                imageUrl: string | null;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                merchantId: string;
+                sortOrder: number;
+                description: string | null;
+                visibility: {
+                    channels: string[];
+                };
+                clientId: string | null;
+                categoryId: string | null;
+                sku: string | null;
+                barcode: string | null;
+                price: string;
+                cost: string | null;
+                stock: number;
+                lowStockThreshold: number | null;
+                isTaxable: boolean;
+                productType: string;
+                isOpenPrice: boolean;
+                soldByWeight: boolean;
+                weightUnit: string | null;
+                bulkPricing: {
+                    minQty: number;
+                    price: number;
+                }[] | null;
+                extras: {
+                    id: string;
+                    name: string;
+                    price: number;
+                }[] | null;
+                comboItems: {
+                    id?: string;
+                    name?: string;
+                    minPick?: number;
+                    maxPick?: number;
+                    options?: Array<{
+                        productId: string;
+                        extraPrice?: number;
+                    }>;
+                    productId?: string;
+                    quantity?: number;
+                }[] | null;
+                specifications: {
+                    id: string;
+                    name: string;
+                    price: number;
+                    saleStatus?: "in_stock" | "out_of_stock";
+                    isDefault?: boolean;
+                    sortOrder?: number;
+                }[] | null;
+                buttonColor: string | null;
+                allowExtras: boolean;
+                loyaltyRewardPoints: number | null;
+                recipeYield: string;
+                similarProductIds: string[] | null;
+            } | null;
+        }[];
+    }[]>;
+    /**
+     * Get order by ID
+     */
+    static getOrderById(merchantId: string, orderId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        status: string;
+        merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
+        deviceId: string | null;
+        paymentStatus: string | null;
+        paymentMethod: string | null;
+        invoiceNumber: string | null;
+        customerId: string | null;
+        orderNumber: string;
+        orderType: string;
+        orderSource: string | null;
+        externalOrderId: string | null;
+        fulfillmentChannel: string | null;
+        subtotal: string;
+        taxAmount: string;
+        discountAmount: string | null;
+        deliveryFee: string | null;
+        tipAmount: string | null;
+        roundingAmount: string | null;
+        amountTendered: string | null;
+        changeDue: string | null;
+        staffName: string | null;
+        cardFee: string | null;
+        pointsDiscount: string | null;
+        pointsEarned: number | null;
+        pointsRedeemed: number | null;
+        total: string;
+        invoiceIssuedAt: Date | null;
+        invoiceDueAt: Date | null;
+        adyenReference: string | null;
+        adyenPoiTransactionTs: Date | null;
+        adyenCustomerReceiptJson: string | null;
+        adyenCashierReceiptJson: string | null;
+        notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
+        shippingAddress: string | null;
+        deliveryLatitude: string | null;
+        deliveryLongitude: string | null;
+        assignedDeliveryStaffId: string | null;
+        deliveryTrackingToken: string | null;
+        deliveryZoneId: string | null;
+        scheduledFor: Date | null;
+        customerName: string | null;
+        customerPhone: string | null;
+        customerEmail: string | null;
+        tableId: string | null;
+        tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -370,6 +579,7 @@ export declare class OrderService {
         } | null;
         paymentTransactions: {
             id: string;
+            terminalId: string | null;
             createdAt: Date;
             status: string;
             merchantId: string;
@@ -380,13 +590,12 @@ export declare class OrderService {
             adyenPoiTransactionTs: Date | null;
             completedAt: Date | null;
             orderId: string;
-            terminalId: string | null;
         }[];
         items: {
             id: string;
-            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
+            quantity: string;
             taxAmount: string;
             orderId: string;
             productName: string | null;
@@ -415,13 +624,16 @@ export declare class OrderService {
             product: {
                 id: string;
                 name: string;
+                imageUrl: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
                 merchantId: string;
                 sortOrder: number;
                 description: string | null;
-                imageUrl: string | null;
+                visibility: {
+                    channels: string[];
+                };
                 clientId: string | null;
                 categoryId: string | null;
                 sku: string | null;
@@ -468,6 +680,7 @@ export declare class OrderService {
                 allowExtras: boolean;
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
+                similarProductIds: string[] | null;
             } | null;
         }[];
     } & {
@@ -479,6 +692,7 @@ export declare class OrderService {
     static updateOrderStatus(merchantId: string, orderId: string, status: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -511,6 +725,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -523,6 +738,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -575,6 +791,7 @@ export declare class OrderService {
     }): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -607,6 +824,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -619,6 +837,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -655,6 +874,7 @@ export declare class OrderService {
     static updatePaymentStatus(merchantId: string, orderId: string, paymentStatus: "pending" | "completed" | "failed"): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -687,6 +907,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -699,6 +920,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -750,6 +972,7 @@ export declare class OrderService {
     static cancelOrder(merchantId: string, orderId: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -782,6 +1005,7 @@ export declare class OrderService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -794,6 +1018,7 @@ export declare class OrderService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;

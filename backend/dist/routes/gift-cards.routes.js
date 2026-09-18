@@ -4,6 +4,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const edition_middleware_1 = require("@/middleware/edition.middleware");
 const gift_card_service_1 = require("@/services/gift-card.service");
+const shop_gift_card_service_1 = require("@/services/shop-gift-card.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -39,6 +40,8 @@ router.put("/settings", async (req, res) => {
             reloadEnabled: body.reloadEnabled,
             customAmountEnabled: body.customAmountEnabled,
             onlinePurchaseEnabled: body.onlinePurchaseEnabled,
+            digitalVoucherEnabled: body.digitalVoucherEnabled,
+            physicalPostEnabled: body.physicalPostEnabled,
             membershipEnabled: body.membershipEnabled,
             membershipPlans: body.membershipPlans,
         });
@@ -131,6 +134,7 @@ router.post("/sell-membership", async (req, res) => {
             email: req.body.email || req.body.holderEmail,
             phone: req.body.phone || req.body.holderPhone,
             orderId: req.body.orderId,
+            amount: req.body.amount,
         });
         res.status(201).json({ success: true, card });
     }
@@ -393,6 +397,34 @@ router.post("/:cardId/points/redeem", async (req, res) => {
     catch (error) {
         res.status(400).json({
             error: error instanceof Error ? error.message : "Failed to redeem points",
+        });
+    }
+});
+/**
+ * GET /api/gift-cards/online-purchases/pending-shipment
+ */
+router.get("/online-purchases/pending-shipment", async (req, res) => {
+    try {
+        const rows = await shop_gift_card_service_1.ShopGiftCardService.listPendingShipments(req.merchantId);
+        res.json({ success: true, purchases: rows });
+    }
+    catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to list pending shipments",
+        });
+    }
+});
+/**
+ * POST /api/gift-cards/online-purchases/:purchaseId/mark-shipped
+ */
+router.post("/online-purchases/:purchaseId/mark-shipped", async (req, res) => {
+    try {
+        const purchase = await shop_gift_card_service_1.ShopGiftCardService.markPurchaseShipped(req.merchantId, req.params.purchaseId);
+        res.json({ success: true, purchase });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to mark shipped",
         });
     }
 });

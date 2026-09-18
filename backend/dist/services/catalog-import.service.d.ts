@@ -3,6 +3,17 @@ export interface ImportRowError {
     row: number;
     message: string;
 }
+export type ImportProgressPhase = "parsing" | "categories" | "modifierGroups" | "products" | "done" | "error";
+export type ImportProgressEvent = {
+    phase: ImportProgressPhase;
+    message?: string;
+    current?: number;
+    total?: number;
+    percent?: number;
+};
+export type ImportWorkbookOptions = {
+    onProgress?: (event: ImportProgressEvent) => void;
+};
 export declare class CatalogImportService {
     /**
      * One-click Excel import for categories + modifier groups + products.
@@ -14,7 +25,7 @@ export declare class CatalogImportService {
      *   bulkPricing? (10:2.5;20:2.0), specifications? (Small:8.9|Large:10.5*),
      *   modifierGroups? (Milk|Toppings), extras? (Extra Cheese:1.5|Bacon:2), allowExtras?
      */
-    static importWorkbook(merchantId: string, buffer: Buffer): Promise<{
+    static importWorkbook(merchantId: string, buffer: Buffer, options?: ImportWorkbookOptions): Promise<{
         success: boolean;
         categoriesCreated: number;
         productsCreated: number;

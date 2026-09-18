@@ -39,6 +39,19 @@ export declare class EmailUsageService {
             configured: boolean;
             provider: string | null;
         };
+        mailco: {
+            fromEmail: string;
+            fromName: string;
+            apiBase: string;
+            templateSlug: string;
+            emailPrimary: import("@/services/platform-settings.service").PlatformEmailPrimary;
+            apiKeyMasked: string;
+            apiKeySet: boolean;
+            usingEnvFallback: boolean;
+            configured: boolean;
+            provider: string | null;
+        };
+        platformEmailPrimary: import("@/services/platform-settings.service").PlatformEmailPrimary;
         account: {
             email: string | undefined;
             companyName: string | undefined;

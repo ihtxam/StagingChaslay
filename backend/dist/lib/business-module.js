@@ -4,7 +4,7 @@
  * Keep in sync with dashboard/src/lib/business-module.ts
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RETAIL_MODULE_ROUTES = exports.RESTAURANT_MODULE_ROUTES = exports.BUSINESS_MODULES = void 0;
+exports.RETAIL_INVENTORY_RECIPE_ROUTES = exports.RETAIL_MODULE_ROUTES = exports.RESTAURANT_MODULE_ROUTES = exports.BUSINESS_MODULES = void 0;
 exports.normalizeBusinessModule = normalizeBusinessModule;
 exports.businessModuleFromEditionCategory = businessModuleFromEditionCategory;
 exports.normalizePanelPath = normalizePanelPath;
@@ -43,12 +43,18 @@ exports.RESTAURANT_MODULE_ROUTES = [
     "/merchant/tables/qr",
     "/merchant/reservations",
     "/merchant/sales/reservations",
-    "/merchant/inventory/cookbook",
-    "/merchant/inventory/consumption",
     "/merchant/signage",
 ];
 /** Panel routes visible only in retail module. */
-exports.RETAIL_MODULE_ROUTES = ["/merchant/storekeeper"];
+exports.RETAIL_MODULE_ROUTES = [
+    "/merchant/storekeeper",
+    "/merchant/inventory",
+];
+/** Retail inventory — stock only; no recipes or consumption reports. */
+exports.RETAIL_INVENTORY_RECIPE_ROUTES = [
+    "/merchant/inventory/cookbook",
+    "/merchant/inventory/consumption",
+];
 function normalizePanelPath(path) {
     const p = String(path || "").replace(/\/$/, "") || "/merchant";
     return p;
@@ -66,6 +72,9 @@ function canAccessBusinessModuleRoute(path, module) {
     const normalized = normalizePanelPath(path);
     if (module === "retail") {
         if (exports.RESTAURANT_MODULE_ROUTES.some((r) => normalized === r || normalized.startsWith(`${r}/`))) {
+            return false;
+        }
+        if (exports.RETAIL_INVENTORY_RECIPE_ROUTES.some((r) => normalized === r || normalized.startsWith(`${r}/`))) {
             return false;
         }
         return true;

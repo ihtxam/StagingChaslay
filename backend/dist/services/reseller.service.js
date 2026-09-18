@@ -131,22 +131,37 @@ class ResellerService {
     }
     static async ensureChaslayAgency(createdBySuperadminId) {
         const db = (0, db_1.getDb)();
-        const email = (process.env.SEED_RESELLER_EMAIL || "agency@rebornsense.com").toLowerCase();
-        const existing = await db.query.resellers.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.resellers.email, email),
+        const targetEmail = (process.env.SEED_RESELLER_EMAIL || "agency@chaslay.com").toLowerCase();
+        const legacyEmail = "agency@rebornsense.com";
+        const name = process.env.SEED_RESELLER_NAME || "Chaslay Agency";
+        let existing = await db.query.resellers.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.resellers.email, targetEmail),
         });
+        if (!existing) {
+            const legacy = await db.query.resellers.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.resellers.email, legacyEmail),
+            });
+            if (legacy) {
+                const [updated] = await db
+                    .update(db_1.schema.resellers)
+                    .set({ email: targetEmail, name, updatedAt: new Date() })
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.resellers.id, legacy.id))
+                    .returning();
+                existing = updated;
+            }
+        }
         if (existing)
             return serializeReseller(existing);
         const password = process.env.SEED_RESELLER_PASSWORD || "ChaslayAgency123!";
-        const name = process.env.SEED_RESELLER_NAME || "Reborn";
         const passwordHash = await auth_service_1.AuthService.hashPassword(password);
         const [row] = await db
             .insert(db_1.schema.resellers)
             .values({
             name,
-            email,
+            email: targetEmail,
             passwordHash,
             status: "active",
+            licenseSeats: 9999,
             createdBySuperadminId: createdBySuperadminId || null,
         })
             .returning();
@@ -339,11 +354,16 @@ class ResellerService {
             shopEnabled: db_1.schema.merchants.shopEnabled,
             maxPosPosts: db_1.schema.merchants.maxPosPosts,
             maxWaiterPosts: db_1.schema.merchants.maxWaiterPosts,
+            maxLocations: db_1.schema.merchants.maxLocations,
             inventoryAddonEnabled: db_1.schema.merchants.inventoryAddonEnabled,
             signageAddonEnabled: db_1.schema.merchants.signageAddonEnabled,
             signageScreenLimit: db_1.schema.merchants.signageScreenLimit,
             kdsAddonEnabled: db_1.schema.merchants.kdsAddonEnabled,
             odsAddonEnabled: db_1.schema.merchants.odsAddonEnabled,
+            justEatAddonEnabled: db_1.schema.merchants.justEatAddonEnabled,
+            uberEatsAddonEnabled: db_1.schema.merchants.uberEatsAddonEnabled,
+            panelNavHidden: db_1.schema.merchants.panelNavHidden,
+            shopCommissionPercent: db_1.schema.merchants.shopCommissionPercent,
             createdAt: db_1.schema.merchants.createdAt,
         })
             .from(db_1.schema.merchants)
@@ -359,6 +379,7 @@ class ResellerService {
             signageScreenLimit: (0, signage_addon_1.normalizeSignageScreenLimit)(r.signageScreenLimit),
             kdsAddonEnabled: r.kdsAddonEnabled === true,
             odsAddonEnabled: r.odsAddonEnabled === true,
+            deliveryPlatformsAddonEnabled: r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
         }));
     }
     static async createMerchantForReseller(resellerId, input) {
@@ -388,11 +409,13 @@ class ResellerService {
             businessCategory: input.businessCategory,
             maxPosPosts: input.maxPosPosts,
             maxWaiterPosts: input.maxWaiterPosts,
+            maxLocations: input.maxLocations,
             inventoryAddonEnabled: input.inventoryAddonEnabled,
             signageAddonEnabled: input.signageAddonEnabled,
             signageScreenLimit: input.signageScreenLimit,
             kdsAddonEnabled: input.kdsAddonEnabled,
             odsAddonEnabled: input.odsAddonEnabled,
+            deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
             storekeeperAddonEnabled: input.storekeeperAddonEnabled,
         });
         return created;
@@ -403,13 +426,46 @@ class ResellerService {
         await MerchantService.updatePosPostLimits(merchantId, {
             maxPosPosts: limits.maxPosPosts,
             maxWaiterPosts: limits.maxWaiterPosts,
+            maxLocations: limits.maxLocations,
             inventoryAddonEnabled: limits.inventoryAddonEnabled,
             signageAddonEnabled: limits.signageAddonEnabled,
             signageScreenLimit: limits.signageScreenLimit,
             kdsAddonEnabled: limits.kdsAddonEnabled,
             odsAddonEnabled: limits.odsAddonEnabled,
+            deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
             storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
+            kioskAddonEnabled: limits.kioskAddonEnabled,
         });
+        return MerchantService.getMerchantById(merchantId);
+    }
+    static async updateMerchantPanelNav(resellerId, merchantId, hidden) {
+        await this.assertOwnsMerchant(resellerId, merchantId);
+        const { normalizePanelNavHidden } = await Promise.resolve().then(() => __importStar(require("@/lib/panel-nav-hidden")));
+        const panelNavHidden = normalizePanelNavHidden(hidden);
+        const db = (0, db_1.getDb)();
+        await db
+            .update(db_1.schema.merchants)
+            .set({ panelNavHidden, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
+        const { MerchantService } = await Promise.resolve().then(() => __importStar(require("./merchant.service")));
+        return MerchantService.getMerchantById(merchantId);
+    }
+    static async updateMerchantShopCommission(resellerId, merchantId, shopCommissionPercent) {
+        await this.assertOwnsMerchant(resellerId, merchantId);
+        let value = null;
+        if (shopCommissionPercent != null && shopCommissionPercent !== "") {
+            const n = Number(shopCommissionPercent);
+            if (!Number.isFinite(n) || n < 0 || n > 100) {
+                throw new Error("Commission percent must be between 0 and 100");
+            }
+            value = n.toFixed(3).replace(/\.?0+$/, "") || "0";
+        }
+        const db = (0, db_1.getDb)();
+        await db
+            .update(db_1.schema.merchants)
+            .set({ shopCommissionPercent: value, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
+        const { MerchantService } = await Promise.resolve().then(() => __importStar(require("./merchant.service")));
         return MerchantService.getMerchantById(merchantId);
     }
     /** Change POS edition / billing flag for an owned merchant. */
@@ -474,13 +530,13 @@ class ResellerService {
         ];
         if (opts?.status)
             clauses.push((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, opts.status));
-        return db.query.licenses.findMany({
+        const licenses = await db.query.licenses.findMany({
             where: (0, drizzle_orm_1.and)(...clauses),
-            with: { merchant: true, device: true },
             limit,
             offset,
             orderBy: (0, drizzle_orm_1.desc)(db_1.schema.licenses.createdAt),
         });
+        return (0, license_admin_service_1.attachLicenseRelations)(licenses);
     }
     /** Issue device seats from reseller pool to an owned merchant. */
     static async issueDeviceSeats(resellerId, input) {
@@ -535,9 +591,9 @@ class ResellerService {
         const db = (0, db_1.getDb)();
         const license = await db.query.licenses.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.licenses.id, licenseId),
-            with: { merchant: true },
         });
-        if (!license || license.merchant?.resellerId !== resellerId) {
+        const [attached] = license ? await (0, license_admin_service_1.attachLicenseRelations)([license]) : [];
+        if (!attached || attached.merchant?.resellerId !== resellerId) {
             throw new Error("License not found");
         }
         return license_admin_service_1.LicenseAdminService.revokeLicense(licenseId);
@@ -546,9 +602,9 @@ class ResellerService {
         const db = (0, db_1.getDb)();
         const license = await db.query.licenses.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.licenses.id, licenseId),
-            with: { merchant: true },
         });
-        if (!license || license.merchant?.resellerId !== resellerId) {
+        const [attached] = license ? await (0, license_admin_service_1.attachLicenseRelations)([license]) : [];
+        if (!attached || attached.merchant?.resellerId !== resellerId) {
             throw new Error("License not found");
         }
         return license_admin_service_1.LicenseAdminService.extendLicense(licenseId, additionalDays);

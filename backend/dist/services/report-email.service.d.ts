@@ -178,10 +178,10 @@ export declare class ReportEmailService {
                 brut: number;
             }[];
             paymentRows: {
+                percent: number;
                 method: string;
                 count: number;
                 total: number;
-                percent: number;
             }[];
             refundRows: {
                 method: string;
@@ -247,6 +247,12 @@ export declare class ReportEmailService {
             netSales: number;
             orders: number;
         };
+        byLocation: {
+            locationId: string;
+            name: string;
+            revenue: number;
+            orders: number;
+        }[];
     }>;
 }
 //# sourceMappingURL=report-email.service.d.ts.map

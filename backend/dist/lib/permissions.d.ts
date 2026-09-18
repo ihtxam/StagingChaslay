@@ -1,7 +1,12 @@
 /** POS + panel permissions (aligned with Android PosPermission + panel extras). */
-export declare const PERMISSIONS: readonly ["USE_POS", "USE_WEBPOS", "PROCESS_PAYMENTS", "APPLY_DISCOUNTS", "OPEN_CASH_DRAWER", "SEND_KITCHEN", "MANAGE_TABLES", "TAKEAWAY_ORDERS", "DELIVERY_ORDERS", "VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "CANCEL_ORDERS", "REFUND_ORDERS", "VIEW_REPORTS", "VIEW_ALL_SALES", "MANAGE_PRODUCTS", "MANAGE_CUSTOMERS", "MANAGE_OFFERS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS", "ACCESS_PANEL", "MANAGE_STAFF", "MANAGE_ROLES", "MANAGE_BILLING", "END_OF_DAY", "MANAGE_INVENTORY", "STOREKEEPER_INTAKE"];
+export declare const PERMISSIONS: readonly ["USE_POS", "USE_WEBPOS", "PROCESS_PAYMENTS", "APPLY_DISCOUNTS", "OPEN_CASH_DRAWER", "SEND_KITCHEN", "MANAGE_TABLES", "TAKEAWAY_ORDERS", "DELIVERY_ORDERS", "VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "CANCEL_ORDERS", "REFUND_ORDERS", "VIEW_REPORTS", "VIEW_ALL_SALES", "GANDOLA_PURGE", "MANAGE_PRODUCTS", "MANAGE_CUSTOMERS", "MANAGE_OFFERS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS", "ACCESS_PANEL", "MANAGE_STAFF", "MANAGE_ROLES", "MANAGE_BILLING", "END_OF_DAY", "MANAGE_INVENTORY", "STOREKEEPER_INTAKE", "MANAGE_KIOSK"];
 export type Permission = (typeof PERMISSIONS)[number];
 export declare function parsePermissions(raw?: string | null): Permission[];
+/**
+ * Accept the role-editor payload (array or comma-separated string) and keep only
+ * known permission keys. Unknown keys are dropped; known keys are not rewritten.
+ */
+export declare function normalizePermissions(input: unknown): Permission[];
 export declare function encodePermissions(perms: Permission[]): string;
 export declare function hasPermission(granted: readonly string[] | undefined, required: Permission): boolean;
 export declare function hasAnyPermission(granted: readonly string[] | undefined, required: readonly Permission[]): boolean;
@@ -27,5 +32,22 @@ export declare const STAFF_MERCHANT_ENTRY_PERMISSIONS: Permission[];
 export type WaiterSystemKind = "pos-only" | "menu-editor";
 /** Classify system Waiter templates. Custom roles are not matched. */
 export declare function waiterSystemKind(name: string): WaiterSystemKind | null;
-export declare function waiterBlockedPermissions(_kind: WaiterSystemKind): Permission[];
+export declare function waiterBlockedPermissions(kind: WaiterSystemKind): Permission[];
+export declare function storekeeperBlockedPermissions(): Permission[];
+/** Full merchant panel (Sales overview, CMS, users, billing) — not catalog/orders-only. */
+export declare const FULL_PANEL_PERMISSIONS: Permission[];
+export declare function hasFullPanelAccess(granted: readonly string[] | undefined, isOwner?: boolean): boolean;
+/**
+ * Floor waiters (system Waiter templates) without ACCESS_PANEL — POS/waiter app
+ * and optional menu/orders, never CMS, inventory, settings, or clients.
+ */
+export declare function isWaiterRestrictedStaff(granted: readonly string[] | undefined, isOwner?: boolean): boolean;
+export declare function isWaiterPanelPath(pathname: string, granted: readonly string[] | undefined): boolean;
+export declare function waiterRestrictedHomePath(granted: readonly string[] | undefined): string;
+/**
+ * Runtime policy for issued JWTs / staff sessions.
+ * Storekeeper stays locked to intake. Waiter templates keep merchant-saved
+ * permissions so Users & roles checkboxes round-trip to the database.
+ */
+export declare function applyRolePermissionPolicy(roleName: string, permissions: Permission[]): Permission[];
 //# sourceMappingURL=permissions.d.ts.map

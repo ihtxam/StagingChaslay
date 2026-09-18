@@ -7,6 +7,7 @@ export declare class OdsLicenseError extends Error {
 export type OdsDisplayInput = {
     name: string;
     theme?: OdsTheme;
+    layout?: "columns" | "rows";
     isActive?: boolean;
 };
 export type OdsPushPayload = {
@@ -25,24 +26,26 @@ export declare class OdsService {
     static listDisplays(merchantId: string): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         token: string;
-        shortCode: string | null;
-        theme: string;
+        layout: string;
     }[]>;
     static createDisplay(merchantId: string, input: OdsDisplayInput): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         token: string;
-        shortCode: string | null;
-        theme: string;
+        layout: string;
     }>;
     static updateDisplay(merchantId: string, id: string, input: Partial<OdsDisplayInput>): Promise<{
         id: string;
@@ -51,6 +54,7 @@ export declare class OdsService {
         token: string;
         shortCode: string | null;
         theme: string;
+        layout: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -65,6 +69,7 @@ export declare class OdsService {
         token: string;
         shortCode: string | null;
         theme: string;
+        layout: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -72,13 +77,14 @@ export declare class OdsService {
     static displayByToken(accessKey: string): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         token: string;
-        shortCode: string | null;
-        theme: string;
+        layout: string;
     } | null | undefined>;
     /** Push or update an order on the customer board (POS / KDS integration). */
     static pushOrder(merchantId: string, payload: OdsPushPayload): Promise<{
@@ -174,6 +180,7 @@ export declare class OdsService {
             id: string;
             name: string;
             theme: OdsTheme;
+            layout: "columns" | "rows";
         };
         serverTime: string;
         preparing: string[];

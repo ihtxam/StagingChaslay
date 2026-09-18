@@ -18,13 +18,16 @@ export declare class WebShopService {
     static getPublicProducts(merchantId: string, page?: number, limit?: number, categoryId?: string, search?: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -71,17 +74,23 @@ export declare class WebShopService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
         category: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         } | null;
     }[]>;
@@ -91,14 +100,19 @@ export declare class WebShopService {
     static getPublicCategories(merchantId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }[]>;
     /**
@@ -118,11 +132,13 @@ export declare class WebShopService {
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -138,7 +154,6 @@ export declare class WebShopService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -151,6 +166,7 @@ export declare class WebShopService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -163,6 +179,7 @@ export declare class WebShopService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -198,11 +215,13 @@ export declare class WebShopService {
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -218,7 +237,6 @@ export declare class WebShopService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -231,6 +249,7 @@ export declare class WebShopService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -243,6 +262,7 @@ export declare class WebShopService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -290,9 +310,9 @@ export declare class WebShopService {
         } | null;
         items: {
             id: string;
-            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
+            quantity: string;
             taxAmount: string;
             orderId: string;
             productName: string | null;
@@ -321,13 +341,16 @@ export declare class WebShopService {
             product: {
                 id: string;
                 name: string;
+                imageUrl: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
                 merchantId: string;
                 sortOrder: number;
                 description: string | null;
-                imageUrl: string | null;
+                visibility: {
+                    channels: string[];
+                };
                 clientId: string | null;
                 categoryId: string | null;
                 sku: string | null;
@@ -374,6 +397,7 @@ export declare class WebShopService {
                 allowExtras: boolean;
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
+                similarProductIds: string[] | null;
             } | null;
         }[];
     }[]>;
@@ -383,6 +407,7 @@ export declare class WebShopService {
     static updateShippingStatus(merchantId: string, orderId: string, shippingStatus: "pending" | "processing" | "shipped" | "delivered"): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -415,6 +440,7 @@ export declare class WebShopService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -427,6 +453,7 @@ export declare class WebShopService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -473,6 +500,7 @@ export declare class WebShopService {
     static syncOrderToPOS(merchantId: string, orderId: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -505,6 +533,7 @@ export declare class WebShopService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -517,6 +546,7 @@ export declare class WebShopService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;

@@ -2,8 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CANONICAL_PAYMENT_METHODS = void 0;
 exports.normalizePaymentMethod = normalizePaymentMethod;
+exports.collectedTenderMethod = collectedTenderMethod;
 exports.paymentMethodLabelEn = paymentMethodLabelEn;
 exports.parsePaymentBreakdown = parsePaymentBreakdown;
+exports.scaleTendersToOrderTotal = scaleTendersToOrderTotal;
 exports.paymentBreakdownTotals = paymentBreakdownTotals;
 exports.allocateRefundGiftFirst = allocateRefundGiftFirst;
 exports.refundDeltaGiftFirst = refundDeltaGiftFirst;
@@ -82,6 +84,12 @@ function normalizePaymentMethod(method) {
     }
     return PAYMENT_METHOD_ALIASES[raw] || raw;
 }
+/** Collected tender for a settled / refunded ticket.
+ * `pay_later:cash` → cash. Bare `pay_later` stays pay_later.
+ */
+function collectedTenderMethod(method) {
+    return normalizePaymentMethod(String(method || ""));
+}
 function paymentMethodLabelEn(method) {
     switch (normalizePaymentMethod(method)) {
         case "cash":
@@ -107,30 +115,72 @@ function paymentMethodLabelEn(method) {
             return method || "Other";
     }
 }
+function tendersFromRows(rows) {
+    return rows.filter((t) => t.method && t.amount > 0);
+}
+/**
+ * Drop leftover `pay_later` rows when a real tender exists (collect-on-pay-later
+ * used to leave the original pay-later breakdown in place).
+ */
+function preferCollectedTenders(tenders, paymentMethod, orderTotal) {
+    if (!tenders.length)
+        return tenders;
+    const collected = tenders.filter((t) => t.method !== "pay_later");
+    if (collected.length)
+        return collected;
+    const fallback = collectedTenderMethod(paymentMethod);
+    if (fallback && fallback !== "pay_later") {
+        const total = (0, money_1.roundMoney2)(Number(orderTotal) || 0) ||
+            (0, money_1.roundMoney2)(tenders.reduce((s, t) => s + t.amount, 0));
+        if (total > 0)
+            return [{ method: fallback, amount: total }];
+    }
+    return tenders;
+}
 /** Parse stored payment_breakdown JSON or legacy single paymentMethod. */
 function parsePaymentBreakdown(raw, paymentMethod, orderTotal) {
     if (Array.isArray(raw) && raw.length) {
-        return raw
-            .map((row) => ({
+        return preferCollectedTenders(tendersFromRows(raw.map((row) => ({
             method: normalizePaymentMethod(String(row.method || "")),
             amount: (0, money_1.roundMoney2)(Number(row.amount) || 0),
-        }))
-            .filter((t) => t.method && t.amount > 0);
+        }))), paymentMethod, orderTotal);
     }
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-        return Object.entries(raw)
-            .map(([method, amount]) => ({
+        return preferCollectedTenders(tendersFromRows(Object.entries(raw).map(([method, amount]) => ({
             method: normalizePaymentMethod(method),
             amount: (0, money_1.roundMoney2)(Number(amount) || 0),
-        }))
-            .filter((t) => t.method && t.amount > 0);
+        }))), paymentMethod, orderTotal);
     }
-    const method = normalizePaymentMethod(String(paymentMethod || ""));
+    const method = collectedTenderMethod(paymentMethod);
     const total = (0, money_1.roundMoney2)(Number(orderTotal) || 0);
     if (method && method !== "mixed" && total > 0) {
         return [{ method, amount: total }];
     }
     return [];
+}
+/** Scale tender amounts proportionally so they sum to orderTotal (fixes stale oversized breakdowns). */
+function scaleTendersToOrderTotal(tenders, orderTotal) {
+    if (!tenders.length)
+        return tenders;
+    const target = (0, money_1.roundMoney2)(Math.max(0, Number(orderTotal) || 0));
+    if (target <= 0)
+        return [];
+    const sum = (0, money_1.roundMoney2)(tenders.reduce((s, t) => s + t.amount, 0));
+    if (sum <= 0)
+        return [];
+    if (Math.abs(sum - target) < 0.01)
+        return tenders;
+    const ratio = target / sum;
+    const scaled = tenders.map((t) => ({
+        method: t.method,
+        amount: (0, money_1.roundMoney2)(t.amount * ratio),
+    }));
+    const scaledSum = (0, money_1.roundMoney2)(scaled.reduce((s, t) => s + t.amount, 0));
+    const diff = (0, money_1.roundMoney2)(target - scaledSum);
+    if (Math.abs(diff) >= 0.01 && scaled.length) {
+        scaled[0].amount = (0, money_1.roundMoney2)(scaled[0].amount + diff);
+    }
+    return scaled;
 }
 function paymentBreakdownTotals(tenders) {
     let giftCard = 0;
@@ -210,7 +260,7 @@ function refundBucketsFromCumulative(refundAmount, rawBreakdown, paymentMethod, 
     if (refund <= 0)
         return new Map();
     const total = (0, money_1.roundMoney2)(Number(orderTotal) || 0);
-    const tenders = parsePaymentBreakdown(rawBreakdown, paymentMethod, total);
+    const tenders = scaleTendersToOrderTotal(parsePaymentBreakdown(rawBreakdown, paymentMethod, total), total);
     const pm = resolveSalePaymentMethod(tenders, String(paymentMethod || ""));
     if (pm === "mixed")
         return new Map([["mixed", refund]]);
@@ -237,7 +287,7 @@ function refundBucketsFromCumulative(refundAmount, rawBreakdown, paymentMethod, 
 function netPaymentBucketsAfterRefund(orderTotal, refundAmount, rawBreakdown, paymentMethod) {
     const total = (0, money_1.roundMoney2)(Number(orderTotal) || 0);
     const refund = (0, money_1.roundMoney2)(Math.max(0, Number(refundAmount) || 0));
-    const tenders = parsePaymentBreakdown(rawBreakdown, paymentMethod, total);
+    const tenders = scaleTendersToOrderTotal(parsePaymentBreakdown(rawBreakdown, paymentMethod, total), total);
     const pm = resolveSalePaymentMethod(tenders, String(paymentMethod || ""));
     if (pm === "mixed") {
         return new Map([["mixed", (0, money_1.roundMoney2)(Math.max(0, total - refund))]]);

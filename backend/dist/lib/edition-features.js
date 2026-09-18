@@ -60,6 +60,7 @@ exports.EDITION_FEATURE_GROUPS = [
             { key: "digital_signage", label: "Digital signage / menu boards (paid addon)" },
             { key: "kds", label: "Kitchen display / KDS (paid addon)" },
             { key: "ods", label: "Order display / ODS (paid addon)" },
+            { key: "self_order_kiosk", label: "Self-order kiosk (paid addon)" },
         ],
     },
 ];
@@ -81,6 +82,7 @@ exports.EDITION_ROUTE_FEATURES = {
     "/merchant/newsletter": ["online_shop"],
     "/merchant/online-shop": ["online_shop"],
     "/merchant/website": ["website_cms"],
+    "/merchant/chaslay-page-builder": ["website_cms"],
     "/merchant/reservations": ["reservations"],
     "/merchant/reports": ["reports"],
     "/merchant/users": ["staff_roles"],

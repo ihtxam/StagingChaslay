@@ -31,5 +31,18 @@ interface SaleEnvelope {
  * webhook.
  */
 export declare function buildSaleRequest(merchant: Merchant, installationId: string, amountMinor: number, currency: string, reference: string): SaleEnvelope;
+interface ReversalEnvelope {
+    request: Record<string, unknown>;
+    serviceId: string;
+}
+/**
+ * Build a ReversalRequest envelope for refunding a prior SoftPOS sale.
+ * The mobile client submits this via syncTerminalApiRequest (backend proxy).
+ */
+export declare function buildReversalRequest(merchant: Merchant, installationId: string, originalServiceId: string, amountMinor: number, currency: string): ReversalEnvelope;
+/**
+ * Forward a Terminal API request to Adyen's /sync endpoint (used for SoftPOS refunds).
+ */
+export declare function syncTerminalApiRequest(merchant: Merchant, request: Record<string, unknown>): Promise<Record<string, unknown>>;
 export {};
 //# sourceMappingURL=adyen-softpos.service.d.ts.map

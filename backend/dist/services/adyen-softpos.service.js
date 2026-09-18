@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createSoftPosSession = createSoftPosSession;
 exports.buildSaleRequest = buildSaleRequest;
+exports.buildReversalRequest = buildReversalRequest;
+exports.syncTerminalApiRequest = syncTerminalApiRequest;
 const node_crypto_1 = require("node:crypto");
 /** softposconfig base URL for the merchant's environment/region. */
 function softPosBaseUrl(merchant) {
@@ -104,5 +106,86 @@ function buildSaleRequest(merchant, installationId, amountMinor, currency, refer
         },
     };
     return { request, serviceId, saleId, transactionId };
+}
+/** Terminal API /sync base URL for the merchant's environment/region. */
+function terminalApiSyncUrl(merchant) {
+    if (!merchant.adyenLiveEnvironment) {
+        return "https://terminal-api-test.adyen.com/sync";
+    }
+    switch ((merchant.adyenLiveRegion || "EU").toUpperCase()) {
+        case "AU":
+            return "https://terminal-api-live-au.adyen.com/sync";
+        case "APSE":
+            return "https://terminal-api-live-apse.adyen.com/sync";
+        case "NEA":
+            return "https://terminal-api-live-nea.adyen.com/sync";
+        case "US":
+            return "https://terminal-api-live-us.adyen.com/sync";
+        default:
+            return "https://terminal-api-live.adyen.com/sync";
+    }
+}
+/**
+ * Build a ReversalRequest envelope for refunding a prior SoftPOS sale.
+ * The mobile client submits this via syncTerminalApiRequest (backend proxy).
+ */
+function buildReversalRequest(merchant, installationId, originalServiceId, amountMinor, currency) {
+    const serviceId = (0, node_crypto_1.randomUUID)().slice(0, 10);
+    const saleId = `POS-${merchant.id}`;
+    const request = {
+        SaleToPOIRequest: {
+            MessageHeader: {
+                MessageClass: "Service",
+                MessageCategory: "Reversal",
+                MessageType: "Request",
+                ServiceID: serviceId,
+                SaleID: saleId,
+                POIID: installationId,
+                ProtocolVersion: "3.0",
+            },
+            ReversalRequest: {
+                OriginalPOITransaction: {
+                    POITransactionID: {
+                        TransactionID: originalServiceId,
+                    },
+                },
+                ReversalReason: "MerchantCancel",
+                ReversedAmount: amountMinor / 100,
+            },
+        },
+    };
+    return { request, serviceId };
+}
+/**
+ * Forward a Terminal API request to Adyen's /sync endpoint (used for SoftPOS refunds).
+ */
+async function syncTerminalApiRequest(merchant, request) {
+    const apiKey = merchant.adyenApiKey;
+    if (!apiKey) {
+        throw new Error("No Adyen API key configured for this merchant account.");
+    }
+    const header = request.SaleToPOIRequest
+        ?.MessageHeader;
+    const serviceId = String(header?.ServiceID || (0, node_crypto_1.randomUUID)().slice(0, 10));
+    const url = terminalApiSyncUrl(merchant);
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "X-API-Key": apiKey,
+            "Content-Type": "application/json",
+            "Idempotency-Key": serviceId,
+        },
+        body: JSON.stringify(request),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+        throw new Error(`Adyen Terminal API sync failed (${response.status}): ${text}`);
+    }
+    try {
+        return JSON.parse(text);
+    }
+    catch {
+        throw new Error("Adyen Terminal API response was not valid JSON.");
+    }
 }
 //# sourceMappingURL=adyen-softpos.service.js.map

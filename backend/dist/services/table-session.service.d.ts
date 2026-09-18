@@ -26,9 +26,9 @@ export declare class TableSessionService {
             merchantId: string;
             tableId: string;
             guestCount: number | null;
+            closedAt: Date | null;
             sessionToken: string;
             openedAt: Date;
-            closedAt: Date | null;
         };
         table: {
             id: string;
@@ -55,20 +55,22 @@ export declare class TableSessionService {
         merchantId: string;
         tableId: string;
         guestCount: number | null;
+        closedAt: Date | null;
         sessionToken: string;
         openedAt: Date;
-        closedAt: Date | null;
     } | undefined>;
     static listSessionOrders(merchantId: string, sessionId: string): Promise<{
         id: string;
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -84,7 +86,6 @@ export declare class TableSessionService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -97,6 +98,7 @@ export declare class TableSessionService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -138,9 +140,9 @@ export declare class TableSessionService {
         }[] | null;
         items: {
             id: string;
-            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
+            quantity: string;
             taxAmount: string;
             orderId: string;
             productName: string | null;
@@ -188,17 +190,23 @@ export declare class TableSessionService {
         openedAt: Date;
         closedAt: Date | null;
     }>;
+    /** Mark every unpaid order on an open table session as paid (pay-at-table checkout). */
+    static markSessionOrdersPaid(merchantId: string, sessionId: string, paymentMethod?: string): Promise<{
+        count: number;
+    }>;
     static sessionSummary(merchantId: string, sessionId: string): Promise<{
         orders: {
             id: string;
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -214,7 +222,6 @@ export declare class TableSessionService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -227,6 +234,7 @@ export declare class TableSessionService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -268,9 +276,9 @@ export declare class TableSessionService {
             }[] | null;
             items: {
                 id: string;
-                quantity: string;
                 isOpenPrice: boolean;
                 productId: string | null;
+                quantity: string;
                 taxAmount: string;
                 orderId: string;
                 productName: string | null;
@@ -310,20 +318,22 @@ export declare class TableSessionService {
             merchantId: string;
             tableId: string;
             guestCount: number | null;
+            closedAt: Date | null;
             sessionToken: string;
             openedAt: Date;
-            closedAt: Date | null;
         };
         orders: {
             id: string;
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -339,7 +349,6 @@ export declare class TableSessionService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -352,6 +361,7 @@ export declare class TableSessionService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -393,9 +403,9 @@ export declare class TableSessionService {
             }[] | null;
             items: {
                 id: string;
-                quantity: string;
                 isOpenPrice: boolean;
                 productId: string | null;
+                quantity: string;
                 taxAmount: string;
                 orderId: string;
                 productName: string | null;
@@ -430,9 +440,9 @@ export declare class TableSessionService {
         merchantId: string;
         tableId: string;
         guestCount: number | null;
+        closedAt: Date | null;
         sessionToken: string;
         openedAt: Date;
-        closedAt: Date | null;
     }>;
 }
 //# sourceMappingURL=table-session.service.d.ts.map

@@ -4,6 +4,7 @@ exports.MarketingService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const email_service_1 = require("@/services/email.service");
+const brand_1 = require("@/lib/brand");
 const DEFAULT_REORDER_DAYS = 5;
 const DEFAULT_REORDER_SUBJECT = "We miss you — order again from {{businessName}}";
 const DEFAULT_REORDER_BODY = `<p>Hi {{name}},</p>
@@ -83,25 +84,15 @@ function applyPlaceholders(template, vars) {
         .replace(/\{\{\s*businessName\s*\}\}/gi, vars.businessName);
 }
 function shopUrlForMerchant(merchant) {
-    const domain = process.env.DOMAIN || process.env.PUBLIC_APP_URL || "https://rebornsense.com";
-    const base = domain.replace(/\/$/, "").startsWith("http")
-        ? domain.replace(/\/$/, "")
-        : `https://${domain.replace(/\/$/, "")}`;
+    const shopHost = (0, brand_1.resolveShopPublicHost)();
+    const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
     if (merchant.customDomain)
         return `https://${merchant.customDomain.replace(/^https?:\/\//, "")}`;
-    if (merchant.subdomain) {
-        try {
-            const host = new URL(base).host;
-            const apex = host.replace(/^www\./, "").replace(/^shop\./, "").replace(/^app\./, "");
-            return `https://${merchant.subdomain}.${apex}`;
-        }
-        catch {
-            /* fall through */
-        }
-    }
+    if (merchant.subdomain)
+        return `https://${merchant.subdomain}.${apex}`;
     if (merchant.slug)
-        return `${base}/${merchant.slug}`;
-    return base;
+        return `https://${shopHost}/${merchant.slug}`;
+    return `https://${shopHost}`;
 }
 function htmlWrap(body) {
     const looksHtml = /<[a-z][\s\S]*>/i.test(body);

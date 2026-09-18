@@ -41,6 +41,7 @@ const multer_1 = __importDefault(require("multer"));
 const drizzle_orm_1 = require("drizzle-orm");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const business_module_middleware_1 = require("@/middleware/business-module.middleware");
+const catalog_visibility_1 = require("@/lib/catalog-visibility");
 const product_service_1 = require("@/services/product.service");
 const category_service_1 = require("@/services/category.service");
 const category_colors_1 = require("@/lib/category-colors");
@@ -54,13 +55,19 @@ const combo_1 = require("@/lib/combo");
 const money_1 = require("@/lib/money");
 const geocode_1 = require("@/lib/geocode");
 const media_upload_service_1 = require("@/services/media-upload.service");
+const path_1 = __importDefault(require("path"));
 const db_1 = require("@/db");
 const subscription_billing_service_1 = require("@/services/subscription-billing.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const pos_sessions_routes_1 = __importDefault(require("@/routes/pos-sessions.routes"));
+const locations_routes_1 = __importDefault(require("@/routes/locations.routes"));
+const hq_routes_1 = __importDefault(require("@/routes/hq.routes"));
 const client_errors_routes_1 = __importDefault(require("@/routes/client-errors.routes"));
+const location_middleware_1 = require("@/middleware/location.middleware");
 const router = (0, express_1.Router)();
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const FAVICON_EXTENSIONS = new Set([".png", ".ico", ".svg"]);
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 12 * 1024 * 1024 },
@@ -69,10 +76,62 @@ const imageUpload = (0, multer_1.default)({
             cb(null, true);
             return;
         }
+        const ext = path_1.default.extname(String(file.originalname || "")).toLowerCase();
+        if (IMAGE_EXTENSIONS.has(ext)) {
+            cb(null, true);
+            return;
+        }
         cb(new Error("Only JPEG, PNG, WebP, or GIF images are allowed"));
     },
 });
-const POS_SAFE_SETTINGS_KEYS = new Set(["posColorTheme", "panelLanguage"]);
+const faviconUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if ((0, media_upload_service_1.isAllowedFaviconMime)(file.mimetype)) {
+            cb(null, true);
+            return;
+        }
+        const ext = path_1.default.extname(String(file.originalname || "")).toLowerCase();
+        if (FAVICON_EXTENSIONS.has(ext)) {
+            cb(null, true);
+            return;
+        }
+        cb(new Error("Favicon must be PNG, ICO, or SVG"));
+    },
+});
+const POS_SAFE_SETTINGS_KEYS = new Set([
+    "posColorTheme",
+    "panelLanguage",
+    "acceptingOrders",
+    "acceptingReservations",
+    "reservationsEnabled",
+]);
+/** Online shop page — staff with MANAGE_ONLINE_SHOP may save these without full settings access. */
+const ONLINE_SHOP_SETTINGS_KEYS = new Set([
+    "shopEnabled",
+    "pickupEnabled",
+    "dineInEnabled",
+    "deliveryEnabled",
+    "deliveryMode",
+    "channelSelectMode",
+    "menuShowProductImages",
+    "menuShowCategoryBanners",
+    "cartLayout",
+    "scheduledOrdersEnabled",
+    "latitude",
+    "longitude",
+    "pickupEtaMinutes",
+    "deliveryEtaMinutes",
+    "minPreOrderDelayMinutes",
+    "deliveryMenuMarkup",
+    "categoryPricingEnabled",
+    "shopLogoUrl",
+    "shopBannerUrl",
+    "shopSiteSettings",
+]);
+/** Domain/branding identity — requires MANAGE_SETTINGS even from the online shop form. */
+const MERCHANT_IDENTITY_SETTINGS_KEYS = new Set(["slug", "subdomain", "customDomain", "name"]);
 /** Staff can use POS/catalog APIs; writes to catalog/settings/billing stay permission-gated. */
 function restrictStaffMerchantWrites(req, res, next) {
     if (req.user?.role === "merchant")
@@ -85,6 +144,12 @@ function restrictStaffMerchantWrites(req, res, next) {
         const keys = Object.keys((req.body || {}));
         if (keys.length && keys.every((k) => POS_SAFE_SETTINGS_KEYS.has(k)))
             return next();
+        if (keys.some((k) => MERCHANT_IDENTITY_SETTINGS_KEYS.has(k))) {
+            return (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS")(req, res, next);
+        }
+        if (keys.length && keys.every((k) => ONLINE_SHOP_SETTINGS_KEYS.has(k))) {
+            return (0, auth_middleware_1.requirePermission)("MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(req, res, next);
+        }
         return (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS")(req, res, next);
     }
     if (path.startsWith("/billing")) {
@@ -95,9 +160,10 @@ function restrictStaffMerchantWrites(req, res, next) {
             /^\/categories(\/|$)/.test(path) ||
             /^\/modifiers(\/|$)/.test(path) ||
             path === "/demo-menu-photos" ||
-            path === "/media");
+            path === "/media" ||
+            path === "/shop-favicon");
     if (catalogWrite) {
-        return (0, auth_middleware_1.requirePermission)("MANAGE_PRODUCTS")(req, res, next);
+        return (0, auth_middleware_1.requirePermission)("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(req, res, next);
     }
     return next();
 }
@@ -105,6 +171,7 @@ function restrictStaffMerchantWrites(req, res, next) {
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
 router.use(auth_middleware_1.setMerchantContext);
+router.use(location_middleware_1.setLocationContext);
 router.use(restrictStaffMerchantWrites);
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -209,6 +276,39 @@ router.post("/products/import", upload.single("file"), async (req, res) => {
     }
 });
 /**
+ * POST /api/merchant/products/import/stream
+ * Excel import with Server-Sent Events progress updates.
+ */
+router.post("/products/import/stream", upload.single("file"), async (req, res) => {
+    const merchantId = req.merchantId;
+    if (!merchantId)
+        return res.status(400).json({ error: "Merchant ID is required" });
+    if (!req.file?.buffer)
+        return res.status(400).json({ error: "Excel file is required (field: file)" });
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+    const send = (payload) => {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+    try {
+        const result = await catalog_import_service_1.CatalogImportService.importWorkbook(merchantId, req.file.buffer, {
+            onProgress: (event) => send(event),
+        });
+        send({ phase: "done", message: "Import complete", percent: 100, result: { success: result.success, ...result } });
+        res.end();
+    }
+    catch (error) {
+        console.error("Import stream failed:", error);
+        send({
+            phase: "error",
+            message: error instanceof Error ? error.message : "Import failed",
+        });
+        res.end();
+    }
+});
+/**
  * POST /api/merchant/products/import-demo
  * Seed café/bistro demo catalog (categories, products, modifiers, combos).
  */
@@ -282,8 +382,14 @@ router.get("/products", async (req, res) => {
             product_service_1.ProductService.getProducts(merchantId, page, limit, search, categoryId),
             product_service_1.ProductService.countProducts(merchantId, search, categoryId),
             (async () => {
-                const { ProductEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/product-entitlements.service")));
-                return ProductEntitlementsService.getLimitInfo(merchantId);
+                try {
+                    const { ProductEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/product-entitlements.service")));
+                    return await ProductEntitlementsService.getLimitInfo(merchantId);
+                }
+                catch (err) {
+                    console.warn("Product limit lookup failed:", err);
+                    return null;
+                }
             })(),
         ]);
         const pageList = products || [];
@@ -358,12 +464,14 @@ router.get("/products", async (req, res) => {
             success: true,
             products: withCatalog,
             pagination: { page, limit, total },
-            productLimit: {
-                maxProducts: productLimit.maxProducts,
-                currentCount: productLimit.currentCount,
-                planSlug: productLimit.planSlug,
-                planName: productLimit.planName,
-            },
+            productLimit: productLimit
+                ? {
+                    maxProducts: productLimit.maxProducts,
+                    currentCount: productLimit.currentCount,
+                    planSlug: productLimit.planSlug,
+                    planName: productLimit.planName,
+                }
+                : null,
         });
     }
     catch (error) {
@@ -423,7 +531,7 @@ router.get("/products/:productId", async (req, res) => {
 router.post("/products", async (req, res) => {
     try {
         const merchantId = req.merchantId;
-        const { name, price, categoryId, sku, barcode, cost, stock, isTaxable, description, imageUrl, productType, isOpenPrice, soldByWeight, weightUnit, bulkPricing, extras, comboItems, allowExtras, clientId, specifications, buttonColor, loyaltyRewardPoints, modifierGroupIds, } = req.body;
+        const { name, price, categoryId, sku, barcode, cost, stock, isTaxable, description, imageUrl, productType, isOpenPrice, soldByWeight, weightUnit, bulkPricing, extras, comboItems, allowExtras, clientId, specifications, buttonColor, loyaltyRewardPoints, modifierGroupIds, visibility, similarProductIds, } = req.body;
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
@@ -499,10 +607,26 @@ router.post("/products", async (req, res) => {
         if (Array.isArray(modifierGroupIds) && modifierGroupIds.length) {
             modifierGroups = await modifier_service_1.ModifierService.setGroupsForProduct(merchantId, product.id, modifierGroupIds);
         }
+        if (visibility !== undefined || similarProductIds !== undefined) {
+            const patch = {};
+            if (visibility !== undefined) {
+                patch.visibility = (0, catalog_visibility_1.normalizeCatalogVisibility)(visibility);
+            }
+            if (similarProductIds !== undefined) {
+                patch.similarProductIds = Array.isArray(similarProductIds)
+                    ? similarProductIds
+                        .filter((id) => typeof id === "string" && String(id).trim())
+                        .map((id) => String(id).trim())
+                        .slice(0, 12)
+                    : [];
+            }
+            await product_service_1.ProductService.updateProduct(merchantId, product.id, patch);
+        }
+        const saved = await product_service_1.ProductService.getProductById(merchantId, product.id);
         res.status(201).json({
             success: true,
             message: "Product created successfully",
-            product: { ...product, modifierGroups },
+            product: { ...saved, modifierGroups },
         });
     }
     catch (error) {
@@ -570,6 +694,17 @@ router.put("/products/:productId", async (req, res) => {
             if (updates.productType === "combo" || updates.comboItems.length) {
                 updates.productType = "combo";
             }
+        }
+        if (updates.visibility !== undefined) {
+            updates.visibility = (0, catalog_visibility_1.normalizeCatalogVisibility)(updates.visibility);
+        }
+        if (updates.similarProductIds !== undefined) {
+            updates.similarProductIds = Array.isArray(updates.similarProductIds)
+                ? updates.similarProductIds
+                    .filter((id) => typeof id === "string" && String(id).trim())
+                    .map((id) => String(id).trim())
+                    .slice(0, 12)
+                : [];
         }
         const product = await product_service_1.ProductService.updateProduct(merchantId, productId, updates);
         let modifierGroups = undefined;
@@ -831,7 +966,7 @@ router.put("/categories/reorder", async (req, res) => {
 router.post("/categories", async (req, res) => {
     try {
         const merchantId = req.merchantId;
-        const { name, description, color } = req.body;
+        const { name, description, color, visibility } = req.body;
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
@@ -855,10 +990,19 @@ router.post("/categories", async (req, res) => {
         }
         const normalizedColor = color != null && color !== "" ? (0, category_colors_1.normalizeHexColor)(String(color)) : color;
         const category = await category_service_1.CategoryService.createCategory(merchantId, trimmedName, trimmedDescription, normalizedColor);
+        if (visibility !== undefined) {
+            await category_service_1.CategoryService.updateCategory(merchantId, category.id, {
+                visibility: (0, catalog_visibility_1.normalizeCatalogVisibility)(visibility),
+            });
+        }
+        const saved = visibility !== undefined
+            ? (await category_service_1.CategoryService.getCategories(merchantId)).find((c) => c.id === category.id) ||
+                category
+            : category;
         res.status(201).json({
             success: true,
             message: "Category created successfully",
-            category,
+            category: saved,
         });
     }
     catch (error) {
@@ -909,6 +1053,19 @@ router.put("/categories/:categoryId", async (req, res) => {
                 updates.color = (0, category_colors_1.normalizeHexColor)(String(updates.color));
             }
         }
+        if (updates.visibility !== undefined) {
+            updates.visibility = (0, catalog_visibility_1.normalizeCatalogVisibility)(updates.visibility);
+        }
+        if (updates.deliveryPricingEnabled !== undefined) {
+            updates.deliveryPricingEnabled = !!updates.deliveryPricingEnabled;
+        }
+        if (updates.extraDeliveryPrice !== undefined) {
+            const n = Number(updates.extraDeliveryPrice);
+            if (!Number.isFinite(n) || n < 0) {
+                return res.status(400).json({ error: "extraDeliveryPrice must be >= 0" });
+            }
+            updates.extraDeliveryPrice = n.toFixed(2);
+        }
         const category = await category_service_1.CategoryService.updateCategory(merchantId, categoryId, updates);
         res.json({
             success: true,
@@ -955,13 +1112,17 @@ router.get("/orders", async (req, res) => {
         const merchantId = req.merchantId;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
-        const status = req.query.status;
+        const status = req.query.statuses ||
+            req.query.status ||
+            undefined;
         const startDate = req.query.startDate ? new Date(req.query.startDate) : undefined;
         const endDate = req.query.endDate ? new Date(req.query.endDate) : undefined;
+        const scopeRaw = String(req.query.scope || "").toLowerCase();
+        const scope = scopeRaw === "online" || scopeRaw === "incoming" ? "online" : "all";
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
-        const orders = await order_service_1.OrderService.getOrders(merchantId, page, limit, status, startDate, endDate);
+        const orders = await order_service_1.OrderService.getOrders(merchantId, page, limit, status, startDate, endDate, scope);
         res.json({
             success: true,
             orders,
@@ -971,6 +1132,37 @@ router.get("/orders", async (req, res) => {
     catch (error) {
         console.error("Error getting orders:", error);
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get orders" });
+    }
+});
+/**
+ * GET /api/merchant/orders/incoming
+ * Active online / QR / kiosk orders for Order Hub and Web POS polling.
+ */
+router.get("/orders/incoming", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const limit = req.query.limit ? Number(req.query.limit) : 200;
+        const statuses = req.query.statuses || req.query.status || undefined;
+        const since = req.query.since ? new Date(String(req.query.since)) : undefined;
+        const orders = await order_service_1.OrderService.getIncomingOrders(merchantId, {
+            limit,
+            statuses,
+            since: since && !Number.isNaN(since.getTime()) ? since : undefined,
+        });
+        res.json({
+            success: true,
+            orders,
+            pagination: { limit: Math.min(Math.max(limit, 1), 300) },
+        });
+    }
+    catch (error) {
+        console.error("Error getting incoming orders:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to get incoming orders",
+        });
     }
 });
 /**
@@ -1009,7 +1201,7 @@ router.post("/orders", async (req, res) => {
         if (!items || items.length === 0) {
             return res.status(400).json({ error: "Order items are required" });
         }
-        const order = await order_service_1.OrderService.createOrder(merchantId, items, customerId, orderType || "pos", paymentMethod, discountAmount || 0, notes);
+        const order = await order_service_1.OrderService.createOrder(merchantId, items, customerId, orderType || "pos", paymentMethod, discountAmount || 0, notes, req.locationId || req.body?.locationId);
         res.status(201).json({
             success: true,
             message: "Order created successfully",
@@ -1126,7 +1318,7 @@ router.post("/orders/:orderId/cancel", async (req, res) => {
  * GET /api/merchant/customers
  * Get all customers
  */
-router.get("/customers", async (req, res) => {
+router.get("/customers", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const page = parseInt(req.query.page) || 1;
@@ -1151,7 +1343,7 @@ router.get("/customers", async (req, res) => {
  * POST /api/merchant/customers
  * Create customer
  */
-router.post("/customers", async (req, res) => {
+router.post("/customers", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity, name } = req.body;
@@ -1196,7 +1388,7 @@ router.post("/customers", async (req, res) => {
  * GET /api/merchant/customers/:customerId
  * Get customer details
  */
-router.get("/customers/:customerId", async (req, res) => {
+router.get("/customers/:customerId", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const { customerId } = req.params;
@@ -1232,12 +1424,17 @@ router.get("/me", async (req, res) => {
                 id: settings.id,
                 email: settings.email,
                 name: settings.name,
+                shopEnabled: settings.shopEnabled,
                 inventoryAddonEnabled: inventoryOn,
                 inventoryEnabled: inventoryOn,
                 signageAddonEnabled: settings.signageAddonEnabled === true,
                 signageEnabled: settings.signageAddonEnabled === true,
                 signageScreenLimit: settings.signageScreenLimit ?? 2,
                 editionFeatures: settings.editionFeatures,
+                hasPos: settings.hasPos,
+                showOrderCenter: settings.showOrderCenter,
+                showDeliveryHub: settings.showDeliveryHub,
+                orderCenterEnabled: settings.orderCenterEnabled,
             },
         });
     }
@@ -1258,14 +1455,18 @@ router.get("/settings", async (req, res) => {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
         const settings = await merchant_settings_service_1.MerchantSettingsService.getMerchantSettings(merchantId);
+        const { AdyenMerchantWebhookService } = await Promise.resolve().then(() => __importStar(require("@/services/adyen-merchant-webhook.service")));
         res.json({
             success: true,
-            settings,
+            settings: {
+                ...settings,
+                adyenWebhookUrl: AdyenMerchantWebhookService.webhookUrlFromRequest(merchantId, req),
+            },
         });
     }
     catch (error) {
-        const raw = error instanceof Error ? error.message : "Failed to get settings";
-        const { formatDbMigrateError, migrateLogTag } = await Promise.resolve().then(() => __importStar(require("@/lib/db-schema-errors")));
+        const { dbErrorChain, formatDbMigrateError, migrateLogTag } = await Promise.resolve().then(() => __importStar(require("@/lib/db-schema-errors")));
+        const raw = dbErrorChain(error) || "Failed to get settings";
         const tag = migrateLogTag(raw);
         if (tag) {
             console.error(`[settings] schema missing (${tag}):`, raw);
@@ -1329,11 +1530,19 @@ router.get("/webpos-config", async (req, res) => {
         const terminalReady = !!merchant.adyenApiKey &&
             !!merchant.adyenMerchantAccount &&
             activeTerminals.length > 0;
+        const tapToPayReady = merchant.tapToPayEnabled === true &&
+            !!merchant.adyenApiKey &&
+            !!merchant.adyenMerchantAccount;
         const { normalizePosPrintSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-print-settings")));
         const { normalizePosCheckoutSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-checkout-settings")));
         const { normalizeGiftCardSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/gift-card-settings")));
         const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-        const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+        const posCheckoutSettings = normalizePosCheckoutSettings({
+            ...(merchant.posCheckoutSettings && typeof merchant.posCheckoutSettings === "object"
+                ? merchant.posCheckoutSettings
+                : {}),
+            webposExpressEnabled: merchant.webposExpressEnabled,
+        });
         const giftCardSettings = normalizeGiftCardSettings(merchant.giftCardSettings);
         const { WebPosEntitlementService } = await Promise.resolve().then(() => __importStar(require("@/services/webpos-entitlement.service")));
         const entitlement = await WebPosEntitlementService.getEntitlement(merchantId);
@@ -1352,18 +1561,23 @@ router.get("/webpos-config", async (req, res) => {
             success: true,
             config: {
                 methods: {
-                    express: merchant.webposExpressEnabled !== false,
+                    // Express checkout bar under products — driven by posCheckoutSettings, not a tender.
+                    express: posCheckoutSettings.expressCheckoutEnabled,
                     cash: merchant.webposCashEnabled !== false,
                     card: merchant.webposCardEnabled !== false,
                     terminal: merchant.webposTerminalEnabled !== false && terminalReady,
+                    tap_to_pay: tapToPayReady,
                     giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
                     invoice: merchant.webposInvoiceEnabled !== false,
                 },
                 giftCardSettings,
                 loyalty: (await Promise.resolve().then(() => __importStar(require("@/services/shop-loyalty.service")))).ShopLoyaltyService.programFromMerchant(merchant),
                 terminalReady,
+                tapToPayReady,
                 adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,
+                tapToPayEnabled: merchant.tapToPayEnabled === true,
                 adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
+                adyenLiveRegion: merchant.adyenLiveRegion || "EU",
                 adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
                 defaultTerminalId: activeTerminals[0]?.terminalId || null,
                 staffPreferredTerminalId,
@@ -1391,7 +1605,13 @@ router.get("/webpos-config", async (req, res) => {
                 editionFeatures: await (async () => {
                     try {
                         const { EditionEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/edition-entitlements.service")));
-                        return await EditionEntitlementsService.getFeatures(merchantId);
+                        const feats = await EditionEntitlementsService.getFeatures(merchantId);
+                        if (feats == null)
+                            return null;
+                        if (merchant.giftCardAddonEnabled) {
+                            return Array.from(new Set([...feats, "gift_cards", "pos_gift_cards"]));
+                        }
+                        return feats;
                     }
                     catch {
                         return null;
@@ -1438,6 +1658,30 @@ router.get("/webpos-entitlement", async (req, res) => {
     catch (error) {
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to check POS entitlement",
+        });
+    }
+});
+/**
+ * POST /api/merchant/webpos-activate-license
+ * Redeem a Reborn activation code (e.g. 1758-D6DD-EF5A) to unlock WebPOS.
+ */
+router.post("/webpos-activate-license", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const activationCode = String(req.body?.activationCode || req.body?.licenseCode || "").trim();
+        if (!activationCode) {
+            return res.status(400).json({ error: "Activation code is required" });
+        }
+        const { ChaslayCompatService } = await Promise.resolve().then(() => __importStar(require("@/services/chaslay-compat.service")));
+        const result = await ChaslayCompatService.redeemLicenseForMerchant(merchantId, activationCode);
+        res.json(result);
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to activate license",
         });
     }
 });
@@ -1651,6 +1895,11 @@ router.get("/reports/eod", (0, auth_middleware_1.requirePermission)("VIEW_REPORT
             channel: req.query.channel ? String(req.query.channel) : undefined,
             staffId,
             staffName,
+            locationId: req.query.scope === "location"
+                ? req.locationId || undefined
+                : req.query.locationId
+                    ? String(req.query.locationId)
+                    : undefined,
         });
         res.json({ success: true, report });
     }
@@ -1728,6 +1977,11 @@ router.get("/reports/overview", (0, auth_middleware_1.requirePermission)("VIEW_R
             to: req.query.to ? String(req.query.to) : undefined,
             staffId: scope.staffId,
             staffName: scope.staffName,
+            locationId: req.query.scope === "location"
+                ? req.locationId || undefined
+                : req.query.locationId
+                    ? String(req.query.locationId)
+                    : undefined,
         });
         res.json({ success: true, overview });
     }
@@ -2027,7 +2281,16 @@ router.get("/pos/print-jobs/pending", async (req, res) => {
         const data = await ChaslayFloorService.listPendingPrintJobs(merchantId, limit, {
             jobTypes: [jobType],
         });
-        res.json({ success: true, ...data });
+        const { PrintJobExpandService } = await Promise.resolve().then(() => __importStar(require("@/services/print-job-expand.service")));
+        const jobs = [];
+        for (const job of data.jobs || []) {
+            const payload = await PrintJobExpandService.materializeRecipePayload(merchantId, (job.payload || {}));
+            if (payload && String(payload.kind) === "escpos" && payload.dataBase64) {
+                await ChaslayFloorService.updatePrintJobPayload(merchantId, job.id, payload);
+            }
+            jobs.push({ ...job, payload });
+        }
+        res.json({ success: true, ...data, jobs });
     }
     catch (error) {
         res.status(500).json({
@@ -2072,10 +2335,19 @@ router.get("/pos/orders", async (req, res) => {
         if (!merchantId)
             return res.status(400).json({ error: "Merchant ID is required" });
         const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
+        const { resolveReportRange } = await Promise.resolve().then(() => __importStar(require("@/services/pos-reports.service")));
+        const preset = req.query.preset ? String(req.query.preset) : undefined;
+        let from = req.query.from ? String(req.query.from) : undefined;
+        let to = req.query.to ? String(req.query.to) : undefined;
+        if (preset) {
+            const range = resolveReportRange(preset, from, to);
+            from = range.from;
+            to = range.to;
+        }
         const orders = await PosOrdersService.listPosOrders(merchantId, {
             status: req.query.status ? String(req.query.status) : undefined,
-            from: req.query.from ? String(req.query.from) : undefined,
-            to: req.query.to ? String(req.query.to) : undefined,
+            from,
+            to,
             limit: req.query.limit ? Number(req.query.limit) : 50,
             q: req.query.q ? String(req.query.q) : undefined,
         });
@@ -2217,6 +2489,24 @@ router.post("/pos/sales-adjustment/apply", (0, auth_middleware_1.requirePermissi
         });
     }
 });
+/** POST /api/merchant/pos/orders/purge — permanently delete completed cash sales (gandola). */
+router.post("/pos/orders/purge", (0, auth_middleware_1.requirePermission)("GANDOLA_PURGE"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const raw = req.body?.orderIds;
+        const orderIds = Array.isArray(raw) ? raw.map((id) => String(id)) : [];
+        const { OrderPurgeService } = await Promise.resolve().then(() => __importStar(require("@/services/order-purge.service")));
+        const result = await OrderPurgeService.purgeOrders(merchantId, orderIds);
+        res.json({ success: true, result });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to delete orders",
+        });
+    }
+});
 /** Save clocked-in staff POS preferences (e.g. preferred payment terminal). */
 router.put("/pos/staff-preferences", async (req, res) => {
     try {
@@ -2284,6 +2574,9 @@ router.post("/pos/held/release", async (req, res) => {
             ticketDisplay: body.ticketDisplay != null ? String(body.ticketDisplay) : null,
             tableId: body.tableId != null ? String(body.tableId) : null,
             tabNumber: body.tabNumber != null ? String(body.tabNumber) : null,
+            paidTotal: body.paidTotal != null ? Number(body.paidTotal) : null,
+            settleKitchen: body.settleKitchen === true,
+            paymentSettled: body.paymentSettled === false ? false : undefined,
         });
         res.json({ success: true, ...result });
     }
@@ -2392,6 +2685,46 @@ router.post("/media", (req, res, next) => {
         if (!req.file)
             return res.status(400).json({ error: "No image file uploaded" });
         const saved = await (0, media_upload_service_1.saveMerchantImage)({
+            merchantId,
+            buffer: req.file.buffer,
+            mimeType: req.file.mimetype,
+            originalName: req.file.originalname,
+        });
+        res.status(201).json({
+            success: true,
+            url: saved.url,
+            mimeType: saved.mimeType,
+            size: saved.size,
+        });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Upload failed" });
+    }
+});
+/**
+ * POST /api/merchant/shop-favicon
+ * multipart field "file" — PNG, ICO, or SVG
+ */
+router.post("/shop-favicon", (req, res, next) => {
+    faviconUpload.single("file")(req, res, (err) => {
+        if (err) {
+            const message = err instanceof Error
+                ? err.message
+                : typeof err === "string"
+                    ? err
+                    : "Upload failed";
+            return res.status(400).json({ error: message });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        if (!req.file)
+            return res.status(400).json({ error: "No favicon file uploaded" });
+        const saved = await (0, media_upload_service_1.saveMerchantFavicon)({
             merchantId,
             buffer: req.file.buffer,
             mimeType: req.file.mimetype,
@@ -2576,10 +2909,10 @@ router.get("/entitlements", async (req, res) => {
         const { MerchantEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant-entitlements.service")));
         const { ProductEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/product-entitlements.service")));
         const [limits, staff, devices, products] = await Promise.all([
-            MerchantEntitlementsService.getLimits(merchantId),
-            MerchantEntitlementsService.getStaffLimitInfo(merchantId),
-            MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId),
-            ProductEntitlementsService.getLimitInfo(merchantId),
+            MerchantEntitlementsService.getLimits(merchantId).catch(() => null),
+            MerchantEntitlementsService.getStaffLimitInfo(merchantId).catch(() => null),
+            MerchantEntitlementsService.getDeviceLicenseLimitInfo(merchantId).catch(() => null),
+            ProductEntitlementsService.getLimitInfo(merchantId).catch(() => null),
         ]);
         res.json({ success: true, limits, staff, devices, products });
     }
@@ -2706,6 +3039,36 @@ router.get("/platform-shop/orders", async (req, res) => {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list orders" });
     }
 });
+router.get("/platform-shop/orders/:orderId", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
+        const order = await PlatformShopService.getMerchantOrder(merchantId, req.params.orderId);
+        res.json({ success: true, order });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to load order";
+        res.status(msg === "Order not found" ? 404 : 500).json({ error: msg });
+    }
+});
+router.post("/platform-shop/quote", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const items = Array.isArray(req.body?.items) ? req.body.items : [];
+        const { PlatformShopService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-shop.service")));
+        const quote = await PlatformShopService.quote(items, req.body?.voucherCode);
+        res.json({ success: true, quote });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Could not apply voucher",
+        });
+    }
+});
 router.post("/platform-shop/checkout", async (req, res) => {
     try {
         const merchantId = req.merchantId;
@@ -2748,7 +3111,39 @@ router.post("/platform-shop/confirm", async (req, res) => {
         });
     }
 });
+/**
+ * GET /api/merchant/shop-commission?month=YYYY-MM
+ * Monthly web shop orders + reseller commission (when configured).
+ */
+router.get("/shop-commission", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { shopCommissionPercent: true, resellerId: true },
+        });
+        if (!merchant?.resellerId) {
+            return res.status(404).json({ error: "Shop commission billing is not configured" });
+        }
+        const percent = Number(merchant.shopCommissionPercent ?? 0) || 0;
+        if (percent <= 0) {
+            return res.status(404).json({ error: "Shop commission billing is not configured" });
+        }
+        const { ShopCommissionService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-commission.service")));
+        const month = typeof req.query.month === "string" ? req.query.month : undefined;
+        const report = await ShopCommissionService.getMonthlyReport(merchantId, month);
+        res.json({ success: true, report });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to load report" });
+    }
+});
 router.use(pos_sessions_routes_1.default);
+router.use(locations_routes_1.default);
+router.use(hq_routes_1.default);
 router.use("/client-errors", client_errors_routes_1.default);
 exports.default = router;
 //# sourceMappingURL=merchant.routes.js.map

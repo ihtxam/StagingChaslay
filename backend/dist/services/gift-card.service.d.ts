@@ -217,6 +217,7 @@ export declare class GiftCardService {
         email?: string;
         phone?: string;
         orderId?: string;
+        amount?: number;
     }): Promise<{
         membershipPlan: MembershipPlan | null;
         stampCount: {};
@@ -447,11 +448,13 @@ export declare class GiftCardService {
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -467,7 +470,6 @@ export declare class GiftCardService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -480,6 +482,7 @@ export declare class GiftCardService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -492,6 +495,7 @@ export declare class GiftCardService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;

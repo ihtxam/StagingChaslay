@@ -577,8 +577,8 @@ export declare class InventoryService {
         storekeeperAddonEnabled: boolean;
         storeName: string;
         labelPrint: {
-            widthMm: 58 | 40 | undefined;
-            heightMm: 40 | 20 | 25 | 30 | undefined;
+            widthMm: 58 | 80 | 40 | 100 | undefined;
+            heightMm: 80 | 40 | 20 | 25 | 30 | 50 | 150 | undefined;
             showStoreName: boolean | undefined;
             showProductName: boolean | undefined;
             showBarcodeNumber: boolean | undefined;
@@ -877,7 +877,7 @@ export declare class InventoryService {
             daysOfStock: number | null;
             velocityPerDay: number;
             tier: "dead" | "slow" | "healthy";
-            recommendation: "stop_ordering" | "review" | "ok";
+            recommendation: "ok" | "stop_ordering" | "review";
             doNotReorder: boolean;
             autoReorderEnabled: boolean;
             supplierName: string | null;
@@ -898,7 +898,7 @@ export declare class InventoryService {
             daysOfStock: number | null;
             velocityPerDay: number;
             tier: "dead" | "slow" | "healthy";
-            recommendation: "stop_ordering" | "review" | "ok";
+            recommendation: "ok" | "stop_ordering" | "review";
             doNotReorder: boolean;
             autoReorderEnabled: boolean;
             supplierName: null;

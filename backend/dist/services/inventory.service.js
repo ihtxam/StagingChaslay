@@ -581,7 +581,7 @@ class InventoryService {
         });
         const { normalizePosPrintSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-print-settings")));
         const printSettings = normalizePosPrintSettings(merchant?.posPrintSettings);
-        const [categories, units] = await Promise.all([
+        let [categories, units] = await Promise.all([
             db.query.inventoryCategories.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.inventoryCategories.merchantId, merchantId),
                 orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryCategories.name)],
@@ -591,6 +591,42 @@ class InventoryService {
                 orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryUnits.code)],
             }),
         ]);
+        if (!units.length) {
+            try {
+                await db.insert(db_1.schema.inventoryUnits).values(DEFAULT_UNITS.map((u) => ({ merchantId, code: u.code, name: u.name })));
+            }
+            catch {
+                /* unique race if another request seeded first */
+            }
+            units = await db.query.inventoryUnits.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.inventoryUnits.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryUnits.code)],
+            });
+        }
+        if (!categories.length) {
+            const posCategories = await db.query.categories.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.categories.name)],
+                columns: { name: true },
+            });
+            const names = [
+                ...new Set(posCategories
+                    .map((c) => String(c.name || "").trim().slice(0, 100))
+                    .filter(Boolean)),
+            ];
+            if (names.length) {
+                try {
+                    await db.insert(db_1.schema.inventoryCategories).values(names.map((name) => ({ merchantId, name })));
+                }
+                catch {
+                    /* unique race / duplicate names */
+                }
+                categories = await db.query.inventoryCategories.findMany({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.inventoryCategories.merchantId, merchantId),
+                    orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.inventoryCategories.name)],
+                });
+            }
+        }
         return {
             ...license,
             enabled: true,

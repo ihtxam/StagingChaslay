@@ -17,28 +17,30 @@ export type PlatformShopVoucherInput = {
     maxUses?: number | null;
     expiresAt?: string | Date | null;
 };
+/** Accept only http(s) tracking links for storage and email. */
+export declare function sanitizeTrackingUrl(raw?: string | null): string | null;
 export declare class PlatformShopService {
     static listProducts(activeOnly?: boolean): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
         price: string;
         discountPercent: number | null;
     }[]>;
     static createProduct(input: PlatformShopProductInput): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
         price: string;
         discountPercent: number | null;
     }>;
@@ -98,6 +100,49 @@ export declare class PlatformShopService {
         maxUses: number | null;
         usedCount: number;
     }>;
+    static deleteVoucher(id: string): Promise<{
+        deleted: boolean;
+    }>;
+    static listVoucherUsage(voucherId: string, limit?: number): Promise<{
+        voucher: {
+            id: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            expiresAt: Date | null;
+            label: string | null;
+            discountAmount: string | null;
+            code: string;
+            discountPercent: number | null;
+            maxUses: number | null;
+            usedCount: number;
+        };
+        orders: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            merchantId: string;
+            currency: string;
+            adyenSessionId: string | null;
+            adyenPspReference: string | null;
+            adyenResultCode: string | null;
+            paidAt: Date | null;
+            paymentStatus: string;
+            subtotal: string;
+            discountAmount: string;
+            total: string;
+            notes: string | null;
+            items: schema.PlatformShopOrderLine[];
+            voucherCode: string | null;
+            trackingUrl: string | null;
+            merchant: {
+                id: string;
+                name: string;
+                email: string;
+            };
+        }[];
+    }>;
     static updateVoucher(id: string, input: Partial<PlatformShopVoucherInput>): Promise<{
         id: string;
         code: string;
@@ -138,7 +183,24 @@ export declare class PlatformShopService {
         subtotal: number;
         discountAmount: number;
         total: number;
+        voucherCode: string | null;
     };
+    static quote(items: Array<{
+        productId: string;
+        quantity: number;
+    }>, voucherCode?: string): Promise<{
+        lines: {
+            productId: string;
+            name: string;
+            quantity: number;
+            unitPrice: number;
+            lineTotal: number;
+        }[];
+        subtotal: number;
+        discountAmount: number;
+        total: number;
+        voucherCode: string | null;
+    }>;
     static startCheckout(merchantId: string, items: Array<{
         productId: string;
         quantity: number;
@@ -165,6 +227,7 @@ export declare class PlatformShopService {
             notes: string | null;
             items: schema.PlatformShopOrderLine[];
             voucherCode: string | null;
+            trackingUrl: string | null;
         };
         free: boolean;
         paymentSession: null;
@@ -187,6 +250,7 @@ export declare class PlatformShopService {
             notes: string | null;
             items: schema.PlatformShopOrderLine[];
             voucherCode: string | null;
+            trackingUrl: string | null;
         };
         free: boolean;
         paymentSession: {
@@ -219,6 +283,7 @@ export declare class PlatformShopService {
             notes: string | null;
             items: schema.PlatformShopOrderLine[];
             voucherCode: string | null;
+            trackingUrl: string | null;
         };
     } | {
         order: {
@@ -237,6 +302,7 @@ export declare class PlatformShopService {
             adyenPspReference: string | null;
             adyenResultCode: string | null;
             paidAt: Date | null;
+            trackingUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
         };
@@ -270,7 +336,28 @@ export declare class PlatformShopService {
         notes: string | null;
         items: schema.PlatformShopOrderLine[];
         voucherCode: string | null;
+        trackingUrl: string | null;
     }[]>;
+    static getMerchantOrder(merchantId: string, orderId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: string;
+        merchantId: string;
+        currency: string;
+        adyenSessionId: string | null;
+        adyenPspReference: string | null;
+        adyenResultCode: string | null;
+        paidAt: Date | null;
+        paymentStatus: string;
+        subtotal: string;
+        discountAmount: string;
+        total: string;
+        notes: string | null;
+        items: schema.PlatformShopOrderLine[];
+        voucherCode: string | null;
+        trackingUrl: string | null;
+    }>;
     static listAllOrders(limit?: number): Promise<{
         id: string;
         createdAt: Date;
@@ -289,13 +376,14 @@ export declare class PlatformShopService {
         notes: string | null;
         items: schema.PlatformShopOrderLine[];
         voucherCode: string | null;
+        trackingUrl: string | null;
         merchant: {
             id: string;
             name: string;
             email: string;
         };
     }[]>;
-    static updateOrderStatus(orderId: string, status: string): Promise<{
+    static updateOrderStatus(orderId: string, status: string, trackingUrl?: string | null): Promise<{
         id: string;
         merchantId: string;
         status: string;
@@ -311,8 +399,10 @@ export declare class PlatformShopService {
         adyenPspReference: string | null;
         adyenResultCode: string | null;
         paidAt: Date | null;
+        trackingUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
     }>;
+    static sendStatusEmails(order: typeof schema.platformShopOrders.$inferSelect): Promise<void>;
 }
 //# sourceMappingURL=platform-shop.service.d.ts.map

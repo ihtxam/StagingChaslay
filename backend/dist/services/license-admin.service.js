@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LicenseAdminService = void 0;
+exports.attachLicenseRelations = attachLicenseRelations;
 const crypto_1 = __importDefault(require("crypto"));
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
@@ -48,6 +49,47 @@ function asDate(value) {
         return null;
     const d = value instanceof Date ? value : new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;
+}
+/**
+ * Attach merchant/device without Drizzle `with: { merchant: true }`.
+ * Relational joins SELECT every merchants column (addon flags, etc.).
+ * Production often lags schema, so the query throws and list APIs return [].
+ * Stats skip the join, which is why counts can be 5 while the table is empty.
+ */
+async function attachLicenseRelations(rows) {
+    if (rows.length === 0)
+        return [];
+    const db = (0, db_1.getDb)();
+    const merchantIds = [...new Set(rows.map((r) => r.merchantId).filter(Boolean))];
+    const deviceIds = [...new Set(rows.map((r) => r.deviceId).filter((id) => Boolean(id)))];
+    const merchants = merchantIds.length
+        ? await db
+            .select({
+            id: db_1.schema.merchants.id,
+            name: db_1.schema.merchants.name,
+            email: db_1.schema.merchants.email,
+            resellerId: db_1.schema.merchants.resellerId,
+        })
+            .from(db_1.schema.merchants)
+            .where((0, drizzle_orm_1.inArray)(db_1.schema.merchants.id, merchantIds))
+        : [];
+    const devices = deviceIds.length
+        ? await db
+            .select({
+            id: db_1.schema.devices.id,
+            deviceName: db_1.schema.devices.deviceName,
+            deviceId: db_1.schema.devices.deviceId,
+        })
+            .from(db_1.schema.devices)
+            .where((0, drizzle_orm_1.inArray)(db_1.schema.devices.id, deviceIds))
+        : [];
+    const merchantById = new Map(merchants.map((m) => [m.id, m]));
+    const deviceById = new Map(devices.map((d) => [d.id, d]));
+    return rows.map((row) => ({
+        ...row,
+        merchant: merchantById.get(row.merchantId) ?? null,
+        device: row.deviceId ? deviceById.get(row.deviceId) ?? null : null,
+    }));
 }
 function formatActivationCode() {
     const raw = crypto_1.default.randomBytes(6).toString("hex").toUpperCase();
@@ -281,56 +323,38 @@ class LicenseAdminService {
      * Get all licenses with filters
      */
     static async getAllLicenses(page = 1, limit = 20, status, merchantId) {
-        try {
-            return await (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(async () => {
-                const db = (0, db_1.getDb)();
-                const offset = (page - 1) * limit;
-                const whereConditions = [];
-                if (status) {
-                    whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, status));
-                }
-                if (merchantId) {
-                    whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId));
-                }
-                return db.query.licenses.findMany({
-                    where: whereConditions.length > 0 ? (0, drizzle_orm_1.and)(...whereConditions) : undefined,
-                    with: {
-                        merchant: true,
-                        device: true,
-                    },
-                    limit,
-                    offset,
-                    orderBy: (0, drizzle_orm_1.desc)(db_1.schema.licenses.createdAt),
-                });
+        return (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const offset = (page - 1) * limit;
+            const whereConditions = [];
+            if (status) {
+                whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, status));
+            }
+            if (merchantId) {
+                whereConditions.push((0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId));
+            }
+            const licenses = await db.query.licenses.findMany({
+                where: whereConditions.length > 0 ? (0, drizzle_orm_1.and)(...whereConditions) : undefined,
+                limit,
+                offset,
+                orderBy: (0, drizzle_orm_1.desc)(db_1.schema.licenses.createdAt),
             });
-        }
-        catch (error) {
-            console.error("Error getting licenses:", error);
-            return [];
-        }
+            return attachLicenseRelations(licenses);
+        });
     }
     /**
      * Get license details
      */
     static async getLicenseDetails(licenseId) {
         const db = (0, db_1.getDb)();
-        try {
-            const license = await db.query.licenses.findFirst({
-                where: (0, drizzle_orm_1.eq)(db_1.schema.licenses.id, licenseId),
-                with: {
-                    merchant: true,
-                    device: true,
-                },
-            });
-            if (!license) {
-                throw new Error("License not found");
-            }
-            return license;
+        const license = await db.query.licenses.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.licenses.id, licenseId),
+        });
+        if (!license) {
+            throw new Error("License not found");
         }
-        catch (error) {
-            console.error("Error getting license details:", error);
-            throw error;
-        }
+        const [attached] = await attachLicenseRelations([license]);
+        return attached;
     }
     /**
      * Revoke license
@@ -470,14 +494,10 @@ class LicenseAdminService {
                 const db = (0, db_1.getDb)();
                 const now = new Date();
                 const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
-                const licenses = await db.query.licenses.findMany({
+                const licenses = await attachLicenseRelations(await db.query.licenses.findMany({
                     where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active"), (0, drizzle_orm_1.lt)(db_1.schema.licenses.expiresAt, thresholdDate), (0, drizzle_orm_1.gt)(db_1.schema.licenses.expiresAt, now)),
-                    with: {
-                        merchant: true,
-                        device: true,
-                    },
                     orderBy: (0, drizzle_orm_1.asc)(db_1.schema.licenses.expiresAt),
-                });
+                }));
                 return licenses
                     .map((l) => {
                     const expiresAt = asDate(l.expiresAt);

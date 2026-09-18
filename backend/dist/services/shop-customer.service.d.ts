@@ -40,6 +40,9 @@ export declare class ShopCustomerService {
             loyaltyPoints: number;
         };
     }>;
+    static requestPasswordReset(merchantId: string, email: string): Promise<{
+        success: boolean;
+    }>;
     static login(merchantId: string, email: string, password: string): Promise<{
         token: string;
         customer: {

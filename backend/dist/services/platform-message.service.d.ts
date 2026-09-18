@@ -22,6 +22,12 @@ export type PanelViewer = {
     merchantId?: string | null;
     resellerId?: string | null;
 };
+/** Build chronological tray rows (unread first-class) for the panel bell modal. */
+export declare function buildNotificationTray<T extends {
+    id: string;
+}>(visible: T[], dismissedIds: Set<string>, limit?: number): Array<T & {
+    unread: boolean;
+}>;
 export declare class PlatformMessageService {
     static resolveViewer(user?: {
         role?: string;
@@ -31,12 +37,12 @@ export declare class PlatformMessageService {
     }): PanelViewer | null;
     static listAll(includeInactive?: boolean): Promise<{
         id: string;
+        title: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         createdBySuperadminId: string | null;
         startsAt: Date | null;
-        title: string;
         body: string;
         kind: string;
         audience: string;
@@ -51,12 +57,12 @@ export declare class PlatformMessageService {
     }[]>;
     static create(input: PlatformMessageInput): Promise<{
         id: string;
+        title: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         createdBySuperadminId: string | null;
         startsAt: Date | null;
-        title: string;
         body: string;
         kind: string;
         audience: string;
@@ -110,20 +116,14 @@ export declare class PlatformMessageService {
         updatedAt: Date;
     }>;
     static getActiveForViewer(viewer: PanelViewer): Promise<{
-        messages: never[];
-        banner: never[];
-        loginPopup: never[];
-        unreadCount: number;
-        whatsNew?: undefined;
-    } | {
         messages: {
             id: string;
+            title: string;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             createdBySuperadminId: string | null;
             startsAt: Date | null;
-            title: string;
             body: string;
             kind: string;
             audience: string;
@@ -138,12 +138,12 @@ export declare class PlatformMessageService {
         }[];
         banner: {
             id: string;
+            title: string;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             createdBySuperadminId: string | null;
             startsAt: Date | null;
-            title: string;
             body: string;
             kind: string;
             audience: string;
@@ -158,12 +158,12 @@ export declare class PlatformMessageService {
         }[];
         loginPopup: {
             id: string;
+            title: string;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             createdBySuperadminId: string | null;
             startsAt: Date | null;
-            title: string;
             body: string;
             kind: string;
             audience: string;
@@ -178,12 +178,12 @@ export declare class PlatformMessageService {
         }[];
         whatsNew: {
             id: string;
+            title: string;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             createdBySuperadminId: string | null;
             startsAt: Date | null;
-            title: string;
             body: string;
             kind: string;
             audience: string;
@@ -196,7 +196,64 @@ export declare class PlatformMessageService {
             showInBanner: boolean;
             endsAt: Date | null;
         }[];
+        tray: ({
+            id: string;
+            title: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            createdBySuperadminId: string | null;
+            startsAt: Date | null;
+            body: string;
+            kind: string;
+            audience: string;
+            targetMerchantId: string | null;
+            targetResellerId: string | null;
+            severity: string;
+            externalUrl: string | null;
+            externalLabel: string | null;
+            showOnLogin: boolean;
+            showInBanner: boolean;
+            endsAt: Date | null;
+        } & {
+            unread: boolean;
+        })[];
         unreadCount: number;
+    }>;
+    static paginateHistory<T>(items: T[], offsetRaw: unknown, limitRaw: unknown): {
+        messages: T[];
+        total: number;
+        offset: number;
+        limit: number;
+        hasMore: boolean;
+    };
+    /** All published messages for the viewer, including dismissed and expired entries. */
+    static getHistoryForViewer(viewer: PanelViewer, offsetRaw?: unknown, limitRaw?: unknown): Promise<{
+        messages: {
+            dismissed: boolean;
+            id: string;
+            title: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            createdBySuperadminId: string | null;
+            startsAt: Date | null;
+            body: string;
+            kind: string;
+            audience: string;
+            targetMerchantId: string | null;
+            targetResellerId: string | null;
+            severity: string;
+            externalUrl: string | null;
+            externalLabel: string | null;
+            showOnLogin: boolean;
+            showInBanner: boolean;
+            endsAt: Date | null;
+        }[];
+        total: number;
+        offset: number;
+        limit: number;
+        hasMore: boolean;
     }>;
     static dismiss(viewer: PanelViewer, messageId: string): Promise<void>;
     static dismissAll(viewer: PanelViewer, messageIds: string[]): Promise<void>;

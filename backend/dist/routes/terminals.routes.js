@@ -5,6 +5,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const db_1 = require("@/db");
 const merchant_settings_service_1 = require("@/services/merchant-settings.service");
+const adyen_merchant_webhook_service_1 = require("@/services/adyen-merchant-webhook.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -35,6 +36,7 @@ router.get("/", async (req, res) => {
             where: (0, drizzle_orm_1.eq)(db_1.schema.paymentTerminals.merchantId, req.merchantId),
         });
         const settings = await merchant_settings_service_1.MerchantSettingsService.getMerchantSettings(req.merchantId);
+        const webhookUrl = adyen_merchant_webhook_service_1.AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId, req);
         res.json({
             success: true,
             terminals: terminals.map(sanitizeTerminal),
@@ -43,6 +45,10 @@ router.get("/", async (req, res) => {
                 apiKeyMasked: settings.adyenApiKeyMasked,
                 apiKeySet: settings.adyenApiKeySet,
                 clientId: settings.adyenClientId,
+                hmacKeyMasked: settings.adyenHmacKeyMasked,
+                hmacKeySet: settings.adyenHmacKeySet,
+                liveUrlPrefix: settings.adyenLiveUrlPrefix || "",
+                webhookUrl,
             },
         });
     }
@@ -52,15 +58,17 @@ router.get("/", async (req, res) => {
 });
 /**
  * PUT /api/terminals/adyen-credentials
- * Store merchant-level Adyen merchant account, API key, and client ID.
+ * Store merchant-level Adyen merchant account, API key, client ID, and webhook HMAC key.
  */
 router.put("/adyen-credentials", async (req, res) => {
     try {
-        const { adyenMerchantAccount, adyenApiKey, adyenClientId } = req.body;
+        const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix } = req.body;
         const settings = await merchant_settings_service_1.MerchantSettingsService.updateMerchantSettings(req.merchantId, {
             adyenMerchantAccount,
             adyenApiKey,
             adyenClientId,
+            adyenHmacKey,
+            adyenLiveUrlPrefix,
         });
         res.json({
             success: true,
@@ -69,6 +77,10 @@ router.put("/adyen-credentials", async (req, res) => {
                 apiKeyMasked: settings.adyenApiKeyMasked,
                 apiKeySet: settings.adyenApiKeySet,
                 clientId: settings.adyenClientId,
+                hmacKeyMasked: settings.adyenHmacKeyMasked,
+                hmacKeySet: settings.adyenHmacKeySet,
+                liveUrlPrefix: settings.adyenLiveUrlPrefix || "",
+                webhookUrl: adyen_merchant_webhook_service_1.AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId, req),
             },
         });
     }
@@ -113,6 +125,12 @@ router.post("/", async (req, res) => {
             },
         })
             .returning();
+        if (!terminal) {
+            return res.status(500).json({ error: "Failed to register terminal" });
+        }
+        if (terminal.merchantId !== req.merchantId) {
+            return res.status(409).json({ error: "Terminal ID is already registered to another merchant" });
+        }
         res.status(201).json({ success: true, terminal: sanitizeTerminal(terminal) });
     }
     catch (error) {

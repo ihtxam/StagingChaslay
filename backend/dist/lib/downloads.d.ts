@@ -1,5 +1,6 @@
 export declare const DOWNLOADS_ROOT: string;
 export declare const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
+/** Old installer URL — redirects to PRINT_AGENT_SETUP_FILE */
 export declare const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export declare const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
 export declare function downloadsFilePath(filename: string): string;
@@ -11,7 +12,11 @@ export type DownloadDescriptor = {
     filename: string;
     available: boolean;
     sizeBytes: number;
+    /** Version baked into the APK binary (what installs on the device). */
     version: string | null;
+    /** Version recorded in reborn-print-bridge.json (may be ahead of the APK if deploy skipped rebuild). */
+    declaredVersion?: string | null;
+    versionMismatch?: boolean;
     downloadUrl: string | null;
     message?: string;
 };

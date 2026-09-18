@@ -63,6 +63,34 @@ export declare function isCashOnlyOrder(order: {
     total: unknown;
     refundAmount?: unknown | null;
 }): boolean;
+type OrderRow = {
+    id: string;
+    status?: string | null;
+    paymentStatus?: string | null;
+    invoiceNumber?: string | null;
+    subtotal: string;
+    taxAmount: string;
+    discountAmount: string | null;
+    tipAmount: string | null;
+    roundingAmount: string | null;
+    total: string;
+    refundAmount: string | null;
+    paymentMethod: string | null;
+    paymentBreakdown: unknown;
+    notes?: string | null;
+    amountTendered?: string | null;
+    items: Array<{
+        id: string;
+        quantity: string;
+        unitPrice: string;
+        totalPrice: string;
+        taxAmount: string;
+        refundedQuantity: string | null;
+        weightKg: string | null;
+    }>;
+};
+/** Line can be reduced (weighed kg, unit qty, or positive line total). */
+export declare function isAdjustableCashLine(item: OrderRow["items"][number]): boolean;
 export declare class SalesAdjustmentService {
     static allowedPercents(): readonly number[];
     static preview(merchantId: string, targetPercent: number, rangeOpts?: {
@@ -79,4 +107,5 @@ export declare class SalesAdjustmentService {
     }): Promise<SalesAdjustmentResult>;
     private static loadEligibleOrders;
 }
+export {};
 //# sourceMappingURL=sales-adjustment.service.d.ts.map

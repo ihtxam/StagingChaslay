@@ -26,15 +26,16 @@ export declare class OffersService {
         merchantId: string;
         sortOrder: number;
         description: string | null;
+        channels: string[];
         categoryIds: string[];
         productIds: string[];
-        offerType: string;
-        rules: schema.OfferRules;
-        channels: string[];
-        scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
         timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
         validFrom: Date | null;
         validTo: Date | null;
         featured: boolean;
@@ -51,15 +52,16 @@ export declare class OffersService {
         merchantId: string;
         sortOrder: number;
         description: string | null;
+        channels: string[];
         categoryIds: string[];
         productIds: string[];
-        offerType: string;
-        rules: schema.OfferRules;
-        channels: string[];
-        scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
         timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
         validFrom: Date | null;
         validTo: Date | null;
         featured: boolean;
@@ -70,14 +72,19 @@ export declare class OffersService {
     static ensureOffersCategory(merchantId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }>;
     static create(merchantId: string, input: {
@@ -88,6 +95,7 @@ export declare class OffersService {
         channels?: string[];
         categoryIds?: string[];
         productIds?: string[];
+        staffIds?: string[];
         scheduleMode?: string;
         daysOfWeek?: string[];
         timeStart?: string | null;
@@ -108,15 +116,16 @@ export declare class OffersService {
         merchantId: string;
         sortOrder: number;
         description: string | null;
+        channels: string[];
         categoryIds: string[];
         productIds: string[];
-        offerType: string;
-        rules: schema.OfferRules;
-        channels: string[];
-        scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
         timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
         validFrom: Date | null;
         validTo: Date | null;
         featured: boolean;
@@ -134,6 +143,7 @@ export declare class OffersService {
         channels: string[];
         categoryIds: string[];
         productIds: string[];
+        staffIds: string[];
         scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
@@ -162,15 +172,48 @@ export declare class OffersService {
         merchantId: string;
         sortOrder: number;
         description: string | null;
+        channels: string[];
         categoryIds: string[];
         productIds: string[];
-        offerType: string;
-        rules: schema.OfferRules;
-        channels: string[];
-        scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
         timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
+        validFrom: Date | null;
+        validTo: Date | null;
+        featured: boolean;
+        badgeLabel: string | null;
+        priority: number;
+        stackable: boolean;
+    }[]>;
+    /**
+     * Offers the logged-in POS user should see: active today or scheduled (validFrom in the future),
+     * targeted at this staff member or all POS users. Time-of-day windows are not applied so
+     * waiters can read happy-hour terms before the window starts.
+     */
+    static listForPos(merchantId: string, staffId: string | null, at?: Date, ownerSeesAll?: boolean): Promise<{
+        posStatus: import("@/lib/pos-offer-visibility").PosOfferStatus;
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        merchantId: string;
+        sortOrder: number;
+        description: string | null;
+        channels: string[];
+        categoryIds: string[];
+        productIds: string[];
+        daysOfWeek: string[];
+        timeStart: string | null;
+        timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
         validFrom: Date | null;
         validTo: Date | null;
         featured: boolean;
@@ -179,6 +222,11 @@ export declare class OffersService {
         stackable: boolean;
     }[]>;
     static matchesProduct(offer: typeof schema.offers.$inferSelect, line: CartLineForOffer): boolean;
+    /** Expand eligible cart lines into unit prices, optionally grouped per product. */
+    private static unitPoolsByProduct;
+    private static computeBogoDiscount;
+    private static computePayNGetMDiscount;
+    private static computeNthItemPercentDiscount;
     static computeOfferDiscount(offer: typeof schema.offers.$inferSelect, lines: CartLineForOffer[]): number;
     /**
      * Choose buyQty from buyProductIds + getQty from getProductIds for packagePrice.
@@ -202,15 +250,16 @@ export declare class OffersService {
         merchantId: string;
         sortOrder: number;
         description: string | null;
+        channels: string[];
         categoryIds: string[];
         productIds: string[];
-        offerType: string;
-        rules: schema.OfferRules;
-        channels: string[];
-        scheduleMode: string;
         daysOfWeek: string[];
         timeStart: string | null;
         timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
         validFrom: Date | null;
         validTo: Date | null;
         featured: boolean;

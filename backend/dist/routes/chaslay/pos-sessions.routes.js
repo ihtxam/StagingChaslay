@@ -19,6 +19,7 @@ router.post("/register", async (req, res) => {
             deviceLabel: body.deviceLabel ? String(body.deviceLabel) : null,
             staffId: body.staffId ? String(body.staffId) : null,
             staffName: body.staffName ? String(body.staffName) : null,
+            locationId: body.locationId ? String(body.locationId) : null,
         });
         res.json({ ok: true, ...result });
     }

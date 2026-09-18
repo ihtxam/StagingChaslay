@@ -6,8 +6,16 @@ const db_1 = require("@/db");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
 const escpos_tickets_1 = require("@/lib/escpos-tickets");
 const chaslay_floor_service_1 = require("@/services/chaslay-floor.service");
+function looksLikeLabelPrinterName(name) {
+    const n = String(name || "").toLowerCase();
+    if (!n.trim())
+        return false;
+    if (/niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/.test(n))
+        return true;
+    return /eml-?\d|emlabel|luckydoor|lucky\s*door|\btspl\b|gprinter|\btsc[-\s]|zd\d{3}|4inch|4-inch|4 inch|lp-80[hn]|lp-400|xp-?3[5-9]\d|xp-?4[0-2]\d|hprt|godex|argox|\blabel\b|\bsticker\b|barcode\s*printer/.test(n);
+}
 function printersForRole(printers, role, fallbackPaper) {
-    const list = (printers || []).filter((p) => p.enabled !== false && p.name);
+    const list = (printers || []).filter((p) => p.enabled !== false && p.name && !looksLikeLabelPrinterName(p.name));
     const matched = list.filter((p) => role === "kitchen" ? !!p.printKitchenTickets : !!p.printReceipts);
     if (matched.length) {
         return matched.map((p) => ({
@@ -15,7 +23,19 @@ function printersForRole(printers, role, fallbackPaper) {
             paperWidthMm: (p.paperWidthMm === 58 ? 58 : fallbackPaper),
         }));
     }
-    return [{ name: "", paperWidthMm: fallbackPaper }];
+    if (role === "kitchen") {
+        const receipt = list.filter((p) => p.printReceipts);
+        if (receipt.length) {
+            return receipt.map((p) => ({
+                name: p.name,
+                paperWidthMm: (p.paperWidthMm === 58 ? 58 : fallbackPaper),
+            }));
+        }
+    }
+    const named = list[0];
+    return named
+        ? [{ name: named.name, paperWidthMm: fallbackPaper }]
+        : [{ name: "", paperWidthMm: fallbackPaper }];
 }
 function itemExtras(raw) {
     if (!Array.isArray(raw))
@@ -92,13 +112,14 @@ class PrintJobExpandService {
         const printSettings = (0, pos_print_settings_1.normalizePosPrintSettings)(merchant.posPrintSettings);
         const paper = printSettings.paperWidthMm === 58 ? 58 : 80;
         const source = String(opts.orderSource || order.orderSource || "online_shop");
+        const bypass = opts.independentOfMasterAutoPrint === true;
         const items = (order.items || []).map((i) => ({
             name: String(i.productName || "Item"),
             quantity: Number(i.quantity) || 1,
             extras: itemExtras(i.selectedExtras),
         }));
         const jobs = [];
-        if (opts.printKitchen && printSettings.autoPrintKitchen !== false) {
+        if (opts.printKitchen && (bypass || printSettings.autoPrintKitchen !== false)) {
             for (const printer of printersForRole(printSettings.printers, "kitchen", paper)) {
                 jobs.push({
                     target: printer,
@@ -119,7 +140,7 @@ class PrintJobExpandService {
                 });
             }
         }
-        if (opts.printNotification && printSettings.autoPrintReceipt !== false) {
+        if (opts.printNotification && (bypass || printSettings.autoPrintReceipt !== false)) {
             for (const printer of printersForRole(printSettings.printers, "receipt", paper)) {
                 jobs.push({
                     target: printer,
@@ -140,7 +161,7 @@ class PrintJobExpandService {
                 });
             }
         }
-        if (opts.printDeliveryReceipt && printSettings.autoPrintReceipt !== false) {
+        if (opts.printDeliveryReceipt && (bypass || printSettings.autoPrintReceipt !== false)) {
             for (const printer of printersForRole(printSettings.printers, "receipt", paper)) {
                 jobs.push({
                     target: printer,

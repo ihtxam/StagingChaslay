@@ -6,6 +6,7 @@ const auth_middleware_1 = require("@/middleware/auth.middleware");
 const edition_middleware_1 = require("@/middleware/edition.middleware");
 const floor_plan_service_1 = require("@/services/floor-plan.service");
 const table_qr_service_1 = require("@/services/table-qr.service");
+const table_qr_token_1 = require("@/lib/table-qr-token");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -41,6 +42,23 @@ router.get("/tables", async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list tables" });
+    }
+});
+/** GET /api/merchant/floor-plans/table-access-tokens — signed QR tokens for all tables */
+router.get("/table-access-tokens", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const tables = await floor_plan_service_1.FloorPlanService.listTablesForSync(merchantId);
+        const tokens = {};
+        for (const table of tables) {
+            tokens[table.id] = (0, table_qr_token_1.signTableAccess)(merchantId, table.id);
+        }
+        res.json({ success: true, tokens });
+    }
+    catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to build table access tokens",
+        });
     }
 });
 router.get("/qr-codes", async (req, res) => {

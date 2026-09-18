@@ -6,13 +6,13 @@ exports.buildDriverClaimUrl = buildDriverClaimUrl;
 const crypto_1 = require("crypto");
 /** Guest tracking URL (no login) for shop order confirmation page. */
 function buildGuestOrderTrackingUrl(merchant, orderId, token) {
-    const base = (process.env.PUBLIC_APP_URL ||
-        process.env.MERCHANT_DASHBOARD_URL ||
-        process.env.WEB_SHOP_URL ||
-        "http://localhost:5173").replace(/\/$/, "");
+    const base = appBaseUrl();
     const slug = merchant.slug || merchant.subdomain || "shop";
-    const params = new URLSearchParams({ track: token });
-    return `${base}/shop/${encodeURIComponent(slug)}/order/${orderId}?${params.toString()}`;
+    const params = new URLSearchParams();
+    if (token)
+        params.set("track", token);
+    const qs = params.toString();
+    return `${base}/shop/${encodeURIComponent(slug)}/order/${orderId}${qs ? `?${qs}` : ""}`;
 }
 function generateDeliveryTrackingToken() {
     return (0, crypto_1.randomBytes)(24).toString("hex");

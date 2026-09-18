@@ -118,6 +118,19 @@ async function findRecentPaidDuplicateOrder(db, merchantId, opts) {
     }
     return null;
 }
+/** True when it is safe to release held rows and free the table (non-split or final split part). */
+function splitBillFullyPaid(sale) {
+    const master = String(sale.masterOrderId || "").trim();
+    if (!master)
+        return true;
+    const part = Number(sale.splitCheckNumber);
+    const total = Number(sale.splitPartCount);
+    if (!Number.isFinite(part) || part <= 0)
+        return false;
+    if (!Number.isFinite(total) || total <= 0)
+        return false;
+    return part >= total;
+}
 function normalizeFulfillmentChannel(sale) {
     const raw = String(sale.fulfillmentChannel || sale.channel || sale.fulfillment_type || sale.fulfillmentType || "")
         .toLowerCase()
@@ -325,8 +338,12 @@ class SyncService {
     /**
      * Idempotent push of offline sales/orders.
      */
-    static async pushSales(merchantId, sales) {
+    static async pushSales(merchantId, sales, opts) {
         const db = (0, db_1.getDb)();
+        const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+        const contextLocationId = opts?.contextLocationId
+            ? await LocationsService.resolveLocationIdOrNull(merchantId, opts.contextLocationId)
+            : null;
         const results = [];
         for (const sale of sales) {
             const existing = await db.query.orders.findFirst({
@@ -444,8 +461,10 @@ class SyncService {
                     }
                 }
             }
+            const resolvedLocationId = await LocationsService.resolveLocationId(merchantId, sale.locationId ?? contextLocationId);
             const orderValuesBase = {
                 merchantId,
+                locationId: resolvedLocationId,
                 orderType: "pos",
                 fulfillmentChannel: channel,
                 status,
@@ -600,7 +619,7 @@ class SyncService {
                     seatNumber,
                 });
             }
-            if (sale.tableId) {
+            if (sale.tableId && splitBillFullyPaid(sale)) {
                 try {
                     await floor_plan_service_1.FloorPlanService.setTableStatus(merchantId, sale.tableId, "available", null);
                 }
@@ -635,15 +654,42 @@ class SyncService {
                     console.warn("[sync] inventory deduct failed:", invErr);
                 }
                 try {
-                    const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
-                    await PosOrdersService.releaseHeldByIdentity(merchantId, {
-                        ticketDisplay: sale.ticketDisplay,
-                        tabNumber: sale.tabNumber,
-                        tableId: sale.tableId,
+                    const paidItems = await db.query.orderItems.findMany({
+                        where: (0, drizzle_orm_1.eq)(db_1.schema.orderItems.orderId, order.id),
+                        columns: { productId: true, quantity: true },
                     });
+                    for (const line of paidItems) {
+                        if (!line.productId)
+                            continue;
+                        const qty = Number(line.quantity || 0);
+                        if (!Number.isFinite(qty) || qty <= 0)
+                            continue;
+                        await db
+                            .update(db_1.schema.products)
+                            .set({
+                            stock: (0, drizzle_orm_1.sql) `GREATEST(0, ${db_1.schema.products.stock} - ${qty})`,
+                            updatedAt: new Date(),
+                        })
+                            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.id, line.productId), (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId)));
+                    }
                 }
-                catch (heldErr) {
-                    console.warn("[sync] held release failed:", heldErr);
+                catch (stockErr) {
+                    console.warn("[sync] product stock deduct failed:", stockErr);
+                }
+                if (splitBillFullyPaid(sale)) {
+                    try {
+                        const { PosOrdersService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-orders.service")));
+                        await PosOrdersService.releaseHeldByIdentity(merchantId, {
+                            ticketDisplay: sale.ticketDisplay,
+                            tabNumber: sale.tabNumber,
+                            tableId: sale.tableId,
+                            paidTotal: Number(sale.total) || Number(order.total) || 0,
+                            settleKitchen: true,
+                        });
+                    }
+                    catch (heldErr) {
+                        console.warn("[sync] held release failed:", heldErr);
+                    }
                 }
             }
             if (!isCancelled) {

@@ -5,11 +5,11 @@ export declare class PosShiftService {
         updatedAt: Date;
         status: string;
         merchantId: string;
-        staffName: string | null;
         staffId: string | null;
+        staffName: string | null;
         notes: string | null;
-        openedAt: Date;
         closedAt: Date | null;
+        openedAt: Date;
         openingCash: string;
         closingCashCounted: string | null;
         expectedCash: string | null;

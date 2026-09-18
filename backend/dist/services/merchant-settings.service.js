@@ -37,6 +37,9 @@ exports.MerchantSettingsService = void 0;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
 const domain_1 = require("@/lib/domain");
+const custom_domain_service_1 = require("@/services/custom-domain.service");
+const delivery_match_1 = require("@/lib/delivery-match");
+const shop_public_urls_1 = require("@/lib/shop-public-urls");
 const vacation_1 = require("@/lib/vacation");
 const marketing_service_1 = require("@/services/marketing.service");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
@@ -45,13 +48,18 @@ const business_module_1 = require("@/lib/business-module");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings");
 const inventory_addon_1 = require("@/lib/inventory-addon");
+const fiskaly_settings_1 = require("@/lib/fiskaly-settings");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const kiosk_addon_1 = require("@/lib/kiosk-addon");
+const shop_site_settings_1 = require("@/lib/shop-site-settings");
+const customer_display_settings_1 = require("@/lib/customer-display-settings");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const brand_1 = require("@/lib/brand");
+const merchant_product_flags_1 = require("@/lib/merchant-product-flags");
+const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
 function maskSecret(value) {
     if (!value)
         return null;
@@ -95,6 +103,13 @@ function normalizeCartLayout(raw) {
         return "sticky_right";
     return "hidden_slide";
 }
+function normalizeTaxRatePercent(value, field) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+        throw new Error(`${field} must be between 0 and 100`);
+    }
+    return n.toFixed(2);
+}
 class MerchantSettingsService {
     static async getMerchantSettings(merchantId) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => this.buildMerchantSettings(merchantId));
@@ -122,10 +137,38 @@ class MerchantSettingsService {
         const kioskOn = (0, kiosk_addon_1.isKioskAddonEnabled)(merchant.kioskAddonEnabled);
         const shopHost = (0, brand_1.resolveShopPublicHost)();
         const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
-        const shopRootUrl = merchant.slug ? `https://${shopHost}/${merchant.slug}` : null;
-        const shopPanelPathUrl = merchant.slug
-            ? `${brand_1.APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}`
-            : null;
+        const shopRootUrl = (0, shop_public_urls_1.filterMerchantShopUrl)(merchant.slug ? `https://${shopHost}/${merchant.slug}` : null);
+        const shopPanelPathUrl = (0, shop_public_urls_1.filterMerchantShopUrl)(merchant.slug ? `${brand_1.APP_ORIGIN}/shop/${encodeURIComponent(merchant.slug)}` : null);
+        const maxPosPosts = Math.max(0, Number(merchant.maxPosPosts ?? 0));
+        let editionFeatures = null;
+        try {
+            const { EditionEntitlementsService } = await Promise.resolve().then(() => __importStar(require("./edition-entitlements.service")));
+            const feats = await EditionEntitlementsService.getFeatures(merchantId);
+            if (feats != null) {
+                const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
+                const extra = [];
+                if (inventoryOn)
+                    extra.push("inventory");
+                if (signage.enabled)
+                    extra.push("digital_signage");
+                if (merchant.giftCardAddonEnabled) {
+                    extra.push("gift_cards");
+                    extra.push("pos_gift_cards");
+                }
+                editionFeatures = [...withoutPaid, ...extra];
+            }
+        }
+        catch {
+            editionFeatures = null;
+        }
+        const orderCenterEnabled = true;
+        const productFlags = (0, merchant_product_flags_1.resolveMerchantProductFlags)({
+            shopEnabled: merchant.shopEnabled,
+            editionFeatures,
+            maxPosPosts,
+            orderCenterEnabled,
+            deliveryEnabled: merchant.deliveryEnabled,
+        });
         return {
             id: merchant.id,
             name: merchant.name,
@@ -145,6 +188,12 @@ class MerchantSettingsService {
             slug: merchant.slug,
             subdomain: merchant.subdomain,
             customDomain: merchant.customDomain,
+            customDomainPending: merchant.customDomainPending || null,
+            customDomainDnsStatus: merchant.customDomainDnsStatus || "none",
+            customDomainSslStatus: merchant.customDomainSslStatus || "none",
+            customDomainVerifiedAt: merchant.customDomainVerifiedAt
+                ? new Date(merchant.customDomainVerifiedAt).toISOString()
+                : null,
             cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
             shopEnabled: merchant.shopEnabled,
             acceptingOrders: merchant.acceptingOrders !== false,
@@ -153,6 +202,7 @@ class MerchantSettingsService {
             pickupEnabled: merchant.pickupEnabled,
             dineInEnabled: merchant.dineInEnabled,
             deliveryEnabled: merchant.deliveryEnabled,
+            deliveryMode: (0, delivery_match_1.normalizeDeliveryMode)(merchant.deliveryMode),
             channelSelectMode: normalizeChannelSelectMode(merchant.channelSelectMode),
             menuShowProductImages: merchant.menuShowProductImages !== false,
             menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
@@ -162,7 +212,7 @@ class MerchantSettingsService {
             paxOrderingEnabled: merchant.paxOrderingEnabled,
             coursesEnabled: !!merchant.coursesEnabled,
             shiftsEnabled: !!merchant.shiftsEnabled,
-            maxPosPosts: Math.max(0, Number(merchant.maxPosPosts ?? 0)),
+            maxPosPosts,
             maxWaiterPosts: Math.max(0, Number(merchant.maxWaiterPosts ?? 0)),
             maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
             inventoryAddonEnabled: inventoryOn,
@@ -187,6 +237,7 @@ class MerchantSettingsService {
             storeHours: merchant.storeHours || {},
             shopLogoUrl: merchant.shopLogoUrl,
             shopBannerUrl: merchant.shopBannerUrl,
+            shopSiteSettings: (0, shop_site_settings_1.normalizeShopSiteSettings)(merchant.shopSiteSettings),
             latitude: merchant.latitude,
             longitude: merchant.longitude,
             pickupEtaMinutes: merchant.pickupEtaMinutes,
@@ -206,10 +257,10 @@ class MerchantSettingsService {
                 : "platform",
             marketingSettings: marketing_service_1.MarketingService.normalizeMarketing(merchant.marketingSettings),
             shopPathUrl: shopRootUrl,
-            shopMenuUrl: shopRootUrl ? `${shopRootUrl}/menu` : null,
+            shopMenuUrl: shopRootUrl ? (0, shop_public_urls_1.filterMerchantShopUrl)(`${shopRootUrl}/menu`) : null,
             shopPanelPathUrl,
-            shopSubdomainUrl: merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null,
-            shopCustomDomainUrl: merchant.customDomain ? `https://${merchant.customDomain}` : null,
+            shopSubdomainUrl: (0, shop_public_urls_1.filterMerchantShopUrl)(merchant.subdomain ? `https://${merchant.subdomain}.${apex}` : null),
+            shopCustomDomainUrl: (0, shop_public_urls_1.filterMerchantShopUrl)(merchant.customDomain ? `https://${merchant.customDomain}` : null),
             adyenMerchantAccount: merchant.adyenMerchantAccount,
             adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
             adyenApiKeySet: !!merchant.adyenApiKey,
@@ -218,8 +269,11 @@ class MerchantSettingsService {
             adyenHmacKeySet: !!merchant.adyenHmacKey,
             tapToPayEnabled: merchant.tapToPayEnabled === true,
             adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
+            adyenLiveUrlPrefix: merchant.adyenLiveUrlPrefix || "",
             adyenLiveRegion: merchant.adyenLiveRegion || "EU",
             adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
+            giftCardAddonEnabled: !!merchant.giftCardAddonEnabled,
+            fiskalySettings: (0, fiskaly_settings_1.getFiskalyPublic)(merchant.fiskalySettings),
             webposExpressEnabled: merchant.webposExpressEnabled !== false,
             webposCashEnabled: merchant.webposCashEnabled !== false,
             webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -237,35 +291,25 @@ class MerchantSettingsService {
             posPrintSettings: (0, pos_print_settings_1.normalizePosPrintSettings)(merchant.posPrintSettings),
             tableQrSettings: (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings),
             posCheckoutSettings: (0, pos_checkout_settings_1.normalizePosCheckoutSettings)(merchant.posCheckoutSettings),
+            customerDisplaySettings: (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(merchant.customerDisplaySettings),
             deliveryPlatformSettings: (0, delivery_platform_settings_1.getDeliveryPlatformPublic)(merchant.deliveryPlatformSettings),
             status: merchant.status,
             subscriptionPlan: merchant.subscriptionPlan,
             editionId: merchant.editionId || null,
             businessCategory: (0, business_module_1.normalizeBusinessModule)(merchant.businessCategory),
             resellerId: merchant.resellerId || null,
+            panelNavHidden: Array.isArray(merchant.panelNavHidden)
+                ? merchant.panelNavHidden
+                : [],
+            shopCommissionPercent: Number(merchant.shopCommissionPercent ?? 0) || 0,
             /**
              * null = legacy full access for edition routes.
              * Inventory is a paid merchant addon — never grant it via edition JSON.
              * Inject only when the merchant column is true (for any leftover edition checks).
              */
-            editionFeatures: await (async () => {
-                try {
-                    const { EditionEntitlementsService } = await Promise.resolve().then(() => __importStar(require("./edition-entitlements.service")));
-                    const feats = await EditionEntitlementsService.getFeatures(merchantId);
-                    if (feats == null)
-                        return null;
-                    const withoutPaid = feats.filter((k) => k !== "inventory" && k !== "digital_signage");
-                    const extra = [];
-                    if (inventoryOn)
-                        extra.push("inventory");
-                    if (signage.enabled)
-                        extra.push("digital_signage");
-                    return [...withoutPaid, ...extra];
-                }
-                catch {
-                    return null;
-                }
-            })(),
+            editionFeatures,
+            orderCenterEnabled,
+            ...productFlags,
         };
     }
     static async updateMerchantSettings(merchantId, updates) {
@@ -303,13 +347,16 @@ class MerchantSettingsService {
         if (updates.vatNumber !== undefined)
             patch.vatNumber = updates.vatNumber;
         if (updates.vatRate !== undefined)
-            patch.vatRate = updates.vatRate.toString();
-        if (updates.taxTakeawayRate !== undefined)
-            patch.taxTakeawayRate = updates.taxTakeawayRate.toString();
-        if (updates.taxDineInRate !== undefined)
-            patch.taxDineInRate = updates.taxDineInRate.toString();
-        if (updates.taxDeliveryRate !== undefined)
-            patch.taxDeliveryRate = updates.taxDeliveryRate.toString();
+            patch.vatRate = normalizeTaxRatePercent(updates.vatRate, "vatRate");
+        if (updates.taxTakeawayRate !== undefined) {
+            patch.taxTakeawayRate = normalizeTaxRatePercent(updates.taxTakeawayRate, "taxTakeawayRate");
+        }
+        if (updates.taxDineInRate !== undefined) {
+            patch.taxDineInRate = normalizeTaxRatePercent(updates.taxDineInRate, "taxDineInRate");
+        }
+        if (updates.taxDeliveryRate !== undefined) {
+            patch.taxDeliveryRate = normalizeTaxRatePercent(updates.taxDeliveryRate, "taxDeliveryRate");
+        }
         if (updates.taxIncludedInPrice !== undefined)
             patch.taxIncludedInPrice = !!updates.taxIncludedInPrice;
         if (updates.vatAfterDiscount !== undefined)
@@ -327,6 +374,9 @@ class MerchantSettingsService {
             patch.dineInEnabled = !!updates.dineInEnabled;
         if (updates.deliveryEnabled !== undefined)
             patch.deliveryEnabled = !!updates.deliveryEnabled;
+        if (updates.deliveryMode !== undefined) {
+            patch.deliveryMode = (0, delivery_match_1.normalizeDeliveryMode)(updates.deliveryMode);
+        }
         if (updates.channelSelectMode !== undefined) {
             patch.channelSelectMode = normalizeChannelSelectMode(updates.channelSelectMode);
         }
@@ -362,6 +412,25 @@ class MerchantSettingsService {
             patch.shopLogoUrl = updates.shopLogoUrl;
         if (updates.shopBannerUrl !== undefined)
             patch.shopBannerUrl = updates.shopBannerUrl;
+        if (updates.shopSiteSettings !== undefined) {
+            const current = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: { shopSiteSettings: true },
+            });
+            const existing = (0, shop_site_settings_1.normalizeShopSiteSettings)(current?.shopSiteSettings);
+            const incoming = updates.shopSiteSettings && typeof updates.shopSiteSettings === "object"
+                ? updates.shopSiteSettings
+                : {};
+            const incomingObj = incoming;
+            patch.shopSiteSettings = (0, shop_site_settings_1.normalizeShopSiteSettings)({
+                ...existing,
+                ...incoming,
+                metaTitle: incomingObj.metaTitle !== undefined ? incomingObj.metaTitle : existing.metaTitle,
+                metaDescription: incomingObj.metaDescription !== undefined
+                    ? incomingObj.metaDescription
+                    : existing.metaDescription,
+            });
+        }
         if (updates.latitude !== undefined) {
             patch.latitude = updates.latitude === null || updates.latitude === "" ? null : String(updates.latitude);
         }
@@ -405,18 +474,39 @@ class MerchantSettingsService {
         }
         if (updates.adyenMerchantAccount !== undefined)
             patch.adyenMerchantAccount = updates.adyenMerchantAccount;
-        if (updates.adyenClientId !== undefined)
-            patch.adyenClientId = updates.adyenClientId;
+        if (updates.adyenClientId !== undefined) {
+            const clientKey = String(updates.adyenClientId || "").trim();
+            if (clientKey && !(0, adyen_checkout_env_1.isValidAdyenClientKey)(clientKey)) {
+                throw new Error("Client key must start with test_ or live_. Use the Client Key from Adyen Customer Area → Developers → Client settings — not the API key (AQE…).");
+            }
+            patch.adyenClientId = clientKey || null;
+        }
         if (updates.tapToPayEnabled !== undefined)
             patch.tapToPayEnabled = !!updates.tapToPayEnabled;
         if (updates.adyenLiveEnvironment !== undefined)
             patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
+        if (updates.adyenLiveUrlPrefix !== undefined) {
+            const prefix = String(updates.adyenLiveUrlPrefix || "")
+                .trim()
+                .replace(/^https?:\/\//, "")
+                .replace(/-checkout-live.*$/i, "")
+                .replace(/\/.*$/, "")
+                .replace(/:+$/, "")
+                .slice(0, 255);
+            patch.adyenLiveUrlPrefix = prefix || null;
+        }
         if (updates.adyenLiveRegion !== undefined) {
             const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
             patch.adyenLiveRegion = ["EU", "US", "AU", "APSE"].includes(region) ? region : "EU";
         }
         if (updates.adyenUseLegacyEndpoint !== undefined) {
             patch.adyenUseLegacyEndpoint = !!updates.adyenUseLegacyEndpoint;
+        }
+        if (updates.fiskalySettings !== undefined) {
+            const current = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            });
+            patch.fiskalySettings = (0, fiskaly_settings_1.mergeFiskalySettings)(current?.fiskalySettings, updates.fiskalySettings);
         }
         if (updates.webposExpressEnabled !== undefined)
             patch.webposExpressEnabled = !!updates.webposExpressEnabled;
@@ -487,16 +577,21 @@ class MerchantSettingsService {
             patch.subdomain = normalizeSubdomain(updates.subdomain);
         }
         if (updates.customDomain !== undefined) {
-            const domainNorm = (0, domain_1.normalizeCustomDomain)(updates.customDomain);
-            if (domainNorm) {
-                const taken = await db.query.merchants.findFirst({
-                    where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.customDomain, domainNorm),
-                });
-                if (taken && taken.id !== merchantId) {
-                    throw new Error("Custom domain already in use");
-                }
+            if (custom_domain_service_1.CustomDomainService.isWizardEnabled()) {
+                // Custom domain is managed by /merchant/custom-domain when the wizard is enabled.
             }
-            patch.customDomain = domainNorm;
+            else {
+                const domainNorm = (0, domain_1.normalizeCustomDomain)(updates.customDomain);
+                if (domainNorm) {
+                    const taken = await db.query.merchants.findFirst({
+                        where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.customDomain, domainNorm),
+                    });
+                    if (taken && taken.id !== merchantId) {
+                        throw new Error("Custom domain already in use");
+                    }
+                }
+                patch.customDomain = domainNorm;
+            }
         }
         if (updates.cmsHomepageEnabled !== undefined) {
             patch.cmsHomepageEnabled = !!updates.cmsHomepageEnabled;
@@ -579,6 +674,20 @@ class MerchantSettingsService {
             if (updates.webposExpressEnabled === undefined) {
                 patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
             }
+        }
+        if (updates.customerDisplaySettings !== undefined) {
+            const current = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: { customerDisplaySettings: true },
+            });
+            const existing = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(current?.customerDisplaySettings);
+            const incoming = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)({
+                ...existing,
+                ...updates.customerDisplaySettings,
+            });
+            incoming.accessToken = existing.accessToken || incoming.accessToken;
+            incoming.shortCode = existing.shortCode || incoming.shortCode;
+            patch.customerDisplaySettings = incoming;
         }
         if (updates.deliveryPlatformSettings !== undefined) {
             const current = await db.query.merchants.findFirst({
@@ -736,12 +845,15 @@ class MerchantSettingsService {
         if (domain && host.endsWith(`.${domain}`)) {
             key = host.slice(0, -(domain.length + 1));
         }
-        // Custom apex / branded domain first
+        // Custom apex / branded domain first (verified or legacy direct-save)
         const byCustom = await db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.customDomain, host),
         });
-        if (byCustom)
-            return byCustom;
+        if (byCustom) {
+            const dns = String(byCustom.customDomainDnsStatus || "none").toLowerCase();
+            if (dns === "none" || dns === "verified")
+                return byCustom;
+        }
         return db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.merchants.subdomain, key), (0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, key)),
         });

@@ -44,6 +44,7 @@ const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const subscription_addons_service_1 = require("@/services/subscription-addons.service");
 const router = (0, express_1.Router)();
@@ -198,7 +199,7 @@ router.get("/merchants", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, storekeeperAddonEnabled, } = req.body || {};
+        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, } = req.body || {};
         const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
         if (!email || !trimmedBusinessName || !editionId) {
             return res.status(400).json({ error: "Email, business name, and edition are required" });
@@ -220,11 +221,13 @@ router.post("/merchants", async (req, res) => {
             sendInvite,
             maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
             maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+            maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
             inventoryAddonEnabled: inventoryAddonEnabled === true,
             signageAddonEnabled: signageAddonEnabled === true,
             signageScreenLimit: signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
             kdsAddonEnabled: kdsAddonEnabled === true,
             odsAddonEnabled: odsAddonEnabled === true,
+            deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
             storekeeperAddonEnabled: storekeeperAddonEnabled === true,
         });
         res.status(201).json({ success: true, merchant });
@@ -239,10 +242,11 @@ router.post("/merchants", async (req, res) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
     try {
-        const { maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, kdsAddonEnabled, kdsEnabled, odsAddonEnabled, odsEnabled, storekeeperAddonEnabled, } = req.body || {};
+        const { maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, kdsAddonEnabled, kdsEnabled, odsAddonEnabled, odsEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, kioskEnabled, } = req.body || {};
         const merchant = await reseller_service_1.ResellerService.updateMerchantPosLimits(resellerId(req), req.params.merchantId, {
             maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
             maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
+            maxLocations: maxLocations != null ? Number(maxLocations) : undefined,
             inventoryAddonEnabled: inventoryAddonEnabled != null
                 ? (0, inventory_addon_1.isInventoryAddonEnabled)(inventoryAddonEnabled)
                 : inventoryEnabled != null
@@ -264,14 +268,88 @@ router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
                 : odsEnabled != null
                     ? (0, ods_addon_1.isOdsAddonEnabled)(odsEnabled)
                     : undefined,
+            deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled != null ? deliveryPlatformsAddonEnabled === true : undefined,
             storekeeperAddonEnabled: storekeeperAddonEnabled != null
                 ? (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(storekeeperAddonEnabled)
                 : undefined,
+            kioskAddonEnabled: kioskAddonEnabled != null
+                ? (0, kiosk_addon_1.isKioskAddonEnabled)(kioskAddonEnabled)
+                : kioskEnabled != null
+                    ? (0, kiosk_addon_1.isKioskAddonEnabled)(kioskEnabled)
+                    : undefined,
         });
         res.json({ success: true, merchant });
     }
     catch (error) {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update limits" });
+    }
+});
+/**
+ * PUT /api/reseller/merchants/:merchantId/panel-nav
+ * Hide sidebar menu groups or routes from the merchant panel.
+ */
+router.put("/merchants/:merchantId/panel-nav", async (req, res) => {
+    try {
+        const { hidden, panelNavHidden } = req.body || {};
+        const merchant = await reseller_service_1.ResellerService.updateMerchantPanelNav(resellerId(req), req.params.merchantId, panelNavHidden ?? hidden ?? []);
+        res.json({ success: true, merchant });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update panel menu" });
+    }
+});
+/**
+ * PUT /api/reseller/merchants/:merchantId/shop-commission
+ * Set monthly shop order commission % for this merchant.
+ */
+router.put("/merchants/:merchantId/shop-commission", async (req, res) => {
+    try {
+        const { shopCommissionPercent, percent } = req.body || {};
+        const merchant = await reseller_service_1.ResellerService.updateMerchantShopCommission(resellerId(req), req.params.merchantId, shopCommissionPercent ?? percent);
+        res.json({ success: true, merchant });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update commission" });
+    }
+});
+/**
+ * GET /api/reseller/merchants/:merchantId/shop-commission?month=YYYY-MM
+ */
+router.get("/merchants/:merchantId/shop-commission", async (req, res) => {
+    try {
+        await reseller_service_1.ResellerService.assertOwnsMerchant(resellerId(req), req.params.merchantId);
+        const { ShopCommissionService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-commission.service")));
+        const month = typeof req.query.month === "string" ? req.query.month : undefined;
+        const report = await ShopCommissionService.getMonthlyReport(req.params.merchantId, month);
+        res.json({ success: true, report });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to load report" });
+    }
+});
+/**
+ * GET /api/reseller/merchants/:merchantId/shop-commission/pdf?month=YYYY-MM
+ */
+router.get("/merchants/:merchantId/shop-commission/pdf", async (req, res) => {
+    try {
+        const rid = resellerId(req);
+        await reseller_service_1.ResellerService.assertOwnsMerchant(rid, req.params.merchantId);
+        const { ShopCommissionService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-commission.service")));
+        const month = typeof req.query.month === "string"
+            ? req.query.month
+            : ShopCommissionService.currentMonthKey();
+        const reseller = await reseller_service_1.ResellerService.getById(rid);
+        const pdf = await ShopCommissionService.generatePdf(req.params.merchantId, month, {
+            name: reseller?.name,
+            email: reseller?.email,
+        });
+        const filename = `shop-commission-${req.params.merchantId.slice(0, 8)}-${month}.pdf`;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.send(pdf);
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to generate PDF" });
     }
 });
 /**
@@ -409,6 +487,22 @@ router.post("/merchants/:merchantId/suspend", async (req, res) => {
     }
     catch (error) {
         const message = error instanceof Error ? error.message : "Failed to suspend merchant";
+        res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
+    }
+});
+/**
+ * POST /api/reseller/merchants/:merchantId/revoke-sessions
+ * Force logout a reseller-owned merchant from all devices.
+ */
+router.post("/merchants/:merchantId/revoke-sessions", async (req, res) => {
+    try {
+        await reseller_service_1.ResellerService.assertOwnsMerchant(resellerId(req), req.params.merchantId);
+        const { MerchantService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant.service")));
+        await MerchantService.revokeAllAuthSessions(req.params.merchantId);
+        res.json({ success: true, message: "All merchant sessions revoked" });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to revoke sessions";
         res.status(message === "Merchant not found" ? 404 : 400).json({ error: message });
     }
 });

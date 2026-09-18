@@ -9,6 +9,8 @@ type LicenseActivationLogInput = {
     merchantId?: string | null;
     source?: "android_pos" | "android_client";
 };
+/** Hide raw Drizzle/SQL failures from the Android activation screen. */
+export declare function publicLicenseActivationError(error: unknown): string;
 /** Write a platform event log entry for superadmin System Logs. Returns log id as reference. */
 export declare function logPosLicenseActivation(input: LicenseActivationLogInput): Promise<string>;
 export {};

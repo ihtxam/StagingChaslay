@@ -1,13 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = exports.PANEL_ROUTE_PERMISSIONS = exports.ANDROID_PERMISSION_ALIASES = exports.DEFAULT_ROLE_TEMPLATES = exports.ALL_PERMISSIONS = exports.PERMISSIONS = void 0;
+exports.FULL_PANEL_PERMISSIONS = exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = exports.PANEL_ROUTE_PERMISSIONS = exports.ANDROID_PERMISSION_ALIASES = exports.DEFAULT_ROLE_TEMPLATES = exports.ALL_PERMISSIONS = exports.PERMISSIONS = void 0;
 exports.parsePermissions = parsePermissions;
+exports.normalizePermissions = normalizePermissions;
 exports.encodePermissions = encodePermissions;
 exports.hasPermission = hasPermission;
 exports.hasAnyPermission = hasAnyPermission;
 exports.toAndroidPermissions = toAndroidPermissions;
 exports.waiterSystemKind = waiterSystemKind;
 exports.waiterBlockedPermissions = waiterBlockedPermissions;
+exports.storekeeperBlockedPermissions = storekeeperBlockedPermissions;
+exports.hasFullPanelAccess = hasFullPanelAccess;
+exports.isWaiterRestrictedStaff = isWaiterRestrictedStaff;
+exports.isWaiterPanelPath = isWaiterPanelPath;
+exports.waiterRestrictedHomePath = waiterRestrictedHomePath;
+exports.applyRolePermissionPolicy = applyRolePermissionPolicy;
 /** POS + panel permissions (aligned with Android PosPermission + panel extras). */
 exports.PERMISSIONS = [
     "USE_POS",
@@ -26,6 +33,8 @@ exports.PERMISSIONS = [
     "VIEW_REPORTS",
     /** See company-wide / all-staff sales in reports and EOD (without this = own sales only). */
     "VIEW_ALL_SALES",
+    /** Permanently remove completed cash sales from POS history and reports (gandola role). */
+    "GANDOLA_PURGE",
     "MANAGE_PRODUCTS",
     "MANAGE_CUSTOMERS",
     "MANAGE_OFFERS",
@@ -38,17 +47,40 @@ exports.PERMISSIONS = [
     "END_OF_DAY",
     "MANAGE_INVENTORY",
     "STOREKEEPER_INTAKE",
+    "MANAGE_KIOSK",
 ];
 function parsePermissions(raw) {
     if (!raw)
         return [];
-    return raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => exports.PERMISSIONS.includes(s));
+    const seen = new Set();
+    for (const part of raw.split(",")) {
+        const key = part.trim();
+        if (exports.PERMISSIONS.includes(key)) {
+            seen.add(key);
+        }
+    }
+    return exports.PERMISSIONS.filter((p) => seen.has(p));
+}
+/**
+ * Accept the role-editor payload (array or comma-separated string) and keep only
+ * known permission keys. Unknown keys are dropped; known keys are not rewritten.
+ */
+function normalizePermissions(input) {
+    if (input == null)
+        return [];
+    if (Array.isArray(input)) {
+        return parsePermissions(input
+            .map((v) => String(v ?? "").trim())
+            .filter(Boolean)
+            .join(","));
+    }
+    if (typeof input === "string")
+        return parsePermissions(input);
+    return [];
 }
 function encodePermissions(perms) {
-    return [...new Set(perms)].join(",");
+    const set = new Set(perms);
+    return exports.PERMISSIONS.filter((p) => set.has(p)).join(",");
 }
 function hasPermission(granted, required) {
     if (!granted)
@@ -93,6 +125,7 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "MANAGE_BILLING",
             "END_OF_DAY",
             "MANAGE_INVENTORY",
+            "GANDOLA_PURGE",
         ],
     },
     {
@@ -108,8 +141,6 @@ exports.DEFAULT_ROLE_TEMPLATES = [
             "SEND_KITCHEN",
             "MANAGE_TABLES",
             "TAKEAWAY_ORDERS",
-            "VIEW_ORDER_HISTORY",
-            "MANAGE_PRODUCTS",
         ],
     },
     {
@@ -164,6 +195,20 @@ exports.DEFAULT_ROLE_TEMPLATES = [
         ],
     },
     {
+        /** Self-order kiosk setup — sliders, payments, launch customer mode. No full panel. */
+        name: "Kiosk operator",
+        isSystem: true,
+        sortOrder: 56,
+        permissions: ["MANAGE_KIOSK"],
+    },
+    {
+        /** Handheld / Chrome order center PWA — live online orders, print, daily summary. No panel. */
+        name: "Order center operator",
+        isSystem: true,
+        sortOrder: 57,
+        permissions: ["VIEW_ORDER_HISTORY", "END_OF_DAY"],
+    },
+    {
         /** Mobile stock intake — scan barcodes, receive stock, expiry lots. No full panel. */
         name: "Storekeeper",
         isSystem: true,
@@ -212,6 +257,7 @@ exports.PANEL_ROUTE_PERMISSIONS = {
     "/merchant/newsletter": ["MANAGE_ONLINE_SHOP"],
     "/merchant/online-shop": ["MANAGE_ONLINE_SHOP"],
     "/merchant/website": ["MANAGE_ONLINE_SHOP"],
+    "/merchant/chaslay-page-builder": ["MANAGE_ONLINE_SHOP"],
     "/merchant/floor-plan": ["MANAGE_TABLES"],
     "/merchant/tables": ["MANAGE_TABLES"],
     "/merchant/tables/settings": ["MANAGE_TABLES"],
@@ -236,6 +282,9 @@ exports.PANEL_ROUTE_PERMISSIONS = {
     "/merchant/inventory/report": ["MANAGE_INVENTORY"],
     "/merchant/inventory/consumption": ["MANAGE_INVENTORY"],
     "/merchant/storekeeper": ["STOREKEEPER_INTAKE", "MANAGE_INVENTORY"],
+    "/merchant/kiosk": ["MANAGE_KIOSK", "MANAGE_SETTINGS"],
+    "/merchant/order-center": ["VIEW_ORDER_HISTORY"],
+    "/merchant/order-hub": ["VIEW_ORDER_HISTORY"],
 };
 /** Staff JWT may enter merchant APIs with any of these (POS, waiter, catalog, or full panel). */
 exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
@@ -249,10 +298,13 @@ exports.STAFF_MERCHANT_ENTRY_PERMISSIONS = [
     "STOREKEEPER_INTAKE",
     "DELIVERY_ORDERS",
     "VIEW_DELIVERY_TRACKING",
+    "MANAGE_KIOSK",
+    "VIEW_ORDER_HISTORY",
 ];
 const WAITER_PRIVILEGED_BLOCKED = [
     "VIEW_REPORTS",
     "VIEW_ALL_SALES",
+    "GANDOLA_PURGE",
     "ACCESS_PANEL",
     "OPEN_CASH_DRAWER",
     "MANAGE_SETTINGS",
@@ -275,8 +327,119 @@ function waiterSystemKind(name) {
         return "menu-editor";
     return "pos-only";
 }
-function waiterBlockedPermissions(_kind) {
-    // Menu (MANAGE_PRODUCTS), orders, and own-sales EOD (END_OF_DAY) stay role-assigned.
-    return [...WAITER_PRIVILEGED_BLOCKED];
+function waiterBlockedPermissions(kind) {
+    const blocked = [...WAITER_PRIVILEGED_BLOCKED];
+    if (kind === "pos-only") {
+        blocked.push("MANAGE_PRODUCTS", "VIEW_ORDER_HISTORY");
+    }
+    return blocked;
+}
+const STOREKEEPER_PRIVILEGED_BLOCKED = [
+    "ACCESS_PANEL",
+    "VIEW_REPORTS",
+    "VIEW_ALL_SALES",
+    "GANDOLA_PURGE",
+    "MANAGE_STAFF",
+    "MANAGE_ROLES",
+    "MANAGE_BILLING",
+    "MANAGE_SETTINGS",
+    "MANAGE_CUSTOMERS",
+    "MANAGE_OFFERS",
+    "MANAGE_ONLINE_SHOP",
+    "MANAGE_PRODUCTS",
+    "VIEW_ORDER_HISTORY",
+    "USE_WEBPOS",
+    "USE_POS",
+    "PROCESS_PAYMENTS",
+    "APPLY_DISCOUNTS",
+    "OPEN_CASH_DRAWER",
+    "SEND_KITCHEN",
+    "MANAGE_TABLES",
+    "TAKEAWAY_ORDERS",
+    "DELIVERY_ORDERS",
+    "VIEW_DELIVERY_TRACKING",
+    "CANCEL_ORDERS",
+    "REFUND_ORDERS",
+    "END_OF_DAY",
+    "MANAGE_INVENTORY",
+];
+function storekeeperBlockedPermissions() {
+    return [...STOREKEEPER_PRIVILEGED_BLOCKED];
+}
+/** Full merchant panel (Sales overview, CMS, users, billing) — not catalog/orders-only. */
+exports.FULL_PANEL_PERMISSIONS = [
+    "ACCESS_PANEL",
+    "VIEW_REPORTS",
+    "MANAGE_SETTINGS",
+    "MANAGE_STAFF",
+    "MANAGE_BILLING",
+    "MANAGE_CUSTOMERS",
+    "MANAGE_ONLINE_SHOP",
+    "MANAGE_OFFERS",
+    "MANAGE_INVENTORY",
+    "MANAGE_ROLES",
+    "VIEW_ALL_SALES",
+    "END_OF_DAY",
+];
+function hasFullPanelAccess(granted, isOwner = false) {
+    if (isOwner)
+        return true;
+    return exports.FULL_PANEL_PERMISSIONS.some((p) => hasPermission(granted, p));
+}
+/**
+ * Floor waiters (system Waiter templates) without ACCESS_PANEL — POS/waiter app
+ * and optional menu/orders, never CMS, inventory, settings, or clients.
+ */
+function isWaiterRestrictedStaff(granted, isOwner = false) {
+    if (isOwner)
+        return false;
+    if (!hasPermission(granted, "MANAGE_TABLES"))
+        return false;
+    if (hasPermission(granted, "ACCESS_PANEL"))
+        return false;
+    return !hasFullPanelAccess(granted, false);
+}
+function isWaiterPanelPath(pathname, granted) {
+    const path = pathname.replace(/\/$/, "") || "/merchant";
+    if (path === "/merchant/waiter" || path.startsWith("/merchant/waiter/"))
+        return true;
+    if (path === "/merchant/pos" || path.startsWith("/merchant/pos/"))
+        return true;
+    if (hasPermission(granted, "MANAGE_PRODUCTS")) {
+        if (path === "/merchant/products" ||
+            path.startsWith("/merchant/products/") ||
+            path === "/merchant/categories" ||
+            path.startsWith("/merchant/categories/") ||
+            path === "/merchant/modifiers" ||
+            path.startsWith("/merchant/modifiers/")) {
+            return true;
+        }
+    }
+    if (hasPermission(granted, "VIEW_ORDER_HISTORY")) {
+        if (path === "/merchant/orders" || path.startsWith("/merchant/orders/"))
+            return true;
+    }
+    return false;
+}
+function waiterRestrictedHomePath(granted) {
+    if (hasPermission(granted, "MANAGE_PRODUCTS"))
+        return "/merchant/products";
+    if (hasPermission(granted, "VIEW_ORDER_HISTORY"))
+        return "/merchant/orders";
+    if (hasPermission(granted, "MANAGE_TABLES"))
+        return "/merchant/waiter";
+    return "/merchant/pos";
+}
+/**
+ * Runtime policy for issued JWTs / staff sessions.
+ * Storekeeper stays locked to intake. Waiter templates keep merchant-saved
+ * permissions so Users & roles checkboxes round-trip to the database.
+ */
+function applyRolePermissionPolicy(roleName, permissions) {
+    if (roleName.trim().toLowerCase() === "storekeeper") {
+        const blocked = new Set(storekeeperBlockedPermissions());
+        return permissions.filter((p) => !blocked.has(p));
+    }
+    return permissions;
 }
 //# sourceMappingURL=permissions.js.map

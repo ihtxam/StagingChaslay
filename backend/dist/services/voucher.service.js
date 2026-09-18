@@ -4,9 +4,24 @@ exports.VoucherService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const money_1 = require("@/lib/money");
+const VOUCHER_ORDER_TYPES = new Set(["takeaway", "delivery", "dine_in"]);
 class VoucherService {
     static normalizeCode(code) {
         return code.trim().toUpperCase();
+    }
+    static normalizeOrderTypes(input) {
+        if (!Array.isArray(input))
+            return [];
+        return input.filter((t) => VOUCHER_ORDER_TYPES.has(t));
+    }
+    static allowsOrderType(voucher, orderType) {
+        const types = this.normalizeOrderTypes(voucher.orderTypes);
+        if (types.length === 0)
+            return true;
+        const ch = String(orderType || "").trim().toLowerCase();
+        if (ch === "pickup")
+            return types.includes("takeaway");
+        return types.includes(ch);
     }
     static async list(merchantId) {
         const db = (0, db_1.getDb)();
@@ -68,6 +83,7 @@ class VoucherService {
             discountType,
             discountValue: String(discountValue),
             minOrderAmount: String(Math.max(0, Number(input.minOrderAmount) || 0)),
+            orderTypes: this.normalizeOrderTypes(input.orderTypes),
             validFrom: input.validFrom ? new Date(input.validFrom) : null,
             validTo: input.validTo ? new Date(input.validTo) : null,
             isActive: input.isActive !== false,
@@ -115,6 +131,9 @@ class VoucherService {
         }
         if (input.minOrderAmount !== undefined) {
             patch.minOrderAmount = String(Math.max(0, Number(input.minOrderAmount) || 0));
+        }
+        if (input.orderTypes !== undefined) {
+            patch.orderTypes = this.normalizeOrderTypes(input.orderTypes);
         }
         if (input.validFrom !== undefined) {
             patch.validFrom = input.validFrom ? new Date(input.validFrom) : null;
@@ -185,7 +204,7 @@ class VoucherService {
         }
         return (0, money_1.roundMoney2)((base * value) / 100);
     }
-    static async validateForShop(merchantId, code, subtotal, customerId) {
+    static async validateForShop(merchantId, code, subtotal, customerId, orderType) {
         const normalized = this.normalizeCode(code);
         if (!normalized)
             throw new Error("Enter a voucher code");
@@ -197,6 +216,9 @@ class VoucherService {
             throw new Error("Invalid voucher code");
         if (!voucher.isActive)
             throw new Error("This voucher is no longer active");
+        if (!this.allowsOrderType(voucher, orderType)) {
+            throw new Error("This voucher is not valid for this order type");
+        }
         const now = new Date();
         if (voucher.validFrom && now < new Date(voucher.validFrom)) {
             throw new Error("This voucher is not valid yet");
@@ -281,6 +303,7 @@ class VoucherService {
             discountType: v.discountType,
             discountValue: Number(v.discountValue),
             minOrderAmount: Number(v.minOrderAmount || 0),
+            orderTypes: this.normalizeOrderTypes(v.orderTypes),
             validFrom: v.validFrom,
             validTo: v.validTo,
             isActive: v.isActive,

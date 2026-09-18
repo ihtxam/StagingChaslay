@@ -10,6 +10,7 @@ export type ModifierOptionInput = {
     sortOrder?: number;
     inventoryItemId?: string | null;
     inventoryQty?: number;
+    imageUrl?: string | null;
 };
 export type ModifierGroupInput = {
     title: string;

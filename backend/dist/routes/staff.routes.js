@@ -16,10 +16,10 @@ function requireStaffManage(req, res, next) {
         return next();
     return res.status(403).json({ error: "Staff management permission required" });
 }
-router.get("/permissions", (_req, res) => {
+router.get("/permissions", requireStaffManage, (_req, res) => {
     res.json({ success: true, permissions: permissions_1.ALL_PERMISSIONS });
 });
-router.get("/roles", async (req, res) => {
+router.get("/roles", requireStaffManage, async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const roles = await staff_service_1.StaffService.listRoles(merchantId);
@@ -28,7 +28,7 @@ router.get("/roles", async (req, res) => {
             roles: roles.map((r) => ({
                 id: r.id,
                 name: r.name,
-                permissions: r.permissions.split(",").filter(Boolean),
+                permissions: (0, permissions_1.normalizePermissions)(r.permissions),
                 isSystem: r.isSystem,
                 sortOrder: r.sortOrder,
             })),
@@ -42,7 +42,7 @@ router.post("/roles", requireStaffManage, async (req, res) => {
     try {
         const merchantId = req.merchantId;
         const { name, permissions } = req.body;
-        const role = await staff_service_1.StaffService.createRole(merchantId, name, (permissions || []));
+        const role = await staff_service_1.StaffService.createRole(merchantId, name, (0, permissions_1.normalizePermissions)(permissions));
         res.json({ success: true, role });
     }
     catch (error) {
@@ -55,7 +55,7 @@ router.put("/roles/:roleId", requireStaffManage, async (req, res) => {
         const { name, permissions } = req.body;
         const role = await staff_service_1.StaffService.updateRole(merchantId, req.params.roleId, {
             name,
-            permissions: permissions,
+            permissions: permissions !== undefined ? (0, permissions_1.normalizePermissions)(permissions) : undefined,
         });
         res.json({ success: true, role });
     }
@@ -76,8 +76,25 @@ router.delete("/roles/:roleId", requireStaffManage, async (req, res) => {
 router.get("/staff", async (req, res) => {
     try {
         const merchantId = req.merchantId;
+        const canManage = req.user?.role === "merchant" ||
+            (req.user?.permissions || []).some((p) => p === "MANAGE_STAFF" || p === "MANAGE_ROLES");
         const staff = await staff_service_1.StaffService.listStaff(merchantId);
-        res.json({ success: true, staff });
+        if (canManage) {
+            res.json({ success: true, staff });
+            return;
+        }
+        res.json({
+            success: true,
+            staff: staff.map((s) => ({
+                id: s.id,
+                name: s.name,
+                roleId: s.roleId,
+                roleName: s.roleName,
+                permissions: s.permissions,
+                isActive: s.isActive,
+                pinSet: s.pinSet,
+            })),
+        });
     }
     catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list staff" });
@@ -123,6 +140,7 @@ router.delete("/staff/:staffId", requireStaffManage, async (req, res) => {
 router.post("/staff/verify-pin", async (req, res) => {
     try {
         const merchantId = req.merchantId;
+        await staff_service_1.StaffService.ensureMerchantHasStaff(merchantId);
         const { pin } = req.body;
         const staff = await staff_service_1.StaffService.verifyPin(merchantId, String(pin || ""));
         res.json({ success: true, staff });

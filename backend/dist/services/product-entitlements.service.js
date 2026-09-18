@@ -14,14 +14,25 @@ class ProductEntitlementsService {
         return Number(row?.total) || 0;
     }
     static async getLimitInfo(merchantId) {
-        const limits = await merchant_entitlements_service_1.MerchantEntitlementsService.getLimits(merchantId);
         const currentCount = await this.countProducts(merchantId);
-        return {
-            maxProducts: limits.maxProducts,
-            currentCount,
-            planSlug: limits.planSlug,
-            planName: limits.planName,
-        };
+        try {
+            const limits = await merchant_entitlements_service_1.MerchantEntitlementsService.getLimits(merchantId);
+            return {
+                maxProducts: limits.maxProducts,
+                currentCount,
+                planSlug: limits.planSlug,
+                planName: limits.planName,
+            };
+        }
+        catch (error) {
+            console.warn("[products] limit lookup failed:", error);
+            return {
+                maxProducts: null,
+                currentCount,
+                planSlug: null,
+                planName: null,
+            };
+        }
     }
     static async assertCanAddProducts(merchantId, addCount = 1) {
         const info = await this.getLimitInfo(merchantId);

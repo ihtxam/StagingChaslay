@@ -5,6 +5,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const edition_features_1 = require("@/lib/edition-features");
 const business_module_1 = require("@/lib/business-module");
+const merchant_product_surface_1 = require("@/lib/merchant-product-surface");
 function serialize(row) {
     return {
         id: row.id,
@@ -61,8 +62,39 @@ class EditionService {
             },
         ]);
     }
+    /** Platform editions for shop-only / website / full POS packages. */
+    static async ensureProductSurfaceEditions() {
+        await this.ensureDefaults();
+        const db = (0, db_1.getDb)();
+        for (const surface of merchant_product_surface_1.MERCHANT_PRODUCT_SURFACES) {
+            const preset = merchant_product_surface_1.PRODUCT_SURFACE_PRESETS[surface];
+            const existing = await db.query.editions.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.editions.ownerType, "platform"), (0, drizzle_orm_1.isNull)(db_1.schema.editions.ownerId), (0, drizzle_orm_1.eq)(db_1.schema.editions.name, preset.editionName)),
+            });
+            if (existing)
+                continue;
+            await db.insert(db_1.schema.editions).values({
+                ownerType: "platform",
+                ownerId: null,
+                name: preset.editionName,
+                note: preset.description,
+                businessCategory: "both",
+                features: [...preset.features],
+                isActive: true,
+            });
+        }
+    }
+    static async getPlatformEditionByName(name) {
+        await this.ensureProductSurfaceEditions();
+        const db = (0, db_1.getDb)();
+        const row = await db.query.editions.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.editions.ownerType, "platform"), (0, drizzle_orm_1.isNull)(db_1.schema.editions.ownerId), (0, drizzle_orm_1.eq)(db_1.schema.editions.name, name)),
+        });
+        return row ? serialize(row) : null;
+    }
     static async list(opts) {
         await this.ensureDefaults();
+        await this.ensureProductSurfaceEditions();
         const db = (0, db_1.getDb)();
         const clauses = [];
         if (opts?.forResellerId) {

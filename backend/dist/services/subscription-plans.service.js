@@ -36,7 +36,37 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionPlansService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const platform_reseller_service_1 = require("@/services/platform-reseller.service");
+function asLimit(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+function mapLegacyPlanRow(row) {
+    const maxProductsRaw = row.max_products ?? row.maxProducts;
+    return {
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        slug: String(row.slug ?? ""),
+        description: row.description ?? null,
+        priceMonthly: (row.price_monthly ?? row.priceMonthly),
+        priceYearly: (row.price_yearly ?? row.priceYearly),
+        currency: row.currency || "CHF",
+        maxDevices: asLimit(row.max_devices ?? row.maxDevices, 0),
+        maxProducts: maxProductsRaw === null || maxProductsRaw === undefined
+            ? null
+            : asLimit(maxProductsRaw, 0),
+        maxPosPosts: asLimit(row.max_pos_posts ?? row.maxPosPosts, 0),
+        maxWaiterPosts: asLimit(row.max_waiter_posts ?? row.maxWaiterPosts, 0),
+        maxStaff: asLimit(row.max_staff ?? row.maxStaff, 0),
+        maxLocations: asLimit(row.max_locations ?? row.maxLocations, 1),
+        features: Array.isArray(row.features) ? row.features : [],
+        isActive: row.is_active !== false && row.isActive !== false,
+        isPublic: row.is_public !== false && row.isPublic !== false,
+        sortOrder: asLimit(row.sort_order ?? row.sortOrder, 0),
+        trialDays: asLimit(row.trial_days ?? row.trialDays, 0),
+    };
+}
 function normalizeSlug(slug) {
     return slug
         .trim()
@@ -46,17 +76,60 @@ function normalizeSlug(slug) {
         .slice(0, 50);
 }
 class SubscriptionPlansService {
+    /** Attach edition rows without relying on drizzle relational `with`. */
+    static async withEditions(plans) {
+        const ids = [
+            ...new Set(plans
+                .map((p) => p.editionId)
+                .filter((id) => typeof id === "string" && id.length > 0)),
+        ];
+        if (!ids.length) {
+            return plans.map((p) => ({ ...p, edition: null }));
+        }
+        const db = (0, db_1.getDb)();
+        const editions = await db
+            .select()
+            .from(db_1.schema.editions)
+            .where((0, drizzle_orm_1.inArray)(db_1.schema.editions.id, ids));
+        const byId = new Map(editions.map((e) => [e.id, e]));
+        return plans.map((p) => ({
+            ...p,
+            edition: p.editionId ? byId.get(p.editionId) ?? null : null,
+        }));
+    }
+    /**
+     * List packages without `with: { edition }` — that relational join throws
+     * `Cannot read properties of undefined (reading 'referencedTable')` when
+     * `subscriptionPlansRelations` is missing from the schema export.
+     */
+    static async listPlansByOwner(resellerId, includeInactive) {
+        const db = (0, db_1.getDb)();
+        const where = (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerType, "reseller"), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerId, resellerId));
+        try {
+            const plans = await db.query.subscriptionPlans.findMany({
+                where,
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
+                with: { edition: true },
+            });
+            if (includeInactive)
+                return plans;
+            return plans.filter((p) => p.isActive);
+        }
+        catch (error) {
+            console.warn("[plans] relational list failed, using select + edition attach:", error);
+            const plans = await db.query.subscriptionPlans.findMany({
+                where,
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
+            });
+            const withEdition = await this.withEditions(plans);
+            if (includeInactive)
+                return withEdition;
+            return withEdition.filter((p) => p.isActive);
+        }
+    }
     /** Packages owned by one reseller (including Reborn Direct). */
     static async listForReseller(resellerId, includeInactive = true) {
-        const db = (0, db_1.getDb)();
-        const plans = await db.query.subscriptionPlans.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerType, "reseller"), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerId, resellerId)),
-            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
-            with: { edition: true },
-        });
-        if (includeInactive)
-            return plans;
-        return plans.filter((p) => p.isActive);
+        return this.listPlansByOwner(resellerId, includeInactive);
     }
     static async listAll(includeInactive = true, opts) {
         if (!opts?.forResellerId) {
@@ -73,28 +146,148 @@ class SubscriptionPlansService {
     static async listPublicForMerchant(merchantId) {
         const sellerId = await platform_reseller_service_1.PlatformResellerService.resolveForMerchant(merchantId);
         const db = (0, db_1.getDb)();
-        return db.query.subscriptionPlans.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.isActive, true), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.isPublic, true), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerType, "reseller"), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerId, sellerId)),
-            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
-            with: { edition: true },
-        });
+        const where = (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.isActive, true), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.isPublic, true), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerType, "reseller"), (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.ownerId, sellerId));
+        try {
+            return await db.query.subscriptionPlans.findMany({
+                where,
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
+                with: { edition: true },
+            });
+        }
+        catch (error) {
+            console.warn("[plans] public merchant list failed, using select + edition attach:", error);
+            const plans = await db.query.subscriptionPlans.findMany({
+                where,
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.subscriptionPlans.name)],
+            });
+            return this.withEditions(plans);
+        }
     }
     static async getById(id) {
-        const db = (0, db_1.getDb)();
-        const plan = await db.query.subscriptionPlans.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.id, id),
-            with: { edition: true },
-        });
-        if (!plan)
-            throw new Error("Plan not found");
-        return plan;
+        try {
+            const plan = await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+                const db = (0, db_1.getDb)();
+                return db.query.subscriptionPlans.findFirst({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.id, id),
+                });
+            });
+            if (!plan)
+                throw new Error("Plan not found");
+            return plan;
+        }
+        catch (error) {
+            const legacy = await this.getByIdLegacy(id);
+            if (!legacy)
+                throw error instanceof Error ? error : new Error("Plan not found");
+            return legacy;
+        }
+    }
+    /**
+     * Plan lookup for POS / product / staff limits.
+     * Never joins `editions` and never selects columns added after the original
+     * packages table — production catalog must load even when drizzle-kit OOM'd.
+     */
+    static async getBySlugForLimits(slug) {
+        const normalized = normalizeSlug(slug);
+        if (!normalized)
+            return undefined;
+        try {
+            const db = (0, db_1.getDb)();
+            const [row] = await db
+                .select({
+                id: db_1.schema.subscriptionPlans.id,
+                name: db_1.schema.subscriptionPlans.name,
+                slug: db_1.schema.subscriptionPlans.slug,
+                description: db_1.schema.subscriptionPlans.description,
+                priceMonthly: db_1.schema.subscriptionPlans.priceMonthly,
+                priceYearly: db_1.schema.subscriptionPlans.priceYearly,
+                currency: db_1.schema.subscriptionPlans.currency,
+                maxDevices: db_1.schema.subscriptionPlans.maxDevices,
+                maxProducts: db_1.schema.subscriptionPlans.maxProducts,
+                features: db_1.schema.subscriptionPlans.features,
+                isActive: db_1.schema.subscriptionPlans.isActive,
+                isPublic: db_1.schema.subscriptionPlans.isPublic,
+                sortOrder: db_1.schema.subscriptionPlans.sortOrder,
+                trialDays: db_1.schema.subscriptionPlans.trialDays,
+            })
+                .from(db_1.schema.subscriptionPlans)
+                .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.slug, normalized))
+                .limit(1);
+            if (row) {
+                const extras = await this.selectNewerPlanColumns(normalized);
+                return mapLegacyPlanRow({ ...row, ...extras });
+            }
+        }
+        catch (error) {
+            console.warn("[plans] drizzle core select failed, using legacy SQL:", error);
+        }
+        return this.getBySlugLegacy(normalized);
     }
     static async getBySlug(slug) {
-        const db = (0, db_1.getDb)();
-        return db.query.subscriptionPlans.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.slug, normalizeSlug(slug)),
-            with: { edition: true },
-        });
+        const normalized = normalizeSlug(slug);
+        try {
+            return await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+                const db = (0, db_1.getDb)();
+                return db.query.subscriptionPlans.findFirst({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.slug, normalized),
+                });
+            });
+        }
+        catch (error) {
+            console.warn("[plans] getBySlug relational query failed, using legacy SQL:", error);
+            const legacy = await this.getBySlugLegacy(normalized);
+            return legacy;
+        }
+    }
+    /** Newer limit columns — queried separately so a missing column cannot abort the catalog. */
+    static async selectNewerPlanColumns(slug) {
+        try {
+            const db = (0, db_1.getDb)();
+            const [row] = await db
+                .select({
+                maxPosPosts: db_1.schema.subscriptionPlans.maxPosPosts,
+                maxWaiterPosts: db_1.schema.subscriptionPlans.maxWaiterPosts,
+                maxStaff: db_1.schema.subscriptionPlans.maxStaff,
+                maxLocations: db_1.schema.subscriptionPlans.maxLocations,
+            })
+                .from(db_1.schema.subscriptionPlans)
+                .where((0, drizzle_orm_1.eq)(db_1.schema.subscriptionPlans.slug, slug))
+                .limit(1);
+            return row || {};
+        }
+        catch {
+            return {};
+        }
+    }
+    static async getBySlugLegacy(slug) {
+        try {
+            const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT id, name, slug, description, price_monthly, price_yearly, currency,
+                max_devices, max_products, features, is_active, is_public, sort_order, trial_days
+         FROM subscription_plans
+         WHERE slug = $1
+         LIMIT 1`, [slug]);
+            const row = rows[0];
+            return row ? mapLegacyPlanRow(row) : undefined;
+        }
+        catch (error) {
+            console.warn("[plans] legacy slug lookup failed:", error);
+            return undefined;
+        }
+    }
+    static async getByIdLegacy(id) {
+        try {
+            const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT id, name, slug, description, price_monthly, price_yearly, currency,
+                max_devices, max_products, features, is_active, is_public, sort_order, trial_days
+         FROM subscription_plans
+         WHERE id = $1
+         LIMIT 1`, [id]);
+            const row = rows[0];
+            return row ? mapLegacyPlanRow(row) : undefined;
+        }
+        catch (error) {
+            console.warn("[plans] legacy id lookup failed:", error);
+            return undefined;
+        }
     }
     static async create(input) {
         const db = (0, db_1.getDb)();

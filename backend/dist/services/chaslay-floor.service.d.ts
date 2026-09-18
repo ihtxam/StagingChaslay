@@ -56,6 +56,7 @@ export declare class ChaslayFloorService {
         jobId: string;
         createdAt: string;
     }>;
+    static updatePrintJobPayload(merchantId: string, jobId: string, payload: Record<string, unknown>): Promise<void>;
     /**
      * Atomically claim PENDING print jobs (→ PROCESSING) so overlapping pollers
      * (WebPOS 2.5s interval, multi-tab, Android MAIN_POS) cannot reprint the same job.

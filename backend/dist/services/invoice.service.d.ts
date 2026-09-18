@@ -30,9 +30,11 @@ export declare class InvoiceService {
         total: number;
         subtotal: number;
         taxAmount: number;
+        taxRate: number | undefined;
         discountAmount: number;
         tipAmount: number;
         refundAmount: number;
+        refundHistory: Record<string, unknown>[];
         customerName: string | null;
         customerPhone: string | null;
         customerEmail: string | null;
@@ -69,13 +71,16 @@ export declare class InvoiceService {
             product: {
                 id: string;
                 name: string;
+                imageUrl: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
                 merchantId: string;
                 sortOrder: number;
                 description: string | null;
-                imageUrl: string | null;
+                visibility: {
+                    channels: string[];
+                };
                 clientId: string | null;
                 categoryId: string | null;
                 sku: string | null;
@@ -122,6 +127,7 @@ export declare class InvoiceService {
                 allowExtras: boolean;
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
+                similarProductIds: string[] | null;
             } | null;
         }[];
     }[]>;
@@ -130,11 +136,13 @@ export declare class InvoiceService {
         createdAt: Date;
         status: string;
         merchantId: string;
+        staffId: string | null;
+        locationId: string | null;
+        clientId: string | null;
         deviceId: string | null;
         paymentStatus: string | null;
         paymentMethod: string | null;
         invoiceNumber: string | null;
-        clientId: string | null;
         customerId: string | null;
         orderNumber: string;
         orderType: string;
@@ -150,7 +158,6 @@ export declare class InvoiceService {
         amountTendered: string | null;
         changeDue: string | null;
         staffName: string | null;
-        staffId: string | null;
         cardFee: string | null;
         pointsDiscount: string | null;
         pointsEarned: number | null;
@@ -163,6 +170,7 @@ export declare class InvoiceService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -175,6 +183,7 @@ export declare class InvoiceService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;
@@ -222,9 +231,9 @@ export declare class InvoiceService {
         } | null;
         items: {
             id: string;
-            quantity: string;
             isOpenPrice: boolean;
             productId: string | null;
+            quantity: string;
             taxAmount: string;
             orderId: string;
             productName: string | null;
@@ -253,13 +262,16 @@ export declare class InvoiceService {
             product: {
                 id: string;
                 name: string;
+                imageUrl: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
                 merchantId: string;
                 sortOrder: number;
                 description: string | null;
-                imageUrl: string | null;
+                visibility: {
+                    channels: string[];
+                };
                 clientId: string | null;
                 categoryId: string | null;
                 sku: string | null;
@@ -306,12 +318,14 @@ export declare class InvoiceService {
                 allowExtras: boolean;
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
+                similarProductIds: string[] | null;
             } | null;
         }[];
     } | undefined>;
     static recordPayment(merchantId: string, orderRef: string, _paymentMethod?: string): Promise<{
         id: string;
         merchantId: string;
+        locationId: string | null;
         orderNumber: string;
         customerId: string | null;
         orderType: string;
@@ -344,6 +358,7 @@ export declare class InvoiceService {
         adyenCustomerReceiptJson: string | null;
         adyenCashierReceiptJson: string | null;
         notes: string | null;
+        fiskalySignature: Record<string, unknown> | null;
         shippingAddress: string | null;
         deliveryLatitude: string | null;
         deliveryLongitude: string | null;
@@ -356,6 +371,7 @@ export declare class InvoiceService {
         customerEmail: string | null;
         tableId: string | null;
         tableLabel: string | null;
+        tableSessionId: string | null;
         guestCount: number | null;
         billSplits: {
             id: string;

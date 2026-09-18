@@ -250,6 +250,33 @@ class InvoiceService {
             orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.invoiceIssuedAt), (0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
             limit,
         });
+        const orderIds = rows.map((o) => o.id);
+        const refundsByOrder = new Map();
+        if (orderIds.length) {
+            try {
+                const refundRows = await db.query.orderRefunds.findMany({
+                    where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orderRefunds.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.orderRefunds.orderId, orderIds)),
+                    orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orderRefunds.createdAt)],
+                });
+                for (const rf of refundRows) {
+                    const list = refundsByOrder.get(rf.orderId) || [];
+                    list.push({
+                        id: rf.id,
+                        kind: rf.kind,
+                        amount: Number(rf.amount),
+                        reason: rf.reason || null,
+                        staffName: rf.staffName || null,
+                        items: rf.itemsJson || [],
+                        allocation: rf.allocationJson || null,
+                        createdAt: rf.createdAt?.toISOString?.() ?? null,
+                    });
+                    refundsByOrder.set(rf.orderId, list);
+                }
+            }
+            catch {
+                /* order_refunds may not exist on older DBs */
+            }
+        }
         return rows.map((o) => {
             const customerName = o.customerName ||
                 [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ") ||
@@ -270,9 +297,13 @@ class InvoiceService {
                 total: Number(o.total),
                 subtotal: Number(o.subtotal),
                 taxAmount: Number(o.taxAmount),
+                taxRate: Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
+                    ? (0, money_1.roundMoney2)((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+                    : undefined,
                 discountAmount: Number(o.discountAmount || 0),
                 tipAmount: Number(o.tipAmount || 0),
                 refundAmount: Number(o.refundAmount || 0),
+                refundHistory: refundsByOrder.get(o.id) || [],
                 customerName,
                 customerPhone: o.customerPhone || o.customer?.phone || null,
                 customerEmail: o.customerEmail || o.customer?.email || null,

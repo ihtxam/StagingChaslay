@@ -2,7 +2,9 @@
  * Nominatim forward geocode (OpenStreetMap).
  * Server-side only — respects OSM usage policy via User-Agent.
  */
-export declare function geocodeQuery(query: string): Promise<{
+export declare function geocodeQuery(query: string, opts?: {
+    countryCode?: string | null;
+}): Promise<{
     found: false;
 } | {
     found: true;

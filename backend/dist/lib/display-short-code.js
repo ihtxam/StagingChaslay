@@ -18,7 +18,7 @@ async function allocateDisplayShortCode(db) {
     throw new Error("Could not allocate a display code — try again");
 }
 async function isDisplayShortCodeTaken(db, code) {
-    const [kds, ods, signage] = await Promise.all([
+    const [kds, ods, signage, cds] = await Promise.all([
         db.query.kdsStations.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.kdsStations.shortCode, code),
             columns: { id: true },
@@ -31,8 +31,12 @@ async function isDisplayShortCodeTaken(db, code) {
             where: (0, drizzle_orm_1.eq)(db_1.schema.signageScreens.shortCode, code),
             columns: { id: true },
         }),
+        db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.sql) `${db_1.schema.merchants.customerDisplaySettings}->>'shortCode' = ${code}`,
+            columns: { id: true },
+        }),
     ]);
-    return !!(kds || ods || signage);
+    return !!(kds || ods || signage || cds);
 }
 async function ensureKdsStationShortCodes(db, merchantId) {
     const rows = await db.query.kdsStations.findMany({

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.publicLicenseActivationError = publicLicenseActivationError;
 exports.logPosLicenseActivation = logPosLicenseActivation;
 const platform_log_service_1 = require("@/services/platform-log.service");
 const chaslay_compat_service_1 = require("@/services/chaslay-compat.service");
@@ -10,6 +11,14 @@ function activationCodeHint(code) {
     if (clean.length <= 4)
         return `${clean}***`;
     return `${clean.slice(0, 4)}***`;
+}
+/** Hide raw Drizzle/SQL failures from the Android activation screen. */
+function publicLicenseActivationError(error) {
+    const raw = error instanceof Error ? error.message : String(error || "Activation failed");
+    if (/Failed query|json_build_array|does not exist|relation ["']/i.test(raw)) {
+        return "Activation failed. Please try again or contact support.";
+    }
+    return raw || "Activation failed";
 }
 /** Write a platform event log entry for superadmin System Logs. Returns log id as reference. */
 async function logPosLicenseActivation(input) {

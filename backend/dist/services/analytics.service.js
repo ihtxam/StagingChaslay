@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsService = void 0;
 const db_1 = require("@/db");
@@ -190,12 +223,10 @@ class AnalyticsService {
         try {
             const now = new Date();
             const forecastDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-            const licenses = await db.query.licenses.findMany({
+            const { attachLicenseRelations } = await Promise.resolve().then(() => __importStar(require("@/services/license-admin.service")));
+            const licenses = await attachLicenseRelations(await db.query.licenses.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active"), (0, drizzle_orm_1.gte)(db_1.schema.licenses.expiresAt, now), (0, drizzle_orm_1.lte)(db_1.schema.licenses.expiresAt, forecastDate)),
-                with: {
-                    merchant: true,
-                },
-            });
+            }));
             // Group by week
             const forecast = {};
             licenses.forEach((license) => {
@@ -206,7 +237,7 @@ class AnalyticsService {
                     forecast[weekKey] = [];
                 }
                 forecast[weekKey].push({
-                    merchant: license.merchant.name,
+                    merchant: license.merchant?.name ?? "Unknown",
                     expiresAt: license.expiresAt,
                     licenseType: license.licenseType,
                 });

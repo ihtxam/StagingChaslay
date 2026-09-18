@@ -27,5 +27,14 @@ strict_1.default.ok(Math.abs(bucketSum - 100) < 0.02, `expected bucket sum 100, 
 // Partial refund on cash-only order.
 const cashOnly = (0, payment_breakdown_1.netPaymentBucketsAfterRefund)(110, 20, [{ method: "cash", amount: 110 }], "cash");
 strict_1.default.equal(cashOnly.get("cash"), 90);
+// Leftover pay_later breakdown after cash/card collect must surface the collected tender.
+const leftoverLater = (0, payment_breakdown_1.parsePaymentBreakdown)([{ method: "pay_later", amount: 25 }], "cash", 25);
+strict_1.default.equal(leftoverLater.length, 1);
+strict_1.default.equal(leftoverLater[0].method, "cash");
+const laterColon = (0, payment_breakdown_1.parsePaymentBreakdown)(null, "pay_later:card", 40);
+strict_1.default.equal(laterColon.length, 1);
+strict_1.default.equal(laterColon[0].method, "card");
+const unpaidLater = (0, payment_breakdown_1.parsePaymentBreakdown)([{ method: "pay_later", amount: 12 }], "pay_later", 12);
+strict_1.default.equal(unpaidLater[0].method, "pay_later");
 console.log("payment-breakdown.test.ts: ok");
 //# sourceMappingURL=payment-breakdown.test.js.map

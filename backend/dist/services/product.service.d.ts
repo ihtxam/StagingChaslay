@@ -45,13 +45,16 @@ export declare class ProductService {
     }): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -98,6 +101,7 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
     }>;
     private static productListWhere;
     static countProducts(merchantId: string, search?: string, categoryId?: string): Promise<number>;
@@ -108,12 +112,15 @@ export declare class ProductService {
         name: string;
         description: string | null;
         id: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -160,17 +167,23 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
         category: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         } | null;
     }[]>;
@@ -181,12 +194,15 @@ export declare class ProductService {
         name: string;
         description: string | null;
         id: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -233,17 +249,23 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
         category: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         } | null;
     }[]>;
@@ -253,13 +275,16 @@ export declare class ProductService {
     static getProductById(merchantId: string, productId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -306,17 +331,23 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
         category: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         } | null;
     }>;
@@ -326,13 +357,16 @@ export declare class ProductService {
     static getProductByBarcode(merchantId: string, barcode: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -379,6 +413,7 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
     } | undefined>;
     /**
      * Update product
@@ -437,6 +472,10 @@ export declare class ProductService {
         sortOrder: number;
         clientId: string | null;
         isActive: boolean;
+        visibility: {
+            channels: string[];
+        };
+        similarProductIds: string[] | null;
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -445,6 +484,10 @@ export declare class ProductService {
      */
     static deleteProduct(merchantId: string, productId: string): Promise<{
         success: boolean;
+        deactivated?: undefined;
+    } | {
+        success: boolean;
+        deactivated: boolean;
     }>;
     /**
      * Update stock
@@ -503,6 +546,10 @@ export declare class ProductService {
         sortOrder: number;
         clientId: string | null;
         isActive: boolean;
+        visibility: {
+            channels: string[];
+        };
+        similarProductIds: string[] | null;
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -512,13 +559,16 @@ export declare class ProductService {
     static getLowStockProducts(merchantId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
-        imageUrl: string | null;
+        visibility: {
+            channels: string[];
+        };
         clientId: string | null;
         categoryId: string | null;
         sku: string | null;
@@ -565,6 +615,7 @@ export declare class ProductService {
         allowExtras: boolean;
         loyaltyRewardPoints: number | null;
         recipeYield: string;
+        similarProductIds: string[] | null;
     }[]>;
     /**
      * Get product statistics

@@ -2,7 +2,7 @@
  * SaaS edition feature catalog ? capability gates (not staff RBAC).
  * Keep in sync with dashboard/src/lib/edition-features.ts
  */
-export type EditionFeatureKey = "pos_tables" | "pos_courses" | "pos_shifts" | "pos_kitchen" | "pos_express" | "pos_retail" | "pos_cash_drawer" | "pos_tips" | "pos_gift_cards" | "pos_scale" | "channel_takeaway" | "channel_delivery" | "channel_online_orders" | "online_shop" | "online_payments" | "gift_cards" | "loyalty" | "offers" | "reports" | "staff_roles" | "reservations" | "website_cms" | "inventory" | "digital_signage" | "kds" | "ods";
+export type EditionFeatureKey = "pos_tables" | "pos_courses" | "pos_shifts" | "pos_kitchen" | "pos_express" | "pos_retail" | "pos_cash_drawer" | "pos_tips" | "pos_gift_cards" | "pos_scale" | "channel_takeaway" | "channel_delivery" | "channel_online_orders" | "online_shop" | "online_payments" | "gift_cards" | "loyalty" | "offers" | "reports" | "staff_roles" | "reservations" | "website_cms" | "inventory" | "digital_signage" | "kds" | "ods" | "self_order_kiosk";
 export type EditionFeatureGroup = {
     id: string;
     label: string;
@@ -36,6 +36,6 @@ export declare function retailDefaultsFromFeatures(features: EditionFeatureKey[]
     deliveryEnabled: boolean;
     loyaltyEnabled: boolean;
     webposGiftCardEnabled: boolean;
-    posMode: "retail" | "restaurant";
+    posMode: "restaurant" | "retail";
 };
 //# sourceMappingURL=edition-features.d.ts.map

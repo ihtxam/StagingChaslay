@@ -3,7 +3,16 @@ export declare function normalizeChaslayDeviceId(deviceId: string): string;
 export declare function deriveShortDeviceId(raw: string): string;
 export declare function normalizeActivationCode(code: string): string;
 export declare function generateSyncApiKey(): string;
+export declare function posDeviceIdsMatch(storedExternalId: string, incomingDeviceId: string): boolean;
 export declare class ChaslayCompatService {
+    static lookupLicense(activationCode: string): Promise<{
+        merchantName: string;
+        customerName: string;
+        tenantSlug: string | null;
+        planLabel: string;
+        expiresAt: number;
+        status: string;
+    } | null>;
     static activateLicense(input: {
         deviceId: string;
         activationCode: string;
@@ -14,8 +23,10 @@ export declare class ChaslayCompatService {
         status: string;
         expiresAt: number;
         customerName: string;
+        merchantName: string;
         planLabel: string;
         tenantSlug: string | null;
+        merchantId: string;
     }>;
     static validateLicense(input: {
         deviceId: string;
@@ -24,7 +35,8 @@ export declare class ChaslayCompatService {
     }): Promise<{
         status: string;
         expiresAt: number;
-        customerName: string;
+        customerName: string | undefined;
+        merchantName: string | undefined;
         planLabel: string;
     }>;
     static posLogin(email: string, password: string, tenantSlug?: string | null): Promise<{
@@ -71,7 +83,7 @@ export declare class ChaslayCompatService {
             staffId: string;
             isOwner: boolean;
             roleName: string;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "VIEW_ORDER_HISTORY" | "MANAGE_INVENTORY" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
         };
         dashboardUrl: string;
     }>;
@@ -194,11 +206,14 @@ export declare class ChaslayCompatService {
                 status: string;
             }[];
             terminal_ready: boolean;
+            tap_to_pay_ready: boolean;
+            tap_to_pay_enabled: boolean;
             methods: {
                 express: boolean;
                 cash: boolean;
                 card: boolean;
                 terminal: boolean;
+                tap_to_pay: boolean;
                 giftCard: boolean;
                 invoice: boolean;
             };
@@ -232,6 +247,8 @@ export declare class ChaslayCompatService {
                 retailDineInEnabled: boolean;
                 requireTableForDineIn: boolean;
                 actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
+                expressCheckoutEnabled: boolean;
+                showPosToasts: boolean;
             };
             receipt_base_url: string;
             scale: {
@@ -276,11 +293,14 @@ export declare class ChaslayCompatService {
             status: string;
         }[];
         terminal_ready: boolean;
+        tap_to_pay_ready: boolean;
+        tap_to_pay_enabled: boolean;
         methods: {
             express: boolean;
             cash: boolean;
             card: boolean;
             terminal: boolean;
+            tap_to_pay: boolean;
             giftCard: boolean;
             invoice: boolean;
         };
@@ -314,6 +334,8 @@ export declare class ChaslayCompatService {
             retailDineInEnabled: boolean;
             requireTableForDineIn: boolean;
             actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
+            expressCheckoutEnabled: boolean;
+            showPosToasts: boolean;
         };
         receipt_base_url: string;
         scale: {

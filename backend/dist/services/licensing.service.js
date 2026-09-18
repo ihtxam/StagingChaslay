@@ -1,9 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LicensingService = void 0;
 const uuid_1 = require("uuid");
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const license_activation_code_1 = require("@/lib/license-activation-code");
 class LicensingService {
     /**
      * Generate a device ID for a new POS device
@@ -93,10 +127,19 @@ class LicensingService {
     static async activateLicense(merchantId, deviceId, licenseCode) {
         const db = (0, db_1.getDb)();
         try {
-            // Find the license by code
-            const license = await db.query.licenses.findFirst({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, licenseCode), (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active")),
+            const keys = (0, license_activation_code_1.activationCodeLookupKeys)(licenseCode);
+            const compact = (0, license_activation_code_1.compactActivationCode)(licenseCode);
+            const keyWhere = keys.length === 1
+                ? (0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, keys[0])
+                : (0, drizzle_orm_1.inArray)(db_1.schema.licenses.licenseKey, keys);
+            let license = await db.query.licenses.findFirst({
+                where: (0, drizzle_orm_1.and)(keyWhere, (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active")),
             });
+            if (!license && compact) {
+                license = await db.query.licenses.findFirst({
+                    where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.sql) `regexp_replace(upper(${db_1.schema.licenses.licenseKey}), '[^A-Z0-9]', '', 'g') = ${compact}`, (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active")),
+                });
+            }
             if (!license) {
                 throw new Error("Invalid or expired license code");
             }
@@ -239,13 +282,10 @@ class LicensingService {
         try {
             const now = new Date();
             const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
-            const licenses = await db.query.licenses.findMany({
+            const { attachLicenseRelations } = await Promise.resolve().then(() => __importStar(require("@/services/license-admin.service")));
+            const licenses = await attachLicenseRelations(await db.query.licenses.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active"), (0, drizzle_orm_1.lt)(db_1.schema.licenses.expiresAt, thresholdDate), (0, drizzle_orm_1.gt)(db_1.schema.licenses.expiresAt, now)),
-                with: {
-                    merchant: true,
-                    device: true,
-                },
-            });
+            }));
             return licenses;
         }
         catch (error) {
@@ -275,12 +315,10 @@ class LicensingService {
     static async getMerchantLicenses(merchantId) {
         const db = (0, db_1.getDb)();
         try {
-            const licenses = await db.query.licenses.findMany({
+            const { attachLicenseRelations } = await Promise.resolve().then(() => __importStar(require("@/services/license-admin.service")));
+            const licenses = await attachLicenseRelations(await db.query.licenses.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId),
-                with: {
-                    device: true,
-                },
-            });
+            }));
             return licenses;
         }
         catch (error) {

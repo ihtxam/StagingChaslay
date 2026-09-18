@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { buildDefaultRestaurantTemplate } from "@/lib/chaslay-default-template";
+import { CmsService } from "@/services/cms.service";
 
 const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
   ROOT: {
@@ -67,8 +69,58 @@ export class ChaslayPagebuilderService {
       .where(eq(schema.chaslayHomepageBuilders.id, builderId));
   }
 
+  /** One-time bootstrap when a merchant had the classic CMS homepage but no Chaslay builder yet. */
+  static async ensureBootstrappedFromLegacy(merchantId: string): Promise<boolean> {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      const existing = await db.query.chaslayHomepageBuilders.findFirst({
+        where: eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
+        columns: { id: true },
+      });
+      if (existing) return false;
+
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: {
+          id: true,
+          name: true,
+          cmsHomepageEnabled: true,
+          shopLogoUrl: true,
+          phone: true,
+          address: true,
+          city: true,
+        },
+      });
+      if (!merchant) return false;
+
+      const legacyPage = await CmsService.getPublishedHomepage(merchantId);
+      if (!merchant.cmsHomepageEnabled && !legacyPage) return false;
+
+      const name = legacyPage?.title?.trim() || `${merchant.name} Homepage`.trim();
+      const address = [merchant.address, merchant.city].filter(Boolean).join(", ");
+      const editorState = buildDefaultRestaurantTemplate({
+        merchantName: merchant.name,
+        logoUrl: merchant.shopLogoUrl,
+        phone: merchant.phone,
+        address: address || null,
+      });
+
+      const builder = await this.create(merchantId, { name, editor_state: editorState });
+      await this.createPage(merchantId, builder.id, {
+        title: name,
+        slug: "home",
+        editor_state: editorState,
+        is_homepage: true,
+        sort_order: 0,
+      });
+      await this.activate(merchantId, builder.id);
+      return true;
+    });
+  }
+
   static async list(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureBootstrappedFromLegacy(merchantId);
       const db = getDb();
       const rows = await db.query.chaslayHomepageBuilders.findMany({
         where: eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
@@ -114,6 +166,7 @@ export class ChaslayPagebuilderService {
 
   static async getActive(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureBootstrappedFromLegacy(merchantId);
       const db = getDb();
       const row = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(

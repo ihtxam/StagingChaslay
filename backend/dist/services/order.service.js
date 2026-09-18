@@ -57,6 +57,7 @@ async function releaseHeldAfterPosPayment(merchantId, order) {
                     ? String(order.guestCount)
                     : null),
             tableId: order.tableId || null,
+            paidTotal: Number(order.total) || 0,
         });
     }
     catch (err) {
@@ -118,9 +119,8 @@ function resolveCollectPaymentMethod(requested, order) {
         || (wasPayLater ? "cash" : "")
         || (["cash", "card", "terminal", "bank_transfer"].includes(existingRaw) ? existingRaw : "")
         || "cash";
-    if (wasPayLater && tender !== "bank_transfer") {
-        return `pay_later:${tender}`;
-    }
+    // Persist the collected tender (cash/card/terminal), not pay_later:cash —
+    // refund/cancel history must keep showing Cash/Card.
     return tender;
 }
 function usesExternalKitchenLifecycle(order) {
@@ -595,15 +595,11 @@ class OrderService {
                     const updated = await set({
                         paymentStatus: "completed",
                         paymentMethod: method,
+                        paymentBreakdown: [
+                            { method, amount: (0, money_1.roundMoney2)(Number(order.total) || 0) },
+                        ],
                         ...(closeInternal
                             ? { status: "completed", completedAt: new Date() }
-                            : {}),
-                        ...(invoiceOrder
-                            ? {
-                                paymentBreakdown: [
-                                    { method, amount: (0, money_1.roundMoney2)(Number(order.total) || 0) },
-                                ],
-                            }
                             : {}),
                     });
                     try {
@@ -660,13 +656,11 @@ class OrderService {
                 {
                     const invoiceOrder = isInvoiceOrderRecord(order);
                     const method = resolveCollectPaymentMethod(opts?.paymentMethod, order);
-                    const invoiceBreakdown = invoiceOrder
-                        ? {
-                            paymentBreakdown: [
-                                { method, amount: (0, money_1.roundMoney2)(Number(order.total) || 0) },
-                            ],
-                        }
-                        : {};
+                    const collectedBreakdown = {
+                        paymentBreakdown: [
+                            { method, amount: (0, money_1.roundMoney2)(Number(order.total) || 0) },
+                        ],
+                    };
                     const closeNow = readyToHandoff || !usesExternalKitchenLifecycle(order);
                     const updated = await set(closeNow
                         ? {
@@ -674,12 +668,12 @@ class OrderService {
                             paymentStatus: "completed",
                             paymentMethod: method,
                             completedAt: new Date(),
-                            ...invoiceBreakdown,
+                            ...collectedBreakdown,
                         }
                         : {
                             paymentStatus: "completed",
                             paymentMethod: method,
-                            ...invoiceBreakdown,
+                            ...collectedBreakdown,
                         });
                     try {
                         const { InventoryService } = await Promise.resolve().then(() => __importStar(require("@/services/inventory.service")));
@@ -704,12 +698,14 @@ class OrderService {
                 }
             }
             case "reject":
-            case "cancel": {
+            case "cancel":
+            case "archive": {
                 if (status === "completed")
                     throw new Error("Cannot cancel a completed order");
                 const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(String(opts?.rejectReason || ""));
                 const updated = await set({
                     status: "cancelled",
+                    paymentStatus: "cancelled",
                     cancelReason: reasonText || null,
                     cancelledAt: new Date(),
                 });
@@ -863,7 +859,7 @@ class OrderService {
             // Update order status
             const updatedOrder = await db
                 .update(db_1.schema.orders)
-                .set({ status: "cancelled" })
+                .set({ status: "cancelled", paymentStatus: "cancelled" })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
                 .returning();
             return updatedOrder[0];

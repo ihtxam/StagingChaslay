@@ -1,5 +1,38 @@
 import { schema } from "@/db";
+export type GuestCustomerInput = {
+    name?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    zip?: string | null;
+    city?: string | null;
+};
 export declare class CustomerService {
+    /**
+     * Upsert a merchant customer from an online order, shop reservation, or POS booking.
+     * Matches phone (digits) first, then email. Fills missing contact/address fields.
+     */
+    static upsertFromGuest(merchantId: string, input: GuestCustomerInput): Promise<{
+        id: string;
+        email: string | null;
+        passwordHash: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string | null;
+        merchantId: string;
+        firstName: string | null;
+        lastName: string | null;
+        defaultAddress: string | null;
+        defaultZip: string | null;
+        defaultCity: string | null;
+        loyaltyPoints: number | null;
+        totalSpent: string | null;
+        marketingOptIn: boolean;
+        lastOrderAt: Date | null;
+        lastReorderReminderAt: Date | null;
+    } | null>;
     /**
      * Create customer
      */
@@ -192,11 +225,13 @@ export declare class CustomerService {
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -212,7 +247,6 @@ export declare class CustomerService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -225,6 +259,7 @@ export declare class CustomerService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -237,6 +272,7 @@ export declare class CustomerService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -265,9 +301,9 @@ export declare class CustomerService {
             }[] | null;
             items: {
                 id: string;
-                quantity: string;
                 isOpenPrice: boolean;
                 productId: string | null;
+                quantity: string;
                 taxAmount: string;
                 orderId: string;
                 productName: string | null;
@@ -296,13 +332,16 @@ export declare class CustomerService {
                 product: {
                     id: string;
                     name: string;
+                    imageUrl: string | null;
                     isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
                     merchantId: string;
                     sortOrder: number;
                     description: string | null;
-                    imageUrl: string | null;
+                    visibility: {
+                        channels: string[];
+                    };
                     clientId: string | null;
                     categoryId: string | null;
                     sku: string | null;
@@ -349,6 +388,7 @@ export declare class CustomerService {
                     allowExtras: boolean;
                     loyaltyRewardPoints: number | null;
                     recipeYield: string;
+                    similarProductIds: string[] | null;
                 } | null;
             }[];
         }[];
@@ -389,5 +429,19 @@ export declare class CustomerService {
         totalSpent: number;
         averageCustomerValue: number;
     }>;
+    /**
+     * Compact lookup for reservation / POS autocomplete (name, phone, last party size).
+     */
+    static searchForAutocomplete(merchantId: string, query: string, limit?: number): Promise<{
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        phone: string | null;
+        email: string | null;
+        defaultAddress: string | null;
+        defaultZip: string | null;
+        defaultCity: string | null;
+        lastPartySize: number | null;
+    }[]>;
 }
 //# sourceMappingURL=customer.service.d.ts.map

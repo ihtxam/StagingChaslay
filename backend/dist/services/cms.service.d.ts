@@ -45,13 +45,13 @@ export declare class CmsService {
     }[];
     static listPages(merchantId: string): Promise<{
         id: string;
+        title: string;
+        theme: schema.CmsTheme | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         slug: string;
         merchantId: string;
-        title: string;
-        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         blocks: schema.CmsOpenPageData | schema.CmsPuckData | schema.CmsBlock[];
@@ -62,13 +62,13 @@ export declare class CmsService {
     static getPage(merchantId: string, pageId: string): Promise<{
         blocks: CmsOpenPageData;
         id: string;
+        title: string;
+        theme: schema.CmsTheme | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         slug: string;
         merchantId: string;
-        title: string;
-        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         seoTitle: string | null;
@@ -88,13 +88,13 @@ export declare class CmsService {
     }): Promise<{
         blocks: CmsOpenPageData;
         id: string;
+        title: string;
+        theme: schema.CmsTheme | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         slug: string;
         merchantId: string;
-        title: string;
-        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         seoTitle: string | null;
@@ -133,13 +133,13 @@ export declare class CmsService {
     static getPublishedHomepage(merchantId: string): Promise<{
         blocks: CmsOpenPageData;
         id: string;
+        title: string;
+        theme: schema.CmsTheme | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         slug: string;
         merchantId: string;
-        title: string;
-        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         seoTitle: string | null;
@@ -152,13 +152,13 @@ export declare class CmsService {
     static getPublishedBySlug(merchantId: string, slug: string): Promise<{
         blocks: CmsOpenPageData;
         id: string;
+        title: string;
+        theme: schema.CmsTheme | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
         slug: string;
         merchantId: string;
-        title: string;
-        theme: schema.CmsTheme | null;
         isHomepage: boolean;
         templateKey: string | null;
         seoTitle: string | null;

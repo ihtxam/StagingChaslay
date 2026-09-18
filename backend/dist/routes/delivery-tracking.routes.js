@@ -94,7 +94,7 @@ router.post("/location", (0, auth_middleware_1.requirePermission)("DELIVERY_ORDE
     }
 });
 /** GET /api/merchant/delivery/live — map panel: drivers + orders */
-router.get("/live", (0, auth_middleware_1.requirePermission)("VIEW_DELIVERY_TRACKING"), async (req, res) => {
+router.get("/live", (0, auth_middleware_1.requirePermission)("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "DELIVERY_ORDERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)
@@ -113,7 +113,7 @@ router.get("/live", (0, auth_middleware_1.requirePermission)("VIEW_DELIVERY_TRAC
     }
 });
 /** POST /api/merchant/delivery/orders/:orderId/assign */
-router.post("/orders/:orderId/assign", (0, auth_middleware_1.requirePermission)("VIEW_DELIVERY_TRACKING"), async (req, res) => {
+router.post("/orders/:orderId/assign", (0, auth_middleware_1.requirePermission)("VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "DELIVERY_ORDERS"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
         if (!merchantId)

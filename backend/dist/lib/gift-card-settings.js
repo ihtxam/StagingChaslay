@@ -12,6 +12,8 @@ exports.DEFAULT_GIFT_CARD_SETTINGS = {
     reloadEnabled: true,
     customAmountEnabled: true,
     onlinePurchaseEnabled: true,
+    digitalVoucherEnabled: true,
+    physicalPostEnabled: false,
     membershipEnabled: false,
     membershipPlans: [],
 };
@@ -48,16 +50,23 @@ function normalizeGiftCardSettings(raw) {
         reloadEnabled: src.reloadEnabled !== false,
         customAmountEnabled: src.customAmountEnabled !== false,
         onlinePurchaseEnabled: src.onlinePurchaseEnabled !== false,
+        digitalVoucherEnabled: src.digitalVoucherEnabled !== false,
+        physicalPostEnabled: src.physicalPostEnabled === true,
         membershipEnabled: src.membershipEnabled === true,
         membershipPlans,
     };
 }
-function validateGiftAmount(amount, settings) {
+const MAX_GIFT_AMOUNT = 9999999999.99; // 10 integer digits + cents
+function validateGiftAmount(amount, settings, opts) {
     const n = roundMoney2(Number(amount));
     if (!Number.isFinite(n) || n <= 0) {
         return { ok: false, error: "Valid amount is required" };
     }
-    if (n < settings.minAmount || n > settings.maxAmount) {
+    if (n > MAX_GIFT_AMOUNT) {
+        return { ok: false, error: "Amount is too large" };
+    }
+    const allowCustom = opts?.allowCustomOverMax === true && settings.customAmountEnabled !== false;
+    if (!allowCustom && (n < settings.minAmount || n > settings.maxAmount)) {
         return {
             ok: false,
             error: `Amount must be between CHF ${settings.minAmount.toFixed(2)} and CHF ${settings.maxAmount.toFixed(2)}`,

@@ -9,6 +9,7 @@ export declare class PosSessionsService {
     }>;
     static listActive(merchantId: string, sessionKind?: PosSessionKind): Promise<{
         id: string;
+        locationId: string | null;
         sessionKind: PosSessionKind;
         platform: PosSessionPlatform;
         deviceId: string;
@@ -19,6 +20,8 @@ export declare class PosSessionsService {
         lastHeartbeat: Date;
         createdAt: Date;
     }[]>;
+    private static mapSessionRow;
+    private static listActiveRows;
     private static evictStale;
     private static enforceLimit;
     static registerSession(merchantId: string, input: {
@@ -28,6 +31,7 @@ export declare class PosSessionsService {
         deviceLabel?: string | null;
         staffId?: string | null;
         staffName?: string | null;
+        locationId?: string | null;
     }): Promise<{
         sessionId: string;
         heartbeatIntervalSec: number;
@@ -45,6 +49,10 @@ export declare class PosSessionsService {
         ok: boolean;
     }>;
     static revokeByDevice(merchantId: string, deviceId: string, sessionKind?: PosSessionKind): Promise<{
+        ok: boolean;
+    }>;
+    /** Revoke every active POS / waiter session for a merchant (force logout all devices). */
+    static revokeAllForMerchant(merchantId: string): Promise<{
         ok: boolean;
     }>;
 }

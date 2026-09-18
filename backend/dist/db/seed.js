@@ -42,6 +42,7 @@ const index_1 = require("./index");
 const auth_service_1 = require("../services/auth.service");
 const chaslay_compat_service_1 = require("../services/chaslay-compat.service");
 const subscription_plans_service_1 = require("../services/subscription-plans.service");
+const brand_1 = require("../lib/brand");
 dotenv_1.default.config();
 /** Open all day every channel — keeps demo shop orderable after seed. */
 const ALWAYS_OPEN = {
@@ -177,7 +178,7 @@ async function seedDemoShop() {
             .returning();
         merchant = inserted[0];
         console.log(`Seeded demo merchant: ${merchant.email} (slug=${slug})`);
-        console.log(`  Shop: https://shop.rebornsense.com/${slug} or /shop/${slug}`);
+        console.log(`  Shop: https://${(0, brand_1.resolveShopPublicHost)()}/${slug} or /shop/${slug}`);
         console.log(`  Sync API key: ${merchant.syncApiKey}`);
     }
     else {
@@ -268,6 +269,70 @@ async function seedDemoShop() {
     }
     await seedDemoInventoryBundle(merchant.id);
     await seedDemoDeliveryStaff(merchant.id);
+    await seedDemoPosLicense(merchant.id);
+}
+/** Known Reborn-style seat used on staging tablets (hyphens optional at activate). */
+async function seedDemoPosLicense(merchantId) {
+    const licenseKey = (process.env.SEED_DEMO_POS_LICENSE_KEY || "1758-D6DD-EF5A").trim().toUpperCase();
+    const db = (0, index_1.getDb)();
+    const now = new Date();
+    const expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    const existing = await db.query.licenses.findFirst({
+        where: (0, drizzle_orm_1.eq)(index_1.schema.licenses.licenseKey, licenseKey),
+    });
+    if (existing) {
+        const nextExpiry = existing.expiresAt && existing.expiresAt > now ? existing.expiresAt : expiresAt;
+        await db
+            .update(index_1.schema.licenses)
+            .set({
+            status: "active",
+            merchantId,
+            expiresAt: nextExpiry,
+            updatedAt: now,
+        })
+            .where((0, drizzle_orm_1.eq)(index_1.schema.licenses.id, existing.id));
+        await db
+            .update(index_1.schema.merchants)
+            .set({
+            status: "active",
+            subscriptionEndsAt: existing.expiresAt && existing.expiresAt > now ? existing.expiresAt : expiresAt,
+            updatedAt: now,
+        })
+            .where((0, drizzle_orm_1.eq)(index_1.schema.merchants.id, merchantId));
+        console.log(`Demo POS license ensured: ${licenseKey}`);
+        return;
+    }
+    const deviceId = "POS-DEMO-SEAT-1";
+    let device = await db.query.devices.findFirst({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(index_1.schema.devices.merchantId, merchantId), (0, drizzle_orm_1.eq)(index_1.schema.devices.deviceId, deviceId)),
+    });
+    if (!device) {
+        const inserted = await db
+            .insert(index_1.schema.devices)
+            .values({
+            merchantId,
+            deviceId,
+            deviceName: "Demo POS seat",
+            deviceType: "tablet",
+            isActive: true,
+        })
+            .returning();
+        device = inserted[0];
+    }
+    await db.insert(index_1.schema.licenses).values({
+        merchantId,
+        deviceId: device.id,
+        licenseKey,
+        licenseType: "yearly",
+        startsAt: now,
+        expiresAt,
+        status: "active",
+    });
+    await db
+        .update(index_1.schema.merchants)
+        .set({ status: "active", subscriptionEndsAt: expiresAt, updatedAt: now })
+        .where((0, drizzle_orm_1.eq)(index_1.schema.merchants.id, merchantId));
+    console.log(`Seeded demo POS license: ${licenseKey}`);
 }
 async function seedDemoInventoryBundle(merchantId) {
     if (process.env.SEED_DEMO_INVENTORY === "false") {

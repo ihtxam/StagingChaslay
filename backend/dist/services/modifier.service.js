@@ -23,6 +23,7 @@ function publicOption(o) {
         sortOrder: o.sortOrder ?? 0,
         inventoryItemId: o.inventoryItemId || null,
         inventoryQty: Number.isFinite(qty) ? qty : 0,
+        imageUrl: String(o.imageUrl || "").trim() || null,
     };
 }
 class ModifierService {
@@ -259,6 +260,7 @@ class ModifierService {
                 ? o.inventoryItemId
                 : null,
             inventoryQty: String(Math.max(0, Number(o.inventoryQty) || 0)),
+            imageUrl: o.imageUrl?.trim() || null,
         }))
             .filter((o) => o.name);
         if (rows.length) {

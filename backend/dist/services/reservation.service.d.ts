@@ -175,7 +175,7 @@ export declare class ReservationService {
         acceptedAt: Date | null;
         seatedAt: Date | null;
     }>;
-    /** WebPOS auto-print + alert via floor print job queue. */
+    /** Till auto-print via floor print job queue (Print Agent can drain without POS). */
     static enqueuePosAlert(merchantId: string, reservationId: string): Promise<void>;
     static list(merchantId: string, opts?: {
         from?: Date;

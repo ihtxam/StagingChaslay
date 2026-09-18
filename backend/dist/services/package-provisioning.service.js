@@ -3,6 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PackageProvisioningService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const edition_features_1 = require("@/lib/edition-features");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
+const inventory_addon_1 = require("@/lib/inventory-addon");
+const signage_addon_1 = require("@/lib/signage-addon");
+const kds_addon_1 = require("@/lib/kds-addon");
+const ods_addon_1 = require("@/lib/ods-addon");
 const edition_service_1 = require("@/services/edition.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 function applyIncludedAddons(patch, addons) {
@@ -20,14 +26,43 @@ function applyIncludedAddons(patch, addons) {
         patch.kdsAddonEnabled = true;
     if (addons.ods)
         patch.odsAddonEnabled = true;
+    // kiosk flag is persisted via writeKioskAddonEnabled (SQL source of truth)
 }
 class PackageProvisioningService {
+    /**
+     * Turn on paid merchant add-on columns when the assigned edition includes them.
+     * Full / Legacy editions include inventory, signage, KDS, ODS, and kiosk in features.
+     */
+    static async applyEditionFeatureAddons(merchantId, features) {
+        const normalized = (0, edition_features_1.normalizeEditionFeatures)(features ?? null);
+        if (normalized.includes("inventory")) {
+            await (0, inventory_addon_1.writeInventoryAddonEnabled)(merchantId, true);
+        }
+        if (normalized.includes("digital_signage")) {
+            await (0, signage_addon_1.writeSignageAddonEnabled)(merchantId, true);
+        }
+        if (normalized.includes("kds")) {
+            await (0, kds_addon_1.writeKdsAddonEnabled)(merchantId, true);
+        }
+        if (normalized.includes("ods")) {
+            await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, true);
+        }
+        if (normalized.includes("self_order_kiosk")) {
+            await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, true);
+        }
+    }
     /** Apply a subscription package to a merchant (edition, limits, bundled addons). */
     static async applyPlan(merchantId, planId) {
         const plan = await subscription_plans_service_1.SubscriptionPlansService.getById(planId);
         const db = (0, db_1.getDb)();
+        const kioskBefore = await (0, kiosk_addon_1.readKioskAddonEnabled)(merchantId).catch(() => false);
+        const bundleKiosk = plan.includedAddons?.kiosk === true;
         if (plan.editionId) {
+            const edition = await edition_service_1.EditionService.getById(plan.editionId);
             await edition_service_1.EditionService.applyEditionDefaultsToMerchant(merchantId, plan.editionId);
+            if (edition?.features) {
+                await this.applyEditionFeatureAddons(merchantId, edition.features);
+            }
         }
         const patch = {
             subscriptionPlan: plan.slug,
@@ -40,11 +75,15 @@ class PackageProvisioningService {
         patch.maxPosPosts = Math.max(0, maxPos);
         patch.maxWaiterPosts = Math.max(0, Number(plan.maxWaiterPosts ?? 0));
         patch.maxStaff = Math.max(0, Number(plan.maxStaff ?? 0));
+        patch.maxLocations = Math.max(1, Number(plan.maxLocations ?? 1));
         applyIncludedAddons(patch, plan.includedAddons);
         await db
             .update(db_1.schema.merchants)
             .set(patch)
             .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
+        if (bundleKiosk || kioskBefore) {
+            await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, true);
+        }
         return plan;
     }
     /** Apply a purchased add-on to a merchant (flags or limit bumps). */
@@ -75,6 +114,9 @@ class PackageProvisioningService {
             case "ods":
                 patch.odsAddonEnabled = true;
                 break;
+            case "kiosk":
+                await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, true);
+                break;
             case "just_eat":
                 patch.justEatAddonEnabled = true;
                 break;
@@ -94,6 +136,11 @@ class PackageProvisioningService {
             case "extra_staff": {
                 const current = Number(merchant.maxStaff || 0);
                 patch.maxStaff = current === 0 ? qty : current + qty;
+                break;
+            }
+            case "extra_location": {
+                const current = Number(merchant.maxLocations || 0);
+                patch.maxLocations = current === 0 ? qty : current + qty;
                 break;
             }
             default:

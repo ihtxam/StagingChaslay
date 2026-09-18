@@ -46,9 +46,9 @@ const inventory_addon_1 = require("@/lib/inventory-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
-const staff_login_home_1 = require("@/lib/staff-login-home");
-const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const business_module_1 = require("@/lib/business-module");
+const merchant_support_code_1 = require("@/lib/merchant-support-code");
+const staff_login_home_1 = require("@/lib/staff-login-home");
 class AuthService {
     /**
      * Hash a password
@@ -81,6 +81,39 @@ class AuthService {
             throw new Error("Invalid or expired token");
         }
     }
+    static async getMerchantAuthEpoch(merchantId) {
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { authEpoch: true },
+        });
+        return Number(merchant?.authEpoch ?? 0);
+    }
+    static async bumpMerchantAuthEpoch(merchantId) {
+        const db = (0, db_1.getDb)();
+        const rows = await db
+            .update(db_1.schema.merchants)
+            .set({
+            authEpoch: (0, drizzle_orm_1.sql) `COALESCE(${db_1.schema.merchants.authEpoch}, 0) + 1`,
+            updatedAt: new Date(),
+        })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId))
+            .returning({ authEpoch: db_1.schema.merchants.authEpoch });
+        return Number(rows[0]?.authEpoch ?? 1);
+    }
+    /** Reject merchant/staff JWTs issued before the latest auth epoch bump. */
+    static async assertMerchantTokenEpoch(payload) {
+        if (!payload.merchantId)
+            return;
+        if (payload.role === "superadmin" || payload.role === "reseller" || payload.role === "customer") {
+            return;
+        }
+        const current = await this.getMerchantAuthEpoch(payload.merchantId);
+        const tokenEpoch = payload.authEpoch ?? 0;
+        if (tokenEpoch < current) {
+            throw new Error("Session revoked — please sign in again");
+        }
+    }
     /**
      * Register a new merchant
      */
@@ -97,6 +130,7 @@ class AuthService {
             // Hash password
             const passwordHash = await this.hashPassword(password);
             const lockedModule = (0, business_module_1.normalizeBusinessModule)(businessCategory);
+            const supportCode = await (0, merchant_support_code_1.assignMerchantSupportCode)(db, "CH");
             // Create merchant
             const merchant = await db
                 .insert(db_1.schema.merchants)
@@ -107,6 +141,8 @@ class AuthService {
                 status: "active",
                 subscriptionPlan: "free",
                 businessCategory: lockedModule,
+                country: "CH",
+                supportCode,
             })
                 .returning();
             if (lockedModule) {
@@ -116,6 +152,8 @@ class AuthService {
                     .set(modulePatch)
                     .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchant[0].id));
             }
+            const { StaffService } = await Promise.resolve().then(() => __importStar(require("@/services/staff.service")));
+            await StaffService.ensureDefaultManagerStaff(merchant[0].id, name || businessName);
             return {
                 id: merchant[0].id,
                 email: merchant[0].email,
@@ -177,6 +215,7 @@ class AuthService {
             role: "merchant",
             merchantId: merchant.id,
             name: merchant.name,
+            authEpoch: Number(merchant.authEpoch ?? 0),
         });
         const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchant.id).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled));
         const signage = await (0, signage_addon_1.readSignageAddon)(merchant.id).catch(() => ({
@@ -185,7 +224,6 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
-        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchant.id).catch(() => false);
         return {
             token,
             merchant: {
@@ -203,7 +241,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                storekeeperAddonEnabled: storekeeperOn,
+                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
             },
             isOwner: true,
         };
@@ -214,7 +252,7 @@ class AuthService {
         const db = (0, db_1.getDb)();
         const merchant = await db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, staff.merchantId),
-            columns: { status: true },
+            columns: { status: true, maxLocations: true, authEpoch: true },
         });
         if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
             throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
@@ -228,6 +266,7 @@ class AuthService {
             name: staff.name,
             roleName: role?.name,
             permissions,
+            authEpoch: Number(merchant.authEpoch ?? 0),
         });
         const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(staff.merchantId).catch(() => false);
         const signage = await (0, signage_addon_1.readSignageAddon)(staff.merchantId).catch(() => ({
@@ -236,7 +275,6 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(staff.merchantId).catch(() => false);
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(staff.merchantId).catch(() => false);
-        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(staff.merchantId).catch(() => false);
         return {
             token,
             merchant: {
@@ -247,7 +285,6 @@ class AuthService {
                 staffId: staff.id,
                 roleName: role?.name,
                 permissions,
-                loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
                 inventoryAddonEnabled: inventoryOn,
                 inventoryEnabled: inventoryOn,
                 signageAddonEnabled: signage.enabled,
@@ -257,7 +294,8 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                storekeeperAddonEnabled: storekeeperOn,
+                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+                loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
             },
             isOwner: false,
         };
@@ -437,6 +475,7 @@ class AuthService {
             merchantId: merchant.id,
             name: merchant.name,
             impersonatedBy: superadminId,
+            authEpoch: Number(merchant.authEpoch ?? 0),
         });
         const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchant.id).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled));
         const signage = await (0, signage_addon_1.readSignageAddon)(merchant.id).catch(() => ({
@@ -445,7 +484,6 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
-        const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchant.id).catch(() => false);
         return {
             token,
             merchant: {
@@ -462,7 +500,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                storekeeperAddonEnabled: storekeeperOn,
+                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
             },
             impersonatedBy: superadminId,
         };
@@ -486,7 +524,6 @@ class AuthService {
             }));
             const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
             const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
-            const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
             return {
                 id: merchant.id,
                 email: merchant.email,
@@ -501,7 +538,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                storekeeperAddonEnabled: storekeeperOn,
+                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
             };
         }
         catch (error) {

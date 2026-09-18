@@ -38,6 +38,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const merchant_settings_service_1 = require("@/services/merchant-settings.service");
 const geo_1 = require("@/lib/geo");
+const delivery_match_1 = require("@/lib/delivery-match");
 const money_1 = require("@/lib/money");
 const tax_discount_1 = require("@/lib/tax-discount");
 const shop_customer_service_1 = require("@/services/shop-customer.service");
@@ -46,14 +47,53 @@ const adyen_service_1 = require("@/services/adyen.service");
 const auth_service_1 = require("@/services/auth.service");
 const modifier_service_1 = require("@/services/modifier.service");
 const cms_service_1 = require("@/services/cms.service");
+const chaslay_pagebuilder_service_1 = require("@/services/chaslay-pagebuilder.service");
 const combo_1 = require("@/lib/combo");
 const vacation_1 = require("@/lib/vacation");
 const geocode_1 = require("@/lib/geocode");
+const location_service_1 = require("@/lib/location-service");
 const offers_service_1 = require("@/services/offers.service");
 const voucher_service_1 = require("@/services/voucher.service");
 const shop_gift_card_service_1 = require("@/services/shop-gift-card.service");
+const gift_card_addon_1 = require("@/lib/gift-card-addon");
 const web_order_number_1 = require("@/lib/web-order-number");
+const catalog_visibility_1 = require("@/lib/catalog-visibility");
+const shop_delivery_pricing_1 = require("@/lib/shop-delivery-pricing");
+const table_qr_settings_1 = require("@/lib/table-qr-settings");
+const table_qr_token_1 = require("@/lib/table-qr-token");
+const shop_rate_limit_1 = require("@/lib/shop-rate-limit");
+const table_session_service_1 = require("@/services/table-session.service");
+const public_url_1 = require("@/lib/public-url");
+const shop_site_settings_1 = require("@/lib/shop-site-settings");
+const shop_public_url_1 = require("@/lib/shop-public-url");
 const router = (0, express_1.Router)();
+function shopCheckoutRequestMeta(req) {
+    const body = (req.body || {});
+    return {
+        origin: typeof body.origin === "string" ? body.origin : "",
+        shopPath: typeof body.shopPath === "string" ? body.shopPath : "",
+        headerOrigin: String(req.get("origin") || ""),
+        referer: String(req.get("referer") || ""),
+    };
+}
+function publicShopSite(req, merchant) {
+    const s = (0, shop_site_settings_1.normalizeShopSiteSettings)(merchant.shopSiteSettings);
+    return {
+        ...s,
+        faviconUrl: s.faviconUrl
+            ? (0, public_url_1.resolvePublicAssetUrl)(req, s.faviconUrl) || s.faviconUrl
+            : null,
+    };
+}
+function shopSeoFromMerchant(req, merchant, fallbackTitle, fallbackDescription) {
+    const site = publicShopSite(req, merchant);
+    const lang = String(merchant.shopLanguage || merchant.panelLanguage || "en");
+    const resolved = (0, shop_site_settings_1.resolveShopDocumentSeo)(site, lang, {
+        title: fallbackTitle,
+        description: fallbackDescription,
+    });
+    return { site, seoTitle: resolved.title, seoDescription: resolved.description };
+}
 function serializeShopModifierGroup(g) {
     const pricingType = g.pricingType || "fixed";
     return {
@@ -71,6 +111,7 @@ function serializeShopModifierGroup(g) {
             name: o.name,
             price: pricingType === "free" ? 0 : parseFloat(o.price?.toString() || "0"),
             isDefault: !!o.isDefault,
+            image: o.imageUrl || o.image || null,
         })),
     };
 }
@@ -138,6 +179,38 @@ function mapShopProduct(p, modifierGroups, catalogById, groupsByProduct) {
         modifierGroups,
         comboSlots: isCombo ? comboSlots : [],
         loyaltyRewardPoints: rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
+        similarProductIds: Array.isArray(p.similarProductIds)
+            ? p.similarProductIds.filter((id) => typeof id === "string" && id.trim())
+            : [],
+    };
+}
+function withPublicShopImageUrls(req, item) {
+    const modifierGroups = item.modifierGroups?.map((g) => ({
+        ...g,
+        options: g.options.map((opt) => ({
+            ...opt,
+            image: (0, public_url_1.resolvePublicAssetUrl)(req, opt.image) || opt.image,
+        })),
+    }));
+    const comboSlots = item.comboSlots?.map((slot) => ({
+        ...slot,
+        options: slot.options.map((opt) => ({
+            ...opt,
+            image: (0, public_url_1.resolvePublicAssetUrl)(req, opt.image) || opt.image,
+            modifierGroups: opt.modifierGroups?.map((g) => ({
+                ...g,
+                options: g.options.map((o) => ({
+                    ...o,
+                    image: (0, public_url_1.resolvePublicAssetUrl)(req, o.image) || o.image,
+                })),
+            })),
+        })),
+    }));
+    return {
+        ...item,
+        image: (0, public_url_1.resolvePublicAssetUrl)(req, item.image) || item.image,
+        modifierGroups: modifierGroups ?? item.modifierGroups,
+        comboSlots: comboSlots ?? item.comboSlots,
     };
 }
 async function earnLoyaltyForOrder(merchant, order) {
@@ -425,34 +498,40 @@ async function resolveMerchant(slugOrHost) {
         return null;
     return merchant;
 }
+async function resolveShopLocationId(merchantId, locationSlug, queryLocation) {
+    const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+    const slug = String(locationSlug || queryLocation || "")
+        .trim()
+        .toLowerCase();
+    if (slug) {
+        const loc = await LocationsService.resolveBySlug(merchantId, slug);
+        if (!loc)
+            throw new Error("Location not found");
+        return { locationId: loc.id, locationSlug: loc.slug, locationName: loc.name };
+    }
+    const defaultId = await LocationsService.getDefaultId(merchantId);
+    const db = (0, db_1.getDb)();
+    const defaultLoc = await db.query.locations.findFirst({
+        where: (0, drizzle_orm_1.eq)(db_1.schema.locations.id, defaultId),
+    });
+    return {
+        locationId: defaultId,
+        locationSlug: defaultLoc?.slug || null,
+        locationName: defaultLoc?.name || null,
+    };
+}
 function channelEnabled(merchant, channel) {
     if (channel === "delivery")
         return merchant.deliveryEnabled;
     if (channel === "dine_in")
-        return merchant.dineInEnabled;
+        return merchant.dineInEnabled !== false;
     return merchant.pickupEnabled;
 }
 function mapChannelKey(channel) {
     return channel === "dine_in" ? "dine_in" : channel === "delivery" ? "delivery" : "takeaway";
 }
-async function findMatchingZone(merchantId, lng, lat, zip) {
-    const db = (0, db_1.getDb)();
-    const zones = await db.query.deliveryZones.findMany({
-        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.deliveryZones.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.deliveryZones.isActive, true)),
-        orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.deliveryZones.sortOrder)],
-    });
-    if (lng != null && lat != null && Number.isFinite(lng) && Number.isFinite(lat)) {
-        const hit = zones.find((z) => (0, geo_1.pointInPolygon)(lng, lat, (z.polygon || [])));
-        if (hit)
-            return hit;
-    }
-    if (zip) {
-        const normalized = String(zip).trim().toLowerCase();
-        const hit = zones.find((z) => (z.zipCodes || []).some((c) => String(c).trim().toLowerCase() === normalized));
-        if (hit)
-            return hit;
-    }
-    return null;
+async function findMatchingZone(merchant, lng, lat, zip) {
+    return (0, delivery_match_1.findMatchingDeliveryRule)(merchant.id, merchant.deliveryMode, lng, lat, zip);
 }
 /**
  * GET /api/shop/tls-ask?domain=
@@ -463,8 +542,14 @@ router.get("/tls-ask", async (req, res) => {
         if (!domain)
             return res.status(400).end();
         const merchant = await resolveMerchant(domain);
-        if (merchant?.shopEnabled &&
-            (merchant.subdomain || merchant.customDomain === domain || merchant.slug)) {
+        if (!merchant?.shopEnabled)
+            return res.status(404).end();
+        if (merchant.customDomain === domain) {
+            const dns = String(merchant.customDomainDnsStatus || "none").toLowerCase();
+            if (dns !== "none" && dns !== "verified")
+                return res.status(404).end();
+        }
+        if (merchant.subdomain || merchant.customDomain === domain || merchant.slug) {
             return res.status(200).end();
         }
         return res.status(404).end();
@@ -504,6 +589,15 @@ router.get("/:slug", async (req, res) => {
         const cmsTheme = merchant.cmsHomepageEnabled
             ? await cms_service_1.CmsService.getPublishedTheme(merchant.id)
             : null;
+        const db = (0, db_1.getDb)();
+        const categoryRows = await db.query.categories.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchant.id),
+            columns: {
+                id: true,
+                deliveryPricingEnabled: true,
+                extraDeliveryPrice: true,
+            },
+        });
         res.json({
             success: true,
             data: {
@@ -516,11 +610,13 @@ router.get("/:slug", async (req, res) => {
                 cmsTheme,
                 address: merchant.address,
                 city: merchant.city,
+                country: merchant.country,
                 phone: merchant.phone,
                 latitude: merchant.latitude,
                 longitude: merchant.longitude,
-                shopLogoUrl: merchant.shopLogoUrl,
-                shopBannerUrl: merchant.shopBannerUrl,
+                shopLogoUrl: (0, public_url_1.resolvePublicAssetUrl)(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
+                shopBannerUrl: (0, public_url_1.resolvePublicAssetUrl)(req, merchant.shopBannerUrl) || merchant.shopBannerUrl,
+                site: publicShopSite(req, merchant),
                 taxTakeawayRate: merchant.taxTakeawayRate,
                 taxDineInRate: merchant.taxDineInRate,
                 taxDeliveryRate: merchant.taxDeliveryRate,
@@ -528,6 +624,12 @@ router.get("/:slug", async (req, res) => {
                 taxIncludedInPrice: merchant.taxIncludedInPrice === true,
                 vatAfterDiscount: merchant.vatAfterDiscount !== false,
                 deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
+                categoryPricingEnabled: merchant.categoryPricingEnabled === true,
+                categoryDeliveryPricing: categoryRows.map((c) => ({
+                    id: c.id,
+                    deliveryPricingEnabled: c.deliveryPricingEnabled === true,
+                    extraDeliveryPrice: Number(c.extraDeliveryPrice ?? 0) || 0,
+                })),
                 storeHours: hours,
                 /** Homepage banner hours (display channel or takeaway fallback) */
                 displayHours,
@@ -551,7 +653,7 @@ router.get("/:slug", async (req, res) => {
                 payment: {
                     cash: true,
                     card: true,
-                    cardReady: !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId),
+                    cardReady: (0, shop_public_url_1.shopAdyenCardReady)(merchant),
                     currency: "CHF",
                 },
                 loyalty: shop_loyalty_service_1.ShopLoyaltyService.programFromMerchant(merchant),
@@ -560,6 +662,7 @@ router.get("/:slug", async (req, res) => {
                 acceptingOrders: merchant.acceptingOrders !== false,
                 acceptingReservations: merchant.acceptingReservations !== false,
                 vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
+                deliveryMode: (0, delivery_match_1.normalizeDeliveryMode)(merchant.deliveryMode),
                 /** Merchant panel language — used as shop default when customer has no preference */
                 language: merchant.shopLanguage || merchant.panelLanguage || "en",
             },
@@ -578,49 +681,85 @@ router.get("/:slug/pages/home", async (req, res) => {
         if (!merchant?.shopEnabled) {
             return res.status(404).json({ error: "Shop not found or closed" });
         }
-        const page = await cms_service_1.CmsService.getPublishedHomepage(merchant.id);
-        if (!page || !merchant.cmsHomepageEnabled) {
+        if (!merchant.cmsHomepageEnabled) {
             return res.status(404).json({ error: "Homepage not published" });
         }
-        res.json({
-            success: true,
-            data: {
-                id: page.id,
-                title: page.title,
-                slug: page.slug,
-                isHomepage: page.isHomepage,
-                blocks: page.blocks || [],
-                theme: page.theme || null,
-                seoTitle: page.seoTitle,
-                seoDescription: page.seoDescription,
-                publishedAt: page.publishedAt,
-                merchant: {
-                    id: merchant.id,
-                    name: merchant.name,
-                    slug: merchant.slug,
-                    subdomain: merchant.subdomain,
-                    customDomain: merchant.customDomain,
-                    shopLogoUrl: merchant.shopLogoUrl,
-                    shopBannerUrl: merchant.shopBannerUrl,
-                    storeHours: merchant.storeHours || {},
-                    address: merchant.address,
-                    city: merchant.city,
-                    phone: merchant.phone,
-                    reservationsEnabled: !!merchant.reservationsEnabled,
-                    acceptingOrders: merchant.acceptingOrders !== false,
-                    acceptingReservations: merchant.acceptingReservations !== false,
-                    vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
-                    language: merchant.shopLanguage || merchant.panelLanguage || "en",
+        await chaslay_pagebuilder_service_1.ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
+        const chaslay = await chaslay_pagebuilder_service_1.ChaslayPagebuilderService.getActive(merchant.id);
+        if (chaslay?.editor_state) {
+            const seo = shopSeoFromMerchant(req, merchant, chaslay.name, "");
+            return res.json({
+                success: true,
+                data: {
+                    engine: "chaslay",
+                    id: chaslay.id,
+                    title: chaslay.name,
+                    slug: "home",
+                    isHomepage: true,
+                    editorState: chaslay.editor_state,
+                    seoTitle: seo.seoTitle,
+                    seoDescription: seo.seoDescription,
+                    publishedAt: chaslay.updated_at,
+                    merchant: {
+                        id: merchant.id,
+                        name: merchant.name,
+                        slug: merchant.slug,
+                        subdomain: merchant.subdomain,
+                        customDomain: merchant.customDomain,
+                        shopLogoUrl: merchant.shopLogoUrl,
+                        shopBannerUrl: merchant.shopBannerUrl,
+                        site: seo.site,
+                        storeHours: merchant.storeHours || {},
+                        address: merchant.address,
+                        city: merchant.city,
+                        country: merchant.country,
+                        phone: merchant.phone,
+                        email: merchant.email,
+                        reservationsEnabled: !!merchant.reservationsEnabled,
+                        acceptingOrders: merchant.acceptingOrders !== false,
+                        acceptingReservations: merchant.acceptingReservations !== false,
+                        vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
+                        language: merchant.shopLanguage || merchant.panelLanguage || "en",
+                    },
                 },
-            },
-        });
+            });
+        }
+        return res.status(404).json({ error: "Homepage not published" });
     }
     catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load homepage" });
     }
 });
 /**
- * GET /api/shop/:slug/pages/:pageSlug — published CMS page by slug
+ * GET /api/shop/:slug/site-pages — navigation list from active Chaslay builder layout
+ */
+router.get("/:slug/site-pages", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled) {
+            return res.status(404).json({ error: "Shop not found or closed" });
+        }
+        if (!merchant.cmsHomepageEnabled) {
+            return res.json({ success: true, data: [] });
+        }
+        const pages = await chaslay_pagebuilder_service_1.ChaslayPagebuilderService.listActivePublishedPages(merchant.id);
+        res.json({
+            success: true,
+            data: pages.map((p) => ({
+                id: p.id,
+                title: p.title,
+                slug: p.is_homepage ? "home" : p.slug,
+                isHomepage: p.is_homepage,
+                sortOrder: p.sort_order,
+            })),
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load site pages" });
+    }
+});
+/**
+ * GET /api/shop/:slug/pages/:pageSlug — published CMS or Chaslay page by slug
  */
 router.get("/:slug/pages/:pageSlug", async (req, res) => {
     try {
@@ -628,43 +767,50 @@ router.get("/:slug/pages/:pageSlug", async (req, res) => {
         if (!merchant?.shopEnabled) {
             return res.status(404).json({ error: "Shop not found or closed" });
         }
-        if (req.params.pageSlug === "home") {
-            const home = await cms_service_1.CmsService.getPublishedHomepage(merchant.id);
-            if (!home || !merchant.cmsHomepageEnabled) {
-                return res.status(404).json({ error: "Page not found" });
+        const pageSlug = req.params.pageSlug;
+        if (merchant.cmsHomepageEnabled) {
+            await chaslay_pagebuilder_service_1.ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
+            const chaslayPage = await chaslay_pagebuilder_service_1.ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
+            if (chaslayPage) {
+                const seo = shopSeoFromMerchant(req, merchant, chaslayPage.title, "");
+                return res.json({
+                    success: true,
+                    data: {
+                        engine: "chaslay",
+                        id: chaslayPage.id,
+                        title: chaslayPage.title,
+                        slug: chaslayPage.slug,
+                        isHomepage: chaslayPage.is_homepage,
+                        editorState: chaslayPage.editor_state,
+                        seoTitle: seo.seoTitle,
+                        seoDescription: seo.seoDescription,
+                        publishedAt: chaslayPage.updated_at,
+                        merchant: {
+                            id: merchant.id,
+                            name: merchant.name,
+                            slug: merchant.slug,
+                            subdomain: merchant.subdomain,
+                            customDomain: merchant.customDomain,
+                            shopLogoUrl: merchant.shopLogoUrl,
+                            shopBannerUrl: merchant.shopBannerUrl,
+                            site: seo.site,
+                            storeHours: merchant.storeHours || {},
+                            address: merchant.address,
+                            city: merchant.city,
+                            country: merchant.country,
+                            phone: merchant.phone,
+                            email: merchant.email,
+                            reservationsEnabled: !!merchant.reservationsEnabled,
+                            acceptingOrders: merchant.acceptingOrders !== false,
+                            acceptingReservations: merchant.acceptingReservations !== false,
+                            vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
+                            language: merchant.shopLanguage || merchant.panelLanguage || "en",
+                        },
+                    },
+                });
             }
-            return res.json({
-                success: true,
-                data: {
-                    id: home.id,
-                    title: home.title,
-                    slug: home.slug,
-                    isHomepage: home.isHomepage,
-                    blocks: home.blocks || [],
-                    theme: home.theme || null,
-                    seoTitle: home.seoTitle,
-                    seoDescription: home.seoDescription,
-                    publishedAt: home.publishedAt,
-                },
-            });
         }
-        const page = await cms_service_1.CmsService.getPublishedBySlug(merchant.id, req.params.pageSlug);
-        if (!page)
-            return res.status(404).json({ error: "Page not found" });
-        res.json({
-            success: true,
-            data: {
-                id: page.id,
-                title: page.title,
-                slug: page.slug,
-                isHomepage: page.isHomepage,
-                blocks: page.blocks || [],
-                theme: page.theme || null,
-                seoTitle: page.seoTitle,
-                seoDescription: page.seoDescription,
-                publishedAt: page.publishedAt,
-            },
-        });
+        return res.status(404).json({ error: "Page not found" });
     }
     catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load page" });
@@ -741,74 +887,240 @@ router.get("/:slug/my-orders", async (req, res) => {
     }
 });
 /**
- * GET /api/shop/:slug/menu
+ * GET /api/shop/:slug/locations — public branch list for location picker
  */
-router.get("/:slug/menu", async (req, res) => {
+router.get("/:slug/locations", async (req, res) => {
     try {
         const merchant = await resolveMerchant(req.params.slug);
         if (!merchant || !merchant.shopEnabled) {
             return res.status(404).json({ error: "Shop not found or closed" });
         }
-        const db = (0, db_1.getDb)();
-        const [categories, products] = await Promise.all([
-            db.query.categories.findMany({
-                where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchant.id),
-                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder)],
-            }),
-            db.query.products.findMany({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true)),
-                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.products.name)],
-            }),
-        ]);
-        const groupsByProduct = await loadModifierGroupsByProduct(merchant.id, products.map((p) => p.id));
-        const catalogById = new Map(products.map((p) => [p.id, p]));
-        const toItem = (p) => mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct);
-        const menu = categories.map((cat) => ({
-            id: cat.id,
-            name: cat.name,
-            image: cat.imageUrl || null,
-            isOffersCategory: !!cat.isOffersCategory,
-            items: products.filter((p) => p.categoryId === cat.id).map(toItem),
-        }));
-        const uncategorized = products.filter((p) => !p.categoryId);
-        if (uncategorized.length) {
-            menu.push({
-                id: "uncategorized",
-                name: "Other",
-                image: null,
-                isOffersCategory: false,
-                items: uncategorized.map(toItem),
-            });
-        }
-        // Active featured offers for the Offers shelf badges
-        const activeOffers = await offers_service_1.OffersService.listActivePublic(merchant.id);
-        const featured = activeOffers
-            .filter((o) => o.featured)
-            .map((o) => ({
-            id: o.id,
-            name: o.name,
-            description: o.description,
-            badgeLabel: o.badgeLabel,
-            offerType: o.offerType,
-            rules: o.rules,
-            productIds: o.productIds || [],
-            categoryIds: o.categoryIds || [],
-            channels: o.channels,
-            daysOfWeek: o.daysOfWeek,
-            timeStart: o.timeStart,
-            timeEnd: o.timeEnd,
-            scheduleMode: o.scheduleMode,
-            validFrom: o.validFrom,
-            validTo: o.validTo,
-        }));
-        res.json({
-            success: true,
-            data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
-            offers: featured,
+        const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+        const locations = await LocationsService.listPublicForShop(merchant.id);
+        res.json({ success: true, locations });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load locations" });
+    }
+});
+async function handleShopMenu(req, res, locationSlugParam) {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant || !merchant.shopEnabled) {
+        return res.status(404).json({ error: "Shop not found or closed" });
+    }
+    const db = (0, db_1.getDb)();
+    const catalogChannel = (0, catalog_visibility_1.shopMenuCatalogChannel)(String(req.query.channel || ""), typeof req.query.table === "string" ? req.query.table : null);
+    const { locationId, locationSlug, locationName } = await resolveShopLocationId(merchant.id, locationSlugParam, typeof req.query.location === "string" ? req.query.location : null);
+    const [categories, products] = await Promise.all([
+        db.query.categories.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchant.id),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder)],
+        }),
+        db.query.products.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true)),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.products.name)],
+        }),
+    ]);
+    const { CatalogLocationService } = await Promise.resolve().then(() => __importStar(require("@/services/catalog-location.service")));
+    const { HqMenuService } = await Promise.resolve().then(() => __importStar(require("@/services/hq-menu.service")));
+    const withOverrides = await CatalogLocationService.applyLocationOverrides(merchant.id, locationId, products);
+    const filtered = (0, catalog_visibility_1.filterCatalogForChannel)(withOverrides, categories, catalogChannel);
+    const menuProductIds = await HqMenuService.resolveActiveProductIds(merchant.id, locationId, catalogChannel);
+    const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(filtered.products, menuProductIds);
+    const categoryIdsWithProducts = new Set(visibleProducts.map((p) => p.categoryId).filter(Boolean));
+    const visibleCategories = filtered.categories.filter((c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory);
+    const groupsByProduct = await loadModifierGroupsByProduct(merchant.id, visibleProducts.map((p) => p.id));
+    const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
+    const toItem = (p) => withPublicShopImageUrls(req, mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct));
+    const menu = visibleCategories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        image: (0, public_url_1.resolvePublicAssetUrl)(req, cat.imageUrl) || null,
+        isOffersCategory: !!cat.isOffersCategory,
+        deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
+        extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
+        items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
+    }));
+    const uncategorized = visibleProducts.filter((p) => !p.categoryId);
+    if (uncategorized.length) {
+        menu.push({
+            id: "uncategorized",
+            name: "Other",
+            image: null,
+            isOffersCategory: false,
+            items: uncategorized.map(toItem),
         });
+    }
+    const activeOffers = await offers_service_1.OffersService.listActivePublic(merchant.id);
+    const featured = activeOffers
+        .filter((o) => o.featured)
+        .map((o) => ({
+        id: o.id,
+        name: o.name,
+        description: o.description,
+        badgeLabel: o.badgeLabel,
+        offerType: o.offerType,
+        rules: o.rules,
+        productIds: o.productIds || [],
+        categoryIds: o.categoryIds || [],
+        channels: o.channels,
+        daysOfWeek: o.daysOfWeek,
+        timeStart: o.timeStart,
+        timeEnd: o.timeEnd,
+        scheduleMode: o.scheduleMode,
+        validFrom: o.validFrom,
+        validTo: o.validTo,
+    }));
+    res.json({
+        success: true,
+        data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
+        offers: featured,
+        catalogChannel,
+        location: { id: locationId, slug: locationSlug, name: locationName },
+    });
+}
+/**
+ * GET /api/shop/:slug/l/:locationSlug/menu — per-location menu
+ */
+router.get("/:slug/l/:locationSlug/menu", async (req, res) => {
+    try {
+        await handleShopMenu(req, res, req.params.locationSlug);
     }
     catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+    }
+});
+/**
+ * GET /api/shop/:slug/menu
+ */
+router.get("/:slug/menu", async (req, res) => {
+    try {
+        await handleShopMenu(req, res);
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+    }
+});
+/**
+ * GET /api/shop/:slug/table/:tableId/session — open/resume QR table session + order history
+ */
+router.get("/:slug/table/:tableId/session", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant || !merchant.shopEnabled) {
+            return res.status(404).json({ error: "Shop not found or closed" });
+        }
+        const tableId = String(req.params.tableId || "").trim();
+        if (!tableId)
+            return res.status(400).json({ error: "Table is required" });
+        const signed = String(req.query.s || "").trim();
+        if (signed && !(0, table_qr_token_1.verifyTableAccess)(merchant.id, tableId, signed)) {
+            return res.status(403).json({ error: "Invalid or expired table QR link" });
+        }
+        const { session, table } = await table_session_service_1.TableSessionService.openOrResume(merchant.id, tableId);
+        const summary = await table_session_service_1.TableSessionService.sessionSummary(merchant.id, session.id);
+        const qrSettings = (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings);
+        res.json({
+            success: true,
+            session: {
+                id: session.id,
+                token: session.sessionToken,
+                status: session.status,
+                tableId: table.id,
+                tableLabel: table.label,
+            },
+            table: { id: table.id, label: table.label, capacity: table.capacity },
+            orders: summary.orders.map((o) => ({
+                id: o.id,
+                orderNumber: o.orderNumber,
+                status: o.status,
+                total: Number(o.total),
+                createdAt: o.createdAt,
+                items: (o.items || []).map((i) => ({
+                    name: i.productName,
+                    quantity: Number(i.quantity),
+                    totalPrice: Number(i.totalPrice),
+                })),
+            })),
+            runningTotal: summary.total,
+            settings: {
+                qrAutoApprove: qrSettings.qrAutoApprove,
+                qrPayAtTableEnabled: qrSettings.qrPayAtTableEnabled,
+            },
+        });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to open table session" });
+    }
+});
+/**
+ * POST /api/shop/:slug/table/:tableId/payment-session — pay entire open table session (card)
+ */
+router.post("/:slug/table/:tableId/payment-session", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled)
+            return res.status(404).json({ error: "Shop not found" });
+        const qrSettings = (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings);
+        if (!qrSettings.qrPayAtTableEnabled) {
+            return res.status(400).json({ error: "Pay at table is not enabled for this venue" });
+        }
+        const tableId = String(req.params.tableId || "").trim();
+        const sessionToken = String(req.body?.tableSessionToken || "").trim();
+        const session = await table_session_service_1.TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
+        const summary = await table_session_service_1.TableSessionService.sessionSummary(merchant.id, session.id);
+        const unpaid = summary.orders.filter((o) => o.paymentStatus !== "completed");
+        if (!unpaid.length) {
+            return res.json({ success: true, alreadyPaid: true, total: 0 });
+        }
+        const total = unpaid.reduce((s, o) => s + Number(o.total || 0), 0);
+        const anchor = unpaid[0];
+        const meta = shopCheckoutRequestMeta(req);
+        const checkoutOrigin = (0, shop_public_url_1.resolveShopCheckoutOrigin)(merchant, meta.origin, meta.headerOrigin, meta.referer);
+        const returnUrl = (0, shop_public_url_1.shopTablePaymentReturnUrl)(merchant, tableId, {
+            origin: meta.origin,
+            shopPath: meta.shopPath,
+            sessionToken,
+            extraCandidates: [meta.headerOrigin, meta.referer],
+        });
+        const paySession = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, anchor.id, total, "CHF", returnUrl, checkoutOrigin);
+        res.json({
+            success: true,
+            sessionId: session.id,
+            total,
+            orderCount: unpaid.length,
+            paymentSession: {
+                id: paySession.id,
+                sessionData: paySession.sessionData,
+                clientKey: paySession.clientKey || merchant.adyenClientId,
+                environment: paySession.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
+            },
+        });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Table payment session failed",
+            demoConfirmAvailable: true,
+        });
+    }
+});
+/**
+ * POST /api/shop/:slug/table/:tableId/confirm-payment — mark all session orders paid
+ */
+router.post("/:slug/table/:tableId/confirm-payment", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled)
+            return res.status(404).json({ error: "Shop not found" });
+        const tableId = String(req.params.tableId || "").trim();
+        const sessionToken = String(req.body?.tableSessionToken || "").trim();
+        const session = await table_session_service_1.TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
+        await table_session_service_1.TableSessionService.markSessionOrdersPaid(merchant.id, session.id, "card");
+        await table_session_service_1.TableSessionService.markPaid(merchant.id, session.id);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Confirm payment failed" });
     }
 });
 /**
@@ -833,6 +1145,7 @@ router.get("/:slug/delivery-zones", async (req, res) => {
                 polygon: z.polygon,
                 minOrderAmount: z.minOrderAmount,
                 deliveryFee: z.deliveryFee,
+                freeDeliveryMinOrder: z.freeDeliveryMinOrder,
                 estimatedMinutes: z.estimatedMinutes,
                 color: z.color,
             })),
@@ -869,6 +1182,38 @@ router.get("/:slug/postal-suggest", async (req, res) => {
     }
 });
 /**
+ * GET /api/shop/:slug/address-suggest?q=
+ * Street autocomplete via LocationService (Photon, Nominatim fallback).
+ */
+router.get("/:slug/address-suggest", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant || !merchant.shopEnabled) {
+            return res.status(404).json({ error: "Shop not found" });
+        }
+        const q = String(req.query.q || "").trim();
+        if (q.length < 3) {
+            return res.json({ success: true, suggestions: [] });
+        }
+        const lang = String(req.query.lang || "").trim().slice(0, 2) || undefined;
+        const suggestions = await (0, location_service_1.autocompleteAddress)({
+            q,
+            countryCode: merchant.country,
+            lat: merchant.latitude != null ? Number(merchant.latitude) : null,
+            lng: merchant.longitude != null ? Number(merchant.longitude) : null,
+            lang,
+            limit: 8,
+        });
+        res.json({ success: true, suggestions });
+    }
+    catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Address lookup failed",
+            suggestions: [],
+        });
+    }
+});
+/**
  * POST /api/shop/:slug/geocode
  * Body: { query }
  */
@@ -881,7 +1226,7 @@ router.post("/:slug/geocode", async (req, res) => {
         const query = String(req.body.query || "").trim();
         if (!query)
             return res.status(400).json({ error: "query required" });
-        const result = await (0, geocode_1.geocodeQuery)(query);
+        const result = await (0, geocode_1.geocodeQuery)(query, { countryCode: merchant.country });
         if (!result.found) {
             return res.json({ success: true, found: false });
         }
@@ -912,18 +1257,22 @@ router.post("/:slug/check-delivery", async (req, res) => {
         const lng = req.body.lng != null ? Number(req.body.lng) : undefined;
         const zipCode = req.body.zipCode ? String(req.body.zipCode) : undefined;
         const subtotal = Number(req.body.subtotal || 0);
-        const zone = await findMatchingZone(merchant.id, lng, lat, zipCode);
+        const zone = await findMatchingZone(merchant, lng, lat, zipCode);
         if (!zone) {
+            const outsideMessage = (0, delivery_match_1.normalizeDeliveryMode)(merchant.deliveryMode) === "zipcode"
+                ? "Delivery is not available for this ZIP code"
+                : "Address is outside delivery zones";
             return res.json({
                 success: true,
                 deliverable: false,
                 open: hours.open,
                 todayLabel: hours.todayLabel,
-                error: "Address is outside delivery zones",
+                error: outsideMessage,
             });
         }
         const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
-        const fee = parseFloat(zone.deliveryFee?.toString() || "0");
+        const baseFee = parseFloat(zone.deliveryFee?.toString() || "0");
+        const fee = (0, delivery_match_1.computeEffectiveDeliveryFee)(zone, subtotal);
         const meetsMin = subtotal >= minOrder;
         res.json({
             success: true,
@@ -935,6 +1284,8 @@ router.post("/:slug/check-delivery", async (req, res) => {
                 name: zone.name,
                 minOrderAmount: minOrder,
                 deliveryFee: fee,
+                baseDeliveryFee: baseFee,
+                freeDeliveryMinOrder: parseFloat(zone.freeDeliveryMinOrder?.toString() || "0"),
                 estimatedMinutes: zone.estimatedMinutes,
             },
             meetsMinOrder: meetsMin,
@@ -991,6 +1342,21 @@ router.post("/:slug/auth/login", async (req, res) => {
     }
     catch (error) {
         res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
+    }
+});
+/**
+ * POST /api/shop/:slug/auth/forgot-password
+ */
+router.post("/:slug/auth/forgot-password", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled)
+            return res.status(404).json({ error: "Shop not found" });
+        await shop_customer_service_1.ShopCustomerService.requestPasswordReset(merchant.id, String(req.body?.email || ""));
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Reset failed" });
     }
 });
 /**
@@ -1238,7 +1604,7 @@ router.post("/:slug/vouchers/validate", async (req, res) => {
         const code = String(req.body?.code || "");
         const subtotal = Number(req.body?.subtotal || 0);
         const authCustomer = optionalCustomer(req);
-        const result = await voucher_service_1.VoucherService.validateForShop(merchant.id, code, subtotal, authCustomer.customerId);
+        const result = await voucher_service_1.VoucherService.validateForShop(merchant.id, code, subtotal, authCustomer.customerId, req.body?.orderType || req.body?.fulfillmentChannel || req.body?.channel);
         res.json({ success: true, ...result });
     }
     catch (error) {
@@ -1313,7 +1679,7 @@ router.get("/:slug/payment-options", async (req, res) => {
         const merchant = await resolveMerchant(req.params.slug);
         if (!merchant?.shopEnabled)
             return res.status(404).json({ error: "Shop not found" });
-        const cardReady = !!(merchant.adyenMerchantAccount && merchant.adyenApiKey && merchant.adyenClientId);
+        const cardReady = (0, shop_public_url_1.shopAdyenCardReady)(merchant);
         res.json({
             success: true,
             options: {
@@ -1323,7 +1689,7 @@ router.get("/:slug/payment-options", async (req, res) => {
                 cardReady,
                 currency: "CHF",
                 clientKey: cardReady ? merchant.adyenClientId : null,
-                environment: (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+                environment: adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
                 cardFeeFixed: Number(merchant.onlineCardFeeFixed || 0) || 0,
                 cardFeePercent: Number(merchant.onlineCardFeePercent || 0) || 0,
             },
@@ -1341,6 +1707,17 @@ router.get("/:slug/gift-cards/settings", async (req, res) => {
         const merchant = await resolveMerchant(req.params.slug);
         if (!merchant?.shopEnabled)
             return res.status(404).json({ error: "Shop not found" });
+        const licensed = await (0, gift_card_addon_1.merchantHasGiftCardsLicense)(merchant.id);
+        if (!licensed) {
+            return res.json({
+                success: true,
+                settings: shop_gift_card_service_1.ShopGiftCardService.publicSettings({
+                    ...shop_gift_card_service_1.ShopGiftCardService.settingsFromMerchant(merchant),
+                    enabled: false,
+                    onlinePurchaseEnabled: false,
+                }),
+            });
+        }
         res.json({
             success: true,
             settings: shop_gift_card_service_1.ShopGiftCardService.publicSettings(shop_gift_card_service_1.ShopGiftCardService.settingsFromMerchant(merchant)),
@@ -1373,20 +1750,32 @@ router.post("/:slug/gift-cards/purchase", async (req, res) => {
         const merchant = await resolveMerchant(req.params.slug);
         if (!merchant?.shopEnabled)
             return res.status(404).json({ error: "Shop not found" });
+        if (!(await (0, gift_card_addon_1.merchantHasGiftCardsLicense)(merchant.id))) {
+            return res.status(403).json({ error: "Gift cards are not enabled for this shop" });
+        }
         const body = req.body || {};
+        const deliveryType = body.deliveryType === "physical" ? "physical" : "digital";
         const result = await shop_gift_card_service_1.ShopGiftCardService.createOnlinePurchase(merchant, req.params.slug, {
             amount: Number(body.amount),
+            deliveryType,
             recipientEmail: body.recipientEmail,
             recipientName: body.recipientName,
             senderName: body.senderName,
             senderEmail: body.senderEmail,
             message: body.message,
+            shippingAddress: body.shippingAddress,
+            shippingZip: body.shippingZip,
+            shippingCity: body.shippingCity,
+            shippingCountry: body.shippingCountry,
+            origin: body.origin,
+            shopPath: body.shopPath,
         });
         res.status(201).json({
             success: true,
             purchase: {
                 id: result.purchase.id,
                 amount: result.amount,
+                deliveryType: result.purchase.deliveryType,
                 recipientEmail: result.purchase.recipientEmail,
                 paymentStatus: result.purchase.paymentStatus,
             },
@@ -1416,18 +1805,7 @@ router.get("/:slug/gift-cards/purchase/:purchaseId", async (req, res) => {
         }
         res.json({
             success: true,
-            purchase: {
-                id: purchase.id,
-                amount: purchase.amount,
-                recipientEmail: purchase.recipientEmail,
-                recipientName: purchase.recipientName,
-                senderName: purchase.senderName,
-                message: purchase.message,
-                paymentStatus: purchase.paymentStatus,
-                fulfilledAt: purchase.fulfilledAt,
-                cardCode: card?.ecardCode || null,
-                cardBalance: card?.balance || null,
-            },
+            purchase: shop_gift_card_service_1.ShopGiftCardService.purchasePublicView(purchase, card),
         });
     }
     catch (error) {
@@ -1469,13 +1847,21 @@ router.post("/:slug/orders", async (req, res) => {
         if (!merchant || !merchant.shopEnabled) {
             return res.status(404).json({ error: "Shop not found or closed" });
         }
+        const rateKey = `${req.ip || "unknown"}:${merchant.id}`;
+        const rate = (0, shop_rate_limit_1.checkShopOrderRateLimit)(rateKey);
+        if (!rate.ok) {
+            return res.status(429).json({
+                error: "Too many orders. Please wait a moment and try again.",
+                retryAfterSec: rate.retryAfterSec,
+            });
+        }
         if ((0, vacation_1.isVacationActive)(merchant.vacationSettings)) {
             return res.status(400).json({ error: vacation_1.VACATION_BLOCK_MESSAGE });
         }
         if (merchant.acceptingOrders === false) {
             return res.status(400).json({ error: vacation_1.NOT_ACCEPTING_ORDERS_MESSAGE });
         }
-        const { items, customerEmail, customerPhone, customerName, notes, shippingAddress, city, fulfillmentChannel = "takeaway", lat, lng, zipCode, paymentMethod = "cash", tipAmount = 0, scheduledFor, guestCheckout = true, pointsToRedeem = 0, voucherCode, giftCardCode, } = req.body;
+        const { items, customerEmail, customerPhone, customerName, notes, shippingAddress, city, fulfillmentChannel = "takeaway", lat, lng, zipCode, paymentMethod = "cash", tipAmount = 0, scheduledFor, guestCheckout = true, pointsToRedeem = 0, voucherCode, giftCardCode, tableId, tableSessionToken, orderSource: requestedOrderSource, kioskToken, badgeNumber, } = req.body;
         if (scheduledFor) {
             const when = new Date(scheduledFor);
             if (!Number.isNaN(when.getTime())) {
@@ -1493,14 +1879,63 @@ router.post("/:slug/orders", async (req, res) => {
         if (!items?.length) {
             return res.status(400).json({ error: "Order items are required" });
         }
-        if (!customerName?.trim() || !customerPhone?.trim()) {
+        const qrTableId = String(tableId || "").trim() || null;
+        const isQrTableOrder = !!qrTableId;
+        const resolvedKioskToken = String(kioskToken || "").trim();
+        const isKioskOrder = requestedOrderSource === "kiosk" ||
+            (!!resolvedKioskToken && requestedOrderSource !== "online_shop");
+        let kioskSettings = null;
+        if (isKioskOrder) {
+            try {
+                const { KioskService } = await Promise.resolve().then(() => __importStar(require("@/services/kiosk.service")));
+                kioskSettings = await KioskService.assertTokenForMerchant(merchant.id, resolvedKioskToken);
+            }
+            catch (err) {
+                return res.status(403).json({
+                    error: err instanceof Error ? err.message : "Invalid kiosk access",
+                });
+            }
+        }
+        const kioskBadge = String(badgeNumber || "").trim();
+        let resolvedTableSession = null;
+        let resolvedTableLabel = null;
+        if (isQrTableOrder) {
+            try {
+                resolvedTableSession = await table_session_service_1.TableSessionService.assertOpenSession(merchant.id, qrTableId, tableSessionToken);
+                const table = await table_session_service_1.TableSessionService.resolveTable(merchant.id, qrTableId);
+                resolvedTableLabel = table?.label || null;
+            }
+            catch (err) {
+                return res.status(400).json({
+                    error: err instanceof Error ? err.message : "Invalid table session",
+                });
+            }
+        }
+        if (!isQrTableOrder && !isKioskOrder && (!customerName?.trim() || !customerPhone?.trim())) {
             return res.status(400).json({ error: "Name and phone are required" });
+        }
+        if (!isQrTableOrder && !isKioskOrder) {
+            const emailCheck = String(customerEmail || "").trim();
+            if (!emailCheck || !emailCheck.includes("@")) {
+                return res.status(400).json({ error: "Email is required" });
+            }
         }
         const rawPay = String(paymentMethod || "cash").toLowerCase().replace(/-/g, "_");
         const payMethod = rawPay === "card" ? "card" : rawPay === "pay_later" ? "pay_later" : "cash";
-        const channel = fulfillmentChannel === "dine_in" || fulfillmentChannel === "takeaway" || fulfillmentChannel === "delivery"
-            ? fulfillmentChannel
-            : "takeaway";
+        const rawKioskChannel = String(fulfillmentChannel || "").toLowerCase().replace(/-/g, "_");
+        const channel = isQrTableOrder
+            ? "dine_in"
+            : isKioskOrder
+                ? rawKioskChannel === "takeaway" ||
+                    rawKioskChannel === "delivery" ||
+                    rawKioskChannel === "dine_in"
+                    ? rawKioskChannel
+                    : "dine_in"
+                : fulfillmentChannel === "dine_in" ||
+                    fulfillmentChannel === "takeaway" ||
+                    fulfillmentChannel === "delivery"
+                    ? fulfillmentChannel
+                    : "takeaway";
         if (!channelEnabled(merchant, channel)) {
             return res.status(400).json({ error: "This order type is not available" });
         }
@@ -1548,14 +1983,34 @@ router.post("/:slug/orders", async (req, res) => {
                 : shippingAddress
                     ? JSON.stringify(shippingAddress)
                     : "";
-            if (!addr.trim()) {
+            if (!isKioskOrder && !addr.trim()) {
                 return res.status(400).json({ error: "Delivery address is required" });
             }
         }
-        const taxRate = merchant_settings_service_1.MerchantSettingsService.channelTaxRate(merchant, channel);
+        let taxRate = merchant_settings_service_1.MerchantSettingsService.channelTaxRate(merchant, channel);
+        if ((!taxRate || taxRate <= 0) && channel === "delivery") {
+            taxRate =
+                merchant_settings_service_1.MerchantSettingsService.channelTaxRate(merchant, "takeaway") ||
+                    Number(merchant.vatRate || 0) ||
+                    0;
+        }
+        const vatIncluded = merchant.taxIncludedInPrice === true;
         const db = (0, db_1.getDb)();
         const authCustomer = optionalCustomer(req);
         const loyaltyProgram = shop_loyalty_service_1.ShopLoyaltyService.programFromMerchant(merchant);
+        const merchantCategories = await db.query.categories.findMany({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchant.id),
+            columns: {
+                id: true,
+                deliveryPricingEnabled: true,
+                extraDeliveryPrice: true,
+            },
+        });
+        const categoryDeliveryMap = (0, shop_delivery_pricing_1.buildCategoryDeliveryPricingMap)(merchantCategories);
+        const deliveryPricingConfig = {
+            categoryPricingEnabled: merchant.categoryPricingEnabled === true,
+            deliveryMenuMarkup: merchant.deliveryMenuMarkup,
+        };
         let subtotal = 0;
         let taxAmount = 0;
         let rewardPointsNeeded = 0;
@@ -1618,10 +2073,14 @@ router.post("/:slug/orders", async (req, res) => {
                 return res.status(400).json({ error: resolved.error });
             }
             const extrasTotal = (0, money_1.roundMoney2)(resolved.extras.reduce((s, e) => s + e.price, 0));
-            const deliveryMarkup = channel === "delivery" ? Math.max(0, Number(merchant.deliveryMenuMarkup || 0) || 0) : 0;
+            const deliveryMarkup = (0, shop_delivery_pricing_1.resolveShopItemDeliveryMarkup)(deliveryPricingConfig, channel, product.categoryId, categoryDeliveryMap);
             const unitPrice = (0, money_1.roundMoney2)(parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge);
             const totalPrice = (0, money_1.roundMoney2)(unitPrice * qty);
-            const lineTax = product.isTaxable ? (0, money_1.roundMoney2)((totalPrice * taxRate) / 100) : 0;
+            const lineTax = product.isTaxable
+                ? vatIncluded
+                    ? (0, money_1.extractVatFromGross)(totalPrice, taxRate)
+                    : (0, money_1.roundMoney2)((totalPrice * taxRate) / 100)
+                : 0;
             subtotal += totalPrice;
             taxAmount += lineTax;
             // Flatten combo picks into selectedExtras for receipts/POS that only read extras
@@ -1675,7 +2134,7 @@ router.post("/:slug/orders", async (req, res) => {
         if (trimmedVoucher) {
             try {
                 const voucherBase = (0, money_1.roundMoney2)(Math.max(0, subtotal - offerDiscount));
-                const validated = await voucher_service_1.VoucherService.validateForShop(merchant.id, trimmedVoucher, voucherBase, authCustomer.customerId);
+                const validated = await voucher_service_1.VoucherService.validateForShop(merchant.id, trimmedVoucher, voucherBase, authCustomer.customerId, String(req.body?.fulfillmentChannel || req.body?.channel || req.body?.orderType || ""));
                 voucherDiscount = (0, money_1.roundMoney2)(Math.min(validated.discount, voucherBase));
                 appliedVoucher = {
                     voucherId: validated.voucherId,
@@ -1692,9 +2151,12 @@ router.post("/:slug/orders", async (req, res) => {
         let deliveryFee = 0;
         let deliveryZoneId;
         if (channel === "delivery") {
-            const zone = await findMatchingZone(merchant.id, lng != null ? Number(lng) : undefined, lat != null ? Number(lat) : undefined, zipCode);
+            const zone = await findMatchingZone(merchant, lng != null ? Number(lng) : undefined, lat != null ? Number(lat) : undefined, zipCode);
             if (!zone) {
-                return res.status(400).json({ error: "Address is outside delivery zones" });
+                const outsideMessage = (0, delivery_match_1.normalizeDeliveryMode)(merchant.deliveryMode) === "zipcode"
+                    ? "Delivery is not available for this ZIP code"
+                    : "Address is outside delivery zones";
+                return res.status(400).json({ error: outsideMessage });
             }
             const minOrder = parseFloat(zone.minOrderAmount?.toString() || "0");
             if (subtotal < minOrder) {
@@ -1702,7 +2164,7 @@ router.post("/:slug/orders", async (req, res) => {
                     error: `Minimum order for this zone is CHF ${minOrder.toFixed(2)}`,
                 });
             }
-            deliveryFee = parseFloat(zone.deliveryFee?.toString() || "0");
+            deliveryFee = (0, delivery_match_1.computeEffectiveDeliveryFee)(zone, subtotal);
             deliveryZoneId = zone.id;
         }
         // Points can cover food + delivery + tax after offer discount (not tip / card fee)
@@ -1758,38 +2220,21 @@ router.post("/:slug/orders", async (req, res) => {
         }
         let customerId = authCustomer.customerId;
         const emailNorm = customerEmail?.trim().toLowerCase();
-        if (!customerId && emailNorm) {
-            let customer = await db.query.customers.findFirst({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.customers.email, emailNorm)),
+        try {
+            const { CustomerService } = await Promise.resolve().then(() => __importStar(require("@/services/customer.service")));
+            const upserted = await CustomerService.upsertFromGuest(merchant.id, {
+                name: customerName,
+                phone: customerPhone,
+                email: emailNorm,
+                address: typeof shippingAddress === "string" ? shippingAddress : undefined,
+                zip: zipCode,
+                city,
             });
-            if (!customer) {
-                const [created] = await db
-                    .insert(db_1.schema.customers)
-                    .values({
-                    merchantId: merchant.id,
-                    email: emailNorm,
-                    phone: customerPhone,
-                    firstName: customerName?.split(" ")[0],
-                    lastName: customerName?.split(" ").slice(1).join(" ") || undefined,
-                    defaultAddress: typeof shippingAddress === "string" ? shippingAddress : undefined,
-                    defaultZip: zipCode,
-                    defaultCity: city,
-                })
-                    .returning();
-                customer = created;
-            }
-            else if (guestCheckout) {
-                await db
-                    .update(db_1.schema.customers)
-                    .set({
-                    phone: customerPhone || customer.phone,
-                    firstName: customerName?.split(" ")[0] || customer.firstName,
-                    lastName: customerName?.split(" ").slice(1).join(" ") || customer.lastName,
-                    updatedAt: new Date(),
-                })
-                    .where((0, drizzle_orm_1.eq)(db_1.schema.customers.id, customer.id));
-            }
-            customerId = customer.id;
+            if (!customerId && upserted?.id)
+                customerId = upserted.id;
+        }
+        catch (custErr) {
+            console.warn("Shop order customer upsert failed:", custErr);
         }
         const tip = (0, money_1.roundTo005)(Math.max(0, Number(tipAmount) || 0));
         const feeTax = (0, money_1.roundMoney2)((deliveryFee * taxRate) / 100);
@@ -1818,6 +2263,8 @@ router.post("/:slug/orders", async (req, res) => {
         const total = (0, money_1.roundTo005)(rawTotal);
         const notesWithRounding = [
             notes || "",
+            isKioskOrder && kioskBadge ? `[Kiosk badge: ${kioskBadge}]` : "",
+            isKioskOrder ? "[Kiosk order]" : "",
             offerEval.applied.length
                 ? `[Offers: ${offerEval.applied.map((a) => `${a.name} −CHF ${a.discount.toFixed(2)}`).join("; ")}]`
                 : "",
@@ -1863,8 +2310,8 @@ router.post("/:slug/orders", async (req, res) => {
             }
             else if (addressText) {
                 try {
-                    const geo = await (0, geocode_1.geocodeQuery)(addressText);
-                    if (geo?.lat != null && geo?.lng != null) {
+                    const geo = await (0, geocode_1.geocodeQuery)(addressText, { countryCode: merchant.country });
+                    if (geo.found) {
                         deliveryLat = String(geo.lat);
                         deliveryLng = String(geo.lng);
                     }
@@ -1879,17 +2326,43 @@ router.post("/:slug/orders", async (req, res) => {
             customerId = authCustomer.customerId;
         }
         const { normalizeDeliveryPlatformSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/delivery-platform-settings")));
-        const shopAutoAccept = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings)
-            .onlineShopAutoAccept;
-        const initialOrderStatus = shopAutoAccept ? "preparing" : "pending_approval";
+        const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
+        const qrSettings = (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings);
+        const shopAutoAccept = deliverySettings.onlineShopAutoAccept;
+        const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
+        const kioskCashNeedsApproval = kioskSettings?.kioskCashNeedsApproval !== false;
+        const kioskAutoAcceptCash = isKioskOrder && payMethod === "cash" && !kioskCashNeedsApproval;
+        const initialOrderStatus = shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash ? "preparing" : "pending_approval";
+        const resolvedOrderSource = isKioskOrder
+            ? "kiosk"
+            : isQrTableOrder
+                ? "qr_table"
+                : requestedOrderSource === "qr_table"
+                    ? "qr_table"
+                    : "online_shop";
+        const resolvedCustomerName = customerName?.trim() ||
+            (kioskBadge ? `Badge ${kioskBadge}` : null) ||
+            (resolvedTableLabel ? `Table ${resolvedTableLabel}` : isQrTableOrder ? "Table guest" : isKioskOrder ? "Kiosk guest" : "");
+        const resolvedCustomerPhone = customerPhone?.trim() || (isKioskOrder ? "KIOSK" : isQrTableOrder ? "QR" : "");
+        const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+        const orderLocationId = await (async () => {
+            try {
+                const resolved = await resolveShopLocationId(merchant.id, req.body?.locationSlug, typeof req.query.location === "string" ? req.query.location : null);
+                return resolved.locationId;
+            }
+            catch {
+                return LocationsService.getDefaultId(merchant.id);
+            }
+        })();
         const [order] = await db
             .insert(db_1.schema.orders)
             .values({
             merchantId: merchant.id,
+            locationId: orderLocationId,
             orderNumber,
             customerId,
             orderType: "web_shop",
-            orderSource: "online_shop",
+            orderSource: resolvedOrderSource,
             fulfillmentChannel: channel,
             status: initialOrderStatus,
             subtotal: subtotal.toFixed(2),
@@ -1915,9 +2388,12 @@ router.post("/:slug/orders", async (req, res) => {
             deliveryZoneId,
             scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
             estimatedReadyAt,
-            customerName: customerName.trim(),
-            customerPhone: customerPhone.trim(),
+            customerName: resolvedCustomerName,
+            customerPhone: resolvedCustomerPhone,
             customerEmail: emailNorm || null,
+            tableId: qrTableId,
+            tableLabel: resolvedTableLabel,
+            tableSessionId: resolvedTableSession?.id ?? null,
             deliveryLatitude: deliveryLat,
             deliveryLongitude: deliveryLng,
             deliveryTrackingToken,
@@ -2036,15 +2512,54 @@ router.post("/:slug/orders", async (req, res) => {
                 orderSource: "online_shop",
             });
         }
-        // Till notification on arrival; kitchen ticket when auto-accept or on manual Accept.
+        else if (qrAutoAccept) {
+            const { enterKitchenFromOrder } = await Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service")));
+            void enterKitchenFromOrder(merchant.id, order.id, {
+                printKitchen: true,
+                orderSource: "qr_table",
+            });
+        }
+        else if (isKioskOrder) {
+            const kioskAutoAcceptCard = kioskSettings?.kioskAutoAcceptCard !== false;
+            const kioskKitchenEnabled = kioskSettings?.autoPrintKitchen !== false;
+            const kioskShouldKitchen = kioskKitchenEnabled &&
+                initialOrderStatus === "preparing" &&
+                (kioskAutoAcceptCash || (payMethod === "card" && kioskAutoAcceptCard));
+            if (kioskShouldKitchen) {
+                const { enterKitchenFromOrder } = await Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service")));
+                void enterKitchenFromOrder(merchant.id, order.id, {
+                    printKitchen: true,
+                    orderSource: "kiosk",
+                });
+            }
+            try {
+                const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
+                await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "kiosk", {
+                    printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+                    printNotification: initialOrderStatus !== "preparing",
+                    printKitchen: kioskShouldKitchen,
+                    printReceipt: false,
+                });
+            }
+            catch (printErr) {
+                console.warn("Kiosk order print enqueue failed:", printErr);
+            }
+        }
+        // Till notification on arrival; kitchen ticket when auto-accept, on-arrival setting, or later on Accept.
+        const { normalizePosPrintSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-print-settings")));
+        const arrivalPrint = normalizePosPrintSettings(merchant.posPrintSettings);
+        const kitchenOnArrival = !shopAutoAccept && arrivalPrint.autoPrintOnlineOrdersOnArrival === true;
         try {
             const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
-            await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-                printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-                printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
-                printKitchen: false,
-                printReceipt: false,
-            });
+            if (!isKioskOrder) {
+                await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
+                    printDeliveryReceipt: order.fulfillmentChannel === "delivery",
+                    printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
+                    printKitchen: kitchenOnArrival,
+                    printReceipt: false,
+                    independentOfMasterAutoPrint: kitchenOnArrival,
+                });
+            }
         }
         catch (printErr) {
             console.warn("Shop order notification print enqueue failed:", printErr);
@@ -2055,6 +2570,11 @@ router.post("/:slug/orders", async (req, res) => {
             await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
                 guestLocale: guestLocale || null,
             });
+            if (shopAutoAccept) {
+                await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
+                    guestLocale: guestLocale || null,
+                });
+            }
         }
         catch (mailErr) {
             console.warn("Shop order confirmation email failed:", mailErr);
@@ -2062,20 +2582,25 @@ router.post("/:slug/orders", async (req, res) => {
         let paymentSession = null;
         if (payMethod === "card" && preCardTotal > 0) {
             try {
-                const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-                const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
-                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(finalOrder.total.toString()), "CHF", returnUrl);
+                const meta = shopCheckoutRequestMeta(req);
+                const checkoutOrigin = (0, shop_public_url_1.resolveShopCheckoutOrigin)(merchant, meta.origin, meta.headerOrigin, meta.referer);
+                const returnUrl = (0, shop_public_url_1.shopOrderPaymentReturnUrl)(merchant, order.id, {
+                    origin: meta.origin,
+                    shopPath: meta.shopPath,
+                    extraCandidates: [meta.headerOrigin, meta.referer],
+                });
+                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(finalOrder.total.toString()), "CHF", returnUrl, checkoutOrigin);
                 paymentSession = {
                     id: session.id,
                     sessionData: session.sessionData,
-                    clientKey: merchant.adyenClientId,
-                    environment: (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+                    clientKey: session.clientKey || merchant.adyenClientId,
+                    environment: session.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
                 };
             }
             catch (e) {
-                // Card selected but Adyen not ready — keep order awaiting_payment; client can retry or switch
+                // Card selected but Swisspayout not ready — keep order awaiting_payment; client can retry or switch
                 paymentSession = {
-                    error: e instanceof Error ? e.message : "Adyen not configured",
+                    error: e instanceof Error ? e.message : "Swisspayout not configured",
                     demoConfirmAvailable: true,
                 };
             }
@@ -2208,16 +2733,21 @@ router.post("/:slug/orders/:orderId/payment-session", async (req, res) => {
         if (order.paymentStatus === "completed") {
             return res.json({ success: true, alreadyPaid: true });
         }
-        const domain = process.env.DOMAIN || "manupos.webprintmedia.swiss";
-        const returnUrl = `https://${domain}/shop/${merchant.slug || req.params.slug}/order/${order.id}?paid=1`;
-        const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(order.total.toString()), "CHF", returnUrl);
+        const meta = shopCheckoutRequestMeta(req);
+        const checkoutOrigin = (0, shop_public_url_1.resolveShopCheckoutOrigin)(merchant, meta.origin, meta.headerOrigin, meta.referer);
+        const returnUrl = (0, shop_public_url_1.shopOrderPaymentReturnUrl)(merchant, order.id, {
+            origin: meta.origin,
+            shopPath: meta.shopPath,
+            extraCandidates: [meta.headerOrigin, meta.referer],
+        });
+        const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(order.total.toString()), "CHF", returnUrl, checkoutOrigin);
         res.json({
             success: true,
             paymentSession: {
                 id: session.id,
                 sessionData: session.sessionData,
-                clientKey: merchant.adyenClientId,
-                environment: (process.env.ADYEN_ENVIRONMENT || "test").toLowerCase() === "live" ? "live" : "test",
+                clientKey: session.clientKey || merchant.adyenClientId,
+                environment: session.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
             },
         });
     }

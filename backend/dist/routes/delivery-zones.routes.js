@@ -30,7 +30,7 @@ router.get("/", async (req, res) => {
  */
 router.post("/", async (req, res) => {
     try {
-        const { name, polygon, zipCodes, minOrderAmount, deliveryFee, estimatedMinutes, color, isActive, sortOrder, } = req.body;
+        const { name, polygon, zipCodes, minOrderAmount, deliveryFee, freeDeliveryMinOrder, estimatedMinutes, color, isActive, sortOrder, } = req.body;
         if (!name)
             return res.status(400).json({ error: "name is required" });
         const ring = (0, geo_1.normalizeRing)(polygon || []);
@@ -47,6 +47,7 @@ router.post("/", async (req, res) => {
             zipCodes: Array.isArray(zipCodes) ? zipCodes.map(String) : [],
             minOrderAmount: String(minOrderAmount ?? 0),
             deliveryFee: String(deliveryFee ?? 0),
+            freeDeliveryMinOrder: String(freeDeliveryMinOrder ?? 0),
             estimatedMinutes: estimatedMinutes ?? 45,
             color: color || "#0d9488",
             isActive: isActive !== false,
@@ -81,6 +82,9 @@ router.put("/:id", async (req, res) => {
             patch.minOrderAmount = String(req.body.minOrderAmount);
         if (req.body.deliveryFee !== undefined)
             patch.deliveryFee = String(req.body.deliveryFee);
+        if (req.body.freeDeliveryMinOrder !== undefined) {
+            patch.freeDeliveryMinOrder = String(req.body.freeDeliveryMinOrder);
+        }
         if (req.body.estimatedMinutes !== undefined)
             patch.estimatedMinutes = req.body.estimatedMinutes;
         if (req.body.color !== undefined)

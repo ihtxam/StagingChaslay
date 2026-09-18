@@ -255,7 +255,7 @@ class KdsService {
         return this.pushKitchen(merchantId, {
             ticketKey: displayNum,
             orderNumber: displayNum,
-            tableLabel: order.customerName?.trim()?.slice(0, 120) || null,
+            tableLabel: (order.tableLabel || order.customerName)?.trim()?.slice(0, 120) || null,
             channel: order.fulfillmentChannel || "takeaway",
             items,
         });
@@ -442,13 +442,14 @@ class KdsService {
         if (!item?.ticket || item.ticket.merchantId !== station.merchantId) {
             throw new Error("Item not found");
         }
+        const now = new Date();
         await db
             .update(db_1.schema.kdsTicketItems)
-            .set({ status: "ready", readyAt: new Date() })
+            .set({ status: "ready", readyAt: now })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.id, itemId));
         await db
             .update(db_1.schema.kdsTickets)
-            .set({ updatedAt: new Date() })
+            .set({ updatedAt: now })
             .where((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.id, item.ticketId));
         const allItems = await db.query.kdsTicketItems.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.ticketId, item.ticketId),

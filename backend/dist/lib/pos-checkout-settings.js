@@ -30,6 +30,8 @@ exports.DEFAULT_POS_CHECKOUT = {
     retailDineInEnabled: false,
     requireTableForDineIn: true,
     actionButtonSize: "md",
+    expressCheckoutEnabled: true,
+    showPosToasts: false,
 };
 function asNumberArray(v, fallback) {
     if (!Array.isArray(v))
@@ -39,6 +41,13 @@ function asNumberArray(v, fallback) {
 }
 function isRetailPosMode(raw) {
     return normalizePosCheckoutSettings(raw).posMode === "retail";
+}
+function resolveExpressCheckoutEnabled(src) {
+    if (src.expressCheckoutEnabled !== undefined)
+        return src.expressCheckoutEnabled !== false;
+    if (src.webposExpressEnabled !== undefined)
+        return src.webposExpressEnabled !== false;
+    return true;
 }
 function normalizePosCheckoutSettings(raw) {
     const src = (raw && typeof raw === "object" ? raw : {});
@@ -96,6 +105,8 @@ function normalizePosCheckoutSettings(raw) {
         actionButtonSize: src.actionButtonSize === "sm" || src.actionButtonSize === "lg"
             ? src.actionButtonSize
             : exports.DEFAULT_POS_CHECKOUT.actionButtonSize,
+        expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
+        showPosToasts: src.showPosToasts === true,
     };
 }
 //# sourceMappingURL=pos-checkout-settings.js.map

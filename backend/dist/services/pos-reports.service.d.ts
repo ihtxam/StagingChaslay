@@ -16,6 +16,8 @@ export type SalesScopeOpts = {
     staffId?: string | null;
     /** Fallback match for legacy orders without staffId. */
     staffName?: string | null;
+    /** When set, filter orders to this branch location. */
+    locationId?: string | null;
 };
 export declare class PosReportsService {
     /** Shift-scoped sales report (exact openedAt–closedAt window, not full calendar day). */
@@ -76,7 +78,7 @@ export declare class PosReportsService {
         tipsTotal: number;
         refundTotal: number;
         cancelledTotal: number;
-        /** Net sales + tips (money collected) */
+        /** Net (excl. VAT) + tax + tips − full refunds not already in sales */
         grandTotal: number;
         coversServed: number | null;
         vatRows: {
@@ -88,10 +90,10 @@ export declare class PosReportsService {
             brut: number;
         }[];
         paymentRows: {
+            percent: number;
             method: string;
             count: number;
             total: number;
-            percent: number;
         }[];
         refundRows: {
             method: string;
@@ -207,7 +209,7 @@ export declare class PosReportsService {
         tipsTotal: number;
         refundTotal: number;
         cancelledTotal: number;
-        /** Net sales + tips (money collected) */
+        /** Net (excl. VAT) + tax + tips − full refunds not already in sales */
         grandTotal: number;
         coversServed: number | null;
         vatRows: {
@@ -219,10 +221,10 @@ export declare class PosReportsService {
             brut: number;
         }[];
         paymentRows: {
+            percent: number;
             method: string;
             count: number;
             total: number;
-            percent: number;
         }[];
         refundRows: {
             method: string;
@@ -422,7 +424,7 @@ export declare class PosReportsService {
             tipsTotal: number;
             refundTotal: number;
             cancelledTotal: number;
-            /** Net sales + tips (money collected) */
+            /** Net (excl. VAT) + tax + tips − full refunds not already in sales */
             grandTotal: number;
             coversServed: number | null;
             vatRows: {
@@ -434,10 +436,10 @@ export declare class PosReportsService {
                 brut: number;
             }[];
             paymentRows: {
+                percent: number;
                 method: string;
                 count: number;
                 total: number;
-                percent: number;
             }[];
             refundRows: {
                 method: string;
@@ -504,6 +506,44 @@ export declare class PosReportsService {
             netSales: number;
             orders: number;
         };
+        byLocation: {
+            locationId: string;
+            name: string;
+            revenue: number;
+            orders: number;
+        }[];
+    }>;
+    /** Revenue and order count grouped by location (org-wide analytics). */
+    static getLocationBreakdown(merchantId: string, opts: {
+        from: string;
+        to: string;
+    } & SalesScopeOpts): Promise<{
+        locationId: string;
+        name: string;
+        revenue: number;
+        orders: number;
+    }[]>;
+    /** HQ dashboard — org-wide summary with per-location breakdown. */
+    static getOrgAnalytics(merchantId: string, opts: {
+        preset?: "today" | "yesterday" | "this_month";
+    }): Promise<{
+        range: {
+            preset: ReportPreset;
+            from: string;
+            to: string;
+            label: string;
+            start: string;
+            end: string;
+        };
+        totalRevenue: number;
+        totalOrders: number;
+        netTotal: number;
+        byLocation: {
+            locationId: string;
+            name: string;
+            revenue: number;
+            orders: number;
+        }[];
     }>;
     /** Top product ids by quantity sold over the last N days (for POS "Most Sold" category). */
     static getBestsellerProductIds(merchantId: string, opts?: {

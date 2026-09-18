@@ -1,4 +1,3 @@
-import { schema } from "@/db";
 export declare class LicensingService {
     /**
      * Generate a device ID for a new POS device
@@ -111,7 +110,7 @@ export declare class LicensingService {
     /**
      * Get licenses expiring soon (for renewal notifications)
      */
-    static getLicensesExpiringsoon(daysThreshold?: number): Promise<{
+    static getLicensesExpiringsoon(daysThreshold?: number): Promise<({
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -125,141 +124,19 @@ export declare class LicensingService {
         startsAt: Date;
         renewalNotifiedAt: Date | null;
         issuedByResellerId: string | null;
+    } & {
         merchant: {
             id: string;
             name: string;
             email: string;
-            passwordHash: string;
-            createdAt: Date;
-            updatedAt: Date;
-            phone: string | null;
-            status: string;
-            businessCategory: string | null;
-            businessLicense: string | null;
-            address: string | null;
-            city: string | null;
-            country: string | null;
-            vatNumber: string | null;
-            vatRate: string | null;
-            taxTakeawayRate: string | null;
-            taxDineInRate: string | null;
-            taxDeliveryRate: string | null;
-            taxIncludedInPrice: boolean;
-            vatAfterDiscount: boolean;
-            slug: string | null;
-            subdomain: string | null;
-            customDomain: string | null;
-            shopEnabled: boolean;
-            acceptingOrders: boolean;
-            acceptingReservations: boolean;
-            cmsHomepageEnabled: boolean;
-            pickupEnabled: boolean;
-            dineInEnabled: boolean;
-            deliveryEnabled: boolean;
-            channelSelectMode: string;
-            menuShowProductImages: boolean;
-            menuShowCategoryBanners: boolean;
-            cartLayout: string;
-            scheduledOrdersEnabled: boolean;
-            storeHours: Record<string, Record<string, {
-                open: string;
-                close: string;
-            }[]>> | null;
-            shopLogoUrl: string | null;
-            shopBannerUrl: string | null;
-            latitude: string | null;
-            longitude: string | null;
-            pickupEtaMinutes: number | null;
-            deliveryEtaMinutes: number | null;
-            minPreOrderDelayMinutes: number | null;
-            deliveryMenuMarkup: string | null;
-            deliveryDriverPayMode: string;
-            deliveryDriverHourlyRate: string | null;
-            deliveryPerOrderFee: string | null;
-            adyenMerchantAccount: string | null;
-            adyenApiKey: string | null;
-            adyenClientId: string | null;
-            adyenLiveEnvironment: boolean;
-            adyenLiveRegion: string;
-            adyenUseLegacyEndpoint: boolean;
-            webposExpressEnabled: boolean;
-            webposCashEnabled: boolean;
-            webposCardEnabled: boolean;
-            webposTerminalEnabled: boolean;
-            webposGiftCardEnabled: boolean;
-            webposInvoiceEnabled: boolean;
-            bankIban: string | null;
-            bankQrIban: string | null;
-            bankName: string | null;
-            bankAccountHolder: string | null;
-            invoiceSequence: number;
-            giftCardSettings: Record<string, unknown> | null;
-            onlineCardFeeFixed: string | null;
-            onlineCardFeePercent: string | null;
-            loyaltyEnabled: boolean;
-            loyaltyEarnPointsPerChf: string | null;
-            loyaltyRedeemPointsPerChf: number;
-            loyaltyPointsExpiryDays: number;
-            panelLanguage: string;
-            shopLanguage: string | null;
-            syncApiKey: string | null;
-            floorPlanEnabled: boolean;
-            paxOrderingEnabled: boolean;
-            coursesEnabled: boolean;
-            shiftsEnabled: boolean;
-            maxPosPosts: number;
-            maxWaiterPosts: number;
-            maxStaff: number;
-            inventoryAddonEnabled: boolean;
-            signageAddonEnabled: boolean;
-            signageScreenLimit: number;
-            kdsAddonEnabled: boolean;
-            odsAddonEnabled: boolean;
-            justEatAddonEnabled: boolean;
-            uberEatsAddonEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
-            inventoryWasteFactor: string;
-            inventoryAutoReorderEmailEnabled: boolean;
-            inventoryExpiryAlertDays: number;
-            posColorTheme: string;
-            reservationsEnabled: boolean;
-            reservationSettings: schema.ReservationSettings | null;
-            vacationSettings: schema.VacationSettings | null;
-            emailSmtpSettings: schema.MerchantSmtpSettings | null;
-            emailBrevoSettings: schema.MerchantBrevoSettings | null;
-            emailDeliveryMode: string;
-            marketingSettings: schema.MarketingSettings | null;
-            reportEmailSettings: schema.ReportEmailSettings | null;
-            posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
-            tableQrSettings: import("../lib/table-qr-settings").TableQrSettings | null;
-            posCheckoutSettings: Record<string, unknown> | null;
-            deliveryPlatformSettings: Record<string, unknown> | null;
-            subscriptionPlan: string | null;
-            trialEndsAt: Date | null;
-            subscriptionEndsAt: Date | null;
-            subscriptionBillingCycle: string | null;
-            adyenRecurringDetailReference: string | null;
             resellerId: string | null;
-            editionId: string | null;
-            planBillingPaid: boolean;
-            passwordSetAt: Date | null;
-            inviteTokenHash: string | null;
-            inviteTokenExpiresAt: Date | null;
-            inviteSentAt: Date | null;
-        };
+        } | null;
         device: {
             id: string;
-            isActive: boolean;
-            createdAt: Date;
-            merchantId: string;
-            deviceId: string;
             deviceName: string;
-            deviceType: string;
-            osVersion: string | null;
-            appVersion: string | null;
-            lastSync: Date | null;
-        };
-    }[]>;
+            deviceId: string;
+        } | null;
+    })[]>;
     /**
      * Mark renewal notification as sent
      */
@@ -267,7 +144,7 @@ export declare class LicensingService {
     /**
      * Get all licenses for a merchant
      */
-    static getMerchantLicenses(merchantId: string): Promise<{
+    static getMerchantLicenses(merchantId: string): Promise<({
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -281,18 +158,18 @@ export declare class LicensingService {
         startsAt: Date;
         renewalNotifiedAt: Date | null;
         issuedByResellerId: string | null;
+    } & {
+        merchant: {
+            id: string;
+            name: string;
+            email: string;
+            resellerId: string | null;
+        } | null;
         device: {
             id: string;
-            isActive: boolean;
-            createdAt: Date;
-            merchantId: string;
-            deviceId: string;
             deviceName: string;
-            deviceType: string;
-            osVersion: string | null;
-            appVersion: string | null;
-            lastSync: Date | null;
-        };
-    }[]>;
+            deviceId: string;
+        } | null;
+    })[]>;
 }
 //# sourceMappingURL=licensing.service.d.ts.map

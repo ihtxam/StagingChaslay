@@ -15,7 +15,7 @@ const permissions_1 = require("@/lib/permissions");
 /**
  * Middleware to verify JWT token
  */
-function verifyToken(req, res, next) {
+async function verifyToken(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -23,6 +23,7 @@ function verifyToken(req, res, next) {
         }
         const token = authHeader.substring(7);
         const payload = auth_service_1.AuthService.verifyToken(token);
+        await auth_service_1.AuthService.assertMerchantTokenEpoch(payload);
         req.user = payload;
         if (payload.merchantId) {
             req.merchantId = payload.merchantId;
@@ -30,7 +31,8 @@ function verifyToken(req, res, next) {
         next();
     }
     catch (error) {
-        res.status(401).json({ error: "Invalid or expired token" });
+        const message = error instanceof Error ? error.message : "Invalid or expired token";
+        res.status(401).json({ error: message });
     }
 }
 /**

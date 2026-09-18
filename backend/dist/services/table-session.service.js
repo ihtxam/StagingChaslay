@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TableSessionService = void 0;
 const crypto_1 = require("crypto");
@@ -73,6 +106,27 @@ class TableSessionService {
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.tableSessions.id, sessionId), (0, drizzle_orm_1.eq)(db_1.schema.tableSessions.merchantId, merchantId)))
             .returning();
         return row ?? null;
+    }
+    /** Mark every unpaid order on an open table session as paid (pay-at-table checkout). */
+    static async markSessionOrdersPaid(merchantId, sessionId, paymentMethod = "card") {
+        const db = (0, db_1.getDb)();
+        const orders = await this.listSessionOrders(merchantId, sessionId);
+        const unpaid = orders.filter((o) => o.paymentStatus !== "completed" && o.paymentStatus !== "paid");
+        if (!unpaid.length)
+            return { count: 0 };
+        const { OrderService } = await Promise.resolve().then(() => __importStar(require("@/services/order.service")));
+        for (const order of unpaid) {
+            await db
+                .update(db_1.schema.orders)
+                .set({
+                paymentStatus: "completed",
+                paymentMethod,
+                updatedAt: new Date(),
+            })
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id), (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId)));
+            await OrderService.updatePaymentStatus(merchantId, order.id, "completed");
+        }
+        return { count: unpaid.length };
     }
     static async sessionSummary(merchantId, sessionId) {
         const orders = await this.listSessionOrders(merchantId, sessionId);

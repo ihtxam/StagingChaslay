@@ -6,14 +6,19 @@ export declare class CategoryService {
     static createCategory(merchantId: string, name: string, description?: string, color?: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }>;
     /**
@@ -22,14 +27,19 @@ export declare class CategoryService {
     static getCategories(merchantId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }[]>;
     /**
@@ -38,14 +48,19 @@ export declare class CategoryService {
     static reorderCategories(merchantId: string, orderedIds: string[]): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }[]>;
     /**
@@ -54,14 +69,19 @@ export declare class CategoryService {
     static getCategoryById(merchantId: string, categoryId: string): Promise<{
         id: string;
         name: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         sortOrder: number;
         description: string | null;
         color: string | null;
-        imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         clientId: string | null;
     }>;
     /**
@@ -75,6 +95,11 @@ export declare class CategoryService {
         color: string | null;
         imageUrl: string | null;
         isOffersCategory: boolean;
+        visibility: {
+            channels: string[];
+        };
+        deliveryPricingEnabled: boolean;
+        extraDeliveryPrice: string | null;
         sortOrder: number;
         clientId: string | null;
         createdAt: Date;
@@ -93,26 +118,34 @@ export declare class CategoryService {
         category: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         };
         products: {
             id: string;
             name: string;
+            imageUrl: string | null;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
-            imageUrl: string | null;
+            visibility: {
+                channels: string[];
+            };
             clientId: string | null;
             categoryId: string | null;
             sku: string | null;
@@ -159,6 +192,7 @@ export declare class CategoryService {
             allowExtras: boolean;
             loyaltyRewardPoints: number | null;
             recipeYield: string;
+            similarProductIds: string[] | null;
         }[];
         productCount: number;
     }>;

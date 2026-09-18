@@ -4,6 +4,20 @@ import { type BusinessModule } from "@/lib/business-module";
 export type EditionRow = typeof schema.editions.$inferSelect;
 export declare class EditionService {
     static ensureDefaults(): Promise<void>;
+    /** Platform editions for shop-only / website / full POS packages. */
+    static ensureProductSurfaceEditions(): Promise<void>;
+    static getPlatformEditionByName(name: string): Promise<{
+        id: string;
+        ownerType: string;
+        ownerId: string | null;
+        name: string;
+        note: string | null;
+        businessCategory: string;
+        features: EditionFeatureKey[];
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+    } | null>;
     static list(opts?: {
         ownerType?: "platform" | "reseller";
         ownerId?: string | null;

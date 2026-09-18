@@ -44,6 +44,8 @@ const payment_breakdown_1 = require("@/lib/payment-breakdown");
 const gift_card_service_1 = require("@/services/gift-card.service");
 const adyen_terminal_poi_service_1 = require("@/services/adyen-terminal-poi.service");
 const adyen_service_1 = require("@/services/adyen.service");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const pos_open_ticket_1 = require("@/lib/pos-open-ticket");
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
     "completed",
@@ -118,13 +120,21 @@ function heldIdentity(cartJson) {
         tabNumber: tab || null,
     };
 }
+function normalizeHeldTicket(value) {
+    const raw = String(value || "")
+        .trim()
+        .replace(/^#/, "");
+    return raw ? `#${raw}` : "";
+}
 function sameHeldIdentity(a, b) {
-    if (a.ticketDisplay && b.ticketDisplay && a.ticketDisplay === b.ticketDisplay)
+    const aTicket = normalizeHeldTicket(a.ticketDisplay);
+    const bTicket = normalizeHeldTicket(b.ticketDisplay);
+    if (aTicket && bTicket && aTicket === bTicket)
         return true;
     if (a.tableId && b.tableId && a.tableId === b.tableId) {
-        if (a.ticketDisplay && b.ticketDisplay)
-            return a.ticketDisplay === b.ticketDisplay;
-        if (a.ticketDisplay || b.ticketDisplay)
+        if (aTicket && bTicket)
+            return aTicket === bTicket;
+        if (aTicket || bTicket)
             return false;
         return true;
     }
@@ -132,6 +142,71 @@ function sameHeldIdentity(a, b) {
         return true;
     }
     return false;
+}
+/** POS shout numbers like #6893 — not WEB-1 / WP- / table labels. */
+function isPosShoutTicket(value) {
+    const raw = String(value || "")
+        .trim()
+        .replace(/^#/, "");
+    return /^\d{3,6}$/.test(raw);
+}
+function extraPriceSum(extras) {
+    if (!Array.isArray(extras))
+        return 0;
+    return extras.reduce((sum, extra) => {
+        const row = extra && typeof extra === "object" ? extra : {};
+        return sum + (Number(row.price) || 0);
+    }, 0);
+}
+function comboPriceSum(combos) {
+    if (!Array.isArray(combos))
+        return 0;
+    return combos.reduce((sum, combo) => {
+        const row = combo && typeof combo === "object"
+            ? combo
+            : {};
+        return sum + (Number(row.extraPrice) || 0) + extraPriceSum(row.selectedExtras);
+    }, 0);
+}
+function kdsModifiers(raw) {
+    const mods = raw && typeof raw === "object" ? raw : {};
+    const selectedExtras = Array.isArray(mods.selectedExtras) ? mods.selectedExtras : [];
+    const comboSelections = Array.isArray(mods.comboSelections) ? mods.comboSelections : [];
+    return {
+        selectedExtras,
+        comboSelections,
+        unitPrice: Number(mods.unitPrice) || 0,
+        lineTotal: Number(mods.lineTotal) || 0,
+    };
+}
+function heldCartTotal(cartJson) {
+    const data = normalizeHeldCartJson(cartJson);
+    const cart = Array.isArray(data)
+        ? data
+        : data && typeof data === "object" && Array.isArray(data.cart)
+            ? (data.cart)
+            : [];
+    return cart.reduce((sum, line) => sum + (Number(line?.lineTotal) || 0), 0);
+}
+function openHeldWhere(merchantId) {
+    return (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.heldOrders.status, [...pos_open_ticket_1.OPEN_TICKET_STATUSES]), (0, drizzle_orm_1.isNull)(db_1.schema.heldOrders.closedAt));
+}
+async function closeHeldRow(merchantId, id, reason, paidTotal) {
+    const db = (0, db_1.getDb)();
+    const paid = paidTotal != null && Number.isFinite(Number(paidTotal)) ? Number(paidTotal).toFixed(2) : null;
+    const [row] = await db
+        .update(db_1.schema.heldOrders)
+        .set({
+        status: "closed",
+        closedAt: new Date(),
+        closedReason: reason,
+        ...(paid != null ? { paidTotal: paid } : {}),
+        updatedAt: new Date(),
+    })
+        .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)))
+        .returning();
+    console.info("[pos-held] soft-close", { merchantId, id, reason, paidTotal: paid });
+    return row;
 }
 class PosOrdersService {
     static cancelReasons() {
@@ -141,205 +216,219 @@ class PosOrdersService {
         return pos_print_settings_1.POS_REFUND_REASONS;
     }
     static async listPosOrders(merchantId, opts = {}) {
-        const db = (0, db_1.getDb)();
-        const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
-        const conditions = [
-            (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId),
-            // POS register sales + online shop orders (web_shop) for the Orders board
-            (0, drizzle_orm_1.inArray)(db_1.schema.orders.orderType, ["pos", "web_shop"]),
-        ];
-        if (opts.status && opts.status !== "all") {
-            if (opts.status === "completed") {
-                // Unpaid invoice POS sales stay in history (status may still be preparing).
-                conditions.push((0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.status, "completed"), (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.paymentMethod, "invoice"), (0, drizzle_orm_1.eq)(db_1.schema.orders.paymentStatus, "awaiting_payment"))));
-            }
-            else {
-                conditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.status, opts.status));
-            }
-        }
-        const q = String(opts.q || "").trim();
-        const bareQ = q.replace(/^#/, "");
-        const searchParts = q
-            ? [
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.clientId, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.invoiceNumber, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.customerName, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.paymentMethod, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.tableLabel, `%${q}%`),
-                (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${q}%`),
-            ]
-            : [];
-        if (bareQ && bareQ !== q) {
-            searchParts.push((0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${bareQ}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${bareQ}%`));
-        }
-        if (/^\d{1,6}$/.test(bareQ)) {
-            const guestNum = Number(bareQ);
-            searchParts.push((0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:#${bareQ}]%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:#${bareQ}]%`));
-            if (Number.isFinite(guestNum)) {
-                searchParts.push((0, drizzle_orm_1.eq)(db_1.schema.orders.guestCount, guestNum));
-            }
-        }
-        const searchCond = searchParts.length ? (0, drizzle_orm_1.or)(...searchParts) : null;
-        // Include orders created in range OR scheduled (pickup/delivery) in range so a
-        // future delivery time does not hide a ticket from today's history.
-        // A ref search (WP-… / INV-… / kitchen #1001) also matches outside the date window.
-        if (opts.from || opts.to) {
-            const start = opts.from ? (0, vacation_1.zurichDayBounds)(opts.from).start : new Date(0);
-            const end = opts.to ? (0, vacation_1.zurichDayBounds)(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
-            const createdInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, end));
-            const scheduledInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.scheduledFor, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.scheduledFor, end));
-            const inRange = (0, drizzle_orm_1.or)(createdInRange, scheduledInRange);
-            const looksLikeRef = /^(WP-|INV-|ORD-|TX-|WEB-|DI-|#)/i.test(q) ||
-                /^\d{1,6}$/.test(bareQ) ||
-                q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
-            if (searchCond && looksLikeRef) {
-                conditions.push((0, drizzle_orm_1.or)(inRange, searchCond));
-            }
-            else if (searchCond) {
-                conditions.push((0, drizzle_orm_1.and)(inRange, searchCond));
-            }
-            else {
-                conditions.push(inRange);
-            }
-        }
-        else if (searchCond) {
-            conditions.push(searchCond);
-        }
-        const rows = await db.query.orders.findMany({
-            where: (0, drizzle_orm_1.and)(...conditions),
-            with: {
-                items: {
-                    with: { product: true },
-                },
-                customer: true,
-            },
-            orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
-            limit,
-        });
-        const orderIds = rows.map((o) => o.id);
-        const assignedIds = [
-            ...new Set(rows.map((r) => r.assignedDeliveryStaffId).filter(Boolean)),
-        ];
-        const driverNameById = new Map();
-        if (assignedIds.length) {
-            const drivers = await db.query.merchantStaff.findMany({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.merchantStaff.id, assignedIds)),
-                columns: { id: true, name: true },
-            });
-            for (const d of drivers)
-                driverNameById.set(d.id, d.name);
-        }
-        const refundsByOrder = new Map();
-        if (orderIds.length) {
-            try {
-                const refundRows = await db.query.orderRefunds.findMany({
-                    where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orderRefunds.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.orderRefunds.orderId, orderIds)),
-                    orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orderRefunds.createdAt)],
-                });
-                for (const rf of refundRows) {
-                    const list = refundsByOrder.get(rf.orderId) || [];
-                    list.push({
-                        id: rf.id,
-                        kind: rf.kind,
-                        amount: Number(rf.amount),
-                        reason: rf.reason || null,
-                        staffName: rf.staffName || null,
-                        items: rf.itemsJson || [],
-                        allocation: rf.allocationJson || null,
-                        createdAt: rf.createdAt?.toISOString?.() ?? null,
-                    });
-                    refundsByOrder.set(rf.orderId, list);
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+            const conditions = [
+                (0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId),
+                // POS register sales + online shop orders (web_shop + legacy online) for the Orders board
+                (0, drizzle_orm_1.inArray)(db_1.schema.orders.orderType, ["pos", "web_shop", "online"]),
+            ];
+            if (opts.status && opts.status !== "all") {
+                if (opts.status === "completed") {
+                    // Unpaid invoice POS sales stay in history (status may still be preparing).
+                    conditions.push((0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.status, "completed"), (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.paymentMethod, "invoice"), (0, drizzle_orm_1.eq)(db_1.schema.orders.paymentStatus, "awaiting_payment"))));
+                }
+                else {
+                    conditions.push((0, drizzle_orm_1.eq)(db_1.schema.orders.status, opts.status));
                 }
             }
-            catch {
-                /* table may not exist yet on older DBs */
+            const q = String(opts.q || "").trim();
+            const bareQ = q.replace(/^#/, "");
+            const numericQ = /^\d{3,}$/.test(bareQ);
+            const searchParts = q
+                ? numericQ
+                    ? [
+                        (0, drizzle_orm_1.eq)(db_1.schema.orders.orderNumber, bareQ),
+                        (0, drizzle_orm_1.eq)(db_1.schema.orders.orderNumber, `#${bareQ}`),
+                        (0, drizzle_orm_1.eq)(db_1.schema.orders.invoiceNumber, bareQ),
+                        (0, drizzle_orm_1.eq)(db_1.schema.orders.clientId, bareQ),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%-${bareQ}`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:${bareQ}]%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:${bareQ}]%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:#${bareQ}]%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[tab:#${bareQ}]%`),
+                    ]
+                    : [
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.clientId, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.invoiceNumber, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.customerName, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.paymentMethod, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.tableLabel, `%${q}%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${q}%`),
+                    ]
+                : [];
+            if (!numericQ && bareQ && bareQ !== q) {
+                searchParts.push((0, drizzle_orm_1.ilike)(db_1.schema.orders.orderNumber, `%${bareQ}%`), (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%${bareQ}%`));
             }
-        }
-        return rows.map((o) => {
-            const notes = String(o.notes || "");
-            const ticketMatch = notes.match(/\[ticket:([^\]]+)\]/i);
-            const tabMatch = notes.match(/\[tab:([^\]]+)\]/i);
-            let ticketDisplay = ticketMatch?.[1]?.trim() || null;
-            if (ticketDisplay && !ticketDisplay.startsWith("#")) {
-                ticketDisplay = `#${ticketDisplay.replace(/^#/, "")}`;
+            const searchCond = searchParts.length ? (0, drizzle_orm_1.or)(...searchParts) : null;
+            // Include orders created in range OR scheduled (pickup/delivery) in range so a
+            // future delivery time does not hide a ticket from today's history.
+            // A ref search (WP-… / INV-… / kitchen #1001) also matches outside the date window.
+            if (opts.from || opts.to) {
+                const start = opts.from ? (0, vacation_1.zurichDayBounds)(opts.from).start : new Date(0);
+                const end = opts.to ? (0, vacation_1.zurichDayBounds)(opts.to).end : new Date("9999-12-31T23:59:59.999Z");
+                const createdInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.createdAt, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.createdAt, end));
+                const scheduledInRange = (0, drizzle_orm_1.and)((0, drizzle_orm_1.gte)(db_1.schema.orders.scheduledFor, start), (0, drizzle_orm_1.lte)(db_1.schema.orders.scheduledFor, end));
+                const inRange = (0, drizzle_orm_1.or)(createdInRange, scheduledInRange);
+                const looksLikeRef = /^(WP-|INV-|ORD-|TX-|WEB-|DI-|#)/i.test(q) ||
+                    /^\d{1,6}$/.test(bareQ) ||
+                    q.replace(/[^A-Za-z0-9-]/g, "").length >= 8;
+                if (searchCond && looksLikeRef) {
+                    conditions.push((0, drizzle_orm_1.or)(inRange, searchCond));
+                }
+                else if (searchCond) {
+                    conditions.push((0, drizzle_orm_1.and)(inRange, searchCond));
+                }
+                else {
+                    conditions.push(inRange);
+                }
             }
-            const tabNumber = tabMatch?.[1]?.trim() ||
-                (o.guestCount != null && Number(o.guestCount) > 0 ? String(o.guestCount) : null);
-            return {
-                id: o.id,
-                orderNumber: o.orderNumber,
-                clientId: o.clientId,
-                orderType: o.orderType,
-                orderSource: o.orderSource,
-                externalOrderId: o.externalOrderId,
-                status: o.status,
-                channel: o.fulfillmentChannel,
-                paymentMethod: o.paymentMethod,
-                paymentBreakdown: o.paymentBreakdown ?? null,
-                paymentStatus: o.paymentStatus,
-                invoiceNumber: o.invoiceNumber || null,
-                invoiceIssuedAt: o.invoiceIssuedAt || null,
-                invoiceDueAt: o.invoiceDueAt || null,
-                subtotal: Number(o.subtotal),
-                taxAmount: Number(o.taxAmount),
-                discountAmount: Number(o.discountAmount || 0),
-                tipAmount: Number(o.tipAmount || 0),
-                roundingAmount: Number(o.roundingAmount || 0),
-                total: Number(o.total),
-                refundAmount: Number(o.refundAmount || 0),
-                cancelReason: o.cancelReason,
-                cancelledAt: o.cancelledAt,
-                refundedAt: o.refundedAt,
-                refundReason: o.refundReason || null,
-                refundHistory: refundsByOrder.get(o.id) || [],
-                notes: o.notes,
-                tableLabel: o.tableLabel,
-                guestCount: o.guestCount,
-                ticketDisplay,
-                tabNumber,
-                staffName: o.staffName,
-                assignedDeliveryStaffId: o.assignedDeliveryStaffId || null,
-                assignedDriverName: o.assignedDeliveryStaffId
-                    ? driverNameById.get(o.assignedDeliveryStaffId) || null
-                    : null,
-                masterOrderId: o.masterOrderId,
-                splitCheckNumber: o.splitCheckNumber,
-                customerName: resolveOrderCustomerName(o),
-                pointsEarned: o.pointsEarned ?? 0,
-                pointsRedeemed: o.pointsRedeemed ?? 0,
-                customerPhone: o.customerPhone,
-                shippingAddress: o.shippingAddress,
-                deliveryLatitude: o.deliveryLatitude != null && o.deliveryLatitude !== ""
-                    ? Number(o.deliveryLatitude)
-                    : null,
-                deliveryLongitude: o.deliveryLongitude != null && o.deliveryLongitude !== ""
-                    ? Number(o.deliveryLongitude)
-                    : null,
-                deliveryTrackingToken: o.deliveryTrackingToken || null,
-                scheduledFor: o.scheduledFor,
-                createdAt: o.createdAt,
-                completedAt: o.completedAt,
-                adyenReference: o.adyenReference ?? null,
-                adyenCustomerReceiptJson: o.adyenCustomerReceiptJson ?? null,
-                adyenCashierReceiptJson: o.adyenCashierReceiptJson ?? null,
-                items: (o.items || []).map((i) => {
-                    const name = (0, order_item_name_1.resolveOrderItemName)(i.productName, i.product?.name);
-                    return {
-                        id: i.id,
-                        productId: i.productId,
-                        categoryId: i.product?.categoryId || null,
-                        name,
-                        productName: name,
-                        quantity: Number(i.quantity),
-                        unitPrice: Number(i.unitPrice),
-                        totalPrice: Number(i.totalPrice),
-                        refundedQuantity: Number(i.refundedQuantity || 0),
-                        selectedExtras: i.selectedExtras || [],
-                        comboSelections: i.comboSelections || [],
-                    };
-                }),
-            };
+            else if (searchCond) {
+                conditions.push(searchCond);
+            }
+            const rows = await db.query.orders.findMany({
+                where: (0, drizzle_orm_1.and)(...conditions),
+                with: {
+                    items: {
+                        with: { product: true },
+                    },
+                    customer: true,
+                },
+                orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
+                limit,
+            });
+            const orderIds = rows.map((o) => o.id);
+            const assignedIds = [
+                ...new Set(rows.map((r) => r.assignedDeliveryStaffId).filter(Boolean)),
+            ];
+            const driverNameById = new Map();
+            if (assignedIds.length) {
+                const drivers = await db.query.merchantStaff.findMany({
+                    where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.merchantStaff.id, assignedIds)),
+                    columns: { id: true, name: true },
+                });
+                for (const d of drivers)
+                    driverNameById.set(d.id, d.name);
+            }
+            const refundsByOrder = new Map();
+            if (orderIds.length) {
+                try {
+                    const refundRows = await db.query.orderRefunds.findMany({
+                        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orderRefunds.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.orderRefunds.orderId, orderIds)),
+                        orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orderRefunds.createdAt)],
+                    });
+                    for (const rf of refundRows) {
+                        const list = refundsByOrder.get(rf.orderId) || [];
+                        list.push({
+                            id: rf.id,
+                            kind: rf.kind,
+                            amount: Number(rf.amount),
+                            reason: rf.reason || null,
+                            staffName: rf.staffName || null,
+                            items: rf.itemsJson || [],
+                            allocation: rf.allocationJson || null,
+                            createdAt: rf.createdAt?.toISOString?.() ?? null,
+                        });
+                        refundsByOrder.set(rf.orderId, list);
+                    }
+                }
+                catch {
+                    /* table may not exist yet on older DBs */
+                }
+            }
+            return rows.map((o) => {
+                const notes = String(o.notes || "");
+                const ticketMatch = notes.match(/\[ticket:([^\]]+)\]/i);
+                const tabMatch = notes.match(/\[tab:([^\]]+)\]/i);
+                let ticketDisplay = ticketMatch?.[1]?.trim() || null;
+                if (ticketDisplay && !ticketDisplay.startsWith("#")) {
+                    ticketDisplay = `#${ticketDisplay.replace(/^#/, "")}`;
+                }
+                const tabNumber = tabMatch?.[1]?.trim() ||
+                    (o.guestCount != null && Number(o.guestCount) > 0 ? String(o.guestCount) : null);
+                return {
+                    id: o.id,
+                    orderNumber: o.orderNumber,
+                    clientId: o.clientId,
+                    orderType: o.orderType,
+                    orderSource: o.orderSource,
+                    externalOrderId: o.externalOrderId,
+                    status: o.status,
+                    channel: o.fulfillmentChannel,
+                    fulfillmentChannel: o.fulfillmentChannel,
+                    paymentMethod: o.paymentMethod,
+                    paymentBreakdown: o.paymentBreakdown ?? null,
+                    paymentStatus: o.paymentStatus,
+                    invoiceNumber: o.invoiceNumber || null,
+                    invoiceIssuedAt: o.invoiceIssuedAt || null,
+                    invoiceDueAt: o.invoiceDueAt || null,
+                    subtotal: Number(o.subtotal),
+                    taxAmount: Number(o.taxAmount),
+                    taxRate: Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
+                        ? (0, money_1.roundMoney2)((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+                        : undefined,
+                    discountAmount: Number(o.discountAmount || 0),
+                    tipAmount: Number(o.tipAmount || 0),
+                    roundingAmount: Number(o.roundingAmount || 0),
+                    deliveryFee: Number(o.deliveryFee || 0),
+                    cardFee: Number(o.cardFee || 0),
+                    total: Number(o.total),
+                    refundAmount: Number(o.refundAmount || 0),
+                    cancelReason: o.cancelReason,
+                    cancelledAt: o.cancelledAt,
+                    refundedAt: o.refundedAt,
+                    refundReason: o.refundReason || null,
+                    refundHistory: refundsByOrder.get(o.id) || [],
+                    notes: o.notes,
+                    tableLabel: o.tableLabel,
+                    guestCount: o.guestCount,
+                    ticketDisplay,
+                    tabNumber,
+                    staffName: o.staffName,
+                    assignedDeliveryStaffId: o.assignedDeliveryStaffId || null,
+                    assignedDriverName: o.assignedDeliveryStaffId
+                        ? driverNameById.get(o.assignedDeliveryStaffId) || null
+                        : null,
+                    masterOrderId: o.masterOrderId,
+                    splitCheckNumber: o.splitCheckNumber,
+                    customerName: resolveOrderCustomerName(o),
+                    pointsEarned: o.pointsEarned ?? 0,
+                    pointsRedeemed: o.pointsRedeemed ?? 0,
+                    customerPhone: o.customerPhone,
+                    shippingAddress: o.shippingAddress,
+                    deliveryLatitude: o.deliveryLatitude != null && o.deliveryLatitude !== ""
+                        ? Number(o.deliveryLatitude)
+                        : null,
+                    deliveryLongitude: o.deliveryLongitude != null && o.deliveryLongitude !== ""
+                        ? Number(o.deliveryLongitude)
+                        : null,
+                    deliveryTrackingToken: o.deliveryTrackingToken || null,
+                    scheduledFor: o.scheduledFor,
+                    createdAt: o.createdAt,
+                    completedAt: o.completedAt,
+                    adyenReference: o.adyenReference ?? null,
+                    adyenCustomerReceiptJson: o.adyenCustomerReceiptJson ?? null,
+                    adyenCashierReceiptJson: o.adyenCashierReceiptJson ?? null,
+                    items: (o.items || []).map((i) => {
+                        const name = (0, order_item_name_1.resolveOrderItemName)(i.productName, i.product?.name);
+                        return {
+                            id: i.id,
+                            productId: i.productId,
+                            categoryId: i.product?.categoryId || null,
+                            name,
+                            productName: name,
+                            quantity: Number(i.quantity),
+                            unitPrice: Number(i.unitPrice),
+                            totalPrice: Number(i.totalPrice),
+                            refundedQuantity: Number(i.refundedQuantity || 0),
+                            selectedExtras: i.selectedExtras || [],
+                            comboSelections: i.comboSelections || [],
+                        };
+                    }),
+                };
+            });
         });
     }
     static async cancelOrder(merchantId, orderId, reason) {
@@ -415,9 +504,13 @@ class PosOrdersService {
             !COMPLETED_STATUSES.has(String(order.paymentStatus || ""))) {
             throw new Error("Only completed orders can change payment method");
         }
+        const orderTotal = (0, money_1.roundMoney2)(Number(order.total) || 0);
         const [updated] = await db
             .update(db_1.schema.orders)
-            .set({ paymentMethod: method })
+            .set({
+            paymentMethod: method,
+            paymentBreakdown: [{ method, amount: orderTotal }],
+        })
             .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
             .returning();
         return updated;
@@ -483,6 +576,16 @@ class PosOrdersService {
         if (refund <= 0)
             throw new Error("Invalid refund amount");
         const tenders = (0, payment_breakdown_1.parsePaymentBreakdown)(order.paymentBreakdown, order.paymentMethod, total);
+        const originalMethod = (0, payment_breakdown_1.resolveSalePaymentMethod)(tenders, String(order.paymentMethod || "cash"));
+        const persistedMethod = originalMethod && originalMethod !== "pay_later"
+            ? originalMethod
+            : String(order.paymentMethod || "cash");
+        const persistedBreakdown = tenders.length
+            ? tenders.map((t) => ({
+                method: t.method === "pay_later" ? persistedMethod : t.method,
+                amount: t.amount,
+            }))
+            : [{ method: persistedMethod, amount: (0, money_1.roundMoney2)(total) }];
         const refundDelta = (0, payment_breakdown_1.refundDeltaGiftFirst)(already, refund, tenders);
         const terminalRefundAmount = refundDelta.terminal;
         let terminalRefundRef = null;
@@ -571,6 +674,8 @@ class PosOrdersService {
             refundReason: reasonText,
             status: fully ? "refunded" : "partially_refunded",
             paymentStatus: fully ? "refunded" : "partially_refunded",
+            paymentMethod: persistedMethod,
+            paymentBreakdown: persistedBreakdown,
         })
             .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
             .returning();
@@ -698,225 +803,485 @@ class PosOrdersService {
             terminalReference: terminalRef,
         };
     }
-    static async listHeld(merchantId) {
+    /**
+     * Recreate POS held rows from open KDS tickets when the hold was deleted
+     * (partial payment / stale session) but kitchen/ODS still show the ticket.
+     * Only POS shout numbers (#6893). Never clone paid sales or web-shop tickets.
+     */
+    static async restoreHeldFromOpenKitchen(merchantId) {
         const db = (0, db_1.getDb)();
-        const rows = await db.query.heldOrders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.heldOrders.status, ["held", "sent_to_kitchen"])),
-            orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.heldOrders.updatedAt)],
-        });
-        console.info("[pos-held] list", {
-            merchantId,
-            count: rows.length,
-            tickets: rows.map((r) => {
-                const ident = heldIdentity(r.cartJson);
+        try {
+            const tickets = await db.query.kdsTickets.findMany({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.kdsTickets.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.kdsTickets.status, ["pending", "in_progress", "preparing"])),
+            });
+            const openHeld = await db.query.heldOrders.findMany({
+                where: openHeldWhere(merchantId),
+            });
+            const shoutTickets = tickets.filter((ticket) => isPosShoutTicket(ticket.ticketKey || ticket.orderNumber));
+            const restoredHoldTickets = openHeld
+                .filter((row) => String(row.notes || "").startsWith("restored from kitchen"))
+                .map((row) => normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay))
+                .filter(Boolean);
+            const ticketKeys = [
+                ...new Set([
+                    ...shoutTickets.map((ticket) => normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber)),
+                    ...restoredHoldTickets,
+                ].filter(Boolean)),
+            ];
+            const existingOrderTickets = new Set();
+            if (ticketKeys.length) {
+                const noteFilters = ticketKeys.flatMap((key) => {
+                    const bare = key.replace(/^#/, "");
+                    return [
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:${key}]%`),
+                        (0, drizzle_orm_1.ilike)(db_1.schema.orders.notes, `%[ticket:${bare}]%`),
+                    ];
+                });
+                const orderRows = await db
+                    .select({ notes: db_1.schema.orders.notes })
+                    .from(db_1.schema.orders)
+                    .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.or)(...noteFilters)));
+                for (const row of orderRows) {
+                    const match = String(row.notes || "").match(/\[ticket:([^\]]+)\]/i);
+                    const key = normalizeHeldTicket(match?.[1]);
+                    if (key)
+                        existingOrderTickets.add(key);
+                }
+            }
+            for (const row of openHeld) {
+                const ident = heldIdentity(row.cartJson);
+                const key = normalizeHeldTicket(ident.ticketDisplay);
+                const restored = String(row.notes || "").startsWith("restored from kitchen");
+                if (!restored)
+                    continue;
+                const ghost = !isPosShoutTicket(key) || existingOrderTickets.has(key);
+                if (ghost) {
+                    await closeHeldRow(merchantId, row.id, "superseded");
+                    console.info("[pos-held] closed ghost kitchen restore", { merchantId, ticket: key, id: row.id });
+                }
+            }
+            const heldAfterCleanup = await db.query.heldOrders.findMany({
+                where: openHeldWhere(merchantId),
+            });
+            const heldByTicket = new Map();
+            for (const row of heldAfterCleanup) {
+                const key = normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay);
+                if (key)
+                    heldByTicket.set(key, row);
+            }
+            const productIds = new Set();
+            const itemsByTicket = new Map();
+            for (const ticket of shoutTickets) {
+                const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
+                if (!key || existingOrderTickets.has(key))
+                    continue;
+                const items = await db.query.kdsTicketItems.findMany({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.kdsTicketItems.ticketId, ticket.id),
+                });
+                if (!items.length)
+                    continue;
+                itemsByTicket.set(key, items);
+                for (const item of items) {
+                    if (item.productId)
+                        productIds.add(item.productId);
+                }
+            }
+            const priceByProduct = new Map();
+            if (productIds.size) {
+                const products = await db
+                    .select({ id: db_1.schema.products.id, price: db_1.schema.products.price })
+                    .from(db_1.schema.products)
+                    .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.products.id, [...productIds])));
+                for (const product of products) {
+                    priceByProduct.set(product.id, Number(product.price) || 0);
+                }
+            }
+            const buildCart = (items) => items.map((item) => {
+                const qty = Number(item.quantity) || 1;
+                const mods = kdsModifiers(item.modifiersJson);
+                const catalog = item.productId ? priceByProduct.get(item.productId) || 0 : 0;
+                const extras = extraPriceSum(mods.selectedExtras) + comboPriceSum(mods.comboSelections);
+                const unit = mods.unitPrice > 0 ? mods.unitPrice : catalog + extras;
+                const lineTotal = mods.lineTotal > 0 ? mods.lineTotal : (0, money_1.roundMoney2)(unit * qty);
                 return {
-                    id: r.id,
-                    status: r.status,
-                    channel: r.channel,
-                    ticket: ident.ticketDisplay,
-                    tableId: ident.tableId,
-                    tab: ident.tabNumber,
+                    lineId: item.lineId,
+                    productId: item.productId || item.lineId,
+                    name: item.name,
+                    quantity: qty,
+                    unitPrice: (0, money_1.roundMoney2)(unit),
+                    lineTotal,
+                    taxable: true,
+                    sentToKitchen: true,
+                    courseNumber: item.courseNumber || 1,
+                    selectedExtras: mods.selectedExtras,
+                    comboSelections: mods.comboSelections,
+                    lineNote: item.lineNote || null,
                 };
-            }),
+            });
+            for (const ticket of shoutTickets) {
+                const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
+                if (!key || existingOrderTickets.has(key))
+                    continue;
+                const items = itemsByTicket.get(key);
+                if (!items?.length)
+                    continue;
+                const cart = buildCart(items);
+                const channel = String(ticket.channel || "takeaway");
+                const cartJson = {
+                    cart,
+                    channel,
+                    tableLabel: ticket.tableLabel || null,
+                    tabNumber: ticket.tabNumber || null,
+                    ticketDisplay: key,
+                    kitchenTicketKey: key,
+                };
+                const existing = heldByTicket.get(key);
+                if (existing) {
+                    const restored = String(existing.notes || "").startsWith("restored from kitchen");
+                    const openTotal = heldCartTotal(existing.cartJson);
+                    if (restored && openTotal <= 0.05) {
+                        await db
+                            .update(db_1.schema.heldOrders)
+                            .set({
+                            cartJson,
+                            label: `${key} · ${channel}`,
+                            channel,
+                            updatedAt: new Date(),
+                        })
+                            .where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, existing.id));
+                        console.info("[pos-held] repriced kitchen restore", {
+                            merchantId,
+                            ticket: key,
+                            lines: cart.length,
+                            total: heldCartTotal(cartJson),
+                        });
+                    }
+                    continue;
+                }
+                await db.insert(db_1.schema.heldOrders).values({
+                    merchantId,
+                    label: `${key} · ${channel}`,
+                    status: "sent_to_kitchen",
+                    channel,
+                    cartJson,
+                    notes: `restored from kitchen ${key}`,
+                });
+                heldByTicket.set(key, {
+                    id: "new",
+                });
+                console.info("[pos-held] restored from kitchen", {
+                    merchantId,
+                    ticket: key,
+                    lines: cart.length,
+                    total: heldCartTotal(cartJson),
+                });
+            }
+        }
+        catch (err) {
+            console.warn("[pos-held] kitchen restore skipped:", err);
+        }
+    }
+    static async listHeld(merchantId) {
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            await this.restoreHeldFromOpenKitchen(merchantId);
+            const rows = await db.query.heldOrders.findMany({
+                where: openHeldWhere(merchantId),
+                orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.heldOrders.updatedAt)],
+            });
+            console.info("[pos-held] list", {
+                merchantId,
+                count: rows.length,
+                tickets: rows.map((r) => {
+                    const ident = heldIdentity(r.cartJson);
+                    return {
+                        id: r.id,
+                        status: r.status,
+                        channel: r.channel,
+                        ticket: ident.ticketDisplay,
+                        tableId: ident.tableId,
+                        tab: ident.tabNumber,
+                    };
+                }),
+            });
+            return rows;
         });
-        return rows;
     }
     static async holdOrder(merchantId, body) {
-        const db = (0, db_1.getDb)();
-        if (body.cartJson == null)
-            throw new Error("cartJson is required");
-        const ident = heldIdentity(body.cartJson);
-        const requested = String(body.channel || "").toLowerCase();
-        const persistChannel = ident.tableId
-            ? "dine_in"
-            : requested === "dine_in" || requested === "delivery" || requested === "takeaway"
-                ? requested
-                : "takeaway";
-        const status = body.sendToKitchen ? "sent_to_kitchen" : "held";
-        const values = {
-            label: (body.label || "").trim().slice(0, 120) || null,
-            status,
-            channel: persistChannel,
-            cartJson: body.cartJson,
-            notes: body.notes || null,
-            staffId: body.staffId || null,
-            staffName: body.staffName || null,
-            updatedAt: new Date(),
-        };
-        const open = await db.query.heldOrders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.heldOrders.status, ["held", "sent_to_kitchen"])),
-        });
-        const existing = (body.id && open.find((r) => r.id === body.id)) ||
-            open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
-        if (existing) {
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            if (body.cartJson == null)
+                throw new Error("cartJson is required");
+            const ident = heldIdentity(body.cartJson);
+            const requested = String(body.channel || "").toLowerCase();
+            const persistChannel = ident.tableId
+                ? "dine_in"
+                : requested === "dine_in" || requested === "delivery" || requested === "takeaway"
+                    ? requested
+                    : "takeaway";
+            const open = await db.query.heldOrders.findMany({
+                where: openHeldWhere(merchantId),
+            });
+            const existing = (body.id && open.find((r) => r.id === body.id)) ||
+                open.find((r) => sameHeldIdentity(heldIdentity(r.cartJson), ident));
+            const incomingCart = Array.isArray(body.cartJson?.cart)
+                ? (body.cartJson.cart)
+                : Array.isArray(body.cartJson)
+                    ? body.cartJson
+                    : [];
+            if (existing && incomingCart.length === 0) {
+                // Empty cart + explicit id = table/dish transfer. Never wipe kitchen by identity alone.
+                if (existing.status === "sent_to_kitchen" && !body.id) {
+                    console.warn("[pos-held] refuse empty overwrite of kitchen ticket", {
+                        merchantId,
+                        id: existing.id,
+                    });
+                    return existing;
+                }
+                const closed = await closeHeldRow(merchantId, existing.id, "transferred");
+                return closed || { ...existing, status: "closed" };
+            }
+            const status = (0, pos_open_ticket_1.nextOpenTicketStatus)(existing?.status, !!body.sendToKitchen);
+            const values = {
+                label: (body.label || "").trim().slice(0, 120) || null,
+                status,
+                channel: persistChannel,
+                cartJson: body.cartJson,
+                notes: body.notes || null,
+                staffId: body.staffId || null,
+                staffName: body.staffName || null,
+                updatedAt: new Date(),
+            };
+            if (existing) {
+                const [row] = await db
+                    .update(db_1.schema.heldOrders)
+                    .set(values)
+                    .where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, existing.id))
+                    .returning();
+                console.info("[pos-held] upsert-update", {
+                    merchantId,
+                    id: existing.id,
+                    status,
+                    channel: persistChannel,
+                    ticket: ident.ticketDisplay,
+                    tableId: ident.tableId,
+                });
+                return row;
+            }
             const [row] = await db
-                .update(db_1.schema.heldOrders)
-                .set(values)
-                .where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, existing.id))
-                .returning();
-            console.info("[pos-held] upsert-update", {
+                .insert(db_1.schema.heldOrders)
+                .values({
                 merchantId,
-                id: existing.id,
+                ...values,
+            })
+                .returning();
+            console.info("[pos-held] upsert-insert", {
+                merchantId,
+                id: row.id,
                 status,
                 channel: persistChannel,
                 ticket: ident.ticketDisplay,
                 tableId: ident.tableId,
             });
             return row;
-        }
-        const [row] = await db
-            .insert(db_1.schema.heldOrders)
-            .values({
-            merchantId,
-            ...values,
-        })
-            .returning();
-        console.info("[pos-held] upsert-insert", {
-            merchantId,
-            id: row.id,
-            status,
-            channel: persistChannel,
-            ticket: ident.ticketDisplay,
-            tableId: ident.tableId,
         });
-        return row;
     }
     static async deleteHeld(merchantId, id) {
-        const db = (0, db_1.getDb)();
-        const existing = await db.query.heldOrders.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const existing = await db.query.heldOrders.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
+            });
+            if (!existing)
+                throw new Error("Held order not found");
+            if (existing.status === "sent_to_kitchen" && !existing.closedAt) {
+                throw new Error("Kitchen tickets cannot be deleted. Cancel or collect payment.");
+            }
+            if (!existing.closedAt) {
+                await closeHeldRow(merchantId, id, "deleted");
+            }
+            return { ok: true };
         });
-        if (!existing)
-            throw new Error("Held order not found");
-        await db.delete(db_1.schema.heldOrders).where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id));
-        return { ok: true };
     }
     /**
      * Remove open held rows after payment — matches ticket #, table, or tab identity.
      * Used by POS checkout (staff may lack CANCEL_ORDERS) and server-side sale sync.
      */
     static async releaseHeldByIdentity(merchantId, opts) {
-        const db = (0, db_1.getDb)();
-        const target = heldIdentity({
-            ticketDisplay: opts.ticketDisplay,
-            tableId: opts.tableId,
-            tabNumber: opts.tabNumber,
-        });
-        const hasTarget = !!target.ticketDisplay || !!target.tableId || !!target.tabNumber || !!opts.heldId;
-        if (!hasTarget)
-            return { released: 0 };
-        const open = await db.query.heldOrders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.heldOrders.status, ["held", "sent_to_kitchen"])),
-        });
-        const toDelete = new Set();
-        if (opts.heldId)
-            toDelete.add(opts.heldId);
-        for (const row of open) {
-            if (sameHeldIdentity(heldIdentity(row.cartJson), target)) {
-                toDelete.add(row.id);
-            }
-        }
-        for (const id of toDelete) {
-            await db
-                .delete(db_1.schema.heldOrders)
-                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)));
-        }
-        if (toDelete.size) {
-            console.info("[pos-held] release", {
-                merchantId,
-                released: toDelete.size,
-                ticket: target.ticketDisplay,
-                tableId: target.tableId,
-                tab: target.tabNumber,
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const target = heldIdentity({
+                ticketDisplay: opts.ticketDisplay,
+                tableId: opts.tableId,
+                tabNumber: opts.tabNumber,
             });
-        }
-        return { released: toDelete.size };
+            const hasTarget = !!target.ticketDisplay || !!target.tableId || !!target.tabNumber || !!opts.heldId;
+            if (!hasTarget)
+                return { released: 0 };
+            const open = await db.query.heldOrders.findMany({
+                where: openHeldWhere(merchantId),
+            });
+            const targetTicket = normalizeHeldTicket(target.ticketDisplay);
+            const paidTotal = Number(opts.paidTotal);
+            const paidKnown = Number.isFinite(paidTotal) && paidTotal > 0;
+            const hasIdentFields = !!(target.ticketDisplay || target.tableId || target.tabNumber);
+            const matchesTarget = (row) => {
+                const ident = heldIdentity(row.cartJson);
+                if (opts.heldId && row.id === opts.heldId) {
+                    const rowTicket = normalizeHeldTicket(ident.ticketDisplay);
+                    if (targetTicket && rowTicket && targetTicket !== rowTicket) {
+                        console.warn("[pos-held] skip stale heldId", {
+                            merchantId,
+                            heldId: opts.heldId,
+                            heldTicket: rowTicket,
+                            paidTicket: targetTicket,
+                        });
+                        return false;
+                    }
+                    if (hasIdentFields && !sameHeldIdentity(ident, target)) {
+                        console.warn("[pos-held] skip heldId identity mismatch", {
+                            merchantId,
+                            heldId: opts.heldId,
+                            heldTicket: rowTicket,
+                            paidTicket: targetTicket,
+                        });
+                        return false;
+                    }
+                    return true;
+                }
+                return sameHeldIdentity(ident, target);
+            };
+            const toClose = new Set();
+            for (const row of open) {
+                const matched = matchesTarget(row);
+                const decision = (0, pos_open_ticket_1.decideOpenTicketClose)({
+                    status: row.status,
+                    cartTotal: heldCartTotal(row.cartJson),
+                    paidTotal: paidKnown ? paidTotal : null,
+                    settleKitchen: opts.settleKitchen === true,
+                    identityMatched: matched,
+                    paymentSettled: opts.paymentSettled,
+                });
+                if (decision !== "close") {
+                    if (matched) {
+                        console.info("[pos-held] keep open ticket", {
+                            merchantId,
+                            id: row.id,
+                            status: row.status,
+                            ticket: normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay),
+                            paidTotal: paidKnown ? paidTotal : null,
+                            paymentSettled: opts.paymentSettled,
+                        });
+                    }
+                    continue;
+                }
+                toClose.add(row.id);
+            }
+            for (const id of toClose) {
+                await closeHeldRow(merchantId, id, "paid", paidKnown ? paidTotal : null);
+            }
+            if (toClose.size) {
+                console.info("[pos-held] release", {
+                    merchantId,
+                    released: toClose.size,
+                    ticket: target.ticketDisplay,
+                    tableId: target.tableId,
+                    tab: target.tabNumber,
+                });
+            }
+            return { released: toClose.size };
+        });
     }
     /**
      * Cancel a held / kitchen-sent order with a required reason.
      * Records a cancelled POS sale for EOD and sales reports, then removes the hold.
      */
     static async cancelHeld(merchantId, id, reason) {
-        const db = (0, db_1.getDb)();
-        const existing = await db.query.heldOrders.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
-        });
-        if (!existing)
-            throw new Error("Held order not found");
-        const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(reason);
-        if (!reasonText)
-            throw new Error("Cancel reason is required");
-        const { lines, channel, tableLabel, notes } = parseHeldCart(existing.cartJson);
-        if (!lines.length) {
-            await db.delete(db_1.schema.heldOrders).where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id));
-            return { ok: true, order: null, heldStatus: existing.status };
-        }
-        let subtotal = 0;
-        for (const line of lines) {
-            subtotal += Number(line.lineTotal || 0);
-        }
-        subtotal = (0, money_1.roundMoney2)(subtotal);
-        const orderNumber = `CXL-${Date.now().toString(36).toUpperCase()}-${Math.random()
-            .toString(36)
-            .slice(2, 6)
-            .toUpperCase()}`.slice(0, 50);
-        const clientId = `cancel-held-${existing.id}`.slice(0, 64);
-        const now = new Date();
-        const [order] = await db
-            .insert(db_1.schema.orders)
-            .values({
-            merchantId,
-            orderNumber,
-            orderType: "pos",
-            fulfillmentChannel: existing.channel || channel || "takeaway",
-            status: "cancelled",
-            subtotal: subtotal.toFixed(2),
-            taxAmount: "0.00",
-            discountAmount: "0.00",
-            tipAmount: "0.00",
-            roundingAmount: "0.00",
-            total: subtotal.toFixed(2),
-            paymentMethod: null,
-            paymentStatus: "cancelled",
-            notes: notes || existing.notes || null,
-            tableLabel: tableLabel || null,
-            staffName: existing.staffName || null,
-            clientId,
-            cancelReason: reasonText,
-            cancelledAt: now,
-            completedAt: null,
-            syncedAt: now,
-        })
-            .returning();
-        for (const line of lines) {
-            const qty = Number(line.quantity) || 1;
-            const totalPrice = (0, money_1.roundMoney2)(Number(line.lineTotal || 0));
-            const unitPrice = (0, money_1.roundMoney2)(Number(line.unitPrice != null ? line.unitPrice : qty ? totalPrice / qty : 0));
-            await db.insert(db_1.schema.orderItems).values({
-                orderId: order.id,
-                productId: null,
-                productName: (0, order_item_name_1.resolveOrderItemName)(line.name),
-                quantity: String(qty),
-                unitPrice: unitPrice.toFixed(2),
-                totalPrice: totalPrice.toFixed(2),
-                taxAmount: "0.00",
-                selectedExtras: Array.isArray(line.selectedExtras) ? line.selectedExtras : [],
-                comboSelections: Array.isArray(line.comboSelections) ? line.comboSelections : [],
-                isOpenPrice: !!line.isOpenPrice,
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const existing = await db.query.heldOrders.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
             });
-        }
-        await db.delete(db_1.schema.heldOrders).where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id));
-        return { ok: true, order, heldStatus: existing.status, cancelReason: reasonText };
+            if (!existing)
+                throw new Error("Held order not found");
+            const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(reason);
+            if (!reasonText)
+                throw new Error("Cancel reason is required");
+            const { lines, channel, tableLabel, notes } = parseHeldCart(existing.cartJson);
+            if (!lines.length) {
+                await closeHeldRow(merchantId, id, "cancelled");
+                return { ok: true, order: null, heldStatus: existing.status };
+            }
+            let subtotal = 0;
+            for (const line of lines) {
+                subtotal += Number(line.lineTotal || 0);
+            }
+            subtotal = (0, money_1.roundMoney2)(subtotal);
+            const orderNumber = `CXL-${Date.now().toString(36).toUpperCase()}-${Math.random()
+                .toString(36)
+                .slice(2, 6)
+                .toUpperCase()}`.slice(0, 50);
+            const clientId = `cancel-held-${existing.id}`.slice(0, 64);
+            const now = new Date();
+            const [order] = await db
+                .insert(db_1.schema.orders)
+                .values({
+                merchantId,
+                orderNumber,
+                orderType: "pos",
+                fulfillmentChannel: existing.channel || channel || "takeaway",
+                status: "cancelled",
+                subtotal: subtotal.toFixed(2),
+                taxAmount: "0.00",
+                discountAmount: "0.00",
+                tipAmount: "0.00",
+                roundingAmount: "0.00",
+                total: subtotal.toFixed(2),
+                paymentMethod: null,
+                paymentStatus: "cancelled",
+                notes: notes || existing.notes || null,
+                tableLabel: tableLabel || null,
+                staffName: existing.staffName || null,
+                clientId,
+                cancelReason: reasonText,
+                cancelledAt: now,
+                completedAt: null,
+                syncedAt: now,
+            })
+                .returning();
+            for (const line of lines) {
+                const qty = Number(line.quantity) || 1;
+                const totalPrice = (0, money_1.roundMoney2)(Number(line.lineTotal || 0));
+                const unitPrice = (0, money_1.roundMoney2)(Number(line.unitPrice != null ? line.unitPrice : qty ? totalPrice / qty : 0));
+                await db.insert(db_1.schema.orderItems).values({
+                    orderId: order.id,
+                    productId: null,
+                    productName: (0, order_item_name_1.resolveOrderItemName)(line.name),
+                    quantity: String(qty),
+                    unitPrice: unitPrice.toFixed(2),
+                    totalPrice: totalPrice.toFixed(2),
+                    taxAmount: "0.00",
+                    selectedExtras: Array.isArray(line.selectedExtras) ? line.selectedExtras : [],
+                    comboSelections: Array.isArray(line.comboSelections) ? line.comboSelections : [],
+                    isOpenPrice: !!line.isOpenPrice,
+                });
+            }
+            await closeHeldRow(merchantId, id, "cancelled");
+            return { ok: true, order, heldStatus: existing.status, cancelReason: reasonText };
+        });
     }
     static async resumeHeld(merchantId, id) {
-        const db = (0, db_1.getDb)();
-        const existing = await db.query.heldOrders.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const existing = await db.query.heldOrders.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.heldOrders.merchantId, merchantId)),
+            });
+            if (!existing)
+                throw new Error("Held order not found");
+            // Opening a ticket onto the register must not remove it. Persist updates
+            // the same row; payment or cancel is the only close.
+            return existing;
         });
-        if (!existing)
-            throw new Error("Held order not found");
-        await db.delete(db_1.schema.heldOrders).where((0, drizzle_orm_1.eq)(db_1.schema.heldOrders.id, id));
-        return existing;
     }
 }
 exports.PosOrdersService = PosOrdersService;

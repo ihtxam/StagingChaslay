@@ -132,6 +132,7 @@ class EmailUsageService {
             .limit(50);
         const { PlatformSettingsService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-settings.service")));
         const brevoPublic = await PlatformSettingsService.getBrevoSettingsPublic();
+        const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
         let account = null;
         if (brevoPublic.apiKeySet) {
             try {
@@ -165,6 +166,8 @@ class EmailUsageService {
                 count: Number(r.count || 0),
             })),
             brevo: brevoPublic,
+            mailco: mailcoPublic,
+            platformEmailPrimary: mailcoPublic.emailPrimary,
             account,
         };
     }

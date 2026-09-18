@@ -51,6 +51,8 @@ const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
+const kiosk_addon_1 = require("@/lib/kiosk-addon");
+const merchant_support_code_1 = require("@/lib/merchant-support-code");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 function pickLastAppVersion(rows) {
     let best = null;
@@ -93,7 +95,7 @@ class MerchantService {
         try {
             const offset = (page - 1) * limit;
             const where = search
-                ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.like)(db_1.schema.merchants.name, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.email, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.slug, `%${search}%`))
+                ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.like)(db_1.schema.merchants.name, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.email, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.slug, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.supportCode, `%${search}%`))
                 : undefined;
             const merchants = await (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(() => db.query.merchants.findMany({
                 where,
@@ -122,6 +124,7 @@ class MerchantService {
             const signageById = await (0, signage_addon_1.readSignageAddonMap)(merchantIds).catch(() => new Map());
             const kdsById = await (0, kds_addon_1.readKdsAddonEnabledMap)(merchantIds).catch(() => new Map());
             const odsById = await (0, ods_addon_1.readOdsAddonEnabledMap)(merchantIds).catch(() => new Map());
+            const kioskById = await (0, kiosk_addon_1.readKioskAddonEnabledMap)(merchantIds).catch(() => new Map());
             return merchants.map((m) => {
                 const floor = floorByMerchant.get(m.id) ?? [];
                 const lastSeen = pickLastAppVersion([
@@ -133,6 +136,7 @@ class MerchantService {
                 const signageOn = signage?.enabled ?? (0, signage_addon_1.isSignageAddonEnabled)(m.signageAddonEnabled);
                 const kdsOn = kdsById.get(m.id) ?? (0, kds_addon_1.isKdsAddonEnabled)(m.kdsAddonEnabled);
                 const odsOn = odsById.get(m.id) ?? (0, ods_addon_1.isOdsAddonEnabled)(m.odsAddonEnabled);
+                const kioskOn = kioskById.get(m.id) ?? (0, kiosk_addon_1.isKioskAddonEnabled)(m.kioskAddonEnabled);
                 return {
                     id: m.id,
                     name: m.name,
@@ -141,6 +145,7 @@ class MerchantService {
                     address: m.address,
                     city: m.city,
                     country: m.country,
+                    supportCode: m.supportCode,
                     slug: m.slug,
                     shopEnabled: m.shopEnabled,
                     status: m.status,
@@ -162,7 +167,8 @@ class MerchantService {
                     kdsEnabled: kdsOn,
                     odsAddonEnabled: odsOn,
                     odsEnabled: odsOn,
-                    storekeeperAddonEnabled: (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(m.storekeeperAddonEnabled) || inventoryOn,
+                    kioskAddonEnabled: kioskOn,
+                    kioskEnabled: kioskOn,
                     createdAt: m.createdAt,
                     devices: m.devices?.length ?? 0,
                     licenses: m.licenses?.length ?? 0,
@@ -210,7 +216,9 @@ class MerchantService {
             }));
             const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
             const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
-            const storekeeperOn = await (0, storekeeper_addon_1.readStorekeeperAddonEnabled)(merchantId).catch(() => false);
+            const kioskOn = await (0, kiosk_addon_1.readKioskAddonEnabled)(merchantId).catch(() => (0, kiosk_addon_1.isKioskAddonEnabled)(merchant.kioskAddonEnabled));
+            const justEatOn = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => (0, delivery_platform_addon_1.isJustEatAddonEnabled)(merchant.justEatAddonEnabled));
+            const uberEatsOn = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => (0, delivery_platform_addon_1.isUberEatsAddonEnabled)(merchant.uberEatsAddonEnabled));
             return {
                 ...merchant,
                 inventoryAddonEnabled: inventoryOn,
@@ -222,7 +230,11 @@ class MerchantService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                storekeeperAddonEnabled: storekeeperOn,
+                kioskAddonEnabled: kioskOn,
+                kioskEnabled: kioskOn,
+                justEatAddonEnabled: justEatOn,
+                uberEatsAddonEnabled: uberEatsOn,
+                deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
                 editionName: merchant.edition?.name ?? null,
                 planBillingPaid: merchant.planBillingPaid !== false,
                 lastAppVersion: lastSeen.lastAppVersion,
@@ -266,11 +278,8 @@ class MerchantService {
                 }
             }
             const lockedModule = (0, business_module_1.normalizeBusinessModule)(options?.businessCategory);
-            let assignedResellerId = options?.resellerId || null;
-            if (!assignedResellerId) {
-                const { PlatformResellerService } = await Promise.resolve().then(() => __importStar(require("./platform-reseller.service")));
-                assignedResellerId = await PlatformResellerService.getId();
-            }
+            const merchantCountry = country || "CH";
+            const supportCode = await (0, merchant_support_code_1.assignMerchantSupportCode)(db, merchantCountry);
             const merchant = await db
                 .insert(db_1.schema.merchants)
                 .values({
@@ -281,7 +290,8 @@ class MerchantService {
                 phone,
                 address,
                 city,
-                country: country || "CH",
+                country: merchantCountry,
+                supportCode,
                 slug: slug || null,
                 shopEnabled: options?.shopEnabled ?? true,
                 status: options?.status || "trial",
@@ -289,16 +299,19 @@ class MerchantService {
                 trialEndsAt,
                 syncApiKey: (0, chaslay_compat_service_1.generateSyncApiKey)(),
                 editionId: options?.editionId || null,
-                resellerId: assignedResellerId,
+                resellerId: options?.resellerId || null,
                 businessCategory: lockedModule,
                 maxPosPosts: normalizePosPostLimit(options?.maxPosPosts ?? 0),
                 maxWaiterPosts: normalizePosPostLimit(options?.maxWaiterPosts ?? 0),
+                maxLocations: normalizePosPostLimit(options?.maxLocations ?? 1) || 1,
                 inventoryAddonEnabled: options?.inventoryAddonEnabled === true,
                 signageAddonEnabled: options?.signageAddonEnabled === true,
                 signageScreenLimit: (0, signage_addon_1.normalizeSignageScreenLimit)(options?.signageScreenLimit ?? 2),
                 kdsAddonEnabled: options?.kdsAddonEnabled === true,
                 odsAddonEnabled: options?.odsAddonEnabled === true,
-                storekeeperAddonEnabled: options?.storekeeperAddonEnabled === true,
+                kioskAddonEnabled: options?.kioskAddonEnabled === true,
+                justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+                uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
             })
                 .returning();
             const created = merchant[0];
@@ -344,6 +357,8 @@ class MerchantService {
                 const { MerchantInviteService } = await Promise.resolve().then(() => __importStar(require("./merchant-invite.service")));
                 invite = await MerchantInviteService.sendInviteEmail(created.id);
             }
+            const { StaffService } = await Promise.resolve().then(() => __importStar(require("./staff.service")));
+            await StaffService.ensureDefaultManagerStaff(created.id, _contactName || businessName);
             const refreshed = await db.query.merchants.findFirst({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, created.id),
             });
@@ -363,8 +378,12 @@ class MerchantService {
             if (options?.odsAddonEnabled === true) {
                 await (0, ods_addon_1.writeOdsAddonEnabled)(created.id, true);
             }
-            if (options?.storekeeperAddonEnabled === true) {
-                await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(created.id, true);
+            if (options?.kioskAddonEnabled === true) {
+                await (0, kiosk_addon_1.writeKioskAddonEnabled)(created.id, true);
+            }
+            if (options?.deliveryPlatformsAddonEnabled === true) {
+                await (0, delivery_platform_addon_1.writeJustEatAddonEnabled)(created.id, true);
+                await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(created.id, true);
             }
             const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(created.id).catch(() => false);
             const signage = await (0, signage_addon_1.readSignageAddon)(created.id).catch(() => ({
@@ -386,6 +405,9 @@ class MerchantService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+                uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
+                deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
                 issuedLicenses,
                 invite,
                 passwordSet: hasPassword,
@@ -406,6 +428,7 @@ class MerchantService {
             const signageRequested = updates.signageAddonEnabled;
             const kdsRequested = updates.kdsAddonEnabled;
             const odsRequested = updates.odsAddonEnabled;
+            const kioskRequested = updates.kioskAddonEnabled;
             if (addonRequested !== undefined) {
                 await (0, ensure_merchant_schema_1.ensureInventoryAddonColumn)();
                 updates.inventoryAddonEnabled = (0, inventory_addon_1.isInventoryAddonEnabled)(addonRequested);
@@ -418,6 +441,9 @@ class MerchantService {
             }
             if (odsRequested !== undefined) {
                 updates.odsAddonEnabled = (0, ods_addon_1.isOdsAddonEnabled)(odsRequested);
+            }
+            if (kioskRequested !== undefined) {
+                updates.kioskAddonEnabled = (0, kiosk_addon_1.isKioskAddonEnabled)(kioskRequested);
             }
             const merchant = await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => db
                 .update(db_1.schema.merchants)
@@ -443,6 +469,10 @@ class MerchantService {
                 const on = await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, odsRequested);
                 Object.assign(merchant[0], { odsAddonEnabled: on, odsEnabled: on });
             }
+            if (kioskRequested !== undefined) {
+                const on = await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, kioskRequested);
+                Object.assign(merchant[0], { kioskAddonEnabled: on, kioskEnabled: on });
+            }
             return merchant[0];
         }
         catch (error) {
@@ -458,6 +488,10 @@ class MerchantService {
         }
         if (limits.maxWaiterPosts !== undefined) {
             patch.maxWaiterPosts = normalizePosPostLimit(limits.maxWaiterPosts);
+        }
+        if (limits.maxLocations !== undefined) {
+            const n = normalizePosPostLimit(limits.maxLocations);
+            patch.maxLocations = n === 0 ? 0 : Math.max(1, n);
         }
         if (Object.keys(patch).length > 0) {
             await this.updateMerchant(merchantId, patch);
@@ -483,12 +517,21 @@ class MerchantService {
             await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, limits.odsAddonEnabled);
             wroteAddon = true;
         }
+        if (limits.deliveryPlatformsAddonEnabled !== undefined) {
+            await (0, delivery_platform_addon_1.writeJustEatAddonEnabled)(merchantId, limits.deliveryPlatformsAddonEnabled);
+            await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(merchantId, limits.deliveryPlatformsAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.kioskAddonEnabled !== undefined) {
+            await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, limits.kioskAddonEnabled);
+            wroteAddon = true;
+        }
         if (limits.storekeeperAddonEnabled !== undefined) {
             await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(merchantId, limits.storekeeperAddonEnabled);
             wroteAddon = true;
         }
         if (!wroteAddon && Object.keys(patch).length === 0) {
-            throw new Error("At least one of maxPosPosts, maxWaiterPosts, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, or storekeeperAddonEnabled is required");
+            throw new Error("At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, or deliveryPlatformsAddonEnabled is required");
         }
         return this.getMerchantById(merchantId);
     }
@@ -518,8 +561,7 @@ class MerchantService {
             const plan = await SubscriptionPlansService.getBySlug(planSlug);
             if (!plan || !plan.isActive)
                 throw new Error("Subscription plan not found or inactive");
-            const { PackageProvisioningService } = await Promise.resolve().then(() => __importStar(require("./package-provisioning.service")));
-            await PackageProvisioningService.applyPlan(merchantId, plan.id);
+            patch.subscriptionPlan = plan.slug;
         }
         if (hasEdition) {
             if (input.editionId === null) {
@@ -545,6 +587,8 @@ class MerchantService {
                     await this.updateMerchant(merchantId, patch);
                 }
                 await EditionService.applyEditionDefaultsToMerchant(merchantId, editionId);
+                const { PackageProvisioningService } = await Promise.resolve().then(() => __importStar(require("./package-provisioning.service")));
+                await PackageProvisioningService.applyEditionFeatureAddons(merchantId, edition.features);
                 return this.getMerchantById(merchantId);
             }
         }
@@ -560,9 +604,7 @@ class MerchantService {
             addons.signageScreenLimit === undefined &&
             addons.kdsAddonEnabled === undefined &&
             addons.odsAddonEnabled === undefined &&
-            addons.justEatAddonEnabled === undefined &&
-            addons.uberEatsAddonEnabled === undefined &&
-            addons.storekeeperAddonEnabled === undefined) {
+            addons.kioskAddonEnabled === undefined) {
             throw new Error("No addon updates provided");
         }
         if (addons.inventoryAddonEnabled !== undefined) {
@@ -580,14 +622,8 @@ class MerchantService {
         if (addons.odsAddonEnabled !== undefined) {
             await (0, ods_addon_1.writeOdsAddonEnabled)(merchantId, addons.odsAddonEnabled);
         }
-        if (addons.justEatAddonEnabled !== undefined) {
-            await (0, delivery_platform_addon_1.writeJustEatAddonEnabled)(merchantId, addons.justEatAddonEnabled);
-        }
-        if (addons.uberEatsAddonEnabled !== undefined) {
-            await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(merchantId, addons.uberEatsAddonEnabled);
-        }
-        if (addons.storekeeperAddonEnabled !== undefined) {
-            await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(merchantId, addons.storekeeperAddonEnabled);
+        if (addons.kioskAddonEnabled !== undefined) {
+            await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, addons.kioskAddonEnabled);
         }
         return this.getMerchantById(merchantId);
     }
@@ -605,12 +641,23 @@ class MerchantService {
             })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId))
                 .returning();
+            await MerchantService.revokeAllAuthSessions(merchantId);
             return merchant[0];
         }
         catch (error) {
             console.error("Error suspending merchant:", error);
             throw error;
         }
+    }
+    /**
+     * Invalidate all dashboard JWTs and revoke active POS/waiter device sessions.
+     */
+    static async revokeAllAuthSessions(merchantId) {
+        const { AuthService } = await Promise.resolve().then(() => __importStar(require("@/services/auth.service")));
+        const { PosSessionsService } = await Promise.resolve().then(() => __importStar(require("@/services/pos-sessions.service")));
+        await AuthService.bumpMerchantAuthEpoch(merchantId);
+        await PosSessionsService.revokeAllForMerchant(merchantId);
+        return { ok: true };
     }
     /**
      * Reactivate merchant account
@@ -752,12 +799,10 @@ class MerchantService {
         try {
             const now = new Date();
             const thresholdDate = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
-            const licenses = await db.query.licenses.findMany({
+            const { attachLicenseRelations } = await Promise.resolve().then(() => __importStar(require("@/services/license-admin.service")));
+            const licenses = await attachLicenseRelations(await db.query.licenses.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active"), (0, drizzle_orm_1.lt)(db_1.schema.licenses.expiresAt, thresholdDate), (0, drizzle_orm_1.gt)(db_1.schema.licenses.expiresAt, now)),
-                with: {
-                    merchant: true,
-                },
-            });
+            }));
             return licenses.map((l) => ({
                 merchant: l.merchant,
                 expiresAt: l.expiresAt,
@@ -768,6 +813,30 @@ class MerchantService {
             console.error("Error getting merchants with expiring licenses:", error);
             throw error;
         }
+    }
+    /** Assign support codes (CH-001, UK-002, …) to merchants missing one. */
+    static async backfillSupportCodes() {
+        const db = (0, db_1.getDb)();
+        const rows = await db.query.merchants.findMany({
+            where: (0, drizzle_orm_1.isNull)(db_1.schema.merchants.supportCode),
+            columns: { id: true, country: true, supportCode: true },
+            orderBy: [db_1.schema.merchants.createdAt],
+        });
+        let assigned = 0;
+        let skipped = 0;
+        for (const row of rows) {
+            if (row.supportCode) {
+                skipped += 1;
+                continue;
+            }
+            const supportCode = await (0, merchant_support_code_1.assignMerchantSupportCode)(db, row.country);
+            await db
+                .update(db_1.schema.merchants)
+                .set({ supportCode, updatedAt: new Date() })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, row.id));
+            assigned += 1;
+        }
+        return { assigned, skipped };
     }
 }
 exports.MerchantService = MerchantService;

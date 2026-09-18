@@ -36,16 +36,16 @@ export declare class KdsService {
     static listStations(merchantId: string): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
-        token: string;
-        shortCode: string | null;
-        orderTypes: string[];
         categoryIds: string[];
         productIds: string[];
-        theme: string;
+        token: string;
+        orderTypes: string[];
         layoutMode: string;
         gridColumns: number;
         overdueMinutes: number;
@@ -53,16 +53,16 @@ export declare class KdsService {
     static createStation(merchantId: string, input: KdsStationInput): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
-        token: string;
-        shortCode: string | null;
-        orderTypes: string[];
         categoryIds: string[];
         productIds: string[];
-        theme: string;
+        token: string;
+        orderTypes: string[];
         layoutMode: string;
         gridColumns: number;
         overdueMinutes: number;
@@ -107,16 +107,16 @@ export declare class KdsService {
     static stationByToken(accessKey: string): Promise<{
         id: string;
         name: string;
+        shortCode: string | null;
+        theme: string;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
-        token: string;
-        shortCode: string | null;
-        orderTypes: string[];
         categoryIds: string[];
         productIds: string[];
-        theme: string;
+        token: string;
+        orderTypes: string[];
         layoutMode: string;
         gridColumns: number;
         overdueMinutes: number;

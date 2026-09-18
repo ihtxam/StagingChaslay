@@ -35,23 +35,42 @@ router.post("/activate", async (req, res) => {
             deviceId: String(deviceId),
             activationCode: String(activationCode),
             tenantSlug: result.tenantSlug,
+            merchantId: result.merchantId,
             appVersion,
             deviceModel,
         });
         res.json(result);
     }
     catch (error) {
-        const message = error instanceof Error ? error.message : "Activation failed";
+        const raw = error instanceof Error ? error.message : "Activation failed";
+        const message = (0, license_activation_log_1.publicLicenseActivationError)(error);
         const referenceId = await (0, license_activation_log_1.logPosLicenseActivation)({
             outcome: "failure",
             deviceId: String(deviceId || ""),
             activationCode: String(activationCode || ""),
-            errorMessage: message,
+            errorMessage: raw,
             tenantSlug: resolvedTenantSlug,
             appVersion,
             deviceModel,
         });
         res.status(400).json({ error: message, referenceId });
+    }
+});
+/** Resolve merchant/shop name for an activation code without consuming the license. */
+router.post("/lookup", async (req, res) => {
+    try {
+        const { activationCode } = req.body ?? {};
+        if (!activationCode || !String(activationCode).trim()) {
+            return res.status(400).json({ error: "activationCode is required" });
+        }
+        const result = await chaslay_compat_service_1.ChaslayCompatService.lookupLicense(String(activationCode));
+        if (!result) {
+            return res.status(404).json({ error: "Unknown activation code" });
+        }
+        res.json(result);
+    }
+    catch (error) {
+        res.status(400).json({ error: (0, license_activation_log_1.publicLicenseActivationError)(error) });
     }
 });
 /** Client-side activation failures (network, parse) before/during activate — no auth required. */

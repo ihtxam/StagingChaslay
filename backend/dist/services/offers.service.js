@@ -5,6 +5,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const money_1 = require("@/lib/money");
 const geo_1 = require("@/lib/geo");
+const pos_offer_visibility_1 = require("@/lib/pos-offer-visibility");
 function zurichParts(at) {
     const fmt = new Intl.DateTimeFormat("en-GB", {
         timeZone: geo_1.MERCHANT_TZ,
@@ -83,6 +84,12 @@ function defaultBadge(type, rules) {
         const recv = rules.receiveQty || pay + 1;
         return `${pay}+${recv - pay}`;
     }
+    if (type === "nth_item_percent") {
+        const nth = rules.nthItem || 2;
+        const pct = rules.percentOff || 0;
+        const ord = nth === 2 ? "2nd" : nth === 3 ? "3rd" : nth === 5 ? "5th" : `#${nth}`;
+        return pct > 0 ? `${pct}% off ${ord}` : `${ord} off`;
+    }
     if (type === "package_deal") {
         const buy = rules.buyQty || 2;
         const get = rules.getQty || 1;
@@ -148,6 +155,7 @@ class OffersService {
             channels: Array.isArray(input.channels) ? input.channels : [],
             categoryIds: Array.isArray(input.categoryIds) ? input.categoryIds : [],
             productIds: Array.isArray(input.productIds) ? input.productIds : [],
+            staffIds: Array.isArray(input.staffIds) ? input.staffIds.map(String).filter(Boolean) : [],
             scheduleMode: input.scheduleMode === "days" ? "days" : "always",
             daysOfWeek: Array.isArray(input.daysOfWeek) ? input.daysOfWeek : [],
             timeStart: input.timeStart || null,
@@ -174,6 +182,7 @@ class OffersService {
             "channels",
             "categoryIds",
             "productIds",
+            "staffIds",
             "scheduleMode",
             "daysOfWeek",
             "timeStart",
@@ -194,6 +203,11 @@ class OffersService {
         }
         if (updates.validTo !== undefined) {
             patch.validTo = updates.validTo ? new Date(String(updates.validTo)) : null;
+        }
+        if (updates.staffIds !== undefined) {
+            patch.staffIds = Array.isArray(updates.staffIds)
+                ? updates.staffIds.map(String).filter(Boolean)
+                : [];
         }
         if (patch.featured)
             await this.ensureOffersCategory(merchantId);
@@ -238,7 +252,18 @@ class OffersService {
     }
     static async listActivePublic(merchantId, at = new Date(), channel) {
         const all = await this.list(merchantId);
-        return all.filter((o) => this.isOfferActiveAt(o, at, channel));
+        return all.filter((o) => this.isOfferActiveAt(o, at, channel) && (0, pos_offer_visibility_1.offerStaffIds)(o).length === 0);
+    }
+    /**
+     * Offers the logged-in POS user should see: active today or scheduled (validFrom in the future),
+     * targeted at this staff member or all POS users. Time-of-day windows are not applied so
+     * waiters can read happy-hour terms before the window starts.
+     */
+    static async listForPos(merchantId, staffId, at = new Date(), ownerSeesAll = false) {
+        const all = await this.list(merchantId);
+        return all
+            .filter((o) => (0, pos_offer_visibility_1.isOfferListedOnPos)(o, at, staffId, ownerSeesAll))
+            .map((o) => ({ ...o, posStatus: (0, pos_offer_visibility_1.posOfferStatus)(o, at) }));
     }
     static matchesProduct(offer, line) {
         if (line.loyaltyReward)
@@ -250,6 +275,67 @@ class OffersService {
         if (cids.length)
             return !!line.categoryId && cids.includes(line.categoryId);
         return true;
+    }
+    /** Expand eligible cart lines into unit prices, optionally grouped per product. */
+    static unitPoolsByProduct(eligible, sameProductOnly) {
+        if (!sameProductOnly) {
+            const units = [];
+            for (const l of eligible) {
+                for (let i = 0; i < l.quantity; i++)
+                    units.push(l.unitPrice);
+            }
+            return units.length ? [units] : [];
+        }
+        const byProduct = new Map();
+        for (const l of eligible) {
+            const list = byProduct.get(l.productId) || [];
+            for (let i = 0; i < l.quantity; i++)
+                list.push(l.unitPrice);
+            byProduct.set(l.productId, list);
+        }
+        return [...byProduct.values()].filter((u) => u.length > 0);
+    }
+    static computeBogoDiscount(rules, pools) {
+        const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
+        const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
+        const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
+        const group = buy + get;
+        let discount = 0;
+        for (const raw of pools) {
+            const units = [...raw].sort((a, b) => a - b);
+            const freeSlots = Math.floor(units.length / group) * get;
+            for (let i = 0; i < freeSlots; i++) {
+                discount += (units[i] * getPct) / 100;
+            }
+        }
+        return discount;
+    }
+    static computePayNGetMDiscount(rules, pools) {
+        const pay = Math.max(1, Math.floor(Number(rules.payQty) || 3));
+        const recv = Math.max(pay + 1, Math.floor(Number(rules.receiveQty) || pay + 1));
+        const freePerSet = recv - pay;
+        let discount = 0;
+        for (const raw of pools) {
+            const units = [...raw].sort((a, b) => a - b);
+            const sets = Math.floor(units.length / recv);
+            for (let s = 0; s < sets; s++) {
+                for (let f = 0; f < freePerSet; f++) {
+                    discount += units[s * recv + f] || 0;
+                }
+            }
+        }
+        return discount;
+    }
+    static computeNthItemPercentDiscount(rules, pools) {
+        const nth = Math.max(2, Math.floor(Number(rules.nthItem) || 2));
+        const pct = Math.min(100, Math.max(0, Number(rules.percentOff) || 0));
+        let discount = 0;
+        for (const units of pools) {
+            for (let i = nth; i <= units.length; i += nth) {
+                discount += (units[i - 1] * pct) / 100;
+            }
+        }
+        return discount;
     }
     static computeOfferDiscount(offer, lines) {
         const rules = (offer.rules || {});
@@ -273,42 +359,18 @@ class OffersService {
             return (0, money_1.roundMoney2)((base * pct) / 100);
         }
         if (type === "bogo") {
-            const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
-            const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
-            const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
-            // Expand to unit prices sorted ascending (cheapest free)
-            const units = [];
-            for (const l of eligible) {
-                for (let i = 0; i < l.quantity; i++)
-                    units.push(l.unitPrice);
-            }
-            units.sort((a, b) => a - b);
-            const group = buy + get;
-            const freeSlots = Math.floor(units.length / group) * get;
-            let discount = 0;
-            for (let i = 0; i < freeSlots; i++) {
-                discount += (units[i] * getPct) / 100;
-            }
-            return (0, money_1.roundMoney2)(discount);
+            const sameProductOnly = !!rules.sameProductOnly;
+            const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
+            return (0, money_1.roundMoney2)(this.computeBogoDiscount(rules, pools));
         }
         if (type === "pay_n_get_m") {
-            const pay = Math.max(1, Math.floor(Number(rules.payQty) || 3));
-            const recv = Math.max(pay + 1, Math.floor(Number(rules.receiveQty) || pay + 1));
-            const freePerSet = recv - pay;
-            const units = [];
-            for (const l of eligible) {
-                for (let i = 0; i < l.quantity; i++)
-                    units.push(l.unitPrice);
-            }
-            units.sort((a, b) => a - b);
-            const sets = Math.floor(units.length / recv);
-            let discount = 0;
-            for (let s = 0; s < sets; s++) {
-                for (let f = 0; f < freePerSet; f++) {
-                    discount += units[s * recv + f] || 0;
-                }
-            }
-            return (0, money_1.roundMoney2)(discount);
+            const sameProductOnly = !!rules.sameProductOnly;
+            const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
+            return (0, money_1.roundMoney2)(this.computePayNGetMDiscount(rules, pools));
+        }
+        if (type === "nth_item_percent") {
+            const pools = this.unitPoolsByProduct(eligible, true);
+            return (0, money_1.roundMoney2)(this.computeNthItemPercentDiscount(rules, pools));
         }
         if (type === "combo_deal") {
             const needed = (rules.comboProductIds || []);
@@ -489,11 +551,35 @@ class OffersService {
             },
             {
                 name: "Buy 2 get 1 free",
-                description: "Buy two, get one free.",
+                description: "Buy two of the same item, get the third free.",
                 offerType: "bogo",
-                rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100 },
+                rules: { buyQty: 2, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
                 badgeLabel: "2+1",
                 priority: 15,
+            },
+            {
+                name: "Buy 4 get 5th free",
+                description: "Buy four of the same item, get the fifth free.",
+                offerType: "bogo",
+                rules: { buyQty: 4, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
+                badgeLabel: "4+1",
+                priority: 14,
+            },
+            {
+                name: "30% off 2nd item",
+                description: "Every second unit of the same product is 30% off.",
+                offerType: "nth_item_percent",
+                rules: { nthItem: 2, percentOff: 30, sameProductOnly: true },
+                badgeLabel: "2nd -30%",
+                priority: 12,
+            },
+            {
+                name: "50% off 2nd item",
+                description: "Every second unit of the same product is half price.",
+                offerType: "nth_item_percent",
+                rules: { nthItem: 2, percentOff: 50, sameProductOnly: true },
+                badgeLabel: "2nd -50%",
+                priority: 11,
             },
             {
                 name: "Dine-in 3+1",

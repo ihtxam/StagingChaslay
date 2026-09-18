@@ -9,6 +9,7 @@ const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
 router.use(auth_middleware_1.setMerchantContext);
+router.use((0, auth_middleware_1.requirePermission)("MANAGE_ONLINE_SHOP"));
 /**
  * GET /api/merchant/cms/templates
  */

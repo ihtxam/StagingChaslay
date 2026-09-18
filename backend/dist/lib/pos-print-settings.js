@@ -1,7 +1,9 @@
 "use strict";
 /** Cloud POS / WebPOS receipt + printer settings (shared with Android later). */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.POS_REFUND_REASONS = exports.POS_CANCEL_REASONS = exports.DEFAULT_POS_PRINT_SETTINGS = exports.KITCHEN_PRINT_DESTINATIONS = void 0;
+exports.POS_REFUND_REASONS = exports.POS_CANCEL_REASONS = exports.DEFAULT_POS_PRINT_SETTINGS = exports.LABEL_HEIGHTS_MM = exports.LABEL_WIDTHS_MM = exports.KITCHEN_PRINT_DESTINATIONS = void 0;
+exports.parseLabelWidthMm = parseLabelWidthMm;
+exports.parseLabelHeightMm = parseLabelHeightMm;
 exports.normalizePosPrintSettings = normalizePosPrintSettings;
 exports.migrateKitchenPrintRoutingToPrinters = migrateKitchenPrintRoutingToPrinters;
 exports.resolvePosCancelReason = resolvePosCancelReason;
@@ -12,6 +14,16 @@ exports.KITCHEN_PRINT_DESTINATIONS = [
     "receipt",
     "none",
 ];
+exports.LABEL_WIDTHS_MM = [40, 58, 80, 100];
+exports.LABEL_HEIGHTS_MM = [20, 25, 30, 40, 50, 80, 150];
+function parseLabelWidthMm(value) {
+    const n = Number(value);
+    return exports.LABEL_WIDTHS_MM.includes(n) ? n : 40;
+}
+function parseLabelHeightMm(value) {
+    const n = Number(value);
+    return exports.LABEL_HEIGHTS_MM.includes(n) ? n : 20;
+}
 exports.DEFAULT_POS_PRINT_SETTINGS = {
     receiptHeader: "",
     receiptFooter: "Merci / Danke / Thank you",
@@ -52,6 +64,9 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     labelShowBarcodeNumber: true,
     labelShowPrice: false,
     labelShowSku: false,
+    orderLabelEnabled: false,
+    autoPrintOrderLabelOnHold: true,
+    autoPrintOrderLabelOnSend: false,
 };
 function clampInt(value, min, max, fallback) {
     const n = Number(value);
@@ -122,9 +137,8 @@ function normalizePosPrintSettings(raw) {
             kitchenExcludedCategoryIds = ids;
     }
     const migrated = migrateKitchenPrintRoutingToPrinters(printers, kitchenPrintRouting, kitchenExcludedCategoryIds);
-    const labelWidthMm = Number(src.labelWidthMm) === 58 ? 58 : 40;
-    const rawH = Number(src.labelHeightMm);
-    const labelHeightMm = (rawH === 25 || rawH === 30 || rawH === 40 ? rawH : 20);
+    const labelWidthMm = parseLabelWidthMm(src.labelWidthMm);
+    const labelHeightMm = parseLabelHeightMm(src.labelHeightMm);
     const itemScale = Number(src.kitchenItemTextScale);
     const headerScale = Number(src.kitchenHeaderTextScale);
     const modifierScale = Number(src.kitchenModifierTextScale);
@@ -196,6 +210,9 @@ function normalizePosPrintSettings(raw) {
         labelShowBarcodeNumber: src.labelShowBarcodeNumber !== false,
         labelShowPrice: src.labelShowPrice === true,
         labelShowSku: src.labelShowSku === true,
+        orderLabelEnabled: src.orderLabelEnabled === true,
+        autoPrintOrderLabelOnHold: src.autoPrintOrderLabelOnHold !== false,
+        autoPrintOrderLabelOnSend: src.autoPrintOrderLabelOnSend === true,
     };
 }
 /** One-time migration: category→destination map → per-printer linkedCategoryIds (Android-aligned). */
@@ -220,6 +237,15 @@ function migrateKitchenPrintRoutingToPrinters(printers, routing, existingExclude
         byDest[dest]?.push(catId);
     }
     const excluded = new Set([...(existingExcluded || []), ...byDest.none]);
+    if (kitchenIndices[0] !== undefined && byDest.kitchen1.length) {
+        const idx = kitchenIndices[0];
+        result[idx] = {
+            ...result[idx],
+            printKitchenTickets: true,
+            printAllProducts: false,
+            linkedCategoryIds: [...new Set([...(result[idx].linkedCategoryIds || []), ...byDest.kitchen1])],
+        };
+    }
     if (kitchenIndices[1] !== undefined && byDest.kitchen2.length) {
         const idx = kitchenIndices[1];
         result[idx] = {
@@ -239,7 +265,10 @@ function migrateKitchenPrintRoutingToPrinters(printers, routing, existingExclude
             };
         }
     }
-    const migratedExplicitly = byDest.kitchen2.length > 0 || byDest.receipt.length > 0 || byDest.none.length > 0;
+    const migratedExplicitly = byDest.kitchen1.length > 0 ||
+        byDest.kitchen2.length > 0 ||
+        byDest.receipt.length > 0 ||
+        byDest.none.length > 0;
     return {
         printers: result,
         routing: migratedExplicitly ? undefined : routing,

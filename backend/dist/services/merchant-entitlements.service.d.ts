@@ -2,6 +2,7 @@ export type MerchantLimits = {
     maxPosPosts: number;
     maxWaiterPosts: number;
     maxStaff: number;
+    maxLocations: number;
     maxProducts: number | null;
     signageScreenLimit: number;
     planSlug: string | null;
@@ -19,8 +20,19 @@ export type DeviceLicenseLimitInfo = {
     planSlug: string | null;
     planName: string | null;
 };
+export type LocationLimitInfo = {
+    maxLocations: number;
+    currentCount: number;
+    planSlug: string | null;
+    planName: string | null;
+};
 export declare class MerchantEntitlementsService {
     static getLimits(merchantId: string): Promise<MerchantLimits>;
+    private static loadLimitsFromMerchantOnly;
+    private static loadLimits;
+    static countActiveLocations(merchantId: string): Promise<number>;
+    static getLocationLimitInfo(merchantId: string): Promise<LocationLimitInfo>;
+    static assertCanAddLocation(merchantId: string, addCount?: number): Promise<LocationLimitInfo>;
     static countActiveStaff(merchantId: string): Promise<number>;
     static getStaffLimitInfo(merchantId: string): Promise<StaffLimitInfo>;
     static assertCanAddStaff(merchantId: string, addCount?: number): Promise<StaffLimitInfo>;

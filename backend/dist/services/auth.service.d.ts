@@ -11,6 +11,8 @@ export interface JWTPayload {
     permissions?: string[];
     /** Set when a superadmin opens a merchant or reseller panel */
     impersonatedBy?: string;
+    /** Merchant auth epoch at token issue — bumped to revoke all sessions. */
+    authEpoch?: number;
 }
 export declare class AuthService {
     private static readonly SALT_ROUNDS;
@@ -32,6 +34,10 @@ export declare class AuthService {
      * Verify JWT token
      */
     static verifyToken(token: string): JWTPayload;
+    static getMerchantAuthEpoch(merchantId: string): Promise<number>;
+    static bumpMerchantAuthEpoch(merchantId: string): Promise<number>;
+    /** Reject merchant/staff JWTs issued before the latest auth epoch bump. */
+    static assertMerchantTokenEpoch(payload: JWTPayload): Promise<void>;
     /**
      * Register a new merchant
      */
@@ -60,7 +66,7 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
         };
         isOwner: boolean;
     } | {
@@ -72,8 +78,7 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "VIEW_ORDER_HISTORY" | "MANAGE_INVENTORY" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
-            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
@@ -83,7 +88,8 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
+            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
         };
         isOwner: boolean;
     }>;
@@ -104,7 +110,7 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
         };
         isOwner: boolean;
     }>;
@@ -117,8 +123,7 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "VIEW_ORDER_HISTORY" | "MANAGE_INVENTORY" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
-            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
@@ -128,7 +133,8 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
+            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
         };
         isOwner: boolean;
     }>;
@@ -162,7 +168,7 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
         };
         isOwner: boolean;
         reseller?: undefined;
@@ -177,8 +183,7 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "VIEW_ORDER_HISTORY" | "MANAGE_INVENTORY" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
-            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
             inventoryAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
@@ -188,7 +193,8 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
+            loginHome: import("@/lib/staff-login-home").StaffLoginHome;
         };
         isOwner: boolean;
         reseller?: undefined;
@@ -247,7 +253,7 @@ export declare class AuthService {
             kdsEnabled: boolean;
             odsAddonEnabled: boolean;
             odsEnabled: boolean;
-            storekeeperAddonEnabled: boolean;
+            maxLocations: number;
         };
         impersonatedBy: string;
     }>;
@@ -268,7 +274,7 @@ export declare class AuthService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
-        storekeeperAddonEnabled: boolean;
+        maxLocations: number;
     }>;
     /**
      * Update merchant password

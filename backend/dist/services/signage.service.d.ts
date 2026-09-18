@@ -37,27 +37,27 @@ export declare class SignageService {
     static listScreens(merchantId: string): Promise<{
         id: string;
         name: string;
+        screenSizeIn: number;
+        shortCode: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         token: string;
-        shortCode: string | null;
         template: string;
         orientation: string;
-        screenSizeIn: number;
         playlistId: string | null;
     }[]>;
     static createScreen(merchantId: string, input: SignageScreenInput): Promise<{
         id: string;
         name: string;
+        screenSizeIn: number;
+        shortCode: string | null;
         createdAt: Date;
         updatedAt: Date;
         merchantId: string;
         token: string;
-        shortCode: string | null;
         template: string;
         orientation: string;
-        screenSizeIn: number;
         playlistId: string | null;
     }>;
     static updateScreen(merchantId: string, id: string, input: Partial<SignageScreenInput>): Promise<{
@@ -92,10 +92,10 @@ export declare class SignageService {
     static listPlaylists(merchantId: string): Promise<{
         slides: {
             id: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             sortOrder: number;
-            imageUrl: string | null;
             categoryIds: string[];
             type: string;
             playlistId: string;
@@ -136,10 +136,10 @@ export declare class SignageService {
     }>;
     static createSlide(merchantId: string, playlistId: string, input: SignageSlideInput): Promise<{
         id: string;
+        imageUrl: string | null;
         createdAt: Date;
         updatedAt: Date;
         sortOrder: number;
-        imageUrl: string | null;
         categoryIds: string[];
         type: string;
         playlistId: string;

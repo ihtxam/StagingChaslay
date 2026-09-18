@@ -29,6 +29,8 @@ export interface SyncSaleItem {
 }
 export interface SyncSalePayload {
     clientId: string;
+    /** POS / WebPOS location; falls back to request context or merchant default */
+    locationId?: string | null;
     deviceId?: string;
     orderNumber?: string;
     /** Kitchen / takeaway shout number shown to staff & customers, e.g. #4821 */
@@ -88,6 +90,8 @@ export interface SyncSalePayload {
     masterOrderId?: string | null;
     /** 1-based split check number */
     splitCheckNumber?: number | null;
+    /** Total split parts when masterOrderId is set (defer held/table release until last part). */
+    splitPartCount?: number | null;
     /** Adyen POI transaction id from terminal payment */
     adyenReference?: string | null;
     adyenPoiTransactionTimestamp?: string | null;
@@ -112,26 +116,34 @@ export declare class SyncService {
         categories: {
             id: string;
             name: string;
+            imageUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
             color: string | null;
-            imageUrl: string | null;
             isOffersCategory: boolean;
+            visibility: {
+                channels: string[];
+            };
+            deliveryPricingEnabled: boolean;
+            extraDeliveryPrice: string | null;
             clientId: string | null;
         }[];
         products: {
             id: string;
             name: string;
+            imageUrl: string | null;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
             merchantId: string;
             sortOrder: number;
             description: string | null;
-            imageUrl: string | null;
+            visibility: {
+                channels: string[];
+            };
             clientId: string | null;
             categoryId: string | null;
             sku: string | null;
@@ -178,6 +190,7 @@ export declare class SyncService {
             allowExtras: boolean;
             loyaltyRewardPoints: number | null;
             recipeYield: string;
+            similarProductIds: string[] | null;
         }[];
         terminals: {
             id: string;
@@ -203,11 +216,13 @@ export declare class SyncService {
             createdAt: Date;
             status: string;
             merchantId: string;
+            staffId: string | null;
+            locationId: string | null;
+            clientId: string | null;
             deviceId: string | null;
             paymentStatus: string | null;
             paymentMethod: string | null;
             invoiceNumber: string | null;
-            clientId: string | null;
             customerId: string | null;
             orderNumber: string;
             orderType: string;
@@ -223,7 +238,6 @@ export declare class SyncService {
             amountTendered: string | null;
             changeDue: string | null;
             staffName: string | null;
-            staffId: string | null;
             cardFee: string | null;
             pointsDiscount: string | null;
             pointsEarned: number | null;
@@ -236,6 +250,7 @@ export declare class SyncService {
             adyenCustomerReceiptJson: string | null;
             adyenCashierReceiptJson: string | null;
             notes: string | null;
+            fiskalySignature: Record<string, unknown> | null;
             shippingAddress: string | null;
             deliveryLatitude: string | null;
             deliveryLongitude: string | null;
@@ -248,6 +263,7 @@ export declare class SyncService {
             customerEmail: string | null;
             tableId: string | null;
             tableLabel: string | null;
+            tableSessionId: string | null;
             guestCount: number | null;
             billSplits: {
                 id: string;
@@ -295,9 +311,9 @@ export declare class SyncService {
             } | null;
             items: {
                 id: string;
-                quantity: string;
                 isOpenPrice: boolean;
                 productId: string | null;
+                quantity: string;
                 taxAmount: string;
                 orderId: string;
                 productName: string | null;
@@ -444,7 +460,9 @@ export declare class SyncService {
     /**
      * Idempotent push of offline sales/orders.
      */
-    static pushSales(merchantId: string, sales: SyncSalePayload[]): Promise<{
+    static pushSales(merchantId: string, sales: SyncSalePayload[], opts?: {
+        contextLocationId?: string | null;
+    }): Promise<{
         results: {
             clientId: string;
             orderId: string;

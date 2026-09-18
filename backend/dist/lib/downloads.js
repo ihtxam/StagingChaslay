@@ -11,8 +11,10 @@ exports.describePrintBridgeApk = describePrintBridgeApk;
 exports.describePrintAgentExe = describePrintAgentExe;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const apk_meta_1 = require("@/lib/apk-meta");
 exports.DOWNLOADS_ROOT = path_1.default.join(__dirname, "..", "..", "public", "downloads");
 exports.PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
+/** Old installer URL — redirects to PRINT_AGENT_SETUP_FILE */
 exports.LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 exports.PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
 function downloadsFilePath(filename) {
@@ -46,16 +48,27 @@ function describePrintBridgeApk() {
     const manifest = readDownloadManifest("reborn-print-bridge");
     const valid = fileMagicOk(filePath, "apk");
     const stat = valid ? fs_1.default.statSync(filePath) : null;
+    const declaredVersion = typeof manifest?.version === "string" ? manifest.version.trim() || null : null;
+    const apkVersion = valid ? (0, apk_meta_1.readApkMeta)(filePath).versionName : null;
+    const version = apkVersion ?? declaredVersion;
+    const versionMismatch = !!apkVersion && !!declaredVersion && apkVersion !== declaredVersion;
+    const cacheBust = stat ? `?v=${encodeURIComponent(apkVersion || declaredVersion || String(stat.mtimeMs))}` : "";
     return {
         id: "print-bridge",
         name: "Reborn Print Bridge (Android)",
         filename: exports.PRINT_BRIDGE_APK_FILE,
-        available: valid,
+        available: valid && !versionMismatch,
         sizeBytes: stat?.size ?? 0,
-        version: typeof manifest?.version === "string" ? manifest.version : null,
-        downloadUrl: valid ? `/downloads/${exports.PRINT_BRIDGE_APK_FILE}` : null,
+        version,
+        declaredVersion,
+        versionMismatch,
+        downloadUrl: valid && !versionMismatch
+            ? `/downloads/reborn-print-bridge-${version || "latest"}.apk${cacheBust}`
+            : null,
         message: valid
-            ? undefined
+            ? versionMismatch
+                ? `Bridge APK on this server is still v${apkVersion} (manifest lists v${declaredVersion}). Rebuild print-agent-android and redeploy the APK.`
+                : undefined
             : "Print Bridge APK is not published on this server yet. Build from print-agent-android/ or contact support.",
     };
 }

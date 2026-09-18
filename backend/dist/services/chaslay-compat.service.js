@@ -41,17 +41,20 @@ exports.normalizeChaslayDeviceId = normalizeChaslayDeviceId;
 exports.deriveShortDeviceId = deriveShortDeviceId;
 exports.normalizeActivationCode = normalizeActivationCode;
 exports.generateSyncApiKey = generateSyncApiKey;
+exports.posDeviceIdsMatch = posDeviceIdsMatch;
 const crypto_1 = __importDefault(require("crypto"));
 const db_1 = require("@/db");
 const text_encoding_1 = require("@/lib/text-encoding");
 const order_item_name_1 = require("@/lib/order-item-name");
 const drizzle_orm_1 = require("drizzle-orm");
+const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
 const auth_service_1 = require("./auth.service");
 const merchant_settings_service_1 = require("./merchant-settings.service");
 const receipt_public_url_1 = require("@/lib/receipt-public-url");
 const combo_1 = require("@/lib/combo");
 const money_1 = require("@/lib/money");
 const modifier_service_1 = require("./modifier.service");
+const catalog_visibility_1 = require("@/lib/catalog-visibility");
 function normalizeChaslayDeviceId(deviceId) {
     if (!deviceId)
         return "";
@@ -82,44 +85,163 @@ function normalizeActivationCode(code) {
 function generateSyncApiKey() {
     return crypto_1.default.randomBytes(24).toString("hex");
 }
+function posDeviceIdsMatch(storedExternalId, incomingDeviceId) {
+    const normalized = normalizeChaslayDeviceId(incomingDeviceId);
+    const short = deriveShortDeviceId(incomingDeviceId);
+    const ext = String(storedExternalId || "").toUpperCase();
+    const compact = normalized.replace(/-/g, "");
+    return (ext.includes(compact) ||
+        ext.endsWith(compact) ||
+        deriveShortDeviceId(storedExternalId) === normalized ||
+        deriveShortDeviceId(storedExternalId) === short ||
+        normalizeChaslayDeviceId(storedExternalId) === normalized);
+}
+function isPlaceholderDeviceId(externalId) {
+    return /^POS-/i.test(String(externalId || "").trim());
+}
+const LICENSE_ACTIVATE_COLUMNS = {
+    id: db_1.schema.licenses.id,
+    merchantId: db_1.schema.licenses.merchantId,
+    deviceId: db_1.schema.licenses.deviceId,
+    licenseKey: db_1.schema.licenses.licenseKey,
+    licenseType: db_1.schema.licenses.licenseType,
+    expiresAt: db_1.schema.licenses.expiresAt,
+    status: db_1.schema.licenses.status,
+};
+const MERCHANT_LITE_COLUMNS = {
+    id: db_1.schema.merchants.id,
+    name: db_1.schema.merchants.name,
+    slug: db_1.schema.merchants.slug,
+    status: db_1.schema.merchants.status,
+};
+const DEVICE_LITE_COLUMNS = {
+    id: db_1.schema.devices.id,
+    merchantId: db_1.schema.devices.merchantId,
+    deviceId: db_1.schema.devices.deviceId,
+    deviceName: db_1.schema.devices.deviceName,
+};
+async function findMerchantLiteBySlug(slug) {
+    const db = (0, db_1.getDb)();
+    const rows = await db
+        .select(MERCHANT_LITE_COLUMNS)
+        .from(db_1.schema.merchants)
+        .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, slug))
+        .limit(1);
+    return rows[0] ?? null;
+}
+async function findMerchantLiteById(merchantId) {
+    const db = (0, db_1.getDb)();
+    const rows = await db
+        .select(MERCHANT_LITE_COLUMNS)
+        .from(db_1.schema.merchants)
+        .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId))
+        .limit(1);
+    return rows[0] ?? null;
+}
+async function findLicenseByActivationCode(licenseKey, merchantId) {
+    return (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(async () => {
+        const db = (0, db_1.getDb)();
+        const where = merchantId
+            ? (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, licenseKey), (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchantId))
+            : (0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, licenseKey);
+        const rows = await db.select(LICENSE_ACTIVATE_COLUMNS).from(db_1.schema.licenses).where(where).limit(1);
+        return rows[0] ?? null;
+    });
+}
+async function findDeviceLiteById(deviceUuid) {
+    const db = (0, db_1.getDb)();
+    const rows = await db
+        .select(DEVICE_LITE_COLUMNS)
+        .from(db_1.schema.devices)
+        .where((0, drizzle_orm_1.eq)(db_1.schema.devices.id, deviceUuid))
+        .limit(1);
+    return rows[0] ?? null;
+}
+async function findDeviceForPosId(incomingDeviceId, merchantId) {
+    const db = (0, db_1.getDb)();
+    const normalized = normalizeChaslayDeviceId(incomingDeviceId);
+    const exactWhere = merchantId
+        ? (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.devices.deviceId, normalized), (0, drizzle_orm_1.eq)(db_1.schema.devices.merchantId, merchantId))
+        : (0, drizzle_orm_1.eq)(db_1.schema.devices.deviceId, normalized);
+    const exact = await db.select(DEVICE_LITE_COLUMNS).from(db_1.schema.devices).where(exactWhere).limit(1);
+    if (exact[0])
+        return exact[0];
+    const scoped = merchantId
+        ? await db.select(DEVICE_LITE_COLUMNS).from(db_1.schema.devices).where((0, drizzle_orm_1.eq)(db_1.schema.devices.merchantId, merchantId))
+        : await db.select(DEVICE_LITE_COLUMNS).from(db_1.schema.devices);
+    return scoped.find((d) => posDeviceIdsMatch(d.deviceId, incomingDeviceId)) ?? null;
+}
+function planLabelForLicense(licenseType) {
+    return licenseType === "trial" ? "Trial license" : `${licenseType} license`;
+}
 class ChaslayCompatService {
+    static async lookupLicense(activationCode) {
+        const licenseKey = normalizeActivationCode(activationCode);
+        if (!licenseKey)
+            return null;
+        const license = await findLicenseByActivationCode(licenseKey);
+        if (!license)
+            return null;
+        const merchant = await findMerchantLiteById(license.merchantId);
+        if (!merchant)
+            return null;
+        return {
+            merchantName: merchant.name,
+            customerName: merchant.name,
+            tenantSlug: merchant.slug,
+            planLabel: planLabelForLicense(license.licenseType),
+            expiresAt: license.expiresAt.getTime(),
+            status: license.status,
+        };
+    }
     static async activateLicense(input) {
         const db = (0, db_1.getDb)();
         const normalizedDeviceId = normalizeChaslayDeviceId(input.deviceId);
         const licenseKey = normalizeActivationCode(input.activationCode);
-        let merchant = input.tenantSlug
-            ? await db.query.merchants.findFirst({ where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, input.tenantSlug) })
+        const scopedMerchant = input.tenantSlug
+            ? await findMerchantLiteBySlug(input.tenantSlug)
             : null;
-        const license = await db.query.licenses.findFirst({
-            where: merchant
-                ? (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, licenseKey), (0, drizzle_orm_1.eq)(db_1.schema.licenses.merchantId, merchant.id))
-                : (0, drizzle_orm_1.eq)(db_1.schema.licenses.licenseKey, licenseKey),
-            with: { merchant: true, device: true },
-        });
-        if (!license || !license.merchant) {
+        const license = await findLicenseByActivationCode(licenseKey, scopedMerchant?.id);
+        if (!license) {
             throw new Error("Invalid or already used activation code. Generate a fresh code in admin and try again.");
         }
-        merchant = license.merchant;
+        const merchant = await findMerchantLiteById(license.merchantId);
+        if (!merchant) {
+            throw new Error("Invalid or already used activation code. Generate a fresh code in admin and try again.");
+        }
         const now = new Date();
         if (license.expiresAt <= now || license.status !== "active") {
             throw new Error("License expired or inactive");
         }
-        let device = license.device;
-        if (!device) {
-            const externalId = `POS-${merchant.id.substring(0, 6).toUpperCase()}-${normalizedDeviceId.replace(/-/g, "")}`;
-            const inserted = await db
-                .insert(db_1.schema.devices)
-                .values({
-                merchantId: merchant.id,
-                deviceId: externalId,
-                deviceName: input.deviceModel || `Chaslay ${normalizedDeviceId}`,
-                deviceType: "tablet",
-                osVersion: input.deviceModel,
-                appVersion: input.appVersion,
-                isActive: true,
-            })
-                .returning();
-            device = inserted[0];
+        let device = license.deviceId ? await findDeviceLiteById(license.deviceId) : null;
+        if (device && !posDeviceIdsMatch(device.deviceId, normalizedDeviceId) && !isPlaceholderDeviceId(device.deviceId)) {
+            throw new Error("This license is already bound to another device. Ask support for a code for this Device ID.");
+        }
+        if (!device || !posDeviceIdsMatch(device.deviceId, normalizedDeviceId)) {
+            const existing = await findDeviceForPosId(normalizedDeviceId, merchant.id);
+            if (existing) {
+                device = existing;
+            }
+            else {
+                const inserted = await db
+                    .insert(db_1.schema.devices)
+                    .values({
+                    merchantId: merchant.id,
+                    deviceId: normalizedDeviceId,
+                    deviceName: input.deviceModel || `Chaslay ${normalizedDeviceId}`,
+                    deviceType: "tablet",
+                    osVersion: input.deviceModel,
+                    appVersion: input.appVersion,
+                    isActive: true,
+                })
+                    .returning({
+                    id: db_1.schema.devices.id,
+                    merchantId: db_1.schema.devices.merchantId,
+                    deviceId: db_1.schema.devices.deviceId,
+                    deviceName: db_1.schema.devices.deviceName,
+                });
+                device = inserted[0];
+            }
             await db
                 .update(db_1.schema.licenses)
                 .set({ deviceId: device.id, updatedAt: now })
@@ -144,33 +266,29 @@ class ChaslayCompatService {
             status: "ACTIVE",
             expiresAt: license.expiresAt.getTime(),
             customerName: merchant.name,
-            planLabel: license.licenseType === "trial" ? "Trial license" : `${license.licenseType} license`,
+            merchantName: merchant.name,
+            planLabel: planLabelForLicense(license.licenseType),
             tenantSlug: merchant.slug,
+            merchantId: merchant.id,
         };
     }
     static async validateLicense(input) {
         const db = (0, db_1.getDb)();
-        const normalized = normalizeChaslayDeviceId(input.deviceId);
-        const short = deriveShortDeviceId(input.deviceId);
-        let merchant = input.tenantSlug
-            ? await db.query.merchants.findFirst({ where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, input.tenantSlug) })
+        const scopedMerchant = input.tenantSlug
+            ? await findMerchantLiteBySlug(input.tenantSlug)
             : null;
-        const devices = await db.query.devices.findMany({
-            where: merchant ? (0, drizzle_orm_1.eq)(db_1.schema.devices.merchantId, merchant.id) : undefined,
-            with: { licenses: true, merchant: true },
-        });
-        const device = devices.find((d) => {
-            const ext = d.deviceId.toUpperCase();
-            return (ext.includes(normalized.replace(/-/g, "")) ||
-                ext.endsWith(normalized.replace(/-/g, "")) ||
-                deriveShortDeviceId(d.deviceId) === normalized ||
-                deriveShortDeviceId(d.deviceId) === short);
-        });
+        const device = await findDeviceForPosId(input.deviceId, scopedMerchant?.id);
         if (!device) {
             throw new Error("Device not licensed");
         }
-        merchant = device.merchant;
-        const license = device.licenses?.find((l) => l.status === "active");
+        const merchant = await findMerchantLiteById(device.merchantId);
+        const licenseRows = await (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(async () => {
+            return db
+                .select(LICENSE_ACTIVATE_COLUMNS)
+                .from(db_1.schema.licenses)
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.licenses.deviceId, device.id), (0, drizzle_orm_1.eq)(db_1.schema.licenses.status, "active")));
+        });
+        const license = licenseRows.find((l) => l.expiresAt > new Date()) ?? licenseRows[0];
         if (!license || license.expiresAt <= new Date()) {
             throw new Error("License expired");
         }
@@ -182,6 +300,7 @@ class ChaslayCompatService {
             status: "ACTIVE",
             expiresAt: license.expiresAt.getTime(),
             customerName: merchant?.name,
+            merchantName: merchant?.name,
             planLabel: license.licenseType,
         };
     }
@@ -240,6 +359,7 @@ class ChaslayCompatService {
             role: "merchant",
             merchantId: merchant.id,
             name: merchant.name,
+            authEpoch: Number(merchant.authEpoch ?? 0),
         });
         const dashboardUser = {
             id: merchant.id,
@@ -294,6 +414,7 @@ class ChaslayCompatService {
             name: staff.name,
             roleName,
             permissions,
+            authEpoch: Number(merchant.authEpoch ?? 0),
         });
         const dashboardUser = {
             id: staff.id,
@@ -338,7 +459,8 @@ class ChaslayCompatService {
         const allProducts = await db.query.products.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
         });
-        const products = allProducts.filter((p) => p.isActive !== false);
+        const activeProducts = allProducts.filter((p) => p.isActive !== false);
+        const { products, categories: visibleCategories } = (0, catalog_visibility_1.filterCatalogForChannel)(activeProducts, categories, "pos");
         const { FloorPlanService } = await Promise.resolve().then(() => __importStar(require("@/services/floor-plan.service")));
         const { ReservationService } = await Promise.resolve().then(() => __importStar(require("@/services/reservation.service")));
         const floorPlans = await FloorPlanService.list(merchantId);
@@ -348,7 +470,7 @@ class ChaslayCompatService {
                 .map((r) => r.tableId)
                 .filter((id) => !!id)),
         ];
-        const categoryClientById = new Map(categories.map((c) => [c.id, c.clientId || c.id]));
+        const categoryClientById = new Map(visibleCategories.map((c) => [c.id, c.clientId || c.id]));
         const productClientById = new Map(allProducts.map((p) => [p.id, p.clientId || p.id]));
         const catalogById = new Map(allProducts.map((p) => [p.id, p]));
         const groupsByProduct = await modifier_service_1.ModifierService.getGroupsForProducts(merchantId, allProducts.map((p) => p.id));
@@ -378,7 +500,7 @@ class ChaslayCompatService {
                 store_hours: merchant.storeHours || {},
                 receipt_base_url: receiptPublicBaseUrl(),
             },
-            categories: categories.map((c) => this.mapCategory(c)),
+            categories: visibleCategories.map((c) => this.mapCategory(c)),
             products: products.map((p) => this.mapProduct(p, false, categoryClientById, productClientById, groupsByProduct, catalogById)),
             paymentConfig: await this.getPaymentConfigPayload(merchantId),
             floor_plans: floorPlans.map((p) => ({
@@ -424,9 +546,14 @@ class ChaslayCompatService {
         const terminalReady = !!merchant.adyenApiKey &&
             !!merchant.adyenMerchantAccount &&
             active.length > 0;
+        const tapToPayReady = merchant.tapToPayEnabled === true &&
+            !!merchant.adyenApiKey &&
+            !!merchant.adyenMerchantAccount;
         const { normalizePosPrintSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-print-settings")));
+        const { normalizePosCheckoutSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-checkout-settings")));
         const { receiptPublicBaseUrl } = await Promise.resolve().then(() => __importStar(require("@/lib/receipt-public-url")));
         const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
+        const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
         return {
             adyen: {
                 merchant_account: merchant.adyenMerchantAccount || null,
@@ -442,11 +569,15 @@ class ChaslayCompatService {
                 status: t.status,
             })),
             terminal_ready: terminalReady,
+            tap_to_pay_ready: tapToPayReady,
+            tap_to_pay_enabled: merchant.tapToPayEnabled === true,
             methods: {
-                express: merchant.webposExpressEnabled !== false,
+                // Express checkout bar under products — driven by posCheckoutSettings.
+                express: posCheckoutSettings.expressCheckoutEnabled,
                 cash: merchant.webposCashEnabled !== false,
                 card: merchant.webposCardEnabled !== false,
                 terminal: merchant.webposTerminalEnabled !== false && terminalReady,
+                tap_to_pay: tapToPayReady,
                 giftCard: merchant.webposGiftCardEnabled === true &&
                     !!merchant.giftCardSettings?.enabled,
                 invoice: merchant.webposInvoiceEnabled !== false,
@@ -459,7 +590,7 @@ class ChaslayCompatService {
                 shifts_enabled: !!merchant.shiftsEnabled,
             },
             checkout: {
-                ...(await Promise.resolve().then(() => __importStar(require("@/lib/pos-checkout-settings")))).normalizePosCheckoutSettings(merchant.posCheckoutSettings),
+                ...posCheckoutSettings,
                 vatIncludedInPrice: merchant.taxIncludedInPrice === true,
                 vatAfterDiscount: merchant.vatAfterDiscount !== false,
             },
@@ -557,6 +688,8 @@ class ChaslayCompatService {
         const allCategories = await db.query.categories.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId),
         });
+        const activeChangedProducts = products.filter((p) => p.isActive !== false);
+        const { products: visibleProducts, categories: visibleChangedCategories } = (0, catalog_visibility_1.filterCatalogForChannel)(activeChangedProducts, categories, "pos");
         const categoryClientById = new Map(allCategories.map((c) => [c.id, c.clientId || c.id]));
         const allProducts = await db.query.products.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
@@ -566,8 +699,8 @@ class ChaslayCompatService {
         const groupsByProduct = await modifier_service_1.ModifierService.getGroupsForProducts(merchantId, allProducts.map((p) => p.id));
         return {
             serverTime: Date.now(),
-            categories: categories.map((c) => this.mapCategory(c, true)),
-            products: products.map((p) => this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)),
+            categories: visibleChangedCategories.map((c) => this.mapCategory(c, true)),
+            products: visibleProducts.map((p) => this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)),
         };
     }
     static async incomingOrders(merchantId, sinceMs) {
@@ -684,8 +817,8 @@ class ChaslayCompatService {
             combo_items: comboItems,
             specifications,
             variants,
-            online_visible: p.isActive,
-            kiosk_visible: p.isActive,
+            online_visible: p.isActive && (0, catalog_visibility_1.isVisibleOnChannel)(p.visibility, "pos"),
+            kiosk_visible: p.isActive && (0, catalog_visibility_1.isVisibleOnChannel)(p.visibility, "pos"),
             updated_at: p.updatedAt?.toISOString(),
             ...(includeDeleted && !p.isActive ? { deleted_at: p.updatedAt?.toISOString() } : {}),
         };

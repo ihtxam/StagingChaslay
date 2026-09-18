@@ -51,8 +51,12 @@ class CatalogImportService {
      *   bulkPricing? (10:2.5;20:2.0), specifications? (Small:8.9|Large:10.5*),
      *   modifierGroups? (Milk|Toppings), extras? (Extra Cheese:1.5|Bacon:2), allowExtras?
      */
-    static async importWorkbook(merchantId, buffer) {
+    static async importWorkbook(merchantId, buffer, options) {
+        const onProgress = options?.onProgress;
+        const emit = (event) => onProgress?.(event);
+        emit({ phase: "parsing", message: "Reading workbook…", percent: 0 });
         const workbook = XLSX.read(buffer, { type: "buffer" });
+        emit({ phase: "parsing", message: "Workbook loaded", percent: 5 });
         const errors = [];
         let categoriesCreated = 0;
         let productsCreated = 0;
@@ -76,6 +80,13 @@ class CatalogImportService {
                 defval: "",
             });
             for (let i = 0; i < rows.length; i++) {
+                emit({
+                    phase: "categories",
+                    current: i + 1,
+                    total: rows.length,
+                    percent: rows.length ? 5 + Math.round(((i + 1) / rows.length) * 15) : 10,
+                    message: `Importing categories (${i + 1}/${rows.length})`,
+                });
                 const row = rows[i];
                 const name = (0, text_encoding_1.repairCatalogText)(String(row.name || row.Name || "").trim());
                 if (!name) {
@@ -112,7 +123,15 @@ class CatalogImportService {
                 }
             }
         }
-        const groupTitleToId = await this.importModifierGroupsSheet(merchantId, workbook, errors, { created: () => modifierGroupsCreated++, updated: () => modifierGroupsUpdated++ });
+        const groupTitleToId = await this.importModifierGroupsSheet(merchantId, workbook, errors, { created: () => modifierGroupsCreated++, updated: () => modifierGroupsUpdated++ }, (current, total) => {
+            emit({
+                phase: "modifierGroups",
+                current,
+                total,
+                percent: total ? 20 + Math.round((current / total) * 10) : 25,
+                message: `Importing modifier groups (${current}/${total})`,
+            });
+        });
         const productsSheet = findSheet(workbook, "Products");
         if (!productsSheet) {
             return {
@@ -131,6 +150,15 @@ class CatalogImportService {
             defval: "",
         });
         for (let i = 0; i < productRows.length; i++) {
+            emit({
+                phase: "products",
+                current: i + 1,
+                total: productRows.length,
+                percent: productRows.length
+                    ? 30 + Math.round(((i + 1) / productRows.length) * 65)
+                    : 95,
+                message: `Importing products (${i + 1}/${productRows.length})`,
+            });
             const row = productRows[i];
             const name = (0, text_encoding_1.repairCatalogText)(String(row.name || row.Name || "").trim());
             const priceRaw = row.price ?? row.Price;
@@ -269,6 +297,7 @@ class CatalogImportService {
                 });
             }
         }
+        emit({ phase: "done", message: "Import complete", percent: 100 });
         return {
             success: errors.length === 0,
             categoriesCreated,
@@ -279,7 +308,7 @@ class CatalogImportService {
             errors,
         };
     }
-    static async importModifierGroupsSheet(merchantId, workbook, errors, counters) {
+    static async importModifierGroupsSheet(merchantId, workbook, errors, counters, onRowProgress) {
         const groupTitleToId = new Map();
         const existingGroups = await modifier_service_1.ModifierService.list(merchantId);
         for (const group of existingGroups) {
@@ -290,6 +319,7 @@ class CatalogImportService {
             return groupTitleToId;
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
         for (let i = 0; i < rows.length; i++) {
+            onRowProgress?.(i + 1, rows.length);
             const row = rows[i];
             const title = (0, text_encoding_1.repairCatalogText)(String(row.title || row.Title || row.name || row.Name || "").trim());
             if (!title) {
