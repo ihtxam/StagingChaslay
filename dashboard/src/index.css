@@ -2264,7 +2264,28 @@ html.shop-shell #root {
 .shop-checkout-desktop-cart {
   position: -webkit-sticky;
   position: sticky;
-  top: 5.5rem;
+  top: calc(var(--shop-header-height, 3.5rem) + 1rem);
+  z-index: 30;
+  align-self: start;
+  max-height: calc(100dvh - var(--shop-header-height, 3.5rem) - 2rem);
+}
+
+.shop-checkout-desktop-cart__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--shop-header-height, 3.5rem) - 6.5rem);
+  min-height: 0;
+}
+
+.shop-checkout-desktop-cart__items {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.shop-checkout-desktop-cart__footer {
+  flex-shrink: 0;
 }
 
 html.shop-shell input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
