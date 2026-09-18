@@ -1228,6 +1228,7 @@ export default function CheckoutPage() {
       (draft.channel === 'delivery' && draft.paymentMethod !== 'card'));
   const cardSelected = !payWithPoints && draft.paymentMethod === 'card';
   const menuPath = `${shopBasePath(shopKey, locSlug)}/menu`;
+  const accountPath = `${shopBasePath(shopKey, locSlug)}/account`.replace(/\/+/g, '/');
   const tipPresets = [5, 10, 15] as const;
   const activeTipPct = tipPresets.find(
     (pct) => subtotal > 0 && Math.abs(tip - roundTo005((subtotal * pct) / 100)) < 0.02
@@ -1641,6 +1642,10 @@ export default function CheckoutPage() {
             {customer ? (
               <p className="text-sm text-teal-800 border border-teal-100 bg-teal-50 px-3 py-2 rounded-xl">
                 {t('shopLoggedInAs')} {customer.name || customer.email}.{' '}
+                <Link to={accountPath} className="underline font-medium">
+                  {t('shopMyAccount')}
+                </Link>
+                {' · '}
                 <button
                   type="button"
                   className="underline font-medium"
