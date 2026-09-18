@@ -63,6 +63,18 @@ export function findOrdersMatchingCart(
   return orders.filter((o) => orderMatchesCartLink(o, link));
 }
 
+function isActivePaidOrder(o: MerchantOrder): boolean {
+  return isPaidOrder(o) && (o.status || '').toLowerCase() !== 'cancelled';
+}
+
+/** Paid POS ticket matching the same kitchen link — block reload / stale held rows. */
+export function findPaidOrderForCartLink(
+  orders: MerchantOrder[],
+  link: CartOrderLink
+): MerchantOrder | null {
+  return findOrdersMatchingCart(orders, link).find(isActivePaidOrder) || null;
+}
+
 export type CartCheckoutGuard =
   | { action: 'ok' }
   | { action: 'blocked'; order: MerchantOrder }

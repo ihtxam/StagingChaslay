@@ -53,7 +53,7 @@ import {
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { collectPaymentAction } from '@/lib/order-to-cart';
+import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-cart';
 import {
   localHeldRowsFromSession,
   parseHeldCartJson,
@@ -294,9 +294,24 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
+/** Held row duplicates a ticket that was already paid at the till. */
+function findPaidOrderForHeldRow(
+  held: HeldRow,
+  orders: PosOrder[]
+): PosOrder | null {
+  const meta = parseHeldCartJson(held.cartJson);
+  const ticketFromLabel = (held.label || '').match(/#\d{1,6}/)?.[0] || null;
+  return (findPaidOrderForCartLink(orders, {
+    ticketDisplay: meta.kitchenTicketKey?.trim() || meta.ticketDisplay || ticketFromLabel,
+    tabNumber: meta.tabNumber,
+    tableId: meta.tableId,
+    ticketOrderNumber: meta.ticketOrderNumber,
+  }) as PosOrder | null) || null;
+}
+
 /** In-store unpaid ticket — load into register / collect, even if kitchen already closed. */
 function isOpenPosAwaitingOrder(o: PosOrder): boolean {
-  return !isOnlineShopOrder(o) && isAwaitingPaymentOrder(o);
+  return !isOnlineShopOrder(o) && !isPaidOrder(o) && isAwaitingPaymentOrder(o);
 }
 
 /** Ongoing / kitchen / unpaid — not completed sales (POS cancel rules) */
@@ -755,6 +770,7 @@ export default function WebPosOrdersPanel({
         // Held / kitchen-sent tickets are POS register work — hide only on Online shop.
         if (channelFilter === 'online') continue;
         if (!matchesChannelFilter(h, channelFilter)) continue;
+        if (findPaidOrderForHeldRow(h, ordersForList)) continue;
         if (q) {
           const meta = parseHeldCartJson(h.cartJson);
           if (
@@ -1180,6 +1196,12 @@ export default function WebPosOrdersPanel({
 
   const startCollectPayment = (order: PosOrder) => {
     setPaymentEditFor(null);
+    if (isPaidOrder(order)) {
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(order))
+      );
+      return;
+    }
     if (isInvoiceOrder(order)) {
       setPaymentMethodDraft('cash');
       setCollectFor(order);
@@ -1202,6 +1224,13 @@ export default function WebPosOrdersPanel({
   };
 
   const openHeldInCart = (h: HeldRow) => {
+    const paid = findPaidOrderForHeldRow(h, ordersForList);
+    if (paid) {
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(paid))
+      );
+      return;
+    }
     onResumeHeld(h);
     onClose();
   };
