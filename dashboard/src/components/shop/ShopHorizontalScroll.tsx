@@ -1,15 +1,22 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Props = {
   children: ReactNode;
   className?: string;
+  /** Auto-advance the row (used for popular items). Pauses on hover/touch. */
+  autoSlide?: boolean;
 };
 
 /** Hidden scrollbar row; left/right arrows appear on hover (Deliverect-style). */
-export default function ShopHorizontalScroll({ children, className = '' }: Props) {
+export default function ShopHorizontalScroll({
+  children,
+  className = '',
+  autoSlide = false,
+}: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
+  const [touching, setTouching] = useState(false);
 
   const scrollBy = (dir: -1 | 1) => {
     const el = trackRef.current;
@@ -18,11 +25,35 @@ export default function ShopHorizontalScroll({ children, className = '' }: Props
     el.scrollBy({ left: dir * step, behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    if (!autoSlide || hovered || touching) return;
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const tick = () => {
+      const el = trackRef.current;
+      if (!el || el.scrollWidth <= el.clientWidth + 8) return;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 12;
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        const step = Math.max(280, Math.round(el.clientWidth * 0.6));
+        el.scrollBy({ left: step, behavior: 'smooth' });
+      }
+    };
+
+    const id = window.setInterval(tick, 3200);
+    return () => window.clearInterval(id);
+  }, [autoSlide, hovered, touching]);
+
   return (
     <div
       className={`shop-horizontal-scroll ${className}`.trim()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onTouchStart={() => setTouching(true)}
+      onTouchEnd={() => setTouching(false)}
+      onTouchCancel={() => setTouching(false)}
     >
       <button
         type="button"

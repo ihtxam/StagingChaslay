@@ -1756,7 +1756,7 @@ export default function OrderingPage() {
         {!menuSearchQuery.trim() && popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
-            <ShopHorizontalScroll>
+            <ShopHorizontalScroll autoSlide>
               {popularProducts.map((product) => {
                 const catalog = catalogUnitPrice(product.price, product.categoryId ?? null);
                 return (
