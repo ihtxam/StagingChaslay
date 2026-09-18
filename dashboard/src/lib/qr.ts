@@ -326,7 +326,7 @@ export async function buildLabeledReceiptQrRasterEscPos(opts: {
     const labelLines = wrapLabelLines(ctx, opts.label, canvasWidth - 8);
     const labelHeight = Math.max(labelLineHeight, labelLines.length * labelLineHeight);
     canvas.width = canvasWidth;
-    canvas.height = labelHeight + gap + qrSize + 8;
+    canvas.height = labelHeight + gap + qrSize + 2;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const labelBottom = drawCenteredLabel(ctx, opts.label, 0, 4, canvasWidth, labelLineHeight);
@@ -383,7 +383,7 @@ export async function buildDualReceiptQrRasterEscPos(opts: {
     const labelRows = Math.max(leftLabelLines.length, rightLabelLines.length, 1);
     const labelHeight = labelRows * labelLineHeight + 4;
     canvas.width = canvasWidth;
-    canvas.height = labelHeight + labelGap + qrSize + 8;
+    canvas.height = labelHeight + labelGap + qrSize + 2;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     drawCenteredLabel(ctx, opts.left.label, 0, 4, colWidth, labelLineHeight);

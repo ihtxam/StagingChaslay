@@ -1758,7 +1758,7 @@ const en: Dict = {
   receiptPaperWidth: 'Paper width',
   receiptChfToEurRate: 'CHF → EUR exchange rate',
   receiptChfToEurRateHint:
-    'Optional. When set, receipts show an EUR equivalent under the total (1 CHF = X EUR). Leave empty to hide.',
+    'Optional. When set, receipts show an EUR equivalent under the total (1 CHF = X EUR), rounded to 0.05 EUR. Leave empty to hide.',
   receiptLogoUrl: 'Receipt logo URL',
   receiptLogoHint: 'Leave empty to use the shop logo. Printed on 80mm / 58mm receipts.',
   receiptHeader: 'Receipt header',
@@ -1768,6 +1768,10 @@ const en: Dict = {
   receiptShowVat: 'Show VAT line',
   receiptShowStaff: 'Show staff name',
   receiptShowQr: 'Show digital receipt QR',
+  receiptShowGoogleReviewQr: 'Show Google review QR',
+  receiptGoogleReviewsUrl: 'Google review URL',
+  receiptGoogleReviewsUrlHint:
+    'Paste your Google review link (g.page/.../review or writereview URL). Scanned QR opens the review form.',
   receiptDeliveryDirectionsQr: 'Delivery directions QR on receipt',
   adyenReceiptDigitalOnly: 'Adyen card receipt: digital only (QR)',
   adyenReceiptDigitalOnlyHint:
@@ -5804,7 +5808,7 @@ const fr: Dict = {
   receiptPaperWidth: 'Largeur papier',
   receiptChfToEurRate: 'Taux CHF → EUR',
   receiptChfToEurRateHint:
-    'Optionnel. Si renseigné, les reçus affichent un équivalent EUR sous le total (1 CHF = X EUR). Laissez vide pour masquer.',
+    'Optionnel. Si renseigné, les reçus affichent un équivalent EUR sous le total (1 CHF = X EUR), arrondi à 0,05 EUR. Laissez vide pour masquer.',
   receiptLogoUrl: 'URL du logo reçu',
   receiptLogoHint: 'Laissez vide pour utiliser le logo boutique. Imprimé en 80mm / 58mm.',
   receiptHeader: 'En-tête du reçu',
@@ -5814,6 +5818,10 @@ const fr: Dict = {
   receiptShowVat: 'Afficher la TVA',
   receiptShowStaff: 'Afficher le personnel',
   receiptShowQr: 'Afficher le QR reçu digital',
+  receiptShowGoogleReviewQr: 'Afficher le QR avis Google',
+  receiptGoogleReviewsUrl: 'URL avis Google',
+  receiptGoogleReviewsUrlHint:
+    'Collez votre lien d’avis Google (g.page/.../review ou URL writereview). Le QR ouvre le formulaire d’avis.',
   receiptDeliveryDirectionsQr: 'QR directions livraison sur le reçu',
   adyenReceiptDigitalOnly: 'Reçu carte Adyen : digital uniquement (QR)',
   adyenReceiptDigitalOnlyHint:
@@ -9800,7 +9808,7 @@ const de: Dict = {
   receiptPaperWidth: 'Papierbreite',
   receiptChfToEurRate: 'CHF → EUR Wechselkurs',
   receiptChfToEurRateHint:
-    'Optional. Wenn gesetzt, zeigen Belege unter dem Total einen EUR-Gegenwert (1 CHF = X EUR). Leer lassen zum Ausblenden.',
+    'Optional. Wenn gesetzt, zeigen Belege unter dem Total einen EUR-Gegenwert (1 CHF = X EUR), gerundet auf 0,05 EUR. Leer lassen zum Ausblenden.',
   receiptLogoUrl: 'Logo-URL für Beleg',
   receiptLogoHint: 'Leer lassen für Shop-Logo. Druck auf 80mm / 58mm.',
   receiptHeader: 'Beleg-Kopfzeile',
@@ -9810,6 +9818,10 @@ const de: Dict = {
   receiptShowVat: 'MwSt.-Zeile anzeigen',
   receiptShowStaff: 'Personal anzeigen',
   receiptShowQr: 'Digitalen Beleg-QR anzeigen',
+  receiptShowGoogleReviewQr: 'Google-Bewertungs-QR anzeigen',
+  receiptGoogleReviewsUrl: 'Google-Bewertungs-URL',
+  receiptGoogleReviewsUrlHint:
+    'Google-Bewertungslink einfügen (g.page/.../review oder writereview-URL). Der QR öffnet das Bewertungsformular.',
   receiptDeliveryDirectionsQr: 'Liefer-Routen-QR auf Beleg',
   adyenReceiptDigitalOnly: 'Adyen-Kartenbeleg: nur digital (QR)',
   adyenReceiptDigitalOnlyHint:

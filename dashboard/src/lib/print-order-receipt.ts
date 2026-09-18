@@ -71,6 +71,8 @@ async function printReceiptText(
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
     deliveryQrData: opts.deliveryQrUrl,
+    googleReviewUrl: opts.printSettings?.receiptGoogleReviewsUrl,
+    showGoogleReviewQr: opts.printSettings?.receiptShowGoogleReviewQr === true,
     language: lang,
     logoBytes: logo,
     paperWidthMm: paper,

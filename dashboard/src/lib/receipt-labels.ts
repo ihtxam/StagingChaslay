@@ -23,6 +23,7 @@ export type ReceiptLabels = {
   scanDigitalReceipt: string;
   /** Title above digital receipt QR on thermal */
   digitalReceiptQrTitle: string;
+  googleReviewQrTitle: string;
   /** Title above delivery directions QR on thermal */
   scanDeliveryDirections: string;
   /** Title above driver claim QR on delivery slip */
@@ -124,7 +125,8 @@ const EN: ReceiptLabels = {
   note: 'Note',
   staff: 'Staff',
   scanDigitalReceipt: 'Scan for digital receipt',
-  digitalReceiptQrTitle: 'Digital receipt',
+  digitalReceiptQrTitle: 'Scan for digital receipt',
+  googleReviewQrTitle: 'Give us your feedback',
   scanDeliveryDirections: 'Scan for directions',
   scanDriver: 'SCAN DRIVER',
   postalCode: 'Postal code',
@@ -220,7 +222,8 @@ const FR: ReceiptLabels = {
   note: 'Note',
   staff: 'Personnel',
   scanDigitalReceipt: 'Scannez pour le recu digital',
-  digitalReceiptQrTitle: 'Reçu digital',
+  digitalReceiptQrTitle: 'Scannez pour le reçu digital',
+  googleReviewQrTitle: 'Donnez-nous votre avis',
   scanDeliveryDirections: "Scannez pour l'itinéraire",
   scanDriver: 'SCAN LIVREUR',
   postalCode: 'Code postal',
@@ -316,7 +319,8 @@ const DE: ReceiptLabels = {
   note: 'Notiz',
   staff: 'Personal',
   scanDigitalReceipt: 'Scannen fuer digitalen Beleg',
-  digitalReceiptQrTitle: 'Digitaler Beleg',
+  digitalReceiptQrTitle: 'Für digitalen Beleg scannen',
+  googleReviewQrTitle: 'Geben Sie uns Feedback',
   scanDeliveryDirections: 'Scan fuer Wegbeschreibung',
   scanDriver: 'FAHRER SCAN',
   postalCode: 'PLZ',

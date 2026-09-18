@@ -7,6 +7,8 @@ const order_item_name_1 = require("@/lib/order-item-name");
 const adyen_receipt_1 = require("@/lib/adyen-receipt");
 const merchant_settings_service_1 = require("@/services/merchant-settings.service");
 const guest_order_number_1 = require("@/lib/guest-order-number");
+const pos_print_settings_1 = require("@/lib/pos-print-settings");
+const money_1 = require("@/lib/money");
 const router = (0, express_1.Router)();
 /** Any hex UUID (v1–v8), not just RFC 4122 v1–v5. Postgres accepts all of these. */
 function isPgUuid(ref) {
@@ -62,6 +64,7 @@ async function findReceiptOrder(ref) {
         taxDeliveryRate: db_1.schema.merchants.taxDeliveryRate,
         taxIncludedInPrice: db_1.schema.merchants.taxIncludedInPrice,
         vatAfterDiscount: db_1.schema.merchants.vatAfterDiscount,
+        posPrintSettings: db_1.schema.merchants.posPrintSettings,
     })
         .from(db_1.schema.orders)
         .leftJoin(db_1.schema.merchants, (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, db_1.schema.orders.merchantId))
@@ -259,6 +262,13 @@ router.get("/:ref", async (req, res) => {
             orderDisplay,
             tabNumber,
         });
+        const chfToEurRate = (0, pos_print_settings_1.parseReceiptChfToEurRate)(order.posPrintSettings && typeof order.posPrintSettings === "object"
+            ? order.posPrintSettings.receiptChfToEurRate
+            : null);
+        const orderTotal = Number(order.total) || 0;
+        const rawEurTotal = chfToEurRate != null ? orderTotal * chfToEurRate : null;
+        const eurTotal = rawEurTotal != null ? (0, money_1.roundTo005)(rawEurTotal) : null;
+        const eurRounding = rawEurTotal != null && eurTotal != null ? (0, money_1.roundMoney2)(eurTotal - rawEurTotal) : null;
         res.json({
             success: true,
             receipt: {
@@ -289,6 +299,9 @@ router.get("/:ref", async (req, res) => {
                 total: order.total,
                 tipAmount: order.tipAmount,
                 roundingAmount: order.roundingAmount,
+                chfToEurRate,
+                eurTotal,
+                eurRounding,
                 tableLabel: order.tableLabel,
                 guestCount: order.guestCount,
                 notes: order.notes,

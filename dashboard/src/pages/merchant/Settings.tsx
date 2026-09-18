@@ -290,6 +290,8 @@ interface SettingsData {
     receiptShowVatTable?: boolean;
     receiptShowStaffLine?: boolean;
     receiptShowQrCode?: boolean;
+    receiptShowGoogleReviewQr?: boolean;
+    receiptGoogleReviewsUrl?: string | null;
     receiptDeliveryDirectionsQr?: boolean;
     adyenReceiptDigitalOnly?: boolean;
     paperWidthMm?: 58 | 80;
@@ -1516,6 +1518,11 @@ export default function Settings() {
         receiptShowVatTable: ps.receiptShowVatTable !== false,
         receiptShowStaffLine: ps.receiptShowStaffLine !== false,
         receiptShowQrCode: ps.receiptShowQrCode !== false,
+        receiptShowGoogleReviewQr: ps.receiptShowGoogleReviewQr === true,
+        receiptGoogleReviewsUrl:
+          ps.receiptGoogleReviewsUrl === null || ps.receiptGoogleReviewsUrl === undefined
+            ? null
+            : String(ps.receiptGoogleReviewsUrl).trim().slice(0, 500) || null,
         receiptDeliveryDirectionsQr: ps.receiptDeliveryDirectionsQr !== false,
         adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
         paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
@@ -3806,6 +3813,39 @@ export default function Settings() {
                     }}
                   />
                 </Field>
+                <Field label={t('receiptGoogleReviewsUrl')} hint={t('receiptGoogleReviewsUrlHint')}>
+                  <input
+                    type="url"
+                    className="input w-full"
+                    placeholder="https://g.page/r/.../review"
+                    value={settings.posPrintSettings?.receiptGoogleReviewsUrl || ''}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptGoogleReviewsUrl: e.target.value.trim() || null,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.posPrintSettings?.receiptShowGoogleReviewQr === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptShowGoogleReviewQr: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  {t('receiptShowGoogleReviewQr')}
+                </label>
                 {showScaleSettings ? (
                   <>
                 <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>

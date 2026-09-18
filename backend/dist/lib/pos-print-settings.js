@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.POS_REFUND_REASONS = exports.POS_CANCEL_REASONS = exports.DEFAULT_POS_PRINT_SETTINGS = exports.LABEL_HEIGHTS_MM = exports.LABEL_WIDTHS_MM = exports.KITCHEN_PRINT_DESTINATIONS = void 0;
 exports.parseLabelWidthMm = parseLabelWidthMm;
 exports.parseLabelHeightMm = parseLabelHeightMm;
+exports.parseReceiptChfToEurRate = parseReceiptChfToEurRate;
 exports.normalizePosPrintSettings = normalizePosPrintSettings;
 exports.migrateKitchenPrintRoutingToPrinters = migrateKitchenPrintRoutingToPrinters;
 exports.resolvePosCancelReason = resolvePosCancelReason;
@@ -36,6 +37,8 @@ exports.DEFAULT_POS_PRINT_SETTINGS = {
     receiptShowVatTable: true,
     receiptShowStaffLine: true,
     receiptShowQrCode: true,
+    receiptShowGoogleReviewQr: false,
+    receiptGoogleReviewsUrl: null,
     receiptDeliveryDirectionsQr: true,
     adyenReceiptDigitalOnly: false,
     paperWidthMm: 80,
@@ -73,6 +76,15 @@ function clampInt(value, min, max, fallback) {
     if (!Number.isFinite(n))
         return fallback;
     return Math.min(max, Math.max(min, Math.round(n)));
+}
+/** Parse optional receipt CHF→EUR rate; null hides the EUR line on receipts. */
+function parseReceiptChfToEurRate(value) {
+    if (value === null || value === undefined || value === "")
+        return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0 || n > 2)
+        return null;
+    return Math.round(n * 10000) / 10000;
 }
 function normalizePosPrintSettings(raw) {
     const src = raw && typeof raw === "object" ? raw : {};
@@ -170,10 +182,15 @@ function normalizePosPrintSettings(raw) {
         receiptShowVatTable: src.receiptShowVatTable !== false,
         receiptShowStaffLine: src.receiptShowStaffLine !== false,
         receiptShowQrCode: src.receiptShowQrCode !== false,
+        receiptShowGoogleReviewQr: src.receiptShowGoogleReviewQr === true,
+        receiptGoogleReviewsUrl: src.receiptGoogleReviewsUrl === null || src.receiptGoogleReviewsUrl === undefined
+            ? null
+            : String(src.receiptGoogleReviewsUrl).trim().slice(0, 500) || null,
         receiptDeliveryDirectionsQr: src.receiptDeliveryDirectionsQr !== false,
         adyenReceiptDigitalOnly: src.adyenReceiptDigitalOnly === true,
         paperWidthMm: paper,
         receiptLanguage,
+        receiptChfToEurRate: parseReceiptChfToEurRate(src.receiptChfToEurRate),
         receiptLogoUrl: src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
             ? null
             : String(src.receiptLogoUrl).trim().slice(0, 500) || null,
