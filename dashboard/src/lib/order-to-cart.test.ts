@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const webPos = readFileSync(join(root, '../pages/merchant/WebPos.tsx'), 'utf8');
+const ordersPanel = readFileSync(join(root, '../components/WebPosOrdersPanel.tsx'), 'utf8');
 const guard = readFileSync(join(root, 'order-to-cart.ts'), 'utf8');
 
 assert.match(
@@ -18,7 +19,12 @@ assert.match(
   webPos,
   /Fresh unsent cart after a paid sale must not inherit the previous ticket/
 );
+assert.match(webPos, /if \(isPaidOrder\(order\)\)/);
+assert.match(ordersPanel, /!isPaidOrder\(o\) && isAwaitingPaymentOrder\(o\)/);
+assert.match(ordersPanel, /function findPaidOrderForHeldRow/);
+assert.match(ordersPanel, /findPaidOrderForHeldRow\(h, ordersForList\)/);
 assert.match(guard, /export function resolveCartCheckoutGuard/);
 assert.match(guard, /action: 'blocked'/);
+assert.match(guard, /export function findPaidOrderForCartLink/);
 
 console.log('order-to-cart.test.ts OK');

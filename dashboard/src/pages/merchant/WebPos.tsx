@@ -6527,6 +6527,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
+    if (isPaidOrder(order)) {
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+      );
+      return false;
+    }
     const lines = orderItemsToCartLines(order.items || []);
     if (!lines.length) {
       toast.error(t('webPosNoItems'));
@@ -6794,6 +6800,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const res = await api.get(`/merchant/orders/${collectId}`);
         const order = (res.data?.order || res.data) as MerchantOrder;
         if (!order?.id) throw new Error('Order not found');
+        if (isPaidOrder(order)) {
+          toast.error(
+            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+          );
+          setHighlightOrderId(order.id);
+          setPosTab('orders');
+          setPosView('orders');
+          setSearchParams({}, { replace: true });
+          return;
+        }
         openOrderCollectCheckout(order, 'register');
         setSearchParams({}, { replace: true });
       } catch (e: any) {
