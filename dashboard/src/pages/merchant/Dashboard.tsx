@@ -122,6 +122,7 @@ import BulkPricingPage from './BulkPricingPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
+const WebsiteCms = lazy(() => import('./WebsiteCms'));
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
 
@@ -836,7 +837,8 @@ function MerchantShell() {
       icon: '🌐',
       children: [
         { label: t('shop'), path: '/merchant/online-shop', icon: '🛒' },
-        { label: t('cmsWebsite'), path: '/merchant/chaslay-page-builder', icon: '✏️' },
+        { label: t('cmsWebsite'), path: '/merchant/website', icon: '✏️' },
+        { label: t('cmsWebsiteBuilder'), path: '/merchant/chaslay-page-builder', icon: '🧩' },
       ].filter((item) => allow(item.path)),
     },
   ]
@@ -1182,7 +1184,16 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route path="website" element={<Navigate to="/merchant/chaslay-page-builder" replace />} />
+            <Route
+              path="website"
+              element={
+                <PanelRouteGuard path="/merchant/website" allow={allow}>
+                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                    <WebsiteCms />
+                  </Suspense>
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="chaslay-page-builder"
               element={

@@ -504,6 +504,13 @@ export default function WebsiteCms() {
         <h1 className="text-xl font-semibold">{t('cmsWebsite')}</h1>
         <p className="text-sm muted mt-1">{t('cmsWebsiteHint')}</p>
         <p className="text-xs muted mt-1">{t('cmsOpenPageHint')}</p>
+        <p className="text-xs mt-2">
+          <a href="/merchant/chaslay-page-builder" className="font-medium text-teal-800 underline underline-offset-2">
+            {t('cmsWebsiteBuilder')}
+          </a>
+          {' — '}
+          optional drag-and-drop layouts. Your published shop uses this classic editor until you set a new layout active.
+        </p>
       </div>
 
       <form onSubmit={saveSite} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-4 space-y-3">
