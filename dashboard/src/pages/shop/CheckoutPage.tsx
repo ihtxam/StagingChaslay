@@ -2414,48 +2414,44 @@ export default function CheckoutPage() {
               {renderTipPicker()}
               {renderGrandTotal()}
             </section>
+
+            <ShopStorefrontFooter
+              basePath={shopBasePath(shopKey, locSlug)}
+              merchantName={merchant?.name}
+              className="mt-10"
+            />
         </div>
 
-        <aside className="mt-8 hidden lg:block lg:mt-0">
-          <div className="shop-checkout-desktop-cart space-y-3">
-            <Link
-              to={menuPath}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
-            >
-              {t('shopAddMoreItems')}
-            </Link>
-            <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <div>
-                <h2 className="mb-3 flex items-center gap-2 text-base font-bold tracking-tight">
-                  <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
-                  {t('shopYourCart')}
-                </h2>
-                <div className="max-h-[min(52vh,28rem)] overflow-y-auto pr-1">{renderCartItems()}</div>
-              </div>
-              <div className="border-t border-stone-100 pt-3 space-y-3">
-                {renderCartTotals()}
-                {renderDiscountControls()}
-                {renderTipPicker()}
-                {renderGrandTotal()}
-                <button
-                  type="button"
-                  className={`shop-checkout-sticky-bar__order w-full ${checkoutReady ? 'is-ready' : 'is-pending'}`}
-                  disabled={placeOrderDisabled}
-                  onClick={() => void submitCheckout()}
-                >
-                  {placeOrderLabel}
-                </button>
-              </div>
+        <aside className="shop-checkout-desktop-cart mt-8 hidden lg:block lg:mt-0">
+          <Link
+            to={menuPath}
+            className="mb-3 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+          >
+            {t('shopAddMoreItems')}
+          </Link>
+          <div className="shop-checkout-desktop-cart__panel rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 flex shrink-0 items-center gap-2 text-base font-bold tracking-tight">
+              <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
+              {t('shopYourCart')}
+            </h2>
+            <div className="shop-checkout-desktop-cart__items pr-1">{renderCartItems()}</div>
+            <div className="shop-checkout-desktop-cart__footer space-y-3 border-t border-stone-100 pt-3">
+              {renderCartTotals()}
+              {renderDiscountControls()}
+              {renderTipPicker()}
+              {renderGrandTotal()}
+              <button
+                type="button"
+                className={`shop-checkout-sticky-bar__order w-full ${checkoutReady ? 'is-ready' : 'is-pending'}`}
+                disabled={placeOrderDisabled}
+                onClick={() => void submitCheckout()}
+              >
+                {placeOrderLabel}
+              </button>
             </div>
           </div>
         </aside>
         </div>
-
-        <ShopStorefrontFooter
-          basePath={shopBasePath(shopKey, locSlug)}
-          merchantName={merchant?.name}
-          className="mt-10"
-        />
       </div>
 
       <div className="shop-checkout-sticky-bar lg:hidden">
