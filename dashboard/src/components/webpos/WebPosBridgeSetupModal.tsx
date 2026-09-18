@@ -17,6 +17,7 @@ type Props = {
   printSettings: PosPrintSettingsClient | null;
   checking: boolean;
   starting?: boolean;
+  tapToPayEnabled?: boolean;
   onRefresh: () => Promise<void>;
   onConfirm: (opts: {
     printerName: string;
@@ -33,6 +34,7 @@ export default function WebPosBridgeSetupModal({
   printSettings,
   checking,
   starting = false,
+  tapToPayEnabled = false,
   onRefresh,
   onConfirm,
   onDismiss,
@@ -89,7 +91,9 @@ export default function WebPosBridgeSetupModal({
             <p className="text-sm text-[var(--text-muted)]">
               {starting || checking
                 ? t('webPosBridgeSetupStartingBody')
-                : t('webPosBridgeSetupOfflineBody')}
+                : tapToPayEnabled
+                  ? t('webPosBridgeSetupOfflineBody')
+                  : t('webPosBridgeSetupOfflineBodyPrintOnly')}
             </p>
             {!starting && !checking ? (
               <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[var(--text-muted)]">
