@@ -292,6 +292,7 @@ interface SettingsData {
     adyenReceiptDigitalOnly?: boolean;
     paperWidthMm?: 58 | 80;
     receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
+    receiptChfToEurRate?: number | null;
     receiptLogoUrl?: string | null;
     receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
@@ -1461,6 +1462,13 @@ export default function Settings() {
         adyenReceiptDigitalOnly: ps.adyenReceiptDigitalOnly === true,
         paperWidthMm: ps.paperWidthMm === 58 ? 58 : 80,
         receiptLanguage: ps.receiptLanguage || 'panel',
+        receiptChfToEurRate: (() => {
+          const raw = ps.receiptChfToEurRate;
+          if (raw === null || raw === undefined || raw === ('' as unknown)) return null;
+          const n = Number(raw);
+          if (!Number.isFinite(n) || n <= 0 || n > 2) return null;
+          return Math.round(n * 10000) / 10000;
+        })(),
         receiptLogoUrl: ps.receiptLogoUrl || null,
         receiptLogoWidthPx: Math.min(
           200,
@@ -3664,6 +3672,39 @@ export default function Settings() {
                     <option value={80}>80mm</option>
                     <option value={58}>58mm</option>
                   </select>
+                </Field>
+                <Field label={t('receiptChfToEurRate')} hint={t('receiptChfToEurRateHint')}>
+                  <input
+                    type="number"
+                    className="input max-w-[12rem]"
+                    min={0}
+                    max={2}
+                    step={0.0001}
+                    placeholder="0.95"
+                    value={
+                      settings.posPrintSettings?.receiptChfToEurRate != null
+                        ? String(settings.posPrintSettings.receiptChfToEurRate)
+                        : ''
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      const nextRate =
+                        raw === ''
+                          ? null
+                          : (() => {
+                              const n = Number(raw);
+                              if (!Number.isFinite(n) || n <= 0) return null;
+                              return Math.min(2, Math.round(n * 10000) / 10000);
+                            })();
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptChfToEurRate: nextRate,
+                        },
+                      });
+                    }}
+                  />
                 </Field>
                 {showScaleSettings ? (
                   <>

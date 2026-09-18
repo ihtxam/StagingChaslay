@@ -270,6 +270,8 @@ export type PosPrintSettingsClient = {
   adyenReceiptDigitalOnly?: boolean;
   paperWidthMm?: 58 | 80;
   receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
+  /** Optional CHF→EUR rate (1 CHF = X EUR) for receipt EUR equivalent line. */
+  receiptChfToEurRate?: number | null;
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
   receiptLogoWidthPx?: number;
@@ -401,6 +403,8 @@ export type WebPosReceipt = {
   /** Cumulative refunded amount on this order (for reprint receipts). */
   refundAmount?: number;
   refundReason?: string | null;
+  /** Optional CHF→EUR rate (1 CHF = X EUR) for EUR equivalent under total. */
+  chfToEurRate?: number | null;
   isProvisional?: boolean;
 };
 
@@ -1031,6 +1035,15 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   return { subtotal: adjusted.subtotal, taxAmount: adjusted.taxAmount, taxRate: rate };
 }
 
+export function computeReceiptEurTotal(
+  chfTotal: number,
+  chfToEurRate: number | null | undefined
+): number | null {
+  const rate = Number(chfToEurRate);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  return roundMoney2(Number(chfTotal) * rate);
+}
+
 export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string): string {
   const width = lineWidthForPaper(tx.paperWidthMm);
   const lang = resolveLang(tx, panelLang);
@@ -1107,6 +1120,10 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
+  const eurTotal = computeReceiptEurTotal(tx.total, tx.chfToEurRate);
+  if (eurTotal != null) {
+    r += padLine(`${L.eurEquivalent}:`, `EUR ${eurTotal.toFixed(2)}`, width) + '\n';
+  }
   const refundTotal = Number(tx.refundAmount || 0);
   const netPaid = Math.max(0, Number(tx.total || 0) - refundTotal);
   if (refundTotal > 0.001) {
@@ -3369,6 +3386,7 @@ export function posOrderToWebPosReceipt(
     giftCardRemainingBalance,
     refundAmount: Number(order.refundAmount ?? 0),
     refundReason: order.refundReason,
+    chfToEurRate: ctx.printSettings?.receiptChfToEurRate ?? null,
   };
 }
 
