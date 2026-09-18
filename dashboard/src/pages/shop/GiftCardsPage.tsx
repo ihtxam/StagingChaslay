@@ -67,6 +67,14 @@ export default function GiftCardsPage() {
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
   const loggedIn = !!loadCustomerToken(shopKey);
+  const [balanceCode, setBalanceCode] = useState('');
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceResult, setBalanceResult] = useState<{
+    balance: number;
+    code: string;
+    holderName?: string | null;
+  } | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -105,6 +113,29 @@ export default function GiftCardsPage() {
 
   const showDigital = settings?.digitalVoucherEnabled !== false;
   const showPhysical = settings?.physicalPostEnabled === true;
+
+  const checkBalance = async (e: FormEvent) => {
+    e.preventDefault();
+    const code = balanceCode.trim();
+    if (!shopKey || !code) return;
+    setBalanceLoading(true);
+    setBalanceError(null);
+    setBalanceResult(null);
+    try {
+      const res = await axios.get(
+        `/api/shop/${shopKey}/gift-cards/balance/${encodeURIComponent(code)}`
+      );
+      setBalanceResult({
+        balance: Number(res.data?.balance) || 0,
+        code: String(res.data?.code || code),
+        holderName: res.data?.holderName || null,
+      });
+    } catch (err: any) {
+      setBalanceError(err?.response?.data?.error || t('giftCardNotFound'));
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
 
   const startPurchase = async (e: FormEvent) => {
     e.preventDefault();
@@ -238,6 +269,57 @@ export default function GiftCardsPage() {
         <p className="text-stone-600 mb-8">{t('shopGiftCardSubtitleFull')}</p>
 
         {!purchaseId ? (
+          <>
+            <section className="mb-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+              <h2 className="text-base font-semibold text-stone-900">{t('shopGiftCardCheckBalance')}</h2>
+              <p className="mt-1 text-sm text-stone-500">{t('shopGiftCardCheckBalanceHint')}</p>
+              <form
+                onSubmit={(e) => void checkBalance(e)}
+                className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+              >
+                <label className="block min-w-0 flex-1">
+                  <span className="sr-only">{t('shopGiftCardCode')}</span>
+                  <input
+                    type="text"
+                    value={balanceCode}
+                    onChange={(e) => {
+                      setBalanceCode(e.target.value);
+                      if (balanceError) setBalanceError(null);
+                      if (balanceResult) setBalanceResult(null);
+                    }}
+                    placeholder={t('shopGiftCardCode')}
+                    className="w-full rounded-xl border border-stone-300 px-4 py-3 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={balanceLoading || !balanceCode.trim()}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 hover:border-stone-400 disabled:opacity-50"
+                >
+                  {balanceLoading ? '…' : t('shopGiftCardCheckBalance')}
+                </button>
+              </form>
+              {balanceError ? <p className="mt-3 text-sm text-red-600">{balanceError}</p> : null}
+              {balanceResult ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                  <p className="text-sm text-emerald-900">{t('shopGiftCardBalance')}</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-emerald-950">
+                    CHF {balanceResult.balance.toFixed(2)}
+                  </p>
+                  {balanceResult.holderName ? (
+                    <p className="mt-1 text-sm text-emerald-800">{balanceResult.holderName}</p>
+                  ) : null}
+                  <Link
+                    to={`${base}/gift/${encodeURIComponent(balanceResult.code)}`.replace(/\/+/g, '/')}
+                    className="mt-3 inline-flex text-sm font-semibold text-emerald-900 underline"
+                  >
+                    {t('shopGiftCardViewFull')}
+                  </Link>
+                </div>
+              ) : null}
+            </section>
+
           <form
             onSubmit={startPurchase}
             className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6"
@@ -422,6 +504,7 @@ export default function GiftCardsPage() {
                 : t('shopGiftCardPay').replace('{amount}', resolvedAmount.toFixed(2))}
             </button>
           </form>
+          </>
         ) : (
           <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-2">{t('shopGiftCardPayment')}</h2>
