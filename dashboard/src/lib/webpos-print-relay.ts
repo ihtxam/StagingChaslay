@@ -498,10 +498,14 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
             text: p.text,
           });
           if (relayKind === 'kitchen') {
+            const alertKind = String(p.alertKind || '');
+            // Server-expanded tickets (reservation / online kitchen) already include cut bytes.
+            const serverBuiltTicket =
+              alertKind === 'reservation' || alertKind === 'online_order';
             try {
               const livePrinter = resolvedPrinter || '';
               const isBt = looksLikeBluetoothOrComPrinter(livePrinter);
-              if (!isBt || !skipBtCutFollowUp) {
+              if (!serverBuiltTicket && (!isBt || !skipBtCutFollowUp)) {
                 await new Promise((r) => setTimeout(r, 150));
                 await printViaAgent({
                   printerName: resolvedPrinter,
