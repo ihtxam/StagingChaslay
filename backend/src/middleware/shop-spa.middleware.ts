@@ -19,7 +19,7 @@ export async function shopSpaShellMiddleware(req: Request, res: Response, next: 
     if (!html) return next();
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     if (req.method === "HEAD") return res.status(200).end();
     return res.status(200).send(html);
   } catch (error) {

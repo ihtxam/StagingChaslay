@@ -4,6 +4,7 @@ import App from './App.tsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import { ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
+import { isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
 import './index.css'
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */
@@ -28,30 +29,37 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 }
 
 if (import.meta.env.PROD && typeof window !== 'undefined') {
-  probeRebornPwaInstalled();
-  bindRebornPwaInstallGuard();
+  if (!isShopStorefrontHost()) {
+    probeRebornPwaInstalled();
+    bindRebornPwaInstallGuard();
+  }
 }
 
-/** Register SW before React boot so static assets get cached on the first online visit. */
+/** Register SW before React boot so static assets get cached on the first online visit.
+ * Shop storefronts must never install the POS offline shell — it hijacks custom domains. */
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker
-    .register('/sw.js')
-    .then((reg) => {
-      void reg.update();
-      const onStateChange = () => {
-        if (reg.waiting && navigator.serviceWorker.controller) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }
-      };
-      reg.addEventListener('updatefound', () => {
-        const worker = reg.installing;
-        worker?.addEventListener('statechange', onStateChange);
+  if (isShopStorefrontHost()) {
+    void unregisterRebornShellOnShop();
+  } else {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        void reg.update();
+        const onStateChange = () => {
+          if (reg.waiting && navigator.serviceWorker.controller) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        };
+        reg.addEventListener('updatefound', () => {
+          const worker = reg.installing;
+          worker?.addEventListener('statechange', onStateChange);
+        });
+        if (reg.waiting) onStateChange();
+      })
+      .catch(() => {
+        /* installability still works with manifest alone in many cases */
       });
-      if (reg.waiting) onStateChange();
-    })
-    .catch(() => {
-      /* installability still works with manifest alone in many cases */
-    });
+  }
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
