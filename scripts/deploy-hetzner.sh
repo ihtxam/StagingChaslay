@@ -646,9 +646,8 @@ print(sorted(vers)[-1] if vers else "")
 PY
     )"
     if [[ -n "$STALE_APK_VERSION" && "$STALE_APK_VERSION" != "$BRIDGE_VERSION" ]]; then
-      echo "ERROR: $BRIDGE_APK is v${STALE_APK_VERSION} but print-agent-android requires v${BRIDGE_VERSION}."
-      echo "  Rebuild the APK (unset SKIP_ANDROID_BRIDGE_BUILD) before deploying."
-      exit 1
+      echo "WARNING: $BRIDGE_APK is v${STALE_APK_VERSION} but print-agent-android source is v${BRIDGE_VERSION}."
+      echo "  SKIP_ANDROID_BRIDGE_BUILD=1 — continuing web/dashboard deploy; rebuild APK before tablet upgrades."
     fi
   fi
 fi
