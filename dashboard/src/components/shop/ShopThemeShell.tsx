@@ -10,6 +10,7 @@ import {
   DEFAULT_SHOP_FAVICON,
   faviconTypeFromUrl,
   resolveShopDocumentSeo,
+  localizedShopCopy,
   shopBrandCssVars,
   type ShopSiteSettings,
 } from '@/lib/shop-site-settings';
@@ -137,12 +138,22 @@ export default function ShopThemeShell({
     });
     if (seo.title) document.title = seo.title;
     applyNamedMeta('description', seo.description || null);
-    applyNamedMeta('twitter:card', seo.title || seo.description ? 'summary' : null);
+    const pageUrl = typeof window !== 'undefined' ? window.location.href.split('#')[0] : null;
+    const imageUrl = seo.faviconUrl || logoUrl || null;
+    const siteName = localizedShopCopy(site?.metaTitle, lang) || seo.title || null;
+    applyNamedMeta('twitter:card', imageUrl ? 'summary_large_image' : seo.title || seo.description ? 'summary' : null);
     applyNamedMeta('twitter:title', seo.title || null);
     applyNamedMeta('twitter:description', seo.description || null);
+    if (imageUrl) applyNamedMeta('twitter:image', imageUrl);
     applyPropertyMeta('og:title', seo.title || null);
     applyPropertyMeta('og:description', seo.description || null);
     applyPropertyMeta('og:type', seo.title || seo.description ? 'website' : null);
+    applyPropertyMeta('og:url', pageUrl);
+    applyPropertyMeta('og:site_name', siteName);
+    if (imageUrl) {
+      applyPropertyMeta('og:image', imageUrl);
+      applyPropertyMeta('og:image:alt', seo.title || siteName);
+    }
     if (site || logoUrl) {
       applyFavicon(seo.faviconUrl || logoUrl || DEFAULT_SHOP_FAVICON);
       if (site) applyGtag(site.gaMeasurementId);

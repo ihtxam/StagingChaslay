@@ -57,6 +57,7 @@ import { APP_NAME, CURRENT_HOST_ALIASES, LEGACY_HOST_ALIASES } from "@/lib/brand
 import downloadsRoutes from "@/routes/downloads.routes";
 import customDomainRoutes from "@/routes/custom-domain.routes";
 import { shopHostMiddleware } from "@/middleware/shop-host.middleware";
+import { shopSpaShellMiddleware } from "@/middleware/shop-spa.middleware";
 
 // Load environment variables
 dotenv.config();
@@ -289,6 +290,8 @@ app.use("/v1", chaslayRoutes);
 // ============================================================================
 // ERROR HANDLING
 // ============================================================================
+
+app.use(shopSpaShellMiddleware);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Route not found" });

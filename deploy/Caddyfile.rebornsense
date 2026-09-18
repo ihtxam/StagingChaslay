@@ -74,6 +74,17 @@ order.rebornsense.com {
 		reverse_proxy api:3000
 	}
 
+	@shop_spa {
+		not path /api/*
+		not path /assets/*
+		not path /openpage/*
+		not path /downloads/*
+		not path /*.*
+	}
+	handle @shop_spa {
+		reverse_proxy api:3000
+	}
+
 	handle {
 		reverse_proxy dashboard:80
 	}
@@ -136,6 +147,17 @@ status.rebornsense.com {
 		reverse_proxy api:3000
 	}
 
+	@shop_spa {
+		not path /api/*
+		not path /assets/*
+		not path /openpage/*
+		not path /downloads/*
+		not path /*.*
+	}
+	handle @shop_spa {
+		reverse_proxy api:3000
+	}
+
 	handle {
 		reverse_proxy dashboard:80
 	}
@@ -150,6 +172,17 @@ https:// {
 	encode gzip zstd
 
 	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	@shop_spa {
+		not path /api/*
+		not path /assets/*
+		not path /openpage/*
+		not path /downloads/*
+		not path /*.*
+	}
+	handle @shop_spa {
 		reverse_proxy api:3000
 	}
 
