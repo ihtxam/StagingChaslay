@@ -46,6 +46,10 @@ export type PosPrintSettings = {
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
+  /** When true, print a Google review QR (uses receiptGoogleReviewsUrl). */
+  receiptShowGoogleReviewQr?: boolean;
+  /** Google review / writereview URL encoded in the feedback QR. */
+  receiptGoogleReviewsUrl?: string | null;
   /** When true, delivery order receipts include a Google Maps navigation QR at the bottom. */
   receiptDeliveryDirectionsQr?: boolean;
   /** When true, Adyen card payment receipt is available via QR only (not printed on thermal). */
@@ -148,6 +152,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptShowVatTable: true,
   receiptShowStaffLine: true,
   receiptShowQrCode: true,
+  receiptShowGoogleReviewQr: false,
+  receiptGoogleReviewsUrl: null,
   receiptDeliveryDirectionsQr: true,
   adyenReceiptDigitalOnly: false,
   paperWidthMm: 80,
@@ -304,6 +310,11 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptShowVatTable: src.receiptShowVatTable !== false,
     receiptShowStaffLine: src.receiptShowStaffLine !== false,
     receiptShowQrCode: src.receiptShowQrCode !== false,
+    receiptShowGoogleReviewQr: src.receiptShowGoogleReviewQr === true,
+    receiptGoogleReviewsUrl:
+      src.receiptGoogleReviewsUrl === null || src.receiptGoogleReviewsUrl === undefined
+        ? null
+        : String(src.receiptGoogleReviewsUrl).trim().slice(0, 500) || null,
     receiptDeliveryDirectionsQr: src.receiptDeliveryDirectionsQr !== false,
     adyenReceiptDigitalOnly: src.adyenReceiptDigitalOnly === true,
     paperWidthMm: paper,

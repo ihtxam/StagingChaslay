@@ -10,7 +10,7 @@ import {
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { guestOrderNumber, parseOrderMetaFromNotes } from "@/lib/guest-order-number";
 import { parseReceiptChfToEurRate } from "@/lib/pos-print-settings";
-import { roundMoney2 } from "@/lib/money";
+import { roundMoney2, roundTo005 } from "@/lib/money";
 
 const router = Router();
 
@@ -332,8 +332,10 @@ router.get("/:ref", async (req: Request, res: Response) => {
         : null
     );
     const orderTotal = Number(order.total) || 0;
-    const eurTotal =
-      chfToEurRate != null ? roundMoney2(orderTotal * chfToEurRate) : null;
+    const rawEurTotal = chfToEurRate != null ? orderTotal * chfToEurRate : null;
+    const eurTotal = rawEurTotal != null ? roundTo005(rawEurTotal) : null;
+    const eurRounding =
+      rawEurTotal != null && eurTotal != null ? roundMoney2(eurTotal - rawEurTotal) : null;
 
     res.json({
       success: true,
@@ -367,6 +369,7 @@ router.get("/:ref", async (req: Request, res: Response) => {
         roundingAmount: order.roundingAmount,
         chfToEurRate,
         eurTotal,
+        eurRounding,
         tableLabel: order.tableLabel,
         guestCount: order.guestCount,
         notes: order.notes,

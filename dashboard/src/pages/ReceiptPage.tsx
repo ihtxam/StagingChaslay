@@ -32,6 +32,7 @@ type Receipt = {
   total: string | number;
   chfToEurRate?: number | null;
   eurTotal?: number | null;
+  eurRounding?: number | null;
   tableLabel?: string | null;
   guestCount?: number | null;
   customerName?: string | null;
@@ -222,13 +223,20 @@ export default function ReceiptPage() {
           )}
         </div>
         <div className="text-sm space-y-1 border-y py-3 mb-3">
-          <p>
-            <span className="text-gray-500">{t('receiptOrder')}:</span> {guestRef}
-          </p>
-          {receipt.completedAt && (
+          {(guestRef || receipt.completedAt) && (
             <p>
-              <span className="text-gray-500">{t('receiptDate')}:</span>{' '}
-              {formatDateTimeDDMMYYYY(receipt.completedAt)}
+              {receipt.completedAt ? (
+                <>
+                  <span className="text-gray-500">{t('receiptDate')}:</span>{' '}
+                  {formatDateTimeDDMMYYYY(receipt.completedAt)}
+                </>
+              ) : null}
+              {guestRef && receipt.completedAt ? ' · ' : null}
+              {guestRef ? (
+                <>
+                  <span className="text-gray-500">{t('receiptOrder')}:</span> {guestRef}
+                </>
+              ) : null}
             </p>
           )}
           {receipt.channel && (
@@ -309,7 +317,15 @@ export default function ReceiptPage() {
           ) : null}
           <TotalsRow label={L.total} value={money(totals.total)} bold />
           {receipt.eurTotal != null && receipt.chfToEurRate != null ? (
-            <TotalsRow label={L.eurEquivalent} value={eurMoney(receipt.eurTotal)} muted />
+            <>
+              {Math.abs(Number(receipt.eurRounding || 0)) > 0.001 ? (
+                <TotalsRow
+                  label={L.rounding}
+                  value={`${Number(receipt.eurRounding) > 0 ? '+' : ''}${eurMoney(receipt.eurRounding)}`}
+                />
+              ) : null}
+              <TotalsRow label={L.eurEquivalent} value={eurMoney(receipt.eurTotal)} muted />
+            </>
           ) : null}
           {receipt.paymentMethod ? (
             <p className="text-gray-500 pt-1">
@@ -355,7 +371,7 @@ export default function ReceiptPage() {
               height={180}
               style={{ imageRendering: 'pixelated' }}
             />
-            <p className="text-xs text-gray-500 mt-2">{t('webPosDigitalReceipt')}</p>
+            <p className="text-xs text-gray-500 mt-2">{L.digitalReceiptQrTitle}</p>
           </div>
         )}
         <button className="btn-primary w-full mt-6" onClick={() => window.print()}>

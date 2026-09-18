@@ -2,6 +2,7 @@ import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich }
 import {
   channelTaxRateFromMerchant,
   roundMoney2,
+  roundTo005,
   splitVatIncludedGross,
   type MerchantChannelTaxSettings,
 } from '@/lib/money';
@@ -11,6 +12,7 @@ import {
   buildReceiptUrl,
   buildGiftCardBarcodePayload,
   buildDeliverySlipQrRasterEscPos,
+  buildDualReceiptQrRasterEscPos,
   buildLabeledReceiptQrRasterEscPos,
   concatBytes,
   escposCode128,
@@ -264,6 +266,10 @@ export type PosPrintSettingsClient = {
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
+  /** When true, print a Google review QR (uses receiptGoogleReviewsUrl). */
+  receiptShowGoogleReviewQr?: boolean;
+  /** Google review / writereview URL encoded in the feedback QR. */
+  receiptGoogleReviewsUrl?: string | null;
   /** When true, delivery order receipts include a Google Maps navigation QR at the bottom. */
   receiptDeliveryDirectionsQr?: boolean;
   /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */
@@ -376,6 +382,10 @@ export type WebPosReceipt = {
   notes?: string;
   receiptUrl?: string;
   includeQr?: boolean;
+  /** When true, print Google review QR using googleReviewUrl. */
+  includeGoogleReviewQr?: boolean;
+  /** Normalized Google writereview URL for feedback QR. */
+  googleReviewUrl?: string | null;
   /** When false, skip delivery directions QR even for delivery channel. */
   deliveryDirectionsQr?: boolean;
   staffName?: string | null;
@@ -884,11 +894,9 @@ function formatReceiptMetaFooter(
   const orderRef = guestReceiptBottomNumber(tx);
   const channel = tx.channel ? channelLabel(L, tx.channel) : '';
   const user = tx.showStaff !== false && tx.staffName?.trim() ? tx.staffName.trim() : '';
-  const metaParts = [dateStr, channel, user].filter(Boolean);
-  let r = '';
-  if (orderRef) r += centerLine(orderRef, width) + '\n';
-  if (metaParts.length) r += centerLine(metaParts.join(' | '), width);
-  return r.trimEnd();
+  const metaParts = [dateStr, orderRef, channel, user].filter(Boolean);
+  if (!metaParts.length) return '';
+  return centerLine(metaParts.join(' | '), width);
 }
 
 function hasGiftCardPayment(tx: WebPosReceipt): boolean {
@@ -1035,13 +1043,53 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
   return { subtotal: adjusted.subtotal, taxAmount: adjusted.taxAmount, taxRate: rate };
 }
 
+/** Normalize a merchant-entered Google URL to open the review composer when scanned. */
+export function normalizeGoogleReviewUrl(url: string | null | undefined): string | null {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+  try {
+    const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const u = new URL(href);
+    if (u.hostname.includes('google.') && u.pathname.includes('writereview')) return u.toString();
+    if (u.hostname === 'g.page' && u.pathname.includes('/review')) return u.toString();
+    const placeId =
+      u.searchParams.get('placeid') ||
+      u.searchParams.get('place_id') ||
+      u.searchParams.get('placeId');
+    if (placeId) {
+      return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(placeId)}`;
+    }
+    const q = u.searchParams.get('q') || '';
+    const fromQ = q.match(/place_id:([A-Za-z0-9_-]+)/i)?.[1];
+    if (fromQ) {
+      return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(fromQ)}`;
+    }
+    const fromRaw = raw.match(/place[_-]?id[=:]([A-Za-z0-9_-]+)/i)?.[1];
+    if (fromRaw) {
+      return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(fromRaw)}`;
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function computeReceiptEurTotals(
+  chfTotal: number,
+  chfToEurRate: number | null | undefined
+): { eurTotal: number; eurRounding: number } | null {
+  const rate = Number(chfToEurRate);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  const rawEur = Number(chfTotal) * rate;
+  const eurTotal = roundTo005(rawEur);
+  return { eurTotal, eurRounding: roundMoney2(eurTotal - rawEur) };
+}
+
 export function computeReceiptEurTotal(
   chfTotal: number,
   chfToEurRate: number | null | undefined
 ): number | null {
-  const rate = Number(chfToEurRate);
-  if (!Number.isFinite(rate) || rate <= 0) return null;
-  return roundMoney2(Number(chfTotal) * rate);
+  return computeReceiptEurTotals(chfTotal, chfToEurRate)?.eurTotal ?? null;
 }
 
 export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string): string {
@@ -1120,9 +1168,17 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
-  const eurTotal = computeReceiptEurTotal(tx.total, tx.chfToEurRate);
-  if (eurTotal != null) {
-    r += padLine(`${L.eurEquivalent}:`, `EUR ${eurTotal.toFixed(2)}`, width) + '\n';
+  const eurTotals = computeReceiptEurTotals(tx.total, tx.chfToEurRate);
+  if (eurTotals != null) {
+    if (Math.abs(eurTotals.eurRounding) > 0.001) {
+      r +=
+        padLine(
+          `${L.rounding}:`,
+          `${eurTotals.eurRounding > 0 ? '+' : ''}EUR ${roundMoney2(eurTotals.eurRounding).toFixed(2)}`,
+          width
+        ) + '\n';
+    }
+    r += padLine(`${L.eurEquivalent}:`, `EUR ${eurTotals.eurTotal.toFixed(2)}`, width) + '\n';
   }
   const refundTotal = Number(tx.refundAmount || 0);
   const netPaid = Math.max(0, Number(tx.total || 0) - refundTotal);
@@ -1202,9 +1258,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
-  // QR label + graphic embedded by buildReceiptEscPos (digital receipt only).
+  // QR labels + graphics embedded by buildReceiptEscPos.
   const hasDigitalQr = tx.includeQr !== false && !!(tx.receiptUrl || tx.id);
-  if (hasDigitalQr) {
+  const hasGoogleQr =
+    tx.includeGoogleReviewQr === true && !!normalizeGoogleReviewUrl(tx.googleReviewUrl);
+  if (hasDigitalQr || hasGoogleQr) {
     r += thin + '\n';
   }
 
@@ -1213,8 +1271,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.printAdyenReceiptOnTicket !== false) {
     r = appendAdyenReceiptBlock(r, tx.adyenCustomerReceipt, width);
   }
-  r += '\n';
-  return r;
+  return r.replace(/\n+$/, '');
 }
 
 export type RefundReceiptPrint = {
@@ -2505,7 +2562,8 @@ export function textToEscPos(
   barcodeLabel?: string,
   deliveryQrRaster?: Uint8Array | null
 ): Uint8Array {
-  const body = escposCp850Encode(text);
+  const hasQr = !!(qrRaster?.length || deliveryQrRaster?.length);
+  const body = escposCp850Encode(hasQr ? text.replace(/\n+$/, '') + '\n' : text);
   const init = new Uint8Array([0x1b, 0x40]);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
@@ -2530,19 +2588,21 @@ export function textToEscPos(
   return concatBytes(...parts);
 }
 
-/** Build receipt ESC/POS with bitmap QR (web / print-agent path). Digital receipt QR only. */
+/** Build receipt ESC/POS with labeled QR block(s) at the bottom. */
 export async function buildReceiptEscPos(
   text: string,
   opts: {
     qrData?: string;
     /** @deprecated Directions QR removed — kept for call-site compat, ignored. */
     deliveryQrData?: string;
+    googleReviewUrl?: string | null;
+    showGoogleReviewQr?: boolean;
     language?: ReceiptLang | string;
     logoBytes?: Uint8Array | null;
     barcodeData?: string;
     barcodeLabel?: string;
     paperWidthMm?: 58 | 80;
-    /** Skip slow external QR fetch — embedded ESC/POS QR (~1s faster at checkout). */
+    /** When true, fall back to native ESC/POS QR if raster build fails. */
     fastQr?: boolean;
   } = {}
 ): Promise<Uint8Array> {
@@ -2550,23 +2610,44 @@ export async function buildReceiptEscPos(
   const langCode = String(opts.language || 'en').toLowerCase().slice(0, 2);
   const lang: ReceiptLang = langCode === 'fr' || langCode === 'de' ? langCode : 'en';
   const L = receiptLabels(lang);
-  const qrData = opts.qrData?.trim();
+  const digitalData = opts.qrData?.trim() || '';
+  const googleData =
+    opts.showGoogleReviewQr === true
+      ? normalizeGoogleReviewUrl(opts.googleReviewUrl) || ''
+      : '';
 
   let qrRaster: Uint8Array | null = null;
 
-  if (qrData) {
-    if (opts.fastQr !== false) {
-      qrRaster = escposQrCode(qrData, paper === 58 ? 5 : 5);
-    } else {
-      qrRaster =
-        (await buildLabeledReceiptQrRasterEscPos({
-          label: L.digitalReceiptQrTitle,
-          data: qrData,
-          paperWidthMm: paper,
-        })) ||
-        (await generateReceiptQrRasterEscPos(qrData, paper)) ||
-        escposQrCode(qrData, paper === 58 ? 5 : 5);
-    }
+  if (digitalData && googleData) {
+    qrRaster =
+      (await buildDualReceiptQrRasterEscPos({
+        left: { label: L.digitalReceiptQrTitle, data: digitalData },
+        right: { label: L.googleReviewQrTitle, data: googleData },
+        paperWidthMm: paper,
+      })) ||
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.digitalReceiptQrTitle,
+        data: digitalData,
+        paperWidthMm: paper,
+      }));
+  } else if (digitalData) {
+    qrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.digitalReceiptQrTitle,
+        data: digitalData,
+        paperWidthMm: paper,
+      })) ||
+      (opts.fastQr !== false
+        ? escposQrCode(digitalData, paper === 58 ? 5 : 5)
+        : (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
+          escposQrCode(digitalData, paper === 58 ? 5 : 5));
+  } else if (googleData) {
+    qrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.googleReviewQrTitle,
+        data: googleData,
+        paperWidthMm: paper,
+      })) || escposQrCode(googleData, paper === 58 ? 5 : 5);
   }
 
   return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);
@@ -2700,16 +2781,32 @@ export async function logoUrlToEscPos(
     ctx.drawImage(img, 0, 0, w, h);
     const { data } = ctx.getImageData(0, 0, w, h);
     const bytesPerRow = Math.ceil(w / 8);
-    const raster = new Uint8Array(bytesPerRow * h);
+    const fullRaster = new Uint8Array(bytesPerRow * h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4;
         const lum = data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114;
         if (lum < 160) {
-          raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
+          fullRaster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
         }
       }
     }
+    let top = 0;
+    let bottom = h - 1;
+    const rowHasInk = (row: number) => {
+      const off = row * bytesPerRow;
+      for (let i = 0; i < bytesPerRow; i++) {
+        if (fullRaster[off + i] !== 0) return true;
+      }
+      return false;
+    };
+    while (top < bottom && !rowHasInk(top)) top++;
+    while (bottom > top && !rowHasInk(bottom)) bottom--;
+    const trimmedH = Math.max(1, bottom - top + 1);
+    const raster =
+      top === 0 && trimmedH === h
+        ? fullRaster
+        : fullRaster.subarray(top * bytesPerRow, (top + trimmedH) * bytesPerRow);
     const header = new Uint8Array([
       0x1d,
       0x76,
@@ -2717,8 +2814,8 @@ export async function logoUrlToEscPos(
       0x00,
       bytesPerRow & 0xff,
       (bytesPerRow >> 8) & 0xff,
-      h & 0xff,
-      (h >> 8) & 0xff,
+      trimmedH & 0xff,
+      (trimmedH >> 8) & 0xff,
     ]);
     return concatBytes(header, raster);
   } catch {
@@ -3371,6 +3468,8 @@ export function posOrderToWebPosReceipt(
     splitLabel,
     receiptUrl: order.id || order.clientId ? buildReceiptUrl(String(order.id || order.clientId)) : undefined,
     includeQr: ctx.printSettings?.receiptShowQrCode !== false,
+    includeGoogleReviewQr: ctx.printSettings?.receiptShowGoogleReviewQr === true,
+    googleReviewUrl: normalizeGoogleReviewUrl(ctx.printSettings?.receiptGoogleReviewsUrl),
     deliveryDirectionsQr: ctx.printSettings?.receiptDeliveryDirectionsQr !== false,
     staffName: order.staffName,
     language: lang,

@@ -37,6 +37,10 @@ export type PosPrintSettings = {
     receiptShowVatTable?: boolean;
     receiptShowStaffLine?: boolean;
     receiptShowQrCode?: boolean;
+    /** When true, print a Google review QR (uses receiptGoogleReviewsUrl). */
+    receiptShowGoogleReviewQr?: boolean;
+    /** Google review / writereview URL encoded in the feedback QR. */
+    receiptGoogleReviewsUrl?: string | null;
     /** When true, delivery order receipts include a Google Maps navigation QR at the bottom. */
     receiptDeliveryDirectionsQr?: boolean;
     /** When true, Adyen card payment receipt is available via QR only (not printed on thermal). */
@@ -45,6 +49,11 @@ export type PosPrintSettings = {
     paperWidthMm?: 58 | 80;
     /** Receipt language; "panel" follows panelLanguage */
     receiptLanguage?: "en" | "fr" | "de" | "panel";
+    /**
+     * Optional CHF→EUR rate for receipts (1 CHF = X EUR).
+     * When set, printed and digital receipts show an EUR equivalent under the total.
+     */
+    receiptChfToEurRate?: number | null;
     /** Override logo; empty/null falls back to shopLogoUrl */
     receiptLogoUrl?: string | null;
     /** Printed logo width in pixels (48–200, default 200). */
@@ -114,6 +123,8 @@ export declare const DEFAULT_POS_PRINT_SETTINGS: Required<Omit<PosPrintSettings,
     receiptLogoUrl: string | null;
     printers: PosPrinterProfile[];
 };
+/** Parse optional receipt CHF→EUR rate; null hides the EUR line on receipts. */
+export declare function parseReceiptChfToEurRate(value: unknown): number | null;
 export declare function normalizePosPrintSettings(raw: unknown): PosPrintSettings;
 /** One-time migration: category→destination map → per-printer linkedCategoryIds (Android-aligned). */
 export declare function migrateKitchenPrintRoutingToPrinters(printers: PosPrinterProfile[], routing?: Record<string, KitchenPrintDestination>, existingExcluded?: string[]): {
