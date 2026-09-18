@@ -45,6 +45,7 @@ import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
+import ShopClosedBanner from '@/components/shop/ShopClosedBanner';
 import ShopChannelPrompt, { type ShopFulfillmentConfirmPayload } from '@/components/shop/ShopChannelPrompt';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
@@ -962,6 +963,7 @@ export default function OrderingPage() {
 
   const pickupOpen = !!(channels.takeaway?.open || channels.dine_in?.open);
   const deliveryOpen = !!channels.delivery?.open;
+  const shopClosedNow = !!merchant && !pickupOpen && !deliveryOpen;
 
   const nextPickupOpen = useMemo(() => {
     if (!merchant || pickupOpen) return null;
@@ -1567,7 +1569,8 @@ export default function OrderingPage() {
       </ShopTopShell>
       <ShopFloatingActions basePath={shopBasePath(shopKey, locSlug)} showReservations={showReservations} />
 
-      {ordersPaused ? (
+      {shopClosedNow ? <ShopClosedBanner canPreorder={allowScheduledOrders} /> : null}
+      {ordersPaused && !shopClosedNow ? (
         <div className="shop-page-content pt-4">
           <ShopNotAcceptingBanner kind="orders" phone={merchant?.phone} />
         </div>
