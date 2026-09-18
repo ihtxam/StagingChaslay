@@ -19,8 +19,8 @@ function readConst(source, name) {
   return m ? Number(m[1]) : null;
 }
 
-const EXPECT_80 = 180;
-const EXPECT_58 = 136;
+const EXPECT_80 = 90;
+const EXPECT_58 = 100;
 
 const web80 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_80');
 const web58 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_58');

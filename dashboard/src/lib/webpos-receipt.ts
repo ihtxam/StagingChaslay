@@ -18,6 +18,7 @@ import {
   escposCode128,
   generateReceiptQrRasterEscPos,
   escposQrCode,
+  RECEIPT_QR_ESCPOS_MODULE_SIZE,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
@@ -2638,16 +2639,16 @@ export async function buildReceiptEscPos(
         paperWidthMm: paper,
       })) ||
       (opts.fastQr !== false
-        ? escposQrCode(digitalData, paper === 58 ? 5 : 5)
+        ? escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE)
         : (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-          escposQrCode(digitalData, paper === 58 ? 5 : 5));
+          escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE));
   } else if (googleData) {
     qrRaster =
       (await buildLabeledReceiptQrRasterEscPos({
         label: L.googleReviewQrTitle,
         data: googleData,
         paperWidthMm: paper,
-      })) || escposQrCode(googleData, paper === 58 ? 5 : 5);
+      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   }
 
   return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);

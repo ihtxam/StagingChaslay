@@ -4599,8 +4599,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             : l
         );
         const ticket = ensureCartTicket();
-        // Orders panel only lists API held rows — persist before clearing the register.
-        await persistHeldOrder(sentCart, true, { ticket });
+        // Print first — persist held order in background so Send stays instant.
+        void persistHeldOrder(sentCart, true, { ticket }).catch(() => undefined);
         await fireCourseLines(lines, activeCourse);
         toast.success(t('webPosFireCourseDone').replace('{n}', String(activeCourse)));
         releaseOperatorAfterKitchen(sentCart, { ticket });
@@ -4637,8 +4637,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           : l
       );
       const ticket = ensureCartTicket();
-      // Print alone is not enough — Orders loads /merchant/pos/held + today's paid POS.
-      await persistHeldOrder(sentCart, true, { ticket });
+      // Print first — persist held order in background so Send stays instant.
+      void persistHeldOrder(sentCart, true, { ticket }).catch(() => undefined);
       await fireCourseLines(toSend);
       setOrderSent(true);
       setCoursesBulkSent(true);
