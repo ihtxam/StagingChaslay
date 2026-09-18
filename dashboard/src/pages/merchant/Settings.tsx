@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Clock,
   CreditCard,
+  Banknote,
   FileCheck,
   Globe2,
   Languages,
@@ -27,6 +28,7 @@ import {
   Tv,
   TabletSmartphone,
   Copy,
+  Wallet,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -498,6 +500,62 @@ function Section({
           {children}
         </SettingsReportCard>
       </SettingsSearchErrorBoundary>
+    </div>
+  );
+}
+
+function PaymentMethodToggle({
+  title,
+  hint,
+  enabled,
+  onToggle,
+  icon: Icon,
+  accentClass,
+  toggleClass,
+}: {
+  title: string;
+  hint: string;
+  enabled: boolean;
+  onToggle: () => void;
+  icon: LucideIcon;
+  accentClass: string;
+  toggleClass: string;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3.5 ${
+        enabled ? accentClass : 'border-[var(--border)] bg-[var(--surface)]'
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            enabled ? 'bg-white/80' : 'bg-[var(--bg-muted)]'
+          }`}
+        >
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
+          <p className="text-xs text-[var(--text-muted)]">{hint}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={title}
+        onClick={onToggle}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+          enabled ? toggleClass : 'bg-stone-300'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+            enabled ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
     </div>
   );
 }
@@ -1364,7 +1422,7 @@ export default function Settings() {
         adyenApiKey: apiKey || undefined,
         adyenClientId: clientId,
         adyenHmacKey: hmacKey || undefined,
-        adyenLiveUrlPrefix: liveUrlPrefix,
+        adyenLiveUrlPrefix: liveUrlPrefix || undefined,
       });
       const a = response.data.adyen || {};
       applyAdyenCreds(a);
@@ -2918,12 +2976,19 @@ export default function Settings() {
                 description={t('webposPaymentMethodsHint')}
                 highlight={isSectionHighlight('pos-payments')}
               >
+                <p className="text-xs muted">
+                  {t('webposPaymentMethodsOnPaymentsHint')}{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-[var(--text)] underline underline-offset-2"
+                    onClick={() => selectTab('payments')}
+                  >
+                    {t('settingsPayments')}
+                  </button>
+                </p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(
                     [
-                      ['webposCashEnabled', t('webposCash'), false] as const,
-                      ['webposCardEnabled', t('webposCard'), false] as const,
-                      ['webposTerminalEnabled', t('webposTerminal'), false] as const,
                       ['webposGiftCardEnabled', t('webposGiftCard'), true] as const,
                       ['webposInvoiceEnabled', t('webposInvoice'), false] as const,
                     ] as const
@@ -2957,7 +3022,63 @@ export default function Settings() {
 
           {tab === 'payments' && (
             <div className="space-y-5">
-              <SettingsPageHeader title={t('settingsPayments')} subtitle={t('adyenSettingsHint')} />
+              <SettingsPageHeader title={t('settingsPayments')} subtitle={t('settingsPaymentsHint')} />
+              <form onSubmit={saveWebposPayments} className="space-y-5">
+                <Section
+                  id="payments-methods"
+                  icon={Wallet}
+                  accent={settingsDash.success}
+                  title={t('webposPaymentMethods')}
+                  description={t('paymentMethodsToggleHint')}
+                  highlight={isSectionHighlight('payments-methods')}
+                >
+                  <div className="space-y-3">
+                    <PaymentMethodToggle
+                      title={t('webposCash')}
+                      hint={t('paymentMethodCashHint')}
+                      enabled={settings?.webposCashEnabled !== false}
+                      onToggle={() =>
+                        setSettings((prev) =>
+                          prev ? { ...prev, webposCashEnabled: prev.webposCashEnabled === false } : prev
+                        )
+                      }
+                      icon={Banknote}
+                      accentClass="border-emerald-400 bg-emerald-50 text-emerald-900"
+                      toggleClass="bg-emerald-500"
+                    />
+                    <PaymentMethodToggle
+                      title={t('webposCard')}
+                      hint={t('paymentMethodCardHint')}
+                      enabled={settings?.webposCardEnabled !== false}
+                      onToggle={() =>
+                        setSettings((prev) =>
+                          prev ? { ...prev, webposCardEnabled: prev.webposCardEnabled === false } : prev
+                        )
+                      }
+                      icon={CreditCard}
+                      accentClass="border-slate-300 bg-slate-50 text-slate-900"
+                      toggleClass="bg-slate-700"
+                    />
+                    <PaymentMethodToggle
+                      title={t('webposSwisspayout')}
+                      hint={t('paymentMethodSwisspayoutHint')}
+                      enabled={settings?.webposTerminalEnabled !== false}
+                      onToggle={() =>
+                        setSettings((prev) =>
+                          prev
+                            ? { ...prev, webposTerminalEnabled: prev.webposTerminalEnabled === false }
+                            : prev
+                        )
+                      }
+                      icon={TabletSmartphone}
+                      accentClass="border-violet-400 bg-violet-50 text-violet-900"
+                      toggleClass="bg-violet-500"
+                    />
+                  </div>
+                </Section>
+                <SettingsSaveBar saving={savingWebposPay} />
+              </form>
+
               <form onSubmit={saveAdyen} className="space-y-5">
                 <Section
                   id="payments-adyen"
@@ -2996,17 +3117,6 @@ export default function Settings() {
                         autoComplete="off"
                       />
                     </Field>
-                    <div className="sm:col-span-2">
-                      <Field label={t('adyenLiveUrlPrefix')} hint={t('adyenLiveUrlPrefixHint')}>
-                        <input
-                          className="input"
-                          value={liveUrlPrefix}
-                          onChange={(e) => setLiveUrlPrefix(e.target.value)}
-                          placeholder="1797a841fbb37ca7-Chaslay"
-                          autoComplete="off"
-                        />
-                      </Field>
-                    </div>
                     <div className="sm:col-span-2">
                       <Field
                         label={t('apiKey')}
@@ -3137,16 +3247,6 @@ export default function Settings() {
                 </Section>
 
                 <Section icon={CreditCard} accent={settingsDash.info} title={t('adyenTerminalEnv')}>
-                  <p className="text-xs muted">
-                    {t('webposPaymentMethodsMovedHint')}{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-[var(--text)] underline underline-offset-2"
-                      onClick={() => goToPosSection('pos-payments')}
-                    >
-                      {t('settingsPos')}
-                    </button>
-                  </p>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"

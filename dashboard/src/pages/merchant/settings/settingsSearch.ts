@@ -395,18 +395,30 @@ export function buildSettingsSearchIndex(
       ],
     },
     {
-      id: 'pos-payments',
-      tab: 'pos',
+      id: 'payments-methods',
+      tab: 'payments',
       keywords: [
         'cash',
         'card',
         'terminal',
+        'swisspayout',
         'paiement',
         'zahlung',
         t('webposPaymentMethods'),
         t('webposCash'),
         t('webposCard'),
+        t('webposSwisspayout'),
         t('webposTerminal'),
+      ],
+    },
+    {
+      id: 'pos-payments',
+      tab: 'pos',
+      keywords: [
+        'gift card',
+        'invoice',
+        t('webposGiftCard'),
+        t('webposInvoice'),
       ],
     },
     {
@@ -461,6 +473,7 @@ export function buildSettingsSearchIndex(
         'softpos',
         t('adyenCredentials'),
         t('tapToPaySettings'),
+        t('webposSwisspayout'),
       ],
     },
     {

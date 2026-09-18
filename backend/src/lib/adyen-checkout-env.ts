@@ -2,12 +2,18 @@
  * Merchant shop Checkout API environment (test vs live).
  * Derived from the Drop-in client key (test_… / live_…), never from platform ADYEN_ENVIRONMENT.
  *
- * Live Checkout API hosts MUST include the company-specific prefix from Adyen Customer Area
- * (Developers → API URLs), e.g. `{prefix}-checkout-live.adyen.com`. The unprefixed host
- * `checkout-live.adyen.com` is invalid and causes getaddrinfo ENOTFOUND.
+ * Live Checkout API hosts MUST include the company-specific prefix. Merchants do not enter this:
+ * the Swisspayout/Chaslay company prefix is applied automatically (override with ADYEN_LIVE_URL_PREFIX).
  */
 
 export type AdyenCheckoutEnvironment = "live" | "test";
+
+/**
+ * Swisspayout / Chaslay Adyen company live prefix.
+ * Shared for all merchants — they do not need to paste an endpoint URL.
+ * Override with ADYEN_LIVE_URL_PREFIX when the company prefix changes.
+ */
+export const PLATFORM_ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-Chaslay";
 
 export const LIVE_CHECKOUT_PREFIX_REQUIRED =
   "Live Adyen Checkout requires a live URL prefix from Adyen Customer Area " +
@@ -87,6 +93,15 @@ function prefixFromEnv(): string {
   );
 }
 
+/** Merchant override → platform env → Swisspayout company default. */
+export function resolveLiveUrlPrefix(merchantPrefix?: string | null): string {
+  return (
+    normalizeLiveUrlPrefix(merchantPrefix) ||
+    prefixFromEnv() ||
+    PLATFORM_ADYEN_LIVE_URL_PREFIX
+  );
+}
+
 /**
  * Live Checkout API base. Prefixed company URL wins; never use the unprefixed live host.
  * `merchantPrefix` comes from merchant settings (adyenLiveUrlPrefix) when env is unset.
@@ -104,7 +119,7 @@ export function liveCheckoutApiBase(merchantPrefix?: string | null): string {
     return stripTrailingSlash(explicit);
   }
 
-  const prefix = normalizeLiveUrlPrefix(merchantPrefix) || prefixFromEnv();
+  const prefix = resolveLiveUrlPrefix(merchantPrefix);
   if (!prefix) {
     throw new Error(LIVE_CHECKOUT_PREFIX_REQUIRED);
   }
