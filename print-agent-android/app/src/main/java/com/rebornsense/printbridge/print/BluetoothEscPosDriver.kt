@@ -16,11 +16,10 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     private data class CachedSocket(val socket: BluetoothSocket, var lastUsedMs: Long)
 
-    /** One full cut + short feed — cheap clones beep on every GS V / ESC m variant. */
+    /** One short feed + full cut — matches dashboard escposKitchenCut(). */
     private val btCutTrailer: ByteArray = byteArrayOf(
-        0x1B, 0x64, 0x05,
+        0x1B, 0x64, 0x02,
         0x1D, 0x56, 0x00,
-        0x0A, 0x0A,
     )
 
     @SuppressLint("MissingPermission")
@@ -72,10 +71,9 @@ class BluetoothEscPosDriver : PrinterDriver {
     }
 
     /**
-     * Pace SPP writes like Windows print-agent (96-byte slices, 80ms gaps) so kitchen
-     * tickets are not truncated. Strips any embedded feed/cut suffix from the payload
-     * (kitchen tickets already include KITCHEN_TICKET_CUT) and sends one btCutTrailer
-     * after the body drains — avoids 3–4 visible cuts on Chinese clones.
+     * Pace SPP writes so kitchen tickets are not truncated.
+     * Strips embedded cut suffix, trims trailing feeds, appends one btCutTrailer, and
+     * sends body+cut in a single paced stream — avoids visible multi-phase jerks on clones.
      */
     private fun transmitBluetoothJob(socket: BluetoothSocket, data: ByteArray) {
         if (NiimbotPrintClient.isNiimbotPayload(data)) {
@@ -83,14 +81,37 @@ class BluetoothEscPosDriver : PrinterDriver {
             Thread.sleep(400)
             return
         }
-        val (body, _) = splitCutSuffix(data)
-        if (body.isNotEmpty()) {
-            writePaced(socket, body, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
-            val drainMs = (800L + body.size / 8L).coerceAtMost(8_000L)
-            Thread.sleep(drainMs)
+        val (bodyRaw, _) = splitCutSuffix(data)
+        val body = stripTrailingFeedAndCut(bodyRaw)
+        val payload = if (body.isNotEmpty()) body + btCutTrailer else btCutTrailer
+        writePaced(socket, payload, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
+        val drainMs = (400L + payload.size / 20L).coerceAtMost(2_500L)
+        Thread.sleep(drainMs)
+    }
+
+    /** Remove stacked ESC d / GS V / LF tails before appending btCutTrailer. */
+    private fun stripTrailingFeedAndCut(data: ByteArray): ByteArray {
+        var end = data.size
+        while (end > 0) {
+            if (data[end - 1] == 0x0A.toByte()) {
+                end--
+                continue
+            }
+            if (end >= 3 && data[end - 3] == 0x1B.toByte() && data[end - 2] == 0x64.toByte()) {
+                end -= 3
+                continue
+            }
+            if (end >= 3 && data[end - 3] == 0x1D.toByte() && data[end - 2] == 0x56.toByte()) {
+                end -= 3
+                continue
+            }
+            if (end >= 2 && data[end - 2] == 0x1B.toByte() && data[end - 1] == 0x6D.toByte()) {
+                end -= 2
+                continue
+            }
+            break
         }
-        writePaced(socket, btCutTrailer, chunkSize = 32, delayMs = BT_CHUNK_DELAY_MS)
-        Thread.sleep(500L)
+        return if (end == data.size) data else data.copyOfRange(0, end)
     }
 
     /** Mirror Windows print-agent Split-CutSuffix — scan tail for GS V / ESC d. */
@@ -195,7 +216,7 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     companion object {
         private const val SOCKET_KEEP_MS = 12_000L
-        private const val BT_CHUNK_SIZE = 96
-        private const val BT_CHUNK_DELAY_MS = 80L
+        private const val BT_CHUNK_SIZE = 128
+        private const val BT_CHUNK_DELAY_MS = 40L
     }
 }

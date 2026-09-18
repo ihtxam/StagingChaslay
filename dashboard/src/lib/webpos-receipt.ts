@@ -1804,9 +1804,8 @@ export function escposKitchenTicketEnd(): Uint8Array {
  */
 export function escposKitchenCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x05, // ESC d 5 — short feed before cut
+    0x1b, 0x64, 0x02, // ESC d 2 — short feed before cut
     0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
-    0x0a, 0x0a,
   ]);
 }
 
@@ -2510,7 +2509,6 @@ export function textToEscPos(
   const init = new Uint8Array([0x1b, 0x40]);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
-  const feed = new Uint8Array([0x1b, 0x64, 0x04]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
     parts.push(alignCenter, logoBytes, alignLeft);
@@ -2528,7 +2526,7 @@ export function textToEscPos(
       parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
   }
-  parts.push(feed, escposFeedAndCut());
+  parts.push(escposFeedAndCut());
   return concatBytes(...parts);
 }
 
