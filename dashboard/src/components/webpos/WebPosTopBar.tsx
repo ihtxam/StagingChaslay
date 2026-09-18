@@ -20,6 +20,7 @@ import {
   ArrowDownUp,
 } from 'lucide-react';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { useFullscreenActive } from '@/hooks/useFullscreenActive';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
@@ -53,18 +54,6 @@ export function readWebPosFullscreenPreference(): boolean {
   } catch {
     return true;
   }
-}
-
-function useFullscreenActive() {
-  const [active, setActive] = useState(
-    () => typeof document !== 'undefined' && !!document.fullscreenElement
-  );
-  useEffect(() => {
-    const onChange = () => setActive(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-  return active;
 }
 
 export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean }) {
