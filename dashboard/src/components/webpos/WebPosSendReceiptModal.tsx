@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 
 type Props = {
   open: boolean;
@@ -18,6 +19,7 @@ export default function WebPosSendReceiptModal({
   onSend,
 }: Props) {
   const { t } = useI18n();
+  const { open: keyboardOpen } = useOnScreenKeyboard();
   const [email, setEmail] = useState(initialEmail);
 
   useEffect(() => {
@@ -29,9 +31,22 @@ export default function WebPosSendReceiptModal({
 
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
+  const scrollFieldIntoView = (el: HTMLElement) => {
+    if (!keyboardOpen) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl">
+    <div
+      className={`fixed inset-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
+        keyboardOpen
+          ? 'items-start pt-[max(0.75rem,env(safe-area-inset-top))] pb-[min(42dvh,300px)]'
+          : 'items-end sm:items-center'
+      }`}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl sm:my-auto">
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <h2 className="text-base font-semibold text-stone-800">{t('webPosSendReceipt')}</h2>
           <button
@@ -67,6 +82,7 @@ export default function WebPosSendReceiptModal({
               value={email}
               disabled={busy}
               onChange={(e) => setEmail(e.target.value)}
+              onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
             />
           </label>
           <div className="flex gap-2">

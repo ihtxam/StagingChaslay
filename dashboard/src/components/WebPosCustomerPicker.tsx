@@ -50,6 +50,19 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
     setShowCreate(false);
   }, [open, closeKeyboard]);
 
+  const scrollFieldIntoView = (el: HTMLElement) => {
+    if (!keyboardOpen) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
+
+  useEffect(() => {
+    if (!open || !keyboardOpen || !showCreate) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) scrollFieldIntoView(active);
+  }, [keyboardOpen, open, showCreate]);
+
   const load = async (search: string) => {
     setLoading(true);
     try {
@@ -101,12 +114,14 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-3 sm:p-4">
-      <div
-        className={`flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl ${
-          keyboardOpen ? 'mb-[max(10rem,36dvh)]' : ''
-        }`}
-      >
+    <div
+      className={`fixed inset-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
+        keyboardOpen
+          ? 'items-start pt-[max(0.75rem,env(safe-area-inset-top))] pb-[min(42dvh,300px)]'
+          : 'items-center'
+      }`}
+    >
+      <div className="flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>
           <button type="button" className="rounded-lg p-2 hover:bg-[var(--bg-muted)]" onClick={onClose} aria-label={t('close')}>
@@ -128,6 +143,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   autoFocus
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                 />
               </div>
               <button type="button" className="btn-primary shrink-0" onClick={() => setShowCreate(true)}>
@@ -169,6 +185,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                   className="input"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                   required
                 />
               </label>
@@ -178,6 +195,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                   className="input"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                 />
               </label>
               <label className="block space-y-1 text-sm">
@@ -187,6 +205,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                 />
               </label>
               <label className="block space-y-1 text-sm">
@@ -195,6 +214,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                   className="input"
                   value={form.address}
                   onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                 />
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -204,6 +224,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                     className="input"
                     value={form.zip}
                     onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                   />
                 </label>
                 <label className="block space-y-1 text-sm">
@@ -212,6 +233,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
                     className="input"
                     value={form.city}
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                   />
                 </label>
               </div>
