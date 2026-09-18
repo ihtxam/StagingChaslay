@@ -40,6 +40,16 @@ function editorStateForUpdate(state?: string): string | undefined {
 }
 
 export class ChaslayPagebuilderService {
+  /**
+   * Auto-bootstrap from legacy CMS is disabled on production by default.
+   * Client website content must not be created or replaced without explicit merchant action.
+   * Set CHASLAY_AUTO_BOOTSTRAP=1 to allow on any env, or run outside NODE_ENV=production.
+   */
+  static isAutoBootstrapAllowed(): boolean {
+    if (process.env.CHASLAY_AUTO_BOOTSTRAP === "1") return true;
+    return process.env.NODE_ENV !== "production";
+  }
+
   /** Prefer the homepage row in chaslay_homepage_builder_pages; fall back to builder.editor_state. */
   private static async resolvePublishedEditorState(
     builderId: number,
@@ -71,6 +81,10 @@ export class ChaslayPagebuilderService {
 
   /** One-time bootstrap when a merchant had the classic CMS homepage but no Chaslay builder yet. */
   static async ensureBootstrappedFromLegacy(merchantId: string): Promise<boolean> {
+    // NEVER auto-create or overwrite client CMS layouts on production.
+    // Merchants must opt in explicitly (CHASLAY_AUTO_BOOTSTRAP=1) or use non-production env.
+    if (!ChaslayPagebuilderService.isAutoBootstrapAllowed()) return false;
+
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
       const existing = await db.query.chaslayHomepageBuilders.findFirst({

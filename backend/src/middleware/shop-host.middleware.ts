@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { schema } from "@/db";
+import { findMerchantByCustomDomainHost } from "@/lib/custom-domain-lookup";
 
 declare global {
   namespace Express {
@@ -42,15 +42,10 @@ export async function shopHostMiddleware(req: Request, _res: Response, next: Nex
       return next();
     }
 
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.customDomain, host),
-    });
+    const merchant = await findMerchantByCustomDomainHost(host);
 
     if (
       merchant &&
-      merchant.customDomainDnsStatus !== "pending" &&
-      merchant.customDomainDnsStatus !== "failed" &&
       merchant.shopEnabled &&
       merchant.status !== "suspended" &&
       merchant.status !== "expired"

@@ -997,14 +997,9 @@ export class MerchantSettingsService {
       key = host.slice(0, -(domain.length + 1));
     }
 
-    // Custom apex / branded domain first (verified or legacy direct-save)
-    const byCustom = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.customDomain, host),
-    });
-    if (byCustom) {
-      const dns = String(byCustom.customDomainDnsStatus || "none").toLowerCase();
-      if (dns === "none" || dns === "verified") return byCustom;
-    }
+    const { findMerchantByCustomDomainHost } = await import("@/lib/custom-domain-lookup");
+    const byCustom = await findMerchantByCustomDomainHost(host);
+    if (byCustom) return byCustom;
 
     return db.query.merchants.findFirst({
       where: or(eq(schema.merchants.subdomain, key), eq(schema.merchants.slug, key)),

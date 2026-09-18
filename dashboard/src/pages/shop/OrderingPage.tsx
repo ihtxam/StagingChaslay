@@ -891,6 +891,28 @@ export default function OrderingPage() {
     (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
     minOrderNotMet;
 
+  const checkoutBlockedMessage = useMemo(() => {
+    if (!cart.length) return '';
+    if (merchant?.vacation?.active) return t('shopVacationOrdersBlocked');
+    if (merchant?.acceptingOrders === false) return t('shopNotAcceptingOrders');
+    if (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) {
+      return t('shopStoreClosedNow');
+    }
+    if (minOrderNotMet) {
+      return effectiveDeliveryInfo?.message || t('shopMinOrderNotMet');
+    }
+    return '';
+  }, [
+    cart.length,
+    merchant?.vacation?.active,
+    merchant?.acceptingOrders,
+    merchant?.scheduledOrdersEnabled,
+    channelMeta?.open,
+    minOrderNotMet,
+    effectiveDeliveryInfo?.message,
+    t,
+  ]);
+
   const goCheckout = () => {
     if (!cart.length) return;
     if (minOrderNotMet) {
@@ -1459,6 +1481,9 @@ export default function OrderingPage() {
           freeDeliveryFrom={freeDeliveryThreshold}
         />
         {error && <p className="text-red-600 text-sm">{error}</p>}
+        {checkoutBlockedMessage ? (
+          <p className="text-sm font-medium text-rose-600">{checkoutBlockedMessage}</p>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3">
           <button
@@ -1904,6 +1929,9 @@ export default function OrderingPage() {
               freeDeliveryFrom={freeDeliveryThreshold}
             />
           </div>
+          {checkoutBlockedMessage ? (
+            <p className="shop-mobile-cart-stack__closed-msg">{checkoutBlockedMessage}</p>
+          ) : null}
           <div className="shop-mobile-cart-bar">
             <button
               type="button"

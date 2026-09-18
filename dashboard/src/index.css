@@ -2112,6 +2112,16 @@ html.shop-shell #root {
   display: none;
 }
 
+.shop-mobile-cart-stack__closed-msg {
+  margin: 0;
+  padding: 0.5rem 1rem 0;
+  background: #fff;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(225 29 72);
+}
+
 .shop-mobile-cart-stack .shop-mobile-cart-bar {
   position: relative;
 }

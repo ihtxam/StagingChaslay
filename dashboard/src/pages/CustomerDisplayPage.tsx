@@ -169,27 +169,8 @@ export default function CustomerDisplayPage() {
   return (
     <div className={`min-h-screen ${pageClass}`}>
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col p-4 md:p-6 lg:flex-row lg:gap-6">
-        <section
-          className={`${hasLines ? 'lg:w-[35%]' : 'lg:w-full'} flex shrink-0 flex-col gap-4`}
-        >
-          {config?.merchant.logoUrl ? (
-            <img
-              src={config.merchant.logoUrl}
-              alt=""
-              className="h-12 w-auto object-contain self-start"
-            />
-          ) : null}
-          <CdsPromoSlider
-            slides={slides}
-            intervalSec={config?.settings.slideIntervalSec || 8}
-            merchantName={merchantName}
-            fullWidth={!hasLines}
-            className="flex-1"
-          />
-        </section>
-
-        {hasLines || phase === 'payment' ? (
-          <section className="flex min-h-0 flex-1 flex-col lg:w-[65%]">
+        {(hasLines || phase === 'payment') && (
+          <section className="order-1 flex min-h-0 flex-1 flex-col lg:order-2 lg:w-[65%]">
             <div className={`flex h-full flex-col rounded-2xl border shadow-sm ${cardClass}`}>
               <header className="border-b border-inherit px-6 py-5">
                 <h1 className="text-2xl font-bold md:text-3xl">{headline}</h1>
@@ -247,7 +228,29 @@ export default function CustomerDisplayPage() {
               </footer>
             </div>
           </section>
-        ) : null}
+        )}
+
+        <section
+          className={`order-2 flex shrink-0 flex-col gap-4 lg:order-1 ${
+            hasLines || phase === 'payment' ? 'max-h-[32vh] lg:max-h-none lg:w-[35%]' : 'lg:w-full'
+          }`}
+        >
+          {config?.merchant.logoUrl ? (
+            <img
+              src={config.merchant.logoUrl}
+              alt=""
+              className="h-12 w-auto object-contain self-start"
+            />
+          ) : null}
+          <CdsPromoSlider
+            slides={slides}
+            intervalSec={config?.settings.slideIntervalSec || 8}
+            merchantName={merchantName}
+            fullWidth={!hasLines && phase !== 'payment'}
+            compact={hasLines || phase === 'payment'}
+            className="flex-1 min-h-0"
+          />
+        </section>
       </div>
     </div>
   );

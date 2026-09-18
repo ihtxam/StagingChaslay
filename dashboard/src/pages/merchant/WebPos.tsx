@@ -168,6 +168,8 @@ import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
 import {
   openCustomerDisplayWindow,
   publishCustomerDisplayState,
+  subscribeCustomerDisplayRequests,
+  isCustomerDisplayLocale,
   type CustomerDisplayPhase,
 } from '@/lib/customer-display-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
@@ -1888,24 +1890,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     if (!cdsToken || !cdsEnabled) return;
-    const saleTotals = activeSale.totals;
-    publishCustomerDisplayState(cdsToken, {
-      merchantName: merchant?.name || merchant?.businessName,
-      currency: 'CHF',
-      lines: activeSale.lines.map((l) => ({
-        name: repairCatalogText(l.name),
-        qty: l.quantity,
-        lineTotal: l.lineTotal,
-        modifiers: lineExtrasLabel(l) || undefined,
-      })),
-      subtotal: saleTotals.subtotal,
-      discount: saleTotals.discount ?? 0,
-      tax: saleTotals.tax,
-      total: saleTotals.total,
-      phase: cdsPhase,
-      receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
-      updatedAt: Date.now(),
-    });
+    const pushState = () => {
+      const saleTotals = activeSale.totals;
+      publishCustomerDisplayState(cdsToken, {
+        merchantName: merchant?.name || merchant?.businessName,
+        currency: 'CHF',
+        lines: activeSale.lines.map((l) => ({
+          name: repairCatalogText(l.name),
+          qty: l.quantity,
+          lineTotal: l.lineTotal,
+          modifiers: lineExtrasLabel(l) || undefined,
+        })),
+        subtotal: saleTotals.subtotal,
+        discount: saleTotals.discount ?? 0,
+        tax: saleTotals.tax,
+        total: saleTotals.total,
+        phase: cdsPhase,
+        receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
+        locale: isCustomerDisplayLocale(locale) ? locale : undefined,
+        updatedAt: Date.now(),
+      });
+    };
+    pushState();
+    return subscribeCustomerDisplayRequests(cdsToken, pushState);
   }, [
     cdsToken,
     cdsEnabled,
@@ -1913,6 +1920,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     activeSale.lines,
     activeSale.totals,
     lastReceiptUrl,
+    locale,
     merchant?.name,
     merchant?.businessName,
   ]);

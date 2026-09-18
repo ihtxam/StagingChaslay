@@ -624,15 +624,11 @@ router.get("/tls-ask", async (req: Request, res: Response) => {
   try {
     const domain = String(req.query.domain || "").toLowerCase().split(":")[0];
     if (!domain) return res.status(400).end();
-    const merchant = await resolveMerchant(domain);
+    const { findMerchantForTlsAsk } = await import("@/lib/custom-domain-lookup");
+    const merchant = (await findMerchantForTlsAsk(domain)) || (await resolveMerchant(domain));
     if (!merchant?.shopEnabled) return res.status(404).end();
 
-    if (merchant.customDomain === domain) {
-      const dns = String(merchant.customDomainDnsStatus || "none").toLowerCase();
-      if (dns !== "none" && dns !== "verified") return res.status(404).end();
-    }
-
-    if (merchant.subdomain || merchant.customDomain === domain || merchant.slug) {
+    if (merchant.subdomain || merchant.customDomain || merchant.slug) {
       return res.status(200).end();
     }
     return res.status(404).end();
@@ -775,7 +771,6 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Homepage not published" });
     }
 
-    await ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
     const chaslay = await ChaslayPagebuilderService.getActive(merchant.id);
     if (chaslay?.editor_state) {
       const seo = shopSeoFromMerchant(req, merchant, chaslay.name, "");
@@ -862,7 +857,6 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
     const pageSlug = req.params.pageSlug;
 
     if (merchant.cmsHomepageEnabled) {
-      await ChaslayPagebuilderService.ensureBootstrappedFromLegacy(merchant.id);
       const chaslayPage = await ChaslayPagebuilderService.getActivePublishedPage(merchant.id, pageSlug);
       if (chaslayPage) {
         const seo = shopSeoFromMerchant(req, merchant, chaslayPage.title, "");

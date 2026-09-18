@@ -7,6 +7,8 @@ type Props = {
   merchantName?: string;
   /** When cart is empty promos can use the full width. */
   fullWidth?: boolean;
+  /** Shorter promo area when cart totals are visible (mobile / split layout). */
+  compact?: boolean;
   className?: string;
 };
 
@@ -15,6 +17,7 @@ export default function CdsPromoSlider({
   intervalSec = 8,
   merchantName,
   fullWidth = false,
+  compact = false,
   className = '',
 }: Props) {
   const items = useMemo(() => {
@@ -42,7 +45,7 @@ export default function CdsPromoSlider({
   return (
     <div
       className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white ${
-        fullWidth ? 'min-h-[40vh]' : 'h-full min-h-[20rem]'
+        fullWidth ? 'min-h-[40vh]' : compact ? 'h-full min-h-[8rem]' : 'h-full min-h-[20rem]'
       } ${className}`}
     >
       {active.imageUrl ? (
