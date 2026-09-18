@@ -44,7 +44,7 @@ import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import { SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
-import { Check, ShoppingBag } from 'lucide-react';
+import { Check, ShoppingBag, Trophy } from 'lucide-react';
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -1573,7 +1573,15 @@ export default function CheckoutPage() {
               </p>
             ) : (
               <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-                <h3 className="text-sm font-bold text-stone-900">{t('shopCheckoutRewardsTitleShort')}</h3>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-stone-900">
+                  <span
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"
+                    aria-hidden
+                  >
+                    <Trophy className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </span>
+                  <span>{t('shopCheckoutRewardsTitleShort')}</span>
+                </h3>
                 <ul className="mt-2 space-y-1">
                   {(
                     [
