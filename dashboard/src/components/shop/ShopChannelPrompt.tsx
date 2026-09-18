@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import axios from 'axios';
-import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopAddressAutocomplete from '@/components/shop/ShopAddressAutocomplete';
 import ShopDeliveryZoneBadges from '@/components/shop/ShopDeliveryZoneBadges';
 import type { ShopChannel } from '@/lib/shop-cart';
@@ -189,13 +188,13 @@ export default function ShopChannelPrompt({
   const mapEmbedUrl =
     mapLat != null && mapLng != null
       ? `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=15&output=embed`
-        : fullAddress.trim() && zipCode
-          ? `https://maps.google.com/maps?q=${encodeURIComponent(`${fullAddress}, ${zipCode} ${city}`)}&z=15&output=embed`
+      : fullAddress.trim()
+        ? `https://maps.google.com/maps?q=${encodeURIComponent(fullAddress)}&z=15&output=embed`
         : mapLat != null && mapLng != null
           ? `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=14&output=embed`
           : null;
 
-  const verifyDelivery = async (override?: {
+  const runVerifyDelivery = async (override?: {
     lat?: number;
     lng?: number;
     zipCode?: string;
@@ -205,9 +204,9 @@ export default function ShopChannelPrompt({
     const line = (override?.address ?? fullAddress).trim();
     if (!line) {
       setError(t('shopEnterDeliveryAddress'));
-      return;
+      return null;
     }
-    if (!shopKey) return;
+    if (!shopKey) return null;
     const zip = override?.zipCode ?? zipCode;
     const town = override?.city ?? city;
     setChecking(true);
@@ -237,24 +236,43 @@ export default function ShopChannelPrompt({
       if (!res.data.deliverable) {
         setError(res.data.error || t('shopOutsideDelivery'));
       }
+      return res.data;
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
       setDeliveryInfo(null);
+      return null;
     } finally {
       setChecking(false);
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (showDeliveryPanel && shopKey) {
-      if (!fullAddress.trim()) {
+      if (!street.trim()) {
         setError(t('shopEnterDeliveryAddress'));
         return;
       }
-      if (!effectiveDeliveryInfo?.deliverable) {
-        setError(t('shopConfirmDeliveryVerifyFirst'));
+      if (!houseNumber.trim()) {
+        setError(t('shopHouseNumberRequired'));
         return;
       }
+      if (!floor.trim()) {
+        setError(t('shopFloorRequired'));
+        return;
+      }
+
+      let info = effectiveDeliveryInfo;
+      if (!info?.deliverable) {
+        info = await runVerifyDelivery();
+      }
+      if (!info?.deliverable) return;
+
+      const verified = withDeliveryMinOrderStatus(info, subtotal);
+      if (!verified.meetsMinOrder) {
+        setError(verified.message || t('shopOutsideDelivery'));
+        return;
+      }
+
       onConfirm({
         channel: addressOnly ? 'delivery' : selected,
         scheduledFor: withSchedule && !addressOnly ? slotValue : null,
@@ -263,7 +281,7 @@ export default function ShopChannelPrompt({
         city,
         lat,
         lng,
-        deliveryInfo: effectiveDeliveryInfo,
+        deliveryInfo: verified,
       });
       return;
     }
@@ -462,13 +480,6 @@ export default function ShopChannelPrompt({
                     setLng(s.longitude);
                     setDeliveryInfo(null);
                     setError(null);
-                    void verifyDelivery({
-                      lat: s.latitude,
-                      lng: s.longitude,
-                      zipCode: nextZip,
-                      city: nextCity,
-                      address: [nextStreet, nextHouse].filter(Boolean).join(' '),
-                    });
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">
@@ -476,6 +487,7 @@ export default function ShopChannelPrompt({
                     className={SHOP_INPUT_CLASS}
                     placeholder={t('shopHouseNumber')}
                     value={houseNumber}
+                    required
                     onChange={(e) => {
                       setHouseNumber(e.target.value);
                       setDeliveryInfo(null);
@@ -486,6 +498,7 @@ export default function ShopChannelPrompt({
                     className={SHOP_INPUT_CLASS}
                     placeholder={t('shopFloor')}
                     value={floor}
+                    required
                     onChange={(e) => {
                       setFloor(e.target.value);
                       setDeliveryInfo(null);
@@ -493,29 +506,6 @@ export default function ShopChannelPrompt({
                     }}
                   />
                 </div>
-                <ZipCityFields
-                  shopKey={shopKey}
-                  zipCode={zipCode}
-                  city={city}
-                  onZipChange={(z) => {
-                    setZipCode(z);
-                    setDeliveryInfo(null);
-                  }}
-                  onCityChange={(c) => {
-                    setCity(c);
-                    setDeliveryInfo(null);
-                  }}
-                  zipClassName="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl"
-                  cityClassName="w-full border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 rounded-xl"
-                />
-                <button
-                  type="button"
-                  onClick={() => void verifyDelivery()}
-                  className="w-full border border-stone-800 bg-white text-stone-900 text-sm font-semibold py-2.5 rounded-xl hover:bg-stone-50"
-                  disabled={checking}
-                >
-                  {checking ? t('shopChecking') : t('shopCheckDeliveryZone')}
-                </button>
 
                 {effectiveDeliveryInfo?.deliverable ? (
                   <ShopDeliveryZoneBadges
@@ -689,10 +679,16 @@ export default function ShopChannelPrompt({
           <div className="shrink-0 px-5 py-4 border-t border-stone-100 bg-stone-50/80">
             <button
               type="button"
-              onClick={handleConfirm}
-              className="w-full rounded-xl bg-amber-700 py-3.5 text-sm font-semibold text-white hover:bg-amber-800 transition"
+              onClick={() => void handleConfirm()}
+              disabled={
+                checking ||
+                (showDeliveryPanel &&
+                  shopKey &&
+                  (!street.trim() || !houseNumber.trim() || !floor.trim()))
+              }
+              className="w-full rounded-xl bg-amber-700 py-3.5 text-sm font-semibold text-white hover:bg-amber-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {resolvedConfirm}
+              {checking ? t('shopChecking') : resolvedConfirm}
             </button>
           </div>
         </div>
