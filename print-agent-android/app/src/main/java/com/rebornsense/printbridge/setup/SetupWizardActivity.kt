@@ -46,12 +46,18 @@ class SetupWizardActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.wizardDeviceLabel).text =
             getString(R.string.oem_setup_device_label, DeviceProfiler.detect().displayName)
 
+        findViewById<MaterialButton>(R.id.wizardBackBtn).setOnClickListener { goToPreviousStep() }
         findViewById<MaterialButton>(R.id.wizardPrimaryBtn).setOnClickListener { onPrimaryAction() }
         findViewById<MaterialButton>(R.id.wizardSecondaryBtn).setOnClickListener { markCurrentStepDone() }
-        findViewById<MaterialButton>(R.id.wizardSkipBtn).setOnClickListener { goToNextStep() }
+        findViewById<MaterialButton>(R.id.wizardSkipBtn).setOnClickListener { onSkipAction() }
         findViewById<MaterialButton>(R.id.wizardNextBtn).setOnClickListener { onNextAction() }
 
         renderStep()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        goToPreviousStep()
     }
 
     override fun onResume() {
@@ -98,6 +104,7 @@ class SetupWizardActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.wizardStepTitle).setText(step.titleRes)
         findViewById<TextView>(R.id.wizardStepDescription).setText(step.descriptionRes)
 
+        val backBtn = findViewById<MaterialButton>(R.id.wizardBackBtn)
         val primaryBtn = findViewById<MaterialButton>(R.id.wizardPrimaryBtn)
         primaryBtn.setText(step.actionLabelRes)
 
@@ -106,10 +113,16 @@ class SetupWizardActivity : AppCompatActivity() {
         val nextBtn = findViewById<MaterialButton>(R.id.wizardNextBtn)
         val statusText = findViewById<TextView>(R.id.wizardStatusText)
 
+        backBtn.visibility = if (stepIndex > 0) View.VISIBLE else View.GONE
+
         when (step.action) {
             OemSetupAction.INSTRUCTION_ONLY -> {
                 secondaryBtn.visibility = View.GONE
-                skipBtn.visibility = if (step.id == "done") View.GONE else View.VISIBLE
+                skipBtn.visibility = View.VISIBLE
+                skipBtn.text = when (step.id) {
+                    "done" -> getString(R.string.oem_step_finish)
+                    else -> getString(R.string.oem_step_skip)
+                }
                 nextBtn.visibility = View.VISIBLE
                 nextBtn.text = when (step.id) {
                     "done" -> getString(R.string.oem_step_open_webpos)
@@ -202,12 +215,13 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.OPEN_BACKGROUND -> OemSettingsNavigator.openBackgroundActivitySettings(this)
             OemSetupAction.START_BRIDGE -> ensureBridgeRunningWithPermission()
             OemSetupAction.INSTRUCTION_ONLY -> {
-                if (step.id == "tap_to_pay") {
-                    openWebPosTapToPaySetup()
-                } else if (step.id == "done") {
-                    openWebPos()
-                } else {
-                    onNextAction()
+                when (step.id) {
+                    "tap_to_pay" -> openWebPosTapToPaySetup()
+                    "done" -> {
+                        openWebPos()
+                        finishWizard()
+                    }
+                    else -> onNextAction()
                 }
             }
         }
@@ -371,6 +385,14 @@ class SetupWizardActivity : AppCompatActivity() {
         goToNextStep()
     }
 
+    private fun onSkipAction() {
+        if (currentStep().id == "done") {
+            finishWizard()
+            return
+        }
+        goToNextStep()
+    }
+
     private fun goToNextStep() {
         OemSetupPreferences.setStepCompleted(this, currentStep().id, true)
         if (stepIndex >= steps.lastIndex) {
@@ -378,6 +400,17 @@ class SetupWizardActivity : AppCompatActivity() {
             return
         }
         stepIndex += 1
+        renderStep()
+    }
+
+    private fun goToPreviousStep() {
+        stopHealthPolling()
+        if (stepIndex <= 0) {
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
+        stepIndex -= 1
         renderStep()
     }
 

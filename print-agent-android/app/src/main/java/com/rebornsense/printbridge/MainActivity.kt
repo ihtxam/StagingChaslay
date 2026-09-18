@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
     private var pendingWizardLaunch = false
+    private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
@@ -138,8 +139,10 @@ class MainActivity : AppCompatActivity() {
     private fun maybeLaunchOemWizard() {
         if (!runtimePermissionsResolved) return
         if (pendingWizardLaunch) return
+        if (autoWizardShownThisSession) return
         if (OemSetupPreferences.isWizardCompleted(this)) return
         pendingWizardLaunch = true
+        autoWizardShownThisSession = true
         openOemSetupWizard()
     }
 
