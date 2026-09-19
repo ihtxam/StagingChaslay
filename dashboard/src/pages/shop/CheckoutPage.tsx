@@ -147,6 +147,7 @@ export default function CheckoutPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [wantCreateAccount, setWantCreateAccount] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
   const [paymentOptions, setPaymentOptions] = useState<any>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -938,6 +939,40 @@ export default function CheckoutPage() {
     }
   };
 
+  const applyAuthedCustomer = async (
+    token: string,
+    nextCustomer: any,
+    authMode: 'login' | 'register',
+    emailFallback: string
+  ) => {
+    saveCustomerToken(shopKey, token);
+    setCustomer(nextCustomer);
+    const addrs: SavedAddress[] = Array.isArray(nextCustomer?.addresses) ? nextCustomer.addresses : [];
+    setSavedAddresses(addrs);
+    const preferred = addrs.find((a) => a.isDefault) || addrs[0] || null;
+    setSelectedAddressId(preferred?.id || null);
+    await refreshLoyalty(token);
+    setWantCreateAccount(false);
+    setShowLogin(false);
+    setShowRegister(false);
+    setPassword('');
+    setConfirmPassword('');
+    const names = splitCustomerName(nextCustomer?.name || '');
+    if (names.first) setFirstName(names.first);
+    if (names.last) setLastName(names.last);
+    patch({
+      authMode,
+      customerName: nextCustomer?.name || '',
+      customerEmail: nextCustomer?.email || emailFallback,
+      customerPhone: nextCustomer?.phone || '',
+      address: preferred?.address || nextCustomer?.defaultAddress || draft.address,
+      zipCode: preferred?.zipCode || nextCustomer?.defaultZip || draft.zipCode,
+      city: preferred?.city || nextCustomer?.defaultCity || draft.city,
+      lat: preferred?.latitude ?? draft.lat,
+      lng: preferred?.longitude ?? draft.lng,
+    });
+  };
+
   const onLogin = async (e: FormEvent) => {
     e.preventDefault();
     try {
@@ -945,32 +980,34 @@ export default function CheckoutPage() {
         email: loginEmail,
         password: loginPassword,
       });
-      saveCustomerToken(shopKey, res.data.token);
-      setCustomer(res.data.customer);
-      const addrs: SavedAddress[] = Array.isArray(res.data.customer.addresses)
-        ? res.data.customer.addresses
-        : [];
-      setSavedAddresses(addrs);
-      const preferred = addrs.find((a) => a.isDefault) || addrs[0] || null;
-      setSelectedAddressId(preferred?.id || null);
-      await refreshLoyalty(res.data.token);
-      setWantCreateAccount(false);
-      setShowLogin(false);
-      setPassword('');
-      setConfirmPassword('');
-      patch({
-        authMode: 'login',
-        customerName: res.data.customer.name || '',
-        customerEmail: res.data.customer.email || loginEmail,
-        customerPhone: res.data.customer.phone || '',
-        address: preferred?.address || res.data.customer.defaultAddress || draft.address,
-        zipCode: preferred?.zipCode || res.data.customer.defaultZip || draft.zipCode,
-        city: preferred?.city || res.data.customer.defaultCity || draft.city,
-        lat: preferred?.latitude ?? draft.lat,
-        lng: preferred?.longitude ?? draft.lng,
-      });
+      await applyAuthedCustomer(res.data.token, res.data.customer, 'login', loginEmail);
     } catch (err: any) {
       showCheckoutError(err.response?.data?.error || t('shopLoginFailed'));
+    }
+  };
+
+  const onRegisterFromPerks = async (e: FormEvent) => {
+    e.preventDefault();
+    const email = (loginEmail || draft.customerEmail).trim();
+    if (!email || password.length < 6) {
+      showCheckoutError(t('shopEmailPasswordRequired'));
+      return;
+    }
+    if (password !== confirmPassword) {
+      showCheckoutError(t('shopPasswordsMustMatch'));
+      return;
+    }
+    try {
+      const res = await axios.post(`/api/shop/${shopKey}/auth/register`, {
+        email,
+        password,
+        firstName: firstName.trim() || undefined,
+        lastName: lastName.trim() || undefined,
+        phone: draft.customerPhone || undefined,
+      });
+      await applyAuthedCustomer(res.data.token, res.data.customer, 'register', email);
+    } catch (err: any) {
+      showCheckoutError(err.response?.data?.error || t('shopCouldNotCreateAccount'));
     }
   };
 
@@ -1713,13 +1750,14 @@ export default function CheckoutPage() {
                   ))}
                 </ul>
 
-                {!showLogin ? (
+                {!showLogin && !showRegister ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white"
                       onClick={() => {
                         setShowLogin(true);
+                        setShowRegister(false);
                         setWantCreateAccount(false);
                         setPassword('');
                         setConfirmPassword('');
@@ -1727,6 +1765,19 @@ export default function CheckoutPage() {
                       }}
                     >
                       {t('shopLogIn')}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-900"
+                      onClick={() => {
+                        setShowRegister(true);
+                        setShowLogin(false);
+                        setWantCreateAccount(false);
+                        setLoginPassword('');
+                        if (draft.customerEmail) setLoginEmail(draft.customerEmail);
+                      }}
+                    >
+                      {t('shopCreateAccount')}
                     </button>
                   </div>
                 ) : null}
@@ -1766,6 +1817,90 @@ export default function CheckoutPage() {
                       className="w-full rounded-lg bg-stone-900 py-2 text-sm font-semibold text-white"
                     >
                       {t('shopLogIn')}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-xs text-stone-600 underline"
+                      onClick={() => {
+                        setShowLogin(false);
+                        setShowRegister(true);
+                        setLoginPassword('');
+                        if (draft.customerEmail && !loginEmail) setLoginEmail(draft.customerEmail);
+                      }}
+                    >
+                      {t('shopDontHaveAccount')} {t('shopCreateAccount')}
+                    </button>
+                  </form>
+                ) : null}
+
+                {showRegister ? (
+                  <form
+                    onSubmit={onRegisterFromPerks}
+                    className="mt-3 space-y-2 border-t border-stone-100 pt-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="font-semibold text-sm">{t('shopCreateAccount')}</h2>
+                      <button
+                        type="button"
+                        className="text-xs text-stone-500 underline"
+                        onClick={() => {
+                          setShowRegister(false);
+                          setPassword('');
+                          setConfirmPassword('');
+                        }}
+                      >
+                        {t('cancel')}
+                      </button>
+                    </div>
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="email"
+                      placeholder={t('shopEmail')}
+                      value={loginEmail}
+                      onChange={(e) => {
+                        setLoginEmail(e.target.value);
+                        patch({ customerEmail: e.target.value });
+                      }}
+                      required
+                      autoComplete="email"
+                    />
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="password"
+                      placeholder={t('shopPasswordMin6')}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                    <input
+                      className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                      type="password"
+                      placeholder={t('shopConfirmPassword')}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="submit"
+                      className="w-full rounded-lg bg-stone-900 py-2 text-sm font-semibold text-white"
+                    >
+                      {t('shopCreateAccount')}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-xs text-stone-600 underline"
+                      onClick={() => {
+                        setShowRegister(false);
+                        setShowLogin(true);
+                        setPassword('');
+                        setConfirmPassword('');
+                      }}
+                    >
+                      {t('shopHaveAccount')} {t('shopLogIn')}
                     </button>
                   </form>
                 ) : null}
@@ -2189,7 +2324,7 @@ export default function CheckoutPage() {
               {fieldErrors.customerPhone ? (
                 <p className="text-sm text-rose-600">{fieldErrors.customerPhone}</p>
               ) : null}
-              {!customer ? (
+              {!customer && !showRegister ? (
                 <div className="space-y-3 pt-1">
                   <label className="flex items-start gap-2.5 cursor-pointer text-sm text-stone-800">
                     <input
@@ -2200,6 +2335,7 @@ export default function CheckoutPage() {
                         const on = e.target.checked;
                         setWantCreateAccount(on);
                         setShowLogin(false);
+                        setShowRegister(false);
                         if (!on) {
                           setPassword('');
                           setConfirmPassword('');
