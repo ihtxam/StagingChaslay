@@ -114,6 +114,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   adyen_use_legacy_endpoint:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_use_legacy_endpoint boolean NOT NULL DEFAULT false",
   adyen_hmac_key: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_hmac_key text",
+  adyen_store_reference:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_store_reference varchar(255)",
   tap_to_pay_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tap_to_pay_enabled boolean NOT NULL DEFAULT false",
   courses_enabled:
@@ -1841,12 +1843,12 @@ export function ensureMerchantSchemaAtStartup(): Promise<void> {
 }
 
 function isMerchantsColumnSchemaError(raw: string): boolean {
-  return (
-    isMissingSchemaError(raw) &&
-    (/relation ["']?merchants["']?/i.test(raw) ||
-      /from ["']?merchants["']?/i.test(raw) ||
-      /merchants\./i.test(raw))
-  );
+  const mentionsMerchants =
+    /relation ["']?merchants["']?/i.test(raw) ||
+    /from ["']?merchants["']?/i.test(raw) ||
+    /merchants\./i.test(raw);
+  if (!mentionsMerchants) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
 }
 
 function isSubscriptionSchemaError(raw: string): boolean {
