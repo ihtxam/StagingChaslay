@@ -37,7 +37,7 @@ type Props = {
 
 export default function WebPosMembershipSellModal({ open, plans, onClose, onSold, onAddToCart }: Props) {
   const { t } = useI18n();
-  const { overlayClassName, overlayStyle, scrollFieldIntoView, keyboardActive } =
+  const { overlayClassName, overlayStyle, modalStyle, scrollFieldIntoView, keyboardActive, overlayFocusHandlers } =
     useModalKeyboardScroll();
   const activePlans = plans.filter((p) => p.active);
   const [planId, setPlanId] = useState(activePlans[0]?.id || '');
@@ -142,10 +142,16 @@ export default function WebPosMembershipSellModal({ open, plans, onClose, onSold
 
   return (
     <div
-      className={`fixed inset-0 z-[80] flex justify-center overflow-y-auto bg-black/40 p-3 sm:p-4 ${overlayClassName}`}
+      className={`fixed inset-x-0 z-[80] flex justify-center overflow-y-auto bg-black/40 p-3 sm:p-4 ${
+        keyboardActive ? '' : 'inset-y-0'
+      } ${overlayClassName}`}
       style={overlayStyle}
+      {...overlayFocusHandlers}
     >
-      <div className="flex max-h-[min(92dvh,calc(100dvh-1.5rem))] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+      <div
+        className="flex w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+        style={modalStyle}
+      >
         <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2 font-semibold text-stone-900">
             <CreditCard className="h-5 w-5 text-teal-600" />

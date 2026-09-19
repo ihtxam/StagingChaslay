@@ -30,8 +30,14 @@ function displayName(c: WebPosCustomer) {
 export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props) {
   const { t } = useI18n();
   const { close: closeKeyboard } = useOnScreenKeyboard();
-  const { overlayClassName, overlayStyle, scrollFieldIntoView, keyboardActive } =
-    useModalKeyboardScroll();
+  const {
+    overlayClassName,
+    overlayStyle,
+    modalStyle,
+    scrollFieldIntoView,
+    keyboardActive,
+    overlayFocusHandlers,
+  } = useModalKeyboardScroll();
   const [q, setQ] = useState('');
   const [list, setList] = useState<WebPosCustomer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,10 +117,16 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
 
   return (
     <div
-      className={`fixed inset-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${overlayClassName}`}
+      className={`fixed inset-x-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
+        keyboardActive ? '' : 'inset-y-0'
+      } ${overlayClassName}`}
       style={overlayStyle}
+      {...overlayFocusHandlers}
     >
-      <div className="flex max-h-[min(90dvh,calc(100dvh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
+      <div
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+        style={modalStyle}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>
           <button type="button" className="rounded-lg p-2 hover:bg-[var(--bg-muted)]" onClick={onClose} aria-label={t('close')}>

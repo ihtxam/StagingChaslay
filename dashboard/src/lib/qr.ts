@@ -2,6 +2,7 @@
  * Minimal helpers for receipt QR codes (browser + ESC/POS).
  */
 
+import QRCode from 'qrcode';
 import { publicApi } from '@/lib/api';
 import { SHOP_ORIGIN } from '@/lib/brand';
 
@@ -246,6 +247,22 @@ export async function generateReceiptQrRasterEscPos(
   const raw = String(data || '').trim();
   if (!raw || typeof document === 'undefined') return null;
   const size = receiptQrRasterPx(paperWidthMm);
+  try {
+    const canvas = document.createElement('canvas');
+    await QRCode.toCanvas(canvas, raw, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: size,
+    });
+    const w = Math.max(8, canvas.width);
+    const h = Math.max(8, canvas.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const { data: pixels } = ctx.getImageData(0, 0, w, h);
+    return imageDataToEscPosRaster(pixels, w, h, 128);
+  } catch {
+    /* fall through to external PNG */
+  }
   try {
     const img = await loadImage(qrImageUrl(raw, size, { ecc: 'M', margin: 8 }));
     const w = Math.max(8, img.width);

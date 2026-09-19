@@ -93,7 +93,8 @@ export default function WebPosGiftCardModal({
   onAttachCustomer,
 }: Props) {
   const { t } = useI18n();
-  const { overlayClassName, overlayStyle, scrollFieldIntoView } = useModalKeyboardScroll();
+  const { overlayClassName, overlayStyle, modalStyle, scrollFieldIntoView, keyboardActive, overlayFocusHandlers } =
+    useModalKeyboardScroll();
   const [step, setStep] = useState<Mode>(mode === 'pay' ? 'pay' : 'menu');
   const [media, setMedia] = useState<MediaPick>(mode === 'pay' ? 'choose' : 'physical');
   const [code, setCode] = useState('');
@@ -308,13 +309,17 @@ export default function WebPosGiftCardModal({
 
   return (
     <div
-      className={`fixed inset-0 z-[80] flex justify-center overflow-y-auto bg-black/40 p-3 sm:p-4 ${overlayClassName}`}
+      className={`fixed inset-x-0 z-[80] flex justify-center overflow-y-auto bg-black/40 p-3 sm:p-4 ${
+        keyboardActive ? '' : 'inset-y-0'
+      } ${overlayClassName}`}
       style={overlayStyle}
+      {...overlayFocusHandlers}
     >
       <div
-        className={`my-auto flex max-h-[min(92dvh,calc(100dvh-1.5rem))] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${
+        className={`my-auto flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${
           step === 'menu' ? 'max-w-xl' : 'max-w-md'
         }`}
+        style={modalStyle}
       >
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">

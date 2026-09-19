@@ -19,7 +19,7 @@ export default function WebPosSendReceiptModal({
   onSend,
 }: Props) {
   const { t } = useI18n();
-  const { keyboardActive, overlayClassName, overlayStyle, scrollFieldIntoView } =
+  const { keyboardActive, overlayClassName, overlayStyle, modalStyle, scrollFieldIntoView, overlayFocusHandlers } =
     useModalKeyboardScroll();
   const [email, setEmail] = useState(initialEmail);
 
@@ -34,12 +34,16 @@ export default function WebPosSendReceiptModal({
 
   return (
     <div
-      className={`fixed inset-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
-        keyboardActive ? overlayClassName : 'items-end sm:items-center'
+      className={`fixed inset-x-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
+        keyboardActive ? overlayClassName : 'inset-y-0 items-end sm:items-center'
       }`}
       style={overlayStyle}
+      {...overlayFocusHandlers}
     >
-      <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl sm:my-auto">
+      <div
+        className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl sm:my-auto"
+        style={modalStyle}
+      >
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <h2 className="text-base font-semibold text-stone-800">{t('webPosSendReceipt')}</h2>
           <button
