@@ -58,14 +58,17 @@ jobs:
         working-directory: print-agent-android
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.android" ../backend/public/downloads
-          if [[ ! -f "$HOME/.android/debug.keystore" ]]; then
-            keytool -genkeypair -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
-          fi
+          mkdir -p "$HOME/.android" "$HOME/.config/.android" ../backend/public/downloads
+          # AGP 9 on ubuntu-latest looks in ~/.config/.android, not ~/.android.
+          for ks in "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"; do
+            if [[ ! -f "$ks" ]]; then
+              keytool -genkeypair -v \
+                -keystore "$ks" \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
+            fi
+          done
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon --no-build-cache
           APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
