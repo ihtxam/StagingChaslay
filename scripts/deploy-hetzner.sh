@@ -814,15 +814,32 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
-# StagingChaslay only: dropped columns still count toward Postgres 1600 limit — reset when bloated.
+# StagingChaslay only: monitor merchants pg_attribute bloat (Postgres hard limit 1600).
+# Production (DEPLOY_STACK=rebornsense) never runs this block — merchant data cannot be
+# wiped by routine production deploys.
 if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  STAGING_PG_ATTR_WARN_THRESHOLD="${STAGING_PG_ATTR_WARN_THRESHOLD:-300}"
+  STAGING_PG_ATTR_BLOCK_THRESHOLD="${STAGING_PG_ATTR_BLOCK_THRESHOLD:-1500}"
   merchant_attnum="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
     "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.merchants'::regclass AND attnum > 0;" 2>/dev/null | tr -d '[:space:]' || echo "0")"
   merchant_cols="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
     "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='merchants';" 2>/dev/null | tr -d '[:space:]' || echo "0")"
   echo "merchants columns: active=${merchant_cols:-?} total_pg_attribute=${merchant_attnum:-?}"
-  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt 200 ]]; then
-    echo "WARNING: merchants pg_attribute count $merchant_attnum (active $merchant_cols) — resetting staging postgres volume"
+  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$STAGING_PG_ATTR_WARN_THRESHOLD" ]]; then
+    echo "NOTE: merchants pg_attribute=$merchant_attnum (active $merchant_cols) — migration churn; data is preserved on deploy"
+  fi
+  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$STAGING_PG_ATTR_BLOCK_THRESHOLD" ]]; then
+    echo "ERROR: merchants pg_attribute=$merchant_attnum is near Postgres limit 1600 (active $merchant_cols)."
+    echo "  Routine deploys will NOT wipe staging data. To reset staging manually:"
+    echo "    RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh"
+    if [[ "${RESET_STAGING_DB:-}" != "1" ]]; then
+      echo "  Set RESET_STAGING_DB=1 on the deploy job only when you intend to delete ALL staging merchants, orders, customers, and payment credentials."
+      exit 1
+    fi
+  fi
+  if [[ "${RESET_STAGING_DB:-}" == "1" ]]; then
+    echo "WARNING: RESET_STAGING_DB=1 — deleting ALL staging data (merchants, orders, customers, Swisspayout/Adyen credentials, products)"
+    echo "STAGING ONLY: removing ${migrate_project}_postgres_data (production deploys never run this)"
     dc stop api dashboard migrate 2>/dev/null || true
     dc down 2>/dev/null || true
     docker volume rm "${migrate_project}_postgres_data" 2>/dev/null || true
