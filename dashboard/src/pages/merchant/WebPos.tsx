@@ -1721,6 +1721,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Fast-food can keep kitchen but hide Tables / Set table. */
   const tablesUiEnabled =
     !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
+  const canPickDineInChannel =
+    retailDineInEnabled || (tablesUiEnabled && counterDineInEnabled);
   const channelTabOptions: Array<'takeaway' | 'delivery' | 'dine_in'> = isRetail
     ? [
         ...(retailDineInEnabled ? (['dine_in'] as const) : []),
@@ -5896,7 +5898,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const selectFulfillmentChannel = (ch: 'takeaway' | 'delivery' | 'dine_in') => {
-    if (ch === 'dine_in' && !tablesUiEnabled) return;
+    if (ch === 'dine_in' && !canPickDineInChannel) return;
     if (ch === 'dine_in' && channel === 'dine_in') {
       leaveTableForChannel();
       if (!tableId) clearCartTicket();
@@ -5911,6 +5913,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const channelChanged = channel !== ch;
     setChannel(ch);
     if (ch === 'dine_in') {
+      if (channel === 'delivery' || channel === 'takeaway') {
+        setTabNumber(null);
+        if (!tableId) clearCartTicket();
+      }
       setFulfillmentWhen(null);
       if (!tableId && !ticketDisplay) {
         const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
@@ -5918,6 +5924,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setTicketOrderNumber(ticket.orderNumber);
       }
       return;
+    }
+    if (channel === 'dine_in' && (ch === 'delivery' || ch === 'takeaway') && !tableId) {
+      clearCartTicket();
     }
     // Default ASAP immediately — no modal. Keep existing when re-tapping same channel.
     if (channelChanged || !fulfillmentWhen) {
