@@ -27,7 +27,7 @@ import {
   generateWebPosReceiptText,
   generateRefundReceiptText,
   generateGiftCardSaleReceiptText,
-  giftCardSaleReceiptEscPos,
+  buildGiftCardSaleReceiptEscPos,
   computeGiftCardSaleVat,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
@@ -6199,7 +6199,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         logoEscPosCacheRef.current = { key: cacheKey, bytes: logo };
       }
     }
-    const escpos = giftCardSaleReceiptEscPos(text, opts.code, logo);
+    const escpos = await buildGiftCardSaleReceiptEscPos(
+      text,
+      opts.code,
+      logo,
+      paper === 58 ? 58 : 80
+    );
     const dataBase64 = uint8ToBase64(escpos);
     const targets = printersForRole(printSettings, 'receipt');
     const names =

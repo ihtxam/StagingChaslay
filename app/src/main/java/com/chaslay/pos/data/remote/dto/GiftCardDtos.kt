@@ -47,6 +47,7 @@ data class GiftCardMembershipPlanDto(
     @SerializedName("discountPercent") val discountPercent: Double? = null,
     @SerializedName("stampsRequired") val stampsRequired: Int? = null,
     @SerializedName("rewardProductId") val rewardProductId: String? = null,
+    @SerializedName("sellPrice") val sellPrice: Double? = null,
     val active: Boolean = true
 )
 

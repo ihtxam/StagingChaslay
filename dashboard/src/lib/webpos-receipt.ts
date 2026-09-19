@@ -11,6 +11,7 @@ import { APP_NAME } from '@/lib/brand';
 import {
   buildReceiptUrl,
   buildGiftCardBarcodePayload,
+  buildGiftCardRedeemQrPayload,
   buildDeliverySlipQrRasterEscPos,
   buildDualReceiptQrRasterEscPos,
   buildLabeledReceiptQrRasterEscPos,
@@ -548,7 +549,23 @@ export function giftCardSaleReceiptQrPayload(code: string): string {
   return giftCardSaleBarcodePayload(code);
 }
 
-/** ESC/POS bytes for e-gift sale receipt (Code128 only, code printed below). */
+/** ESC/POS bytes for e-gift sale receipt (QR raster + Code128 barcode). */
+export async function buildGiftCardSaleReceiptEscPos(
+  text: string,
+  code: string,
+  logoBytes?: Uint8Array | null,
+  paperWidthMm: 58 | 80 = 80
+): Promise<Uint8Array> {
+  const payload = giftCardSaleBarcodePayload(code);
+  const label = buildGiftCardBarcodePayload(code);
+  const qrData = buildGiftCardRedeemQrPayload(code);
+  const qrRaster =
+    (await generateReceiptQrRasterEscPos(qrData, paperWidthMm)) ||
+    escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  return textToEscPos(text, qrRaster, logoBytes, payload, label);
+}
+
+/** @deprecated use buildGiftCardSaleReceiptEscPos */
 export function giftCardSaleReceiptEscPos(
   text: string,
   code: string,
@@ -556,7 +573,9 @@ export function giftCardSaleReceiptEscPos(
 ): Uint8Array {
   const payload = giftCardSaleBarcodePayload(code);
   const label = buildGiftCardBarcodePayload(code);
-  return textToEscPos(text, undefined, logoBytes, payload, label);
+  const qrData = buildGiftCardRedeemQrPayload(code);
+  const qrRaster = escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
 
 /** Prefer merchant print settings; kitchen defaults to full 80mm width. */

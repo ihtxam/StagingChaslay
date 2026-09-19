@@ -865,6 +865,8 @@
     <string name="membership_stamp_hint">Each qualifying sale earns one stamp; reward when full.</string>
     <string name="membership_stamps">stamps</string>
     <string name="membership_off">off</string>
+    <string name="membership_customer_details">Customer details</string>
+    <string name="membership_plan_free">Free</string>
     <string name="gift_card_sell">Sell gift card</string>
     <string name="gift_card_sell_requires_shift">Start a cash shift before selling gift cards.</string>
     <string name="gift_card_cloud_login_required">Cloud login required for gift cards. Sign in under Settings → Online.</string>
