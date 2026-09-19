@@ -8,6 +8,7 @@ import {
   resolveShopKey,
   resolveShopLocationSlug,
   shopBasePath,
+  shopCustomerAuthConfig,
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -250,7 +251,7 @@ export default function OrderConfirmationPage() {
       try {
         const res = await axios.post(`/api/shop/${shopKey}/orders/${orderId}/payment-session`, {
           ...shopCheckoutOriginPayload(shopBasePath(shopKey)),
-        });
+        }, shopCustomerAuthConfig(shopKey));
         if (res.data.alreadyPaid) {
           await load();
           return;
@@ -326,7 +327,7 @@ export default function OrderConfirmationPage() {
     try {
       const res = await axios.post(`/api/shop/${shopKey}/orders/${orderId}/payment-session`, {
         ...shopCheckoutOriginPayload(basePath),
-      });
+      }, shopCustomerAuthConfig(shopKey));
       if (res.data.alreadyPaid) {
         await load();
         return;

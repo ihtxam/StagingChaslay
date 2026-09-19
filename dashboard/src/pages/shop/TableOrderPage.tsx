@@ -4,7 +4,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
+import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug, shopBasePath, shopCustomerAuthConfig } from '@/lib/shop-cart';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
@@ -136,7 +136,7 @@ export default function TableOrderPage() {
         const res = await axios.post(`/api/shop/${shopKey}/table/${tableId}/payment-session`, {
           tableSessionToken: sessionToken,
           ...shopCheckoutOriginPayload(shopBasePath(shopKey, locationSlug)),
-        });
+        }, shopCustomerAuthConfig(shopKey));
         if (res.data.alreadyPaid) {
           await loadSession();
           setPayOpen(false);

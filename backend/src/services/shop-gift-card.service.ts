@@ -129,6 +129,7 @@ export class ShopGiftCardService {
       paymentMethod?: "card";
       origin?: string;
       shopPath?: string;
+      customerId?: string | null;
     }
   ) {
     const settings = this.settingsFromMerchant(merchant);
@@ -206,7 +207,8 @@ export class ShopGiftCardService {
           check.amount,
           "CHF",
           returnUrl,
-          checkoutOrigin
+          checkoutOrigin,
+          { customerId: input.customerId }
         );
         paymentSession = {
           id: session.id,
@@ -214,6 +216,7 @@ export class ShopGiftCardService {
           clientKey: session.clientKey || merchant.adyenClientId,
           environment:
             session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
+          storePaymentMethod: session.storePaymentMethod === true,
         };
       } catch (e) {
         paymentSession = {

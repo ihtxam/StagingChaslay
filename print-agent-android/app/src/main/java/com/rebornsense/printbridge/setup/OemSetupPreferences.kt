@@ -12,6 +12,7 @@ object OemSetupPreferences {
     /** Detects reinstall when Android backup restores stale wizard prefs. */
     private const val KEY_FIRST_INSTALL_TIME = "first_install_time"
     private const val KEY_WEBPOS_ORIGIN = "webpos_origin"
+    private const val KEY_WEBPOS_PATH = "webpos_path"
 
     /**
      * Clears wizard completion when the app was updated or reinstalled so merchants
@@ -101,6 +102,36 @@ object OemSetupPreferences {
             .edit()
             .putString(KEY_WEBPOS_ORIGIN, trimmed.trimEnd('/'))
             .apply()
+    }
+
+    fun getWebPosPath(context: Context): String {
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_WEBPOS_PATH, null)
+            ?.trim()
+            .orEmpty()
+        return sanitizeWebPosPath(stored)
+    }
+
+    fun setWebPosPath(context: Context, path: String?) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_WEBPOS_PATH, sanitizeWebPosPath(path))
+            .apply()
+    }
+
+    fun sanitizeWebPosPath(raw: String?): String {
+        val path = raw?.trim()?.substringBefore('?')?.substringBefore('#')?.trimEnd('/')
+            ?.ifBlank { null }
+            ?: return "/merchant/pos"
+        return when {
+            path == "/merchant/order-center" || path == "/merchant/order-hub" -> "/merchant/order-center"
+            path == "/merchant/pos" || path.startsWith("/merchant/pos/") -> "/merchant/pos"
+            path == "/merchant/waiter" -> "/merchant/waiter"
+            path == "/merchant/storekeeper" -> "/merchant/storekeeper"
+            path == "/merchant/kiosk" -> "/merchant/kiosk"
+            path == "/merchant/delivery/driver" -> "/merchant/delivery/driver"
+            else -> "/merchant/pos"
+        }
     }
 
     fun reset(context: Context) {

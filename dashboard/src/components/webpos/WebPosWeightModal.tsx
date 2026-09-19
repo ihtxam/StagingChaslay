@@ -244,9 +244,9 @@ export default function WebPosWeightModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-lg rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-5 py-3">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-2 sm:p-3">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-4 py-2.5">
           <div className="min-w-0">
             <h3 className="truncate font-semibold">
               {t('webPosEnterWeight')} — {productName}
@@ -265,90 +265,95 @@ export default function WebPosWeightModal({
           </button>
         </div>
 
-        <div className="space-y-3 p-5">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => switchEntryUnit('kg')}
-              className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
-                entryUnit === 'kg'
-                  ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                  : 'webpos-keypad-key !py-2.5 text-xs'
-              }`}
-            >
-              kg
-            </button>
-            <button
-              type="button"
-              onClick={() => switchEntryUnit('g')}
-              className={`rounded-lg py-2.5 text-xs font-bold uppercase ${
-                entryUnit === 'g'
-                  ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
-                  : 'webpos-keypad-key !py-2.5 text-xs'
-              }`}
-            >
-              g
-            </button>
-          </div>
-
-          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-5 py-4 text-right">
-            <p className="text-3xl font-semibold tabular-nums">
-              {buffer || '0'} {entryUnit}
-            </p>
-            <p className="mt-1 text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
-              = {weightKg > 0 ? weightKg.toFixed(3) : '0.000'} kg · {money(lineTotal)}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-[var(--webpos-border,var(--border))] p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--webpos-text-muted,var(--text-muted))]">
-              <Scale size={14} />
-              {t('webPosScale')}
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_minmax(16rem,18.5rem)]">
+          <div className="flex flex-col gap-3 p-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => switchEntryUnit('kg')}
+                className={`rounded-lg py-2 text-xs font-bold uppercase ${
+                  entryUnit === 'kg'
+                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                    : 'webpos-keypad-key !py-2 text-xs'
+                }`}
+              >
+                kg
+              </button>
+              <button
+                type="button"
+                onClick={() => switchEntryUnit('g')}
+                className={`rounded-lg py-2 text-xs font-bold uppercase ${
+                  entryUnit === 'g'
+                    ? 'bg-[var(--webpos-accent-soft)] text-[var(--webpos-accent-text)] ring-1 ring-[var(--webpos-accent-ring)]'
+                    : 'webpos-keypad-key !py-2 text-xs'
+                }`}
+              >
+                g
+              </button>
             </div>
-            {!scaleConfigured ? (
-              <p className="text-[11px] text-amber-800">{t('webPosScalePortMissing')}</p>
-            ) : !agentOk ? (
-              <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
-                {agentOfflineMessage}
+
+            <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-4 py-3 text-right">
+              <p className="text-3xl font-semibold tabular-nums">
+                {buffer || '0'} {entryUnit}
               </p>
-            ) : (
-              <div className="space-y-0.5 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
-                <p>
-                  {scaleReading
-                    ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
-                    : scaleMsg || t('webPosScaleWaiting')}
-                </p>
-                {displayAddress ? (
-                  <p>
-                    {useUsbScale ? t('webPosScaleUsb') : t('webPosScalePort')}: {displayAddress}
-                    {activeAddress &&
-                    configuredAddress &&
-                    activeAddress !== (useUsbScale ? fixedUsb : formatScalePortLabel(fixedPort))
-                      ? ` (${t('webPosScalePortReconnected')})`
-                      : ''}
-                  </p>
-                ) : null}
+              <p className="mt-1 text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
+                = {weightKg > 0 ? weightKg.toFixed(3) : '0.000'} kg · {money(lineTotal)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-[var(--webpos-border,var(--border))] p-3">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--webpos-text-muted,var(--text-muted))]">
+                <Scale size={14} />
+                {t('webPosScale')}
               </div>
-            )}
+              {!scaleConfigured ? (
+                <p className="text-[11px] text-amber-800">{t('webPosScalePortMissing')}</p>
+              ) : !agentOk ? (
+                <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
+                  {agentOfflineMessage}
+                </p>
+              ) : (
+                <div className="space-y-0.5 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
+                  <p>
+                    {scaleReading
+                      ? `${t('webPosScaleLive')}: ${scaleReading.weightKg.toFixed(3)} kg (${scaleReading.status})`
+                      : scaleMsg || t('webPosScaleWaiting')}
+                  </p>
+                  {displayAddress ? (
+                    <p>
+                      {useUsbScale ? t('webPosScaleUsb') : t('webPosScalePort')}: {displayAddress}
+                      {activeAddress &&
+                      configuredAddress &&
+                      activeAddress !== (useUsbScale ? fixedUsb : formatScalePortLabel(fixedPort))
+                        ? ` (${t('webPosScalePortReconnected')})`
+                        : ''}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
 
-          <WebPosNumericKeypad
-            mode="price"
-            onModeChange={() => undefined}
-            buffer={buffer}
-            onBufferChange={(value) => {
-              manualOverrideRef.current = true;
-              setBuffer(value);
-            }}
-            onApply={() => {
-              if (weightKg <= 0) return;
-              onConfirm(weightKg);
-            }}
-            showModeButtons={false}
-            integerOnly={entryUnit === 'g'}
-            applyLabel={t('confirm')}
-            applyDisabled={weightKg <= 0}
-          />
+          <div className="border-t border-[var(--webpos-border,var(--border))] p-4 md:border-l md:border-t-0">
+            <WebPosNumericKeypad
+              mode="price"
+              onModeChange={() => undefined}
+              buffer={buffer}
+              onBufferChange={(value) => {
+                manualOverrideRef.current = true;
+                setBuffer(value);
+              }}
+              onApply={() => {
+                if (weightKg <= 0) return;
+                onConfirm(weightKg);
+              }}
+              showModeButtons={false}
+              integerOnly={entryUnit === 'g'}
+              applyLabel={t('confirm')}
+              applyDisabled={weightKg <= 0}
+              compact
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { eq, and, asc, desc, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { MerchantSettingsService, type FulfillmentChannel } from "@/services/merchant-settings.service";
 import {
@@ -993,11 +993,18 @@ router.get("/:slug/my-orders", async (req: Request, res: Response) => {
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
 
     const db = getDb();
+    const profile = await db.query.customers.findFirst({
+      where: and(eq(schema.customers.id, customerId), eq(schema.customers.merchantId, merchant.id)),
+      columns: { email: true },
+    });
+    const email = String(profile?.email || "").trim().toLowerCase();
     const orders = await db.query.orders.findMany({
       where: and(
         eq(schema.orders.merchantId, merchant.id),
-        eq(schema.orders.customerId, customerId),
-        eq(schema.orders.orderType, "web_shop")
+        eq(schema.orders.orderType, "web_shop"),
+        email
+          ? or(eq(schema.orders.customerId, customerId), eq(schema.orders.customerEmail, email))
+          : eq(schema.orders.customerId, customerId)
       ),
       with: { items: true },
       orderBy: [desc(schema.orders.createdAt)],
@@ -1278,13 +1285,15 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
       sessionToken,
       extraCandidates: [meta.headerOrigin, meta.referer],
     });
+    const { customerId } = optionalCustomer(req);
     const paySession = await AdyenService.initializePaymentSession(
       merchant.id,
       anchor.id,
       total,
       "CHF",
       returnUrl,
-      checkoutOrigin
+      checkoutOrigin,
+      { customerId }
     );
     res.json({
       success: true,
@@ -1296,6 +1305,7 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
         sessionData: paySession.sessionData,
         clientKey: paySession.clientKey || merchant.adyenClientId,
         environment: paySession.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
+        storePaymentMethod: paySession.storePaymentMethod === true,
       },
     });
   } catch (error) {
@@ -1975,6 +1985,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
     const body = req.body || {};
     const deliveryType =
       body.deliveryType === "physical" ? "physical" : "digital";
+    const { customerId } = optionalCustomer(req);
     const result = await ShopGiftCardService.createOnlinePurchase(
       merchant,
       req.params.slug,
@@ -1992,8 +2003,21 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         shippingCountry: body.shippingCountry,
         origin: body.origin,
         shopPath: body.shopPath,
+        customerId,
       }
     );
+
+    if (customerId && deliveryType === "physical") {
+      try {
+        await ShopCustomerService.rememberCheckoutAddress(customerId, merchant.id, {
+          address: String(body.shippingAddress || ""),
+          zipCode: body.shippingZip || null,
+          city: body.shippingCity || null,
+        });
+      } catch {
+        /* address save is optional */
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -2611,16 +2635,42 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     let customerId = authCustomer.customerId;
     const emailNorm = customerEmail?.trim().toLowerCase();
     try {
-      const { CustomerService } = await import("@/services/customer.service");
-      const upserted = await CustomerService.upsertFromGuest(merchant.id, {
-        name: customerName,
-        phone: customerPhone,
-        email: emailNorm,
-        address: typeof shippingAddress === "string" ? shippingAddress : undefined,
-        zip: zipCode,
-        city,
-      });
-      if (!customerId && upserted?.id) customerId = upserted.id;
+      if (customerId) {
+        await ShopCustomerService.syncFromCheckout(customerId, merchant.id, {
+          name: customerName,
+          phone: customerPhone,
+          email: emailNorm,
+        });
+        if (channel === "delivery") {
+          const rawAddr =
+            typeof shippingAddress === "string"
+              ? shippingAddress
+              : shippingAddress && typeof shippingAddress === "object"
+                ? String(
+                    (shippingAddress as { address?: string }).address ||
+                      Object.values(shippingAddress).filter(Boolean).join(", ")
+                  )
+                : "";
+          await ShopCustomerService.rememberCheckoutAddress(customerId, merchant.id, {
+            address: rawAddr,
+            zipCode: zipCode || null,
+            city: city || null,
+            latitude: lat != null && Number.isFinite(Number(lat)) ? Number(lat) : null,
+            longitude: lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null,
+          });
+        }
+      } else {
+        const { CustomerService } = await import("@/services/customer.service");
+        const upserted = await CustomerService.upsertFromGuest(merchant.id, {
+          name: customerName,
+          phone: customerPhone,
+          email: emailNorm,
+          address: typeof shippingAddress === "string" ? shippingAddress : undefined,
+          zip: zipCode,
+          city,
+        });
+        if (upserted?.id) customerId = upserted.id;
+      }
     } catch (custErr) {
       console.warn("Shop order customer upsert failed:", custErr);
     }
@@ -3024,13 +3074,15 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           parseFloat(finalOrder.total.toString()),
           "CHF",
           returnUrl,
-          checkoutOrigin
+          checkoutOrigin,
+          { customerId: authCustomer.customerId || customerId }
         );
         paymentSession = {
           id: session.id,
           sessionData: session.sessionData,
           clientKey: session.clientKey || merchant.adyenClientId,
           environment: session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
+          storePaymentMethod: session.storePaymentMethod === true,
         };
       } catch (e) {
         // Card selected but Swisspayout not ready — keep order awaiting_payment; client can retry or switch
@@ -3188,7 +3240,8 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       parseFloat(order.total.toString()),
       "CHF",
       returnUrl,
-      checkoutOrigin
+      checkoutOrigin,
+      { customerId: order.customerId }
     );
     res.json({
       success: true,
@@ -3197,6 +3250,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
         sessionData: session.sessionData,
         clientKey: session.clientKey || merchant.adyenClientId,
         environment: session.environment || AdyenService.environmentFromClientKey(merchant.adyenClientId),
+        storePaymentMethod: session.storePaymentMethod === true,
       },
     });
   } catch (error) {

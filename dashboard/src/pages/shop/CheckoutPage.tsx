@@ -16,6 +16,7 @@ import {
   saveCart,
   saveCustomerToken,
   shopBasePath,
+  shopCustomerAuthConfig,
   type ShopCheckoutDraft,
   type ShopChannel,
 } from '@/lib/shop-cart';
@@ -2607,7 +2608,7 @@ export default function CheckoutPage() {
           try {
             const res = await axios.post(`/api/shop/${shopKey}/orders/${paymentOrderId}/payment-session`, {
               ...shopCheckoutOriginPayload(shopBasePath(shopKey, locSlug)),
-            });
+            }, shopCustomerAuthConfig(shopKey));
             if (res.data.alreadyPaid) {
               setPaymentModalOpen(false);
               navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}`);

@@ -6,6 +6,8 @@ export type AdyenPaymentSession = {
   sessionData: string;
   clientKey: string;
   environment?: string;
+  /** True when /sessions stored the method for a logged-in shopper. */
+  storePaymentMethod?: boolean;
 };
 
 export const ADYEN_SUCCESS_RESULT_CODES = [
@@ -39,8 +41,9 @@ export function normalizeAdyenPaymentSession(raw: unknown): AdyenPaymentSession 
   const sessionData = String(r.sessionData ?? r.session_data ?? '').trim();
   const clientKey = String(r.clientKey ?? r.client_key ?? '').trim();
   const environment = r.environment != null ? String(r.environment) : undefined;
+  const storePaymentMethod = r.storePaymentMethod === true || r.store_payment_method === true;
   if (!id || !sessionData || !clientKey) return null;
-  return { id, sessionData, clientKey, environment };
+  return { id, sessionData, clientKey, environment, storePaymentMethod };
 }
 
 function explainAdyenUnauthorized(
@@ -131,6 +134,24 @@ function resolveAdyenEnvironment(session: AdyenPaymentSession): 'live' | 'test' 
   return adyenEnvironmentFromClientKey(session.clientKey);
 }
 
+/** Drop-in create() options. Stored cards only when the session tokenized a logged-in shopper. */
+export function adyenDropinCreateConfig(session: Pick<AdyenPaymentSession, 'storePaymentMethod'>) {
+  const config: Record<string, unknown> = {
+    showPayButton: true,
+    openFirstPaymentMethod: true,
+  };
+  if (session.storePaymentMethod) {
+    config.paymentMethodsConfiguration = {
+      card: {
+        enableStoreDetails: true,
+        hasHolderName: true,
+        holderNameRequired: false,
+      },
+    };
+  }
+  return config;
+}
+
 type AdyenCheckoutInstance = {
   create: (
     type: string,
@@ -212,10 +233,7 @@ export async function mountAdyenDropin({
   }
 
   try {
-    const dropin = checkout.create('dropin', {
-      showPayButton: true,
-      openFirstPaymentMethod: true,
-    });
+    const dropin = checkout.create('dropin', adyenDropinCreateConfig(session));
     if (!dropin || typeof dropin.mount !== 'function') {
       throw new Error('Adyen Drop-in could not be created.');
     }
