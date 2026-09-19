@@ -239,13 +239,13 @@ export function DeadStockReportPage() {
       <p className="text-sm muted">{t('invDeadHint')}</p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select className="input max-w-[120px]" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+        <select className="input w-auto min-w-[7rem]" value={days} onChange={(e) => setDays(Number(e.target.value))}>
           <option value={30}>30 {t('days')}</option>
           <option value={60}>60 {t('days')}</option>
           <option value={90}>90 {t('days')}</option>
           <option value={180}>180 {t('days')}</option>
         </select>
-        <select className="input max-w-[200px]" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+        <select className="input w-auto min-w-[15rem]" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
           <option value="stop">{t('invDeadFilterStop')}</option>
           <option value="dead">{t('invDeadFilterDead')}</option>
           <option value="slow">{t('invDeadFilterSlow')}</option>
