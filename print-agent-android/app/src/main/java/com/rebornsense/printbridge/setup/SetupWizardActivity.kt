@@ -377,7 +377,8 @@ class SetupWizardActivity : AppCompatActivity() {
     private fun resolveWebPosUrl(): String {
         val stored = OemSetupPreferences.getWebPosOrigin(this)
         val host = stored?.trimEnd('/') ?: "https://app.chaslay.com"
-        return "$host/merchant/pos"
+        val path = OemSetupPreferences.getWebPosPath(this)
+        return "$host$path"
     }
 
     private fun markCurrentStepDone() {

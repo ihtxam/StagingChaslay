@@ -57,6 +57,17 @@ const STOREKEEPER_PERMS: Permission[] = ['STOREKEEPER_INTAKE'];
   assert.equal(path, '/merchant/storekeeper');
 }
 
+// Order center operator with loginHome=pos → Order Center (not WebPOS)
+{
+  const path = homePathForUser({
+    role: 'staff',
+    permissions: ORDER_CENTER_PERMS,
+    isOwner: false,
+    loginHome: 'pos',
+  });
+  assert.equal(path, '/merchant/order-center');
+}
+
 // Email login routes cashier to WebPOS regardless of stored loginHome=panel
 {
   const path = homePathForUser({

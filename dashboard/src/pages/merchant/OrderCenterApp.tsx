@@ -44,6 +44,8 @@ import {
 } from '@/lib/delivery-hub-alerts';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
+import { isAndroidDevice } from '@/lib/print-agent-platform';
+import { probeDeviceBridgeHealth, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
 import { printOrderCenterOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
@@ -218,6 +220,10 @@ export default function OrderCenterApp() {
     try {
       const h = await getPrintAgentHealth();
       setPrintBridgeOk(h.ok);
+      if (h.ok && isAndroidDevice()) {
+        void probeDeviceBridgeHealth(2);
+        void syncBridgeWebPosOrigin();
+      }
     } catch {
       setPrintBridgeOk(false);
     }

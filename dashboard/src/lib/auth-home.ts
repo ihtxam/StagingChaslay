@@ -55,10 +55,12 @@ export function homePathForUser(
   }
 
   if (loginHome === 'pos') {
+    if (isOrderCenterOnlyStaff(perms, user.isOwner === true)) return orderCenterHomePath();
     if (hasPermission(perms, 'USE_WEBPOS', false)) return '/merchant/pos';
     if (hasPermission(perms, 'MANAGE_TABLES', false)) return '/merchant/waiter';
     if (isStorekeeperOnlyStaff(perms, user.isOwner === true)) return storekeeperHomePath();
     if (isDeliveryDriverOnlyStaff(perms, user.isOwner === true)) return deliveryDriverHomePath();
+    if (isKioskOnlyStaff(perms, user.isOwner === true)) return kioskHomePath();
     return '/merchant/pos';
   }
 
@@ -74,5 +76,6 @@ export function homePathForUser(
   if (hasPermission(perms, 'MANAGE_TABLES', false)) return '/merchant/waiter';
   if (hasPermission(perms, 'MANAGE_PRODUCTS', false)) return '/merchant/products';
   if (hasPermission(perms, 'DELIVERY_ORDERS', false)) return deliveryDriverHomePath();
+  if (hasPermission(perms, 'VIEW_ORDER_HISTORY', false)) return orderCenterHomePath();
   return '/merchant/pos';
 }

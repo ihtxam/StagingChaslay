@@ -45,6 +45,12 @@ class BridgeHttpServer(
                 if (origin.startsWith("http")) {
                     OemSetupPreferences.setWebPosOrigin(appContext, origin)
                 }
+                if (body.has("webpos_path")) {
+                    OemSetupPreferences.setWebPosPath(
+                        appContext,
+                        body.optString("webpos_path", ""),
+                    )
+                }
                 jsonResponse(JSONObject().put("ok", true))
             }
 

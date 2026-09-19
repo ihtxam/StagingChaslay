@@ -6,6 +6,7 @@
  */
 
 import { resolveApiOriginForBridge } from '@/lib/api';
+import { sanitizeBridgeWebAppPath } from '@/lib/merchant-app-home';
 import { markBridgeRebornInstalled } from '@/lib/pwa';
 import { PRINT_AGENT_URL } from '@/lib/print-agent';
 
@@ -46,14 +47,17 @@ function bridgeUrl(path: string): string {
   return `${PRINT_AGENT_URL}${path}`;
 }
 
-/** Push WebPOS origin so Bridge setup wizard can reopen the correct site (staging vs prod). */
+/** Push site origin + app path so Bridge setup can reopen Order Center or WebPOS. */
 export async function syncBridgeWebPosOrigin(): Promise<void> {
   if (typeof window === 'undefined') return;
   try {
     await fetch(bridgeUrl('/config'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webpos_origin: window.location.origin }),
+      body: JSON.stringify({
+        webpos_origin: window.location.origin,
+        webpos_path: sanitizeBridgeWebAppPath(window.location.pathname),
+      }),
     });
   } catch {
     /* bridge offline */

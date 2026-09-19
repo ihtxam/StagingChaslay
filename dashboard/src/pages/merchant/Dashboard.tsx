@@ -62,6 +62,11 @@ import PlatformMessagesProvider, {
 import { useAuthStore } from '@/store/auth';
 import { homePathForUser } from '@/lib/auth-home';
 import {
+  allowOrderCenterRoute,
+  resolveDeniedRouteFallback,
+  resolveMissingPosRedirect,
+} from '@/lib/merchant-app-home';
+import {
   canAccessRoute,
   canShowWebPosQuickAction,
   canJwtReturnToPanel,
@@ -160,8 +165,9 @@ function PanelRouteGuard({
 }) {
   const user = useAuthStore((s) => s.user);
   if (!allow(path)) {
-    const dest = user ? homePathForUser(user) : '/merchant/pos';
-    const fallback = dest === path || dest === '/merchant' ? '/merchant/pos' : dest;
+    const dest = user ? homePathForUser(user) : '/merchant';
+    const fallback = resolveDeniedRouteFallback({ currentPath: path, homePath: dest });
+    if (!fallback) return <>{children}</>;
     return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
@@ -184,6 +190,7 @@ function MerchantShell() {
     (location.pathname.replace(/\/$/, '') === '/merchant/settings' && isKioskSettingsTab(location.search));
   const isSettingsRoute = /^\/merchant\/settings\/?$/.test(location.pathname);
   const isPosLikeRoute = isPosRoute || isWaiterRoute || isStorekeeperRoute || isKioskRoute;
+  const isAppShellRoute = isPosLikeRoute || isOrderCenterRoute || isDriverRoute;
   const isPosEmbed =
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
@@ -206,6 +213,7 @@ function MerchantShell() {
   const [shopEnabled, setShopEnabled] = useState(false);
   const [maxPosPosts, setMaxPosPosts] = useState(0);
   const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
+  const [productFlagsReady, setProductFlagsReady] = useState(false);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
@@ -360,6 +368,7 @@ function MerchantShell() {
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
       setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
+      setProductFlagsReady(true);
     };
     const load = () => {
       api
@@ -376,6 +385,7 @@ function MerchantShell() {
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
+          setProductFlagsReady(true);
         });
     };
     load();
@@ -512,16 +522,31 @@ function MerchantShell() {
     [shopEnabled, editionFeatures, maxPosPosts]
   );
 
+  const missingPosRedirect = useMemo(
+    () =>
+      resolveMissingPosRedirect({
+        hasPos,
+        showOrderCenter,
+        productFlagsReady,
+      }),
+    [hasPos, showOrderCenter, productFlagsReady]
+  );
+
   const allow = useCallback(
     (path: string) => {
       const normalized = path.split('?')[0].replace(/\/$/, '') || '/merchant';
-      if (
-        (normalized === '/merchant/order-center' || normalized === '/merchant/order-hub') &&
-        !showOrderCenter
-      ) {
-        return false;
+      if (normalized === '/merchant/order-center' || normalized === '/merchant/order-hub') {
+        if (
+          !allowOrderCenterRoute({
+            showOrderCenter,
+            productFlagsReady,
+            isOrderCenterOnlyStaff: isOrderCenterOnlyStaff(effective.permissions, false),
+          })
+        ) {
+          return false;
+        }
       }
-      if (normalized === '/merchant/pos' && !hasPos) {
+      if (normalized === '/merchant/pos' && productFlagsReady && !hasPos) {
         return false;
       }
       if (isPanelNavHidden(path, panelNavHidden)) {
@@ -535,7 +560,16 @@ function MerchantShell() {
         businessModule
       );
     },
-    [effective.permissions, effective.isOwner, editionFeatures, businessModule, showOrderCenter, hasPos, panelNavHidden]
+    [
+      effective.permissions,
+      effective.isOwner,
+      editionFeatures,
+      businessModule,
+      showOrderCenter,
+      hasPos,
+      panelNavHidden,
+      productFlagsReady,
+    ]
   );
 
   /** Inventory is a paid merchant addon — never gate it on edition feature lists. */
@@ -578,12 +612,20 @@ function MerchantShell() {
 
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
-    if (jwtOwnerBypass || isPosLikeRoute) return;
+    if (jwtOwnerBypass || isPosLikeRoute || isOrderCenterRoute) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     if (allow(path)) return;
     const dest = backOfficeHomePath(effective.permissions, false);
     if (dest !== path) navigate(dest, { replace: true });
-  }, [jwtOwnerBypass, effective.permissions, isPosLikeRoute, location.pathname, allow, navigate]);
+  }, [
+    jwtOwnerBypass,
+    effective.permissions,
+    isPosLikeRoute,
+    isOrderCenterRoute,
+    location.pathname,
+    allow,
+    navigate,
+  ]);
 
   // Delivery-only staff must use the driver app, not register POS.
   useEffect(() => {
@@ -685,6 +727,13 @@ function MerchantShell() {
       if (path !== deliveryDriverHomePath()) navigate(deliveryDriverHomePath(), { replace: true });
       return;
     }
+    if (isOrderCenterRoute) return;
+    if (productFlagsReady && !hasPos && showOrderCenter) {
+      if (!isOrderCenterHomeLocation(location.pathname)) {
+        navigate(orderCenterHomePath(), { replace: true });
+      }
+      return;
+    }
     if (!isPosLikeRoute && path !== '/merchant/pos') {
       navigate('/merchant/pos', { replace: true });
     }
@@ -693,6 +742,10 @@ function MerchantShell() {
     effective.canOpenBackOffice,
     effective.permissions,
     isPosLikeRoute,
+    isOrderCenterRoute,
+    hasPos,
+    showOrderCenter,
+    productFlagsReady,
     location.pathname,
     navigate,
   ]);
@@ -712,16 +765,31 @@ function MerchantShell() {
     if (jwtOwnerBypass || user?.role !== 'staff') return;
     if (isPlatformNotificationsPath(location.pathname)) return;
     const perms = user?.permissions as Permission[] | undefined;
+    if (isOrderCenterOnlyStaff(perms, false)) {
+      if (!isOrderCenterHomeLocation(location.pathname)) {
+        navigate(orderCenterHomePath(), { replace: true });
+      }
+      return;
+    }
     const registerFirst = isRegisterFirstStaff(perms, false);
     if (!registerFirst && canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
     const floorOnly = isFloorWaiterStaff(perms, false);
     const posDest = normalizeStaffLoginHome(user?.loginHome) === 'pos' || registerFirst;
     if (!floorOnly && !posDest) return;
-    if (isPosLikeRoute) return;
+    if (isAppShellRoute) return;
     const path = location.pathname.replace(/\/$/, '') || '/merchant';
     const dest = hasPermission(perms, 'MANAGE_TABLES', false) ? '/merchant/waiter' : '/merchant/pos';
     if (path !== dest) navigate(dest, { replace: true });
-  }, [jwtOwnerBypass, user?.role, user?.loginHome, user?.permissions, isPosLikeRoute, location.pathname, navigate]);
+  }, [
+    jwtOwnerBypass,
+    user?.role,
+    user?.loginHome,
+    user?.permissions,
+    jwtIsOwner,
+    isAppShellRoute,
+    location.pathname,
+    navigate,
+  ]);
 
   const showWebPosQuickAction = useMemo(
     () =>
@@ -1048,9 +1116,13 @@ function MerchantShell() {
             <Route
               path="pos"
               element={
-                <WebPosErrorBoundary>
-                  <WebPos appMode={hideChrome} />
-                </WebPosErrorBoundary>
+                missingPosRedirect ? (
+                  <Navigate to={missingPosRedirect} replace />
+                ) : (
+                  <WebPosErrorBoundary>
+                    <WebPos appMode={hideChrome} />
+                  </WebPosErrorBoundary>
+                )
               }
             />
             <Route
