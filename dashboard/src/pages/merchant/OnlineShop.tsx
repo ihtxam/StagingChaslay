@@ -33,6 +33,33 @@ function parseStoreCoords(latRaw: unknown, lngRaw: unknown): LatLngTuple | null 
 
 const DEFAULT_MAP_CENTER: LatLngTuple = [46.8182, 8.2275]; // Switzerland overview
 
+function ShopSeoLocaleTabs({
+  active,
+  onChange,
+}: {
+  active: ShopSeoLocale;
+  onChange: (loc: ShopSeoLocale) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {SHOP_SEO_LOCALES.map((loc) => (
+        <button
+          key={loc}
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
+            active === loc
+              ? 'bg-teal-700 text-white'
+              : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+          }`}
+          onClick={() => onChange(loc)}
+        >
+          {loc}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface Zone {
   id: string;
   name: string;
@@ -118,6 +145,7 @@ export default function OnlineShop() {
   const logoFileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
   const faviconFileRef = useRef<HTMLInputElement>(null);
+  const [seoLocale, setSeoLocale] = useState<ShopSeoLocale>('en');
 
   const storeCoords = useMemo(
     () => parseStoreCoords(settings?.latitude, settings?.longitude),
@@ -819,43 +847,31 @@ export default function OnlineShop() {
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('shopMetaTitle')}</p>
               <p className="text-xs text-stone-500">{t('shopMetaTitleHint')}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {SHOP_SEO_LOCALES.map((loc: ShopSeoLocale) => (
-                  <label key={`title-${loc}`} className="block text-xs text-stone-500">
-                    {loc.toUpperCase()}
-                    <input
-                      className="input mt-1 w-full"
-                      maxLength={60}
-                      value={siteSettings.metaTitle[loc] || ''}
-                      onChange={(e) => patchSite({ metaTitle: { [loc]: e.target.value } })}
-                    />
-                    <span className="mt-0.5 block text-[11px] text-stone-400">
-                      {(siteSettings.metaTitle[loc] || '').length}/60
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ShopSeoLocaleTabs active={seoLocale} onChange={setSeoLocale} />
+              <input
+                className="input max-w-xl"
+                maxLength={60}
+                value={siteSettings.metaTitle[seoLocale] || ''}
+                onChange={(e) => patchSite({ metaTitle: { [seoLocale]: e.target.value } })}
+              />
+              <span className="block text-[11px] text-stone-400">
+                {(siteSettings.metaTitle[seoLocale] || '').length}/60
+              </span>
             </div>
 
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('shopMetaDescription')}</p>
               <p className="text-xs text-stone-500">{t('shopMetaDescriptionHint')}</p>
-              <div className="grid grid-cols-1 gap-2">
-                {SHOP_SEO_LOCALES.map((loc: ShopSeoLocale) => (
-                  <label key={`desc-${loc}`} className="block text-xs text-stone-500">
-                    {loc.toUpperCase()}
-                    <textarea
-                      className="input mt-1 w-full min-h-[4.5rem] resize-y"
-                      maxLength={160}
-                      value={siteSettings.metaDescription[loc] || ''}
-                      onChange={(e) => patchSite({ metaDescription: { [loc]: e.target.value } })}
-                    />
-                    <span className="mt-0.5 block text-[11px] text-stone-400">
-                      {(siteSettings.metaDescription[loc] || '').length}/160
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ShopSeoLocaleTabs active={seoLocale} onChange={setSeoLocale} />
+              <textarea
+                className="input max-w-xl min-h-[4.5rem] resize-y"
+                maxLength={160}
+                value={siteSettings.metaDescription[seoLocale] || ''}
+                onChange={(e) => patchSite({ metaDescription: { [seoLocale]: e.target.value } })}
+              />
+              <span className="block text-[11px] text-stone-400">
+                {(siteSettings.metaDescription[seoLocale] || '').length}/160
+              </span>
             </div>
           </div>
 

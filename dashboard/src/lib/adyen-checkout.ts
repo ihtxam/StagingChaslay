@@ -1,3 +1,6 @@
+import AdyenCheckout from '@adyen/adyen-web';
+import '@adyen/adyen-web/dist/adyen.css';
+
 export type AdyenPaymentSession = {
   id: string;
   sessionData: string;
@@ -47,7 +50,7 @@ function explainAdyenUnauthorized(
   }
   return (
     `${where} The platform API key, merchant account, and client key must all belong to the same ${envHint} Adyen account. ` +
-    `In Superadmin → Settings → Payment (Adyen): use the Web service API key (AQE…), merchant account name, and client key (${keyPrefix}…). ` +
+    `In Superadmin → Settings → Payment (Adyen): use the Checkout Web service API key (AQE…), merchant account name, and client key (${keyPrefix}…). ` +
     `Merchant shop credentials under Settings → Payments are separate and will not work for subscriptions.`
   );
 }
@@ -80,6 +83,12 @@ export function formatAdyenError(
   if (/unauthorized/i.test(raw) || /HTTP Status Response - Unauthorized/i.test(raw)) {
     return explainAdyenUnauthorized(raw, context, credentialSource);
   }
+  if (/paymentMethods/i.test(raw)) {
+    return (
+      'Adyen could not load payment methods for this session. Check that the client key matches the live/test ' +
+      'environment, allowed origins include this shop domain, and card payments are enabled on the merchant account.'
+    );
+  }
   return raw;
 }
 
@@ -104,26 +113,17 @@ function adyenEnvironmentFromClientKey(clientKey: string): 'live' | 'test' {
 }
 
 function resolveAdyenEnvironment(session: AdyenPaymentSession): 'live' | 'test' {
+  const fromSession = String(session.environment || '').toLowerCase();
+  if (fromSession === 'live' || fromSession === 'test') return fromSession;
   return adyenEnvironmentFromClientKey(session.clientKey);
 }
 
-async function loadAdyenCheckoutCtor(): Promise<
-  (config: Record<string, unknown>) => Promise<{ create: (type: string) => { mount: (el: HTMLElement) => void } }>
-> {
-  const mod = (await import('@adyen/adyen-web')) as {
-    default?: unknown;
-    AdyenCheckout?: unknown;
-  };
-  const ctor = mod.AdyenCheckout ?? mod.default;
-  if (typeof ctor !== 'function') {
-    throw new Error(
-      'Adyen Web library failed to load (missing AdyenCheckout export). Rebuild the dashboard after npm install.'
-    );
-  }
-  return ctor as (config: Record<string, unknown>) => Promise<{
-    create: (type: string) => { mount: (el: HTMLElement) => void };
-  }>;
-}
+type AdyenCheckoutInstance = {
+  create: (
+    type: string,
+    config?: Record<string, unknown>
+  ) => { mount: (el: HTMLElement) => void };
+};
 
 /** Mount Adyen Drop-in for a /sessions response. Throws with a readable message on failure. */
 export async function mountAdyenDropin({
@@ -152,35 +152,52 @@ export async function mountAdyenDropin({
     throw new Error('Payment session is incomplete (missing id or sessionData). Try checkout again.');
   }
 
-  await import(/* @vite-ignore */ '@adyen/adyen-web/dist/adyen.css').catch(() => undefined);
-
-  const AdyenCheckout = await loadAdyenCheckoutCtor();
   const environment = resolveAdyenEnvironment(session);
+  const expectedPrefix = environment === 'live' ? 'live_' : 'test_';
+  if (!clientKey.startsWith(expectedPrefix)) {
+    throw new Error(
+      `Adyen client key must start with ${expectedPrefix} for ${environment} checkout. Update Settings → Payments.`
+    );
+  }
 
-  let checkout: { create: (type: string) => { mount: (el: HTMLElement) => void } };
+  let checkout: AdyenCheckoutInstance;
   try {
-    checkout = await AdyenCheckout({
+    checkout = (await AdyenCheckout({
       environment,
       clientKey,
       locale,
       countryCode,
-      session: { id: session.id, sessionData: session.sessionData },
-      onPaymentCompleted,
-      onPaymentFailed: (result: { resultCode?: string }) => {
-        onError?.({ message: `Payment failed (${result?.resultCode || 'unknown'})` });
+      session: {
+        id: session.id,
+        sessionData: session.sessionData,
+      },
+      analytics: { enabled: false },
+      onPaymentCompleted: (result: { resultCode?: string }) => {
+        void onPaymentCompleted(result);
       },
       onError: (error: unknown) => {
         onError?.({ message: formatAdyenError(error, 'dropin', credentialSource) });
       },
-    });
+    })) as AdyenCheckoutInstance;
   } catch (err) {
     throw new Error(
       `Adyen Checkout init failed (${environment}, key ${clientKey.slice(0, 8)}…): ${formatAdyenError(err, 'dropin', credentialSource)}`
     );
   }
 
+  if (!checkout || typeof checkout.create !== 'function') {
+    throw new Error('Adyen Checkout failed to initialize.');
+  }
+
   try {
-    checkout.create('dropin').mount(container);
+    const dropin = checkout.create('dropin', {
+      showPayButton: true,
+      openFirstPaymentMethod: true,
+    });
+    if (!dropin || typeof dropin.mount !== 'function') {
+      throw new Error('Adyen Drop-in could not be created.');
+    }
+    dropin.mount(container);
   } catch (err) {
     throw new Error(`Adyen Drop-in mount failed: ${formatAdyenError(err, 'dropin', credentialSource)}`);
   }
