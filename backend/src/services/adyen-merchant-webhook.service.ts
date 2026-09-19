@@ -32,6 +32,17 @@ function inferPaymentMethod(
   const poi = String(additional.terminalId || additional["terminalId"] || "");
   if (merchantReference.startsWith("webpos-ttp-")) return "tap_to_pay";
   if (interaction.toUpperCase() === "POS" || poi) return "terminal";
+  const raw =
+    additional.paymentMethod ||
+    additional["paymentMethod"] ||
+    additional.paymentMethodVariant ||
+    (item as { paymentMethod?: unknown }).paymentMethod;
+  const text = String(
+    typeof raw === "object" && raw
+      ? (raw as { type?: string }).type || (raw as { brand?: string }).brand || ""
+      : raw || ""
+  ).toLowerCase();
+  if (text.includes("twint")) return "twint";
   return "card";
 }
 
@@ -239,7 +250,10 @@ export class AdyenMerchantWebhookService {
           const { finalizePaidOnlineShopCardOrder } = await import(
             "@/services/shop-online-order-arrival.service"
           );
-          await finalizePaidOnlineShopCardOrder(merchant, order, { pspReference });
+          await finalizePaidOnlineShopCardOrder(merchant, order, {
+            pspReference,
+            adyenPaymentMethod: paymentMethod,
+          });
         } else {
           await db
             .update(schema.orders)
@@ -249,6 +263,17 @@ export class AdyenMerchantWebhookService {
                 order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
             })
             .where(eq(schema.orders.id, order.id));
+          if (merchant) {
+            try {
+              const { ShopLoyaltyService } = await import("@/services/shop-loyalty.service");
+              const latest = await db.query.orders.findFirst({
+                where: eq(schema.orders.id, order.id),
+              });
+              if (latest) await ShopLoyaltyService.earnForPaidOrder(merchant, latest);
+            } catch (earnErr) {
+              console.error("[adyen-webhook] loyalty earn failed:", earnErr);
+            }
+          }
         }
       }
       return;

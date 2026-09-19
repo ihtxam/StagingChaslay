@@ -15,6 +15,7 @@ const PAYMENT_METHOD_ALIASES: Record<string, string> = {
   bargeld: 'cash',
   liquide: 'cash',
   card: 'card',
+  twint: 'twint',
   carte: 'card',
   karte: 'card',
   credit_card: 'card',
@@ -74,6 +75,7 @@ export function paymentMethodLabel(
   const m = collectedTenderMethod(method);
   if (m === 'cash') return t('webPosCash');
   if (m === 'card') return t('webPosCard');
+  if (m === 'twint') return t('webPosTwint');
   if (m === 'terminal') return t('webPosTerminal');
   if (m === 'gift_card') return t('giftCard');
   if (m === 'mixed') return t('webPosMixedPayment');

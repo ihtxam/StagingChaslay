@@ -25,7 +25,7 @@ export default function GiftCardViewPage() {
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
-      <ShopMinimalHeader basePath={base} loggedIn={loggedIn} />
+      <ShopMinimalHeader basePath={base} shopKey={shopKey} loggedIn={loggedIn} />
       <main className="shop-page-content max-w-lg py-12">
         {error && <p className="text-center text-red-600">{error}</p>}
         {data && (

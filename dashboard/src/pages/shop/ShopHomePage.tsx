@@ -165,6 +165,7 @@ export default function ShopHomePage() {
         basePath={base}
         merchantName={merchant?.name}
         logoUrl={merchant?.shopLogoUrl}
+        shopKey={shopKey}
       />
 
       <div className="cms-homepage flex flex-col pb-6">
