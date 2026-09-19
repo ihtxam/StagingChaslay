@@ -955,6 +955,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printerHealAttemptedRef = useRef<Set<string>>(new Set());
   const [lastReceipt, setLastReceipt] = useState<string>('');
   const [lastReceiptUrl, setLastReceiptUrl] = useState<string>('');
+  const [cdsThankYouSnapshot, setCdsThankYouSnapshot] = useState<{
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    receiptUrl?: string;
+  } | null>(null);
   const [lastDeliveryQrUrl, setLastDeliveryQrUrl] = useState<string>('');
   const [lastReceiptOrderId, setLastReceiptOrderId] = useState<string>('');
   const [lastReceiptOrderNumber, setLastReceiptOrderNumber] = useState<string>('');
@@ -1885,32 +1892,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const cdsShortCode = String(cdsSettings?.shortCode || '').trim();
   const cdsEnabled = cdsSettings?.enabled !== false;
 
+  const cdsThankYouActive = posView === 'success' || expressSuccessOpen;
+
   const cdsPhase: CustomerDisplayPhase = useMemo(() => {
-    if (posView === 'success') return 'thankyou';
+    if (cdsThankYouActive) return 'thankyou';
     if (paymentModalOpen) return 'payment';
     if (activeSale.lines.length === 0) return 'idle';
     return 'building';
-  }, [posView, paymentModalOpen, activeSale.lines.length]);
+  }, [cdsThankYouActive, paymentModalOpen, activeSale.lines.length]);
+
+  useEffect(() => {
+    if (cdsThankYouActive) return;
+    setCdsThankYouSnapshot(null);
+  }, [cdsThankYouActive]);
 
   useEffect(() => {
     if (!cdsToken || !cdsEnabled) return;
     const pushState = () => {
-      const saleTotals = activeSale.totals;
+      const thankYou = cdsPhase === 'thankyou';
+      const snap = thankYou ? cdsThankYouSnapshot : null;
+      const saleTotals = snap ?? activeSale.totals;
       publishCustomerDisplayState(cdsToken, {
         merchantName: merchant?.name || merchant?.businessName,
         currency: 'CHF',
-        lines: activeSale.lines.map((l) => ({
-          name: repairCatalogText(l.name),
-          qty: l.quantity,
-          lineTotal: l.lineTotal,
-          modifiers: lineExtrasLabel(l) || undefined,
-        })),
+        lines: thankYou
+          ? []
+          : activeSale.lines.map((l) => ({
+              name: repairCatalogText(l.name),
+              qty: l.quantity,
+              lineTotal: l.lineTotal,
+              modifiers: lineExtrasLabel(l) || undefined,
+            })),
         subtotal: saleTotals.subtotal,
         discount: saleTotals.discount ?? 0,
         tax: saleTotals.tax,
-        total: saleTotals.total,
+        total: snap?.total ?? successInfo?.amount ?? saleTotals.total,
         phase: cdsPhase,
-        receiptUrl: cdsPhase === 'thankyou' ? lastReceiptUrl || undefined : undefined,
+        receiptUrl: thankYou
+          ? snap?.receiptUrl || lastReceiptUrl || undefined
+          : undefined,
         locale: isCustomerDisplayLocale(locale) ? locale : undefined,
         updatedAt: Date.now(),
       });
@@ -1921,9 +1941,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     cdsToken,
     cdsEnabled,
     cdsPhase,
+    cdsThankYouSnapshot,
     activeSale.lines,
     activeSale.totals,
     lastReceiptUrl,
+    successInfo?.amount,
     locale,
     merchant?.name,
     merchant?.businessName,
@@ -6956,6 +6978,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           deliveryQrUrl
         ).catch(() => undefined);
         setLastReceiptUrl(receiptPayload.receiptUrl);
+        setCdsThankYouSnapshot({
+          subtotal: receiptPayload.subtotal ?? ctx.total,
+          discount: receiptPayload.discount ?? 0,
+          tax: receiptPayload.taxAmount ?? 0,
+          total: ctx.total,
+          receiptUrl: receiptPayload.receiptUrl,
+        });
         setLastReceiptOrderId(orderId);
         setLastReceiptOrderNumber(orderNumber);
         const part: SplitReceiptPart = {
@@ -8426,6 +8455,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setLastReceipt(receiptText);
       void prefetchLastReceiptEscPos(receiptText, receiptUrl, deliveryQrUrl).catch(() => undefined);
       setLastReceiptUrl(receiptUrl);
+      setCdsThankYouSnapshot({
+        subtotal: saleTotals.subtotal,
+        discount: saleTotals.discount ?? 0,
+        tax: saleTotals.tax,
+        total: sale.total,
+        receiptUrl,
+      });
       setLastDeliveryQrUrl(deliveryQrUrl || '');
       setLastReceiptOrderId(receiptRef || clientId);
       setLastReceiptOrderNumber(ticket.orderNumber || ticket.display || '');

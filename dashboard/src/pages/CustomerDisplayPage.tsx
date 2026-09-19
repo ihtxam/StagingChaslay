@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicApi } from '@/lib/api';
 import CdsPromoSlider from '@/components/customer-display/CdsPromoSlider';
@@ -47,6 +47,7 @@ export default function CustomerDisplayPage() {
   const [syncToken, setSyncToken] = useState('');
   const [error, setError] = useState('');
   const [cart, setCart] = useState<CustomerDisplayState>(IDLE_STATE);
+  const linesScrollRef = useRef<HTMLDivElement>(null);
 
   const applyPosLocale = useCallback(
     (next: unknown) => {
@@ -102,6 +103,18 @@ export default function CustomerDisplayPage() {
   const phase = cart.phase;
   const merchantName = cart.merchantName || config?.merchant.name || '';
   const showThankYou = phase === 'thankyou';
+
+  useEffect(() => {
+    if (showThankYou || phase === 'idle') return;
+    const el = linesScrollRef.current;
+    if (!el) return;
+    const scrollToLatest = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    scrollToLatest();
+    const raf = window.requestAnimationFrame(scrollToLatest);
+    return () => window.cancelAnimationFrame(raf);
+  }, [cart.lines, cart.updatedAt, showThankYou, phase]);
 
   const pageClass =
     theme === 'dark'
@@ -168,15 +181,24 @@ export default function CustomerDisplayPage() {
 
   return (
     <div className={`min-h-screen ${pageClass}`}>
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col p-4 md:p-6 lg:flex-row lg:gap-6">
+      <div
+        className={`mx-auto flex max-w-[1600px] flex-col p-4 md:p-6 lg:min-h-screen lg:flex-row lg:gap-6 ${
+          hasLines || phase === 'payment'
+            ? 'h-[100dvh] min-h-0 overflow-hidden'
+            : 'min-h-screen'
+        }`}
+      >
         {(hasLines || phase === 'payment') && (
           <section className="order-1 flex min-h-0 flex-1 flex-col lg:order-2 lg:w-[65%]">
-            <div className={`flex h-full flex-col rounded-2xl border shadow-sm ${cardClass}`}>
-              <header className="border-b border-inherit px-6 py-5">
+            <div className={`flex min-h-0 flex-1 flex-col rounded-2xl border shadow-sm ${cardClass}`}>
+              <header className="shrink-0 border-b border-inherit px-6 py-5">
                 <h1 className="text-2xl font-bold md:text-3xl">{headline}</h1>
               </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div
+                ref={linesScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4"
+              >
                 <ul className="space-y-3">
                   {cart.lines.map((line, idx) => (
                     <li
@@ -200,7 +222,7 @@ export default function CustomerDisplayPage() {
                 </ul>
               </div>
 
-              <footer className="border-t border-inherit px-6 py-5">
+              <footer className="shrink-0 border-t border-inherit px-6 py-5">
                 <div className="space-y-1 text-base md:text-lg">
                   {cart.discount > 0 ? (
                     <div className="flex justify-between opacity-80">
@@ -232,7 +254,9 @@ export default function CustomerDisplayPage() {
 
         <section
           className={`order-2 flex shrink-0 flex-col gap-4 lg:order-1 ${
-            hasLines || phase === 'payment' ? 'max-h-[32vh] lg:max-h-none lg:w-[35%]' : 'lg:w-full'
+            hasLines || phase === 'payment'
+              ? 'max-h-[28vh] min-h-0 lg:max-h-none lg:w-[35%]'
+              : 'lg:w-full'
           }`}
         >
           {config?.merchant.logoUrl ? (
