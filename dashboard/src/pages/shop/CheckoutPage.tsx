@@ -224,14 +224,9 @@ export default function CheckoutPage() {
         const token = loadCustomerToken(shopKey);
         if (token) {
           try {
-            const [me, loyaltyRes] = await Promise.all([
-              axios.get(`/api/shop/${shopKey}/auth/me`, {
-                headers: { Authorization: `Bearer ${token}` },
-              }),
-              axios.get(`/api/shop/${shopKey}/loyalty`, {
-                headers: { Authorization: `Bearer ${token}` },
-              }),
-            ]);
+            const me = await axios.get(`/api/shop/${shopKey}/auth/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
             setCustomer(me.data.customer);
             const addrs: SavedAddress[] = Array.isArray(me.data.customer.addresses)
               ? me.data.customer.addresses
@@ -242,8 +237,6 @@ export default function CheckoutPage() {
               addrs[0] ||
               null;
             setSelectedAddressId(preferred?.id || null);
-            setLoyaltyBalance(Number(loyaltyRes.data.balance) || 0);
-            setRedeemRate(Number(loyaltyRes.data.program?.redeemPointsPerChf) || 100);
             const loggedInName = me.data.customer.name || '';
             const loggedInNames = splitCustomerName(loggedInName);
             setFirstName(loggedInNames.first);
@@ -262,8 +255,19 @@ export default function CheckoutPage() {
             }));
             setWantCreateAccount(false);
             setShowLogin(false);
-          } catch {
-            clearCustomerToken(shopKey);
+            try {
+              const loyaltyRes = await axios.get(`/api/shop/${shopKey}/loyalty`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              setLoyaltyBalance(Number(loyaltyRes.data.balance) || 0);
+              setRedeemRate(Number(loyaltyRes.data.program?.redeemPointsPerChf) || 100);
+            } catch {
+              /* loyalty optional when disabled or unavailable */
+            }
+          } catch (e: any) {
+            if (e.response?.status === 401) {
+              clearCustomerToken(shopKey);
+            }
           }
         }
       } catch (e: any) {

@@ -28,6 +28,11 @@ import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
+  inStockProductSpecifications,
+  SHOP_SIZE_MODIFIER_GROUP_ID,
+  specificationOptionPriceDelta,
+} from "@/lib/shop-product-specifications";
+import {
   filterCatalogForChannel,
   shopMenuCatalogChannel,
 } from "@/lib/catalog-visibility";
@@ -494,6 +499,27 @@ async function resolveShopLineExtras(
     optionsByGroup.set(g.id, list);
   }
 
+  const basePrice = parseFloat(product.price.toString());
+  const specRows = inStockProductSpecifications(product.specifications);
+  if (specRows.length) {
+    const sizeOptions = specRows.map((s) => ({
+      id: s.id,
+      name: s.name,
+      price: specificationOptionPriceDelta(basePrice, s.price),
+      isDefault: s.isDefault,
+    }));
+    optionsByGroup.set(SHOP_SIZE_MODIFIER_GROUP_ID, sizeOptions);
+    for (const o of sizeOptions) {
+      optionById.set(o.id, {
+        id: o.id,
+        name: o.name,
+        price: o.price,
+        groupId: SHOP_SIZE_MODIFIER_GROUP_ID,
+        groupTitle: "Sizes",
+      });
+    }
+  }
+
   // Legacy flat extras (no groups)
   if (!groups.length && Array.isArray(product.extras)) {
     for (const e of product.extras) {
@@ -518,12 +544,45 @@ async function resolveShopLineExtras(
     if (!opt) {
       // Ignore stale combo-flattened ids if they leaked into parent extras
       if (String(id).startsWith("combo:")) continue;
-      return { extras: [], error: `Invalid extra selected for ${product.name}` };
+      return {
+        extras: [],
+        error: `Invalid option selected for ${product.name}. Remove it from your cart and add it again.`,
+      };
     }
     if (seen.has(opt.id)) continue;
     seen.add(opt.id);
     extras.push({ id: opt.id, name: opt.name, price: roundMoney2(opt.price) });
     countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
+  }
+
+  if (specRows.length > 1 && opts?.fillDefaultsIfMissing) {
+    const specIdSet = new Set(specRows.map((s) => s.id));
+    let pickedSpecs = extras.filter((e) => specIdSet.has(e.id)).length;
+    if (pickedSpecs < 1) {
+      const defaults = specRows.filter((s) => s.isDefault);
+      const fillFrom = defaults.length ? defaults : [specRows[0]!];
+      for (const s of fillFrom) {
+        if (pickedSpecs >= 1) break;
+        if (seen.has(s.id)) continue;
+        const opt = optionById.get(s.id);
+        if (!opt) continue;
+        seen.add(opt.id);
+        extras.push({ id: opt.id, name: opt.name, price: roundMoney2(opt.price) });
+        countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
+        pickedSpecs += 1;
+      }
+    }
+  }
+
+  if (specRows.length > 1) {
+    const specIdSet = new Set(specRows.map((s) => s.id));
+    const pickedSpecs = extras.filter((e) => specIdSet.has(e.id)).length;
+    if (pickedSpecs < 1) {
+      return { extras: [], error: `Please choose a size for ${product.name}` };
+    }
+    if (pickedSpecs > 1) {
+      return { extras: [], error: `Please choose only one size for ${product.name}` };
+    }
   }
 
   for (const g of groups) {
@@ -2347,7 +2406,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         comboSurcharge = comboResolved.surcharge;
       }
 
-      const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras);
+      const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras, {
+        fillDefaultsIfMissing: true,
+      });
       if (resolved.error) {
         return res.status(400).json({ error: resolved.error });
       }
