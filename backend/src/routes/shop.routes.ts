@@ -2701,7 +2701,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
             : null;
 
     const paymentStatus =
-      payMethod === "card" || payMethod === "pay_later"
+      payMethod === "card"
         ? "awaiting_payment"
         : giftCardDiscount > 0 && preCardTotal <= 0
           ? "completed"

@@ -207,6 +207,7 @@ export function isUnconfirmedCardOnlineOrder(o: {
   const method = String(o.paymentMethod || '')
     .toLowerCase()
     .replace(/-/g, '_');
+  if (method === 'cash' || method === 'pay_later') return false;
   if (status === 'awaiting_payment') return true;
   return method === 'card' && pay === 'awaiting_payment';
 }
