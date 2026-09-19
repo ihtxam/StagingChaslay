@@ -1,4 +1,5 @@
 import { Rocket } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 type Props = {
   percent: number;
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export default function SetupProgressPill({ percent, completedCount, totalCount, onClick }: Props) {
+  const { t } = useI18n();
   const clamped = Math.max(0, Math.min(100, percent));
   return (
     <button
@@ -17,7 +19,7 @@ export default function SetupProgressPill({ percent, completedCount, totalCount,
       style={{
         background: 'linear-gradient(90deg, #7c3aed 0%, #ec4899 100%)',
       }}
-      title="Complete your setup"
+      title={t('onboardingPillTitle')}
     >
       <Rocket className="h-3.5 w-3.5 shrink-0" />
       <span className="relative h-1.5 w-14 overflow-hidden rounded-full bg-white/30">

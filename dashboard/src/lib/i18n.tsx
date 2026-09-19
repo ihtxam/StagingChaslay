@@ -12,6 +12,7 @@ import {
   formatDateTimeDDMMYYYY,
   formatTimeHHMM,
 } from '@/lib/date-format';
+import { onboardingDe, onboardingEn, onboardingFr } from '@/lib/onboarding-i18n';
 import { shopDe, shopEn, shopFr } from '@/lib/shop-i18n';
 
 export type Locale = 'en' | 'fr' | 'de';
@@ -4196,6 +4197,7 @@ const en: Dict = {
   signageUploadImage: 'Upload image',
   signageSlideCategoriesRequired: 'Pick at least one category',
   signageSlideImageRequired: 'Upload an image for this slide',
+  ...onboardingEn,
   ...shopEn,
 };
 
@@ -8210,6 +8212,7 @@ const fr: Dict = {
   signageUploadImage: 'Téléverser une image',
   signageSlideCategoriesRequired: 'Choisissez au moins une catégorie',
   signageSlideImageRequired: 'Téléversez une image pour cette diapositive',
+  ...onboardingFr,
   ...shopFr,
 };
 
@@ -12220,6 +12223,7 @@ const de: Dict = {
   signageUploadImage: 'Bild hochladen',
   signageSlideCategoriesRequired: 'Mindestens eine Kategorie wählen',
   signageSlideImageRequired: 'Bild für diesen Slide hochladen',
+  ...onboardingDe,
   ...shopDe,
 };
 

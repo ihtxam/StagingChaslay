@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 export const MERCHANT_SETUP_STORAGE_KEY = 'reborn_merchant_setup_v1';
 
@@ -59,6 +60,7 @@ function writeManualDone(map: Partial<Record<SetupStepId, boolean>>) {
 }
 
 export function useMerchantSetupProgress(): SetupSnapshot {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(readDismissed);
   const [manualDone, setManualDone] = useState(readManualDone);
@@ -105,41 +107,41 @@ export function useMerchantSetupProgress(): SetupSnapshot {
       {
         id: 'business_info',
         step: 1,
-        title: 'Business Information',
-        description: 'Add your business name, address, and contact details.',
-        completedDescription: 'Business info completed',
+        title: t('onboardingStepBusinessTitle'),
+        description: t('onboardingStepBusinessDesc'),
+        completedDescription: t('onboardingStepBusinessDone'),
         path: '/merchant/settings',
       },
       {
         id: 'products',
         step: 2,
-        title: 'Products',
-        description: 'Add items to your menu or product catalog.',
-        completedDescription: 'Products added',
+        title: t('onboardingStepProductsTitle'),
+        description: t('onboardingStepProductsDesc'),
+        completedDescription: t('onboardingStepProductsDone'),
         path: '/merchant/products',
       },
       {
         id: 'payment_settings',
         step: 3,
-        title: 'Payment Settings',
-        description: 'Configure how you accept payments.',
-        completedDescription: 'Payments configured',
+        title: t('onboardingStepPaymentTitle'),
+        description: t('onboardingStepPaymentDesc'),
+        completedDescription: t('onboardingStepPaymentDone'),
         path: '/merchant/settings?tab=payments',
       },
       {
         id: 'staff',
         step: 4,
-        title: 'Staff & Users',
-        description: 'Invite team members and set up PIN access.',
-        completedDescription: 'Staff added',
+        title: t('onboardingStepStaffTitle'),
+        description: t('onboardingStepStaffDesc'),
+        completedDescription: t('onboardingStepStaffDone'),
         path: '/merchant/settings?tab=users',
       },
       {
         id: 'online_shop',
         step: 5,
-        title: 'Online Shop & Website',
-        description: 'Publish your page builder layout on the online shop.',
-        completedDescription: 'Website published',
+        title: t('onboardingStepShopTitle'),
+        description: t('onboardingStepShopDesc'),
+        completedDescription: t('onboardingStepShopDone'),
         path: '/merchant/chaslay-page-builder',
       },
     ];
@@ -147,7 +149,7 @@ export function useMerchantSetupProgress(): SetupSnapshot {
       ...def,
       completed: Boolean(detected[def.id] || manualDone[def.id]),
     }));
-  }, [detected, manualDone]);
+  }, [detected, manualDone, t]);
 
   const completedCount = steps.filter((s) => s.completed).length;
   const totalCount = steps.length;

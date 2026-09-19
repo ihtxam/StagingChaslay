@@ -1,5 +1,6 @@
 import { Check, ChevronRight, MapPin, Rocket, Store, Users, CreditCard, Package, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '@/lib/i18n';
 import type { SetupStep } from './useMerchantSetupProgress';
 
 const ICONS: Record<string, typeof Rocket> = {
@@ -27,6 +28,7 @@ export default function SetupChecklistDrawer({
   totalCount,
   percent,
 }: Props) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   if (!open) return null;
 
@@ -38,7 +40,7 @@ export default function SetupChecklistDrawer({
       <button
         type="button"
         className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
-        aria-label="Close setup checklist"
+        aria-label={t('onboardingCloseChecklist')}
         onClick={onClose}
       />
       <aside className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-zinc-950">
@@ -49,21 +51,21 @@ export default function SetupChecklistDrawer({
                 <Rocket className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold">Complete Your Setup</h2>
-                <p className="text-sm text-white/70">Get your business ready to go</p>
+                <h2 className="text-lg font-bold">{t('onboardingSetupTitle')}</h2>
+                <p className="text-sm text-white/70">{t('onboardingSetupSubtitle')}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="rounded-md p-1 hover:bg-white/10"
-              aria-label="Close"
+              aria-label={t('close')}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="mt-5 flex items-center justify-between text-sm">
-            <span>{completedCount} of {totalCount} completed</span>
+            <span>{t('onboardingCompletedOf', { completed: completedCount, total: totalCount })}</span>
             <span className="text-2xl font-bold tabular-nums">{clamped}%</span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20">
@@ -98,7 +100,7 @@ export default function SetupChecklistDrawer({
                   </div>
                   <div className="min-w-0 flex-1 pt-0.5">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                      Step {step.step}
+                      {t('onboardingStepLabel', { n: step.step })}
                     </p>
                     <p
                       className={`font-semibold ${
@@ -123,7 +125,7 @@ export default function SetupChecklistDrawer({
                         }}
                         className="mt-3 inline-flex items-center gap-1 rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
                       >
-                        Get Started
+                        {t('onboardingGetStarted')}
                         <ChevronRight className="h-4 w-4" />
                       </button>
                     ) : null}
