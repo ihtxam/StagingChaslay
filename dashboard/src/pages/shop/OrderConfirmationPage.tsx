@@ -17,6 +17,7 @@ import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
   adyenLocaleFor,
   formatAdyenError,
+  isAdyenPaymentSuccess,
   mountAdyenDropin,
   shopCheckoutOriginPayload,
 } from '@/lib/adyen-checkout';
@@ -137,6 +138,8 @@ export default function OrderConfirmationPage() {
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [payMsg, setPayMsg] = useState('');
+  const [paymentPhase, setPaymentPhase] = useState<'paying' | 'cancelled' | 'failed'>('paying');
+  const [dropinMountKey, setDropinMountKey] = useState(0);
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
 
@@ -225,8 +228,8 @@ export default function OrderConfirmationPage() {
 
   useEffect(() => {
     if (!wantPay || !needsPayment || !shopKey || !orderId) return;
-
-    // Prefer session stored at checkout
+    setPaymentPhase('paying');
+    dropinMounted.current = false;
     try {
       const cached = sessionStorage.getItem(`manupos_pay_${orderId}`);
       if (cached) {
@@ -260,7 +263,13 @@ export default function OrderConfirmationPage() {
   }, [wantPay, needsPayment, shopKey, orderId, load]);
 
   useEffect(() => {
-    if (!session?.sessionData || !session.clientKey || !dropinEl || dropinMounted.current) {
+    if (
+      paymentPhase !== 'paying' ||
+      !session?.sessionData ||
+      !session.clientKey ||
+      !dropinEl ||
+      dropinMounted.current
+    ) {
       return;
     }
     let cancelled = false;
@@ -273,7 +282,7 @@ export default function OrderConfirmationPage() {
           locale: adyenLocaleFor(locale),
           credentialSource: 'merchant',
           onPaymentCompleted: async (result) => {
-            if (cancelled) return;
+            if (cancelled || !isAdyenPaymentSuccess(result?.resultCode)) return;
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
               resultCode: result?.resultCode || 'Authorised',
@@ -282,12 +291,21 @@ export default function OrderConfirmationPage() {
             clearCart(shopKey);
             await load();
           },
-          onError: (err) =>
-            setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopPaymentFailed')),
+          onPaymentFailed: (result) => {
+            if (cancelled) return;
+            const code = String(result?.resultCode || '').toLowerCase();
+            setPaymentPhase(code === 'cancelled' ? 'cancelled' : 'failed');
+            setPayMsg('');
+          },
+          onError: (err) => {
+            setPaymentPhase('failed');
+            setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopPaymentFailed'));
+          },
         });
         if (!cancelled) dropinMounted.current = true;
       } catch (err) {
         setDemoMode(true);
+        setPaymentPhase('failed');
         setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('shopCardFormUnavailable'));
       }
     })();
@@ -295,7 +313,29 @@ export default function OrderConfirmationPage() {
     return () => {
       cancelled = true;
     };
-  }, [session, dropinEl, shopKey, orderId, load, t, locale]);
+  }, [paymentPhase, dropinMountKey, session, dropinEl, shopKey, orderId, load, t, locale]);
+
+  const refreshPaymentSession = async () => {
+    dropinMounted.current = false;
+    setDropinEl(null);
+    setPaymentPhase('paying');
+    setPayMsg('');
+    setDropinMountKey((k) => k + 1);
+    try {
+      const res = await axios.post(`/api/shop/${shopKey}/orders/${orderId}/payment-session`, {
+        ...shopCheckoutOriginPayload(basePath),
+      });
+      if (res.data.alreadyPaid) {
+        await load();
+        return;
+      }
+      setSession(res.data.paymentSession);
+      setDemoMode(false);
+    } catch (e: any) {
+      setDemoMode(true);
+      setPayMsg(e.response?.data?.error || t('shopCardNotConfigured'));
+    }
+  };
 
   const confirmDemoPayment = async () => {
     setPaying(true);
@@ -484,7 +524,7 @@ export default function OrderConfirmationPage() {
               ) : null}
             </div>
           ) : null}
-          {order.estimatedReadyAt && !isOrderEtaComplete(order.status) ? (
+          {order.estimatedReadyAt && paid && !isOrderEtaComplete(order.status) ? (
             <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <div
                 className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-emerald-500 bg-white text-sm font-bold text-emerald-800"
@@ -522,8 +562,32 @@ export default function OrderConfirmationPage() {
             <p className="text-sm text-stone-600">
               {t('shopAmountDue')}: <strong>{money(order.total)}</strong>
             </p>
-            {session && !demoMode && <div ref={setDropinEl} className="min-h-[120px]" />}
-            {(demoMode || !session) && (
+            {paymentPhase === 'paying' && session && !demoMode && (
+              <div ref={setDropinEl} className="min-h-[120px]" />
+            )}
+            {(paymentPhase === 'cancelled' || paymentPhase === 'failed') && (
+              <div className="space-y-3">
+                <p className="text-sm text-stone-600">
+                  {paymentPhase === 'cancelled'
+                    ? t('shopPaymentCancelledMsg')
+                    : payMsg || t('shopPaymentFailedMsg')}
+                </p>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-stone-200 py-3 text-sm font-semibold"
+                  onClick={() => void refreshPaymentSession()}
+                >
+                  {t('shopRetryPayment')}
+                </button>
+                <Link
+                  to={`${basePath}/checkout`}
+                  className="block w-full rounded-xl bg-stone-900 py-3 text-center text-sm font-semibold text-white"
+                >
+                  {t('shopBackToCheckout')}
+                </Link>
+              </div>
+            )}
+            {(demoMode || !session) && paymentPhase === 'paying' && (
               <button
                 type="button"
                 disabled={paying}
@@ -533,7 +597,9 @@ export default function OrderConfirmationPage() {
                 {paying ? t('shopConfirming') : t('shopConfirmPaymentDemo')}
               </button>
             )}
-            {payMsg && <p className="text-sm text-stone-700">{payMsg}</p>}
+            {paymentPhase === 'paying' && payMsg ? (
+              <p className="text-sm text-stone-700">{payMsg}</p>
+            ) : null}
           </section>
         )}
 

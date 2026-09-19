@@ -8,10 +8,23 @@ export type AdyenPaymentSession = {
   environment?: string;
 };
 
+export const ADYEN_SUCCESS_RESULT_CODES = [
+  'Authorised',
+  'Received',
+  'Pending',
+  'PresentToShopper',
+] as const;
+
+export function isAdyenPaymentSuccess(resultCode: string | null | undefined): boolean {
+  const code = String(resultCode || '').trim();
+  return ADYEN_SUCCESS_RESULT_CODES.includes(code as (typeof ADYEN_SUCCESS_RESULT_CODES)[number]);
+}
+
 export type MountAdyenDropinOptions = {
   session: AdyenPaymentSession;
   container: HTMLElement;
   onPaymentCompleted: (result: { resultCode?: string }) => void | Promise<void>;
+  onPaymentFailed?: (result: { resultCode?: string }) => void | Promise<void>;
   onError?: (err: { message?: string }) => void;
   locale?: string;
   countryCode?: string;
@@ -130,6 +143,7 @@ export async function mountAdyenDropin({
   session,
   container,
   onPaymentCompleted,
+  onPaymentFailed,
   onError,
   locale = 'de-CH',
   countryCode = 'CH',
@@ -173,6 +187,14 @@ export async function mountAdyenDropin({
       },
       analytics: { enabled: false },
       onPaymentCompleted: (result: { resultCode?: string }) => {
+        if (isAdyenPaymentSuccess(result?.resultCode)) {
+          void onPaymentCompleted(result);
+          return;
+        }
+        if (onPaymentFailed) {
+          void onPaymentFailed(result);
+          return;
+        }
         void onPaymentCompleted(result);
       },
       onError: (error: unknown) => {

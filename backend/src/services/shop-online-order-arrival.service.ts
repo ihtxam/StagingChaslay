@@ -1,13 +1,17 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { normalizeDeliveryPlatformSettings } from "@/lib/delivery-platform-settings";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
+import { shouldAutoAcceptOnlineShopOrder } from "@/lib/online-shop-auto-accept";
 
 type Merchant = typeof schema.merchants.$inferSelect;
 type Order = typeof schema.orders.$inferSelect;
 
 /** Status after card payment is confirmed for an online shop order. */
-export function resolvePaidOnlineShopOrderStatus(shopAutoAccept: boolean): string {
+export function resolvePaidOnlineShopOrderStatus(
+  merchant: Merchant,
+  order: Order
+): string {
+  const shopAutoAccept = shouldAutoAcceptOnlineShopOrder(merchant, order);
   return shopAutoAccept ? "preparing" : "pending_approval";
 }
 
@@ -26,8 +30,7 @@ export async function runOnlineShopOrderArrivalSideEffects(
 ): Promise<void> {
   if (order.orderType !== "web_shop") return;
 
-  const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
-  const shopAutoAccept = deliverySettings.onlineShopAutoAccept === true;
+  const shopAutoAccept = shouldAutoAcceptOnlineShopOrder(merchant, order);
   const arrivalPrint = normalizePosPrintSettings(merchant.posPrintSettings);
   const kitchenOnArrival =
     !shopAutoAccept && arrivalPrint.autoPrintOnlineOrdersOnArrival === true;
@@ -44,7 +47,7 @@ export async function runOnlineShopOrderArrivalSideEffects(
     const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
     await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
       printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-      printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
+      printNotification: order.fulfillmentChannel !== "delivery",
       printKitchen: kitchenOnArrival,
       printReceipt: opts?.printGuestReceipt === true && order.fulfillmentChannel !== "delivery",
       independentOfMasterAutoPrint: kitchenOnArrival,
@@ -81,8 +84,6 @@ export async function finalizePaidOnlineShopCardOrder(
   }
 ): Promise<Order> {
   const db = getDb();
-  const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
-  const shopAutoAccept = deliverySettings.onlineShopAutoAccept === true;
   const unpaidShopCard =
     order.orderType === "web_shop" &&
     order.paymentStatus === "awaiting_payment" &&
@@ -99,7 +100,7 @@ export async function finalizePaidOnlineShopCardOrder(
     patch.adyenReference = opts.pspReference;
   }
   if (needsArrival) {
-    patch.status = resolvePaidOnlineShopOrderStatus(shopAutoAccept);
+    patch.status = resolvePaidOnlineShopOrderStatus(merchant, order);
   }
 
   const [updated] = await db

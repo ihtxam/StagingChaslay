@@ -208,7 +208,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         }
         if (autoAccept) {
           if (isTerminalOrderStatus(row.status)) unactionedRef.current.delete(id);
-          else if (!isAwaitingApproval(row.status) && isDeliveryOrPickupShopOrder(row)) {
+          else if (
+            !isAwaitingApproval(row.status) &&
+            isDeliveryOrPickupShopOrder(row) &&
+            String(row.orderSource || '').toLowerCase() !== 'online_shop'
+          ) {
             unactionedRef.current.delete(id);
           }
         } else if (!isAwaitingApproval(row.status)) {
@@ -293,7 +297,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
   const current = queue[0] ?? null;
   const acknowledgeOnly =
-    autoAccept && !!current && !isAwaitingApproval(current.status) && !isDeliveryOrPickupShopOrder(current);
+    autoAccept &&
+    !!current &&
+    !isAwaitingApproval(current.status) &&
+    (!isDeliveryOrPickupShopOrder(current) ||
+      String(current.orderSource || '').toLowerCase() === 'online_shop');
   /**
    * ETA / prep minutes: shop delivery + pickup awaiting approval.
    * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).

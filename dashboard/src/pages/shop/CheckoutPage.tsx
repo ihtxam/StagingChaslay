@@ -2592,13 +2592,32 @@ export default function CheckoutPage() {
         session={paymentSession}
         demoMode={paymentDemoMode}
         demoError={paymentDemoError}
-        onClose={() => {
+        onAbandon={() => {
           setPaymentModalOpen(false);
-          navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}?pay=1`);
         }}
         onPaid={() => {
           setPaymentModalOpen(false);
           navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}`);
+        }}
+        onRefreshSession={async () => {
+          try {
+            const res = await axios.post(`/api/shop/${shopKey}/orders/${paymentOrderId}/payment-session`, {
+              ...shopCheckoutOriginPayload(shopBasePath(shopKey, locSlug)),
+            });
+            if (res.data.alreadyPaid) {
+              setPaymentModalOpen(false);
+              navigate(`${shopBasePath(shopKey, locSlug)}/order/${paymentOrderId}`);
+              return null;
+            }
+            const next = normalizeAdyenPaymentSession(res.data.paymentSession);
+            if (next) {
+              setPaymentSession(next);
+              sessionStorage.setItem(`manupos_pay_${paymentOrderId}`, JSON.stringify(next));
+            }
+            return next;
+          } catch {
+            return null;
+          }
         }}
       />
     </div>

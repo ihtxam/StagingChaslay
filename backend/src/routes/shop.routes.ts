@@ -2684,9 +2684,16 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     const { normalizeDeliveryPlatformSettings } = await import("@/lib/delivery-platform-settings");
+    const { shouldAutoAcceptOnlineShopOrder } = await import("@/lib/online-shop-auto-accept");
     const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
     const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
-    const shopAutoAccept = deliverySettings.onlineShopAutoAccept;
+    const shopAutoAcceptSetting = deliverySettings.onlineShopAutoAccept === true;
+    const shopAutoAccept =
+      shopAutoAcceptSetting &&
+      shouldAutoAcceptOnlineShopOrder(merchant, {
+        fulfillmentChannel: channel,
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      });
     const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
     const kioskCashNeedsApproval = kioskSettings?.kioskCashNeedsApproval !== false;
     const kioskAutoAcceptCash = isKioskOrder && payMethod === "cash" && !kioskCashNeedsApproval;
@@ -3152,6 +3159,17 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
       where: and(eq(schema.orders.id, req.params.orderId), eq(schema.orders.merchantId, merchant.id)),
     });
     if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const isDemo = req.body?.demo === true;
+    if (!isDemo) {
+      const { isAdyenPaymentSuccess } = await import("@/lib/adyen-result-codes");
+      const resultCode = String(req.body?.resultCode || "").trim();
+      if (!isAdyenPaymentSuccess(resultCode)) {
+        return res.status(400).json({
+          error: `Payment not authorised (${resultCode || "unknown"})`,
+        });
+      }
+    }
 
     const guestLocale = String(
       (req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || ""

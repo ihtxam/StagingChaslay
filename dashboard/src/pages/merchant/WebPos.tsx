@@ -2899,7 +2899,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         if (deliveryAutoAccept) {
           if (isTerminalOrderStatus(row.status)) unactionedOrderIdsRef.current.delete(id);
-          else if (!isAwaitingApproval(row.status) && isDeliveryOrPickupShopOrder(row)) {
+          else if (
+            !isAwaitingApproval(row.status) &&
+            isDeliveryOrPickupShopOrder(row) &&
+            String(row.orderSource || '').toLowerCase() !== 'online_shop'
+          ) {
             unactionedOrderIdsRef.current.delete(id);
           }
         } else if (!isAwaitingApproval(row.status)) {
@@ -9736,7 +9740,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     deliveryAutoAccept &&
     !!currentNewOrderAlert &&
     !isAwaitingApproval(currentNewOrderAlert.status) &&
-    !isDeliveryOrPickupShopOrder(currentNewOrderAlert);
+    (!isDeliveryOrPickupShopOrder(currentNewOrderAlert) ||
+      String(currentNewOrderAlert.orderSource || '').toLowerCase() === 'online_shop');
   /**
    * ETA / prep minutes: shop delivery + pickup awaiting approval.
    * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).

@@ -47,11 +47,16 @@ export async function maybePrintOnlineOrderOnArrival(
   const orderId = String(order.id || '').trim();
   if (!orderId || printedOnArrivalIds.has(orderId)) return;
   if (isUnconfirmedCardOnlineOrder(order)) return;
-  if (!isAwaitingApproval(order.status)) return;
-  if (readDeliveryAutoAccept(settings)) return;
+
+  const autoAccept = readDeliveryAutoAccept(settings);
+  const status = String(order.status || '').toLowerCase();
+  const isAutoAcceptedPreparing = autoAccept && status === 'preparing';
+
+  if (!isAwaitingApproval(order.status) && !isAutoAcceptedPreparing) return;
+  if (autoAccept && isAwaitingApproval(order.status)) return;
 
   const ps = (settings.posPrintSettings || {}) as { autoPrintOnlineOrdersOnArrival?: boolean };
-  if (ps.autoPrintOnlineOrdersOnArrival !== true) return;
+  if (!isAutoAcceptedPreparing && ps.autoPrintOnlineOrdersOnArrival !== true) return;
 
   printedOnArrivalIds.add(orderId);
 
