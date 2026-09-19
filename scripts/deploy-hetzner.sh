@@ -814,13 +814,15 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
-# StagingChaslay only: corrupted merchants table (1600+ columns) blocks all DDL — reset volume.
+# StagingChaslay only: dropped columns still count toward Postgres 1600 limit — reset when bloated.
 if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  merchant_attnum="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
+    "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.merchants'::regclass AND attnum > 0;" 2>/dev/null | tr -d '[:space:]' || echo "0")"
   merchant_cols="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
     "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='merchants';" 2>/dev/null | tr -d '[:space:]' || echo "0")"
-  echo "merchants column count: ${merchant_cols:-unknown}"
-  if [[ "${merchant_cols:-0}" =~ ^[0-9]+$ && "$merchant_cols" -gt 1500 ]]; then
-    echo "WARNING: merchants has $merchant_cols columns (Postgres max 1600) — resetting staging postgres volume"
+  echo "merchants columns: active=${merchant_cols:-?} total_pg_attribute=${merchant_attnum:-?}"
+  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt 200 ]]; then
+    echo "WARNING: merchants pg_attribute count $merchant_attnum (active $merchant_cols) — resetting staging postgres volume"
     dc stop api dashboard migrate 2>/dev/null || true
     dc down 2>/dev/null || true
     docker volume rm "${migrate_project}_postgres_data" 2>/dev/null || true
