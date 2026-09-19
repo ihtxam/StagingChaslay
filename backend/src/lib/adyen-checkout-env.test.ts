@@ -65,9 +65,9 @@ assert.equal(
 );
 assert.equal(normalizeLiveUrlPrefix(PLATFORM_ADYEN_LIVE_URL_PREFIX), PLATFORM_ADYEN_LIVE_URL_PREFIX);
 assert.equal(
-  canonicalizeLiveUrlPrefix("1797a841fbb37ca7-chaslay"),
+  canonicalizeLiveUrlPrefix("1944d5c28c112475-chaslaypayments"),
   PLATFORM_ADYEN_LIVE_URL_PREFIX,
-  "lowercase chaslay slug is canonicalized to Customer Area casing"
+  "lowercase ChaslayPayments slug is canonicalized to Customer Area casing"
 );
 
 const prevApiBase = process.env.ADYEN_API_BASE;
@@ -107,14 +107,20 @@ assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
 });
 delete process.env.ADYEN_API_BASE_LIVE;
 
-process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-chaslay";
+process.env.ADYEN_LIVE_URL_PREFIX = "1944d5c28c112475-chaslaypayments";
 assert.equal(liveCheckoutApiBase(), liveCheckoutBase, "lowercase env prefix is canonicalized");
 delete process.env.ADYEN_LIVE_URL_PREFIX;
 
 assert.equal(
-  liveCheckoutApiBase("1797a841fbb37ca7-chaslay"),
+  liveCheckoutApiBase("1797a841fbb37ca7-Chaslay"),
   liveCheckoutBase,
-  "stale lowercase merchant adyenLiveUrlPrefix is ignored; platform prefix wins"
+  "stale merchant adyenLiveUrlPrefix is ignored; platform prefix wins"
+);
+
+assert.equal(
+  liveCheckoutBase,
+  "https://1944d5c28c112475-ChaslayPayments-checkout-live.adyenpayments.com/checkout/v71",
+  "live Checkout URL matches Adyen Customer Area API URLs"
 );
 
 if (prevApiBase === undefined) delete process.env.ADYEN_API_BASE;

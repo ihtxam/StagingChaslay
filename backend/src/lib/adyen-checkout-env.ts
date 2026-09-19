@@ -13,9 +13,9 @@ export type AdyenCheckoutEnvironment = "live" | "test";
  * Swisspayout / Chaslay Adyen company live prefix.
  * Shared for all merchants — they do not need to paste an endpoint URL.
  * Override with ADYEN_LIVE_URL_PREFIX when the company prefix changes.
- * Case-sensitive: Adyen DNS uses the exact slug from Customer Area (Chaslay, not chaslay).
+ * Case-sensitive: Adyen DNS uses the exact slug from Customer Area (ChaslayPayments, not chaslaypayments).
  */
-export const PLATFORM_ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-Chaslay";
+export const PLATFORM_ADYEN_LIVE_URL_PREFIX = "1944d5c28c112475-ChaslayPayments";
 
 /** Live Checkout API host suffix (Adyen docs + @adyen/api-library). */
 export const LIVE_CHECKOUT_API_HOST_SUFFIX = "-checkout-live.adyenpayments.com";
@@ -23,7 +23,7 @@ export const LIVE_CHECKOUT_API_HOST_SUFFIX = "-checkout-live.adyenpayments.com";
 export const LIVE_CHECKOUT_PREFIX_REQUIRED =
   "Live Adyen Checkout requires a live URL prefix from Adyen Customer Area " +
   "(Developers → API URLs). Set ADYEN_LIVE_URL_PREFIX to the value shown there " +
-  "(for example 1797a841fbb37ca7-Chaslay). " +
+  "(for example 1944d5c28c112475-ChaslayPayments). " +
   "Do not use checkout-live.adyenpayments.com without that prefix.";
 
 export function isValidAdyenClientKey(clientKey: string | null | undefined): boolean {
@@ -125,9 +125,9 @@ export function resolveLiveUrlPrefix(_merchantPrefix?: string | null): string {
 
 /**
  * Live Checkout API base. Prefixed company URL wins; never use the unprefixed live host.
- * `merchantPrefix` comes from merchant settings (adyenLiveUrlPrefix) when env is unset.
+ * `merchantPrefix` is ignored — all merchants share the platform prefix.
  */
-export function liveCheckoutApiBase(merchantPrefix?: string | null): string {
+export function liveCheckoutApiBase(_merchantPrefix?: string | null): string {
   const explicit = (
     process.env.ADYEN_API_BASE_LIVE ||
     process.env.PLATFORM_ADYEN_API_BASE_LIVE ||
@@ -140,7 +140,7 @@ export function liveCheckoutApiBase(merchantPrefix?: string | null): string {
     return stripTrailingSlash(explicit);
   }
 
-  const prefix = resolveLiveUrlPrefix(merchantPrefix);
+  const prefix = resolveLiveUrlPrefix();
   if (!prefix) {
     throw new Error(LIVE_CHECKOUT_PREFIX_REQUIRED);
   }
