@@ -20,7 +20,7 @@ describe("applyWebCheckoutSessionOptions", () => {
       { adyenStoreReference: "PolaCafe_ECOM" }
     );
     expect(out.store).toBe("PolaCafe_ECOM");
-    expect(out.storeFiltrationMode).toBe("exclusive");
+    expect(out.storeFiltrationMode).toBe("inclusive");
     expect(out.shopperInteraction).toBe("Ecommerce");
     expect(out.blockedPaymentMethods).toEqual(["twint_pos"]);
   });
@@ -42,7 +42,7 @@ describe("applyStoredPaymentOptions", () => {
     expect(out.recurringProcessingModel).toBeUndefined();
   });
 
-  it("stores CardOnFile for a logged-in shopper", () => {
+  it("asks to save the card for a logged-in shopper without forcing Recurring", () => {
     const out = applyStoredPaymentOptions(
       { channel: "Web" },
       {
@@ -52,9 +52,9 @@ describe("applyStoredPaymentOptions", () => {
       }
     );
     expect(out.shopperReference).toBe("shop_m1_c1");
-    expect(out.storePaymentMethod).toBe(true);
-    expect(out.storePaymentMethodMode).toBe("enabled");
-    expect(out.recurringProcessingModel).toBe("CardOnFile");
+    expect(out.storePaymentMethod).toBeUndefined();
+    expect(out.storePaymentMethodMode).toBe("askForConsent");
+    expect(out.recurringProcessingModel).toBeUndefined();
     expect(out.shopperEmail).toBe("ada@example.com");
     expect(out.shopperName).toEqual({ firstName: "Ada", lastName: "Lovelace" });
   });

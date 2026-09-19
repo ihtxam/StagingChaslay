@@ -143,7 +143,7 @@ export class AdyenService {
         options?.shopper ||
         (await this.resolveShopAccountShopper(merchantId, options?.customerId));
 
-      const sessionPayload = applyWebCheckoutSessionOptions(
+      const basePayload = applyWebCheckoutSessionOptions(
         {
           amount: {
             value: Math.round(amount * 100),
@@ -157,29 +157,64 @@ export class AdyenService {
         },
         merchant
       );
-      applyStoredPaymentOptions(sessionPayload, shopper);
-      // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
 
-      const response = await axios.post(`${apiBase}/sessions`, sessionPayload, {
-        headers: {
-          "x-api-key": creds.apiKey,
-          "Content-Type": "application/json",
-        },
-      });
+      const attempts: Array<{ payload: Record<string, unknown>; stored: boolean }> = [];
+      const withShopper = applyStoredPaymentOptions({ ...basePayload }, shopper);
+      attempts.push({ payload: withShopper, stored: Boolean(shopper?.shopperReference) });
+      if (shopper?.shopperReference) {
+        attempts.push({ payload: { ...basePayload }, stored: false });
+      }
+      if (basePayload.store) {
+        const noStore = { ...basePayload };
+        delete noStore.store;
+        delete noStore.storeFiltrationMode;
+        attempts.push({
+          payload: applyStoredPaymentOptions({ ...noStore }, shopper),
+          stored: Boolean(shopper?.shopperReference),
+        });
+        attempts.push({ payload: noStore, stored: false });
+      }
 
-      const id = response.data?.id;
-      const sessionData = response.data?.sessionData;
+      let lastError: unknown;
+      let usedStored = false;
+      let responseData: Record<string, unknown> | null = null;
+      for (const attempt of attempts) {
+        try {
+          const response = await axios.post(`${apiBase}/sessions`, attempt.payload, {
+            headers: {
+              "x-api-key": creds.apiKey,
+              "Content-Type": "application/json",
+            },
+          });
+          responseData = response.data as Record<string, unknown>;
+          usedStored = attempt.stored;
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err;
+          console.warn(
+            "[adyen] /sessions attempt failed:",
+            axios.isAxiosError(err) ? err.response?.data || err.message : err
+          );
+        }
+      }
+      if (lastError || !responseData) {
+        throw lastError || new Error("Adyen session response was incomplete");
+      }
+
+      const id = responseData?.id;
+      const sessionData = responseData?.sessionData;
       if (!id || !sessionData) {
         throw new Error("Adyen session response was incomplete");
       }
 
       return {
-        ...response.data,
+        ...responseData,
         id,
         sessionData,
         clientKey: creds.clientId,
         environment,
-        storePaymentMethod: Boolean(shopper?.shopperReference),
+        storePaymentMethod: usedStored,
       };
     } catch (error) {
       console.error("Error initializing payment session:", error);

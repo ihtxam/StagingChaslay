@@ -239,6 +239,16 @@ export async function mountAdyenDropin({
     }
     dropin.mount(container);
   } catch (err) {
-    throw new Error(`Adyen Drop-in mount failed: ${formatAdyenError(err, 'dropin', credentialSource)}`);
+    const first = formatAdyenError(err, 'dropin', credentialSource);
+    if (session.storePaymentMethod && /paymentMethods/i.test(String(err instanceof Error ? err.message : first))) {
+      try {
+        const dropin = checkout.create('dropin', adyenDropinCreateConfig({ storePaymentMethod: false }));
+        dropin.mount(container);
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error(`Adyen Drop-in mount failed: ${first}`);
   }
 }

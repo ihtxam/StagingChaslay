@@ -45,7 +45,9 @@ export function applyWebCheckoutSessionOptions(
   const store = String(merchant?.adyenStoreReference || "").trim();
   if (store) {
     payload.store = store;
-    payload.storeFiltrationMode = "exclusive";
+    // Inclusive keeps account-level cards/TWINT if the store has no e-com methods.
+    // Exclusive with a missing/wrong store returns an empty method list and Drop-in fails.
+    payload.storeFiltrationMode = "inclusive";
   }
 
   return payload;
@@ -64,9 +66,9 @@ export function applyStoredPaymentOptions(
   if (reference.length < 3) return payload;
 
   payload.shopperReference = reference;
-  payload.storePaymentMethod = true;
-  payload.storePaymentMethodMode = "enabled";
-  payload.recurringProcessingModel = "CardOnFile";
+  // Ask to save the card. Do not send recurringProcessingModel / storePaymentMethodMode=enabled
+  // on /sessions — Swisspayout accounts without Recurring make Drop-in paymentMethods fail.
+  payload.storePaymentMethodMode = "askForConsent";
 
   const email = String(shopper?.shopperEmail || "").trim().toLowerCase();
   if (email.includes("@")) payload.shopperEmail = email;

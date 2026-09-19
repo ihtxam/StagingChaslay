@@ -19,7 +19,7 @@ const pola = applyWebCheckoutSessionOptions(
   { adyenStoreReference: "PolaCafe_ECOM" }
 );
 assert.equal(pola.store, "PolaCafe_ECOM");
-assert.equal(pola.storeFiltrationMode, "exclusive");
+assert.equal(pola.storeFiltrationMode, "inclusive");
 assert.deepEqual(pola.blockedPaymentMethods, ["bcmc", "twint_pos"]);
 
 const guest = applyStoredPaymentOptions({ channel: "Web" }, null);
@@ -36,9 +36,9 @@ const loggedIn = applyStoredPaymentOptions(
   }
 );
 assert.equal(loggedIn.shopperReference, "shop_merchant-a_customer-b");
-assert.equal(loggedIn.storePaymentMethod, true);
-assert.equal(loggedIn.storePaymentMethodMode, "enabled");
-assert.equal(loggedIn.recurringProcessingModel, "CardOnFile");
+assert.equal(loggedIn.storePaymentMethod, undefined);
+assert.equal(loggedIn.storePaymentMethodMode, "askForConsent");
+assert.equal(loggedIn.recurringProcessingModel, undefined);
 assert.equal(loggedIn.shopperEmail, "ada@example.com");
 assert.deepEqual(loggedIn.shopperName, { firstName: "Ada", lastName: "Lovelace" });
 
