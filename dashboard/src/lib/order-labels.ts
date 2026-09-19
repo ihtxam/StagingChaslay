@@ -23,8 +23,9 @@ import {
   encodeTsplCommands,
   tsplBarcodeFits,
 } from '@/lib/tspl-label-core';
-import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
-import { pickPreferredLabelPrinter, resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
+import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import { resolveLabelPrinterForAgent } from '@/lib/label-print-agent';
 import JsBarcode from 'jsbarcode';
 
 function toBase64(bytes: Uint8Array): string {
@@ -185,17 +186,7 @@ export async function printOrderLabelViaAgent(
 ): Promise<'local' | 'queued' | 'browser'> {
   const data = buildOrderLabelData(heldId, lines);
   const labelOpts = orderLabelRenderOpts(data, labelOptionsFromPrintSettings(settings, opts?.storeName));
-  const labelsPrinters = printersForRole(settings || null, 'labels');
-  const preferred = pickPreferredLabelPrinter(settings);
-  const printerName = preferred?.name?.trim() || labelsPrinters[0]?.name?.trim();
-  if (!printerName) {
-    throw new Error(
-      'No label printer configured. Open Settings → Receipts & printers, add your label printer, and enable Labels.'
-    );
-  }
-  const portName =
-    ((settings?.printers || []).find((p) => p.name === printerName) as { portName?: string | null } | undefined)
-      ?.portName || null;
+  const { printerName, portName } = await resolveLabelPrinterForAgent(settings);
   const protocol = resolveLabelPrintProtocol(settings, printerName);
   const o = normalizeLabelOptions(labelOpts);
 
@@ -212,7 +203,10 @@ export async function printOrderLabelViaAgent(
       });
       return 'local';
     }
-    const payload = tsplBarcodeFits(data.barcode, o.widthMm)
+    // Hold/send barcodes (REBORN:O:uuid) rarely fit native TSPL BARCODE on 40–58 mm — raster is reliable.
+    const useNativeTsplBarcode =
+      tsplBarcodeFits(data.barcode, o.widthMm) && !data.barcode.startsWith('REBORN:O:');
+    const payload = useNativeTsplBarcode
       ? buildOrderLabelTspl(data, labelOpts)
       : buildTsplBitmapLabel({
           widthMm: o.widthMm,
@@ -226,9 +220,9 @@ export async function printOrderLabelViaAgent(
       dataBase64: toBase64(payload),
       printerName,
       text: data.barcode,
-      retryLocally: opts?.retryLocally,
+      retryLocally: opts?.retryLocally !== false,
       jobKind: 'other',
-      jobLabel: tsplBarcodeFits(data.barcode, o.widthMm) ? 'order-label-tspl' : 'order-label-tspl-bitmap',
+      jobLabel: useNativeTsplBarcode ? 'order-label-tspl' : 'order-label-tspl-bitmap',
     });
   }
 
