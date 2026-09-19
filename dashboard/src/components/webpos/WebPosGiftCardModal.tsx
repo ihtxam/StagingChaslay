@@ -1,4 +1,4 @@
-import { Gift, QrCode, CreditCard, X, Mail, Printer } from 'lucide-react';
+import { Gift, QrCode, CreditCard, Wallet, X, Mail, Printer } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -306,7 +306,9 @@ export default function WebPosGiftCardModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+      <div
+        className={`w-full rounded-2xl bg-white shadow-xl ${step === 'menu' ? 'max-w-xl' : 'max-w-md'}`}
+      >
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
             <Gift size={20} className="text-teal-600" />
@@ -319,37 +321,40 @@ export default function WebPosGiftCardModal({
 
         <div className="space-y-4 p-4">
           {step === 'menu' && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 max-[320px]:grid-cols-1">
               <button
                 type="button"
-                className="rounded-xl border border-stone-200 px-4 py-3 text-left font-semibold hover:bg-teal-50"
+                className="flex min-h-12 touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-stone-200 px-2 py-4 text-center text-sm font-semibold hover:border-teal-200 hover:bg-teal-50 active:scale-[0.98]"
                 onClick={() => {
                   setStep('sell');
                   setMedia('choose');
                 }}
               >
-                {t('giftCardSell')}
+                <Gift size={24} className="shrink-0 text-teal-600" />
+                <span className="leading-tight">{t('giftCardSell')}</span>
               </button>
               <button
                 type="button"
                 disabled={!reloadOk}
-                className="rounded-xl border border-stone-200 px-4 py-3 text-left font-semibold hover:bg-teal-50 disabled:opacity-40"
+                className="flex min-h-12 touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-stone-200 px-2 py-4 text-center text-sm font-semibold hover:border-teal-200 hover:bg-teal-50 active:scale-[0.98] disabled:opacity-40"
                 onClick={() => {
                   setStep('reload');
                   setMedia('physical');
                 }}
               >
-                {t('giftCardReload')}
+                <CreditCard size={24} className="shrink-0 text-teal-600" />
+                <span className="leading-tight">{t('giftCardReload')}</span>
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-stone-200 px-4 py-3 text-left font-semibold hover:bg-teal-50"
+                className="flex min-h-12 touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-stone-200 px-2 py-4 text-center text-sm font-semibold hover:border-teal-200 hover:bg-teal-50 active:scale-[0.98]"
                 onClick={() => {
                   setStep('balance');
                   setMedia('physical');
                 }}
               >
-                {t('giftCardCheckBalance')}
+                <Wallet size={24} className="shrink-0 text-teal-600" />
+                <span className="leading-tight">{t('giftCardCheckBalance')}</span>
               </button>
             </div>
           )}
