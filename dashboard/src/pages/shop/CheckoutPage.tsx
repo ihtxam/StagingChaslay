@@ -1244,9 +1244,21 @@ export default function CheckoutPage() {
       on ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-white'
     }`;
 
+  const clearTip = () => {
+    setCustomTipOpen(false);
+    patch({ tipAmount: 0 });
+  };
+
   const renderTipPicker = () => (
     <div className="space-y-2">
-      <p className="text-sm font-semibold text-stone-900">{t('shopTip')}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-stone-900">{t('shopTip')}</p>
+        {tip > 0 ? (
+          <button type="button" className="text-xs font-semibold text-stone-600" onClick={clearTip}>
+            {t('shopRemoveTip')}
+          </button>
+        ) : null}
+      </div>
       <div className="grid grid-cols-4 gap-1.5">
         {tipPresets.map((pct) => {
           const amt = roundTo005((subtotal * pct) / 100);
@@ -1553,6 +1565,14 @@ export default function CheckoutPage() {
         <div className="flex justify-between">
           <span className="text-stone-500">{t('shopDelivery')}</span>
           <span>CHF {deliveryFee.toFixed(2)}</span>
+        </div>
+      )}
+      {tax > 0 && taxRate > 0 && (
+        <div className="flex justify-between">
+          <span className="text-stone-500">
+            {t('shopTaxWithRate').replace('{rate}', String(taxRate))}
+          </span>
+          <span>CHF {tax.toFixed(2)}</span>
         </div>
       )}
       {tip > 0 && (
