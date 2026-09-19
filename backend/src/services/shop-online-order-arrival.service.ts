@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { shouldAutoAcceptOnlineShopOrder } from "@/lib/online-shop-auto-accept";
@@ -88,9 +88,15 @@ export async function finalizePaidOnlineShopCardOrder(
     order.orderType === "web_shop" &&
     order.paymentStatus === "awaiting_payment" &&
     String(order.paymentMethod || "").toLowerCase() === "card";
+
+  if (!unpaidShopCard) {
+    return order;
+  }
+
   const needsArrival =
     order.status === "awaiting_payment" ||
-    (unpaidShopCard && (order.status === "pending" || order.status === "pending_approval"));
+    order.status === "pending" ||
+    order.status === "pending_approval";
 
   const patch: Record<string, unknown> = {
     paymentStatus: "completed",
@@ -106,17 +112,27 @@ export async function finalizePaidOnlineShopCardOrder(
   const [updated] = await db
     .update(schema.orders)
     .set(patch)
-    .where(eq(schema.orders.id, order.id))
+    .where(
+      and(
+        eq(schema.orders.id, order.id),
+        eq(schema.orders.paymentStatus, "awaiting_payment")
+      )
+    )
     .returning();
 
-  const finalOrder = updated || order;
+  if (!updated) {
+    const current = await db.query.orders.findFirst({
+      where: eq(schema.orders.id, order.id),
+    });
+    return current || order;
+  }
 
   if (needsArrival) {
-    await runOnlineShopOrderArrivalSideEffects(merchant, finalOrder, {
+    await runOnlineShopOrderArrivalSideEffects(merchant, updated, {
       guestLocale: opts?.guestLocale,
       printGuestReceipt: true,
     });
   }
 
-  return finalOrder;
+  return updated;
 }

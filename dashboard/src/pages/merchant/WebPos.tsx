@@ -1007,6 +1007,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrder[]>([]);
   const knownOnlineIdsRef = useRef<Set<string> | null>(null);
   const unactionedOrderIdsRef = useRef<Set<string>>(new Set());
+  /** Orders the operator accepted/acknowledged — survives known-id re-seed after settings load. */
+  const dismissedOrderAlertIdsRef = useRef<Set<string>>(new Set());
   const [unactionedOrderCount, setUnactionedOrderCount] = useState(0);
   const [newOrderAlertQueue, setNewOrderAlertQueue] = useState<OnlineOrder[]>([]);
   const [deliveryAutoAccept, setDeliveryAutoAccept] = useState(false);
@@ -2881,30 +2883,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (knownOnlineIdsRef.current == null) {
         knownOnlineIdsRef.current = new Set(newIds);
         for (const o of newOnes) {
-          unactionedOrderIdsRef.current.add(o.id);
+          if (!dismissedOrderAlertIdsRef.current.has(o.id)) {
+            unactionedOrderIdsRef.current.add(o.id);
+          }
         }
         setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
         return;
       }
 
-      const fresh = newIds.filter((id) => !knownOnlineIdsRef.current!.has(id));
+      const fresh = newIds.filter(
+        (id) => !knownOnlineIdsRef.current!.has(id) && !dismissedOrderAlertIdsRef.current.has(id)
+      );
       const freshOrders = newOnes.filter((o) => fresh.includes(o.id));
       for (const id of newIds) knownOnlineIdsRef.current.add(id);
 
       for (const id of [...unactionedOrderIdsRef.current]) {
         const row = online.find((o) => o.id === id);
-        if (!row) {
+        if (!row || dismissedOrderAlertIdsRef.current.has(id)) {
           unactionedOrderIdsRef.current.delete(id);
           continue;
         }
         if (deliveryAutoAccept) {
           if (isTerminalOrderStatus(row.status)) unactionedOrderIdsRef.current.delete(id);
-          else if (
-            !isAwaitingApproval(row.status) &&
-            isDeliveryOrPickupShopOrder(row) &&
-            String(row.orderSource || '').toLowerCase() !== 'online_shop'
-          ) {
-            unactionedOrderIdsRef.current.delete(id);
+          else if (!isAwaitingApproval(row.status)) {
+            const src = String(row.orderSource || '').toLowerCase();
+            if (src === 'online_shop' || src === 'kiosk' || src === 'qr_table') {
+              unactionedOrderIdsRef.current.delete(id);
+            } else if (
+              isDeliveryOrPickupShopOrder(row) &&
+              src !== 'online_shop'
+            ) {
+              /* third-party auto-accepted tickets stay until acknowledged */
+            } else {
+              unactionedOrderIdsRef.current.delete(id);
+            }
           }
         } else if (!isAwaitingApproval(row.status)) {
           unactionedOrderIdsRef.current.delete(id);
@@ -2961,6 +2973,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [deliveryAutoAccept, t]);
 
   const markOnlineOrderActioned = useCallback((orderId: string) => {
+    dismissedOrderAlertIdsRef.current.add(orderId);
     unactionedOrderIdsRef.current.delete(orderId);
     localPosOrderIdsRef.current.delete(orderId);
     setLocalPosOrderCount(localPosOrderIdsRef.current.size);
