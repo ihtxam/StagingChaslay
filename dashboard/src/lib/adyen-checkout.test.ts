@@ -24,15 +24,23 @@ describe('normalizeAdyenPaymentSession', () => {
 });
 
 describe('adyenDropinCreateConfig', () => {
-  it('does not enable store details for guests', () => {
+  it('does not enable store details for guests except blocking TWINT save', () => {
     const out = adyenDropinCreateConfig({ storePaymentMethod: false });
-    expect(out.paymentMethodsConfiguration).toBeUndefined();
+    expect(out.paymentMethodsConfiguration).toEqual({
+      twint: { enableStoreDetails: false },
+    });
   });
 
   it('enables card store details when the session tokenized the shopper', () => {
     const out = adyenDropinCreateConfig({ storePaymentMethod: true });
     expect(out.paymentMethodsConfiguration).toEqual({
+      twint: { enableStoreDetails: false },
       card: {
+        enableStoreDetails: true,
+        hasHolderName: true,
+        holderNameRequired: false,
+      },
+      scheme: {
         enableStoreDetails: true,
         hasHolderName: true,
         holderNameRequired: false,

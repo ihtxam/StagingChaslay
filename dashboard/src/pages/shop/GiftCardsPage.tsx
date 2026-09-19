@@ -240,6 +240,7 @@ export default function GiftCardsPage() {
             basePath={base}
             merchantName={merchant?.name}
             logoUrl={merchant?.shopLogoUrl}
+            shopKey={shopKey}
             loggedIn={loggedIn}
           />
           <div className="shop-page-content py-12 text-center">
@@ -260,6 +261,7 @@ export default function GiftCardsPage() {
         basePath={base}
         merchantName={merchant?.name}
         logoUrl={merchant?.shopLogoUrl}
+        shopKey={shopKey}
         loggedIn={loggedIn}
       />
 

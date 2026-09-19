@@ -62,7 +62,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref, surface, isStorefront, accountPath } = useStorefront();
+  const { shopHref, surface, isStorefront, accountPath, loggedIn } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -101,7 +101,7 @@ export const NavbarClassic: React.FC<NavbarClassicProps> & {
           <div className="navbar-classic-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0, flex: 1 }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#1a1a2e'} />
             {isStorefront && accountPath ? (
-              <ShopNavActions accountPath={accountPath} className="navbar-desktop-actions" />
+              <ShopNavActions accountPath={accountPath} loggedIn={loggedIn} className="navbar-desktop-actions" />
             ) : null}
             {showNavCta ? (
               <a

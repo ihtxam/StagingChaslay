@@ -2,6 +2,8 @@ import { eq, and } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { shouldAutoAcceptOnlineShopOrder } from "@/lib/online-shop-auto-accept";
+import { normalizeAdyenEcommerceTender } from "@/lib/shop-adyen-session";
+import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
 
 type Merchant = typeof schema.merchants.$inferSelect;
 type Order = typeof schema.orders.$inferSelect;
@@ -81,6 +83,8 @@ export async function finalizePaidOnlineShopCardOrder(
   opts?: {
     guestLocale?: string | null;
     pspReference?: string | null;
+    /** Adyen method type from Drop-in / webhook (twint, scheme, …). Not CardOnFile. */
+    adyenPaymentMethod?: unknown;
   }
 ): Promise<Order> {
   const db = getDb();
@@ -90,7 +94,12 @@ export async function finalizePaidOnlineShopCardOrder(
     String(order.paymentMethod || "").toLowerCase() === "card";
 
   if (!unpaidShopCard) {
-    return order;
+    try {
+      return await ShopLoyaltyService.earnForPaidOrder(merchant, order);
+    } catch (earnErr) {
+      console.error("Loyalty earn on already-paid shop order failed:", earnErr);
+      return order;
+    }
   }
 
   const needsArrival =
@@ -98,10 +107,16 @@ export async function finalizePaidOnlineShopCardOrder(
     order.status === "pending" ||
     order.status === "pending_approval";
 
+  const tender = normalizeAdyenEcommerceTender(opts?.adyenPaymentMethod);
   const patch: Record<string, unknown> = {
     paymentStatus: "completed",
+    // Keep workflow key `card` (Adyen ecommerce). Surface TWINT via breakdown.
     paymentMethod: "card",
   };
+  if (tender && tender !== "card") {
+    const amount = parseFloat(order.total?.toString() || "0") || 0;
+    patch.paymentBreakdown = [{ method: tender, amount }];
+  }
   if (opts?.pspReference) {
     patch.adyenReference = opts.pspReference;
   }
@@ -124,7 +139,13 @@ export async function finalizePaidOnlineShopCardOrder(
     const current = await db.query.orders.findFirst({
       where: eq(schema.orders.id, order.id),
     });
-    return current || order;
+    const latest = current || order;
+    try {
+      return await ShopLoyaltyService.earnForPaidOrder(merchant, latest);
+    } catch (earnErr) {
+      console.error("Loyalty earn on paid shop order failed:", earnErr);
+      return latest;
+    }
   }
 
   if (needsArrival) {
@@ -134,5 +155,10 @@ export async function finalizePaidOnlineShopCardOrder(
     });
   }
 
-  return updated;
+  try {
+    return await ShopLoyaltyService.earnForPaidOrder(merchant, updated);
+  } catch (earnErr) {
+    console.error("Loyalty earn on paid shop order failed:", earnErr);
+    return updated;
+  }
 }

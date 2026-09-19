@@ -15,6 +15,7 @@ import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarDesktopLinks, NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
+import ShopNavActions from '@/components/shop/ShopNavActions';
 
 interface MenuItem {
   label: string;
@@ -52,7 +53,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref } = useStorefront();
+  const { shopHref, isStorefront, accountPath, loggedIn } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -85,12 +86,15 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
             />
           </div>
 
-          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '40px' }}>
+          <div className="navbar-minimal-menu navbar-minimal-desktop" style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
             <NavbarDesktopLinks
               menuItems={menuItems}
               textColor={mergedProps.textColor || '#1a1a2e'}
               className=""
             />
+            {isStorefront && accountPath ? (
+              <ShopNavActions accountPath={accountPath} loggedIn={loggedIn} className="navbar-desktop-actions" />
+            ) : null}
           </div>
 
           <NavbarMobileMenu

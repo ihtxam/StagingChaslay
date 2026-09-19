@@ -8,6 +8,7 @@ import { extractZipFromAddress } from '@/lib/delivery-hub-alerts';
 import {
   orderPlatformBadgeClass,
   orderPlatformLabel,
+  formatOrderAlertPaymentLine,
   type MerchantOrder,
 } from '@/lib/order-management';
 import { startOrderAlertLoop } from '@/lib/order-alert';
@@ -120,6 +121,7 @@ export default function WebPosNewOrderAlertModal({
               {formatDateTime(order.scheduledFor!)}
             </p>
           ) : null}
+          <p className="text-sm font-semibold text-stone-800">{formatOrderAlertPaymentLine(order, t)}</p>
 
           {(order.customerName || order.customerPhone || order.shippingAddress) && (
             <div className="space-y-0.5 text-sm text-stone-700">

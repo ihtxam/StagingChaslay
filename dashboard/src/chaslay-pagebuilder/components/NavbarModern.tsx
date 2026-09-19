@@ -62,7 +62,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref, surface, isStorefront, accountPath } = useStorefront();
+  const { shopHref, surface, isStorefront, accountPath, loggedIn } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -100,7 +100,7 @@ export const NavbarModern: React.FC<NavbarModernProps> & {
           <div className="navbar-modern-menu navbar-modern-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <NavbarDesktopLinks menuItems={menuItems} textColor={mergedProps.textColor || '#ffffff'} />
             {isStorefront && accountPath ? (
-              <ShopNavActions accountPath={accountPath} className="navbar-desktop-actions" />
+              <ShopNavActions accountPath={accountPath} loggedIn={loggedIn} className="navbar-desktop-actions" />
             ) : null}
           </div>
 

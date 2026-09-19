@@ -9,6 +9,7 @@ import {
 } from '@/lib/delivery-hub-alerts';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
 import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
+import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isTerminalOrderStatus } from '@/lib/order-management';
@@ -43,6 +44,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const [autoAccept, setAutoAccept] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
   const [merchantSettings, setMerchantSettings] = useState<Record<string, unknown>>({});
+  const [rejectTarget, setRejectTarget] = useState<OnlineOrder | null>(null);
   const knownIdsRef = useRef<Set<string> | null>(null);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const unactionedRef = useRef<Set<string>>(new Set());
@@ -293,17 +295,26 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     [markActioned]
   );
 
-  const rejectOrder = useCallback(
-    async (order: OnlineOrder) => {
+  const requestReject = useCallback((order: OnlineOrder) => {
+    setRejectTarget(order);
+  }, []);
+
+  const confirmRejectOrder = useCallback(
+    async (reason: string) => {
+      if (!rejectTarget) return;
       setBusy(true);
       try {
-        await api.post(`/merchant/orders/${order.id}/action`, { action: 'reject' });
-        markActioned(order.id);
+        await api.post(`/merchant/orders/${rejectTarget.id}/action`, {
+          action: 'reject',
+          rejectReason: reason,
+        });
+        markActioned(rejectTarget.id);
+        setRejectTarget(null);
       } finally {
         setBusy(false);
       }
     },
-    [markActioned]
+    [markActioned, rejectTarget]
   );
 
   if (!enabled) return null;
@@ -325,23 +336,38 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     isAwaitingApproval(current.status) &&
     isDeliveryOrPickupShopOrder(current);
 
-  return useEtaModal ? (
-    <OrderAcceptWithEtaModal
-      order={current}
-      queueCount={queue.length}
-      busy={busy}
-      onAccept={(o, mins) => void acceptOrder(o, mins)}
-      onReject={(o) => void rejectOrder(o)}
-    />
-  ) : (
-    <WebPosNewOrderAlertModal
-      order={current}
-      queueCount={queue.length}
-      busy={busy}
-      acknowledgeOnly={acknowledgeOnly}
-      onAcknowledge={acknowledgeOrder}
-      onAccept={acknowledgeOnly ? undefined : (o) => void acceptOrder(o, 30)}
-      onReject={acknowledgeOnly ? undefined : (o) => void rejectOrder(o)}
-    />
+  return (
+    <>
+      {useEtaModal ? (
+        <OrderAcceptWithEtaModal
+          order={current}
+          queueCount={queue.length}
+          busy={busy}
+          onAccept={(o, mins) => void acceptOrder(o, mins)}
+          onReject={requestReject}
+        />
+      ) : (
+        <WebPosNewOrderAlertModal
+          order={current}
+          queueCount={queue.length}
+          busy={busy}
+          acknowledgeOnly={acknowledgeOnly}
+          onAcknowledge={acknowledgeOrder}
+          onAccept={acknowledgeOnly ? undefined : (o) => void acceptOrder(o, 30)}
+          onReject={acknowledgeOnly ? undefined : requestReject}
+        />
+      )}
+      <WebPosRejectOrderModal
+        open={!!rejectTarget}
+        orderLabel={
+          rejectTarget
+            ? formatOrderNumberDisplay(rejectTarget.orderNumber) || rejectTarget.id.slice(0, 8)
+            : undefined
+        }
+        busy={busy}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={(reason) => void confirmRejectOrder(reason)}
+      />
+    </>
   );
 }

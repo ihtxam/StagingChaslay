@@ -399,10 +399,16 @@ export function loadCustomerToken(shopKey: string) {
 
 export function saveCustomerToken(shopKey: string, token: string) {
   localStorage.setItem(`${CUSTOMER_TOKEN_PREFIX}${shopKey}`, token);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('shop-auth-changed'));
+  }
 }
 
 export function clearCustomerToken(shopKey: string) {
   localStorage.removeItem(`${CUSTOMER_TOKEN_PREFIX}${shopKey}`);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('shop-auth-changed'));
+  }
 }
 
 export function shopCustomerAuthConfig(shopKey: string) {

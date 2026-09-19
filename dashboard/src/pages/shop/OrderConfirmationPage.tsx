@@ -289,6 +289,8 @@ export default function OrderConfirmationPage() {
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
               resultCode: result?.resultCode || 'Authorised',
+              paymentMethod: result?.paymentMethod,
+              pspReference: result?.pspReference,
             });
             sessionStorage.removeItem(`manupos_pay_${orderId}`);
             clearCart(shopKey);
@@ -385,7 +387,7 @@ export default function OrderConfirmationPage() {
         className="min-h-dvh"
         style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
       >
-        <ShopMinimalHeader basePath={basePath} loggedIn={loggedIn} />
+        <ShopMinimalHeader basePath={basePath} shopKey={shopKey} loggedIn={loggedIn} />
         <div className="shop-page-content flex min-h-[50vh] flex-col items-center justify-center gap-3 py-12">
           <p className="text-red-600">{error || t('shopOrderNotFound')}</p>
           <Link to={basePath || '/'} className="font-semibold text-stone-900 underline">
@@ -434,6 +436,7 @@ export default function OrderConfirmationPage() {
           basePath={basePath}
           merchantName={order.store?.name}
           logoUrl={order.store?.shopLogoUrl}
+          shopKey={shopKey}
           loggedIn={loggedIn}
         />
 

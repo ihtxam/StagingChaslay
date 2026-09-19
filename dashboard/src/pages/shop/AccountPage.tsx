@@ -17,7 +17,7 @@ import {
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
+import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
 import ShopAccountGuestAuth from '@/components/shop/ShopAccountGuestAuth';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
@@ -377,11 +377,11 @@ export default function AccountPage() {
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >
     <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
-      <ShopMinimalHeader
+      <ShopOpenPageHeader
         basePath={base}
         merchantName={merchantInfo?.name}
         logoUrl={merchantInfo?.shopLogoUrl}
-        loggedIn={!!customer}
+        shopKey={shopKey}
       />
 
       <main className={customer ? 'max-w-2xl mx-auto px-4 py-6 space-y-5' : ''}>
@@ -654,6 +654,12 @@ export default function AccountPage() {
                     {savingAddress ? t('shopSavingAddress') : t('shopSaveAddress')}
                   </button>
                 </form>
+            </section>
+
+            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-2">
+              <h2 className="font-bold text-lg">{t('shopSavedCards')}</h2>
+              <p className="text-sm text-stone-600">{t('shopSavedCardsHint')}</p>
+              <p className="text-sm text-stone-500">{t('shopNoSavedCards')}</p>
             </section>
 
             <section className="bg-white border border-stone-200 p-5 space-y-3">

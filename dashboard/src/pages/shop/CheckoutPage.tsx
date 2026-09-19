@@ -1662,6 +1662,7 @@ export default function CheckoutPage() {
         basePath={shopBasePath(shopKey, locSlug)}
         merchantName={merchant?.name}
         logoUrl={merchant?.shopLogoUrl}
+        shopKey={shopKey}
         loggedIn={!!customer}
       />
 
@@ -2574,6 +2575,9 @@ export default function CheckoutPage() {
                   {t('shopPayOnline')}
                 </button>
               </div>
+              {cardSelected && customer ? (
+                <p className="text-xs text-stone-500">{t('shopCardSaveHint')}</p>
+              ) : null}
             </section>
             <section className="space-y-3 lg:hidden">
               {renderDiscountControls()}
