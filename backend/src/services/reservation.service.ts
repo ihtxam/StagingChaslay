@@ -247,6 +247,15 @@ function makeCode() {
   return `RES-${Date.now().toString(36).toUpperCase().slice(-6)}-${randomUUID().slice(0, 4).toUpperCase()}`;
 }
 
+export function assertReservationNotInPast(reservedAt: Date): void {
+  if (Number.isNaN(reservedAt.getTime())) {
+    throw new Error("Invalid reservation time");
+  }
+  if (reservedAt.getTime() < Date.now() - 60_000) {
+    throw new Error("Cannot book a time in the past");
+  }
+}
+
 async function getMerchant(merchantId: string) {
   const db = getDb();
   const merchant = await db.query.merchants.findFirst({
@@ -499,10 +508,7 @@ export class ReservationService {
     }
 
     const reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
-    if (Number.isNaN(reservedAt.getTime())) throw new Error("Invalid reservation time");
-    if (reservedAt.getTime() < Date.now() - 60_000) {
-      throw new Error("Cannot book a time in the past");
-    }
+    assertReservationNotInPast(reservedAt);
 
     if (input.source === "web" || !input.skipSlotCheck) {
       const dateYmd = formatZurichDate(reservedAt);
@@ -893,8 +899,8 @@ export class ReservationService {
       if (Number.isNaN(reservedAt.getTime())) throw new Error("Invalid reservation time");
       patch.reservedAt = reservedAt;
     }
-    if (patch.reservedAt && new Date(reservedAt).getTime() < Date.now() - 60_000) {
-      throw new Error("Cannot book a time in the past");
+    if (patch.reservedAt) {
+      assertReservationNotInPast(new Date(reservedAt));
     }
 
     let partySize = Number(current.partySize) || 2;

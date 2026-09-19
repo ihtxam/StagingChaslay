@@ -60,6 +60,7 @@ type FieldErrors = {
   guestFirstName?: string;
   guestLastName?: string;
   guestPhone?: string;
+  dateTime?: string;
 };
 
 const emptyForm = (source = 'phone'): ReservationCreateForm => ({
@@ -211,7 +212,6 @@ export default function ReservationCreateSheet({
 
   const timeChips = useMemo(() => {
     const raw = slots.length ? slots.map((s) => s.time) : hoursSlots;
-    if (form.date !== ymdZurich()) return raw;
     const [y, m, d] = form.date.split('-').map(Number);
     const now = Date.now();
     return raw.filter((slot) => {
@@ -263,7 +263,10 @@ export default function ReservationCreateSheet({
     } else if (phoneDigits.length > MAX_PHONE_DIGITS) {
       nextErrors.guestPhone = t('reservationsPhoneTooLong');
     }
-    if (nextErrors.guestFirstName || nextErrors.guestLastName || nextErrors.guestPhone) {
+    if (isPast) {
+      nextErrors.dateTime = t('reservationsDatePast');
+    }
+    if (nextErrors.guestFirstName || nextErrors.guestLastName || nextErrors.guestPhone || nextErrors.dateTime) {
       setFieldErrors(nextErrors);
       return;
     }
@@ -339,9 +342,15 @@ export default function ReservationCreateSheet({
                   <span className="sr-only">{t('date')}</span>
                   <input
                     type="date"
+                    min={ymdZurich()}
                     className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-xs"
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, date: e.target.value });
+                      if (fieldErrors.dateTime) {
+                        setFieldErrors((prev) => ({ ...prev, dateTime: undefined }));
+                      }
+                    }}
                   />
                 </label>
               </div>
@@ -375,7 +384,12 @@ export default function ReservationCreateSheet({
                     type="time"
                     className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-xs"
                     value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, time: e.target.value });
+                      if (fieldErrors.dateTime) {
+                        setFieldErrors((prev) => ({ ...prev, dateTime: undefined }));
+                      }
+                    }}
                   />
                 </label>
               </div>
@@ -399,9 +413,9 @@ export default function ReservationCreateSheet({
                   <p className="text-xs text-[var(--text-muted)]">{t('reservationsNoSlots')}</p>
                 )}
               </div>
-              {isPast ? (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                  {t('reservationsDatePast')}
+              {isPast || fieldErrors.dateTime ? (
+                <p className="mt-2 text-xs text-red-600" role="alert">
+                  {fieldErrors.dateTime || t('reservationsDatePast')}
                 </p>
               ) : null}
             </section>
@@ -596,7 +610,7 @@ export default function ReservationCreateSheet({
           <button
             type="submit"
             form="reservation-create-form"
-            disabled={saving}
+            disabled={saving || isPast}
             className="btn-primary flex-1 py-2 text-sm disabled:opacity-50"
           >
             {saving ? t('loading') : t('save')}

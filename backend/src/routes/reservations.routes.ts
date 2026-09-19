@@ -1,8 +1,11 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
-import { ReservationService } from "@/services/reservation.service";
+import {
+  assertReservationNotInPast,
+  ReservationService,
+  zurichLocalToDate,
+} from "@/services/reservation.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
-import { zurichLocalToDate } from "@/services/reservation.service";
 
 const router = Router();
 
@@ -92,6 +95,8 @@ router.post("/", async (req: Request, res: Response) => {
     if (req.body.date && req.body.time) {
       reservedAt = zurichLocalToDate(String(req.body.date), String(req.body.time));
     }
+    const at = reservedAt instanceof Date ? reservedAt : new Date(String(reservedAt ?? ""));
+    assertReservationNotInPast(at);
     const reservation = await ReservationService.create(req.merchantId!, {
       guestName: req.body.guestName,
       guestEmail: req.body.guestEmail,
