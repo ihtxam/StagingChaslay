@@ -30,6 +30,8 @@ export const PERMISSIONS = [
   "END_OF_DAY",
   "MANAGE_INVENTORY",
   "STOREKEEPER_INTAKE",
+  /** Correct a product saved in the current storekeeper session (qty, expiry, category). */
+  "STOREKEEPER_EDIT_INTAKE",
   "MANAGE_KIOSK",
 ] as const;
 
