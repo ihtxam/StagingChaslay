@@ -888,6 +888,12 @@
     <string name="gift_card_holder_optional">Holder name (optional)</string>
     <string name="gift_card_custom_amount">Custom</string>
     <string name="gift_card_add_to_cart">Add to cart</string>
+    <string name="gift_card_already_sold">This card is already registered. Use Recharge to add funds.</string>
+    <string name="gift_card_already_sold_title">Card already registered</string>
+    <string name="gift_card_already_sold_message">This card is already sold to %1$s. You cannot sell it again.</string>
+    <string name="gift_card_unknown_holder">an existing customer</string>
+    <string name="gift_card_use_different_card">Use a different card</string>
+    <string name="gift_card_recharge_this_card">Recharge this card</string>
     <string name="gift_card_physical">Physical card</string>
     <string name="gift_card_ecard">E-gift card</string>
     <string name="gift_card_sell_choose_media">Physical card or e-gift card?</string>

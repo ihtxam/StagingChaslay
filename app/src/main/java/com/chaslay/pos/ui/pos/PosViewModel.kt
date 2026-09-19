@@ -3105,6 +3105,25 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    fun clearGiftCardOpsLookup() {
+        updateExtras {
+            it.copy(
+                giftCardOpsLookedUpCard = null,
+                giftCardOpsError = null
+            )
+        }
+    }
+
+    fun switchGiftCardSellToReload() {
+        if (_uiExtras.value.giftCardOpsLookedUpCard == null) return
+        updateExtras {
+            it.copy(
+                giftCardOpsMode = GiftCardOp.RELOAD,
+                giftCardOpsError = null
+            )
+        }
+    }
+
     fun openGiftCardPayDialog() {
         if (!_uiExtras.value.giftCardsEnabled) return
         val extras = _uiExtras.value
@@ -3265,6 +3284,12 @@ class PosViewModel @Inject constructor(
         }
         if (mode == GiftCardOp.RELOAD && cardId.isNullOrBlank()) {
             updateExtras { it.copy(giftCardOpsError = "Look up the card before reloading") }
+            return
+        }
+        if (mode == GiftCardOp.SELL && !cardId.isNullOrBlank()) {
+            updateExtras {
+                it.copy(giftCardOpsError = appContext.getString(R.string.gift_card_already_sold))
+            }
             return
         }
         val isEcard = mediaType == "e_card"

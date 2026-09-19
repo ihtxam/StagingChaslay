@@ -82,6 +82,18 @@ type LookedUpCard = {
   } | null;
 };
 
+function cardHolderLabel(card: LookedUpCard): string {
+  if (card.holderName?.trim()) return card.holderName.trim();
+  const c = card.customer;
+  if (c) {
+    const name = [c.firstName, c.lastName].filter(Boolean).join(' ');
+    if (name) return name;
+    if (c.email?.trim()) return c.email.trim();
+    if (c.phone?.trim()) return c.phone.trim();
+  }
+  return '';
+}
+
 export default function WebPosGiftCardModal({
   open,
   mode,
@@ -212,6 +224,21 @@ export default function WebPosGiftCardModal({
   const maxA = settings?.maxAmount ?? 500;
   const reloadOk = settings?.reloadEnabled !== false;
   const customOk = settings?.customAmountEnabled !== false;
+  const sellBlockedByExistingCard = step === 'sell' && !!card;
+
+  const goToReloadForCard = () => {
+    setStep('reload');
+    setAmount('');
+    setCustom(false);
+    setLookupError('');
+  };
+
+  const clearRegisteredCard = () => {
+    setCard(null);
+    setCode('');
+    setLookupError('');
+    lastTriedRef.current = '';
+  };
 
   const confirmSellOrReload = () => {
     const n = roundMoney2(Number(amount));
@@ -265,8 +292,8 @@ export default function WebPosGiftCardModal({
         `${t('giftCardReload')} CHF ${n.toFixed(2)}`
       );
     } else {
-      if (card && Number(card.balance) > 0) {
-        toast.error(t('giftCardAlreadyExists'));
+      if (card) {
+        toast.error(t('giftCardAlreadySold'));
         return;
       }
       onAddToCart(
@@ -528,9 +555,41 @@ export default function WebPosGiftCardModal({
                   <div className="mt-1 text-lg font-bold">CHF {card.balance.toFixed(2)}</div>
                   {card.membershipEnabled && (
                     <div className="mt-1 text-xs">
-                      {t('membership')}: {card.holderName || card.customer?.firstName || '-'}
+                      {t('membership')}: {cardHolderLabel(card) || '-'}
                     </div>
                   )}
+                </div>
+              )}
+
+              {sellBlockedByExistingCard && (
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
+                  <p className="text-sm font-semibold text-amber-950">{t('giftCardAlreadySoldTitle')}</p>
+                  <p className="text-sm text-amber-900">
+                    {t('giftCardAlreadySoldMessage').replace(
+                      '{name}',
+                      cardHolderLabel(card!) || t('giftCardUnknownHolder')
+                    )}
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      className="btn-secondary flex-1"
+                      onClick={clearRegisteredCard}
+                    >
+                      {t('giftCardUseDifferentCard')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary flex-1"
+                      disabled={!reloadOk}
+                      onClick={goToReloadForCard}
+                    >
+                      {t('giftCardRechargeThisCard')}
+                    </button>
+                  </div>
+                  {!reloadOk ? (
+                    <p className="text-xs text-amber-800">{t('giftCardReloadDisabled')}</p>
+                  ) : null}
                 </div>
               )}
 
@@ -540,7 +599,8 @@ export default function WebPosGiftCardModal({
                 </button>
               )}
 
-              {(step === 'sell' || step === 'reload') && (media === 'e_card' && step === 'sell' || code || card) && (
+              {(step === 'reload' || (step === 'sell' && !card)) &&
+                (media === 'e_card' && step === 'sell' || code || card) && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
                     {presets.map((p) => (
