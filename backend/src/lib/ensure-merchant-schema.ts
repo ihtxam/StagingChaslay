@@ -1690,6 +1690,8 @@ export async function ensureAllMerchantSchema(): Promise<{
   subscriptionPlansMissing: string[];
   posSessionsMissing: string[];
 }> {
+  patchedColumns.clear();
+  patchedTables = false;
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
   await runAlterTablePatches();

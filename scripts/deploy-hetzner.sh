@@ -820,6 +820,13 @@ docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -
 # drizzle-kit push can OOM (exit 137) on small VMs; schema-repair covers DDL.
 dc run --rm migrate || echo "WARNING: migrate job failed or OOM; continuing (schema-repair will patch columns)"
 
+if [[ -f "$REPO_DIR/backend/sql/ensure-merchant-columns-drift.sql" ]]; then
+  echo "=== Apply merchant column drift SQL patches ==="
+  dc exec -T db \
+    psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
+    < "$REPO_DIR/backend/sql/ensure-merchant-columns-drift.sql" || true
+fi
+
 if [[ -f "$REPO_DIR/backend/sql/ensure-adyen-features.sql" ]]; then
   echo "=== Apply Adyen feature SQL patches ==="
   dc exec -T db \

@@ -81,7 +81,8 @@ services:
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMeNow!123}
       SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Reborn Admin}
     command: >
-      sh -c "npx drizzle-kit push --force &&
+      sh -c "npx tsx src/db/run-schema-patches.ts || true;
+             npx drizzle-kit push --force &&
              npx tsx src/db/seed.ts || true"
     restart: "no"
 
