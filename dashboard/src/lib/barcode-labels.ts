@@ -5,7 +5,7 @@ import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
 import { renderNiimbotLabelPng } from '@/lib/niimbot-label';
 import { buildLabelTspl } from '@/lib/tspl-label';
-import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import { resolveLabelPrintProtocol, pickPreferredLabelPrinter } from '@/lib/label-print-protocol';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 export const LABEL_WIDTHS_MM = [40, 58, 80, 100] as const;
@@ -150,8 +150,8 @@ export async function printLabelsViaAgentOrQueue(
   if (!printable.length) throw new Error('No barcodes to print');
 
   const labelsPrinters = printersForRole(settings || null, 'labels');
-  const labelProfile = labelsPrinters[0];
-  const printerName = labelProfile?.name?.trim();
+  const preferred = pickPreferredLabelPrinter(settings);
+  const printerName = preferred?.name?.trim() || labelsPrinters[0]?.name?.trim();
   if (!printerName) {
     throw new Error(
       'No label printer configured. Open Settings → Receipts & printers, add your LuckyDoor or Niimbot, and enable Labels.'

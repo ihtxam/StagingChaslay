@@ -35,7 +35,10 @@ class UsbEscPosDriver : PrinterDriver {
         val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
         val device = findDevice(usb, endpoint) ?: return Result.failure(IllegalStateException("USB printer not found"))
         if (!usb.hasPermission(device)) {
-            return Result.failure(IllegalStateException("USB permission not granted for ${endpoint.name}"))
+            com.rebornsense.printbridge.usb.UsbHostPermissions.ensureGranted(context)
+            if (!usb.hasPermission(device)) {
+                return Result.failure(IllegalStateException("USB permission not granted for ${endpoint.name}"))
+            }
         }
         val connection = usb.openDevice(device) ?: return Result.failure(IllegalStateException("USB open failed"))
         return try {

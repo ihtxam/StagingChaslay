@@ -103,3 +103,11 @@ export function resolveLabelPrintProtocol(
   }
   return 'escpos';
 }
+
+/** Receipt/kitchen ESC/POS must not be sent to sticker printers (blank feed). */
+export function printerUsesLabelProtocol(
+  settings?: LabelPrintSettings | null,
+  printerName?: string | null
+): boolean {
+  return resolveLabelPrintProtocol(settings, printerName) !== 'escpos';
+}

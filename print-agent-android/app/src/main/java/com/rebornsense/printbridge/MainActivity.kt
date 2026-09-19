@@ -1,13 +1,8 @@
 package com.rebornsense.printbridge
 
 import android.Manifest
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -31,11 +26,11 @@ import com.rebornsense.printbridge.device.DeviceProfiler
 import com.rebornsense.printbridge.setup.OemSettingsNavigator
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
+import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.BuildConfig
 
 class MainActivity : AppCompatActivity() {
     private val registry = DriverRegistry()
-    private var usbPermissionReceiver: BroadcastReceiver? = null
     private var pendingBluetoothTestPrint: PrinterEndpoint? = null
     private lateinit var printerAdapter: PrinterListAdapter
     private lateinit var emptyPrintersText: TextView
@@ -294,7 +289,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPrinters() {
-        requestUsbPermissionsForAttachedDevices()
+        UsbHostPermissions.ensureGranted(this)
         val printers = registry.refresh(applicationContext)
         val defaultId = PrinterPreferences.getDefaultPrinterId(this)
         printerAdapter.submit(printers, defaultId)
@@ -382,41 +377,8 @@ class MainActivity : AppCompatActivity() {
         return init + text.toByteArray(Charsets.UTF_8) + feed + cut
     }
 
-    private fun requestUsbPermissionsForAttachedDevices() {
-        val usb = getSystemService(Context.USB_SERVICE) as UsbManager
-        val action = "com.rebornsense.printbridge.USB_PERMISSION"
-        if (usbPermissionReceiver == null) {
-            usbPermissionReceiver = object : BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) {
-                    refreshPrinters()
-                }
-            }
-            registerReceiver(
-                usbPermissionReceiver,
-                IntentFilter(action),
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    RECEIVER_NOT_EXPORTED
-                } else {
-                    0
-                }
-            )
-        }
-        for (device in usb.deviceList.values) {
-            if (usb.hasPermission(device)) continue
-            val pi = PendingIntent.getBroadcast(
-                this,
-                device.deviceId,
-                Intent(action),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            usb.requestPermission(device, pi)
-        }
-    }
-
     override fun onDestroy() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
-        usbPermissionReceiver?.let { unregisterReceiver(it) }
-        usbPermissionReceiver = null
         super.onDestroy()
     }
 

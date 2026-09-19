@@ -40,6 +40,7 @@ import {
 } from '@/lib/adyen-receipt';
 import { adjustReceiptVatForDiscount } from '@/lib/tax-discount';
 import { looksLikeLabelPrinterName } from './printer-kind';
+import { resolveLabelPrintProtocol } from './label-print-protocol';
 
 /** Where the kitchen ticket was printed from */
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
@@ -2831,7 +2832,10 @@ export function printersForRole(
   const globalPaper: 58 | 80 = settings?.paperWidthMm === 58 ? 58 : 80;
   const list = (settings?.printers || []).filter((p) => {
     if (p.enabled === false || !p.name) return false;
-    if (role !== 'labels' && looksLikeLabelPrinterName(p.name)) return false;
+    if (role !== 'labels') {
+      if (looksLikeLabelPrinterName(p.name) || looksLikeLabelPrinterName(p.portName)) return false;
+      if (p.printLabels && resolveLabelPrintProtocol(settings, p.name) !== 'escpos') return false;
+    }
     return true;
   });
   const matched = list.filter((p) => {

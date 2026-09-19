@@ -1,5 +1,6 @@
 import {
   buildOrderLabelData,
+  formatOrderLabelWeightKg,
   orderLabelMetaLine,
   type OrderLabelData,
   type OrderLabelLine,
@@ -9,13 +10,19 @@ import {
   parseLabelHeightMm,
   parseLabelWidthMm,
   type LabelPrintOptions,
+  type LabelProduct,
 } from '@/lib/barcode-labels';
 import { concatBytes, escposCode128 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { printViaAgentOrQueue } from '@/lib/webpos-print-relay';
 import { printNiimbotLabelViaAgent } from '@/lib/print-agent';
-import { labelPixelSize } from '@/lib/niimbot-label';
-import { buildTsplCommandList, encodeTsplCommands } from '@/lib/tspl-label-core';
+import { renderNiimbotLabelPng } from '@/lib/niimbot-label';
+import {
+  buildTsplBitmapLabel,
+  buildTsplCommandList,
+  encodeTsplCommands,
+  tsplBarcodeFits,
+} from '@/lib/tspl-label-core';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import { pickPreferredLabelPrinter, resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
 import JsBarcode from 'jsbarcode';
@@ -24,6 +31,13 @@ function toBase64(bytes: Uint8Array): string {
   let bin = '';
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   return btoa(bin);
+}
+
+function fromBase64(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 function escapeHtml(s: string): string {
@@ -53,6 +67,24 @@ function renderCode128Svg(data: string, opts?: { height?: number; width?: number
   } catch {
     return '';
   }
+}
+
+function orderLabelAsProduct(data: OrderLabelData): LabelProduct {
+  return {
+    id: data.heldId,
+    name: data.productName,
+    barcode: data.barcode,
+    price: data.price,
+    sku: formatOrderLabelWeightKg(data.weightKg) || null,
+  };
+}
+
+function orderLabelRenderOpts(data: OrderLabelData, opts: LabelPrintOptions): LabelPrintOptions {
+  return {
+    ...opts,
+    showPrice: true,
+    showSku: !!formatOrderLabelWeightKg(data.weightKg),
+  };
 }
 
 export function buildOrderLabelEscPos(data: OrderLabelData, opts: LabelPrintOptions): Uint8Array {
@@ -91,88 +123,6 @@ export function buildOrderLabelTspl(data: OrderLabelData, opts: LabelPrintOption
       copies: o.copies,
     })
   );
-}
-
-async function renderNiimbotOrderLabelPng(
-  data: OrderLabelData,
-  opts: LabelPrintOptions
-): Promise<{ bitmapBase64: string; widthPx: number; heightPx: number }> {
-  if (typeof document === 'undefined') throw new Error('Label rendering requires a browser');
-  const o = normalizeLabelOptions(opts);
-  const { widthPx, heightPx } = labelPixelSize(o);
-  const canvas = document.createElement('canvas');
-  canvas.width = widthPx;
-  canvas.height = heightPx;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas not available');
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, widthPx, heightPx);
-  ctx.fillStyle = '#000000';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-
-  const pad = Math.max(2, Math.round(widthPx * 0.04));
-  let y = pad;
-  const innerW = widthPx - pad * 2;
-  const lineH = Math.max(10, Math.round(heightPx * 0.12));
-
-  if (o.showStoreName && o.storeName) {
-    ctx.font = `bold ${Math.max(9, Math.round(lineH * 0.75))}px system-ui,sans-serif`;
-    ctx.fillText(o.storeName.slice(0, 28), widthPx / 2, y, innerW);
-    y += lineH;
-  }
-  if (o.showProductName && data.productName) {
-    ctx.font = `600 ${Math.max(10, Math.round(lineH * 0.85))}px system-ui,sans-serif`;
-    ctx.fillText(data.productName.slice(0, 40), widthPx / 2, y, innerW);
-    y += lineH;
-  }
-  const meta = orderLabelMetaLine(data);
-  if (meta) {
-    ctx.font = `${Math.max(8, Math.round(lineH * 0.65))}px system-ui,sans-serif`;
-    ctx.fillText(meta, widthPx / 2, y, innerW);
-    y += Math.round(lineH * 0.85);
-  }
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  JsBarcode(svg, data.barcode, { format: 'CODE128', displayValue: false, height: 36, width: 2, margin: 0 });
-  const svgData = new XMLSerializer().serializeToString(svg);
-  const img = new Image();
-  const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgData)}`;
-  await new Promise<void>((resolve) => {
-    img.onload = () => {
-      const scale = Math.min(1, innerW / Math.max(img.width, 1));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      ctx.drawImage(img, pad + (innerW - w) / 2, y, w, h);
-      y += h + 2;
-      resolve();
-    };
-    img.onerror = () => resolve();
-    img.src = url;
-  });
-
-  if (o.showBarcodeNumber) {
-    ctx.font = `${Math.max(8, Math.round(lineH * 0.65))}px ui-monospace,monospace`;
-    ctx.fillText(data.barcode.slice(0, 32), widthPx / 2, Math.min(y, heightPx - lineH), innerW);
-  }
-
-  const imageData = ctx.getImageData(0, 0, widthPx, heightPx);
-  const rowBytes = Math.ceil(widthPx / 8);
-  const bitmap = new Uint8Array(rowBytes * heightPx);
-  const px = imageData.data;
-  for (let row = 0; row < heightPx; row++) {
-    for (let x = 0; x < widthPx; x++) {
-      const i = (row * widthPx + x) * 4;
-      const lum = px[i]! * 0.299 + px[i + 1]! * 0.587 + px[i + 2]! * 0.114;
-      if (lum >= 200) continue;
-      const byteIndex = row * rowBytes + (x >> 3);
-      bitmap[byteIndex] = (bitmap[byteIndex] || 0) | (1 << (7 - (x & 7)));
-    }
-  }
-  let bin = '';
-  for (let i = 0; i < bitmap.length; i++) bin += String.fromCharCode(bitmap[i]!);
-  return { bitmapBase64: btoa(bin), widthPx, heightPx };
 }
 
 export function printOrderLabelHtml(data: OrderLabelData, opts: LabelPrintOptions) {
@@ -234,7 +184,7 @@ export async function printOrderLabelViaAgent(
   opts?: { storeName?: string; retryLocally?: boolean }
 ): Promise<'local' | 'queued' | 'browser'> {
   const data = buildOrderLabelData(heldId, lines);
-  const labelOpts = labelOptionsFromPrintSettings(settings, opts?.storeName);
+  const labelOpts = orderLabelRenderOpts(data, labelOptionsFromPrintSettings(settings, opts?.storeName));
   const labelsPrinters = printersForRole(settings || null, 'labels');
   const preferred = pickPreferredLabelPrinter(settings);
   const printerName = preferred?.name?.trim() || labelsPrinters[0]?.name?.trim();
@@ -247,29 +197,39 @@ export async function printOrderLabelViaAgent(
     ((settings?.printers || []).find((p) => p.name === printerName) as { portName?: string | null } | undefined)
       ?.portName || null;
   const protocol = resolveLabelPrintProtocol(settings, printerName);
+  const o = normalizeLabelOptions(labelOpts);
 
-  if (protocol === 'tspl') {
-    const payload = buildOrderLabelTspl(data, labelOpts);
+  if (protocol === 'niimbot' || protocol === 'tspl') {
+    const rendered = await renderNiimbotLabelPng(orderLabelAsProduct(data), labelOpts);
+    if (!rendered.bitmapBase64) throw new Error('Order label raster was empty');
+    if (protocol === 'niimbot') {
+      await printNiimbotLabelViaAgent({
+        printerName,
+        portName,
+        bitmapBase64: rendered.bitmapBase64,
+        widthPx: rendered.widthPx,
+        heightPx: rendered.heightPx,
+      });
+      return 'local';
+    }
+    const payload = tsplBarcodeFits(data.barcode, o.widthMm)
+      ? buildOrderLabelTspl(data, labelOpts)
+      : buildTsplBitmapLabel({
+          widthMm: o.widthMm,
+          heightMm: o.heightMm,
+          bitmap: fromBase64(rendered.bitmapBase64),
+          widthPx: rendered.widthPx,
+          heightPx: rendered.heightPx,
+          copies: o.copies,
+        });
     return await printViaAgentOrQueue({
       dataBase64: toBase64(payload),
       printerName,
       text: data.barcode,
       retryLocally: opts?.retryLocally,
       jobKind: 'other',
-      jobLabel: 'order-label-tspl',
+      jobLabel: tsplBarcodeFits(data.barcode, o.widthMm) ? 'order-label-tspl' : 'order-label-tspl-bitmap',
     });
-  }
-
-  if (protocol === 'niimbot') {
-    const rendered = await renderNiimbotOrderLabelPng(data, labelOpts);
-    await printNiimbotLabelViaAgent({
-      printerName,
-      portName,
-      bitmapBase64: rendered.bitmapBase64,
-      widthPx: rendered.widthPx,
-      heightPx: rendered.heightPx,
-    });
-    return 'local';
   }
 
   const payload = buildOrderLabelEscPos(data, labelOpts);
