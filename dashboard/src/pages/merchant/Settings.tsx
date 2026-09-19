@@ -1305,11 +1305,15 @@ export default function Settings() {
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
+    const includeTax = tab === 'taxes';
     const vatRate = parseTaxRateForSave(settings.vatRate);
     const taxTakeawayRate = parseTaxRateForSave(settings.taxTakeawayRate);
     const taxDineInRate = parseTaxRateForSave(settings.taxDineInRate);
     const taxDeliveryRate = parseTaxRateForSave(settings.taxDeliveryRate);
-    if ([vatRate, taxTakeawayRate, taxDineInRate, taxDeliveryRate].some((rate) => rate === null)) {
+    if (
+      includeTax &&
+      [vatRate, taxTakeawayRate, taxDineInRate, taxDeliveryRate].some((rate) => rate === null)
+    ) {
       toast.error(t('taxRateRange'));
       return;
     }
@@ -1323,12 +1327,16 @@ export default function Settings() {
         city: settings.city,
         country: settings.country,
         vatNumber: settings.vatNumber,
-        vatRate,
-        taxTakeawayRate,
-        taxDineInRate,
-        taxDeliveryRate,
-        taxIncludedInPrice: !!settings.taxIncludedInPrice,
-        vatAfterDiscount: settings.vatAfterDiscount !== false,
+        ...(includeTax
+          ? {
+              vatRate,
+              taxTakeawayRate,
+              taxDineInRate,
+              taxDeliveryRate,
+              taxIncludedInPrice: !!settings.taxIncludedInPrice,
+              vatAfterDiscount: settings.vatAfterDiscount !== false,
+            }
+          : {}),
         slug: settings.slug || undefined,
         subdomain: settings.subdomain || undefined,
         ...(CUSTOM_DOMAIN_WIZARD_ENABLED
@@ -1427,12 +1435,12 @@ export default function Settings() {
     setSavingAdyen(true);
     try {
       const response = await api.put('/terminals/adyen-credentials', {
-        adyenMerchantAccount: merchantAccount,
-        adyenStoreReference: storeReference.trim() || null,
-        adyenApiKey: apiKey || undefined,
-        adyenClientId: clientId,
-        adyenHmacKey: hmacKey || undefined,
-        adyenLiveUrlPrefix: liveUrlPrefix || undefined,
+        adyenMerchantAccount: merchantAccount.trim() || undefined,
+        adyenStoreReference: storeReference.trim() || undefined,
+        adyenApiKey: apiKey.trim() || undefined,
+        adyenClientId: clientId.trim() || undefined,
+        adyenHmacKey: hmacKey.trim() || undefined,
+        adyenLiveUrlPrefix: liveUrlPrefix.trim() || undefined,
       });
       const a = response.data.adyen || {};
       applyAdyenCreds(a);
@@ -1960,7 +1968,8 @@ export default function Settings() {
                       min={0}
                       max={TAX_RATE_MAX}
                       step="0.01"
-                      value={settings.taxTakeawayRate ?? settings.vatRate ?? ''}
+                      value={settings.taxTakeawayRate ?? ''}
+                      placeholder={settings.vatRate || ''}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
@@ -1976,7 +1985,8 @@ export default function Settings() {
                       min={0}
                       max={TAX_RATE_MAX}
                       step="0.01"
-                      value={settings.taxDineInRate ?? settings.vatRate ?? ''}
+                      value={settings.taxDineInRate ?? ''}
+                      placeholder={settings.vatRate || ''}
                       onChange={(e) =>
                         setSettings({
                           ...settings,
@@ -1992,7 +2002,8 @@ export default function Settings() {
                       min={0}
                       max={TAX_RATE_MAX}
                       step="0.01"
-                      value={settings.taxDeliveryRate ?? settings.vatRate ?? ''}
+                      value={settings.taxDeliveryRate ?? ''}
+                      placeholder={settings.vatRate || ''}
                       onChange={(e) =>
                         setSettings({
                           ...settings,

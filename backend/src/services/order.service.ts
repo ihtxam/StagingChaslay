@@ -11,6 +11,8 @@ import {
   INCOMING_ONLINE_ORDER_STATUSES,
   onlineOrderScopeCondition,
 } from "@/lib/online-order-scope";
+import { AdyenService } from "@/services/adyen.service";
+import { isPaidOnlineEcommerce, onlineCancelPaymentPatch } from "@/lib/online-payment-refund";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -826,13 +828,19 @@ export class OrderService {
       case "reject":
       case "cancel":
       case "archive": {
-        if (status === "completed") throw new Error("Cannot cancel a completed order");
+        if (status === "completed" && !isPaidOnlineEcommerce(order)) {
+          throw new Error("Cannot cancel a completed order");
+        }
+        const refund = await AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+        if (refund.attempted && !refund.refunded) {
+          throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+        }
         const reasonText = resolvePosCancelReason(String(opts?.rejectReason || ""));
         const updated = await set({
           status: "cancelled",
-          paymentStatus: "cancelled",
           cancelReason: reasonText || null,
           cancelledAt: new Date(),
+          ...onlineCancelPaymentPatch(refund),
         });
         if (action === "reject") {
           if (order.orderType === "web_shop" && order.customerEmail) {
@@ -1008,6 +1016,11 @@ export class OrderService {
         throw new Error("Order not found");
       }
 
+      const refund = await AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+      if (refund.attempted && !refund.refunded) {
+        throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+      }
+
       // Restore stock
       for (const item of order.items) {
         const product = await db.query.products.findFirst({
@@ -1025,7 +1038,11 @@ export class OrderService {
       // Update order status
       const updatedOrder = await db
         .update(schema.orders)
-        .set({ status: "cancelled", paymentStatus: "cancelled" })
+        .set({
+          status: "cancelled",
+          cancelledAt: new Date(),
+          ...onlineCancelPaymentPatch(refund),
+        })
         .where(eq(schema.orders.id, orderId))
         .returning();
 

@@ -3041,7 +3041,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           "CHF",
           returnUrl,
           checkoutOrigin,
-          { customerId: authCustomer.customerId || customerId }
+          { customerId: authCustomer.customerId || customerId, authenticated: Boolean(authCustomer.customerId) }
         );
         paymentSession = {
           id: session.id,
@@ -3208,7 +3208,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       "CHF",
       returnUrl,
       checkoutOrigin,
-      { customerId: authCustomerId || order.customerId }
+      { customerId: authCustomerId || order.customerId, authenticated: Boolean(authCustomerId) }
     );
     res.json({
       success: true,
@@ -3269,14 +3269,18 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
     });
 
     try {
-      await AdyenService.recordPaymentTransaction(
-        merchant.id,
-        order.id,
-        parseFloat(order.total.toString()),
-        "card",
-        String(req.body.pspReference || `DEMO-${order.orderNumber}`),
-        "completed"
-      );
+      const { isUsableAdyenPspReference } = await import("@/lib/online-payment-refund");
+      const psp = String(req.body.pspReference || req.body.adyenReference || "").trim();
+      if (isDemo || isUsableAdyenPspReference(psp)) {
+        await AdyenService.recordPaymentTransaction(
+          merchant.id,
+          order.id,
+          parseFloat(order.total.toString()),
+          "card",
+          isDemo ? String(req.body.pspReference || `DEMO-${order.orderNumber}`) : psp,
+          "completed"
+        );
+      }
     } catch {
       /* optional */
     }

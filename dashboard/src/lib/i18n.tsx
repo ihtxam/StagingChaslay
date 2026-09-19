@@ -1988,6 +1988,8 @@ const en: Dict = {
   webPosPaymentUpdateFailed: 'Could not update payment method',
   webPosRefundConfirm: 'Refund {amount}?',
   webPosOrderCancelled: 'Order cancelled',
+  webPosOrderCancelledAndRefunded: 'Order cancelled and online payment refunded',
+  webPosCancelRefundsOnline: 'This order was paid online. Confirming will also refund the card/TWINT payment automatically.',
   webPosOrderRefunded: 'Order refunded',
   webPosRefundPrintPromptTitle: 'Print refund receipt?',
   webPosRefundPrintPromptBody:
@@ -6069,6 +6071,8 @@ const fr: Dict = {
   webPosPaymentUpdateFailed: 'Impossible de modifier le mode de paiement',
   webPosRefundConfirm: 'Rembourser {amount} ?',
   webPosOrderCancelled: 'Commande annulée',
+  webPosOrderCancelledAndRefunded: 'Commande annulée et paiement en ligne remboursé',
+  webPosCancelRefundsOnline: 'Cette commande a été payée en ligne. Confirmer remboursera aussi automatiquement le paiement carte/TWINT.',
   webPosOrderRefunded: 'Commande remboursée',
   webPosRefundPrintPromptTitle: 'Imprimer le reçu de remboursement ?',
   webPosRefundPrintPromptBody:
@@ -10097,6 +10101,8 @@ const de: Dict = {
   webPosPaymentUpdateFailed: 'Zahlungsart konnte nicht geändert werden',
   webPosRefundConfirm: '{amount} erstatten?',
   webPosOrderCancelled: 'Bestellung storniert',
+  webPosOrderCancelledAndRefunded: 'Bestellung storniert und Online-Zahlung erstattet',
+  webPosCancelRefundsOnline: 'Diese Bestellung wurde online bezahlt. Bestätigen erstattet die Karten-/TWINT-Zahlung automatisch.',
   webPosOrderRefunded: 'Bestellung erstattet',
   webPosRefundPrintPromptTitle: 'Erstattungsbeleg drucken?',
   webPosRefundPrintPromptBody:
