@@ -7,6 +7,7 @@ import {
   encodeTsplCommands,
   encodeWin1252,
   isTsplLabelPrinterName,
+  tsplCode128BBarcode,
   tsplQuote,
 } from './tspl-label-core';
 
@@ -33,10 +34,25 @@ const cmds = buildTsplCommandList({
 const joined = cmds.join('\n');
 assert.match(joined, /SIZE 100 mm,50 mm/);
 assert.match(joined, /CODEPAGE 1252/);
-assert.match(joined, /BARCODE \d+,\d+,"128",/);
-assert.match(joined, /"7612345678901"/);
+assert.match(joined, /BARCODE \d+,\d+,"128M",/);
+assert.match(joined, /">:7612345678901"/);
 assert.match(joined, /PRINT 1,2/);
 assert.ok(!joined.includes('ESC'));
+assert.ok(!joined.includes('"128",'));
+
+const numericEven = buildTsplCommandList({
+  widthMm: 40,
+  heightMm: 20,
+  barcode: '200000000001',
+  showBarcodeNumber: true,
+});
+const numericJoined = numericEven.join('\n');
+assert.match(numericJoined, /">:200000000001"/);
+assert.match(numericJoined, /TEXT \d+,\d+,"2",0,1,1,"200000000001"/);
+assert.equal(
+  tsplCode128BBarcode(8, 10, 56, 1, 2, '200000000001'),
+  'BARCODE 8,10,"128M",56,0,0,1,2,">:200000000001"'
+);
 
 const bytes = encodeTsplCommands(cmds);
 assert.equal(bytes[0], 0x53); // S of SIZE

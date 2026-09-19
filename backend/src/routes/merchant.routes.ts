@@ -728,6 +728,10 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
     if (updates.sku != null && String(updates.sku).length > 100) {
       return res.status(400).json({ error: "SKU must be at most 100 characters" });
     }
+    if (updates.barcode !== undefined) {
+      const { BarcodeService } = await import("@/services/barcode.service");
+      updates.barcode = BarcodeService.normalizeForSave(updates.barcode);
+    }
     if (updates.stock !== undefined) {
       const stockNum = Number(updates.stock);
       if (!Number.isFinite(stockNum) || stockNum < 0) {

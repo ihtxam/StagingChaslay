@@ -43,7 +43,7 @@ async function drawBarcodeOnCanvasAsync(
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   try {
     JsBarcode(svg, barcode, {
-      format: 'CODE128',
+      format: 'CODE128B',
       displayValue: false,
       height,
       width: 2,

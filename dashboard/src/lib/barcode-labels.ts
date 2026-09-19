@@ -58,7 +58,8 @@ function renderCode128Svg(data: string, opts?: { height?: number; width?: number
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   try {
     JsBarcode(svg, raw, {
-      format: 'CODE128',
+      // Subset B encodes each digit as ASCII so HRI/preview shows 0-9, not Code-C letters.
+      format: 'CODE128B',
       displayValue: false,
       height: opts?.height ?? 36,
       width: 2,

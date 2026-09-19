@@ -79,6 +79,23 @@ function tsplLine(text: string, x: number, y: number, font: string, mul: number)
   return `TEXT ${x},${y},"${font}",0,${mul},${mul},"${tsplQuote(text, 48)}"`;
 }
 
+/**
+ * Code128 subset B (TSPL 128M + `>:` start code).
+ * Auto type `"128"` switches to subset C for even-length digits; some LuckyDoor/TSC
+ * firmwares then print HRI as letters (e.g. "BKR CGF") instead of 0-9.
+ */
+export function tsplCode128BBarcode(
+  x: number,
+  y: number,
+  height: number,
+  narrow: number,
+  wide: number,
+  data: string
+): string {
+  const payload = tsplQuote(String(data || '').replace(/>/g, ''), 48);
+  return `BARCODE ${x},${y},"128M",${height},0,0,${narrow},${wide},">:${payload}"`;
+}
+
 export function buildTsplCommandList(fields: TsplLabelFields): string[] {
   const w = fields.widthMm;
   const h = fields.heightMm;
@@ -119,8 +136,7 @@ export function buildTsplCommandList(fields: TsplLabelFields): string[] {
   const barH = Math.max(40, Math.min(h <= 20 ? 56 : 160, remain));
   const narrow = w <= 40 ? 1 : 2;
   const wide = w <= 40 ? 2 : 4;
-  const barcode = tsplQuote(fields.barcode, 48);
-  cmds.push(`BARCODE ${pad},${y},"128",${barH},0,0,${narrow},${wide},"${barcode}"`);
+  cmds.push(tsplCode128BBarcode(pad, y, barH, narrow, wide, fields.barcode));
   y += barH + 4;
   if (fields.showBarcodeNumber !== false) {
     cmds.push(tsplLine(fields.barcode, pad, Math.min(y, dotsH - line2), '2', 1));

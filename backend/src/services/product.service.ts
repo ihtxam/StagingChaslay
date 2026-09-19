@@ -281,7 +281,8 @@ export class ProductService {
         patched.description = repairCatalogText(patched.description);
       }
       if (patched.barcode !== undefined) {
-        const b = String(patched.barcode || "").trim();
+        // Empty string / whitespace clears the barcode (NULL). Unique index allows many NULLs.
+        const b = patched.barcode == null ? "" : String(patched.barcode).trim();
         patched.barcode = b || null;
       }
       const product = await db
