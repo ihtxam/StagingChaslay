@@ -1,5 +1,9 @@
 name: Build Bridge APK
 
+# Slim path: JDK + Android cmdline-tools on the runner.
+# Do NOT pull mingc/android-build-box — that image fills ubuntu-latest disk
+# ("no space left on device" on run 35449045827 and every recent main build).
+
 on:
   workflow_dispatch:
   push:
@@ -14,6 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Disk before SDK
+        run: df -h
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       - name: Write Adyen SDK keys when secrets exist
         env:
@@ -36,34 +54,24 @@ jobs:
             echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
           fi
 
-      - name: Build APK in Android container
+      - name: Build APK
+        working-directory: print-agent-android
         run: |
           set -euo pipefail
-          mkdir -p backend/public/downloads
-          docker run --rm \
-            -e ANDROID_SDK_ROOT=/opt/android-sdk-linux \
-            -e GRADLE_USER_HOME=/tmp/gradle-home \
-            -v "$PWD/print-agent-android:/project" \
-            -v "$PWD/backend/public/downloads:/out" \
-            -w /project \
-            mingc/android-build-box:latest \
-            bash -c 'set -euo pipefail
-              export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
-              rm -rf /project/.gradle /project/app/build /tmp/gradle-home
-              mkdir -p /opt/android-sdk/.android /tmp/gradle-home
-              if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
-                keytool -genkeypair -v \
-                  -keystore /opt/android-sdk/.android/debug.keystore \
-                  -storepass android -alias androiddebugkey -keypass android \
-                  -keyalg RSA -keysize 2048 -validity 10000 \
-                  -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
-              fi
-              chmod +x ./gradlew
-              ./gradlew assembleRelease --no-daemon --no-build-cache -g /tmp/gradle-home
-              APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
-              test -n "$APK"
-              cp -f "$APK" /out/reborn-print-bridge.apk
-            '
+          mkdir -p "$HOME/.android" ../backend/public/downloads
+          if [[ ! -f "$HOME/.android/debug.keystore" ]]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
+          fi
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon --no-build-cache
+          APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
+          test -n "$APK"
+          cp -f "$APK" ../backend/public/downloads/reborn-print-bridge.apk
+          df -h
 
       - name: Verify APK version matches build.gradle
         run: |
