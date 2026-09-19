@@ -28,6 +28,8 @@ type Props = {
   simpleConfirm?: boolean;
   /** Optional API reasons (en/fr/de). Falls back to i18n keys. */
   reasons?: CancelReasonOption[];
+  /** When set, warn that confirming will refund a paid-online Adyen payment. */
+  refundOnlineNotice?: boolean;
   busy?: boolean;
   onClose: () => void;
   /** reasonId + localized label for display; backend normalizes to English. */
@@ -41,6 +43,7 @@ export default function WebPosCancelModal({
   simpleConfirm = false,
   reasons: apiReasons,
   busy = false,
+  refundOnlineNotice = false,
   onClose,
   onConfirm,
 }: Props) {
@@ -87,6 +90,11 @@ export default function WebPosCancelModal({
           </div>
           <div className="p-4">
             <p className="text-sm text-[var(--text-muted)]">{t('webPosCancelConfirm')}</p>
+            {refundOnlineNotice ? (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {t('webPosCancelRefundsOnline')}
+              </p>
+            ) : null}
           </div>
           <div className="flex gap-2 border-t border-[var(--border)] p-4">
             <button type="button" className="btn-secondary flex-1" onClick={onClose} disabled={busy}>
@@ -121,6 +129,11 @@ export default function WebPosCancelModal({
           ) : (
             <p className="text-sm text-[var(--text-muted)]">{t('webPosCancelReasonPrompt')}</p>
           )}
+          {refundOnlineNotice ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {t('webPosCancelRefundsOnline')}
+            </p>
+          ) : null}
           <div className="space-y-1.5">
             {options.map((r) => (
               <label

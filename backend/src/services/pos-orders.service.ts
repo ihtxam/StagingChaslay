@@ -19,6 +19,10 @@ import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { AdyenService } from "@/services/adyen.service";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import {
+  isPaidOnlineEcommerce,
+  onlineCancelPaymentPatch,
+} from "@/lib/online-payment-refund";
+import {
   decideOpenTicketClose,
   nextOpenTicketStatus,
   OPEN_TICKET_STATUSES,
@@ -533,8 +537,10 @@ export class PosOrdersService {
     const awaitingPayment =
       payStatus === "awaiting_payment" ||
       String(order.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "pay_later";
+    const paidOnline = isPaidOnlineEcommerce(order);
     if (
       !awaitingPayment &&
+      !paidOnline &&
       (BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
         COMPLETED_STATUSES.has(payStatus))
     ) {
@@ -546,13 +552,18 @@ export class PosOrdersService {
     const reasonText = resolvePosCancelReason(reason);
     if (!reasonText) throw new Error("Cancel reason is required");
 
+    const refund = await AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+    if (refund.attempted && !refund.refunded) {
+      throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+    }
+
     const [updated] = await db
       .update(schema.orders)
       .set({
         status: "cancelled",
-        paymentStatus: "cancelled",
         cancelReason: reasonText,
         cancelledAt: new Date(),
+        ...onlineCancelPaymentPatch(refund),
       })
       .where(eq(schema.orders.id, orderId))
       .returning();
@@ -710,7 +721,27 @@ export class PosOrdersService {
     const terminalRefundAmount = refundDelta.terminal;
 
     let terminalRefundRef: string | null = null;
-    if (terminalRefundAmount > 0.001) {
+    if (isPaidOnlineEcommerce(order) && refund > 0.001) {
+      const psp = await AdyenService.findEcommercePspReference(merchantId, order);
+      if (!psp) {
+        throw new Error(
+          "Cannot refund this online payment: Adyen checkout reference is missing on this order."
+        );
+      }
+      await AdyenService.refundEcommercePayment(merchantId, psp, refund, "CHF");
+      try {
+        await AdyenService.recordPaymentTransaction(
+          merchantId,
+          orderId,
+          -refund,
+          "refund",
+          psp,
+          "completed"
+        );
+      } catch (logErr) {
+        console.warn("Online refund approved but transaction log failed:", logErr);
+      }
+    } else if (terminalRefundAmount > 0.001) {
       let poiTxId = String(order.adyenReference || "").trim();
       let poiTs =
         order.adyenPoiTransactionTs instanceof Date

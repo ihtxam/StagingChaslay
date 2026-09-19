@@ -49,6 +49,7 @@ import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
 import { isValidAdyenClientKey } from "@/lib/adyen-checkout-env";
+import { incomingTaxRateOrPreserve, shouldWriteCredential } from "@/lib/merchant-settings-preserve";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -459,15 +460,21 @@ export class MerchantSettingsService {
     if (updates.country !== undefined) patch.country = updates.country;
     if (updates.businessLicense !== undefined) patch.businessLicense = updates.businessLicense;
     if (updates.vatNumber !== undefined) patch.vatNumber = updates.vatNumber;
-    if (updates.vatRate !== undefined) patch.vatRate = normalizeTaxRatePercent(updates.vatRate, "vatRate");
+    if (updates.vatRate !== undefined) {
+      const vatRate = incomingTaxRateOrPreserve(updates.vatRate, "vatRate");
+      if (vatRate !== undefined) patch.vatRate = vatRate;
+    }
     if (updates.taxTakeawayRate !== undefined) {
-      patch.taxTakeawayRate = normalizeTaxRatePercent(updates.taxTakeawayRate, "taxTakeawayRate");
+      const rate = incomingTaxRateOrPreserve(updates.taxTakeawayRate, "taxTakeawayRate");
+      if (rate !== undefined) patch.taxTakeawayRate = rate;
     }
     if (updates.taxDineInRate !== undefined) {
-      patch.taxDineInRate = normalizeTaxRatePercent(updates.taxDineInRate, "taxDineInRate");
+      const rate = incomingTaxRateOrPreserve(updates.taxDineInRate, "taxDineInRate");
+      if (rate !== undefined) patch.taxDineInRate = rate;
     }
     if (updates.taxDeliveryRate !== undefined) {
-      patch.taxDeliveryRate = normalizeTaxRatePercent(updates.taxDeliveryRate, "taxDeliveryRate");
+      const rate = incomingTaxRateOrPreserve(updates.taxDeliveryRate, "taxDeliveryRate");
+      if (rate !== undefined) patch.taxDeliveryRate = rate;
     }
     if (updates.taxIncludedInPrice !== undefined) patch.taxIncludedInPrice = !!updates.taxIncludedInPrice;
     if (updates.vatAfterDiscount !== undefined) patch.vatAfterDiscount = !!updates.vatAfterDiscount;
@@ -567,21 +574,23 @@ export class MerchantSettingsService {
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryPerOrderFee must be >= 0");
       patch.deliveryPerOrderFee = n.toFixed(2);
     }
-    if (updates.adyenMerchantAccount !== undefined) patch.adyenMerchantAccount = updates.adyenMerchantAccount;
+    if (shouldWriteCredential(updates.adyenMerchantAccount)) {
+      patch.adyenMerchantAccount = String(updates.adyenMerchantAccount).trim();
+    }
     if (updates.adyenStoreReference !== undefined) {
       const storeRef = String(updates.adyenStoreReference || "")
         .trim()
         .slice(0, 255);
-      patch.adyenStoreReference = storeRef || null;
+      if (storeRef) patch.adyenStoreReference = storeRef;
     }
-    if (updates.adyenClientId !== undefined) {
-      const clientKey = String(updates.adyenClientId || "").trim();
-      if (clientKey && !isValidAdyenClientKey(clientKey)) {
+    if (shouldWriteCredential(updates.adyenClientId)) {
+      const clientKey = String(updates.adyenClientId).trim();
+      if (!isValidAdyenClientKey(clientKey)) {
         throw new Error(
           "Client key must start with test_ or live_. Use the Client Key from Adyen Customer Area → Developers → Client settings — not the API key (AQE…)."
         );
       }
-      patch.adyenClientId = clientKey || null;
+      patch.adyenClientId = clientKey;
     }
     if (updates.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!updates.tapToPayEnabled;
     if (updates.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
@@ -593,7 +602,7 @@ export class MerchantSettingsService {
         .replace(/\/.*$/, "")
         .replace(/:+$/, "")
         .slice(0, 255);
-      patch.adyenLiveUrlPrefix = prefix || null;
+      if (prefix) patch.adyenLiveUrlPrefix = prefix;
     }
     if (updates.adyenLiveRegion !== undefined) {
       const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
@@ -671,12 +680,11 @@ export class MerchantSettingsService {
       }
       patch.shopLanguage = lang;
     }
-    // Only overwrite API key when a non-empty new value is provided (not the masked placeholder)
-    if (updates.adyenApiKey && !updates.adyenApiKey.includes("••••")) {
-      patch.adyenApiKey = updates.adyenApiKey;
+    if (shouldWriteCredential(updates.adyenApiKey)) {
+      patch.adyenApiKey = String(updates.adyenApiKey).trim();
     }
-    if (updates.adyenHmacKey && !updates.adyenHmacKey.includes("••••")) {
-      patch.adyenHmacKey = updates.adyenHmacKey.trim();
+    if (shouldWriteCredential(updates.adyenHmacKey)) {
+      patch.adyenHmacKey = String(updates.adyenHmacKey).trim();
     }
 
     if (updates.slug !== undefined) {

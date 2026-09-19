@@ -25,7 +25,11 @@ export function isAdyenPaymentSuccess(resultCode: string | null | undefined): bo
 export type MountAdyenDropinOptions = {
   session: AdyenPaymentSession;
   container: HTMLElement;
-  onPaymentCompleted: (result: { resultCode?: string }) => void | Promise<void>;
+  onPaymentCompleted: (result: {
+    resultCode?: string;
+    pspReference?: string;
+    paymentMethod?: { type?: string; brand?: string };
+  }) => void | Promise<void>;
   onPaymentFailed?: (result: { resultCode?: string }) => void | Promise<void>;
   onError?: (err: { message?: string }) => void;
   locale?: string;
@@ -134,19 +138,25 @@ function resolveAdyenEnvironment(session: AdyenPaymentSession): 'live' | 'test' 
   return adyenEnvironmentFromClientKey(session.clientKey);
 }
 
-/** Drop-in create() options. Stored cards only when the session tokenized a logged-in shopper. */
+/** Drop-in create() options. Store details only for scheme cards — never TWINT/wallets. */
 export function adyenDropinCreateConfig(session: Pick<AdyenPaymentSession, 'storePaymentMethod'>) {
   const config: Record<string, unknown> = {
     showPayButton: true,
     openFirstPaymentMethod: true,
+    paymentMethodsConfiguration: {
+      twint: { enableStoreDetails: false },
+    },
   };
   if (session.storePaymentMethod) {
+    const cardStore = {
+      enableStoreDetails: true,
+      hasHolderName: true,
+      holderNameRequired: false,
+    };
     config.paymentMethodsConfiguration = {
-      card: {
-        enableStoreDetails: true,
-        hasHolderName: true,
-        holderNameRequired: false,
-      },
+      twint: { enableStoreDetails: false },
+      card: cardStore,
+      scheme: cardStore,
     };
   }
   return config;
@@ -207,7 +217,11 @@ export async function mountAdyenDropin({
         sessionData: session.sessionData,
       },
       analytics: { enabled: false },
-      onPaymentCompleted: (result: { resultCode?: string }) => {
+      onPaymentCompleted: (result: {
+        resultCode?: string;
+        pspReference?: string;
+        paymentMethod?: { type?: string; brand?: string };
+      }) => {
         if (isAdyenPaymentSuccess(result?.resultCode)) {
           void onPaymentCompleted(result);
           return;

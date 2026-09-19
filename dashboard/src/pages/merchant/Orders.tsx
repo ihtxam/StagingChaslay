@@ -6,6 +6,7 @@ import { Download, FileText, Printer, RefreshCw, ShoppingBag, X } from 'lucide-r
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
+import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import {
   canAdminCollectPayment,
@@ -802,7 +803,11 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           reason: reasonId || reason,
         });
       }
-      toast.success(t('webPosOrderCancelled'));
+      toast.success(
+        isPaidOnlineEcommerceOrder(orderSnapshot)
+          ? t('webPosOrderCancelledAndRefunded')
+          : t('webPosOrderCancelled')
+      );
       setCancelFor(null);
       if (selected?.id === orderSnapshot.id) setSelected(null);
       void load();
@@ -1704,6 +1709,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         scope="order"
         reasons={cancelReasons}
         busy={cancelBusy}
+        refundOnlineNotice={isPaidOnlineEcommerceOrder(cancelFor)}
         onClose={() => {
           if (cancelBusy) return;
           setCancelFor(null);

@@ -80,6 +80,8 @@ export default function ShopPaymentModal({
             setPayMsg(t('shopPaymentCompleted'));
             await axios.post(`/api/shop/${shopKey}/orders/${orderId}/confirm-payment`, {
               resultCode: result?.resultCode || 'Authorised',
+              paymentMethod: result?.paymentMethod,
+              pspReference: (result as { pspReference?: string }).pspReference,
             });
             sessionStorage.removeItem(`manupos_pay_${orderId}`);
             clearCart(shopKey);

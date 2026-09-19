@@ -4,6 +4,7 @@ import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/a
 import { getDb, schema } from "@/db";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
+import { shouldWriteCredential } from "@/lib/merchant-settings-preserve";
 
 const router = Router();
 
@@ -67,12 +68,16 @@ router.put("/adyen-credentials", async (req: Request, res: Response) => {
     const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix, adyenStoreReference } =
       req.body;
     const settings = await MerchantSettingsService.updateMerchantSettings(req.merchantId!, {
-      adyenMerchantAccount,
-      adyenApiKey,
-      adyenClientId,
-      adyenHmacKey,
-      adyenLiveUrlPrefix,
-      adyenStoreReference,
+      ...(shouldWriteCredential(adyenMerchantAccount) ? { adyenMerchantAccount } : {}),
+      ...(shouldWriteCredential(adyenApiKey) ? { adyenApiKey } : {}),
+      ...(shouldWriteCredential(adyenClientId) ? { adyenClientId } : {}),
+      ...(shouldWriteCredential(adyenHmacKey) ? { adyenHmacKey } : {}),
+      ...(typeof adyenLiveUrlPrefix === "string" && adyenLiveUrlPrefix.trim()
+        ? { adyenLiveUrlPrefix }
+        : {}),
+      ...(typeof adyenStoreReference === "string" && adyenStoreReference.trim()
+        ? { adyenStoreReference }
+        : {}),
     });
     res.json({
       success: true,

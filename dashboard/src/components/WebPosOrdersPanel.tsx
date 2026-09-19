@@ -27,6 +27,7 @@ import {
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
+import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { parseOrderMetaNotes, type PosOrderForReceipt } from '@/lib/webpos-receipt';
 import {
@@ -960,7 +961,11 @@ export default function WebPosOrdersPanel({
       await api.post(`/merchant/pos/orders/${orderSnapshot.id}/cancel`, {
         reason: reasonId || reason,
       });
-      toast.success(t('webPosOrderCancelled'));
+      toast.success(
+        isPaidOnlineEcommerceOrder(orderSnapshot)
+          ? t('webPosOrderCancelledAndRefunded')
+          : t('webPosOrderCancelled')
+      );
       setCancelFor(null);
       setSelectedOrder(null);
       void load();
@@ -2615,6 +2620,7 @@ export default function WebPosOrdersPanel({
         scope="order"
         reasons={reasons}
         busy={cancelBusy}
+        refundOnlineNotice={isPaidOnlineEcommerceOrder(cancelFor)}
         onClose={() => {
           if (cancelBusy) return;
           setCancelFor(null);
