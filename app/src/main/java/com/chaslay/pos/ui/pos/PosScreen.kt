@@ -740,6 +740,8 @@ fun PosScreen(
                 lookedUpCard = state.giftCardOpsLookedUpCard,
                 onDismiss = viewModel::dismissGiftCardOpsDialog,
                 onLookup = viewModel::lookupGiftCardForOps,
+                onClearLookedUpCard = viewModel::clearGiftCardOpsLookup,
+                onSwitchToReload = viewModel::switchGiftCardSellToReload,
                 onAddToCart = viewModel::addGiftCardLineToCart
             )
         }

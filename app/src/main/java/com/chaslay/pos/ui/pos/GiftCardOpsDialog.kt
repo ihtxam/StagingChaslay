@@ -46,6 +46,8 @@ fun GiftCardOpsDialog(
     lookedUpCard: GiftCardDto?,
     onDismiss: () -> Unit,
     onLookup: (String) -> Unit,
+    onClearLookedUpCard: () -> Unit,
+    onSwitchToReload: () -> Unit,
     onAddToCart: (
         amount: Double,
         cardNumber: String,
@@ -76,6 +78,23 @@ fun GiftCardOpsDialog(
     val resolvedAmount = selectedAmount
     val isEcardSell = mode == GiftCardOp.SELL && sellMedia == "e_card"
     val mediaResolved = if (mode == GiftCardOp.SELL) sellMedia else "physical"
+    val sellBlockedByExistingCard = mode == GiftCardOp.SELL && lookedUpCard != null && !isEcardSell
+    val reloadEnabled = settings?.reloadEnabled != false
+
+    fun holderLabel(card: GiftCardDto): String {
+        card.holderName?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        val customer = card.customer
+        if (customer != null) {
+            listOfNotNull(customer.firstName, customer.lastName)
+                .joinToString(" ")
+                .trim()
+                .takeIf { it.isNotBlank() }
+                ?.let { return it }
+            customer.email?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+            customer.phone?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return ""
+    }
 
     if (showCustomKeypad) {
         PriceKeypadDialog(
@@ -166,11 +185,11 @@ fun GiftCardOpsDialog(
                             onValueChange = { code = it },
                             onScanComplete = { scanned ->
                                 code = scanned
-                                if (mode == GiftCardOp.RELOAD || mode == GiftCardOp.CHECK_BALANCE) onLookup(scanned)
+                                if (mode != GiftCardOp.SELL || !isEcardSell) onLookup(scanned)
                             },
                             autoFocus = true
                         )
-                        if (mode == GiftCardOp.RELOAD || mode == GiftCardOp.CHECK_BALANCE) {
+                        if (mode != GiftCardOp.SELL || !isEcardSell) {
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedButton(
                                 onClick = { onLookup(code) },
@@ -223,6 +242,47 @@ fun GiftCardOpsDialog(
                         )
                     }
 
+                    if (sellBlockedByExistingCard && lookedUpCard != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.gift_card_already_sold_title),
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            stringResource(
+                                R.string.gift_card_already_sold_message,
+                                holderLabel(lookedUpCard).ifBlank {
+                                    stringResource(R.string.gift_card_unknown_holder)
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    code = ""
+                                    onClearLookedUpCard()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.gift_card_use_different_card))
+                            }
+                            Button(
+                                onClick = onSwitchToReload,
+                                enabled = reloadEnabled,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.gift_card_recharge_this_card))
+                            }
+                        }
+                    }
+
                     if (mode == GiftCardOp.CHECK_BALANCE && lookedUpCard != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
@@ -230,7 +290,9 @@ fun GiftCardOpsDialog(
                         }
                     }
 
-                    if ((mode == GiftCardOp.SELL || mode == GiftCardOp.RELOAD) && (presets.isNotEmpty() || customEnabled)) {
+                    if ((mode == GiftCardOp.RELOAD || (mode == GiftCardOp.SELL && !sellBlockedByExistingCard)) &&
+                        (presets.isNotEmpty() || customEnabled)
+                    ) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             stringResource(R.string.gift_card_amount),
@@ -271,7 +333,10 @@ fun GiftCardOpsDialog(
             }
         },
         confirmButton = {
-            if (mode != GiftCardOp.CHECK_BALANCE && (mode != GiftCardOp.SELL || sellMedia != null)) {
+            if (mode != GiftCardOp.CHECK_BALANCE &&
+                !sellBlockedByExistingCard &&
+                (mode != GiftCardOp.SELL || sellMedia != null)
+            ) {
                 Button(
                     onClick = {
                         val amount = resolvedAmount ?: return@Button
