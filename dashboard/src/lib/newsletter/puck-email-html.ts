@@ -18,7 +18,8 @@ export function buildPuckNewsletterEmailHtml(data: Data, title = 'Newsletter'): 
         const text = escapeHtml(String(props.text || ''));
         const level = props.level === 'h2' ? 'h2' : 'h1';
         const size = level === 'h2' ? '22px' : '28px';
-        return `<tr><td style="padding:0 28px 8px;font-family:Georgia,serif;"><${level} style="margin:0;font-size:${size};line-height:1.25;color:#0c0a09;">${text}</${level}></td></tr>`;
+        const pad = level === 'h2' ? '16px 28px 8px' : '24px 28px 8px';
+        return `<tr><td style="padding:${pad};font-family:Georgia,serif;"><${level} style="margin:0;font-size:${size};line-height:1.25;color:#0c0a09;">${text}</${level}></td></tr>`;
       }
       if (block.type === 'Text') {
         const content = String(props.content || '');
@@ -33,7 +34,7 @@ export function buildPuckNewsletterEmailHtml(data: Data, title = 'Newsletter'): 
         return `<tr><td style="padding:8px 28px 16px;"><a href="${url}" style="display:inline-block;background:${color};color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:8px;">${label}</a></td></tr>`;
       }
       if (block.type === 'Spacer') {
-        const h = Math.max(8, Math.min(80, Number(props.height) || 24));
+        const h = Math.max(8, Math.min(120, Number(props.height) || 24));
         return `<tr><td style="height:${h}px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
       }
       return '';
@@ -48,13 +49,18 @@ export function buildPuckNewsletterEmailHtml(data: Data, title = 'Newsletter'): 
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="color-scheme" content="light only"/>
+<meta name="supported-color-schemes" content="light"/>
 <title>${headline}</title>
 </head>
-<body style="margin:0;padding:0;background:#f5f5f4;color:#1c1917;">
+<body style="margin:0;padding:0;background:#f5f5f4;color:#1c1917;-webkit-text-size-adjust:100%;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f4;padding:24px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e7e5e4;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e7e5e4;overflow:hidden;">
+          <tr>
+            <td style="height:6px;background:#0f766e;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
           ${inner}
           <tr>
             <td style="padding:20px 28px;border-top:1px solid #e7e5e4;background:#fafaf9;font-size:12px;color:#78716c;">

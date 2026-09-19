@@ -136,6 +136,21 @@ const en: Dict = {
   newsletterNeedRecipients: 'Select at least one recipient',
   newsletterRecent: 'Recent campaigns',
   newsletterNoCampaigns: 'No campaigns yet.',
+  newsletterPuckHeaderTitle: '{{businessName}}',
+  newsletterPuckHeaderTagline:
+    '<p style="margin:0;letter-spacing:0.08em;text-transform:uppercase;font-size:12px;color:#0f766e;">This week’s newsletter</p>',
+  newsletterPuckGreetingHeading: 'Hello {{name}},',
+  newsletterPuckGreetingBody:
+    '<p>Thanks for being with us. Here is what’s new — a few highlights from the kitchen, plus a little something extra when you order online.</p>',
+  newsletterPuckFeaturedHeading: 'This week’s highlight',
+  newsletterPuckFeaturedBody:
+    '<p>Tell the story of a seasonal special, a new dish, or a weekend event. Edit this block to match what you want customers to notice first.</p>',
+  newsletterPuckPromoHeading: 'A little something extra',
+  newsletterPuckPromoBody:
+    '<p>Enjoy 10% off your next online order this week. Use your usual account at checkout — no code needed. We would love to see you again.</p>',
+  newsletterPuckCta: 'Order online',
+  newsletterPuckFooter:
+    '<p style="margin:0 0 8px;">Questions? Reply to this email or visit us at <a href="{{shopUrl}}" style="color:#0f766e;">{{shopUrl}}</a>.</p><p style="margin:0;font-size:12px;color:#78716c;">You’re receiving this because you ordered from {{businessName}}. Not interested anymore? Reply with “unsubscribe” and we will take you off the list.</p>',
   settingsEmail: 'Email',
   settingsSmtp: 'SMTP (mass mailing)',
   settingsSmtpHint:
@@ -4310,6 +4325,21 @@ const fr: Dict = {
   newsletterNeedRecipients: 'Sélectionnez au moins un destinataire',
   newsletterRecent: 'Campagnes récentes',
   newsletterNoCampaigns: 'Aucune campagne.',
+  newsletterPuckHeaderTitle: '{{businessName}}',
+  newsletterPuckHeaderTagline:
+    '<p style="margin:0;letter-spacing:0.08em;text-transform:uppercase;font-size:12px;color:#0f766e;">La newsletter de la semaine</p>',
+  newsletterPuckGreetingHeading: 'Bonjour {{name}},',
+  newsletterPuckGreetingBody:
+    '<p>Merci d’être avec nous. Voici les nouveautés — quelques temps forts, plus une petite attention si vous commandez en ligne.</p>',
+  newsletterPuckFeaturedHeading: 'Le coup de cœur de la semaine',
+  newsletterPuckFeaturedBody:
+    '<p>Parlez d’une spécialité de saison, d’un nouveau plat ou d’un événement. Modifiez ce bloc pour mettre en avant ce que vos clients doivent voir en premier.</p>',
+  newsletterPuckPromoHeading: 'Un petit extra',
+  newsletterPuckPromoBody:
+    '<p>Profitez de 10 % de réduction sur votre prochaine commande en ligne cette semaine. Connectez-vous comme d’habitude — aucun code nécessaire. Au plaisir de vous revoir.</p>',
+  newsletterPuckCta: 'Commander en ligne',
+  newsletterPuckFooter:
+    '<p style="margin:0 0 8px;">Une question ? Répondez à cet e-mail ou rendez-vous sur <a href="{{shopUrl}}" style="color:#0f766e;">{{shopUrl}}</a>.</p><p style="margin:0;font-size:12px;color:#78716c;">Vous recevez ce message car vous avez commandé chez {{businessName}}. Plus intéressé ? Répondez « unsubscribe » et nous vous retirerons de la liste.</p>',
   settingsEmail: 'Email',
   settingsSmtp: 'SMTP (envoi en masse)',
   settingsSmtpHint:
@@ -8325,6 +8355,21 @@ const de: Dict = {
   newsletterNeedRecipients: 'Mindestens einen Empfänger wählen',
   newsletterRecent: 'Letzte Kampagnen',
   newsletterNoCampaigns: 'Noch keine Kampagnen.',
+  newsletterPuckHeaderTitle: '{{businessName}}',
+  newsletterPuckHeaderTagline:
+    '<p style="margin:0;letter-spacing:0.08em;text-transform:uppercase;font-size:12px;color:#0f766e;">Der Newsletter dieser Woche</p>',
+  newsletterPuckGreetingHeading: 'Hallo {{name}},',
+  newsletterPuckGreetingBody:
+    '<p>Danke, dass Sie bei uns sind. Hier ist das Neueste — ein paar Highlights, plus etwas Extra, wenn Sie online bestellen.</p>',
+  newsletterPuckFeaturedHeading: 'Highlight der Woche',
+  newsletterPuckFeaturedBody:
+    '<p>Erzählen Sie von einem Saisongericht, einem neuen Gericht oder einem Event. Bearbeiten Sie diesen Block, damit Kundinnen zuerst sehen, was wichtig ist.</p>',
+  newsletterPuckPromoHeading: 'Ein kleines Extra',
+  newsletterPuckPromoBody:
+    '<p>Diese Woche 10 % auf Ihre nächste Online-Bestellung. Einfach wie gewohnt einloggen — kein Code nötig. Wir freuen uns auf Sie.</p>',
+  newsletterPuckCta: 'Online bestellen',
+  newsletterPuckFooter:
+    '<p style="margin:0 0 8px;">Fragen? Antworten Sie auf diese E-Mail oder besuchen Sie uns unter <a href="{{shopUrl}}" style="color:#0f766e;">{{shopUrl}}</a>.</p><p style="margin:0;font-size:12px;color:#78716c;">Sie erhalten diese Nachricht, weil Sie bei {{businessName}} bestellt haben. Kein Interesse mehr? Antworten Sie mit „unsubscribe“ und wir nehmen Sie von der Liste.</p>',
   settingsEmail: 'E-Mail',
   settingsSmtp: 'SMTP (Massenversand)',
   settingsSmtpHint:

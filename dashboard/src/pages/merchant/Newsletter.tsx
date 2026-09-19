@@ -8,6 +8,9 @@ import NewsletterPuckEditor from '@/components/newsletter/NewsletterPuckEditor';
 import {
   defaultNewsletterPuckData,
   isPuckNewsletterDesign,
+  newsletterCopyFromT,
+  newsletterPuckDataOrDefault,
+  type NewsletterPuckCopy,
 } from '@/components/newsletter/newsletter-puck-config';
 import {
   buildNewsletterEmailHtml,
@@ -16,7 +19,6 @@ import {
   type NativeNewsletterDesign,
 } from '@/lib/newsletter/email-html';
 import { buildPuckNewsletterEmailHtml } from '@/lib/newsletter/puck-email-html';
-import { normalizePuckData } from '@/lib/newsletter/puck-utils';
 
 type AudienceRow = {
   id: string | null;
@@ -48,13 +50,16 @@ type MarketingSettings = {
   reorderReminderBody?: string | null;
 };
 
-function puckFromStored(raw: unknown): Data {
-  if (!raw || typeof raw !== 'object') return defaultNewsletterPuckData();
+function puckFromStored(raw: unknown, copy?: Partial<NewsletterPuckCopy>): Data {
+  if (!raw || typeof raw !== 'object') return defaultNewsletterPuckData(copy);
   const { engine: _engine, ...rest } = raw as Record<string, unknown>;
-  return normalizePuckData(rest as Data);
+  return newsletterPuckDataOrDefault(rest as Data, copy);
 }
 
-function designFromCampaign(c: Campaign): {
+function designFromCampaign(
+  c: Campaign,
+  copy?: Partial<NewsletterPuckCopy>
+): {
   mode: 'simple' | 'visual';
   native: NativeNewsletterDesign;
   puck: Data;
@@ -63,22 +68,23 @@ function designFromCampaign(c: Campaign): {
     return {
       mode: 'visual',
       native: defaultNativeNewsletter(c.title || 'Newsletter'),
-      puck: puckFromStored(c.designJson),
+      puck: puckFromStored(c.designJson, copy),
     };
   }
   if (isNativeNewsletterDesign(c.designJson)) {
     return {
       mode: 'simple',
       native: { ...c.designJson },
-      puck: defaultNewsletterPuckData(),
+      puck: defaultNewsletterPuckData(copy),
     };
   }
   const native = defaultNativeNewsletter(c.title || 'Newsletter');
-  return { mode: 'simple', native, puck: defaultNewsletterPuckData() };
+  return { mode: 'simple', native, puck: defaultNewsletterPuckData(copy) };
 }
 
 export default function Newsletter() {
   const { t } = useI18n();
+  const puckCopy = useMemo(() => newsletterCopyFromT(t), [t]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingReminders, setSavingReminders] = useState(false);
@@ -94,7 +100,7 @@ export default function Newsletter() {
   const [title, setTitle] = useState('Newsletter');
   const [subject, setSubject] = useState('');
   const [design, setDesign] = useState<NativeNewsletterDesign>(() => defaultNativeNewsletter());
-  const [puckData, setPuckData] = useState<Data>(() => defaultNewsletterPuckData());
+  const [puckData, setPuckData] = useState<Data>(() => defaultNewsletterPuckData(puckCopy));
   const [audienceMode, setAudienceMode] = useState<'all' | 'selected'>('all');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
@@ -271,7 +277,7 @@ export default function Newsletter() {
   };
 
   const loadCampaign = (c: Campaign) => {
-    const parsed = designFromCampaign(c);
+    const parsed = designFromCampaign(c, puckCopy);
     setDesignMode(parsed.mode);
     setDesign(parsed.native);
     setPuckData(parsed.puck);
@@ -292,7 +298,7 @@ export default function Newsletter() {
     setTitle('Newsletter');
     setSubject('');
     setDesign(defaultNativeNewsletter('Newsletter'));
-    setPuckData(defaultNewsletterPuckData());
+    setPuckData(defaultNewsletterPuckData(puckCopy));
     setDesignMode('simple');
     setAudienceMode('all');
     setSelected({});
@@ -422,18 +428,18 @@ export default function Newsletter() {
               className={designMode === 'visual' ? 'btn-secondary text-xs' : 'text-xs underline'}
               onClick={() => {
                 setDesignMode('visual');
-                setPuckData((prev) => normalizePuckData(prev));
+                setPuckData((prev) => newsletterPuckDataOrDefault(prev, puckCopy));
               }}
             >
               {t('newsletterVisualEditor')}
             </button>
           </div>
 
-          <form
-            onSubmit={saveDraft}
+          <div
             className={designMode === 'visual' ? 'space-y-4' : 'grid gap-4 lg:grid-cols-2'}
           >
             <div className="card space-y-4">
+              <form onSubmit={saveDraft} className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block space-y-1 text-sm sm:col-span-2">
                   <span className="font-medium">{t('newsletterTitle')}</span>
@@ -460,31 +466,7 @@ export default function Newsletter() {
                 </label>
               </div>
 
-              {designMode === 'visual' ? (
-                <>
-                  <NewsletterPuckEditor
-                    data={puckData}
-                    onChange={setPuckData}
-                    fullPage
-                  />
-                  <div className="space-y-2 border-t border-[var(--border)] pt-4 !bg-stone-100 rounded-lg p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="text-sm font-semibold text-stone-800">
-                        {t('newsletterPreview')}
-                      </h2>
-                      <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
-                    </div>
-                    <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                      <iframe
-                        title="Newsletter preview"
-                        className="h-[min(480px,50vh)] w-full border-0 bg-white"
-                        srcDoc={bodyHtml}
-                        sandbox=""
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
+              {designMode === 'simple' ? (
                 <>
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium">{t('newsletterHeadline')}</span>
@@ -548,8 +530,38 @@ export default function Newsletter() {
                     />
                   </label>
                 </>
-              )}
+              ) : null}
+              </form>
 
+              {designMode === 'visual' ? (
+                <>
+                  <NewsletterPuckEditor
+                    key={campaignId ?? 'new'}
+                    data={puckData}
+                    onChange={setPuckData}
+                    fullPage
+                    headerTitle={title || t('newsletter')}
+                  />
+                  <div className="space-y-2 border-t border-[var(--border)] pt-4 !bg-stone-100 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold text-stone-800">
+                        {t('newsletterPreview')}
+                      </h2>
+                      <span className="text-[11px] text-stone-500">{t('newsletterPreviewHint')}</span>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                      <iframe
+                        title="Newsletter preview"
+                        className="h-[min(480px,50vh)] w-full border-0 bg-white"
+                        srcDoc={bodyHtml}
+                        sandbox=""
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              <form onSubmit={saveDraft} className="space-y-4">
               <p className="text-[11px] muted">{t('newsletterPlaceholders')}</p>
 
               <div className="space-y-2">
@@ -611,6 +623,7 @@ export default function Newsletter() {
                   {sending ? t('sending') : t('newsletterSend')}
                 </button>
               </div>
+              </form>
             </div>
 
             {designMode === 'simple' ? (
@@ -629,7 +642,7 @@ export default function Newsletter() {
                 </div>
               </div>
             ) : null}
-          </form>
+          </div>
 
           <div className="card space-y-2">
             <h2 className="text-sm font-semibold">{t('newsletterCampaigns')}</h2>

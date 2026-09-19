@@ -1,5 +1,13 @@
+import type { MouseEvent } from 'react';
 import type { Config, Data } from '@measured/puck';
-import { normalizePuckData } from '@/lib/newsletter/puck-utils';
+
+export {
+  defaultNewsletterPuckCopy,
+  defaultNewsletterPuckData,
+  newsletterCopyFromT,
+  newsletterPuckDataOrDefault,
+  type NewsletterPuckCopy,
+} from '@/lib/newsletter/puck-utils';
 
 export type PuckNewsletterBlockProps = {
   Heading: { text: string; level: 'h1' | 'h2' };
@@ -11,6 +19,11 @@ export type PuckNewsletterBlockProps = {
 export type PuckNewsletterRootProps = {
   background: string;
 };
+
+function preventCanvasNav(e: MouseEvent) {
+  const target = e.target as HTMLElement | null;
+  if (target?.closest('a')) e.preventDefault();
+}
 
 export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewsletterRootProps> = {
   root: {
@@ -28,7 +41,19 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewslett
           minHeight: 280,
         }}
       >
-        {children}
+        <div
+          style={{
+            maxWidth: 560,
+            margin: '0 auto',
+            background: '#ffffff',
+            borderRadius: 12,
+            border: '1px solid #e7e5e4',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ height: 6, background: '#0f766e' }} />
+          <div style={{ padding: '8px 0 16px' }}>{children}</div>
+        </div>
       </div>
     ),
   },
@@ -52,8 +77,17 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewslett
       defaultProps: { text: 'Newsletter headline', level: 'h1' },
       render: ({ text, level }) => {
         const Tag = level === 'h2' ? 'h2' : 'h1';
+        const isHeader = level !== 'h2';
         return (
-          <Tag style={{ margin: '0 0 12px', fontFamily: 'Georgia, serif', color: '#0c0a09' }}>
+          <Tag
+            style={{
+              margin: isHeader ? '20px 28px 8px' : '16px 28px 8px',
+              fontFamily: 'Georgia, serif',
+              color: '#0c0a09',
+              fontSize: isHeader ? 28 : 22,
+              lineHeight: 1.25,
+            }}
+          >
             {text || ''}
           </Tag>
         );
@@ -69,7 +103,9 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewslett
       },
       render: ({ content }) => (
         <div
+          onClick={preventCanvasNav}
           style={{
+            padding: '0 28px 8px',
             fontSize: 16,
             lineHeight: 1.55,
             color: '#44403c',
@@ -87,21 +123,24 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewslett
         color: { type: 'text', label: 'Color (#hex)' },
       },
       defaultProps: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e' },
-      render: ({ label, url, color }) => (
-        <a
-          href={url || '#'}
-          style={{
-            display: 'inline-block',
-            background: color || '#0f766e',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            padding: '12px 20px',
-            borderRadius: 8,
-          }}
-        >
-          {label || 'Button'}
-        </a>
+      render: ({ label, color }) => (
+        <div style={{ padding: '8px 28px 16px' }}>
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            style={{
+              display: 'inline-block',
+              background: color || '#0f766e',
+              color: '#fff',
+              textDecoration: 'none',
+              fontWeight: 700,
+              padding: '12px 20px',
+              borderRadius: 8,
+            }}
+          >
+            {label || 'Button'}
+          </a>
+        </div>
       ),
     },
     Spacer: {
@@ -114,23 +153,6 @@ export const newsletterPuckConfig: Config<PuckNewsletterBlockProps, PuckNewslett
     },
   },
 };
-
-export function defaultNewsletterPuckData(): Data {
-  return normalizePuckData({
-    root: { props: { background: '#f5f5f4' } },
-    content: [
-      { type: 'Heading', props: { text: 'Newsletter', level: 'h1' } },
-      {
-        type: 'Text',
-        props: {
-          content: '<p>Share news, offers, and updates with your customers.</p>',
-        },
-      },
-      { type: 'Button', props: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e' } },
-    ],
-    zones: {},
-  } as Data);
-}
 
 export function isPuckNewsletterDesign(raw: unknown): raw is Data {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;

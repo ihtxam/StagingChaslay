@@ -2466,6 +2466,7 @@ html.shop-shell select:focus {
 
 .newsletter-puck-editor--full {
   min-height: min(72vh, 880px);
+  height: min(72vh, 880px);
   display: flex;
   flex-direction: column;
 }
@@ -2473,4 +2474,5 @@ html.shop-shell select:focus {
 .newsletter-puck-editor--full > div {
   flex: 1;
   min-height: 0;
+  height: 100% !important;
 }
