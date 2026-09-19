@@ -28,6 +28,7 @@ export type OnlineOrder = {
   taxAmount?: string | number | null;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
+  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
   customerName?: string | null;
   customerPhone?: string | null;
   customerEmail?: string | null;

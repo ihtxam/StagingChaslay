@@ -10,6 +10,7 @@ import {
   type NavbarMenuItem,
 } from '../utils/default-nav-menu';
 import ShopNavActions from '@/components/shop/ShopNavActions';
+import ShopNavbarDrawerExtras from '@/components/shop/ShopNavbarDrawerExtras';
 
 export type { NavbarMenuItem };
 export { DEFAULT_SMOOTH_SCROLL_MENU };
@@ -64,7 +65,7 @@ export function NavbarMobileMenu({
   buttonColor?: string;
   showButton?: boolean;
 }) {
-  const { shopHref, isStorefront, surface, accountPath } = useStorefront();
+  const { shopHref, isStorefront, surface, accountPath, loggedIn } = useStorefront();
   const [open, setOpen] = useState(false);
 
   const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
@@ -83,7 +84,7 @@ export function NavbarMobileMenu({
     <>
       <div className="navbar-mobile-controls" style={{ display: 'none', alignItems: 'center', gap: '6px' }}>
         {isStorefront && accountPath ? (
-          <ShopNavActions accountPath={accountPath} iconOnlyLogin />
+          <ShopNavActions accountPath={accountPath} iconOnlyLogin loggedIn={loggedIn} />
         ) : null}
         <button
           type="button"
@@ -154,6 +155,9 @@ export function NavbarMobileMenu({
               >
                 {buttonText}
               </a>
+            ) : null}
+            {isStorefront && accountPath ? (
+              <ShopNavbarDrawerExtras accountPath={accountPath} textColor={textColor} loggedIn={loggedIn} />
             ) : null}
           </div>
         </div>

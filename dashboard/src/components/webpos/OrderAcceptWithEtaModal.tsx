@@ -8,6 +8,7 @@ import { extractZipFromAddress } from '@/lib/delivery-hub-alerts';
 import {
   orderPlatformBadgeClass,
   orderPlatformLabel,
+  formatOrderAlertPaymentLine,
   type MerchantOrder,
 } from '@/lib/order-management';
 import { startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
@@ -140,6 +141,9 @@ export default function OrderAcceptWithEtaModal({
           ) : (
             <p className="text-sm text-[var(--webpos-text-muted,var(--text-muted))]">{t('orderAcceptAsapHint')}</p>
           )}
+          <p className="text-sm font-semibold text-[var(--webpos-text,var(--text))]">
+            {formatOrderAlertPaymentLine(order, t)}
+          </p>
 
           {(order.customerName || order.customerPhone || order.shippingAddress) && (
             <div className="space-y-0.5 text-sm text-[var(--webpos-text,var(--text))]">

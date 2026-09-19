@@ -3,6 +3,7 @@
 
 import React, { createContext, useCallback, useContext } from 'react';
 import { resolveStorefrontHref, type StorefrontSurface } from './storefront-href';
+import { useShopLoggedIn } from '@/hooks/useShopLoggedIn';
 
 export type SitePageLink = {
   title: string;
@@ -33,6 +34,7 @@ export type StorefrontContextValue = {
   surface: StorefrontSurface;
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
+  loggedIn: boolean;
 };
 
 const defaultShopHref = (link?: string | null) => String(link || '').trim() || '#';
@@ -51,6 +53,7 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   surface: 'home',
   shopHref: defaultShopHref,
   pageHref: () => '#',
+  loggedIn: false,
 });
 
 export function StorefrontProvider({
@@ -78,6 +81,7 @@ export function StorefrontProvider({
   surface?: StorefrontSurface;
   children: React.ReactNode;
 }) {
+  const loggedIn = useShopLoggedIn(shopKey);
   const shopHref = useCallback(
     (link?: string | null) => resolveStorefrontHref(link, basePath, true, { surface }),
     [basePath, surface]
@@ -105,6 +109,7 @@ export function StorefrontProvider({
         surface,
         shopHref,
         pageHref,
+        loggedIn,
       }}
     >
       {children}

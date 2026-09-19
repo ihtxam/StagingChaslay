@@ -1546,6 +1546,7 @@ export default function OrderingPage() {
                   </span>
                 ) : null}
               </Link>
+              <div className="flex min-w-0 shrink-0 items-center gap-3 sm:gap-4">
               <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
                 <Link to={shopBasePath(shopKey, locSlug) || '/'}>{t('shopHome')}</Link>
                 <Link to={`${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/')}>{t('shopMenu')}</Link>
@@ -1553,6 +1554,7 @@ export default function OrderingPage() {
               </nav>
               <ShopMobileNavMenu
                 accountPath={accountPath}
+                loggedIn={!!customer}
                 links={[
                   { label: t('shopHome'), to: shopBasePath(shopKey, locSlug) || '/' },
                   { label: t('shopMenu'), to: `${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/') },
@@ -1563,6 +1565,7 @@ export default function OrderingPage() {
                   { label: t('shopStoreInfo'), onClick: () => setInfoOpen(true) },
                 ]}
               />
+              </div>
             </div>
           </header>
         )}

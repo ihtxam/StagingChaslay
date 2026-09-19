@@ -27,6 +27,7 @@ const PAYMENT_METHOD_ALIASES: Record<string, string> = {
   bargeld: "cash",
   liquide: "cash",
   card: "card",
+  twint: "twint",
   carte: "card",
   karte: "card",
   credit_card: "card",
@@ -87,6 +88,8 @@ export function paymentMethodLabelEn(method: string): string {
       return "Cash";
     case "card":
       return "Card";
+    case "twint":
+      return "TWINT";
     case "terminal":
       return "Terminal";
     case "mixed":

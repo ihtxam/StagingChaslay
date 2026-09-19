@@ -152,7 +152,60 @@ export class ShopLoyaltyService {
 
   static computeEarnPoints(paidFoodSubtotalChf: number, earnPointsPerChf: number) {
     const base = Math.max(0, Number(paidFoodSubtotalChf) || 0);
-    return Math.floor(base * earnPointsPerChf);
+    const rate = Number(earnPointsPerChf) || 0;
+    if (rate <= 0) return 0;
+    // Epsilon avoids float underflow (e.g. 3.80 * 1 → 3.799999) flooring to one less.
+    return Math.floor(base * rate + 1e-9);
+  }
+
+  /**
+   * Award shop fidelity for a paid order (cash at create, card/TWINT after Adyen confirm/webhook).
+   * Idempotent: skips when already earned, program off, guest, or paid food floors to 0 pts.
+   */
+  static async earnForPaidOrder(
+    merchant: {
+      id: string;
+      loyaltyEnabled?: boolean | null;
+      loyaltyEarnPointsPerChf?: string | number | null;
+      loyaltyRedeemPointsPerChf?: number | null;
+      loyaltyPointsExpiryDays?: number | null;
+    },
+    order: typeof schema.orders.$inferSelect
+  ): Promise<typeof schema.orders.$inferSelect> {
+    if (!order.customerId) return order;
+    if ((order.pointsEarned || 0) > 0) return order;
+    const program = this.programFromMerchant(merchant);
+    if (!program.enabled) return order;
+
+    const subtotal = parseFloat(order.subtotal?.toString() || "0");
+    const pointsDiscount = parseFloat(order.pointsDiscount?.toString() || "0");
+    const delivery = parseFloat(order.deliveryFee?.toString() || "0");
+    const tip = parseFloat(order.tipAmount?.toString() || "0");
+    const cardFee = parseFloat(order.cardFee?.toString() || "0");
+    const total = parseFloat(order.total?.toString() || "0");
+    let paidFood = Math.max(0, subtotal - pointsDiscount);
+    if (paidFood <= 0 && total > 0) {
+      paidFood = Math.max(0, total - delivery - tip - cardFee - pointsDiscount);
+    }
+    const points = this.computeEarnPoints(paidFood, program.earnPointsPerChf);
+    if (points <= 0) return order;
+
+    await this.earnPoints({
+      merchantId: merchant.id,
+      customerId: order.customerId,
+      orderId: order.id,
+      points,
+      expiryDays: program.expiryDays,
+      source: "earn",
+    });
+
+    const db = getDb();
+    const [updated] = await db
+      .update(schema.orders)
+      .set({ pointsEarned: points })
+      .where(eq(schema.orders.id, order.id))
+      .returning();
+    return updated || { ...order, pointsEarned: points };
   }
 
   static computeCashDiscount(points: number, redeemPointsPerChf: number) {

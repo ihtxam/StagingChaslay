@@ -717,12 +717,35 @@ export function formatOrderPaymentDisplay(
   );
   if (tenders.length <= 1) {
     const method =
-      tenders[0]?.method || collectedTenderMethod(order.paymentMethod) || 'cash';
+      tenders[0]?.method || collectedTenderMethod(order.paymentMethod) || '';
     return paymentMethodLabel(method, t);
   }
   return tenders
-    .map((p) => `${paymentMethodLabel(p.method, t)} CHF ${Number(p.amount).toFixed(2)}`)
+    .map((row) => paymentMethodLabel(row.method, t))
     .join(' + ');
+}
+
+/** Paid/unpaid + tender for new-order alert popups (ASAP line). */
+export function formatOrderAlertPaymentLine(
+  order: {
+    paymentStatus?: string | null;
+    paymentMethod?: string | null;
+    paymentBreakdown?: unknown;
+    total?: string | number | null;
+  },
+  t: (k: string) => string
+): string {
+  const paid = isPaidOrder(order);
+  const method = formatOrderPaymentDisplay(
+    {
+      paymentMethod: order.paymentMethod,
+      paymentBreakdown: order.paymentBreakdown,
+      total: Number(order.total || 0),
+    },
+    t
+  );
+  const status = paid ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid');
+  return method ? `${status} · ${method}` : status;
 }
 
 export function orderPaymentLines(order: {

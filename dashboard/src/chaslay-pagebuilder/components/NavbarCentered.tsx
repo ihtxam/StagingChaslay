@@ -15,6 +15,7 @@ import { useStorefront } from '../StorefrontContext';
 import { useNavbarDisplay } from '../utils/use-navbar-display';
 import { NavbarMobileMenu, DEFAULT_SMOOTH_SCROLL_MENU } from './NavbarMenuLinks';
 import { ShopNavbarLogoRow } from './ShopNavbarLogoRow';
+import ShopNavActions from '@/components/shop/ShopNavActions';
 import { handleStorefrontNavClick } from '../utils/anchor-scroll';
 import { isHomeNavLink } from '../storefront-href';
 
@@ -56,7 +57,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
-  const { shopHref, isStorefront, surface } = useStorefront();
+  const { shopHref, isStorefront, surface, accountPath, loggedIn } = useStorefront();
   const { menuItems, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
@@ -120,6 +121,9 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
                 {item.label}
               </a>
             ))}
+            {isStorefront && accountPath ? (
+              <ShopNavActions accountPath={accountPath} loggedIn={loggedIn} className="navbar-desktop-actions" />
+            ) : null}
           </div>
         </div>
         <div className="navbar-centered-mobile-row shop-page-content shop-navbar-mobile-row" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>

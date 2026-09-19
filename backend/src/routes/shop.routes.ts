@@ -241,41 +241,7 @@ async function earnLoyaltyForOrder(
   merchant: typeof schema.merchants.$inferSelect,
   order: typeof schema.orders.$inferSelect
 ) {
-  if (!order.customerId) return order;
-  if ((order.pointsEarned || 0) > 0) return order;
-  const program = ShopLoyaltyService.programFromMerchant(merchant);
-  if (!program.enabled) return order;
-
-  const subtotal = parseFloat(order.subtotal?.toString() || "0");
-  const pointsDiscount = parseFloat(order.pointsDiscount?.toString() || "0");
-  const paidFood = Math.max(0, subtotal - pointsDiscount);
-  const points = ShopLoyaltyService.computeEarnPoints(paidFood, program.earnPointsPerChf);
-  if (points <= 0) {
-    const db = getDb();
-    const [updated] = await db
-      .update(schema.orders)
-      .set({ pointsEarned: 0 })
-      .where(eq(schema.orders.id, order.id))
-      .returning();
-    return updated || order;
-  }
-
-  await ShopLoyaltyService.earnPoints({
-    merchantId: merchant.id,
-    customerId: order.customerId,
-    orderId: order.id,
-    points,
-    expiryDays: program.expiryDays,
-    source: "earn",
-  });
-
-  const db = getDb();
-  const [updated] = await db
-    .update(schema.orders)
-    .set({ pointsEarned: points })
-    .where(eq(schema.orders.id, order.id))
-    .returning();
-  return updated || { ...order, pointsEarned: points };
+  return ShopLoyaltyService.earnForPaidOrder(merchant, order);
 }
 
 async function resolveShopComboSelections(
@@ -3234,6 +3200,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       shopPath: meta.shopPath,
       extraCandidates: [meta.headerOrigin, meta.referer],
     });
+    const { customerId: authCustomerId } = optionalCustomer(req);
     const session = await AdyenService.initializePaymentSession(
       merchant.id,
       order.id,
@@ -3241,7 +3208,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       "CHF",
       returnUrl,
       checkoutOrigin,
-      { customerId: order.customerId }
+      { customerId: authCustomerId || order.customerId }
     );
     res.json({
       success: true,
@@ -3295,6 +3262,10 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
     let updated = await finalizePaidOnlineShopCardOrder(merchant, order, {
       guestLocale: guestLocale || null,
       pspReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
+      adyenPaymentMethod:
+        req.body?.paymentMethod ||
+        req.body?.adyenPaymentMethod ||
+        req.body?.paymentMethodType,
     });
 
     try {

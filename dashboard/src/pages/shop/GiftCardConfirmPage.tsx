@@ -53,6 +53,7 @@ export default function GiftCardConfirmPage() {
       <ShopMinimalHeader
         basePath={base}
         merchantName={undefined}
+        shopKey={shopKey}
         loggedIn={loggedIn}
       />
       <main className="shop-page-content max-w-lg py-12">

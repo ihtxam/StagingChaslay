@@ -1,24 +1,34 @@
 import { Link } from 'react-router-dom';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
+import { useShopLoggedIn } from '@/hooks/useShopLoggedIn';
 import { useI18n } from '@/lib/i18n';
 
-/** Shared shop top strip: rectangular logo + Home/Menu/Contact + language/login. */
+/** Shared shop top strip: logo left, menu next to language/account (homepage style). */
 export default function ShopMinimalHeader({
   basePath,
   merchantName,
   logoUrl,
+  shopKey,
   loggedIn = false,
 }: {
   basePath: string;
   merchantName?: string | null;
   logoUrl?: string | null;
+  shopKey?: string | null;
   loggedIn?: boolean;
 }) {
   const { t } = useI18n();
+  const sessionLoggedIn = useShopLoggedIn(shopKey);
+  const isLoggedIn = shopKey ? sessionLoggedIn : loggedIn;
   const home = basePath || '/';
   const accountPath = `${home}/account`.replace(/\/+/g, '/');
   const menuPath = `${home}/menu`.replace(/\/+/g, '/');
   const contactPath = `${home}#contact`;
+  const links = [
+    { label: t('shopHome'), to: home },
+    { label: t('shopMenu'), to: menuPath },
+    { label: t('shopContact'), to: contactPath },
+  ];
 
   return (
     <header className="border-b border-stone-200 bg-white">
@@ -45,20 +55,16 @@ export default function ShopMinimalHeader({
             </span>
           ) : null}
         </Link>
-        <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
-          <Link to={home}>{t('shopHome')}</Link>
-          <Link to={menuPath}>{t('shopMenu')}</Link>
-          <Link to={contactPath}>{t('shopContact')}</Link>
-        </nav>
-        <ShopMobileNavMenu
-          accountPath={accountPath}
-          loggedIn={loggedIn}
-          links={[
-            { label: t('shopHome'), to: home },
-            { label: t('shopMenu'), to: menuPath },
-            { label: t('shopContact'), to: contactPath },
-          ]}
-        />
+        <div className="flex min-w-0 shrink-0 items-center gap-3 sm:gap-4">
+          <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
+            {links.map((link) => (
+              <Link key={link.to} to={link.to}>
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <ShopMobileNavMenu accountPath={accountPath} loggedIn={isLoggedIn} links={links} />
+        </div>
       </div>
     </header>
   );

@@ -1,11 +1,14 @@
 /**
- * Shop Adyen session helpers — run: cd backend && npx tsx src/lib/shop-adyen-session.test.ts
- * (vitest describe/it also work when a runner is present)
+ * Shop Adyen session helpers — run: cd backend && npx tsx src/lib/shop-adyen-session.node-test.ts
  */
 import assert from "node:assert/strict";
 import {
   applyStoredPaymentOptions,
   applyWebCheckoutSessionOptions,
+  buildShopCheckoutSessionAttempts,
+  filterStoredShopCards,
+  isAdyenStoredCardType,
+  normalizeAdyenEcommerceTender,
   shopAdyenShopperReference,
 } from "./shop-adyen-session.ts";
 
@@ -41,5 +44,30 @@ assert.equal(loggedIn.storePaymentMethodMode, "askForConsent");
 assert.equal(loggedIn.recurringProcessingModel, undefined);
 assert.equal(loggedIn.shopperEmail, "ada@example.com");
 assert.deepEqual(loggedIn.shopperName, { firstName: "Ada", lastName: "Lovelace" });
+
+const shopperOnly = applyStoredPaymentOptions(
+  { channel: "Web" },
+  { shopperReference: "shop_m_c" },
+  "shopperOnly"
+);
+assert.equal(shopperOnly.shopperReference, "shop_m_c");
+assert.equal(shopperOnly.storePaymentMethodMode, undefined);
+
+assert.equal(isAdyenStoredCardType("scheme"), true);
+assert.equal(isAdyenStoredCardType("twint"), false);
+assert.deepEqual(filterStoredShopCards([{ type: "scheme" }, { type: "twint" }]), [{ type: "scheme" }]);
+assert.equal(normalizeAdyenEcommerceTender("twint"), "twint");
+assert.equal(normalizeAdyenEcommerceTender({ type: "scheme" }), "card");
+
+const storedAttempts = buildShopCheckoutSessionAttempts(
+  { channel: "Web", store: "Store1" },
+  { shopperReference: "shop_m_c" }
+);
+assert.equal(storedAttempts[0].stored, true);
+assert.equal(storedAttempts[0].payload.shopperReference, "shop_m_c");
+assert.equal(storedAttempts[0].payload.storePaymentMethodMode, "askForConsent");
+assert.equal(storedAttempts[1]?.stored, true);
+assert.equal(storedAttempts[1]?.payload.storePaymentMethodMode, undefined);
+assert.equal(storedAttempts.at(-1)?.stored, false);
 
 console.log("shop-adyen-session tests passed");
