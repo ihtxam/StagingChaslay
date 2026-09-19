@@ -34,6 +34,28 @@ function publicAddress(row: typeof schema.customerAddresses.$inferSelect) {
   };
 }
 
+function normalizeAddressKey(input: {
+  address?: string | null;
+  zipCode?: string | null;
+  city?: string | null;
+}): string {
+  return [input.address || "", input.zipCode || "", input.city || ""]
+    .map((s) => String(s).trim().toLowerCase().replace(/\s+/g, " "))
+    .join("|");
+}
+
+function splitCheckoutName(name?: string | null): { firstName?: string; lastName?: string } {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return {};
+  return {
+    firstName: parts[0].slice(0, 100),
+    lastName: parts.slice(1).join(" ").slice(0, 100) || undefined,
+  };
+}
+
 export class ShopCustomerService {
   static async register(
     merchantId: string,
@@ -411,6 +433,79 @@ export class ShopCustomerService {
     }
 
     return { success: true };
+  }
+
+  /** Fill blank profile fields from a logged-in checkout without overwriting set values. */
+  static async syncFromCheckout(
+    customerId: string,
+    merchantId: string,
+    input: {
+      name?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      phone?: string | null;
+      email?: string | null;
+    }
+  ) {
+    const db = getDb();
+    const customer = await db.query.customers.findFirst({
+      where: and(eq(schema.customers.id, customerId), eq(schema.customers.merchantId, merchantId)),
+    });
+    if (!customer) return null;
+
+    const split = splitCheckoutName(input.name);
+    const first = String(input.firstName || split.firstName || "").trim().slice(0, 100);
+    const last = String(input.lastName || split.lastName || "").trim().slice(0, 100);
+    const phone = String(input.phone || "").trim().slice(0, 20);
+    const email = String(input.email || "").trim().toLowerCase();
+
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (first && !customer.firstName) patch.firstName = first;
+    if (last && !customer.lastName) patch.lastName = last;
+    if (phone && !customer.phone) patch.phone = phone;
+    if (email.includes("@") && !customer.email) patch.email = email;
+    if (Object.keys(patch).length <= 1) return customer;
+
+    const [updated] = await db
+      .update(schema.customers)
+      .set(patch)
+      .where(eq(schema.customers.id, customerId))
+      .returning();
+    return updated || customer;
+  }
+
+  /**
+   * Persist a delivery address on the shop account if it is new.
+   * Guest checkout must not call this.
+   */
+  static async rememberCheckoutAddress(
+    customerId: string,
+    merchantId: string,
+    input: SavedAddressInput
+  ) {
+    const address = String(input.address || "").trim();
+    if (!address) return null;
+    const existing = await this.listAddresses(customerId, merchantId);
+    const nextKey = normalizeAddressKey({
+      address,
+      zipCode: input.zipCode,
+      city: input.city,
+    });
+    const dup = existing.find(
+      (row) =>
+        normalizeAddressKey({
+          address: row.address,
+          zipCode: row.zipCode,
+          city: row.city,
+        }) === nextKey
+    );
+    if (dup) return dup;
+    return this.createAddress(customerId, merchantId, {
+      ...input,
+      address,
+      label: input.label || (existing.length ? "other" : "home"),
+      isDefault: input.isDefault === true || existing.length === 0,
+    });
   }
 
   private static publicCustomer(

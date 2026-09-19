@@ -7,7 +7,12 @@ import {
   formatAdyenSessionError,
   type AdyenCheckoutEnvironment,
 } from "@/lib/adyen-checkout-env";
-import { applyWebCheckoutSessionOptions } from "@/lib/shop-adyen-session";
+import {
+  applyStoredPaymentOptions,
+  applyWebCheckoutSessionOptions,
+  shopAdyenShopperReference,
+  type ShopAdyenShopper,
+} from "@/lib/shop-adyen-session";
 
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
@@ -79,9 +84,42 @@ export class AdyenService {
   }
 
   /**
+   * Logged-in shop account (password set) → Adyen shopperReference for CardOnFile.
+   * Guest CRM rows without a password are not tokenized.
+   */
+  static async resolveShopAccountShopper(
+    merchantId: string,
+    customerId?: string | null
+  ): Promise<ShopAdyenShopper | null> {
+    const id = String(customerId || "").trim();
+    if (!id) return null;
+    const db = getDb();
+    const customer = await db.query.customers.findFirst({
+      where: and(eq(schema.customers.id, id), eq(schema.customers.merchantId, merchantId)),
+      columns: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        passwordHash: true,
+      },
+    });
+    if (!customer?.passwordHash) return null;
+    return {
+      shopperReference: shopAdyenShopperReference(merchantId, customer.id),
+      shopperEmail: customer.email || null,
+      shopperName: {
+        firstName: customer.firstName || null,
+        lastName: customer.lastName || null,
+      },
+    };
+  }
+
+  /**
    * Initialize Checkout /sessions for Drop-in (online shop + gift cards).
    * API base and Drop-in environment follow the merchant client key (test_ / live_),
    * not platform ADYEN_ENVIRONMENT. Do not send clientKey in the session body.
+   * POS terminal payments use processTerminalPayment / Terminal API — not this path.
    */
   static async initializePaymentSession(
     merchantId: string,
@@ -89,7 +127,8 @@ export class AdyenService {
     amount: number,
     currency: string = "CHF",
     returnUrl?: string,
-    origin?: string
+    origin?: string,
+    options?: { shopper?: ShopAdyenShopper | null; customerId?: string | null } | null
   ) {
     try {
       const db = getDb();
@@ -100,6 +139,9 @@ export class AdyenService {
       const creds = await this.resolveCredentials(merchantId);
       const environment = this.environmentFromClientKey(creds.clientId);
       const apiBase = this.checkoutApiBase(creds.clientId);
+      const shopper =
+        options?.shopper ||
+        (await this.resolveShopAccountShopper(merchantId, options?.customerId));
 
       const sessionPayload = applyWebCheckoutSessionOptions(
         {
@@ -115,6 +157,7 @@ export class AdyenService {
         },
         merchant
       );
+      applyStoredPaymentOptions(sessionPayload, shopper);
       // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
 
       const response = await axios.post(`${apiBase}/sessions`, sessionPayload, {
@@ -136,6 +179,7 @@ export class AdyenService {
         sessionData,
         clientKey: creds.clientId,
         environment,
+        storePaymentMethod: Boolean(shopper?.shopperReference),
       };
     } catch (error) {
       console.error("Error initializing payment session:", error);

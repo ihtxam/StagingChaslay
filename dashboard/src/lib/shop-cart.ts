@@ -404,3 +404,8 @@ export function saveCustomerToken(shopKey: string, token: string) {
 export function clearCustomerToken(shopKey: string) {
   localStorage.removeItem(`${CUSTOMER_TOKEN_PREFIX}${shopKey}`);
 }
+
+export function shopCustomerAuthConfig(shopKey: string) {
+  const token = loadCustomerToken(shopKey);
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+}

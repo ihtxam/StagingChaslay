@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Gift, Mail, Package } from 'lucide-react';
-import { resolveShopKey, loadCustomerToken, shopBasePath } from '@/lib/shop-cart';
+import { resolveShopKey, loadCustomerToken, shopBasePath, shopCustomerAuthConfig } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
@@ -144,20 +144,24 @@ export default function GiftCardsPage() {
     setError(null);
     setPayMsg('');
     try {
-      const res = await axios.post(`/api/shop/${shopKey}/gift-cards/purchase`, {
-        amount: resolvedAmount,
-        deliveryType,
-        recipientEmail,
-        recipientName: recipientName || undefined,
-        senderName: senderName || undefined,
-        senderEmail: senderEmail || undefined,
-        message: message || undefined,
-        shippingAddress: deliveryType === 'physical' ? shippingAddress : undefined,
-        shippingZip: deliveryType === 'physical' ? shippingZip : undefined,
-        shippingCity: deliveryType === 'physical' ? shippingCity : undefined,
-        shippingCountry: deliveryType === 'physical' ? 'CH' : undefined,
-        ...shopCheckoutOriginPayload(base),
-      });
+      const res = await axios.post(
+        `/api/shop/${shopKey}/gift-cards/purchase`,
+        {
+          amount: resolvedAmount,
+          deliveryType,
+          recipientEmail,
+          recipientName: recipientName || undefined,
+          senderName: senderName || undefined,
+          senderEmail: senderEmail || undefined,
+          message: message || undefined,
+          shippingAddress: deliveryType === 'physical' ? shippingAddress : undefined,
+          shippingZip: deliveryType === 'physical' ? shippingZip : undefined,
+          shippingCity: deliveryType === 'physical' ? shippingCity : undefined,
+          shippingCountry: deliveryType === 'physical' ? 'CH' : undefined,
+          ...shopCheckoutOriginPayload(base),
+        },
+        shopCustomerAuthConfig(shopKey)
+      );
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
       setSession(res.data?.paymentSession || null);
