@@ -16,6 +16,8 @@ import kotlin.math.ceil
  */
 object NiimbotPrintClient {
     private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private val wakeBytes: ByteArray = byteArrayOf(0x54, 0x01)
+    private const val PRINTHEAD_PIXELS = 384
 
     fun isNiimbotPayload(data: ByteArray): Boolean =
         data.size >= 2 && data[0] == 0x55.toByte() && data[1] == 0x55.toByte()
@@ -39,7 +41,7 @@ object NiimbotPrintClient {
             else -> {
                 val driver = registry.driverFor(endpoint) ?: return Result.failure(IllegalStateException("Driver missing"))
                 val packets = buildAllPackets(bitmap, widthPx, heightPx, density)
-                val payload = packets.reduce { acc, bytes -> acc + bytes }
+                val payload = wakeBytes + packets.reduce { acc, bytes -> acc + bytes }
                 driver.print(context, endpoint, payload)
             }
         }
@@ -98,12 +100,13 @@ object NiimbotPrintClient {
         val rowBytes = ceil(widthPx / 8.0).toInt()
         for (y in 0 until heightPx) {
             val rowStart = y * rowBytes
-            val line = bitmap.copyOfRange(rowStart, rowStart + rowBytes)
+            val line = bitmap.copyOfRange(rowStart, minOf(rowStart + rowBytes, bitmap.size))
+            val counts = countPixelsForLine(line)
             val header = ByteBuffer.allocate(6).apply {
                 putShort(y.toShort())
-                put(0)
-                put(0)
-                put(0)
+                put(counts[0].toByte())
+                put(counts[1].toByte())
+                put(counts[2].toByte())
                 put(1)
             }.array()
             packets += packet(0x85, header + line)
@@ -134,6 +137,9 @@ object NiimbotPrintClient {
             try {
                 val out = socket.outputStream
                 val input = socket.inputStream
+                out.write(wakeBytes)
+                out.flush()
+                Thread.sleep(120)
                 transceive(out, input, 0x21, byteArrayOf(density.coerceIn(1, 5).toByte()), 16)
                 transceive(out, input, 0x23, byteArrayOf(1), 16)
                 transceive(out, input, 0x01, byteArrayOf(1))
@@ -146,10 +152,11 @@ object NiimbotPrintClient {
                 val rowBytes = ceil(widthPx / 8.0).toInt()
                 for (y in 0 until heightPx) {
                     val rowStart = y * rowBytes
-                    val line = bitmap.copyOfRange(rowStart, rowStart + rowBytes)
+                    val line = bitmap.copyOfRange(rowStart, minOf(rowStart + rowBytes, bitmap.size))
+                    val counts = countPixelsForLine(line)
                     val header = ByteBuffer.allocate(6).apply {
                         putShort(y.toShort())
-                        put(0); put(0); put(0); put(1)
+                        put(counts[0].toByte()); put(counts[1].toByte()); put(counts[2].toByte()); put(1)
                     }.array()
                     out.write(packet(0x85, header + line))
                     out.flush()
@@ -168,5 +175,28 @@ object NiimbotPrintClient {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun countPixelsForLine(lineData: ByteArray): IntArray {
+        var total = 0
+        for (b in lineData) {
+            var value = b.toInt() and 0xff
+            for (bit in 0 until 8) {
+                if (value and (1 shl bit) != 0) total++
+            }
+        }
+        val chunkSize = PRINTHEAD_PIXELS / 8 / 3
+        if (lineData.size <= chunkSize * 3 && chunkSize > 0) {
+            val parts = intArrayOf(0, 0, 0)
+            for (byteN in lineData.indices) {
+                val chunkIdx = byteN / chunkSize
+                var value = lineData[byteN].toInt() and 0xff
+                for (bit in 0 until 8) {
+                    if (value and (1 shl bit) != 0 && chunkIdx <= 2) parts[chunkIdx]++
+                }
+            }
+            return parts
+        }
+        return intArrayOf(0, total and 0xff, (total shr 8) and 0xff)
     }
 }

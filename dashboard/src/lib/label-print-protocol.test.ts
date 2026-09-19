@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { isTsplLabelPrinterName } from './tspl-label-core';
-import { pickPreferredLabelPrinter, resolveLabelPrintProtocol } from './label-print-protocol';
+import { pickPreferredLabelPrinter, printerUsesLabelProtocol, resolveLabelPrintProtocol } from './label-print-protocol';
 
 assert.equal(isTsplLabelPrinterName('XP-365B'), true);
 assert.equal(isTsplLabelPrinterName('HPRT HD42'), true);
@@ -65,6 +65,22 @@ assert.equal(
     'USB004'
   ),
   'tspl'
+);
+
+assert.equal(
+  printerUsesLabelProtocol(
+    { printers: [{ name: 'USB004', printLabels: true, enabled: true, portName: 'USB005' }] },
+    'USB004'
+  ),
+  true
+);
+assert.equal(
+  printerUsesLabelProtocol({ printers: [{ name: 'POS-80C', printReceipts: true, enabled: true }] }, 'POS-80C'),
+  false
+);
+assert.equal(
+  printerUsesLabelProtocol({ printers: [{ name: 'NIIMBOT K3', printLabels: true, enabled: true }] }, 'NIIMBOT K3'),
+  true
 );
 
 console.log('label-print-protocol.test.ts ok');

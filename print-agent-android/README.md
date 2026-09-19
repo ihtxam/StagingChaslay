@@ -106,6 +106,8 @@ Optional later: `/scale/reading` for USB serial scales (Aclas on OTG / RJ11 adap
 - **Sunmi D3 Mini**: printers on rear **USB 3.0 Type-A** ports (host mode — ideal for kitchen printer on USB)
 - **Handheld / generic**: USB-C OTG adapter → USB thermal
 - Persist permission per device VID/PID; re-request only when device changes
+- USB grants use a mutable PendingIntent (Android 12+ FLAG_IMMUTABLE drops the grant)
+- Device filter includes printer class, vendor-specific, CDC, and Niimbot VID 0x0355 so reboot restores access without a second prompt
 - Hot-plug: `ACTION_USB_DEVICE_ATTACHED` → rescan `/printers`
 
 ### P2 — Bluetooth ESC/POS (SPP)

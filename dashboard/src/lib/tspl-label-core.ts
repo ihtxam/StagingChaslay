@@ -145,6 +145,54 @@ export function buildTsplCommandList(fields: TsplLabelFields): string[] {
   return cmds;
 }
 
+/** CODE128-B width in dots: (11 * chars + 13) * narrow. */
+export function tsplBarcodeFits(barcode: string, widthMm: number): boolean {
+  const raw = String(barcode || '').trim();
+  if (!raw) return false;
+  const innerDots = Math.max(8, Math.round(widthMm * TSPL_DPMM) - 16);
+  const narrow = widthMm <= 40 ? 1 : 2;
+  const modules = 11 * raw.length + 13;
+  return modules * narrow <= innerDots;
+}
+
+/**
+ * Packed 1-bit rows (MSB = left) as a TSPL BITMAP job.
+ * Used when CODE128 BARCODE would overflow a 40mm sticker (hold-order UUIDs).
+ */
+export function buildTsplBitmapLabel(opts: {
+  widthMm: number;
+  heightMm: number;
+  bitmap: Uint8Array;
+  widthPx: number;
+  heightPx: number;
+  copies?: number;
+}): Uint8Array {
+  const copies = Math.min(20, Math.max(1, Math.floor(Number(opts.copies) || 1)));
+  const rowBytes = Math.ceil(opts.widthPx / 8);
+  const expected = rowBytes * opts.heightPx;
+  if (!opts.bitmap.length || opts.bitmap.length < expected) {
+    throw new Error('TSPL bitmap payload is empty or truncated');
+  }
+  const header = [
+    `SIZE ${opts.widthMm} mm,${opts.heightMm} mm`,
+    'GAP 2 mm,0 mm',
+    'SPEED 4',
+    'DENSITY 8',
+    'DIRECTION 1',
+    'REFERENCE 0,0',
+    'CLS',
+    `BITMAP 0,0,${rowBytes},${opts.heightPx},0,`,
+  ].join('\r\n');
+  const prefix = encodeWin1252(header);
+  const bitmap = opts.bitmap.subarray(0, expected);
+  const suffix = encodeWin1252(`\r\nPRINT 1,${copies}\r\n`);
+  const out = new Uint8Array(prefix.length + bitmap.length + suffix.length);
+  out.set(prefix, 0);
+  out.set(bitmap, prefix.length);
+  out.set(suffix, prefix.length + bitmap.length);
+  return out;
+}
+
 export function encodeTsplCommands(commands: string[]): Uint8Array {
   return encodeWin1252(commands.join('\r\n') + '\r\n');
 }

@@ -18,6 +18,7 @@ import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
+import com.rebornsense.printbridge.usb.UsbHostPermissions
 
 class PrintBridgeService : Service() {
     private var server: BridgeHttpServer? = null
@@ -35,6 +36,7 @@ class PrintBridgeService : Service() {
         super.onCreate()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        UsbHostPermissions.ensureGranted(applicationContext)
         registry.refresh(applicationContext)
         queue.start(applicationContext)
         server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {

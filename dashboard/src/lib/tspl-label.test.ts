@@ -3,10 +3,12 @@
  */
 import assert from 'node:assert/strict';
 import {
+  buildTsplBitmapLabel,
   buildTsplCommandList,
   encodeTsplCommands,
   encodeWin1252,
   isTsplLabelPrinterName,
+  tsplBarcodeFits,
   tsplCode128BBarcode,
   tsplQuote,
 } from './tspl-label-core';
@@ -57,5 +59,25 @@ assert.equal(
 const bytes = encodeTsplCommands(cmds);
 assert.equal(bytes[0], 0x53); // S of SIZE
 assert.ok(bytes.includes(0x0d) && bytes.includes(0x0a));
+
+assert.equal(tsplBarcodeFits('7612345678901', 40), true);
+assert.equal(tsplBarcodeFits('TEST1234', 40), true);
+assert.equal(tsplBarcodeFits('REBORN:O:a1b2c3d4-e5f6-7890-abcd-ef1234567890', 40), false);
+assert.equal(tsplBarcodeFits('REBORN:O:a1b2c3d4-e5f6-7890-abcd-ef1234567890', 100), false);
+
+const packed = new Uint8Array(40 * 20);
+packed.fill(0xff);
+const bmp = buildTsplBitmapLabel({
+  widthMm: 40,
+  heightMm: 20,
+  bitmap: packed,
+  widthPx: 320,
+  heightPx: 20,
+  copies: 1,
+});
+const bmpText = Buffer.from(bmp).toString('latin1');
+assert.match(bmpText, /BITMAP 0,0,40,20,0,/);
+assert.match(bmpText, /PRINT 1,1/);
+assert.ok(bmp.length > 800);
 
 console.log('tspl-label.test.ts ok');

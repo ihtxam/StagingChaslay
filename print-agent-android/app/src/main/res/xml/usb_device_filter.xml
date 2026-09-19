@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Match common USB thermal printer vendors (Epson, Star, Prolific, CH340, etc.) -->
+    <!-- USB printer class (ESC/POS, many TSPL) -->
     <usb-device class="7" />
+    <!-- Vendor-specific bulk (Niimbot K3/B21 USBPRINT, many clones) -->
+    <usb-device class="255" />
+    <!-- USB CDC ACM serial (some label printers and CH340 adapters) -->
+    <usb-device class="2" />
+    <!-- Wuhan Jingchen / Niimbot -->
+    <usb-device vendor-id="853" />
+    <!-- QinHeng CH340 -->
+    <usb-device vendor-id="6790" />
+    <!-- STMicroelectronics -->
+    <usb-device vendor-id="1155" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" />
+    <!-- Winbond / common TSPL USB -->
+    <usb-device vendor-id="1046" />
 </resources>

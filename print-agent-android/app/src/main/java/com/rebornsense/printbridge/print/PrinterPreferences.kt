@@ -55,4 +55,23 @@ object PrinterPreferences {
         next.remove(host.trim())
         prefs.edit().putStringSet("lan_hosts", next).apply()
     }
+
+    fun rememberedUsbDevices(context: Context): Set<String> {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_USB_DEVICES, emptySet())
+            ?.filter { it.isNotBlank() }
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    fun rememberUsbDevice(context: Context, vidPid: String) {
+        val key = vidPid.trim()
+        if (key.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val next = prefs.getStringSet(KEY_USB_DEVICES, emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (!next.add(key)) return
+        prefs.edit().putStringSet(KEY_USB_DEVICES, next).apply()
+    }
+
+    private const val KEY_USB_DEVICES = "usb_granted_vid_pid"
 }

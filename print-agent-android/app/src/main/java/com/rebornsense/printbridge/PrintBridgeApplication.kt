@@ -12,6 +12,7 @@ class PrintBridgeApplication : Application() {
         }
         // Start the foreground service after install/update so WebPOS can reach localhost:9101
         // without opening MainActivity first.
+        com.rebornsense.printbridge.usb.UsbHostPermissions.register(this)
         PrintBridgeLauncher.start(this)
         BridgeServiceWatchdog.start(this)
     }

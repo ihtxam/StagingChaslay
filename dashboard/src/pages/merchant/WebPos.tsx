@@ -101,6 +101,7 @@ import {
   unsuitableRawPrinterMessage,
   type AgentPrinter,
 } from '@/lib/print-agent';
+import { printerUsesLabelProtocol } from '@/lib/label-print-protocol';
 import { probeDeviceBridgeHealth, runDeviceBridgeTapToPay, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
 import {
   isLocalPrintStation,
@@ -7411,10 +7412,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
+    const fallbackName =
+      printerName && !printerUsesLabelProtocol(printSettings, printerName) && !looksLikeLabelPrinterName(printerName)
+        ? printerName
+        : '';
     const names = (
       targets.length > 0
         ? targets.map((x) => x.name)
-        : [printerName || '']
+        : [fallbackName || '']
     ).slice(0, opts.singleTarget ? 1 : undefined);
     const named = names.map((n) => (n || '').trim()).filter(Boolean);
     const unsuitableNamed = named.filter((n) => isUnsuitableRawPrinter(n));
@@ -7495,7 +7500,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             : configured;
         return label;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter(
+        (label) =>
+          opts.role === 'eod' ||
+          (!looksLikeLabelPrinterName(label) && !printerUsesLabelProtocol(printSettings, label))
+      );
     for (const label of targetsToPrint) {
       if (label && isUnsuitableRawPrinter(label)) {
         if (opts.role === 'eod') {
