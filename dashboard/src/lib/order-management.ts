@@ -123,6 +123,8 @@ export function isKitchenTypeOrder(o: MerchantOrder): boolean {
     return false;
   }
   if (isOnlineShopOrder(o)) {
+    if (status === 'awaiting_payment') return false;
+    if (isUnconfirmedCardOnlineOrder(o)) return false;
     return [
       'accepted',
       'preparing',
@@ -187,6 +189,26 @@ export function isScheduledPosKitchenTicket(o: MerchantOrder): boolean {
 /** Online order center — Active tab (pending through out_for_delivery). */
 export function isActiveOnlineOrder(o: { status?: string | null }): boolean {
   return !isTerminalOrderStatus(o.status);
+}
+
+/** Online shop card order still waiting for Adyen payment — hide from POS alerts. */
+export function isUnconfirmedCardOnlineOrder(o: {
+  orderType?: string | null;
+  orderSource?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+}): boolean {
+  if (!isOnlineShopOrder(o)) return false;
+  const status = normalizeOrderStatus(o.status);
+  const pay = normalizeOrderStatus(o.paymentStatus);
+  const method = String(o.paymentMethod || '')
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (status === 'awaiting_payment') return true;
+  return method === 'card' && pay === 'awaiting_payment';
 }
 
 export function isOnlineShopOrder(o: {

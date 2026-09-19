@@ -1,6 +1,6 @@
 import { processAutoPrintOrderJob } from '@/lib/external-order-auto-print';
 import { readDeliveryAutoAccept } from '@/lib/delivery-auto-accept';
-import { isAwaitingApproval } from '@/lib/order-management';
+import { isAwaitingApproval, isUnconfirmedCardOnlineOrder } from '@/lib/order-management';
 import { buildOrderCenterPrintJob } from '@/lib/order-center-print-prefs';
 
 const printedOnArrivalIds = new Set<string>();
@@ -10,12 +10,16 @@ type ArrivalOrder = {
   orderSource?: string | null;
   fulfillmentChannel?: string | null;
   status?: string;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  orderType?: string | null;
 };
 
 /** Order Center: always print selected tickets when a pending order first arrives. */
 export async function printOrderCenterOnArrival(order: ArrivalOrder): Promise<void> {
   const orderId = String(order.id || '').trim();
   if (!orderId || printedOnArrivalIds.has(orderId)) return;
+  if (isUnconfirmedCardOnlineOrder(order)) return;
   if (!isAwaitingApproval(order.status)) return;
 
   printedOnArrivalIds.add(orderId);
@@ -42,6 +46,7 @@ export async function maybePrintOnlineOrderOnArrival(
 
   const orderId = String(order.id || '').trim();
   if (!orderId || printedOnArrivalIds.has(orderId)) return;
+  if (isUnconfirmedCardOnlineOrder(order)) return;
   if (!isAwaitingApproval(order.status)) return;
   if (readDeliveryAutoAccept(settings)) return;
 

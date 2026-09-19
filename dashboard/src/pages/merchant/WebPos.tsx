@@ -456,7 +456,7 @@ import {
   posSaleFulfillmentStatus,
   type MerchantOrder,
 } from '@/lib/order-management';
-import { readDeliveryAutoAccept, onlineOrderAlertStatuses, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
+import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM, ONLINE_ORDER_HISTORY_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 import {
@@ -2875,10 +2875,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const online = [...byId.values()];
       setOnlineOrders(online);
 
-      const alertStatuses = onlineOrderAlertStatuses(deliveryAutoAccept);
-      const newOnes = online.filter((o) =>
-        alertStatuses.has(String(o.status || '').toLowerCase())
-      );
+      const newOnes = online.filter((o) => shouldAlertForOnlineOrder(o, deliveryAutoAccept));
       const newIds = newOnes.map((o) => o.id);
 
       if (knownOnlineIdsRef.current == null) {

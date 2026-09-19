@@ -2690,8 +2690,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
     const kioskCashNeedsApproval = kioskSettings?.kioskCashNeedsApproval !== false;
     const kioskAutoAcceptCash = isKioskOrder && payMethod === "cash" && !kioskCashNeedsApproval;
-    const initialOrderStatus =
-      shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash ? "preparing" : "pending_approval";
+    const cardPaymentPending = payMethod === "card" && preCardTotal > 0;
+    const initialOrderStatus = cardPaymentPending
+      ? "awaiting_payment"
+      : shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash
+        ? "preparing"
+        : "pending_approval";
     const resolvedOrderSource = isKioskOrder
       ? "kiosk"
       : isQrTableOrder
@@ -2879,7 +2883,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       finalOrder = (await earnLoyaltyForOrder(merchant, order)) as typeof order;
     }
 
-    if (shopAutoAccept) {
+    if (shopAutoAccept && !cardPaymentPending) {
       const { enterKitchenFromOrder } = await import("@/services/kitchen-ingress.service");
       void enterKitchenFromOrder(merchant.id, order.id, {
         printKitchen: true,
@@ -2918,40 +2922,17 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       }
     }
 
-    // Till notification on arrival; kitchen ticket when auto-accept, on-arrival setting, or later on Accept.
-    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
-    const arrivalPrint = normalizePosPrintSettings(merchant.posPrintSettings);
-    const kitchenOnArrival =
-      !shopAutoAccept && arrivalPrint.autoPrintOnlineOrdersOnArrival === true;
-
-    try {
-      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-      if (!isKioskOrder) {
-        await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-          printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-          printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
-          printKitchen: kitchenOnArrival,
-          printReceipt: false,
-          independentOfMasterAutoPrint: kitchenOnArrival,
-        });
-      }
-    } catch (printErr) {
-      console.warn("Shop order notification print enqueue failed:", printErr);
-    }
-
-    try {
-      const { ShopOrderEmailService } = await import("@/services/shop-order-email.service");
-      const guestLocale = String((req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || "");
-      await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
+    // Card orders defer POS notification, emails, and kitchen until payment is confirmed.
+    if (!cardPaymentPending && !isKioskOrder) {
+      const guestLocale = String(
+        (req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || ""
+      );
+      const { runOnlineShopOrderArrivalSideEffects } = await import(
+        "@/services/shop-online-order-arrival.service"
+      );
+      await runOnlineShopOrderArrivalSideEffects(merchant, order, {
         guestLocale: guestLocale || null,
       });
-      if (shopAutoAccept) {
-        await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
-          guestLocale: guestLocale || null,
-        });
-      }
-    } catch (mailErr) {
-      console.warn("Shop order confirmation email failed:", mailErr);
     }
 
     let paymentSession: unknown = null;
@@ -3172,20 +3153,16 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
     });
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    const [updated] = await db
-      .update(schema.orders)
-      .set({
-        paymentStatus: "completed",
-        paymentMethod: "card",
-        adyenReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
-        // Keep kitchen lifecycle — paid card orders still need staff accept
-        status:
-          order.status === "awaiting_payment" || order.status === "pending"
-            ? "pending_approval"
-            : order.status,
-      })
-      .where(eq(schema.orders.id, order.id))
-      .returning();
+    const guestLocale = String(
+      (req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || ""
+    );
+    const { finalizePaidOnlineShopCardOrder } = await import(
+      "@/services/shop-online-order-arrival.service"
+    );
+    let updated = await finalizePaidOnlineShopCardOrder(merchant, order, {
+      guestLocale: guestLocale || null,
+      pspReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
+    });
 
     try {
       await AdyenService.recordPaymentTransaction(
@@ -3205,18 +3182,6 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
       finalOrder = (await earnLoyaltyForOrder(merchant, updated)) as typeof updated;
     } catch (earnErr) {
       console.error("Loyalty earn on confirm-payment failed:", earnErr);
-    }
-
-    try {
-      const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-      await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-        printKitchen: false,
-        printDeliveryReceipt: updated.fulfillmentChannel === "delivery",
-        printNotification: false,
-        printReceipt: updated.fulfillmentChannel !== "delivery",
-      });
-    } catch (printErr) {
-      console.warn("Confirm-payment receipt print enqueue failed:", printErr);
     }
 
     res.json({ success: true, order: finalOrder });

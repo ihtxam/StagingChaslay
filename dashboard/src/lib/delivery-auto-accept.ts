@@ -1,4 +1,4 @@
-import { isDeliveryOrPickupShopOrder } from '@/lib/order-management';
+import { isDeliveryOrPickupShopOrder, isUnconfirmedCardOnlineOrder } from '@/lib/order-management';
 
 /** Whether delivery portal / online shop auto-accept is enabled. */
 export function readDeliveryAutoAccept(settings: unknown): boolean {
@@ -17,6 +17,23 @@ export function onlineOrderAlertStatuses(autoAccept: boolean): Set<string> {
     return new Set(['pending', 'pending_approval', 'preparing']);
   }
   return new Set(['pending', 'pending_approval']);
+}
+
+/** Whether an online order should trigger POS / panel arrival alerts. */
+export function shouldAlertForOnlineOrder(
+  o: {
+    status?: string | null;
+    paymentStatus?: string | null;
+    paymentMethod?: string | null;
+    orderType?: string | null;
+    orderSource?: string | null;
+    channel?: string | null;
+    fulfillmentChannel?: string | null;
+  },
+  autoAccept: boolean
+): boolean {
+  if (isUnconfirmedCardOnlineOrder(o)) return false;
+  return onlineOrderAlertStatuses(autoAccept).has(String(o.status || '').toLowerCase());
 }
 
 /**

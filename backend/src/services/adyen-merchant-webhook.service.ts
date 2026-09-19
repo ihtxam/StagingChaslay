@@ -225,14 +225,31 @@ export class AdyenMerchantWebhookService {
       }
 
       if (pspReference) {
-        await db
-          .update(schema.orders)
-          .set({
-            adyenReference: pspReference,
-            paymentStatus:
-              order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
-          })
-          .where(eq(schema.orders.id, order.id));
+        const merchant = await db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+        });
+        const isAwaitingShopCard =
+          order.orderType === "web_shop" &&
+          order.paymentStatus === "awaiting_payment" &&
+          String(order.paymentMethod || "").toLowerCase() === "card" &&
+          (order.status === "awaiting_payment" ||
+            order.status === "pending" ||
+            order.status === "pending_approval");
+        if (isAwaitingShopCard && merchant) {
+          const { finalizePaidOnlineShopCardOrder } = await import(
+            "@/services/shop-online-order-arrival.service"
+          );
+          await finalizePaidOnlineShopCardOrder(merchant, order, { pspReference });
+        } else {
+          await db
+            .update(schema.orders)
+            .set({
+              adyenReference: pspReference,
+              paymentStatus:
+                order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
+            })
+            .where(eq(schema.orders.id, order.id));
+        }
       }
       return;
     }

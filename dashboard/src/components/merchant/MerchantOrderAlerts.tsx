@@ -12,7 +12,7 @@ import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isTerminalOrderStatus } from '@/lib/order-management';
-import { readDeliveryAutoAccept, onlineOrderAlertStatuses, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
+import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
@@ -106,8 +106,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       const online = ((res.data.orders || []) as OnlineOrder[]).filter((o) =>
         isOnlineShopOrder(o)
       );
-      const alertStatuses = onlineOrderAlertStatuses(autoAccept);
-      const pending = online.filter((o) => alertStatuses.has(String(o.status || '').toLowerCase()));
+      const pending = online.filter((o) => shouldAlertForOnlineOrder(o, autoAccept));
       const pendingIds = pending.map((o) => o.id);
 
       try {
