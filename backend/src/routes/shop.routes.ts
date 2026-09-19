@@ -3234,6 +3234,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       shopPath: meta.shopPath,
       extraCandidates: [meta.headerOrigin, meta.referer],
     });
+    const { customerId: authCustomerId } = optionalCustomer(req);
     const session = await AdyenService.initializePaymentSession(
       merchant.id,
       order.id,
@@ -3241,7 +3242,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
       "CHF",
       returnUrl,
       checkoutOrigin,
-      { customerId: order.customerId }
+      { customerId: authCustomerId || order.customerId }
     );
     res.json({
       success: true,
@@ -3295,6 +3296,10 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: 
     let updated = await finalizePaidOnlineShopCardOrder(merchant, order, {
       guestLocale: guestLocale || null,
       pspReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
+      adyenPaymentMethod:
+        req.body?.paymentMethod ||
+        req.body?.adyenPaymentMethod ||
+        req.body?.paymentMethodType,
     });
 
     try {
