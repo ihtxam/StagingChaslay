@@ -3,6 +3,9 @@
 set -euo pipefail
 
 DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/deploy-production-guard.sh"
 STAGING_DEPLOY_PATH="/root/StagingChaslay"
 STAGING_DEPLOY_KEY="${STAGING_DEPLOY_KEY:-/root/.ssh/staging_chaslay_deploy}"
 STAGING_GITHUB_SSH_HOST="${STAGING_GITHUB_SSH_HOST:-github.com-staging-chaslay}"
@@ -34,6 +37,7 @@ resolve_repo_dir() {
 }
 
 resolve_repo_dir
+pre_deploy_sanity_check
 SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
 
 # CADDYFILE must be exported before ANY docker compose command (compose defaults to chaslay).
@@ -815,9 +819,10 @@ sleep 20
 
 echo "=== Database migrate / seed ==="
 # StagingChaslay only: monitor merchants pg_attribute bloat (Postgres hard limit 1600).
-# Production (DEPLOY_STACK=rebornsense) never runs this block — merchant data cannot be
-# wiped by routine production deploys.
+# PRODUCTION SAFEGUARD: DEPLOY_STACK=rebornsense never enters this block — postgres volume
+# is never removed on production. Any RESET_* / FORCE_* wipe env on rebornsense aborts at start.
 if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  assert_staging_only_db_reset
   STAGING_PG_ATTR_WARN_THRESHOLD="${STAGING_PG_ATTR_WARN_THRESHOLD:-300}"
   STAGING_PG_ATTR_BLOCK_THRESHOLD="${STAGING_PG_ATTR_BLOCK_THRESHOLD:-1500}"
   merchant_attnum="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
@@ -842,7 +847,7 @@ if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
     echo "STAGING ONLY: removing ${migrate_project}_postgres_data (production deploys never run this)"
     dc stop api dashboard migrate 2>/dev/null || true
     dc down 2>/dev/null || true
-    docker volume rm "${migrate_project}_postgres_data" 2>/dev/null || true
+    guard_docker_volume_rm_postgres "${migrate_project}_postgres_data"
     dc up -d db
     for _i in $(seq 1 60); do
       dc exec -T db pg_isready -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" >/dev/null 2>&1 && break
@@ -850,6 +855,8 @@ if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
     done
     dc up -d --build api dashboard caddy
   fi
+elif deploy_stack_is_production; then
+  assert_production_postgres_preserved
 fi
 # Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
 docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true

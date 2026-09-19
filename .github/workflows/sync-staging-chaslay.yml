@@ -122,6 +122,8 @@ jobs:
           envs: STAGING_CHASLAY_DEPLOY_KEY
           script_stop: true
           script: |
+            # STAGING ONLY — never set RESET_STAGING_DB here unless intentionally wiping test data.
+            unset PRODUCTION_DB_FORCE_RESET FORCE_DB_RESET
             export DEPLOY_STACK="${{ secrets.HETZNER_DEPLOY_STACK || 'chaslay' }}"
             export DEPLOY_PATH="${{ secrets.HETZNER_DEPLOY_PATH || '/root/StagingChaslay' }}"
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.chaslay"

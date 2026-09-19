@@ -44,7 +44,10 @@ jobs:
               echo "HETZNER_* secrets belong in the rebornChaslay repo (test server only)."
               exit 1
             fi
+            # PRODUCTION SAFEGUARD: never pass staging DB wipe flags to production deploy.
+            unset RESET_STAGING_DB PRODUCTION_DB_FORCE_RESET FORCE_DB_RESET
             export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             export DEPLOY_STACK=rebornsense
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"
+            bash "$DEPLOY_PATH/scripts/pre-deploy-sanity-check.sh"
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"

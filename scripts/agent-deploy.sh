@@ -84,10 +84,12 @@ deploy_production_ssh() {
   echo "=== Direct SSH deploy: production (${PRODUCTION_SSH_ALIAS}) ==="
   ssh -o BatchMode=yes "$PRODUCTION_SSH_ALIAS" bash -s <<EOF
 set -euo pipefail
+unset RESET_STAGING_DB PRODUCTION_DB_FORCE_RESET FORCE_DB_RESET
 export DEPLOY_STACK=${PRODUCTION_DEPLOY_STACK}
 export DEPLOY_PATH=${PRODUCTION_DEPLOY_PATH}
 export CADDYFILE="\${DEPLOY_PATH}/deploy/Caddyfile.rebornsense"
 cd "\${DEPLOY_PATH}"
+bash scripts/pre-deploy-sanity-check.sh
 git fetch origin main
 git reset --hard origin/main
 bash scripts/deploy-hetzner.sh

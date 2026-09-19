@@ -191,6 +191,34 @@ RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh
 
 Production deploys (`DEPLOY_STACK=rebornsense`) do not include any database reset path.
 
+### Production data is never auto-wiped
+
+**Your live merchant data on `app.rebornsense.com` is protected by code-level fail-safes** (see `scripts/lib/deploy-production-guard.sh`):
+
+| Safeguard | What it does |
+|-----------|----------------|
+| `DEPLOY_STACK=rebornsense` | Staging-only `pg_attribute` / `RESET_STAGING_DB` block never runs |
+| `pre_deploy_sanity_check.sh` | Production deploy aborts if `RESET_STAGING_DB`, `PRODUCTION_DB_FORCE_RESET`, or `FORCE_DB_RESET` is set |
+| `guard_docker_volume_rm_postgres` | `docker volume rm` on `*_postgres_data` is **forbidden** when `DEPLOY_STACK=rebornsense` |
+| `PRODUCTION_DB_FORCE_RESET` | **Not supported** — any value aborts production deploy (no silent override) |
+| GitHub Actions | `deploy-rebornsense.yml` explicitly `unset`s wipe flags before SSH deploy |
+
+The staging wipe bug (auto `docker volume rm` when `pg_attribute > 200`) **only affected `DEPLOY_STACK=chaslay`** on `116.202.26.15`. Production uses `DEPLOY_STACK=rebornsense` on `91.98.41.165` — that code path never ran the volume delete.
+
+**Intentional staging reset only** (never on production):
+
+```bash
+ssh root@116.202.26.15
+cd /root/StagingChaslay
+RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh
+```
+
+Pre-deploy check (runs automatically in production workflow after this PR):
+
+```bash
+DEPLOY_STACK=rebornsense DEPLOY_PATH=/root/rebornSense bash scripts/pre-deploy-sanity-check.sh
+```
+
 ### Chaslay test server (StagingChaslay repo)
 
 Configure secrets in **StagingChaslay** → Settings → Secrets and variables → Actions (not in this repo):

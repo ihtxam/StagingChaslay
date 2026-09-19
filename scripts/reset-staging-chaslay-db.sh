@@ -5,6 +5,10 @@
 # For column drift without data loss, use heal-staging-schema.sh instead.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib/deploy-production-guard.sh"
+
 if [[ "${RESET_STAGING_DB:-}" != "1" ]]; then
   echo "ERROR: Refusing to wipe staging database without RESET_STAGING_DB=1"
   echo "  This deletes ALL merchants, orders, customers, and payment credentials on staging."
@@ -12,17 +16,19 @@ if [[ "${RESET_STAGING_DB:-}" != "1" ]]; then
   exit 1
 fi
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
-
 export DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
+export DEPLOY_PATH="${DEPLOY_PATH:-$ROOT}"
+assert_staging_only_db_reset
+abort_if_production_wipe_attempt
+
+cd "$ROOT"
 PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]')"
 VOLUME="${PROJECT}_postgres_data"
 
 echo "Stopping stack and removing volume ${VOLUME}..."
 docker compose stop api dashboard migrate 2>/dev/null || true
 docker compose down 2>/dev/null || true
-docker volume rm "$VOLUME" 2>/dev/null || true
+guard_docker_volume_rm_postgres "$VOLUME"
 
 echo "Starting fresh database..."
 docker compose up -d db
