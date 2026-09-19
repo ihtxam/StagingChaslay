@@ -46,6 +46,8 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   const knownIdsRef = useRef<Set<string> | null>(null);
   const knownReservationIdsRef = useRef<Set<string> | null>(null);
   const unactionedRef = useRef<Set<string>>(new Set());
+  /** Accepted/acknowledged tickets — survives known-id re-seed when auto-accept settings load. */
+  const dismissedAlertIdsRef = useRef<Set<string>>(new Set());
   const audioUnlockedRef = useRef(false);
   const autoAcceptRef = useRef(autoAccept);
 
@@ -92,6 +94,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   }, [autoAccept, settingsReady]);
 
   const markActioned = useCallback((orderId: string) => {
+    dismissedAlertIdsRef.current.add(orderId);
     unactionedRef.current.delete(orderId);
     setQueue((prev) => prev.filter((o) => o.id !== orderId));
     if (unactionedRef.current.size === 0) stopOrderAlertLoop();
@@ -145,12 +148,16 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       if (knownIdsRef.current == null) {
         knownIdsRef.current = new Set(pendingIds);
         for (const o of pending) {
-          unactionedRef.current.add(o.id);
+          if (!dismissedAlertIdsRef.current.has(o.id)) {
+            unactionedRef.current.add(o.id);
+          }
         }
         return;
       }
 
-      const fresh = pending.filter((o) => !knownIdsRef.current!.has(o.id));
+      const fresh = pending.filter(
+        (o) => !knownIdsRef.current!.has(o.id) && !dismissedAlertIdsRef.current.has(o.id)
+      );
       for (const id of pendingIds) knownIdsRef.current.add(id);
 
       if (fresh.length > 0) {
@@ -202,18 +209,24 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
       for (const id of [...unactionedRef.current]) {
         const row = online.find((o) => o.id === id);
-        if (!row) {
+        if (!row || dismissedAlertIdsRef.current.has(id)) {
           unactionedRef.current.delete(id);
           continue;
         }
         if (autoAccept) {
           if (isTerminalOrderStatus(row.status)) unactionedRef.current.delete(id);
-          else if (
-            !isAwaitingApproval(row.status) &&
-            isDeliveryOrPickupShopOrder(row) &&
-            String(row.orderSource || '').toLowerCase() !== 'online_shop'
-          ) {
-            unactionedRef.current.delete(id);
+          else if (!isAwaitingApproval(row.status)) {
+            const src = String(row.orderSource || '').toLowerCase();
+            if (src === 'online_shop' || src === 'kiosk' || src === 'qr_table') {
+              unactionedRef.current.delete(id);
+            } else if (
+              isDeliveryOrPickupShopOrder(row) &&
+              src !== 'online_shop'
+            ) {
+              /* third-party auto-accepted tickets stay until acknowledged */
+            } else {
+              unactionedRef.current.delete(id);
+            }
           }
         } else if (!isAwaitingApproval(row.status)) {
           unactionedRef.current.delete(id);
