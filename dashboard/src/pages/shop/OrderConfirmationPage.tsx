@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 import {
@@ -110,11 +110,11 @@ export default function OrderConfirmationPage() {
     [merchantSlug, locationSlug]
   );
   const basePath = shopBasePath(shopKey, locSlug);
+  const navigate = useNavigate();
   const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const loggedIn = !!loadCustomerToken(shopKey);
   const [searchParams] = useSearchParams();
   const trackToken = searchParams.get('track') || '';
-  const wantPay = searchParams.get('pay') === '1' || searchParams.get('paid') === '1';
 
   const [trackingLive, setTrackingLive] = useState<{
     store: { latitude: number | null; longitude: number | null; name: string };
@@ -218,7 +218,7 @@ export default function OrderConfirmationPage() {
     }
   }, [order?.store?.name, order?.orderNumber, shopSite?.metaTitle, locale]);
 
-  const needsPayment = useMemo(
+  const awaitingCardPayment = useMemo(
     () =>
       !!order &&
       order.paymentMethod === 'card' &&
@@ -226,8 +226,21 @@ export default function OrderConfirmationPage() {
     [order]
   );
 
+  const handleBackToCheckout = useCallback(() => {
+    try {
+      sessionStorage.removeItem(`manupos_pay_${orderId}`);
+    } catch {
+      /* ignore */
+    }
+    setSession(null);
+    setPayMsg('');
+    setPaymentPhase('paying');
+    dropinMounted.current = false;
+    navigate(`${basePath}/checkout`);
+  }, [orderId, basePath, navigate]);
+
   useEffect(() => {
-    if (!wantPay || !needsPayment || !shopKey || !orderId) return;
+    if (!awaitingCardPayment || !shopKey || !orderId) return;
     setPaymentPhase('paying');
     dropinMounted.current = false;
     try {
@@ -260,7 +273,7 @@ export default function OrderConfirmationPage() {
         setPayMsg(e.response?.data?.error || t('shopCardNotConfigured'));
       }
     })();
-  }, [wantPay, needsPayment, shopKey, orderId, load]);
+  }, [awaitingCardPayment, shopKey, orderId, load]);
 
   useEffect(() => {
     if (
@@ -556,7 +569,7 @@ export default function OrderConfirmationPage() {
           ) : null}
         </section>
 
-        {needsPayment && (
+        {awaitingCardPayment && (
           <section className="bg-white border border-stone-900 p-5 space-y-3">
             <h2 className="font-semibold text-lg">{t('shopCompleteCardPayment')}</h2>
             <p className="text-sm text-stone-600">
@@ -579,12 +592,6 @@ export default function OrderConfirmationPage() {
                 >
                   {t('shopRetryPayment')}
                 </button>
-                <Link
-                  to={`${basePath}/checkout`}
-                  className="block w-full rounded-xl bg-stone-900 py-3 text-center text-sm font-semibold text-white"
-                >
-                  {t('shopBackToCheckout')}
-                </Link>
               </div>
             )}
             {(demoMode || !session) && paymentPhase === 'paying' && (
@@ -600,6 +607,13 @@ export default function OrderConfirmationPage() {
             {paymentPhase === 'paying' && payMsg ? (
               <p className="text-sm text-stone-700">{payMsg}</p>
             ) : null}
+            <button
+              type="button"
+              className="w-full rounded-xl bg-stone-900 py-3 text-sm font-semibold text-white"
+              onClick={handleBackToCheckout}
+            >
+              {t('shopBackToCheckout')}
+            </button>
           </section>
         )}
 
