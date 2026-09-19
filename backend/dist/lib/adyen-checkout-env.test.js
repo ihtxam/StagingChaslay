@@ -8,6 +8,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
  */
 const strict_1 = __importDefault(require("node:assert/strict"));
 const adyen_checkout_env_ts_1 = require("./adyen-checkout-env.ts");
+const liveCheckoutBase = `https://${adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX}${adyen_checkout_env_ts_1.LIVE_CHECKOUT_API_HOST_SUFFIX}/checkout/v71`;
 strict_1.default.equal((0, adyen_checkout_env_ts_1.isValidAdyenClientKey)("test_ABC123"), true);
 strict_1.default.equal((0, adyen_checkout_env_ts_1.isValidAdyenClientKey)("live_XYZ"), true);
 strict_1.default.equal((0, adyen_checkout_env_ts_1.isValidAdyenClientKey)("AQE1234567890"), false);
@@ -27,9 +28,11 @@ strict_1.default.equal((0, adyen_checkout_env_ts_1.shopAdyenCardReady)({
     adyenClientId: "AQEwrong",
 }), false);
 strict_1.default.equal((0, adyen_checkout_env_ts_1.isUnprefixedLiveCheckoutHost)("https://checkout-live.adyen.com/checkout/v71"), true);
-strict_1.default.equal((0, adyen_checkout_env_ts_1.isUnprefixedLiveCheckoutHost)("https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71"), false);
-strict_1.default.equal((0, adyen_checkout_env_ts_1.normalizeLiveUrlPrefix)("https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com"), "1797a841fbb37ca7-Chaslay");
-strict_1.default.equal((0, adyen_checkout_env_ts_1.normalizeLiveUrlPrefix)("1797a841fbb37ca7-Chaslay"), "1797a841fbb37ca7-Chaslay");
+strict_1.default.equal((0, adyen_checkout_env_ts_1.isUnprefixedLiveCheckoutHost)("https://checkout-live.adyenpayments.com/checkout/v71"), true);
+strict_1.default.equal((0, adyen_checkout_env_ts_1.isUnprefixedLiveCheckoutHost)(`https://${adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX}${adyen_checkout_env_ts_1.LIVE_CHECKOUT_API_HOST_SUFFIX}/checkout/v71`), false);
+strict_1.default.equal((0, adyen_checkout_env_ts_1.normalizeLiveUrlPrefix)(`https://${adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX}${adyen_checkout_env_ts_1.LIVE_CHECKOUT_API_HOST_SUFFIX}`), adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX);
+strict_1.default.equal((0, adyen_checkout_env_ts_1.normalizeLiveUrlPrefix)(adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX), adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX);
+strict_1.default.equal((0, adyen_checkout_env_ts_1.canonicalizeLiveUrlPrefix)("1797a841fbb37ca7-chaslay"), adyen_checkout_env_ts_1.PLATFORM_ADYEN_LIVE_URL_PREFIX, "lowercase chaslay slug is canonicalized to Customer Area casing");
 const prevApiBase = process.env.ADYEN_API_BASE;
 const prevLive = process.env.ADYEN_API_BASE_LIVE;
 const prevPrefix = process.env.ADYEN_LIVE_URL_PREFIX;
@@ -43,34 +46,22 @@ delete process.env.ADYEN_LIVE_ENDPOINT_PREFIX;
 delete process.env.PLATFORM_ADYEN_LIVE_URL_PREFIX;
 delete process.env.PLATFORM_ADYEN_API_BASE_LIVE;
 strict_1.default.equal((0, adyen_checkout_env_ts_1.testCheckoutApiBase)(), "https://checkout-test.adyen.com/v71");
-strict_1.default.throws(() => (0, adyen_checkout_env_ts_1.liveCheckoutApiBase)(), (err) => {
-    strict_1.default.ok(err instanceof Error);
-    strict_1.default.equal(err.message, adyen_checkout_env_ts_1.LIVE_CHECKOUT_PREFIX_REQUIRED);
-    return true;
-});
+strict_1.default.equal((0, adyen_checkout_env_ts_1.liveCheckoutApiBase)(), liveCheckoutBase, "live Checkout uses the Swisspayout/Chaslay prefix on adyenpayments.com");
 strict_1.default.equal((0, adyen_checkout_env_ts_1.checkoutApiBase)("test_xxx"), "https://checkout-test.adyen.com/v71");
-strict_1.default.throws(() => (0, adyen_checkout_env_ts_1.checkoutApiBase)("live_xxx"), (err) => {
-    strict_1.default.ok(err instanceof Error);
-    strict_1.default.equal(err.message, adyen_checkout_env_ts_1.LIVE_CHECKOUT_PREFIX_REQUIRED);
-    return true;
-});
+strict_1.default.equal((0, adyen_checkout_env_ts_1.checkoutApiBase)("live_xxx"), liveCheckoutBase);
 process.env.ADYEN_API_BASE = "https://checkout-test.adyen.com/v71";
-strict_1.default.throws(() => (0, adyen_checkout_env_ts_1.checkoutApiBase)("live_xxx"), (err) => {
-    strict_1.default.ok(err instanceof Error);
-    strict_1.default.equal(err.message, adyen_checkout_env_ts_1.LIVE_CHECKOUT_PREFIX_REQUIRED);
-    return true;
-}, "live client key must not reuse ADYEN_API_BASE when it is the test host, and must not fall back to checkout-live.adyen.com");
-process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyen.com/checkout/v71";
+strict_1.default.equal((0, adyen_checkout_env_ts_1.checkoutApiBase)("live_xxx"), liveCheckoutBase, "live client key must not reuse ADYEN_API_BASE when it is the test host");
+process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyenpayments.com/checkout/v71";
 strict_1.default.throws(() => (0, adyen_checkout_env_ts_1.liveCheckoutApiBase)(), (err) => {
     strict_1.default.ok(err instanceof Error);
     strict_1.default.equal(err.message, adyen_checkout_env_ts_1.LIVE_CHECKOUT_PREFIX_REQUIRED);
     return true;
 });
 delete process.env.ADYEN_API_BASE_LIVE;
-process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-Chaslay";
-strict_1.default.equal((0, adyen_checkout_env_ts_1.liveCheckoutApiBase)(), "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71");
+process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-chaslay";
+strict_1.default.equal((0, adyen_checkout_env_ts_1.liveCheckoutApiBase)(), liveCheckoutBase, "lowercase env prefix is canonicalized");
 delete process.env.ADYEN_LIVE_URL_PREFIX;
-strict_1.default.equal((0, adyen_checkout_env_ts_1.liveCheckoutApiBase)("1797a841fbb37ca7-Chaslay"), "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71", "merchant adyenLiveUrlPrefix is used when env prefix is unset");
+strict_1.default.equal((0, adyen_checkout_env_ts_1.liveCheckoutApiBase)("1797a841fbb37ca7-chaslay"), liveCheckoutBase, "stale lowercase merchant adyenLiveUrlPrefix is ignored; platform prefix wins");
 if (prevApiBase === undefined)
     delete process.env.ADYEN_API_BASE;
 else

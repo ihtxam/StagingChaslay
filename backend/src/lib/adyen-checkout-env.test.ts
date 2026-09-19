@@ -3,10 +3,12 @@
  */
 import assert from "node:assert/strict";
 import {
+  canonicalizeLiveUrlPrefix,
   checkoutApiBase,
   environmentFromClientKey,
   isUnprefixedLiveCheckoutHost,
   isValidAdyenClientKey,
+  LIVE_CHECKOUT_API_HOST_SUFFIX,
   LIVE_CHECKOUT_PREFIX_REQUIRED,
   liveCheckoutApiBase,
   normalizeLiveUrlPrefix,
@@ -14,6 +16,8 @@ import {
   shopAdyenCardReady,
   testCheckoutApiBase,
 } from "./adyen-checkout-env.ts";
+
+const liveCheckoutBase = `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}${LIVE_CHECKOUT_API_HOST_SUFFIX}/checkout/v71`;
 
 assert.equal(isValidAdyenClientKey("test_ABC123"), true);
 assert.equal(isValidAdyenClientKey("live_XYZ"), true);
@@ -44,13 +48,27 @@ assert.equal(
 
 assert.equal(isUnprefixedLiveCheckoutHost("https://checkout-live.adyen.com/checkout/v71"), true);
 assert.equal(
+  isUnprefixedLiveCheckoutHost("https://checkout-live.adyenpayments.com/checkout/v71"),
+  true
+);
+assert.equal(
   isUnprefixedLiveCheckoutHost(
-    "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71"
+    `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}${LIVE_CHECKOUT_API_HOST_SUFFIX}/checkout/v71`
   ),
   false
 );
-assert.equal(normalizeLiveUrlPrefix("https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com"), "1797a841fbb37ca7-Chaslay");
-assert.equal(normalizeLiveUrlPrefix("1797a841fbb37ca7-Chaslay"), "1797a841fbb37ca7-Chaslay");
+assert.equal(
+  normalizeLiveUrlPrefix(
+    `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}${LIVE_CHECKOUT_API_HOST_SUFFIX}`
+  ),
+  PLATFORM_ADYEN_LIVE_URL_PREFIX
+);
+assert.equal(normalizeLiveUrlPrefix(PLATFORM_ADYEN_LIVE_URL_PREFIX), PLATFORM_ADYEN_LIVE_URL_PREFIX);
+assert.equal(
+  canonicalizeLiveUrlPrefix("1797a841fbb37ca7-chaslay"),
+  PLATFORM_ADYEN_LIVE_URL_PREFIX,
+  "lowercase chaslay slug is canonicalized to Customer Area casing"
+);
 
 const prevApiBase = process.env.ADYEN_API_BASE;
 const prevLive = process.env.ADYEN_API_BASE_LIVE;
@@ -68,23 +86,20 @@ delete process.env.PLATFORM_ADYEN_API_BASE_LIVE;
 assert.equal(testCheckoutApiBase(), "https://checkout-test.adyen.com/v71");
 assert.equal(
   liveCheckoutApiBase(),
-  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`,
-  "live Checkout uses the Swisspayout/Chaslay prefix when merchants do not enter an endpoint URL"
+  liveCheckoutBase,
+  "live Checkout uses the Swisspayout/Chaslay prefix on adyenpayments.com"
 );
 assert.equal(checkoutApiBase("test_xxx"), "https://checkout-test.adyen.com/v71");
-assert.equal(
-  checkoutApiBase("live_xxx"),
-  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`
-);
+assert.equal(checkoutApiBase("live_xxx"), liveCheckoutBase);
 
 process.env.ADYEN_API_BASE = "https://checkout-test.adyen.com/v71";
 assert.equal(
   checkoutApiBase("live_xxx"),
-  `https://${PLATFORM_ADYEN_LIVE_URL_PREFIX}-checkout-live.adyen.com/checkout/v71`,
+  liveCheckoutBase,
   "live client key must not reuse ADYEN_API_BASE when it is the test host"
 );
 
-process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyen.com/checkout/v71";
+process.env.ADYEN_API_BASE_LIVE = "https://checkout-live.adyenpayments.com/checkout/v71";
 assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
   assert.ok(err instanceof Error);
   assert.equal(err.message, LIVE_CHECKOUT_PREFIX_REQUIRED);
@@ -92,17 +107,14 @@ assert.throws(() => liveCheckoutApiBase(), (err: unknown) => {
 });
 delete process.env.ADYEN_API_BASE_LIVE;
 
-process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-Chaslay";
-assert.equal(
-  liveCheckoutApiBase(),
-  "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71"
-);
-
+process.env.ADYEN_LIVE_URL_PREFIX = "1797a841fbb37ca7-chaslay";
+assert.equal(liveCheckoutApiBase(), liveCheckoutBase, "lowercase env prefix is canonicalized");
 delete process.env.ADYEN_LIVE_URL_PREFIX;
+
 assert.equal(
-  liveCheckoutApiBase("1797a841fbb37ca7-Chaslay"),
-  "https://1797a841fbb37ca7-Chaslay-checkout-live.adyen.com/checkout/v71",
-  "merchant adyenLiveUrlPrefix is used when env prefix is unset"
+  liveCheckoutApiBase("1797a841fbb37ca7-chaslay"),
+  liveCheckoutBase,
+  "stale lowercase merchant adyenLiveUrlPrefix is ignored; platform prefix wins"
 );
 
 if (prevApiBase === undefined) delete process.env.ADYEN_API_BASE;
