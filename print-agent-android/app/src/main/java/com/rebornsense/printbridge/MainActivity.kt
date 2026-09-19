@@ -1,29 +1,30 @@
 package com.rebornsense.printbridge
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import com.google.android.material.switchmaterial.SwitchMaterial
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
-import com.rebornsense.printbridge.device.DeviceProfiler
-import com.rebornsense.printbridge.setup.OemSettingsNavigator
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
 import com.rebornsense.printbridge.usb.UsbHostPermissions
@@ -48,12 +49,11 @@ class MainActivity : AppCompatActivity() {
     private val wizardLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             pendingWizardLaunch = false
-            updateOemSetupBanner()
             updateTapToPayDiagnostics()
-            if (result.resultCode != RESULT_OK && needsSetupAttention()) {
-                // User dismissed wizard — banner stays visible with Run setup.
-                findViewById<View>(R.id.oemSetupBanner).visibility = View.VISIBLE
+            if (result.resultCode == RESULT_OK) {
+                scrollToPrinters()
             }
+            refreshPrinters()
         }
 
     private val permissionLauncher =
@@ -96,20 +96,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<RecyclerView>(R.id.printerRecycler).adapter = printerAdapter
         setupAutoStartSwitch()
         requestNeededPermissions()
-        findViewById<Button>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
-        findViewById<Button>(R.id.testPrintBtn).setOnClickListener { testPrintDefault() }
-        findViewById<Button>(R.id.addLanBtn).setOnClickListener { addLanPrinter() }
-        findViewById<Button>(R.id.oemSetupBtn).setOnClickListener { openOemSetupWizard() }
-        findViewById<Button>(R.id.runSetupBtn).setOnClickListener { openOemSetupWizard() }
-        updateOemSetupBanner()
+        findViewById<MaterialButton>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
+        findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
+        findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         updateTapToPayDiagnostics()
-        // Wizard waits until permission dialogs finish so USB/Bluetooth prompts are not hidden.
     }
 
     override fun onResume() {
         super.onResume()
         refreshPrinters()
-        updateOemSetupBanner()
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
@@ -122,13 +117,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateVersionHeader() {
-        val label = getString(
-            R.string.bridge_version_header,
-            BuildConfig.VERSION_NAME,
-            BuildConfig.VERSION_CODE,
-        )
+        val label = getString(R.string.bridge_version_label, BuildConfig.VERSION_NAME)
         findViewById<TextView>(R.id.versionText).text = label
-        title = label
+        title = getString(R.string.app_name)
     }
 
     private fun maybeLaunchOemWizard() {
@@ -141,67 +132,32 @@ class MainActivity : AppCompatActivity() {
         openOemSetupWizard()
     }
 
-    private fun needsSetupAttention(): Boolean {
-        return !OemSetupPreferences.isWizardCompleted(this) ||
-            !OemSettingsNavigator.isBatteryOptimizationDisabled(this) ||
-            !BridgeHealthChecker.isHealthy()
-    }
-
     private fun openOemSetupWizard() {
         wizardLauncher.launch(SetupWizardActivity.createIntent(this))
     }
 
-    private fun updateOemSetupBanner() {
-        val banner = findViewById<View>(R.id.oemSetupBanner)
-        val summary = findViewById<TextView>(R.id.oemSetupBannerSummary)
-        val runSetupBtn = findViewById<Button>(R.id.runSetupBtn)
-        val needsSetup = needsSetupAttention()
-        banner.visibility = if (needsSetup) View.VISIBLE else View.GONE
-        runSetupBtn.visibility = View.VISIBLE
-        if (needsSetup) {
-            summary.text = getString(
-                R.string.oem_setup_banner_summary,
-                DeviceProfiler.detect().displayName,
-            )
-        }
+    private fun scrollToPrinters() {
+        val scroll = findViewById<ScrollView>(R.id.mainScroll)
+        val target = findViewById<View>(R.id.printersCard)
+        scroll.post { scroll.smoothScrollTo(0, target.top) }
     }
 
     private fun updateTapToPayDiagnostics() {
         val card = findViewById<View>(R.id.tapToPayDiagnosticsCard)
         val text = findViewById<TextView>(R.id.tapToPayDiagnosticsText)
-        val health = BridgeHealthChecker.probeHealth()
-        card.visibility = View.VISIBLE
-        val sdkLine = getString(
-            if (BuildConfig.HAS_ADYEN_SDK) R.string.tap_to_pay_sdk_present else R.string.tap_to_pay_sdk_missing,
-        )
-        if (health == null) {
-            text.text = getString(
-                R.string.tap_to_pay_diag_offline,
-                sdkLine,
-                BuildConfig.VERSION_NAME,
-            )
+        if (!BuildConfig.HAS_ADYEN_SDK) {
+            card.visibility = View.GONE
             return
         }
-        val nfcLine = when (health.nfcAvailable) {
-            true -> getString(R.string.tap_to_pay_nfc_yes)
-            false -> getString(R.string.tap_to_pay_nfc_no)
-            null -> getString(R.string.tap_to_pay_nfc_unknown)
+        val health = BridgeHealthChecker.probeHealth()
+        val ready = health?.tapToPayReady == true
+        if (ready) {
+            card.visibility = View.GONE
+            return
         }
-        val readyLine = when (health.tapToPayReady) {
-            true -> getString(R.string.tap_to_pay_ready_yes)
-            false -> getString(
-                R.string.tap_to_pay_ready_no,
-                health.tapToPayMessage ?: getString(R.string.tap_to_pay_ready_unknown),
-            )
-            null -> getString(R.string.tap_to_pay_ready_unknown)
-        }
-        text.text = getString(
-            R.string.tap_to_pay_diag_summary,
-            sdkLine,
-            nfcLine,
-            readyLine,
-            health.version ?: BuildConfig.VERSION_NAME,
-        )
+        card.visibility = View.VISIBLE
+        val message = health?.tapToPayMessage ?: getString(R.string.tap_to_pay_ready_unknown)
+        text.text = getString(R.string.tap_to_pay_setup_hint, message)
     }
 
     private fun requestNeededPermissions() {
@@ -252,23 +208,17 @@ class MainActivity : AppCompatActivity() {
     private fun updateServiceStatus() {
         val statusText = findViewById<TextView>(R.id.statusText)
         val hintText = findViewById<TextView>(R.id.hintText)
-        val serviceCard = findViewById<View>(R.id.serviceStatusCard)
         val serviceIndicator = findViewById<View>(R.id.serviceStatusIndicator)
-        val serviceStatusText = findViewById<TextView>(R.id.serviceStatusText)
 
         val health = BridgeHealthChecker.probeHealth()
         if (health != null) {
             statusText.text = getString(R.string.status_ready)
-            hintText.text = getString(R.string.open_webpos)
-            serviceStatusText.text = getString(R.string.status_service_running)
+            hintText.text = getString(R.string.main_hint_short)
             serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
-            serviceCard.visibility = View.VISIBLE
         } else {
             statusText.text = getString(R.string.status_starting)
             hintText.text = getString(R.string.oem_step_bridge_pending)
-            serviceStatusText.text = getString(R.string.status_service_stopped)
             serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
-            serviceCard.visibility = View.VISIBLE
             PrintBridgeLauncher.start(this)
         }
         updateTapToPayDiagnostics()
@@ -298,30 +248,46 @@ class MainActivity : AppCompatActivity() {
 
     private fun setDefaultPrinter(endpoint: PrinterEndpoint) {
         PrinterPreferences.setDefaultPrinterId(this, endpoint.id)
-        Toast.makeText(this, getString(R.string.default_set, endpoint.name), Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            this,
+            getString(R.string.default_set, PrinterDisplay.title(endpoint)),
+            Toast.LENGTH_SHORT,
+        ).show()
         refreshPrinters()
     }
 
-    private fun addLanPrinter() {
-        val host = findViewById<EditText>(R.id.lanHostInput).text?.toString()?.trim().orEmpty()
-        if (host.isBlank()) {
-            Toast.makeText(this, R.string.lan_printer_hint, Toast.LENGTH_SHORT).show()
-            return
+    private fun showAddNetworkPrinterDialog() {
+        val inputLayout = TextInputLayout(this).apply {
+            hint = getString(R.string.lan_printer_hint)
+            setPadding(48, 24, 48, 0)
         }
-        PrinterPreferences.addLanHost(this, host)
-        findViewById<EditText>(R.id.lanHostInput).text?.clear()
-        refreshPrinters()
-    }
-
-    private fun testPrintDefault() {
-        val defaultId = PrinterPreferences.getDefaultPrinterId(this)
-        val endpoint = defaultId?.let { registry.findById(it) }
-            ?: registry.findByName(null)
-        if (endpoint == null) {
-            Toast.makeText(this, R.string.no_printers_yet, Toast.LENGTH_SHORT).show()
-            return
+        val input = TextInputEditText(inputLayout.context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
         }
-        testPrint(endpoint)
+        inputLayout.addView(input)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.add_network_printer)
+            .setMessage(R.string.lan_printer_dialog_message)
+            .setView(inputLayout)
+            .setPositiveButton(R.string.add, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            positive.isEnabled = false
+            input.doAfterTextChanged { text ->
+                positive.isEnabled = !text.isNullOrBlank()
+            }
+            positive.setOnClickListener {
+                val host = input.text?.toString()?.trim().orEmpty()
+                if (host.isBlank()) return@setOnClickListener
+                PrinterPreferences.addLanHost(this, host)
+                refreshPrinters()
+                Toast.makeText(this, R.string.lan_printer_added, Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private fun testPrint(endpoint: PrinterEndpoint) {
@@ -339,19 +305,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val sample = buildTestTicket()
-        findViewById<Button>(R.id.testPrintBtn).isEnabled = false
+        testRowBtnEnabled(false)
         Thread {
             val result = driver.print(applicationContext, endpoint, sample)
             runOnUiThread {
-                findViewById<Button>(R.id.testPrintBtn).isEnabled = true
+                testRowBtnEnabled(true)
                 if (result.isSuccess) {
-                    Toast.makeText(this, getString(R.string.test_print_ok, endpoint.name), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this,
+                        getString(R.string.test_print_ok, PrinterDisplay.title(endpoint)),
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 } else {
                     val message = friendlyPrintError(result.exceptionOrNull())
                     Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
+    }
+
+    private fun testRowBtnEnabled(enabled: Boolean) {
+        findViewById<RecyclerView>(R.id.printerRecycler).isEnabled = enabled
     }
 
     private fun friendlyPrintError(error: Throwable?): String {

@@ -1,5 +1,16 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle, Package, Plus, Printer, ScanLine, Sparkles, UserCircle2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Camera,
+  CheckCircle,
+  ImagePlus,
+  Package,
+  Plus,
+  Printer,
+  ScanLine,
+  Sparkles,
+  UserCircle2,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -130,7 +141,12 @@ export default function StorekeeperApp() {
   const [recent, setRecent] = useState<RecentIntake[]>([]);
   const [salePrice, setSalePrice] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoSource, setPhotoSource] = useState<'upload' | 'online' | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [currentMenuPhoto, setCurrentMenuPhoto] = useState<string | null>(null);
+  const [existingAction, setExistingAction] = useState<'stock' | 'expiry' | 'photo'>('stock');
   const [newProductMode, setNewProductMode] = useState(false);
+  const photoFileRef = useRef<HTMLInputElement>(null);
   const [generateBusy, setGenerateBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
   const [storeName, setStoreName] = useState('');
@@ -182,7 +198,8 @@ export default function StorekeeperApp() {
 
   const unitOptions = units.length ? units : FALLBACK_UNITS;
 
-  const displayPhoto = photoUrl || menuProduct?.imageUrl || suggestion?.imageUrl || null;
+  const displayPhoto = photoUrl || (existingItem ? currentMenuPhoto : null);
+  const onlinePhotoAvailable = !!(suggestion?.imageUrl || menuProduct?.imageUrl);
 
   const loadBootstrap = useCallback(async () => {
     if (!clockedIn) return;
@@ -229,6 +246,9 @@ export default function StorekeeperApp() {
       setSuggestion(null);
       setMenuProduct(null);
       setPhotoUrl(null);
+      setPhotoSource(null);
+      setCurrentMenuPhoto(null);
+      setExistingAction('stock');
       setLookupBusy(true);
       try {
         const res = await api.get(`/merchant/storekeeper/lookup/${encodeURIComponent(trimmed)}`, {
@@ -246,8 +266,10 @@ export default function StorekeeperApp() {
           setName(item.name);
           setUnit(item.unit || 'piece');
           setCategoryId(item.categoryId || '');
-          if (menu?.imageUrl) setPhotoUrl(menu.imageUrl);
+          setCurrentMenuPhoto(menu?.imageUrl || null);
           if (menu?.price != null && menu.price > 0) setSalePrice(String(menu.price));
+          setExistingAction('stock');
+          toast(t('storekeeperProductExists'), { icon: 'ℹ️' });
           return;
         }
 
@@ -261,11 +283,9 @@ export default function StorekeeperApp() {
             if (hasUnit) setUnit(ext.unit);
           }
           if (ext.categoryId) setCategoryId(ext.categoryId);
-          if (ext.imageUrl && !menu?.imageUrl) setPhotoUrl(ext.imageUrl);
           toast.success(t('storekeeperOnlineFound'));
         } else if (menu) {
           setName(menu.name);
-          if (menu.imageUrl) setPhotoUrl(menu.imageUrl);
           if (menu.price > 0) setSalePrice(String(menu.price));
           toast.success(t('storekeeperMenuProductFound'));
         } else {
@@ -318,11 +338,48 @@ export default function StorekeeperApp() {
     setExpiryDate('');
     setSalePrice('');
     setPhotoUrl(null);
+    setPhotoSource(null);
+    setCurrentMenuPhoto(null);
+    setExistingAction('stock');
     setExistingItem(null);
     setMenuProduct(null);
     setSuggestion(null);
     setNewProductMode(false);
     setPendingLabel(null);
+  };
+
+  const onUploadPhoto = async (file: File | null) => {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const { compressImageIfNeeded } = await import('@/lib/compress-image');
+      const compressed = await compressImageIfNeeded(file, {
+        maxBytes: 200 * 1024,
+        targetBytes: 200 * 1024,
+        maxWidth: 1200,
+      });
+      const fd = new FormData();
+      fd.append('file', compressed);
+      const res = await api.post('/merchant/media', fd, { headers: apiHeaders });
+      const url = String(res.data?.url || '').trim();
+      if (!url) throw new Error('empty');
+      setPhotoUrl(url);
+      setPhotoSource('upload');
+      toast.success(t('storekeeperPhotoUploaded'));
+    } catch {
+      toast.error(t('storekeeperPhotoUploadFailed'));
+    } finally {
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = '';
+    }
+  };
+
+  const applyOnlinePhoto = () => {
+    const url = suggestion?.imageUrl || menuProduct?.imageUrl || null;
+    if (!url) return;
+    setPhotoUrl(url);
+    setPhotoSource('online');
+    toast.success(t('storekeeperPhotoFromWeb'));
   };
 
   const startNewProduct = () => {
@@ -332,6 +389,9 @@ export default function StorekeeperApp() {
     setExpiryDate('');
     setSalePrice('');
     setPhotoUrl(null);
+    setPhotoSource(null);
+    setCurrentMenuPhoto(null);
+    setExistingAction('stock');
     setExistingItem(null);
     setMenuProduct(null);
     setSuggestion(null);
@@ -404,14 +464,24 @@ export default function StorekeeperApp() {
       toast.error(t('storekeeperNameRequired'));
       return;
     }
+    const photoOnly = !!existingItem && existingAction === 'photo';
     const q = Number(qty);
-    if (!(q > 0)) {
+    if (!photoOnly && !(q > 0)) {
       toast.error(t('storekeeperQtyRequired'));
+      return;
+    }
+    if (photoOnly && !photoUrl) {
+      toast.error(t('storekeeperPhotoRequired'));
+      return;
+    }
+    if (existingItem && existingAction === 'expiry' && !expiryDate) {
+      toast.error(t('storekeeperExpiryRequired'));
       return;
     }
     setBusy(true);
     try {
       const priceNum = salePrice.trim() ? Number(salePrice) : undefined;
+      const chosenImageUrl = photoSource ? photoUrl : null;
       const res = await api.post(
         '/merchant/storekeeper/intake',
         {
@@ -419,10 +489,15 @@ export default function StorekeeperApp() {
           name: name.trim(),
           unit,
           categoryId: categoryId || null,
-          qty: q,
+          qty: photoOnly ? 0 : q,
           expiryDate: expiryDate || null,
           salePrice: priceNum != null && Number.isFinite(priceNum) ? priceNum : undefined,
-          imageUrl: photoUrl || suggestion?.imageUrl || menuProduct?.imageUrl || null,
+          imageUrl: chosenImageUrl,
+          updateImageUrl:
+            photoSource === 'upload' ||
+            photoSource === 'online' ||
+            (photoOnly && !!photoUrl),
+          photoOnly,
         },
         { headers: apiHeaders }
       );
@@ -439,13 +514,15 @@ export default function StorekeeperApp() {
         ...prev.slice(0, 9),
       ]);
       toast.success(
-        res.data.menuProduct
-          ? res.data.menuProduct.created
-            ? t('storekeeperPosProductCreated')
-            : t('storekeeperPosProductUpdated')
-          : res.data.created
-            ? t('storekeeperItemCreated')
-            : t('storekeeperStockAdded')
+        photoOnly
+          ? t('storekeeperPhotoOnlySaved')
+          : res.data.menuProduct
+            ? res.data.menuProduct.created
+              ? t('storekeeperPosProductCreated')
+              : t('storekeeperPosProductUpdated')
+            : res.data.created
+              ? t('storekeeperItemCreated')
+              : t('storekeeperStockAdded')
       );
       if (res.data.created && barcode.trim()) {
         setPendingLabel({
@@ -462,6 +539,9 @@ export default function StorekeeperApp() {
       setExpiryDate('');
       setSalePrice('');
       setPhotoUrl(null);
+      setPhotoSource(null);
+      setCurrentMenuPhoto(null);
+      setExistingAction('stock');
       setExistingItem(null);
       setMenuProduct(null);
       setSuggestion(null);
@@ -639,20 +719,45 @@ export default function StorekeeperApp() {
             </button>
           </div>
           {existingItem ? (
-            <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-2 dark:border-teal-800/40 dark:bg-teal-950/30">
-              <p className="text-xs text-teal-900 dark:text-teal-100">
-                {fillI18n(t('storekeeperExistingItem'), {
-                  stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
-                })}
-              </p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-teal-950">
-                {formatStockQty(existingItem.onHand)}
-                <span className="ml-1 text-sm font-semibold">
-                  {units.find((u) => u.code === (existingItem.unit || unit))?.name ||
-                    existingItem.unit ||
-                    unit}
-                </span>
-              </p>
+            <div className="mt-2 space-y-2">
+              <div className="rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-2 dark:border-teal-800/40 dark:bg-teal-950/30">
+                <p className="text-xs font-semibold text-teal-900 dark:text-teal-100">
+                  {t('storekeeperProductExists')}
+                </p>
+                <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">
+                  {fillI18n(t('storekeeperExistingItem'), {
+                    stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
+                  })}
+                </p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-teal-950 dark:text-teal-100">
+                  {formatStockQty(existingItem.onHand)}
+                  <span className="ml-1 text-sm font-semibold">
+                    {units.find((u) => u.code === (existingItem.unit || unit))?.name ||
+                      existingItem.unit ||
+                      unit}
+                  </span>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['stock', 'expiry', 'photo'] as const).map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                      existingAction === action
+                        ? 'bg-teal-700 text-white'
+                        : 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                    }`}
+                    onClick={() => setExistingAction(action)}
+                  >
+                    {action === 'stock'
+                      ? t('storekeeperUpdateStock')
+                      : action === 'expiry'
+                        ? t('storekeeperUpdateExpiry')
+                        : t('storekeeperUpdatePhoto')}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : menuProduct && menuProduct.stock != null && !lookupBusy ? (
             <div className="mt-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 dark:border-sky-800/40 dark:bg-sky-950/30">
@@ -678,128 +783,209 @@ export default function StorekeeperApp() {
           ) : null}
         </div>
 
-        {(displayPhoto || suggestion?.imageUrl || menuProduct?.imageUrl) && (
-          <div className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] p-3">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
-              {displayPhoto ? (
-                <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-[var(--text-muted)]">
-                  <Package size={28} />
-                </div>
-              )}
+        {existingItem && existingAction === 'photo' ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide muted">
+              {t('storekeeperUpdatePhoto')}
+            </p>
+            <div className="flex items-start gap-3">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
+                {displayPhoto ? (
+                  <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[var(--text-muted)]">
+                    <Package size={28} />
+                  </div>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={photoUploading}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-medium text-[var(--text)] disabled:opacity-60"
+                  onClick={() => photoFileRef.current?.click()}
+                >
+                  <ImagePlus size={16} />
+                  {photoUploading ? t('loading') : t('storekeeperTakePhoto')}
+                </button>
+                {currentMenuPhoto && !photoUrl ? (
+                  <p className="text-xs text-[var(--text-muted)]">{t('storekeeperCurrentPhoto')}</p>
+                ) : null}
+                {photoSource === 'upload' ? (
+                  <p className="text-xs text-teal-800">{t('storekeeperPhotoUploaded')}</p>
+                ) : null}
+              </div>
             </div>
-            <p className="text-xs text-[var(--text-muted)]">{t('storekeeperPhotoOnlineHint')}</p>
           </div>
-        )}
+        ) : null}
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-            {t('storekeeperProductName')}
-          </label>
-          <input
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t('storekeeperProductName')}
-            required
-          />
-        </div>
+        {!(existingItem && existingAction === 'photo') ? (
+          <>
+            {!existingItem ? (
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/50 p-3">
+                <p className="text-xs text-[var(--text-muted)]">{t('storekeeperPhotoOptionalHint')}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={photoUploading}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm font-medium"
+                    onClick={() => photoFileRef.current?.click()}
+                  >
+                    <ImagePlus size={16} />
+                    {photoUploading ? t('loading') : t('storekeeperTakePhoto')}
+                  </button>
+                  {onlinePhotoAvailable ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-lg border border-teal-600/40 bg-teal-500/10 px-3 py-2 text-sm font-medium text-teal-900 dark:text-teal-100"
+                      onClick={applyOnlinePhoto}
+                    >
+                      {t('storekeeperUseOnlinePhoto')}
+                    </button>
+                  ) : null}
+                </div>
+                {displayPhoto ? (
+                  <div className="mt-3 h-16 w-16 overflow-hidden rounded-lg border border-[var(--border)]">
+                    <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperUnit')}
-            </label>
-            <select
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-            >
-              {unitOptions.map((u) => (
-                <option key={u.code} value={u.code}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperCategory')}
-            </label>
-            <select
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">{t('storekeeperNoCategory')}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                {t('storekeeperProductName')}
+              </label>
+              <input
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)] disabled:opacity-80"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('storekeeperProductName')}
+                required
+                readOnly={!!existingItem}
+              />
+            </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperSalePrice')}
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.05"
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-              value={salePrice}
-              onChange={(e) => setSalePrice(e.target.value)}
-              placeholder="0.00"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-              {t('storekeeperQty')}
-              {existingItem ? (
-                <span className="ml-1 font-normal normal-case text-teal-800">
-                  ({fillI18n(t('storekeeperStockNowShort'), {
-                    stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
-                  })})
-                </span>
+            {!existingItem ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                    {t('storekeeperUnit')}
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                  >
+                    {unitOptions.map((u) => (
+                      <option key={u.code} value={u.code}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                    {t('storekeeperCategory')}
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                  >
+                    <option value="">{t('storekeeperNoCategory')}</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-3">
+              {!existingItem ? (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                    {t('storekeeperSalePrice')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value)}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
               ) : null}
-            </label>
-            <input
-              type="number"
-              min="0.0001"
-              step="any"
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              required
-            />
-          </div>
-        </div>
+              <div className={existingItem ? 'col-span-2' : undefined}>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                    {t('storekeeperQty')}
+                    {existingItem ? (
+                      <span className="ml-1 font-normal normal-case text-teal-800">
+                        ({fillI18n(t('storekeeperStockNowShort'), {
+                          stock: stockLabel(existingItem.onHand, existingItem.unit || unit, units),
+                        })})
+                      </span>
+                    ) : null}
+                  </label>
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    required
+                  />
+                </div>
+            </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
-            {t('storekeeperExpiry')}
-          </label>
-          <input
-            type="date"
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-          />
-        </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                {t('storekeeperExpiry')}
+                {existingItem && existingAction === 'expiry' ? (
+                  <span className="ml-1 font-normal normal-case text-amber-800">
+                    ({t('storekeeperUpdateExpiry')})
+                  </span>
+                ) : null}
+              </label>
+              <input
+                type="date"
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                required={existingItem && existingAction === 'expiry'}
+              />
+            </div>
+          </>
+        ) : null}
+
+        <input
+          ref={photoFileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => void onUploadPhoto(e.target.files?.[0] || null)}
+        />
 
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || photoUploading}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-700 py-3.5 text-base font-bold text-white disabled:opacity-60"
         >
           <CheckCircle size={20} />
-          {busy ? t('loading') : t('storekeeperSaveStock')}
+          {busy
+            ? t('loading')
+            : existingItem && existingAction === 'photo'
+              ? t('storekeeperSavePhoto')
+              : existingItem && existingAction === 'expiry'
+                ? t('storekeeperSaveExpiry')
+                : t('storekeeperSaveStock')}
         </button>
 
         {!existingItem && barcode.trim() && name.trim() ? (
