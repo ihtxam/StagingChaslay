@@ -776,7 +776,7 @@ export default function Products() {
       price,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
-      barcode: form.barcode.trim() || undefined,
+      barcode: form.barcode.trim() || null,
       categoryId: form.categoryId || undefined,
       buttonColor: form.buttonColor || undefined,
       imageUrl: form.imageUrl.trim() || null,
@@ -2263,6 +2263,7 @@ export default function Products() {
                           value={form.barcode}
                           height={36}
                           width={160}
+                          displayValue
                           className="mt-2 flex justify-center"
                         />
                       ) : null}
@@ -2277,23 +2278,32 @@ export default function Products() {
                           </button>
                         )}
                         {form.barcode.trim() && (
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() =>
-                              openPrintFor([
-                                {
-                                  id: editingId || 'draft',
-                                  name: form.name,
-                                  barcode: form.barcode,
-                                  price: form.price,
-                                  sku: form.sku,
-                                },
-                              ])
-                            }
-                          >
-                            {t('barcodePrintLabels')}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => setForm({ ...form, barcode: '' })}
+                            >
+                              {t('clear')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() =>
+                                openPrintFor([
+                                  {
+                                    id: editingId || 'draft',
+                                    name: form.name,
+                                    barcode: form.barcode,
+                                    price: form.price,
+                                    sku: form.sku,
+                                  },
+                                ])
+                              }
+                            >
+                              {t('barcodePrintLabels')}
+                            </button>
+                          </>
                         )}
                       </div>
                     </Field>
@@ -2688,6 +2698,7 @@ export default function Products() {
                   value={String(printTargets[0].barcode)}
                   height={36}
                   width={160}
+                  displayValue={labelOpts.showBarcodeNumber !== false}
                   className="mt-1 flex justify-center"
                 />
                 {labelOpts.showBarcodeNumber !== false ? (
