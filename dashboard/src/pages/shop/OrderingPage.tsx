@@ -1248,7 +1248,7 @@ export default function OrderingPage() {
         key={product.id}
         product={product}
         layout={productView === 'list' ? 'list' : 'grid'}
-        showImage={showProductImages && !!product.image}
+        showImage={showProductImages}
         price={catalog}
         salePrice={sale}
         offerBadge={
@@ -1763,11 +1763,11 @@ export default function OrderingPage() {
               {popularProducts.map((product) => {
                 const catalog = catalogUnitPrice(product.price, product.categoryId ?? null);
                 return (
-                  <div key={`pop-${product.id}`} className="min-w-[280px] max-w-[320px] shrink-0 snap-start">
+                  <div key={`pop-${product.id}`} className="w-[300px] shrink-0 snap-start">
                     <ProductCard
                       product={product}
                       layout="list"
-                      showImage={showProductImages && !!product.image}
+                      showImage={showProductImages}
                       price={catalog}
                       onAdd={() => handleProductClick(product)}
                       rewardPts={null}
@@ -2187,28 +2187,29 @@ function ProductCard({
       <span className="tabular-nums">CHF {price.toFixed(2)}</span>
     );
 
-  const hasPhoto = showImage && !!product.image;
+  const imagesEnabled = showImage;
+  const hasPhoto = imagesEnabled && !!product.image;
   const isGrid = layout !== 'list';
 
-  const imageBlock = hasPhoto ? (
-    <div
-      className={
-        isGrid
-          ? 'relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-stone-100'
-          : 'relative h-24 w-28 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-28 sm:w-32'
-      }
-    >
-      <img
-        src={product.image}
-        alt=""
-        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-      />
-      {offerBadge ? (
+  const listImageClass =
+    'relative h-24 w-28 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-28 sm:w-32';
+  const gridImageClass = 'relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-stone-100';
+
+  const imageBlock = imagesEnabled ? (
+    <div className={isGrid ? gridImageClass : listImageClass}>
+      {hasPhoto ? (
+        <img
+          src={product.image}
+          alt=""
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+        />
+      ) : null}
+      {hasPhoto && offerBadge ? (
         <span className="absolute left-1 top-1 rounded-full bg-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
           {offerBadge.toLowerCase() === 'free' ? t('shopFree') : offerBadge}
         </span>
       ) : null}
-      {unlocked ? (
+      {hasPhoto && unlocked ? (
         <button
           type="button"
           onClick={(e) => {
@@ -2235,7 +2236,9 @@ function ProductCard({
         }
       }}
       className={`group cursor-pointer overflow-hidden rounded-xl border border-stone-100 bg-white hover:border-stone-200 ${
-        isGrid ? 'flex flex-col p-2' : 'flex gap-3 p-2'
+        isGrid
+          ? 'flex flex-col p-2'
+          : `flex gap-3 p-2 ${imagesEnabled ? 'min-h-[7.5rem] sm:min-h-[8.5rem]' : ''}`
       }`}
     >
       {imageBlock}
