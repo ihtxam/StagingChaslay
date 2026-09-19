@@ -183,7 +183,7 @@ cd /root/StagingChaslay
 bash scripts/reset-staging-chaslay-db.sh
 ```
 
-New deploys auto-detect column count >1500 on StagingChaslay and reset the postgres volume before migrate.
+New deploys auto-reset the staging postgres volume only when `pg_attribute` on `merchants` exceeds **1500** (Postgres hard limit 1600). Dropped columns from migration churn can inflate `pg_attribute` without blocking DDL — values around 200–400 are normal and **must not** trigger a reset. Set `STAGING_DB_AUTO_RESET=0` to disable auto-reset, or `STAGING_DB_FORCE_RESET=1` to wipe staging manually.
 
 ### Chaslay test server (StagingChaslay repo)
 

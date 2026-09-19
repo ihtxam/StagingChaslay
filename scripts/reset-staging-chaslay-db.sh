@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Reset StagingChaslay Postgres when merchants table hits the 1600-column limit.
-# WARNING: deletes all staging data (merchants, orders, demo shop).
+# Manual reset for StagingChaslay Postgres (e.g. merchants table at Postgres 1600-column limit).
+# WARNING: deletes ALL staging data (merchants, orders, products, demo shop).
+# Prefer deploy auto-reset (pg_attribute > 1500) or heal-staging-schema.sh for column drift.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

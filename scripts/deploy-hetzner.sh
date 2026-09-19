@@ -814,15 +814,29 @@ echo "=== Wait for services ==="
 sleep 20
 
 echo "=== Database migrate / seed ==="
-# StagingChaslay only: dropped columns still count toward Postgres 1600 limit — reset when bloated.
+# StagingChaslay only: dropped columns still count toward Postgres 1600 limit — reset when near limit.
+# Production (DEPLOY_STACK=rebornsense) never runs this block.
 if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  STAGING_PG_ATTR_RESET_THRESHOLD="${STAGING_PG_ATTR_RESET_THRESHOLD:-1500}"
   merchant_attnum="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
     "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.merchants'::regclass AND attnum > 0;" 2>/dev/null | tr -d '[:space:]' || echo "0")"
   merchant_cols="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
     "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='merchants';" 2>/dev/null | tr -d '[:space:]' || echo "0")"
-  echo "merchants columns: active=${merchant_cols:-?} total_pg_attribute=${merchant_attnum:-?}"
-  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt 200 ]]; then
-    echo "WARNING: merchants pg_attribute count $merchant_attnum (active $merchant_cols) — resetting staging postgres volume"
+  echo "merchants columns: active=${merchant_cols:-?} total_pg_attribute=${merchant_attnum:-?} (auto-reset threshold ${STAGING_PG_ATTR_RESET_THRESHOLD})"
+  should_reset_staging_db=0
+  if [[ "${STAGING_DB_FORCE_RESET:-}" == "1" ]]; then
+    echo "WARNING: STAGING_DB_FORCE_RESET=1 — will reset staging postgres volume (all merchants/orders deleted)"
+    should_reset_staging_db=1
+  elif [[ "${STAGING_DB_AUTO_RESET:-1}" == "0" ]]; then
+    echo "STAGING_DB_AUTO_RESET=0 — skipping automatic staging postgres reset"
+  elif [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$STAGING_PG_ATTR_RESET_THRESHOLD" ]]; then
+    echo "WARNING: merchants pg_attribute count $merchant_attnum exceeds ${STAGING_PG_ATTR_RESET_THRESHOLD} (active $merchant_cols) — resetting staging postgres volume"
+    should_reset_staging_db=1
+  elif [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt 300 ]]; then
+    echo "NOTE: merchants pg_attribute=$merchant_attnum (active $merchant_cols) — elevated from migration churn but below reset threshold; data preserved"
+  fi
+  if [[ "$should_reset_staging_db" == "1" ]]; then
+    echo "STAGING ONLY: deleting ${migrate_project}_postgres_data — production deploys are unaffected"
     dc stop api dashboard migrate 2>/dev/null || true
     dc down 2>/dev/null || true
     docker volume rm "${migrate_project}_postgres_data" 2>/dev/null || true
