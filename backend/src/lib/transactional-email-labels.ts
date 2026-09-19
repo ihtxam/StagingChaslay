@@ -131,22 +131,22 @@ type ShopOrderKind = 'received' | 'confirmed' | 'ready' | 'out_for_delivery' | '
 
 const SHOP_ORDER_SUBJECTS: Record<TxLocale, Record<ShopOrderKind, (shop: string, n: string) => string>> = {
   en: {
-    received: (s, n) => `Order ${n} received — ${s}`,
-    confirmed: (s, n) => `Order ${n} confirmed — ${s}`,
+    received: (s, n) => `Order ${n} confirmed — ${s}`,
+    confirmed: (s, n) => `Order #${n} accepted — ${s}`,
     ready: (s, n) => `Order ${n} is ready — ${s}`,
     out_for_delivery: (s, n) => `Order ${n} is on the way — ${s}`,
     cancelled: (s, n) => `Order ${n} cancelled — ${s}`,
   },
   fr: {
-    received: (s, n) => `Commande ${n} reçue — ${s}`,
-    confirmed: (s, n) => `Commande ${n} confirmée — ${s}`,
+    received: (s, n) => `Commande ${n} confirmée — ${s}`,
+    confirmed: (_s, n) => `Commande #${n} acceptée`,
     ready: (s, n) => `Commande ${n} prête — ${s}`,
     out_for_delivery: (s, n) => `Commande ${n} en livraison — ${s}`,
     cancelled: (s, n) => `Commande ${n} annulée — ${s}`,
   },
   de: {
-    received: (s, n) => `Bestellung ${n} erhalten — ${s}`,
-    confirmed: (s, n) => `Bestellung ${n} bestätigt — ${s}`,
+    received: (s, n) => `Bestellung ${n} bestätigt — ${s}`,
+    confirmed: (s, n) => `Bestellung #${n} angenommen — ${s}`,
     ready: (s, n) => `Bestellung ${n} ist bereit — ${s}`,
     out_for_delivery: (s, n) => `Bestellung ${n} ist unterwegs — ${s}`,
     cancelled: (s, n) => `Bestellung ${n} storniert — ${s}`,
@@ -155,27 +155,24 @@ const SHOP_ORDER_SUBJECTS: Record<TxLocale, Record<ShopOrderKind, (shop: string,
 
 const SHOP_ORDER_BODIES: Record<TxLocale, Record<ShopOrderKind, string>> = {
   en: {
-    received: 'Thank you for your order. We will confirm it shortly.',
-    confirmed:
-      'The store has accepted your order and is preparing it. Track status with the link below.',
+    received: 'We have received your order and are preparing it.',
+    confirmed: 'We have received your order and the kitchen has started.',
     ready: 'Your order is ready for pickup.',
-    out_for_delivery: 'Your driver is on the way. Track live delivery using the link below.',
+    out_for_delivery: 'Your driver is on the way.',
     cancelled: 'Your order has been cancelled.',
   },
   fr: {
-    received: 'Merci pour votre commande. Nous la confirmerons sous peu.',
-    confirmed:
-      'Le magasin a accepté votre commande et la prépare. Suivez son statut via le lien ci-dessous.',
+    received: 'Nous avons bien reçu votre commande et nous la préparons.',
+    confirmed: 'Nous avons bien reçu votre commande et la cuisine a commencé.',
     ready: 'Votre commande est prête à être récupérée.',
-    out_for_delivery: 'Votre livreur est en route. Suivez la livraison en direct via le lien ci-dessous.',
+    out_for_delivery: 'Votre livreur est en route.',
     cancelled: 'Votre commande a été annulée.',
   },
   de: {
-    received: 'Vielen Dank für Ihre Bestellung. Wir bestätigen sie in Kürze.',
-    confirmed:
-      'Das Geschäft hat Ihre Bestellung angenommen und bereitet sie zu. Verfolgen Sie den Status über den Link unten.',
+    received: 'Wir haben Ihre Bestellung erhalten und bereiten sie vor.',
+    confirmed: 'Wir haben Ihre Bestellung erhalten und die Küche hat begonnen.',
     ready: 'Ihre Bestellung ist zur Abholung bereit.',
-    out_for_delivery: 'Ihr Fahrer ist unterwegs. Verfolgen Sie die Lieferung live über den Link unten.',
+    out_for_delivery: 'Ihr Fahrer ist unterwegs.',
     cancelled: 'Ihre Bestellung wurde storniert.',
   },
 };
@@ -229,7 +226,199 @@ export function shopOrderTrackLabel(locale?: string | null): string {
 
 export function shopOrderReadyLabel(locale?: string | null): string {
   const lang = loc(locale);
-  if (lang === 'fr') return 'Heure estimée';
-  if (lang === 'de') return 'Geschätzte Zeit';
-  return 'Estimated time';
+  if (lang === 'fr') return 'Prévu pour';
+  if (lang === 'de') return 'Geplant für';
+  return 'Scheduled for';
+}
+
+export type ShopOrderEmailLabels = {
+  orderConfirmedBadge: string;
+  orderStatusLabel: string;
+  thankYou: (name: string) => string;
+  orderType: string;
+  payment: string;
+  total: string;
+  qty: string;
+  item: string;
+  unit: string;
+  lineTotal: string;
+  subtotal: string;
+  discount: string;
+  summary: string;
+  pickupAt: string;
+  deliverTo: string;
+  scheduledFor: string;
+  orderInstructions: string;
+  needHelp: string;
+  needHelpBody: string;
+  call: string;
+  email: string;
+  autoMessage: string;
+  statusAccepted: string;
+  statusReady: string;
+  statusOnTheWay: string;
+  statusCancelled: string;
+  headlineAccepted: string;
+  headlineReady: string;
+  headlineOnTheWay: string;
+  headlineCancelled: string;
+  etaMinutes: (minutes: number) => string;
+  fulfillmentTakeaway: string;
+  fulfillmentDelivery: string;
+  fulfillmentDineIn: string;
+  paymentCash: string;
+  paymentCard: string;
+  paymentPayLater: string;
+  paymentOnline: string;
+};
+
+const SHOP_ORDER_LABELS: Record<TxLocale, ShopOrderEmailLabels> = {
+  en: {
+    orderConfirmedBadge: 'ORDER CONFIRMED',
+    orderStatusLabel: 'ORDER STATUS',
+    thankYou: (name) => `Thank you, ${name}!`,
+    orderType: 'Order type',
+    payment: 'Payment',
+    total: 'Total',
+    qty: 'Qty',
+    item: 'Item',
+    unit: 'Unit',
+    lineTotal: 'Subtotal',
+    subtotal: 'Subtotal',
+    discount: 'Discount',
+    summary: 'Summary',
+    pickupAt: 'Pick up at',
+    deliverTo: 'Deliver to',
+    scheduledFor: 'Scheduled for',
+    orderInstructions: 'Order instructions',
+    needHelp: 'Need help?',
+    needHelpBody: 'For any questions about your order, contact us — we are here to help.',
+    call: 'Call',
+    email: 'Email',
+    autoMessage: 'This is an automated message — please do not reply directly to this email.',
+    statusAccepted: 'Accepted',
+    statusReady: 'Ready',
+    statusOnTheWay: 'On the way',
+    statusCancelled: 'Cancelled',
+    headlineAccepted: 'Your order is on its way to the kitchen',
+    headlineReady: 'Your order is ready',
+    headlineOnTheWay: 'Your order is on the way',
+    headlineCancelled: 'Your order was cancelled',
+    etaMinutes: (m) => `Estimated ~${m} min.`,
+    fulfillmentTakeaway: 'Takeaway',
+    fulfillmentDelivery: 'Delivery',
+    fulfillmentDineIn: 'Dine in',
+    paymentCash: 'Cash',
+    paymentCard: 'Card',
+    paymentPayLater: 'Pay on pickup',
+    paymentOnline: 'Online',
+  },
+  fr: {
+    orderConfirmedBadge: 'COMMANDE CONFIRMÉE',
+    orderStatusLabel: 'STATUT DE LA COMMANDE',
+    thankYou: (name) => `Merci, ${name} !`,
+    orderType: 'Type de commande',
+    payment: 'Paiement',
+    total: 'Total',
+    qty: 'Qté',
+    item: 'Article',
+    unit: 'Unité',
+    lineTotal: 'Sous-total',
+    subtotal: 'Sous-total',
+    discount: 'Remise',
+    summary: 'Récapitulatif',
+    pickupAt: 'À retirer chez',
+    deliverTo: 'Livraison chez',
+    scheduledFor: 'Prévu pour',
+    orderInstructions: 'Instructions pour la commande',
+    needHelp: 'Besoin d\'aide ?',
+    needHelpBody:
+      'Pour toute question sur votre commande, contactez-nous — nous sommes là pour vous aider.',
+    call: 'Appeler',
+    email: 'E-mail',
+    autoMessage:
+      'Ceci est un message automatique — merci de ne pas répondre directement à cet e-mail.',
+    statusAccepted: 'Acceptée',
+    statusReady: 'Prête',
+    statusOnTheWay: 'En livraison',
+    statusCancelled: 'Annulée',
+    headlineAccepted: 'Votre commande est en route vers la cuisine',
+    headlineReady: 'Votre commande est prête',
+    headlineOnTheWay: 'Votre commande est en route',
+    headlineCancelled: 'Votre commande a été annulée',
+    etaMinutes: (m) => `Estimation ~${m} min.`,
+    fulfillmentTakeaway: 'À emporter',
+    fulfillmentDelivery: 'Livraison',
+    fulfillmentDineIn: 'Sur place',
+    paymentCash: 'Espèces',
+    paymentCard: 'Carte',
+    paymentPayLater: 'Espèces',
+    paymentOnline: 'En ligne',
+  },
+  de: {
+    orderConfirmedBadge: 'BESTELLUNG BESTÄTIGT',
+    orderStatusLabel: 'BESTELLSTATUS',
+    thankYou: (name) => `Danke, ${name}!`,
+    orderType: 'Bestellart',
+    payment: 'Zahlung',
+    total: 'Total',
+    qty: 'Menge',
+    item: 'Artikel',
+    unit: 'Einheit',
+    lineTotal: 'Zwischensumme',
+    subtotal: 'Zwischensumme',
+    discount: 'Rabatt',
+    summary: 'Zusammenfassung',
+    pickupAt: 'Abholung bei',
+    deliverTo: 'Lieferung an',
+    scheduledFor: 'Geplant für',
+    orderInstructions: 'Bestellhinweise',
+    needHelp: 'Brauchen Sie Hilfe?',
+    needHelpBody:
+      'Bei Fragen zu Ihrer Bestellung kontaktieren Sie uns — wir helfen Ihnen gerne.',
+    call: 'Anrufen',
+    email: 'E-Mail',
+    autoMessage:
+      'Dies ist eine automatische Nachricht — bitte antworten Sie nicht direkt auf diese E-Mail.',
+    statusAccepted: 'Angenommen',
+    statusReady: 'Bereit',
+    statusOnTheWay: 'Unterwegs',
+    statusCancelled: 'Storniert',
+    headlineAccepted: 'Ihre Bestellung ist auf dem Weg in die Küche',
+    headlineReady: 'Ihre Bestellung ist bereit',
+    headlineOnTheWay: 'Ihre Bestellung ist unterwegs',
+    headlineCancelled: 'Ihre Bestellung wurde storniert',
+    etaMinutes: (m) => `Geschätzt ~${m} Min.`,
+    fulfillmentTakeaway: 'Zum Mitnehmen',
+    fulfillmentDelivery: 'Lieferung',
+    fulfillmentDineIn: 'Vor Ort',
+    paymentCash: 'Bar',
+    paymentCard: 'Karte',
+    paymentPayLater: 'Bar bei Abholung',
+    paymentOnline: 'Online',
+  },
+};
+
+export function shopOrderEmailLabels(locale?: string | null): ShopOrderEmailLabels {
+  return SHOP_ORDER_LABELS[loc(locale)];
+}
+
+export function shopOrderPaymentLabel(method: string | null | undefined, locale?: string | null): string {
+  const labels = shopOrderEmailLabels(locale);
+  const m = String(method || '').toLowerCase();
+  if (m === 'card' || m === 'terminal') return labels.paymentCard;
+  if (m === 'pay_later') return labels.paymentPayLater;
+  if (m === 'online') return labels.paymentOnline;
+  return labels.paymentCash;
+}
+
+export function shopOrderFulfillmentLabel(
+  channel: string | null | undefined,
+  locale?: string | null
+): string {
+  const labels = shopOrderEmailLabels(locale);
+  const c = String(channel || '').toLowerCase();
+  if (c === 'delivery') return labels.fulfillmentDelivery;
+  if (c === 'dine_in' || c === 'dine-in') return labels.fulfillmentDineIn;
+  return labels.fulfillmentTakeaway;
 }
