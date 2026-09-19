@@ -38,6 +38,7 @@ import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
+import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
 import {
@@ -606,7 +607,19 @@ export class MerchantSettingsService {
     if (updates.webposCashEnabled !== undefined) patch.webposCashEnabled = !!updates.webposCashEnabled;
     if (updates.webposCardEnabled !== undefined) patch.webposCardEnabled = !!updates.webposCardEnabled;
     if (updates.webposTerminalEnabled !== undefined) patch.webposTerminalEnabled = !!updates.webposTerminalEnabled;
-    if (updates.webposGiftCardEnabled !== undefined) patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
+    if (updates.webposGiftCardEnabled !== undefined) {
+      patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
+      if (updates.webposGiftCardEnabled) {
+        const currentMerchant = await db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+          columns: { giftCardSettings: true },
+        });
+        const gc = normalizeGiftCardSettings(currentMerchant?.giftCardSettings);
+        if (!gc.enabled) {
+          patch.giftCardSettings = { ...gc, enabled: true };
+        }
+      }
+    }
     if (updates.webposInvoiceEnabled !== undefined) patch.webposInvoiceEnabled = !!updates.webposInvoiceEnabled;
     if (updates.bankIban !== undefined) {
       patch.bankIban = updates.bankIban ? String(updates.bankIban).replace(/\s+/g, "").toUpperCase().slice(0, 34) : null;

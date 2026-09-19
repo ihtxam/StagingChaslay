@@ -9503,8 +9503,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
     invoice: (paymentConfig?.methods.invoice !== false) && canPay,
   };
-  const giftCardsFeatureOn =
-    giftCardsEditionOk && enabledMethods.giftCard;
+  const giftCardsSellingOn =
+    giftCardsEditionOk &&
+    (paymentConfig?.giftCardSettings?.enabled === true ||
+      merchant?.webposGiftCardEnabled === true) &&
+    !offlineNow;
 
   const activeTerminals = useMemo(
     () => (paymentConfig?.terminals || []).filter((t) => t.status === 'active'),
@@ -10580,7 +10583,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onOpenCheckout={openRegisterCheckout}
                 expressDisabled={!cart.length || busy || paymentModalOpen}
                 checkoutDisabled={!cart.length || busy || paymentModalOpen}
-                giftCardsEnabled={giftCardsFeatureOn && !offlineNow}
+                giftCardsEnabled={giftCardsSellingOn}
                 onGiftCards={() => {
                   if (offlineNow) {
                     toast.error(t('webPosOfflineGiftCardBlocked'));

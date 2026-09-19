@@ -639,9 +639,7 @@ export class ChaslayCompatService {
         card: merchant.webposCardEnabled !== false,
         terminal: merchant.webposTerminalEnabled !== false && terminalReady,
         tap_to_pay: tapToPayReady,
-        giftCard:
-          merchant.webposGiftCardEnabled === true &&
-          !!(merchant.giftCardSettings as { enabled?: boolean } | null)?.enabled,
+        giftCard: merchant.webposGiftCardEnabled === true,
         invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
       },
       loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(

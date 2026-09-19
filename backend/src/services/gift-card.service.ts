@@ -81,6 +81,18 @@ async function assertOpenShiftForSell(merchantId: string) {
 }
 
 export class GiftCardService {
+  /** Gift cards module on when Loyalty settings or POS tender is enabled. */
+  static async isOperational(merchantId: string): Promise<boolean> {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { giftCardSettings: true, webposGiftCardEnabled: true },
+    });
+    if (!merchant) return false;
+    const settings = normalizeGiftCardSettings(merchant.giftCardSettings);
+    return settings.enabled || merchant.webposGiftCardEnabled === true;
+  }
+
   static async getSettings(merchantId: string): Promise<GiftCardSettings> {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -381,7 +393,7 @@ export class GiftCardService {
   ) {
     const db = getDb();
     const settings = await this.getSettings(merchantId);
-    if (!settings.enabled) throw new Error("Gift cards are disabled");
+    if (!(await this.isOperational(merchantId))) throw new Error("Gift cards are disabled");
     if (opts.type === "sell") {
       if (!opts.skipShiftCheck) {
         await assertOpenShiftForSell(merchantId);
@@ -488,7 +500,7 @@ export class GiftCardService {
   ) {
     const db = getDb();
     const settings = await this.getSettings(merchantId);
-    if (!settings.enabled) throw new Error("Gift cards are disabled");
+    if (!(await this.isOperational(merchantId))) throw new Error("Gift cards are disabled");
 
     const requested = money(opts.amount);
     if (!Number.isFinite(requested) || requested <= 0) {
@@ -761,7 +773,7 @@ export class GiftCardService {
   ) {
     const db = getDb();
     const settings = await this.getSettings(merchantId);
-    if (!settings.enabled) throw new Error("Gift cards are disabled");
+    if (!(await this.isOperational(merchantId))) throw new Error("Gift cards are disabled");
 
     const amount = money(opts.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
