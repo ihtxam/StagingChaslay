@@ -2,10 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
-import { clearCart, resolveShopKey, shopBasePath } from '@/lib/shop-cart';
+import {
+  clearCart,
+  loadCustomerToken,
+  resolveShopKey,
+  resolveShopLocationSlug,
+  shopBasePath,
+} from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
-import ShopLangSwitcher from '@/components/shop/ShopLangSwitcher';
+import { formatShopCancelReason } from '@/lib/shop-cancel-reason';
 import { roundMoney2 } from '@/lib/money';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import {
@@ -14,6 +20,11 @@ import {
   mountAdyenDropin,
   shopCheckoutOriginPayload,
 } from '@/lib/adyen-checkout';
+import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
+import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
+import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import { localizedShopCopy } from '@/lib/shop-site-settings';
 
 type OrderItem = {
   id: string;
@@ -47,6 +58,7 @@ type OrderView = {
   scheduledFor: string | null;
   estimatedReadyAt?: string | null;
   notes: string | null;
+  cancelReason?: string | null;
   subtotal: string;
   taxAmount: string;
   deliveryFee: string;
@@ -86,8 +98,19 @@ function isOrderEtaComplete(status: string) {
 
 export default function OrderConfirmationPage() {
   const { t, formatDateTime, locale } = useI18n();
-  const { merchantSlug, orderId = '' } = useParams<{ merchantSlug?: string; orderId?: string }>();
+  const { merchantSlug, locationSlug, orderId = '' } = useParams<{
+    merchantSlug?: string;
+    locationSlug?: string;
+    orderId?: string;
+  }>();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const locSlug = useMemo(
+    () => resolveShopLocationSlug(merchantSlug, locationSlug),
+    [merchantSlug, locationSlug]
+  );
+  const basePath = shopBasePath(shopKey, locSlug);
+  const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
+  const loggedIn = !!loadCustomerToken(shopKey);
   const [searchParams] = useSearchParams();
   const trackToken = searchParams.get('track') || '';
   const wantPay = searchParams.get('pay') === '1' || searchParams.get('paid') === '1';
@@ -186,10 +209,11 @@ export default function OrderConfirmationPage() {
   }, [order?.estimatedReadyAt, order?.status]);
 
   useEffect(() => {
+    if (localizedShopCopy(shopSite?.metaTitle, locale)) return;
     if (order?.store?.name) {
       document.title = shopDocumentTitle(`${order.store.name} - ${order.orderNumber}`);
     }
-  }, [order?.store?.name, order?.orderNumber]);
+  }, [order?.store?.name, order?.orderNumber, shopSite?.metaTitle, locale]);
 
   const needsPayment = useMemo(
     () =>
@@ -295,20 +319,38 @@ export default function OrderConfirmationPage() {
 
   if (loading && !order) {
     return (
-      <div className="min-h-screen bg-[#f6f5f2] flex items-center justify-center text-stone-500">
-        {t('shopLoadingOrder')}
-      </div>
+      <ShopThemeShell
+        theme={cmsTheme}
+        site={shopSite}
+        pageTitle={undefined}
+        className="min-h-dvh"
+        style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
+      >
+        <div className="min-h-dvh flex items-center justify-center text-stone-500">
+          {t('shopLoadingOrder')}
+        </div>
+      </ShopThemeShell>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="min-h-screen bg-[#f6f5f2] flex flex-col items-center justify-center gap-3 p-6">
-        <p className="text-red-600">{error || t('shopOrderNotFound')}</p>
-        <Link to={`${shopBasePath(shopKey) || '/'}`} className="text-stone-900 font-semibold underline">
-          {t('shopBackToMenu')}
-        </Link>
-      </div>
+      <ShopThemeShell
+        theme={cmsTheme}
+        site={shopSite}
+        pageTitle={undefined}
+        className="min-h-dvh"
+        style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
+      >
+        <ShopMinimalHeader basePath={basePath} loggedIn={loggedIn} />
+        <div className="shop-page-content flex min-h-[50vh] flex-col items-center justify-center gap-3 py-12">
+          <p className="text-red-600">{error || t('shopOrderNotFound')}</p>
+          <Link to={basePath || '/'} className="font-semibold text-stone-900 underline">
+            {t('shopBackToMenu')}
+          </Link>
+        </div>
+        <ShopStorefrontFooter basePath={basePath} className="mt-auto" />
+      </ShopThemeShell>
     );
   }
 
@@ -329,60 +371,40 @@ export default function OrderConfirmationPage() {
   const paymentStatusLabel = isCash
     ? t('shopCash')
     : translatePaymentStatus(order.paymentStatus, t);
+  const isCancelled = order.status === 'cancelled';
+  const rejectReasonLabel = formatShopCancelReason(order.cancelReason, t);
 
   return (
-    <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
-      <header className="bg-white border-b border-stone-200">
-        <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <Link
-                to={shopBasePath(shopKey) || '/'}
-                className="flex items-center shrink-0"
-                aria-label={order.store?.name || t('shopHome')}
-              >
-                {order.store?.shopLogoUrl ? (
-                  <img
-                    src={order.store.shopLogoUrl}
-                    alt=""
-                    className="h-10 w-auto max-w-[6rem] object-contain"
-                  />
-                ) : (
-                  <div className="h-10 w-10 bg-stone-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                    {(order.store?.name || 'M').slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-              </Link>
-              <Link
-                to={shopBasePath(shopKey) || '/'}
-                className="inline-flex items-center justify-center bg-stone-900 text-white px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-semibold shrink-0"
-              >
-                {t('shopHome')}
-              </Link>
-              <Link
-                to={`${shopBasePath(shopKey)}/menu`}
-                className="inline-flex items-center justify-center border border-stone-300 bg-white px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-semibold shrink-0"
-              >
-                {t('shopOrderAgain')}
-              </Link>
-            </div>
-            <ShopLangSwitcher className="shrink-0" />
-          </div>
-          <div className="min-w-0">
+    <ShopThemeShell
+      theme={cmsTheme}
+      site={shopSite}
+      pageTitle={order.store?.name}
+      logoUrl={order.store?.shopLogoUrl}
+      className="min-h-dvh"
+      style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
+    >
+      <div className="min-h-dvh">
+        <ShopMinimalHeader
+          basePath={basePath}
+          merchantName={order.store?.name}
+          logoUrl={order.store?.shopLogoUrl}
+          loggedIn={loggedIn}
+        />
+
+        <div className="shop-page-content py-8 pb-32 lg:pb-10">
+          <div className="mb-6">
             <p className="text-xs uppercase tracking-wide text-stone-400">
               {t('shopOrderConfirmation')}
             </p>
             <h1
-              className="min-w-0 text-base sm:text-lg font-bold leading-snug break-all"
+              className="min-w-0 text-2xl font-bold tracking-tight break-all"
               title={formatOrderNumberDisplay(order.orderNumber)}
             >
               #{formatOrderNumberDisplay(order.orderNumber)}
             </h1>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+          <div className="max-w-2xl space-y-4">
         <section className="bg-white border border-stone-200 p-5 space-y-3">
           <div className="flex flex-wrap gap-2">
             <StatusPill label={statusLabel} tone={statusTone(order.status)} />
@@ -392,13 +414,25 @@ export default function OrderConfirmationPage() {
             />
             <StatusPill label={channelLabel} tone="stone" />
           </div>
-          <p className="text-sm text-stone-600">
-            {paid
-              ? isCash
-                ? t('shopPayCashPos')
-                : t('shopPaymentReceived')
-              : t('shopCompletePayment')}
-          </p>
+          {isCancelled ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <p className="font-semibold">{t('shopOrderRejectedNotice')}</p>
+              {rejectReasonLabel ? (
+                <p className="mt-1">
+                  <span className="font-medium">{t('shopOrderRejectedReasonLabel')}:</span>{' '}
+                  {rejectReasonLabel}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-stone-600">
+              {paid
+                ? isCash
+                  ? t('shopPayCashPos')
+                  : t('shopPaymentReceived')
+                : t('shopCompletePayment')}
+            </p>
+          )}
           {order.scheduledFor && (
             <p className="text-sm font-medium">
               {t('shopScheduledFor')}{' '}
@@ -596,8 +630,16 @@ export default function OrderConfirmationPage() {
             )}
           </div>
         </section>
-      </main>
-    </div>
+
+        <ShopStorefrontFooter
+          basePath={basePath}
+          merchantName={order.store?.name}
+          className="mt-10"
+        />
+          </div>
+        </div>
+      </div>
+    </ShopThemeShell>
   );
 }
 

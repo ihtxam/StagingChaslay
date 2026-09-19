@@ -35,6 +35,7 @@ import {
 } from '@/lib/order-alert';
 import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal';
 import WebPosNewOrderAlertModal from '@/components/webpos/WebPosNewOrderAlertModal';
+import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import {
   extractZipFromAddress,
@@ -153,6 +154,7 @@ export default function OrderCenterApp() {
   const [alertQueue, setAlertQueue] = useState<CenterOrder[]>([]);
   const [alertBusy, setAlertBusy] = useState(false);
   const [acceptEtaOrder, setAcceptEtaOrder] = useState<CenterOrder | null>(null);
+  const [rejectOrder, setRejectOrder] = useState<CenterOrder | null>(null);
   const unactionedAlertRef = useState<Set<string>>(() => new Set())[0];
   const [hasStaffPins, setHasStaffPins] = useState(false);
 
@@ -379,6 +381,7 @@ export default function OrderCenterApp() {
       orderSource?: string | null;
       fulfillmentChannel?: string | null;
       etaAdjustMinutes?: number;
+      rejectReason?: string;
     }
   ) => {
     setBusyId(orderId);
@@ -386,6 +389,9 @@ export default function OrderCenterApp() {
       const body: Record<string, unknown> = { action };
       if (action === 'accept' && opts?.etaAdjustMinutes != null) {
         body.etaAdjustMinutes = opts.etaAdjustMinutes;
+      }
+      if (opts?.rejectReason) {
+        body.rejectReason = opts.rejectReason;
       }
       await api.post(`/merchant/orders/${orderId}/action`, body);
       if (action === 'accept') {
@@ -424,10 +430,18 @@ export default function OrderCenterApp() {
     [markAlertDone]
   );
 
-  const rejectFromAlert = async (order: OnlineOrder) => {
+  const rejectFromAlert = (order: OnlineOrder) => {
+    setRejectOrder(order);
+  };
+
+  const confirmRejectOrder = async (reason: string) => {
+    if (!rejectOrder) return;
+    const target = rejectOrder;
     setAlertBusy(true);
     try {
-      await runAction(order.id, 'reject');
+      await runAction(target.id, 'reject', { rejectReason: reason });
+      setRejectOrder(null);
+      setAcceptEtaOrder((prev) => (prev?.id === target.id ? null : prev));
     } finally {
       setAlertBusy(false);
     }
@@ -574,7 +588,7 @@ export default function OrderCenterApp() {
               type="button"
               disabled={busyId === o.id}
               className="btn-secondary inline-flex flex-1 min-w-[7rem] items-center justify-center gap-2 py-3"
-              onClick={() => void runAction(o.id, 'reject')}
+              onClick={() => setRejectOrder(o)}
             >
               <X className="h-5 w-5" />
               {t('reject')}
@@ -809,7 +823,19 @@ export default function OrderCenterApp() {
         queueCount={alertQueue.length}
         busy={alertBusy || busyId === currentAlert?.id}
         onAcknowledge={acknowledgeFromAlert}
-        onReject={(o) => void rejectFromAlert(o)}
+        onReject={(o) => rejectFromAlert(o)}
+      />
+
+      <WebPosRejectOrderModal
+        open={!!rejectOrder}
+        orderLabel={
+          rejectOrder
+            ? formatOrderNumberDisplay(rejectOrder.orderNumber) || rejectOrder.id.slice(0, 8)
+            : undefined
+        }
+        busy={alertBusy || (rejectOrder ? busyId === rejectOrder.id : false)}
+        onClose={() => setRejectOrder(null)}
+        onConfirm={(reason) => void confirmRejectOrder(reason)}
       />
 
       <OrderAcceptWithEtaModal
@@ -828,14 +854,9 @@ export default function OrderCenterApp() {
             setAlertBusy(false);
           }
         }}
-        onReject={async (o) => {
-          setAlertBusy(true);
-          try {
-            await runAction(o.id, 'reject');
-            setAcceptEtaOrder(null);
-          } finally {
-            setAlertBusy(false);
-          }
+        onReject={(o) => {
+          setAcceptEtaOrder(null);
+          setRejectOrder(o);
         }}
         onDismiss={() => setAcceptEtaOrder(null)}
       />

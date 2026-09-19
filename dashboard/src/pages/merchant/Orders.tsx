@@ -45,6 +45,7 @@ import { parsePaymentBreakdown, hasTerminalPortion } from '@/lib/payment-breakdo
 import WebPosRefundModal, { type RefundReasonOption } from '@/components/webpos/WebPosRefundModal';
 import WebPosRefundPrintPromptModal from '@/components/webpos/WebPosRefundPrintPromptModal';
 import WebPosCancelModal, { type CancelReasonOption } from '@/components/webpos/WebPosCancelModal';
+import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import OrderDetailTotals from '@/components/orders/OrderDetailTotals';
 import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import {
@@ -471,6 +472,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
   const [refundReasons, setRefundReasons] = useState<RefundReasonOption[]>([]);
   const [cancelReasons, setCancelReasons] = useState<CancelReasonOption[]>([]);
   const [cancelFor, setCancelFor] = useState<MerchantOrder | null>(null);
+  const [rejectFor, setRejectFor] = useState<MerchantOrder | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundPrintPrompt, setRefundPrintPrompt] = useState<{
@@ -1518,7 +1520,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                     <button
                       type="button"
                       disabled={actionBusy}
-                      onClick={() => void runOrderAction(selected, 'reject')}
+                      onClick={() => setRejectFor(selected)}
                       className="inline-flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                     >
                       {t('webPosRejectOrder')}
@@ -1707,6 +1709,24 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           setCancelFor(null);
         }}
         onConfirm={(reason, reasonId) => void doCancelOrder(reason, reasonId)}
+      />
+
+      <WebPosRejectOrderModal
+        open={!!rejectFor}
+        orderLabel={
+          rejectFor ? formatOrderNumberDisplay(rejectFor.orderNumber) || rejectFor.id.slice(0, 8) : undefined
+        }
+        busy={actionBusy}
+        onClose={() => {
+          if (actionBusy) return;
+          setRejectFor(null);
+        }}
+        onConfirm={(reason) => {
+          if (!rejectFor) return;
+          void runOrderAction(rejectFor, 'reject', { rejectReason: reason }).then(() =>
+            setRejectFor(null)
+          );
+        }}
       />
 
       <WebPosRefundModal

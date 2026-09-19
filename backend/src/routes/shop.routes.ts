@@ -3087,6 +3087,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
         customerPhone: order.customerPhone,
         customerEmail: order.customerEmail,
         notes: order.notes,
+        cancelReason: order.cancelReason,
         createdAt: order.createdAt,
         items: order.items,
         store: {
