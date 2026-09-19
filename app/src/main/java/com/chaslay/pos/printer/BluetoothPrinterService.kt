@@ -2137,8 +2137,8 @@ class BluetoothPrinterService @Inject constructor(
         private const val TAG = "PrinterService"
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
-        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80 (90px). */
-        private const val RECEIPT_QR_RASTER_PX_80 = 90
+        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80 (120px). */
+        private const val RECEIPT_QR_RASTER_PX_80 = 120
         /** Thermal digital-receipt QR on 58mm paper — matches WebPOS. */
         private const val RECEIPT_QR_RASTER_PX_58 = 100
         private const val LINE_WIDTH = LINE_WIDTH_80

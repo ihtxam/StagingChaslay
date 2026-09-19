@@ -166,8 +166,8 @@ export function qrImageUrl(
   )}`;
 }
 
-/** Thermal receipt QR raster width — ~90px on 80mm (half of prior 180px default). */
-export const RECEIPT_QR_RASTER_PX_80 = 90;
+/** Thermal receipt QR raster width — 120px on 80mm for reliable phone scans. */
+export const RECEIPT_QR_RASTER_PX_80 = 120;
 /** 58mm thermal QR — half of prior 200px default. */
 export const RECEIPT_QR_RASTER_PX_58 = 100;
 
