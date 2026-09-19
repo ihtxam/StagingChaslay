@@ -155,9 +155,16 @@ async function seedDemoShop() {
     console.log(`  Shop: https://${resolveShopPublicHost()}/${slug} or /shop/${slug}`);
     console.log(`  Sync API key: ${merchant.syncApiKey}`);
   } else {
+    const healDemoPassword =
+      process.env.SEED_DEMO_RESET_PASSWORD !== "false" &&
+      String(merchant.email || "").toLowerCase() === email.toLowerCase();
+    const passwordHash = healDemoPassword
+      ? await AuthService.hashPassword(password)
+      : undefined;
     await db
       .update(schema.merchants)
       .set({
+        ...(passwordHash ? { passwordHash, email } : {}),
         shopEnabled: true,
         slug: merchant.slug || slug,
         subdomain: merchant.subdomain || slug,
@@ -170,7 +177,11 @@ async function seedDemoShop() {
         updatedAt: new Date(),
       })
       .where(eq(schema.merchants.id, merchant.id));
-    console.log(`Demo merchant ensured open: ${merchant.email} (slug=${merchant.slug || slug})`);
+    console.log(
+      `Demo merchant ensured open: ${merchant.email} (slug=${merchant.slug || slug})${
+        passwordHash ? " — password reset to SEED_DEMO_MERCHANT_PASSWORD" : ""
+      }`
+    );
   }
 
   const existingCats = await db.query.categories.findMany({

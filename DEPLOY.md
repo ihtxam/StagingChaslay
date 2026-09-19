@@ -146,6 +146,35 @@ bash scripts/agent-deploy.sh production
 
 Test SSH from an agent: `ssh staging-chaslay hostname` should print the staging host name.
 
+### Staging demo login (`app.chaslay.com`)
+
+Default demo merchant (seeded on every deploy via `docker-compose` migrate container):
+
+| Field | Value |
+|-------|--------|
+| URL | https://app.chaslay.com |
+| Email | `demo@rebornsense.com` |
+| Password | `DemoShop123!` |
+| Shop slug | `demo` → https://shop.chaslay.com/demo |
+
+If login returns **Invalid email or password** (not a 500), the demo row exists but the password drifted or seed did not run. On the staging server:
+
+```bash
+ssh root@116.202.26.15
+cd /root/StagingChaslay
+bash scripts/heal-staging-demo-login.sh
+```
+
+Or re-run the migrate/seed container only:
+
+```bash
+docker compose run --rm migrate
+```
+
+Set `SEED_DEMO_RESET_PASSWORD=false` in secrets to keep a custom demo password across deploys.
+
+Schema-drift login failures (HTTP 500, logs mention missing columns such as `adyen_store_reference`) are healed automatically on the next API request once `main` includes the `ensure-merchant-schema` patch — redeploy staging if the fix is not live yet.
+
 ### Chaslay test server (StagingChaslay repo)
 
 Configure secrets in **StagingChaslay** → Settings → Secrets and variables → Actions (not in this repo):
