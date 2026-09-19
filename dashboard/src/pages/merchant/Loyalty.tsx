@@ -492,7 +492,7 @@ export default function Loyalty() {
                           };
                           setGcSettings({ ...gcSettings, membershipPlans: next });
                         }}
-                        placeholder={t('membershipSellPrice')}
+                        placeholder={t('membershipPlanSellPrice')}
                       />
                     </div>
                   ))}

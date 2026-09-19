@@ -673,6 +673,8 @@
     <string name="membership_stamp_hint">Chaque vente qualifiante = 1 tampon ; récompense quand complet.</string>
     <string name="membership_stamps">tampons</string>
     <string name="membership_off">de réduction</string>
+    <string name="membership_customer_details">Coordonnées client</string>
+    <string name="membership_plan_free">Gratuit</string>
     <string name="gift_card_attached">Carte cadeau associée · CHF %1$.2f</string>
     <string name="gift_card_empty">Cette carte cadeau n’a plus de solde</string>
     <string name="receipt_order_gave_you_points">Cette commande vous a rapporté : %1$d points</string>

@@ -6,6 +6,7 @@ import RfidScanInput from '@/components/RfidScanInput';
 import { useI18n } from '@/lib/i18n';
 import { moneyDigitCount, normalizeMoneyInput, roundMoney2 } from '@/lib/money';
 import { normalizeScannedPayload } from '@/lib/qr';
+import { useModalKeyboardScroll } from '@/lib/useModalKeyboardScroll';
 
 function normalizeRfidUid(raw: string): string {
   return String(raw || '')
@@ -92,6 +93,8 @@ export default function WebPosGiftCardModal({
   onAttachCustomer,
 }: Props) {
   const { t } = useI18n();
+  const { overlayClassName, overlayStyle, modalStyle, scrollFieldIntoView, keyboardActive, overlayFocusHandlers } =
+    useModalKeyboardScroll();
   const [step, setStep] = useState<Mode>(mode === 'pay' ? 'pay' : 'menu');
   const [media, setMedia] = useState<MediaPick>(mode === 'pay' ? 'choose' : 'physical');
   const [code, setCode] = useState('');
@@ -305,9 +308,18 @@ export default function WebPosGiftCardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+    <div
+      className={`fixed inset-x-0 z-[80] flex justify-center overflow-y-auto bg-black/40 p-3 sm:p-4 ${
+        keyboardActive ? '' : 'inset-y-0'
+      } ${overlayClassName}`}
+      style={overlayStyle}
+      {...overlayFocusHandlers}
+    >
       <div
-        className={`w-full rounded-2xl bg-white shadow-xl ${step === 'menu' ? 'max-w-xl' : 'max-w-md'}`}
+        className={`my-auto flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${
+          step === 'menu' ? 'max-w-xl' : 'max-w-md'
+        }`}
+        style={modalStyle}
       >
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
@@ -319,7 +331,7 @@ export default function WebPosGiftCardModal({
           </button>
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
           {step === 'menu' && (
             <div className="grid grid-cols-3 gap-2 sm:gap-3 max-[320px]:grid-cols-1">
               <button
@@ -441,6 +453,7 @@ export default function WebPosGiftCardModal({
                           value={ecardEmail}
                           placeholder="name@example.com"
                           onChange={(e) => setEcardEmail(e.target.value)}
+                          onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                         />
                       </label>
                     )}
@@ -570,6 +583,7 @@ export default function WebPosGiftCardModal({
                             setAmount(next);
                           }}
                           placeholder={t('giftCardCustomAmount')}
+                          onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                         />
                       )}
                     </>
@@ -600,6 +614,7 @@ export default function WebPosGiftCardModal({
                       min="0.01"
                       max={card.balance}
                       step="0.01"
+                      onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                     />

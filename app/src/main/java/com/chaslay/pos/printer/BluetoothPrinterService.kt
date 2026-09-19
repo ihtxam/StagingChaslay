@@ -538,11 +538,11 @@ class BluetoothPrinterService @Inject constructor(
             appendReceiptVatSection(sb, listOf(vatRow), labels, lineWidth, settings.vatIncludedInPrice)
         }
         sb.appendLine(thin)
-        sb.appendLine(center("Scan barcode to redeem", lineWidth))
+        sb.appendLine(center("Scan QR or barcode to redeem", lineWidth))
         sb.appendLine(sep)
         appendFooter(sb, settings.receiptFooter, lineWidth)
         val barcodePayload = displayCode
-        return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, barcodePayload, displayCode)
+        return finalizeGiftCardPayload(sb.toString(), settings, lineWidth, code, barcodePayload, displayCode)
     }
 
     private fun giftCardVatRate(
@@ -557,13 +557,16 @@ class BluetoothPrinterService @Inject constructor(
         text: String,
         settings: BusinessSettingsEntity,
         lineWidth: Int,
+        code: String,
         barcodePayload: String,
         displayCode: String
     ): ByteArray {
         val body = EscPosEncoder.encode(text)
+        val qrPayload = com.chaslay.pos.domain.model.GiftCardCode.qrPayload(code)
+        val qrBytes = receiptQrRaster(qrPayload, lineWidth)
         val barcodeBytes = escPosCode128(barcodePayload)
         val labelBytes = EscPosEncoder.encode(escAlignCenter() + displayCode.take(lineWidth) + "\n" + escAlignLeft())
-        val scannable = barcodeBytes + labelBytes
+        val scannable = qrBytes + barcodeBytes + labelBytes
         return buildPrintPayload(body, settings, lineWidth, scannable, cutFeedLines = 2)
     }
 
