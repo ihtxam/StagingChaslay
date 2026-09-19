@@ -153,6 +153,8 @@ export default function OrderConfirmationPage() {
       if (
         data.paymentStatus === 'completed' ||
         data.paymentMethod === 'cash' ||
+        data.paymentMethod === 'pay_later' ||
+        data.paymentMethod === 'pay-later' ||
         data.paymentStatus === 'cash'
       ) {
         clearCart(shopKey);
@@ -394,11 +396,14 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  const isCash = order.paymentMethod === 'cash';
+  const isPayAtPickup =
+    order.paymentMethod === 'cash' ||
+    order.paymentMethod === 'pay_later' ||
+    order.paymentMethod === 'pay-later';
   const paid =
     order.paymentStatus === 'completed' ||
     order.paymentStatus === 'cash' ||
-    (isCash && order.paymentStatus !== 'failed');
+    (isPayAtPickup && order.paymentStatus !== 'failed');
 
   const channelLabel =
     order.fulfillmentChannel === 'delivery'
@@ -408,7 +413,7 @@ export default function OrderConfirmationPage() {
         : t('shopPickup');
 
   const statusLabel = translateOrderStatus(order.status, t);
-  const paymentStatusLabel = isCash
+  const paymentStatusLabel = isPayAtPickup
     ? t('shopCash')
     : translatePaymentStatus(order.paymentStatus, t);
   const isCancelled = order.status === 'cancelled';
@@ -467,7 +472,7 @@ export default function OrderConfirmationPage() {
           ) : (
             <p className="text-sm text-stone-600">
               {paid
-                ? isCash
+                ? isPayAtPickup
                   ? t('shopPayCashPos')
                   : t('shopPaymentReceived')
                 : t('shopCompletePayment')}
