@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Manual reset for StagingChaslay Postgres (e.g. merchants table at Postgres 1600-column limit).
-# WARNING: deletes ALL staging data (merchants, orders, products, demo shop).
-# Prefer deploy auto-reset (pg_attribute > 1500) or heal-staging-schema.sh for column drift.
+# WARNING: deletes ALL staging data — merchants, orders, customers, products, Swisspayout/Adyen credentials.
+# Requires explicit opt-in: RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh
+# For column drift without data loss, use heal-staging-schema.sh instead.
 set -euo pipefail
+
+if [[ "${RESET_STAGING_DB:-}" != "1" ]]; then
+  echo "ERROR: Refusing to wipe staging database without RESET_STAGING_DB=1"
+  echo "  This deletes ALL merchants, orders, customers, and payment credentials on staging."
+  echo "  To proceed: RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh"
+  exit 1
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

@@ -183,7 +183,13 @@ cd /root/StagingChaslay
 bash scripts/reset-staging-chaslay-db.sh
 ```
 
-New deploys auto-reset the staging postgres volume only when `pg_attribute` on `merchants` exceeds **1500** (Postgres hard limit 1600). Dropped columns from migration churn can inflate `pg_attribute` without blocking DDL — values around 200–400 are normal and **must not** trigger a reset. Set `STAGING_DB_AUTO_RESET=0` to disable auto-reset, or `STAGING_DB_FORCE_RESET=1` to wipe staging manually.
+Routine staging deploys **never** wipe the postgres volume. Dropped columns from migration churn can inflate `pg_attribute` (values around 200–400 are normal) without blocking DDL. When `pg_attribute` exceeds **1500**, deploy fails with instructions instead of deleting data. To wipe staging intentionally (deletes **all** merchants, orders, customers, and Swisspayout/Adyen credentials):
+
+```bash
+RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh
+```
+
+Production deploys (`DEPLOY_STACK=rebornsense`) do not include any database reset path.
 
 ### Chaslay test server (StagingChaslay repo)
 
