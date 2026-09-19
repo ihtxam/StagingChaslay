@@ -45,7 +45,6 @@ class AdyenService {
         const apiKey = terminal?.adyenApiKey || merchant?.adyenApiKey || ADYEN_API_KEY;
         const merchantAccount = terminal?.adyenMerchantAccount || merchant?.adyenMerchantAccount || ADYEN_MERCHANT_ACCOUNT;
         const clientId = terminal?.adyenClientId || merchant?.adyenClientId || ADYEN_CLIENT_ID;
-        const liveUrlPrefix = merchant?.adyenLiveUrlPrefix || null;
         if (!apiKey || !merchantAccount) {
             throw new Error("Swisspayout credentials not configured for this merchant");
         }
@@ -53,7 +52,6 @@ class AdyenService {
             apiKey,
             merchantAccount,
             clientId,
-            liveUrlPrefix,
             terminalId: terminal?.terminalId || terminalId,
         };
     }
@@ -66,7 +64,7 @@ class AdyenService {
         try {
             const creds = await this.resolveCredentials(merchantId);
             const environment = this.environmentFromClientKey(creds.clientId);
-            const apiBase = this.checkoutApiBase(creds.clientId, creds.liveUrlPrefix);
+            const apiBase = this.checkoutApiBase(creds.clientId);
             const sessionPayload = {
                 amount: {
                     value: Math.round(amount * 100),
@@ -78,10 +76,7 @@ class AdyenService {
                 channel: "Web",
                 countryCode: "CH",
             };
-            const checkoutOrigin = String(origin || "").trim();
-            if (/^https?:\/\//i.test(checkoutOrigin)) {
-                sessionPayload.origin = checkoutOrigin.replace(/\/+$/, "");
-            }
+            // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
             const response = await axios_1.default.post(`${apiBase}/sessions`, sessionPayload, {
                 headers: {
                     "x-api-key": creds.apiKey,

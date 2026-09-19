@@ -1,3 +1,5 @@
+import { isDeliveryOrPickupShopOrder } from '@/lib/order-management';
+
 /** Whether delivery portal / online shop auto-accept is enabled. */
 export function readDeliveryAutoAccept(settings: unknown): boolean {
   const root = settings as {
@@ -15,4 +17,19 @@ export function onlineOrderAlertStatuses(autoAccept: boolean): Set<string> {
     return new Set(['pending', 'pending_approval', 'preparing']);
   }
   return new Set(['pending', 'pending_approval']);
+}
+
+/**
+ * Auto-accept on arrival applies to third-party delivery platforms only.
+ * Online shop delivery/pickup must use the ETA accept modal (accept/reject + prep time).
+ */
+export function shouldAutoAcceptOrderOnArrival(o: {
+  orderSource?: string | null;
+  orderType?: string | null;
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): boolean {
+  if (isDeliveryOrPickupShopOrder(o)) return false;
+  const src = String(o.orderSource || '').toLowerCase();
+  return src === 'justeat' || src === 'ubereats';
 }

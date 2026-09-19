@@ -12,7 +12,7 @@ import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isTerminalOrderStatus } from '@/lib/order-management';
-import { readDeliveryAutoAccept, onlineOrderAlertStatuses } from '@/lib/delivery-auto-accept';
+import { readDeliveryAutoAccept, onlineOrderAlertStatuses, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import { printOrderCenterTickets } from '@/lib/order-center-print';
@@ -158,7 +158,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         const forAlert: OnlineOrder[] = [];
         if (autoAccept) {
           for (const o of fresh) {
-            if (isAwaitingApproval(o.status)) {
+            if (isAwaitingApproval(o.status) && shouldAutoAcceptOrderOnArrival(o)) {
               try {
                 const actionRes = await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
                 const updated =
@@ -209,6 +209,9 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         }
         if (autoAccept) {
           if (isTerminalOrderStatus(row.status)) unactionedRef.current.delete(id);
+          else if (!isAwaitingApproval(row.status) && isDeliveryOrPickupShopOrder(row)) {
+            unactionedRef.current.delete(id);
+          }
         } else if (!isAwaitingApproval(row.status)) {
           unactionedRef.current.delete(id);
         }
@@ -290,14 +293,17 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
   if (!enabled) return null;
 
   const current = queue[0] ?? null;
-  const acknowledgeOnly = autoAccept && !!current && !isAwaitingApproval(current.status);
+  const acknowledgeOnly =
+    autoAccept && !!current && !isAwaitingApproval(current.status) && !isDeliveryOrPickupShopOrder(current);
   /**
    * ETA / prep minutes: shop delivery + pickup awaiting approval.
    * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).
    * Same rule as WebPOS new-order alerts.
    */
   const useEtaModal =
-    !!current && !acknowledgeOnly && isDeliveryOrPickupShopOrder(current);
+    !!current &&
+    isAwaitingApproval(current.status) &&
+    isDeliveryOrPickupShopOrder(current);
 
   return useEtaModal ? (
     <OrderAcceptWithEtaModal

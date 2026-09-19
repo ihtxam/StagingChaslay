@@ -106,10 +106,7 @@ export class AdyenService {
         channel: "Web",
         countryCode: "CH",
       };
-      const checkoutOrigin = String(origin || "").trim();
-      if (/^https?:\/\//i.test(checkoutOrigin)) {
-        sessionPayload.origin = checkoutOrigin.replace(/\/+$/, "");
-      }
+      // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
 
       const response = await axios.post(`${apiBase}/sessions`, sessionPayload, {
         headers: {

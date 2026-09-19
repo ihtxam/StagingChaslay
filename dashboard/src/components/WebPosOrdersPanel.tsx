@@ -1149,9 +1149,9 @@ export default function WebPosOrdersPanel({
     try {
       const updated = await postOnlineAction(order.id, action);
       toast.success(t('updated'));
-      if (action === 'accept' || action === 'reject') {
-        onOrderActioned?.(order.id);
-      }
+        if (action === 'accept' || action === 'reject' || action === 'mark_ready') {
+          onOrderActioned?.(order.id);
+        }
       const fresh = updated || order;
       setSelectedOrder((prev) =>
         prev && prev.id === order.id

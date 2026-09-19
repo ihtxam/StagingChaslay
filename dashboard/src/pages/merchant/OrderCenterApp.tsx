@@ -448,6 +448,10 @@ export default function OrderCenterApp() {
   };
 
   const currentAlert = alertQueue[0] ?? null;
+  const useEtaAlert =
+    !!currentAlert &&
+    isAwaitingApproval(currentAlert.status) &&
+    isDeliveryOrPickupShopOrder(currentAlert);
 
   const printOrder = async (o: CenterOrder) => {
     setBusyId(o.id);
@@ -818,13 +822,50 @@ export default function OrderCenterApp() {
         ) : null}
       </main>
 
-      <WebPosNewOrderAlertModal
-        order={currentAlert as OnlineOrder | null}
-        queueCount={alertQueue.length}
-        busy={alertBusy || busyId === currentAlert?.id}
-        onAcknowledge={acknowledgeFromAlert}
-        onReject={(o) => rejectFromAlert(o)}
-      />
+      {useEtaAlert ? (
+        <OrderAcceptWithEtaModal
+          order={currentAlert as OnlineOrder}
+          queueCount={alertQueue.length}
+          busy={alertBusy || busyId === currentAlert?.id}
+          onAccept={async (o, mins) => {
+            setAlertBusy(true);
+            try {
+              await runAction(o.id, 'accept', {
+                orderSource: o.orderSource,
+                fulfillmentChannel: o.fulfillmentChannel,
+                etaAdjustMinutes: mins,
+              });
+              markAlertDone(o.id);
+            } finally {
+              setAlertBusy(false);
+            }
+          }}
+          onReject={(o) => rejectFromAlert(o)}
+          onDismiss={() => markAlertDone(currentAlert!.id)}
+        />
+      ) : (
+        <WebPosNewOrderAlertModal
+          order={currentAlert as OnlineOrder | null}
+          queueCount={alertQueue.length}
+          busy={alertBusy || busyId === currentAlert?.id}
+          onAcknowledge={acknowledgeFromAlert}
+          onAccept={
+            currentAlert && isAwaitingApproval(currentAlert.status)
+              ? (o) => {
+                  if (isDeliveryOrPickupShopOrder(o)) {
+                    setAcceptEtaOrder(o as CenterOrder);
+                  } else {
+                    void runAction(o.id, 'accept', {
+                      orderSource: o.orderSource,
+                      fulfillmentChannel: o.fulfillmentChannel,
+                    }).then(() => markAlertDone(o.id));
+                  }
+                }
+              : undefined
+          }
+          onReject={(o) => rejectFromAlert(o)}
+        />
+      )}
 
       <WebPosRejectOrderModal
         open={!!rejectOrder}

@@ -103,9 +103,9 @@ export default function WebPosOnlineOrdersView({
       setBusyId(order.id);
       try {
         await postAction(order.id, action, extra);
-        if (action === 'accept' || action === 'reject') {
-          onOrderActioned?.(order.id);
-        }
+      if (action === 'accept' || action === 'reject' || action === 'mark_ready') {
+        onOrderActioned?.(order.id);
+      }
         if (action === 'accept') {
           setPrintedToast(order.id);
           window.setTimeout(() => setPrintedToast(null), 3000);
