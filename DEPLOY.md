@@ -173,7 +173,17 @@ docker compose run --rm migrate
 
 Set `SEED_DEMO_RESET_PASSWORD=false` in secrets to keep a custom demo password across deploys.
 
-Schema-drift login failures (HTTP 500, logs mention missing columns such as `adyen_store_reference`) are healed automatically on the next API request once `main` includes the `ensure-merchant-schema` patch — redeploy staging if the fix is not live yet.
+Schema-drift login failures (HTTP 500, logs mention missing columns such as `adyen_store_reference`) are healed on deploy via `backend/sql/ensure-merchant-columns-drift.sql`.
+
+If deploy logs show **`tables can have at most 1600 columns`**, the staging `merchants` table is corrupted (too many columns from repeated failed migrations). Reset the staging database:
+
+```bash
+ssh root@116.202.26.15
+cd /root/StagingChaslay
+bash scripts/reset-staging-chaslay-db.sh
+```
+
+New deploys auto-detect column count >1500 on StagingChaslay and reset the postgres volume before migrate.
 
 ### Chaslay test server (StagingChaslay repo)
 
