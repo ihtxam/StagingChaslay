@@ -3534,6 +3534,9 @@ const en: Dict = {
   perm_MANAGE_KIOSK: 'Manage self-order kiosk',
   adyenSettingsHint:
     'One Swisspayout merchant account, Checkout API key, and client key (test_… or live_…) for the online shop and all payment terminals.',
+  adyenStoreReference: 'Online shop store reference',
+  adyenStoreReferenceHint:
+    'Adyen store reference for e-commerce checkout only. Required when checkout shows duplicate TWINT options from other restaurants.',
   swisspayoutNoAccount: "Don't have a Swisspayout account?",
   swisspayoutCreateAccount: 'Create an account now',
   adyenSaved: 'Swisspayout credentials saved',
@@ -7564,6 +7567,9 @@ const fr: Dict = {
   notes: 'Notes',
   adyenSettingsHint:
     'Un seul compte marchand, clé API Checkout et clé client Swisspayout (test_… ou live_…) pour la boutique en ligne et tous les terminaux.',
+  adyenStoreReference: 'Référence boutique en ligne (store)',
+  adyenStoreReferenceHint:
+    'Référence store Adyen pour le checkout e-commerce. Requis si la caisse affiche plusieurs TWINT d’autres restaurants.',
   swisspayoutNoAccount: "Vous n'avez pas de compte Swisspayout ?",
   swisspayoutCreateAccount: 'Créer un compte maintenant',
   adyenSaved: 'Identifiants Swisspayout enregistrés',
@@ -11572,6 +11578,9 @@ const de: Dict = {
   notes: 'Notizen',
   adyenSettingsHint:
     'Ein Swisspayout-Händlerkonto, Checkout-API-Schlüssel und Client-Schlüssel (test_… oder live_…) für Online-Shop und alle Zahlungsterminals.',
+  adyenStoreReference: 'Online-Shop Store-Referenz',
+  adyenStoreReferenceHint:
+    'Adyen-Store-Referenz nur für E-Commerce-Checkout. Erforderlich, wenn im Checkout doppelte TWINT von anderen Restaurants erscheinen.',
   swisspayoutNoAccount: 'Noch kein Swisspayout-Konto?',
   swisspayoutCreateAccount: 'Jetzt Konto erstellen',
   adyenSaved: 'Swisspayout-Zugangsdaten gespeichert',

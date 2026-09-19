@@ -43,6 +43,7 @@ router.get("/", async (req: Request, res: Response) => {
       terminals: terminals.map(sanitizeTerminal),
       adyen: {
         merchantAccount: settings.adyenMerchantAccount,
+        storeReference: settings.adyenStoreReference || "",
         apiKeyMasked: settings.adyenApiKeyMasked,
         apiKeySet: settings.adyenApiKeySet,
         clientId: settings.adyenClientId,
@@ -63,18 +64,21 @@ router.get("/", async (req: Request, res: Response) => {
  */
 router.put("/adyen-credentials", async (req: Request, res: Response) => {
   try {
-    const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix } = req.body;
+    const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix, adyenStoreReference } =
+      req.body;
     const settings = await MerchantSettingsService.updateMerchantSettings(req.merchantId!, {
       adyenMerchantAccount,
       adyenApiKey,
       adyenClientId,
       adyenHmacKey,
       adyenLiveUrlPrefix,
+      adyenStoreReference,
     });
     res.json({
       success: true,
       adyen: {
         merchantAccount: settings.adyenMerchantAccount,
+        storeReference: settings.adyenStoreReference || "",
         apiKeyMasked: settings.adyenApiKeyMasked,
         apiKeySet: settings.adyenApiKeySet,
         clientId: settings.adyenClientId,

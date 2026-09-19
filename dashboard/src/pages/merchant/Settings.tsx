@@ -220,6 +220,7 @@ interface SettingsData {
   bankAccountHolder?: string | null;
   webposTerminalEnabled?: boolean;
   adyenMerchantAccount?: string | null;
+  adyenStoreReference?: string | null;
   adyenApiKeyMasked?: string | null;
   adyenApiKeySet?: boolean;
   adyenClientId?: string | null;
@@ -343,6 +344,7 @@ interface SettingsData {
 
 interface AdyenCreds {
   merchantAccount?: string | null;
+  storeReference?: string | null;
   clientId?: string | null;
   apiKeyMasked?: string | null;
   apiKeySet?: boolean;
@@ -675,6 +677,7 @@ export default function Settings() {
     return `${base}/webhooks/adyen/${merchantId}`;
   }, [settings?.adyenWebhookUrl, settings?.id, adyen.webhookUrl, user?.merchantId, user?.role, user?.id]);
   const [merchantAccount, setMerchantAccount] = useState('');
+  const [storeReference, setStoreReference] = useState('');
   const [clientId, setClientId] = useState('');
   const [liveUrlPrefix, setLiveUrlPrefix] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -989,6 +992,9 @@ export default function Settings() {
     if (a.merchantAccount != null && a.merchantAccount !== '') {
       setMerchantAccount(a.merchantAccount);
     }
+    if (a.storeReference != null) {
+      setStoreReference(a.storeReference);
+    }
     if (a.clientId != null && a.clientId !== '') {
       setClientId(a.clientId);
     }
@@ -1000,6 +1006,7 @@ export default function Settings() {
   const adyenCredsFromSettings = useCallback((s: SettingsData): AdyenCreds => {
     return {
       merchantAccount: s.adyenMerchantAccount,
+      storeReference: s.adyenStoreReference || '',
       clientId: s.adyenClientId,
       liveUrlPrefix: s.adyenLiveUrlPrefix || '',
       apiKeyMasked: s.adyenApiKeyMasked,
@@ -1421,6 +1428,7 @@ export default function Settings() {
     try {
       const response = await api.put('/terminals/adyen-credentials', {
         adyenMerchantAccount: merchantAccount,
+        adyenStoreReference: storeReference.trim() || null,
         adyenApiKey: apiKey || undefined,
         adyenClientId: clientId,
         adyenHmacKey: hmacKey || undefined,
@@ -3113,6 +3121,14 @@ export default function Settings() {
                         value={merchantAccount}
                         onChange={(e) => setMerchantAccount(e.target.value)}
                         placeholder="Reborn_COM"
+                      />
+                    </Field>
+                    <Field label={t('adyenStoreReference')} hint={t('adyenStoreReferenceHint')}>
+                      <input
+                        className="input"
+                        value={storeReference}
+                        onChange={(e) => setStoreReference(e.target.value)}
+                        placeholder="PolaCafe_ECOM"
                       />
                     </Field>
                     <Field label={t('adyenClientKey')} hint={t('adyenClientKeyHint')}>

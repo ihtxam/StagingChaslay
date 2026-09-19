@@ -283,6 +283,7 @@ export class MerchantSettingsService {
       adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
       adyenApiKeySet: !!merchant.adyenApiKey,
       adyenClientId: merchant.adyenClientId,
+      adyenStoreReference: (merchant as { adyenStoreReference?: string | null }).adyenStoreReference || "",
       adyenHmacKeyMasked: maskSecret(merchant.adyenHmacKey),
       adyenHmacKeySet: !!merchant.adyenHmacKey,
       tapToPayEnabled: merchant.tapToPayEnabled === true,
@@ -399,6 +400,7 @@ export class MerchantSettingsService {
       adyenMerchantAccount?: string;
       adyenApiKey?: string;
       adyenClientId?: string;
+      adyenStoreReference?: string;
       adyenHmacKey?: string;
       tapToPayEnabled?: boolean;
       adyenLiveEnvironment?: boolean;
@@ -566,6 +568,12 @@ export class MerchantSettingsService {
       patch.deliveryPerOrderFee = n.toFixed(2);
     }
     if (updates.adyenMerchantAccount !== undefined) patch.adyenMerchantAccount = updates.adyenMerchantAccount;
+    if (updates.adyenStoreReference !== undefined) {
+      const storeRef = String(updates.adyenStoreReference || "")
+        .trim()
+        .slice(0, 255);
+      patch.adyenStoreReference = storeRef || null;
+    }
     if (updates.adyenClientId !== undefined) {
       const clientKey = String(updates.adyenClientId || "").trim();
       if (clientKey && !isValidAdyenClientKey(clientKey)) {

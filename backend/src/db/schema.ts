@@ -222,6 +222,8 @@ export const merchants = pgTable(
     adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
     adyenApiKey: text("adyen_api_key"),
     adyenClientId: varchar("adyen_client_id", { length: 255 }),
+    /** E-commerce store reference for Checkout /sessions (filters web TWINT to this store). */
+    adyenStoreReference: varchar("adyen_store_reference", { length: 255 }),
     /** Adyen Standard webhook HMAC key (merchant Customer Area) */
     adyenHmacKey: text("adyen_hmac_key"),
     /** Enable NFC Tap to Pay (Adyen SoftPOS) for WebPOS + Android when credentials are set */

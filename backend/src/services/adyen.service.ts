@@ -7,6 +7,7 @@ import {
   formatAdyenSessionError,
   type AdyenCheckoutEnvironment,
 } from "@/lib/adyen-checkout-env";
+import { applyWebCheckoutSessionOptions } from "@/lib/shop-adyen-session";
 
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
@@ -91,21 +92,29 @@ export class AdyenService {
     origin?: string
   ) {
     try {
+      const db = getDb();
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { adyenStoreReference: true },
+      });
       const creds = await this.resolveCredentials(merchantId);
       const environment = this.environmentFromClientKey(creds.clientId);
       const apiBase = this.checkoutApiBase(creds.clientId);
 
-      const sessionPayload: Record<string, unknown> = {
-        amount: {
-          value: Math.round(amount * 100),
-          currency,
+      const sessionPayload = applyWebCheckoutSessionOptions(
+        {
+          amount: {
+            value: Math.round(amount * 100),
+            currency,
+          },
+          merchantAccount: creds.merchantAccount,
+          reference: `${merchantId}-${orderId}`,
+          returnUrl: returnUrl || `${process.env.APP_URL || process.env.PUBLIC_APP_URL}/payment/return`,
+          channel: "Web",
+          countryCode: "CH",
         },
-        merchantAccount: creds.merchantAccount,
-        reference: `${merchantId}-${orderId}`,
-        returnUrl: returnUrl || `${process.env.APP_URL || process.env.PUBLIC_APP_URL}/payment/return`,
-        channel: "Web",
-        countryCode: "CH",
-      };
+        merchant
+      );
       // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
 
       const response = await axios.post(`${apiBase}/sessions`, sessionPayload, {
