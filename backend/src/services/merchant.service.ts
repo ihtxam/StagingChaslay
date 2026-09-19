@@ -118,27 +118,33 @@ export class MerchantService {
           )
         : undefined;
 
-      const merchants = await withLicenseSchemaRetry(() =>
-        db.query.merchants.findMany({
-          where,
-          limit,
-          offset,
-          orderBy: desc(schema.merchants.createdAt),
-          with: {
-            devices: true,
-            licenses: true,
-            edition: true,
-          },
-        })
+      const merchants = await withMerchantSchemaRetry(() =>
+        withLicenseSchemaRetry(() =>
+          db.query.merchants.findMany({
+            where,
+            limit,
+            offset,
+            orderBy: desc(schema.merchants.createdAt),
+            with: {
+              devices: true,
+              licenses: true,
+              edition: true,
+            },
+          })
+        )
       );
 
       const merchantIds = merchants.map((m) => m.id);
-      const floorDevices =
-        merchantIds.length > 0
-          ? await db.query.chaslayFloorDevices.findMany({
-              where: inArray(schema.chaslayFloorDevices.merchantId, merchantIds),
-            })
-          : [];
+      let floorDevices: Awaited<ReturnType<typeof db.query.chaslayFloorDevices.findMany>> = [];
+      if (merchantIds.length > 0) {
+        try {
+          floorDevices = await db.query.chaslayFloorDevices.findMany({
+            where: inArray(schema.chaslayFloorDevices.merchantId, merchantIds),
+          });
+        } catch (floorErr) {
+          console.warn("[merchants] chaslay_floor_devices query skipped:", floorErr);
+        }
+      }
       const floorByMerchant = new Map<string, typeof floorDevices>();
       for (const row of floorDevices) {
         const list = floorByMerchant.get(row.merchantId) ?? [];

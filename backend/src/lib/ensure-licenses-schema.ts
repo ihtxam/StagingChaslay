@@ -78,13 +78,23 @@ export function ensureLicensesSchemaAtStartup(): void {
   });
 }
 
+function isLicenseSchemaError(raw: string): boolean {
+  const mentionsLicenseTables =
+    /relation ["']?(licenses|devices)["']?/i.test(raw) ||
+    /column "[^"]+" of relation "(licenses|devices)"/i.test(raw) ||
+    /\blicenses\b/i.test(raw) ||
+    /\bdevices\b/i.test(raw);
+  if (!mentionsLicenseTables) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
 /** Retry a licenses query after applying missing-column/table patches. */
 export async function withLicenseSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error ?? "");
-    if (!isMissingSchemaError(raw) && !/relation ["']?(licenses|devices)["']? does not exist/i.test(raw)) {
+    if (!isLicenseSchemaError(raw)) {
       throw error;
     }
     await ensureLicensesSchema();
