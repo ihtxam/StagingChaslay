@@ -1,6 +1,13 @@
 {
   "name": "rebornSense Cloud Agent",
-  "install": "bash scripts/cloud-agent-setup-ssh.sh",
+  "install": "bash scripts/cloud-agent-setup-ssh.sh && bash scripts/dev-local-install.sh",
+  "start": "bash scripts/dev-local-start.sh",
+  "terminals": [
+    {
+      "name": "dev-stack",
+      "command": "bash scripts/dev-local.sh serve"
+    }
+  ],
   "repositoryDependencies": [
     "github.com/ihtxam/StagingChaslay"
   ]

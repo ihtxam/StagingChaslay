@@ -406,6 +406,8 @@ const en: Dict = {
   loginFailed: 'Incorrect email or password.',
   loginNetworkError:
     'Cannot reach the server. Check your internet connection, or try again in a minute if the site is being updated.',
+  loginApiUnavailable:
+    'Cannot reach the API server. For local development, start the backend on port 3000 (and Postgres), then try again.',
   loginServerUnavailable: 'The server is temporarily unavailable. Please try again in a minute.',
   loginStaffUsePin:
     'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.',
@@ -4638,6 +4640,8 @@ const fr: Dict = {
   loginFailed: 'E-mail ou mot de passe incorrect.',
   loginNetworkError:
     'Impossible de joindre le serveur. Vérifiez votre connexion ou réessayez dans une minute.',
+  loginApiUnavailable:
+    'API inaccessible. En développement local, démarrez le backend sur le port 3000 (et Postgres), puis réessayez.',
   loginServerUnavailable: 'Le serveur est temporairement indisponible. Réessayez dans une minute.',
   loginStaffUsePin:
     'Ce compte utilise un PIN caisse. Connectez-vous à la caisse avec le PIN, ou demandez au propriétaire de définir un mot de passe officiel dans Utilisateurs et rôles.',
@@ -8707,6 +8711,8 @@ const de: Dict = {
   loginFailed: 'E-Mail oder Passwort ungültig.',
   loginNetworkError:
     'Server nicht erreichbar. Internet prüfen oder in einer Minute erneut versuchen.',
+  loginApiUnavailable:
+    'API nicht erreichbar. Für lokale Entwicklung Backend auf Port 3000 (und Postgres) starten, dann erneut versuchen.',
   loginServerUnavailable: 'Server vorübergehend nicht verfügbar. Bitte in einer Minute erneut versuchen.',
   loginStaffUsePin:
     'Dieses Konto nutzt eine Kassen-PIN. Melden Sie sich an der Kasse mit der PIN an, oder bitten Sie den Inhaber, in Benutzer & Rollen ein offizielles Login-Passwort festzulegen.',

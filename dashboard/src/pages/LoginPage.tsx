@@ -21,6 +21,14 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+function isLoginApiUnavailable(error: unknown): boolean {
+  const err = error as { response?: { status?: number; data?: { error?: string } } };
+  const status = err.response?.status;
+  if (status === 404 || status === 502 || status === 503 || status === 504) return true;
+  const apiError = String(err.response?.data?.error || '').trim().toLowerCase();
+  return apiError === 'not found' || apiError === 'route not found';
+}
+
 function loginErrorMessage(
   error: unknown,
   t: (key: string) => string
@@ -30,8 +38,11 @@ function loginErrorMessage(
     message?: string;
     code?: string;
   };
+  if (isLoginApiUnavailable(error)) {
+    return t('loginApiUnavailable');
+  }
   if (err.response?.data?.error) return err.response.data.error;
-  if (err.response?.status === 500 || err.response?.status === 502 || err.response?.status === 503) {
+  if (err.response?.status === 500) {
     return t('loginServerUnavailable');
   }
   const msg = String(err.message || '');
@@ -61,16 +72,36 @@ type UnifiedLoginResponse = {
   isOwner?: boolean;
 };
 
+function isLoginNetworkError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string; response?: { status?: number } };
+  if (err.response?.status) return false;
+  const msg = String(err.message || '');
+  return (
+    err.code === 'ERR_NETWORK' ||
+    /network error|failed to fetch|load failed|networkerror/i.test(msg)
+  );
+}
+
 async function legacyLogin(email: string, password: string): Promise<UnifiedLoginResponse> {
+  let lastAuthError: unknown = null;
+  let sawUnavailable = false;
   for (const endpoint of ['/auth/merchant/login', '/auth/reseller/login', '/auth/superadmin/login'] as const) {
     try {
       const response = await api.post<UnifiedLoginResponse>(endpoint, { email, password });
       if (response.data?.token) return response.data;
-    } catch {
-      /* try next account type */
+    } catch (error: unknown) {
+      if (isLoginNetworkError(error)) throw error;
+      if (isLoginApiUnavailable(error)) {
+        sawUnavailable = true;
+        lastAuthError = error;
+        continue;
+      }
+      lastAuthError = error;
     }
   }
-  throw new Error('Invalid email or password');
+  if (sawUnavailable && lastAuthError) throw lastAuthError;
+  const authErr = lastAuthError as { response?: { data?: { error?: string } } } | null;
+  throw new Error(authErr?.response?.data?.error || 'Invalid email or password');
 }
 
 function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string } | null {

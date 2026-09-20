@@ -1,0 +1,21 @@
+# Local development — Postgres only. Backend + dashboard run on the host (see scripts/dev-local.sh).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-manupos}
+      POSTGRES_USER: ${POSTGRES_USER:-manupos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+    volumes:
+      - reborn_dev_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-manupos} -d ${POSTGRES_DB:-manupos}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  reborn_dev_postgres:

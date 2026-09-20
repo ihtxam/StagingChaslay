@@ -1,12 +1,16 @@
 import axios, { AxiosInstance } from 'axios';
 
-/** Prefer same-origin /api in production; localhost only for local dev without env override. */
-function resolveApiBaseUrl(): string {
+/** Prefer same-origin /api in production; Vite dev proxies /api on any port. */
+export function resolveApiBaseUrl(): string {
   const fromEnv = import.meta.env.VITE_API_URL;
   if (fromEnv != null && String(fromEnv).trim() !== '') {
     return String(fromEnv).trim();
   }
   if (typeof window !== 'undefined') {
+    // Vite dev server proxies /api → backend (works on 5173, 5137, etc.).
+    if (import.meta.env.DEV) {
+      return '/api';
+    }
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
       return 'http://localhost:3000/api';
