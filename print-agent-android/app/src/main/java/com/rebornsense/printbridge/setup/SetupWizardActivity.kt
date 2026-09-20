@@ -120,12 +120,12 @@ class SetupWizardActivity : AppCompatActivity() {
                 secondaryBtn.visibility = View.GONE
                 skipBtn.visibility = View.VISIBLE
                 skipBtn.text = when (step.id) {
-                    "done" -> getString(R.string.oem_step_finish)
+                    "done" -> getString(R.string.oem_step_go_printers)
                     else -> getString(R.string.oem_step_skip)
                 }
                 nextBtn.visibility = View.VISIBLE
                 nextBtn.text = when (step.id) {
-                    "done" -> getString(R.string.oem_step_open_webpos)
+                    "done" -> getString(R.string.oem_step_go_printers)
                     "tap_to_pay" -> getString(R.string.oem_step_open_webpos)
                     else -> getString(R.string.oem_step_next)
                 }
@@ -217,10 +217,7 @@ class SetupWizardActivity : AppCompatActivity() {
             OemSetupAction.INSTRUCTION_ONLY -> {
                 when (step.id) {
                     "tap_to_pay" -> openWebPosTapToPaySetup()
-                    "done" -> {
-                        openWebPos()
-                        finishWizard()
-                    }
+                    "done" -> finishWizard()
                     else -> onNextAction()
                 }
             }
@@ -229,15 +226,12 @@ class SetupWizardActivity : AppCompatActivity() {
 
     private fun onNextAction() {
         val step = currentStep()
-        if (step.id == "done" || step.id == "tap_to_pay") {
-            if (step.id == "done") {
-                openWebPos()
-            } else {
-                openWebPosTapToPaySetup()
-            }
-            if (step.id == "done") {
-                finishWizard()
-            }
+        if (step.id == "tap_to_pay") {
+            openWebPosTapToPaySetup()
+            return
+        }
+        if (step.id == "done") {
+            finishWizard()
             return
         }
         goToNextStep()

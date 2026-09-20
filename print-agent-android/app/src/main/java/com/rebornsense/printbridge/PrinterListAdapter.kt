@@ -3,9 +3,9 @@ package com.rebornsense.printbridge
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.rebornsense.printbridge.print.PrinterEndpoint
 
 class PrinterListAdapter(
@@ -35,11 +35,10 @@ class PrinterListAdapter(
 
     class RowHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val nameText: TextView = itemView.findViewById(R.id.printerNameText)
-        private val idText: TextView = itemView.findViewById(R.id.printerIdText)
+        private val subtitleText: TextView = itemView.findViewById(R.id.printerSubtitleText)
         private val typeText: TextView = itemView.findViewById(R.id.printerTypeText)
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
-        private val setDefaultBtn: Button = itemView.findViewById(R.id.setDefaultBtn)
-        private val testRowBtn: Button = itemView.findViewById(R.id.testRowBtn)
+        private val testRowBtn: MaterialButton = itemView.findViewById(R.id.testRowBtn)
 
         fun bind(
             endpoint: PrinterEndpoint,
@@ -48,12 +47,20 @@ class PrinterListAdapter(
             onTestPrint: (PrinterEndpoint) -> Unit,
         ) {
             val isDefault = endpoint.id == defaultId
-            nameText.text = endpoint.name
-            idText.text = endpoint.id
-            typeText.text = endpoint.connectionType.uppercase()
+            val context = itemView.context
+            nameText.text = PrinterDisplay.title(endpoint)
+            val subtitle = PrinterDisplay.subtitle(context, endpoint)
+            if (subtitle.isNullOrBlank()) {
+                subtitleText.visibility = View.GONE
+            } else {
+                subtitleText.visibility = View.VISIBLE
+                subtitleText.text = subtitle
+            }
+            typeText.text = PrinterDisplay.typeLabel(context, endpoint)
             defaultBadge.visibility = if (isDefault) View.VISIBLE else View.GONE
-            setDefaultBtn.isEnabled = !isDefault
-            setDefaultBtn.setOnClickListener { onSetDefault(endpoint) }
+            itemView.setOnClickListener {
+                if (!isDefault) onSetDefault(endpoint)
+            }
             testRowBtn.setOnClickListener { onTestPrint(endpoint) }
         }
     }

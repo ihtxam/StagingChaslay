@@ -763,6 +763,10 @@ export class InventoryService {
       cost?: number;
       salePrice?: number;
       imageUrl?: string | null;
+      /** Replace POS product photo even when one already exists. */
+      updateImageUrl?: boolean;
+      /** Update photo only — no stock movement (existing barcode required). */
+      photoOnly?: boolean;
       /** Retail: create/update menu product for POS sale. Default true for retail merchants. */
       publishToPos?: boolean;
       note?: string;
@@ -772,6 +776,33 @@ export class InventoryService {
     const barcode = String(input.barcode || "").trim();
     if (!barcode) throw new Error("Barcode is required");
     const qty = num(input.qty);
+    const photoOnly = input.photoOnly === true;
+    if (photoOnly) {
+      const item = await this.getItemByBarcode(merchantId, barcode);
+      if (!item) throw new Error("Product not found — scan an existing barcode to update the photo");
+      const imageUrl = String(input.imageUrl || "").trim();
+      if (!imageUrl) throw new Error("Product photo is required");
+      let menuProduct: Record<string, unknown> | null = null;
+      const db = getDb();
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { businessCategory: true },
+      });
+      const businessModule = normalizeBusinessModule(merchant?.businessCategory);
+      const publishToPos =
+        input.publishToPos !== false && (businessModule === "retail" || businessModule === null);
+      if (publishToPos) {
+        menuProduct = await this.publishStorekeeperToPos(merchantId, {
+          barcode,
+          name: String(input.name || item.name).trim(),
+          salePrice: input.salePrice,
+          qty: 0,
+          imageUrl,
+          updateImageUrl: true,
+        });
+      }
+      return { item, created: false, menuProduct };
+    }
     if (!(qty > 0)) throw new Error("Quantity must be greater than 0");
 
     let item = await this.getItemByBarcode(merchantId, barcode);
@@ -826,6 +857,7 @@ export class InventoryService {
         salePrice: input.salePrice,
         qty,
         imageUrl: input.imageUrl,
+        updateImageUrl: input.updateImageUrl === true,
       });
     }
 
@@ -841,6 +873,7 @@ export class InventoryService {
       salePrice?: number;
       qty: number;
       imageUrl?: string | null;
+      updateImageUrl?: boolean;
     }
   ) {
     const { ProductService } = await import("@/services/product.service");
@@ -858,7 +891,10 @@ export class InventoryService {
       if (input.salePrice != null && Number.isFinite(input.salePrice)) {
         patch.price = price.toString();
       }
-      if (input.imageUrl && !existing.imageUrl) {
+      if (
+        input.imageUrl &&
+        (input.updateImageUrl || !existing.imageUrl)
+      ) {
         patch.imageUrl = input.imageUrl;
       }
       const updated = await ProductService.updateProduct(merchantId, existing.id, patch);

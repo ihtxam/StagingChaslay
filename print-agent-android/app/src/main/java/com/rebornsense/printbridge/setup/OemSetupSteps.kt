@@ -132,7 +132,7 @@ object OemSetupSteps {
         id = "done",
         titleRes = R.string.oem_step_done_title,
         descriptionRes = R.string.oem_step_done_desc,
-        actionLabelRes = R.string.oem_step_open_webpos,
+        actionLabelRes = R.string.oem_step_go_printers,
         action = OemSetupAction.INSTRUCTION_ONLY,
     )
 }
