@@ -61,16 +61,29 @@ type UnifiedLoginResponse = {
   isOwner?: boolean;
 };
 
+function isLoginNetworkError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string; response?: { status?: number } };
+  if (err.response?.status) return false;
+  const msg = String(err.message || '');
+  return (
+    err.code === 'ERR_NETWORK' ||
+    /network error|failed to fetch|load failed|networkerror/i.test(msg)
+  );
+}
+
 async function legacyLogin(email: string, password: string): Promise<UnifiedLoginResponse> {
+  let lastAuthError: unknown = null;
   for (const endpoint of ['/auth/merchant/login', '/auth/reseller/login', '/auth/superadmin/login'] as const) {
     try {
       const response = await api.post<UnifiedLoginResponse>(endpoint, { email, password });
       if (response.data?.token) return response.data;
-    } catch {
-      /* try next account type */
+    } catch (error: unknown) {
+      if (isLoginNetworkError(error)) throw error;
+      lastAuthError = error;
     }
   }
-  throw new Error('Invalid email or password');
+  const authErr = lastAuthError as { response?: { data?: { error?: string } } } | null;
+  throw new Error(authErr?.response?.data?.error || 'Invalid email or password');
 }
 
 function userFromLogin(data: UnifiedLoginResponse): { user: User; token: string } | null {
