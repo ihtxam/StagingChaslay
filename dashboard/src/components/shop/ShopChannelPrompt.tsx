@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import axios from 'axios';
 import ShopAddressAutocomplete from '@/components/shop/ShopAddressAutocomplete';
+import ShopHouseNumberSuggest from '@/components/shop/ShopHouseNumberSuggest';
 import ShopDeliveryZoneBadges from '@/components/shop/ShopDeliveryZoneBadges';
 import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
@@ -130,6 +131,7 @@ export default function ShopChannelPrompt({
   const [deliveryInfo, setDeliveryInfo] = useState<any>(null);
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
+  const calendarInputRef = useRef<HTMLInputElement>(null);
 
   const shopLocale = locale === 'fr' ? 'fr-CH' : locale === 'de' ? 'de-CH' : 'en-CH';
   const eta = options.find((o) => o.id === selected)?.etaMinutes || 30;
@@ -194,7 +196,7 @@ export default function ShopChannelPrompt({
           ? `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=14&output=embed`
           : null;
 
-  const runVerifyDelivery = async (override?: {
+  const runVerifyDelivery = useCallback(async (override?: {
     lat?: number;
     lng?: number;
     zipCode?: string;
@@ -232,11 +234,16 @@ export default function ShopChannelPrompt({
         zipCode: zip,
         subtotal,
       });
-      setDeliveryInfo(res.data);
-      if (!res.data.deliverable) {
-        setError(res.data.error || t('shopOutsideDelivery'));
+      const verified = withDeliveryMinOrderStatus(res.data, subtotal);
+      setDeliveryInfo(verified);
+      if (!verified.deliverable) {
+        setError(verified.error || t('shopOutsideDelivery'));
+      } else if (!verified.meetsMinOrder) {
+        setError(verified.message || t('shopMinOrderNotMet'));
+      } else {
+        setError(null);
       }
-      return res.data;
+      return verified;
     } catch (e: any) {
       setError(e.response?.data?.error || t('shopCouldNotVerifyAddress'));
       setDeliveryInfo(null);
@@ -244,6 +251,36 @@ export default function ShopChannelPrompt({
     } finally {
       setChecking(false);
     }
+  }, [fullAddress, shopKey, zipCode, city, lat, lng, subtotal, t]);
+
+  const addressReady =
+    showDeliveryPanel &&
+    !!shopKey &&
+    !!street.trim() &&
+    !!houseNumber.trim() &&
+    !!floor.trim();
+
+  useEffect(() => {
+    if (!open || !addressReady) return;
+    const timer = window.setTimeout(() => {
+      void runVerifyDelivery();
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [open, addressReady, runVerifyDelivery, street, houseNumber, floor, zipCode, city, subtotal]);
+
+  const openCalendarPicker = () => {
+    setChooseDateOpen(true);
+    setCustomDay(null);
+    window.requestAnimationFrame(() => {
+      const input = calendarInputRef.current;
+      if (!input) return;
+      input.focus();
+      try {
+        input.showPicker?.();
+      } catch {
+        input.click();
+      }
+    });
   };
 
   const handleConfirm = async () => {
@@ -269,7 +306,7 @@ export default function ShopChannelPrompt({
 
       const verified = withDeliveryMinOrderStatus(info, subtotal);
       if (!verified.meetsMinOrder) {
-        setError(verified.message || t('shopOutsideDelivery'));
+        setError(verified.message || t('shopMinOrderNotMet'));
         return;
       }
 
@@ -480,16 +517,33 @@ export default function ShopChannelPrompt({
                     setLng(s.longitude);
                     setDeliveryInfo(null);
                     setError(null);
+                    const pickedAddress = buildFullAddress(
+                      nextStreet,
+                      s.houseNumber || nextHouse,
+                      floor
+                    );
+                    if (pickedAddress.trim() && floor.trim()) {
+                      void runVerifyDelivery({
+                        address: pickedAddress,
+                        zipCode: nextZip,
+                        city: nextCity,
+                        lat: s.latitude,
+                        lng: s.longitude,
+                      });
+                    }
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input
+                  <ShopHouseNumberSuggest
+                    shopKey={shopKey}
+                    street={street}
+                    zipCode={zipCode}
+                    city={city}
                     className={SHOP_INPUT_CLASS}
-                    placeholder={t('shopHouseNumber')}
-                    value={houseNumber}
                     required
-                    onChange={(e) => {
-                      setHouseNumber(e.target.value);
+                    value={houseNumber}
+                    onChange={(next) => {
+                      setHouseNumber(next);
                       setDeliveryInfo(null);
                       setError(null);
                     }}
@@ -513,7 +567,17 @@ export default function ShopChannelPrompt({
                     zone={effectiveDeliveryInfo.zone}
                   />
                 ) : null}
-                {error ? <p className="text-sm text-red-600">{error}</p> : null}
+                {error ? (
+                  <p
+                    className={`text-sm font-medium ${
+                      effectiveDeliveryInfo?.deliverable && effectiveDeliveryInfo.meetsMinOrder === false
+                        ? 'text-amber-800'
+                        : 'text-red-600'
+                    }`}
+                  >
+                    {error}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -563,13 +627,12 @@ export default function ShopChannelPrompt({
                     <button
                       type="button"
                       onClick={() => {
-                        setChooseDateOpen(true);
-                        setCustomDay(null);
                         const first = laterDays[0];
                         if (first && !calendarDate) {
                           setDayOffset(first.offset);
                           setSlotValue(first.slots[0]?.value || null);
                         }
+                        openCalendarPicker();
                       }}
                       className={`rounded-xl px-2 py-2.5 text-center text-sm font-medium border transition ${
                         dayTab === 'choose'
@@ -588,6 +651,7 @@ export default function ShopChannelPrompt({
                       {t('shopChooseDate')}
                     </label>
                     <input
+                      ref={calendarInputRef}
                       type="date"
                       className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm"
                       min={calendarMin}
@@ -595,29 +659,6 @@ export default function ShopChannelPrompt({
                       value={calendarDate}
                       onChange={(e) => onCalendarPick(e.target.value)}
                     />
-                    {laterDays.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {laterDays.map((d) => (
-                          <button
-                            key={d.offset}
-                            type="button"
-                            onClick={() => {
-                              setCustomDay(null);
-                              setDayOffset(d.offset);
-                              setSlotValue(d.slots[0]?.value || null);
-                              setShowAllSlots(false);
-                            }}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-medium border ${
-                              !customDay && dayOffset === d.offset
-                                ? 'bg-amber-100 border-amber-400 text-amber-900'
-                                : 'border-stone-200 text-stone-600'
-                            }`}
-                          >
-                            {d.dateLabel} · {d.weekday}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
 

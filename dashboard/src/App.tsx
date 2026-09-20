@@ -9,6 +9,7 @@ import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
+import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
@@ -154,13 +155,15 @@ function ShopRoutes({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider storageKey={storageKey}>
       <ShopLocaleSync shopKey={shopKey} />
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
-        }
-      >
-        {children}
-      </Suspense>
+      <ShopRouteLayout>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center text-stone-500">…</div>
+          }
+        >
+          {children}
+        </Suspense>
+      </ShopRouteLayout>
     </I18nProvider>
   );
 }

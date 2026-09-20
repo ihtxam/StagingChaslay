@@ -40,7 +40,6 @@ import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
-import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import { SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
@@ -190,6 +189,7 @@ export default function CheckoutPage() {
   const lastNameRef = useRef<HTMLInputElement>(null);
   const phoneLocalRef = useRef<HTMLInputElement>(null);
   const [showMoreScheduleDays, setShowMoreScheduleDays] = useState(false);
+  const scheduleCalendarRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -528,6 +528,22 @@ export default function CheckoutPage() {
   const scheduleCalendarMaxDate = new Date();
   scheduleCalendarMaxDate.setDate(scheduleCalendarMaxDate.getDate() + 60);
   const scheduleCalendarMax = scheduleCalendarMaxDate.toISOString().slice(0, 10);
+
+  const openScheduleCalendarPicker = () => {
+    setWhenMode('later');
+    setChooseScheduleDateOpen(true);
+    setShowMoreScheduleDays(true);
+    window.requestAnimationFrame(() => {
+      const input = scheduleCalendarRef.current;
+      if (!input) return;
+      input.focus();
+      try {
+        input.showPicker?.();
+      } catch {
+        input.click();
+      }
+    });
+  };
 
   const onScheduleCalendarPick = (ymd: string) => {
     setScheduleCalendarDate(ymd);
@@ -2031,10 +2047,13 @@ export default function CheckoutPage() {
                                       : 'border-stone-300 bg-white'
                                   }`}
                                   onClick={() => {
-                                    setChooseScheduleDateOpen((v) => !v);
-                                    if (chooseScheduleDateOpen) {
+                                    if (chooseScheduleDateOpen || customScheduleDay) {
+                                      setChooseScheduleDateOpen(false);
                                       setCustomScheduleDay(null);
+                                      setScheduleCalendarDate('');
+                                      return;
                                     }
+                                    openScheduleCalendarPicker();
                                   }}
                                 >
                                   {t('shopChooseDate')}
@@ -2043,8 +2062,9 @@ export default function CheckoutPage() {
                             ) : null}
                             {chooseScheduleDateOpen ? (
                               <input
+                                ref={scheduleCalendarRef}
                                 type="date"
-                                className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm"
+                                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
                                 min={scheduleCalendarMin}
                                 max={scheduleCalendarMax}
                                 value={scheduleCalendarDate}
@@ -2585,11 +2605,6 @@ export default function CheckoutPage() {
               {renderGrandTotal()}
             </section>
 
-            <ShopStorefrontFooter
-              basePath={shopBasePath(shopKey, locSlug)}
-              merchantName={merchant?.name}
-              className="mt-10"
-            />
         </div>
 
         <aside className="shop-checkout-desktop-cart mt-8 hidden lg:block lg:mt-0">

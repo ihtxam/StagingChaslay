@@ -1983,6 +1983,18 @@ html.shop-shell #root {
   margin-inline: 0;
 }
 
+/* Global shop footer: full viewport width, pinned below page content */
+.shop-route-layout__footer {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.shop-route-layout__footer .shop-global-footer,
+.shop-route-layout__footer .shop-storefront-footer {
+  width: 100%;
+}
+
 .cms-homepage .wrap {
   width: 80%;
   max-width: 90rem;

@@ -21,7 +21,7 @@ import { ChaslayPagebuilderService } from "@/services/chaslay-pagebuilder.servic
 import { normalizeComboSlots } from "@/lib/combo";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
-import { autocompleteAddress } from "@/lib/location-service";
+import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
@@ -1386,6 +1386,36 @@ router.get("/:slug/address-suggest", async (req: Request, res: Response) => {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Address lookup failed",
       suggestions: [],
+    });
+  }
+});
+
+/**
+ * GET /api/shop/:slug/house-number-suggest?street=&city=&zip=
+ */
+router.get("/:slug/house-number-suggest", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant || !merchant.shopEnabled) {
+      return res.status(404).json({ error: "Shop not found" });
+    }
+    const street = String(req.query.street || "").trim();
+    if (!street) {
+      return res.json({ success: true, numbers: [] });
+    }
+    const lang = String(req.query.lang || "").trim().slice(0, 2) || undefined;
+    const numbers = await suggestHouseNumbers({
+      street,
+      city: String(req.query.city || "").trim() || undefined,
+      postcode: String(req.query.zip || req.query.postcode || "").trim() || undefined,
+      countryCode: merchant.country,
+      lang,
+    });
+    res.json({ success: true, numbers });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "House number lookup failed",
+      numbers: [],
     });
   }
 });
