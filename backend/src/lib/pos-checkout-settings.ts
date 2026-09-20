@@ -11,6 +11,7 @@ export type CartSide = "left" | "right";
 export type PostSuccessTarget = "register" | "tables";
 export type PosMode = "restaurant" | "retail";
 export type ActionButtonSize = "sm" | "md" | "lg";
+export type RetailTileSize = "sm" | "md" | "lg";
 
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
@@ -60,6 +61,16 @@ export type PosCheckoutSettings = {
   expressCheckoutEnabled: boolean;
   /** Show POS toast notifications. Off by default — they block the till. */
   showPosToasts: boolean;
+  /** Retail register: three-column layout (categories | products | cart). */
+  retailLayoutEnabled: boolean;
+  /** Retail register: auto-focus scan/search field on register view. */
+  retailScannerFirst: boolean;
+  /** Retail register: product tile size in the retail layout grid. */
+  retailTileSize: RetailTileSize;
+  /** Retail register: Cash / Card / Pay bar at bottom of cart panel. */
+  retailPaymentBar: boolean;
+  /** Retail register: clear search after adding a product. */
+  retailClearSearchAfterAdd: boolean;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -90,6 +101,11 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   actionButtonSize: "md",
   expressCheckoutEnabled: true,
   showPosToasts: false,
+  retailLayoutEnabled: true,
+  retailScannerFirst: true,
+  retailTileSize: "lg",
+  retailPaymentBar: true,
+  retailClearSearchAfterAdd: true,
 };
 
 function asNumberArray(v: unknown, fallback: number[]): number[] {
@@ -180,5 +196,14 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
     expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
     showPosToasts: src.showPosToasts === true,
+    retailLayoutEnabled:
+      src.retailLayoutEnabled === undefined ? posMode === "retail" : src.retailLayoutEnabled !== false,
+    retailScannerFirst: src.retailScannerFirst !== false,
+    retailTileSize:
+      src.retailTileSize === "sm" || src.retailTileSize === "md" || src.retailTileSize === "lg"
+        ? src.retailTileSize
+        : DEFAULT_POS_CHECKOUT.retailTileSize,
+    retailPaymentBar: src.retailPaymentBar !== false,
+    retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
   };
 }

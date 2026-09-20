@@ -1,1 +1,0 @@
-import{u as r,r as n,a as u,s as p,j as h}from"./index-B151KoDd.js";import{C as m}from"./ChaslayShopPageView-LEiEZ-51.js";function i(){const{merchantSlug:e,pageSlug:s}=r(),a=n.useMemo(()=>u(e),[e]),t=p(a),o=(s==null?void 0:s.trim())||"";return!a||!o?null:h.jsx(m,{shopKey:a,base:t,pageSlug:o})}export{i as default};

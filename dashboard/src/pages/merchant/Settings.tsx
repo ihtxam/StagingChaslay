@@ -197,6 +197,11 @@ interface SettingsData {
     actionButtonSize?: 'sm' | 'md' | 'lg';
     expressCheckoutEnabled?: boolean;
     showPosToasts?: boolean;
+    retailLayoutEnabled?: boolean;
+    retailScannerFirst?: boolean;
+    retailTileSize?: 'sm' | 'md' | 'lg';
+    retailPaymentBar?: boolean;
+    retailClearSearchAfterAdd?: boolean;
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -2575,6 +2580,92 @@ export default function Settings() {
                     })}
                   </div>
                 </Field>
+                {posRetailMode ? (
+                  <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+                    <p className="text-sm font-semibold">{t('posRetailLayoutEnabled')}</p>
+                    <p className="text-xs muted">{t('posRetailLayoutEnabledHint')}</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(
+                        [
+                          ['retailLayoutEnabled', t('posRetailLayoutEnabled'), t('posRetailLayoutEnabledHint')],
+                          ['retailScannerFirst', t('posRetailScannerFirst'), t('posRetailScannerFirstHint')],
+                          ['retailPaymentBar', t('posRetailPaymentBar'), t('posRetailPaymentBarHint')],
+                          ['retailClearSearchAfterAdd', t('posRetailClearSearchAfterAdd'), t('posRetailClearSearchAfterAddHint')],
+                        ] as const
+                      ).map(([key, label, hint]) => (
+                        <label
+                          key={key}
+                          className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={
+                              key === 'retailLayoutEnabled'
+                                ? settings.posCheckoutSettings?.retailLayoutEnabled !== false
+                                : settings.posCheckoutSettings?.[key] !== false
+                            }
+                            onChange={(e) =>
+                              setSettings({
+                                ...settings,
+                                posCheckoutSettings: {
+                                  ...(settings.posCheckoutSettings || {}),
+                                  [key]: e.target.checked,
+                                },
+                              })
+                            }
+                          />
+                          <span>
+                            <span className="font-medium block">{label}</span>
+                            <span className="text-xs muted">{hint}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <Field label={t('posRetailTileSize')} hint={t('posRetailTileSizeHint')}>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {(
+                          [
+                            ['sm', t('posRetailTileSmall')],
+                            ['md', t('posRetailTileMedium')],
+                            ['lg', t('posRetailTileLarge')],
+                          ] as const
+                        ).map(([size, label]) => {
+                          const active =
+                            normalizePosCheckoutSettings(settings.posCheckoutSettings).retailTileSize ===
+                            size;
+                          return (
+                            <label
+                              key={size}
+                              className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-sm ${
+                                active
+                                  ? 'border-[var(--text)] bg-[var(--bg-muted)]'
+                                  : 'border-[var(--border)]'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="retailTileSize"
+                                className="mt-0.5"
+                                checked={active}
+                                onChange={() =>
+                                  setSettings({
+                                    ...settings,
+                                    posCheckoutSettings: {
+                                      ...(settings.posCheckoutSettings || {}),
+                                      retailTileSize: size,
+                                    },
+                                  })
+                                }
+                              />
+                              <span className="font-medium">{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </Field>
+                  </div>
+                ) : null}
                 <div id="pos-post-success">
                   <Field label={t('webPosPostSuccessNav')} hint={t('posPostSuccessHint')}>
                     <select
