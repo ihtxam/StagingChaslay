@@ -40,6 +40,7 @@ import {
   type AdyenTerminalReceipt,
 } from '@/lib/adyen-receipt';
 import { adjustReceiptVatForDiscount } from '@/lib/tax-discount';
+import { formatModifierTicketLine } from '@/lib/cart-modifier-lines';
 import { looksLikeLabelPrinterName } from './printer-kind';
 import { resolveLabelPrintProtocol } from './label-print-protocol';
 
@@ -1398,28 +1399,31 @@ export function buildKitchenTicketItemFromLine(input: {
   productId?: string | null;
   categoryId?: string | null;
   courseNumber?: number | null;
-  selectedExtras?: Array<{ name?: string | null }>;
+  selectedExtras?: Array<{ name?: string | null; price?: number | null }>;
   comboSelections?: Array<{
     slotName?: string | null;
     productName?: string | null;
-    selectedExtras?: Array<{ name?: string | null }>;
+    selectedExtras?: Array<{ name?: string | null; price?: number | null }>;
   }>;
   lineNote?: string | null;
+  /** Customer receipts: append paid-extra prices (kitchen tickets omit). */
+  showModifierPrices?: boolean;
 }): KitchenTicketItem {
+  const showPrices = input.showModifierPrices === true;
   const comboLines: KitchenComboLine[] = (input.comboSelections || []).map((c) => ({
     slotName: c.slotName?.trim() || undefined,
     productName: String(c.productName || '').trim(),
     modifierLines: (c.selectedExtras || [])
-      .map((e) => String(e.name || '').trim())
+      .map((e) => formatModifierTicketLine(e, showPrices))
       .filter(Boolean),
   }));
   const comboLevelExtras =
     comboLines.length > 0
       ? (input.selectedExtras || [])
-          .map((e) => String(e.name || '').trim())
+          .map((e) => formatModifierTicketLine(e, showPrices))
           .filter(Boolean)
       : (input.selectedExtras || [])
-          .map((e) => String(e.name || '').trim())
+          .map((e) => formatModifierTicketLine(e, showPrices))
           .filter(Boolean);
   return {
     name: String(input.name || '').trim(),
@@ -3510,6 +3514,7 @@ export function posOrderToWebPosReceipt(
         courseNumber: i.courseNumber,
         selectedExtras: i.selectedExtras || [],
         comboSelections: i.comboSelections || [],
+        showModifierPrices: true,
       })
     ),
     subtotal,

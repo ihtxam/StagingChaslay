@@ -18,8 +18,9 @@ import {
   normalizeActionButtonSize,
   type WebPosActionButtonSize,
 } from '@/lib/webpos-action-button-size';
+import { cartModifierRows } from '@/lib/cart-modifier-lines';
 import { cartLineKitchenReady } from '@/lib/kds-push';
-import { normalizeDashes, repairCatalogText } from '@/lib/text-encoding';
+import { repairCatalogText } from '@/lib/text-encoding';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
 import WebPosSwipeableCartLine from './WebPosSwipeableCartLine';
 import type { CartLine, KeypadMode, PosChannel } from './types';
@@ -140,27 +141,6 @@ type Props = {
   kitchenOrderLabel?: string | null;
   actionButtonSize?: WebPosActionButtonSize;
 };
-
-function lineExtrasLabel(l: CartLine) {
-  const parts: string[] = [];
-  const combos = l.comboSelections || [];
-  const extras = l.selectedExtras || [];
-  if (combos.length) {
-    parts.push(
-      ...combos.map((c) => {
-        const productName = repairCatalogText(c.productName || '');
-        const extraNames = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
-        return extraNames.length ? `${productName} (${extraNames.join(', ')})` : productName;
-      })
-    );
-  }
-  if (!combos.length && extras.length) {
-    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
-  } else if (combos.length && extras.length) {
-    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
-  }
-  return normalizeDashes(parts.join(', '));
-}
 
 type CartRow =
   | { kind: 'course'; course: number }
@@ -892,7 +872,7 @@ export default function WebPosCartPanel({
               }
               const l = row.line;
               const selected = selectedLineId === l.lineId;
-              const extras = lineExtrasLabel(l);
+              const modifierRows = cartModifierRows(l);
               const lineName = repairCatalogText(l.name || '');
               const sentAtLabel = formatSentAt(l.sentToKitchenAt);
               const isKitchenReady = lineReady(l);
@@ -923,11 +903,23 @@ export default function WebPosCartPanel({
                         </span>
                       ) : null}
                     </p>
-                    {extras ? (
-                      <p className="mt-0.5 text-[11px] text-stone-500">
-                        {'- '}
-                        {extras}
-                      </p>
+                    {modifierRows.length > 0 ? (
+                      <ul className="mt-0.5 space-y-0.5 pl-3">
+                        {modifierRows.map((row, idx) => (
+                          <li
+                            key={`${l.lineId}-mod-${idx}`}
+                            className="flex items-baseline justify-between gap-2 text-[11px] text-stone-500"
+                          >
+                            <span className="min-w-0 truncate">
+                              <span aria-hidden className="mr-1">-</span>
+                              {row.label}
+                            </span>
+                            {row.price != null ? (
+                              <span className="shrink-0 tabular-nums">{money(row.price)}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     {l.lineNote?.trim() ? (
                       <p className="mt-0.5 text-[11px] italic text-stone-500">
