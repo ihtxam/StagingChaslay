@@ -827,6 +827,9 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
             phone: merchant.phone,
             email: merchant.email,
             reservationsEnabled: !!merchant.reservationsEnabled,
+            giftCards: ShopGiftCardService.publicSettings(
+              ShopGiftCardService.settingsFromMerchant(merchant)
+            ),
             acceptingOrders: merchant.acceptingOrders !== false,
             acceptingReservations: merchant.acceptingReservations !== false,
             vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -913,6 +916,9 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
               phone: merchant.phone,
               email: merchant.email,
               reservationsEnabled: !!merchant.reservationsEnabled,
+              giftCards: ShopGiftCardService.publicSettings(
+                ShopGiftCardService.settingsFromMerchant(merchant)
+              ),
               acceptingOrders: merchant.acceptingOrders !== false,
               acceptingReservations: merchant.acceptingReservations !== false,
               vacation: vacationPublicPayload(merchant.vacationSettings),

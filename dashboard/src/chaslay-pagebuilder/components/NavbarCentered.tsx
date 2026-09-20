@@ -58,7 +58,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref, isStorefront, surface, accountPath, loggedIn } = useStorefront();
-  const { menuItems, t } = useNavbarDisplay(
+  const { menuItems, drawerExtras, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
     mergedProps.useSitePagesNav
@@ -139,6 +139,7 @@ export const NavbarCentered: React.FC<NavbarCenteredProps> & {
           </div>
           <NavbarMobileMenu
             menuItems={menuItems}
+            drawerExtras={drawerExtras}
             textColor={mergedProps.textColor || '#1a1a2e'}
             backgroundColor={mergedProps.backgroundColor || '#ffffff'}
           />

@@ -297,6 +297,7 @@ export const shopEn: Record<string, string> = {
 
   // Gift cards (online shop)
   shopGiftCardTitle: 'Gift cards',
+  shopGiftCardNav: 'Gift Card',
   shopGiftCardSubtitle: 'Send a digital gift card by email. Redeemable in store and online.',
   shopGiftCardSubtitleFull:
     'Buy a gift card online — digital voucher with QR/barcode for instant use, or a physical card delivered by post.',
@@ -821,6 +822,7 @@ export const shopFr: Record<string, string> = {
   shopNoOpeningHours: 'Pas d’horaires pour planifier - essayez un autre mode',
 
   shopGiftCardTitle: 'Cartes cadeau',
+  shopGiftCardNav: 'Carte cadeau',
   shopGiftCardSubtitle: 'Envoyez une e-carte par e-mail. Utilisable en boutique et en ligne.',
   shopGiftCardSubtitleFull:
     'Achetez une carte cadeau en ligne — bon numérique (QR/code-barres) ou carte physique par la poste.',
@@ -1347,6 +1349,7 @@ export const shopDe: Record<string, string> = {
   shopNoOpeningHours: 'Keine Öffnungszeiten zum Planen - anderen Modus versuchen',
 
   shopGiftCardTitle: 'Geschenkkarten',
+  shopGiftCardNav: 'Geschenkkarte',
   shopGiftCardSubtitle: 'Digitale Geschenkkarte per E-Mail. Einlösbar im Laden und online.',
   shopGiftCardSubtitleFull:
     'Geschenkkarte online kaufen — digitaler Gutschein (QR/Barcode) oder physische Karte per Post.',

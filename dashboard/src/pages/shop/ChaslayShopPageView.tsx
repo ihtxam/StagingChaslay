@@ -9,13 +9,13 @@ import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-sit
 import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRenderer';
 import type { SitePageLink, MerchantContact } from '@/chaslay-pagebuilder/StorefrontContext';
 import { BuilderLanguageProvider } from '@/chaslay-pagebuilder/BuilderLanguageContext';
-import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 
 type MerchantInfo = {
   name?: string;
   shopLogoUrl?: string | null;
   storeHours?: import('@/lib/shop-hours').StoreHours | null;
   reservationsEnabled?: boolean;
+  giftCards?: { enabled?: boolean };
   language?: string;
   phone?: string | null;
   email?: string | null;
@@ -193,8 +193,6 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     }
   }, [locale, defaultLanguage, shopKey]);
 
-  const showReservationsNav = Boolean(merchant?.reservationsEnabled);
-
   if (loading) {
     return (
       <ShopThemeShell
@@ -250,10 +248,11 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
               contact={contact}
               merchantDisplayName={merchant?.name || null}
               storeHours={merchant?.storeHours || null}
+              giftCardsEnabled={!!merchant?.giftCards?.enabled}
+              reservationsEnabled={!!merchant?.reservationsEnabled}
             />
           </ShopHomepageErrorBoundary>
         </div>
-        <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
       </ShopThemeShell>
     </BuilderLanguageProvider>
   );

@@ -54,7 +54,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { connectors: { connect, drag } } = useNode();
   const { shopHref, isStorefront, accountPath, loggedIn } = useStorefront();
-  const { menuItems, t } = useNavbarDisplay(
+  const { menuItems, drawerExtras, t } = useNavbarDisplay(
     mergedProps as Record<string, unknown>,
     mergedProps.menuItems,
     mergedProps.useSitePagesNav
@@ -99,6 +99,7 @@ export const NavbarMinimal: React.FC<NavbarMinimalProps> & {
 
           <NavbarMobileMenu
             menuItems={menuItems}
+            drawerExtras={drawerExtras}
             textColor={mergedProps.textColor || '#1a1a2e'}
             backgroundColor={mergedProps.backgroundColor || '#faf9f6'}
           />

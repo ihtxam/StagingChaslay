@@ -22,6 +22,8 @@ type ChaslayHomepageRendererProps = {
   contact?: MerchantContact | null;
   merchantDisplayName?: string | null;
   storeHours?: import('@/lib/shop-hours').StoreHours | null;
+  giftCardsEnabled?: boolean;
+  reservationsEnabled?: boolean;
 };
 
 /**
@@ -38,6 +40,8 @@ export default function ChaslayHomepageRenderer({
   contact = null,
   merchantDisplayName = null,
   storeHours = null,
+  giftCardsEnabled = false,
+  reservationsEnabled = false,
 }: ChaslayHomepageRendererProps) {
   const [navPages, setNavPages] = useState<SitePageLink[]>(sitePages);
 
@@ -108,6 +112,8 @@ export default function ChaslayHomepageRenderer({
       accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
       storeHours={storeHours}
       surface="home"
+      giftCardsEnabled={giftCardsEnabled}
+      reservationsEnabled={reservationsEnabled}
     >
       <BuilderLanguageProvider locale={locale} defaultLanguage={defaultLanguage}>
         <MenuDataProvider>

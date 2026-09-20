@@ -52,6 +52,7 @@ export function NavbarDesktopLinks({ menuItems, textColor, className = '' }: Pro
 
 export function NavbarMobileMenu({
   menuItems,
+  drawerExtras = [],
   textColor,
   backgroundColor,
   buttonLink,
@@ -59,6 +60,7 @@ export function NavbarMobileMenu({
   buttonColor,
   showButton,
 }: Props & {
+  drawerExtras?: NavbarMenuItem[];
   backgroundColor: string;
   buttonLink?: string;
   buttonText?: string;
@@ -129,6 +131,16 @@ export function NavbarMobileMenu({
             {menuItems?.map((item, i) => (
               <a
                 key={`m-${item.label}-${i}`}
+                href={shopHref(item.link)}
+                onClick={(e) => onNavClick(e, item.link)}
+                style={{ color: textColor, textDecoration: 'none', fontSize: '16px', fontWeight: 500 }}
+              >
+                {item.label}
+              </a>
+            ))}
+            {drawerExtras?.map((item, i) => (
+              <a
+                key={`d-${item.label}-${i}`}
                 href={shopHref(item.link)}
                 onClick={(e) => onNavClick(e, item.link)}
                 style={{ color: textColor, textDecoration: 'none', fontSize: '16px', fontWeight: 500 }}

@@ -35,6 +35,8 @@ export type StorefrontContextValue = {
   shopHref: (link?: string | null) => string;
   pageHref: (slug: string, isHomepage?: boolean) => string;
   loggedIn: boolean;
+  giftCardsEnabled: boolean;
+  reservationsEnabled: boolean;
 };
 
 const defaultShopHref = (link?: string | null) => String(link || '').trim() || '#';
@@ -54,6 +56,8 @@ const StorefrontContext = createContext<StorefrontContextValue>({
   shopHref: defaultShopHref,
   pageHref: () => '#',
   loggedIn: false,
+  giftCardsEnabled: false,
+  reservationsEnabled: false,
 });
 
 export function StorefrontProvider({
@@ -67,6 +71,8 @@ export function StorefrontProvider({
   accountPath = '',
   storeHours = null,
   surface = 'home',
+  giftCardsEnabled = false,
+  reservationsEnabled = false,
   children,
 }: {
   shopKey: string;
@@ -79,6 +85,8 @@ export function StorefrontProvider({
   accountPath?: string;
   storeHours?: import('@/lib/shop-hours').StoreHours | null;
   surface?: StorefrontSurface;
+  giftCardsEnabled?: boolean;
+  reservationsEnabled?: boolean;
   children: React.ReactNode;
 }) {
   const loggedIn = useShopLoggedIn(shopKey);
@@ -110,6 +118,8 @@ export function StorefrontProvider({
         shopHref,
         pageHref,
         loggedIn,
+        giftCardsEnabled,
+        reservationsEnabled,
       }}
     >
       {children}

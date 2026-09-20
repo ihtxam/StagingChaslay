@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
 import { useShopLoggedIn } from '@/hooks/useShopLoggedIn';
+import { useShopNavFlags } from '@/hooks/useShopNavFlags';
 import { useI18n } from '@/lib/i18n';
+import { buildShopTopbarNav } from '@/lib/shop-topbar-nav';
 
 /** OpenPage CMS home top strip: logo left, menu next to language/account. */
 export default function ShopOpenPageHeader({
@@ -9,23 +11,33 @@ export default function ShopOpenPageHeader({
   merchantName,
   logoUrl,
   shopKey,
+  showGiftCards,
+  showReservations,
 }: {
   basePath: string;
   merchantName?: string | null;
   logoUrl?: string | null;
   shopKey?: string | null;
+  showGiftCards?: boolean;
+  showReservations?: boolean;
 }) {
   const { t } = useI18n();
   const loggedIn = useShopLoggedIn(shopKey);
   const home = basePath || '/';
   const accountPath = `${home}/account`.replace(/\/+/g, '/');
-  const menuPath = `${home}/menu`.replace(/\/+/g, '/');
-  const contactPath = `${home}#contact`;
-  const links = [
-    { label: t('shopHome'), to: home },
-    { label: t('shopMenu'), to: menuPath },
-    { label: t('shopContact'), to: contactPath },
-  ];
+  const navFlags = useShopNavFlags(shopKey, { showGiftCards, showReservations });
+  const { topbarLinks, drawerLinks } = buildShopTopbarNav({
+    basePath: home,
+    showGiftCards: navFlags.showGiftCards,
+    showReservations: navFlags.showReservations,
+    labels: {
+      home: t('shopHome'),
+      menu: t('shopMenu'),
+      giftCard: t('shopGiftCardNav'),
+      reservations: t('shopReservations'),
+      contact: t('shopContact'),
+    },
+  });
 
   return (
     <header className="border-b border-stone-200 bg-white">
@@ -54,13 +66,13 @@ export default function ShopOpenPageHeader({
         </Link>
         <div className="flex min-w-0 shrink-0 items-center gap-3 sm:gap-4">
           <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
-            {links.map((link) => (
+            {topbarLinks.map((link) => (
               <Link key={link.to} to={link.to}>
                 {link.label}
               </Link>
             ))}
           </nav>
-          <ShopMobileNavMenu accountPath={accountPath} loggedIn={loggedIn} links={links} />
+          <ShopMobileNavMenu accountPath={accountPath} loggedIn={loggedIn} links={drawerLinks} />
         </div>
       </div>
     </header>

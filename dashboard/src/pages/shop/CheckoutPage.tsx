@@ -1680,6 +1680,8 @@ export default function CheckoutPage() {
         logoUrl={merchant?.shopLogoUrl}
         shopKey={shopKey}
         loggedIn={!!customer}
+        showGiftCards={!!merchant?.giftCards?.enabled}
+        showReservations={!!merchant?.reservationsEnabled}
       />
 
       <div className="shop-page-content py-8 pb-32 lg:pb-10">

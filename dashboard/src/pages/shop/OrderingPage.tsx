@@ -40,8 +40,8 @@ import ShopComboWizard, {
 import { Bike, Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
+import { buildShopTopbarNav } from '@/lib/shop-topbar-nav';
 import ShopTopShell from '@/components/shop/ShopTopShell';
-import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
 import ShopClosedBanner from '@/components/shop/ShopClosedBanner';
@@ -1211,11 +1211,24 @@ export default function OrderingPage() {
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
-  const giftCardsPath = `${shopBasePath(shopKey, locSlug)}/gift-cards`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const showReservations = !!merchant?.reservationsEnabled;
   const showGiftCards = !!merchant?.giftCards?.enabled;
+  const shopNav = buildShopTopbarNav({
+    basePath: shopBasePath(shopKey, locSlug),
+    showGiftCards,
+    showReservations,
+    onStoreInfo: () => setInfoOpen(true),
+    labels: {
+      home: t('shopHome'),
+      menu: t('shopMenu'),
+      giftCard: t('shopGiftCardNav'),
+      reservations: t('shopReservations'),
+      contact: t('shopContact'),
+      storeInfo: t('shopStoreInfo'),
+    },
+  });
 
   const scrollToCategory = (id: string) => {
     categoryScrollLock.current = true;
@@ -1547,30 +1560,20 @@ export default function OrderingPage() {
               </Link>
               <div className="flex min-w-0 shrink-0 items-center gap-3 sm:gap-4">
               <nav className="hidden sm:flex min-w-0 items-center gap-4 text-sm font-medium text-stone-800">
-                <Link to={shopBasePath(shopKey, locSlug) || '/'}>{t('shopHome')}</Link>
-                <Link to={`${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/')}>{t('shopMenu')}</Link>
-                <Link to={`${shopBasePath(shopKey, locSlug) || ''}#contact`}>{t('shopContact')}</Link>
+                {shopNav.topbarLinks.map((link) => (
+                  <Link key={link.to} to={link.to}>{link.label}</Link>
+                ))}
               </nav>
               <ShopMobileNavMenu
                 accountPath={accountPath}
                 loggedIn={!!customer}
-                links={[
-                  { label: t('shopHome'), to: shopBasePath(shopKey, locSlug) || '/' },
-                  { label: t('shopMenu'), to: `${shopBasePath(shopKey, locSlug)}/menu`.replace(/\/+/g, '/') },
-                  { label: t('shopContact'), to: `${shopBasePath(shopKey, locSlug) || ''}#contact` },
-                  ...(showGiftCards
-                    ? [{ label: t('shopGiftCardTitle'), to: giftCardsPath }]
-                    : []),
-                  { label: t('shopStoreInfo'), onClick: () => setInfoOpen(true) },
-                ]}
+                links={shopNav.drawerLinks}
               />
               </div>
             </div>
           </header>
         )}
       </ShopTopShell>
-      <ShopFloatingActions basePath={shopBasePath(shopKey, locSlug)} showReservations={showReservations} />
-
       {shopClosedNow ? <ShopClosedBanner canPreorder={allowScheduledOrders} /> : null}
       {ordersPaused && !shopClosedNow ? (
         <div className="shop-page-content pt-4">
