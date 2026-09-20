@@ -286,6 +286,10 @@ export class ShopGiftCardService {
     const db = getDb();
     const purchase = await this.getPurchase(merchantId, purchaseId);
 
+    if (purchase.paymentStatus === "failed" || purchase.paymentStatus === "cancelled") {
+      throw new Error("Payment was not completed");
+    }
+
     if (purchase.paymentStatus === "completed" && purchase.cardId) {
       const card = await GiftCardService.getById(merchantId, purchase.cardId);
       return { purchase, card, alreadyFulfilled: true };

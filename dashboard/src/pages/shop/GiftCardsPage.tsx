@@ -12,6 +12,7 @@ import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
   adyenLocaleFor,
   formatAdyenError,
+  isAdyenPaymentSuccess,
   mountAdyenDropin,
   normalizeAdyenPaymentSession,
   shopCheckoutOriginPayload,
@@ -181,7 +182,11 @@ export default function GiftCardsPage() {
     try {
       await axios.post(
         `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}/confirm-payment`,
-        { pspReference: `DEMO-GC-${Date.now()}` }
+        {
+          demo: true,
+          resultCode: 'Authorised',
+          pspReference: `DEMO-GC-${Date.now()}`,
+        }
       );
       window.location.href = `${base}/gift-cards/confirm/${purchaseId}`;
     } catch (err: any) {
@@ -202,16 +207,28 @@ export default function GiftCardsPage() {
           container: dropinEl,
           locale: adyenLocaleFor(locale),
           credentialSource: 'merchant',
-          onPaymentCompleted: async () => {
+          onPaymentCompleted: async (result) => {
+            if (!isAdyenPaymentSuccess(result?.resultCode)) return;
             try {
               await axios.post(
                 `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}/confirm-payment`,
-                {}
+                {
+                  resultCode: result?.resultCode || 'Authorised',
+                  pspReference: result?.pspReference,
+                }
               );
               window.location.href = `${base}/gift-cards/confirm/${purchaseId}`;
             } catch {
               setPayMsg(t('shopGiftCardConfirmPending'));
             }
+          },
+          onPaymentFailed: (result) => {
+            const code = String(result?.resultCode || '').toLowerCase();
+            setPayMsg(
+              code === 'cancelled'
+                ? t('shopPaymentCancelledMsg')
+                : t('shopPaymentFailedMsg') || t('actionFailed')
+            );
           },
           onError: (err) =>
             setPayMsg(formatAdyenError(err, 'dropin', 'merchant') || t('actionFailed')),

@@ -3,6 +3,7 @@ import type { Permission } from '@/lib/permissions';
 import { clearWebPosStaffSession } from '@/lib/permissions';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import api from '@/lib/api';
+import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
 import { resetPrintAgentCloudRelayPairing } from '@/lib/print-agent';
 
 export interface User {
@@ -114,6 +115,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
   refreshSession: async () => {
+    if (typeof window !== 'undefined' && isShopCustomerSurface()) {
+      return;
+    }
     const token = get().token || localStorage.getItem('token');
     if (!token) return;
     try {

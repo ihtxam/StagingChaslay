@@ -2068,6 +2068,18 @@ router.post(
     try {
       const merchant = await resolveMerchant(req.params.slug);
       if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+
+      const isDemo = req.body?.demo === true;
+      if (!isDemo) {
+        const { isAdyenPaymentSuccess } = await import("@/lib/adyen-result-codes");
+        const resultCode = String(req.body?.resultCode || "").trim();
+        if (!isAdyenPaymentSuccess(resultCode)) {
+          return res.status(400).json({
+            error: `Payment not authorised (${resultCode || "unknown"})`,
+          });
+        }
+      }
+
       const result = await ShopGiftCardService.confirmPurchasePayment(
         merchant.id,
         req.params.purchaseId,

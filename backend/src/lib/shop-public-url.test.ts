@@ -91,7 +91,7 @@ assert.equal(
     origin: "https://shop.chaslay.com",
     shopPath: "/demo",
   }),
-  "https://shop.chaslay.com/demo/gift-cards/confirm/gc-1?paid=1"
+  "https://shop.chaslay.com/demo/gift-cards/confirm/gc-1"
 );
 
 assert.match(

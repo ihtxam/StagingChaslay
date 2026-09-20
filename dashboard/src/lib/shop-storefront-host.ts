@@ -3,6 +3,21 @@
 const PANEL_PREFIXES = ['app.', 'admin.', 'api.', 'pay.', 'status.'];
 const PLATFORM_SUBDOMAINS = new Set(['app', 'admin', 'api', 'order', 'shop', 'pay', 'status', 'www']);
 
+const SHOP_CUSTOMER_SEGMENTS =
+  'menu|checkout|order|account|gift-cards|gift|reservations|table|register|forgot-password|pages';
+
+/** True when the current URL is a customer shop surface (not merchant panel). */
+export function isShopCustomerSurface(
+  pathname = typeof window !== 'undefined' ? window.location.pathname : '',
+  hostname = typeof window !== 'undefined' ? window.location.hostname : ''
+): boolean {
+  const path = String(pathname || '');
+  if (/^\/shop\/[^/]+(\/|$)/.test(path)) return true;
+  if (new RegExp(`/(?:${SHOP_CUSTOMER_SEGMENTS})(?:/|$)`).test(path)) return true;
+  if (new RegExp(`^/[^/]+/(?:${SHOP_CUSTOMER_SEGMENTS})(?:/|$)`).test(path)) return true;
+  return isShopStorefrontHost(hostname, path);
+}
+
 export function isShopStorefrontHost(
   hostname = typeof window !== 'undefined' ? window.location.hostname : '',
   pathname = typeof window !== 'undefined' ? window.location.pathname : ''

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { User } from 'lucide-react';
 import { resolveShopKey, loadCustomerToken, shopBasePath } from '@/lib/shop-cart';
@@ -7,46 +7,62 @@ import { useI18n } from '@/lib/i18n';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopGiftCardVoucher from '@/components/shop/ShopGiftCardVoucher';
 
+type PurchaseView = {
+  id: string;
+  amount: string;
+  deliveryType?: string;
+  recipientEmail?: string;
+  recipientName?: string | null;
+  message?: string | null;
+  paymentStatus?: string;
+  shippingAddress?: string | null;
+  shippingZip?: string | null;
+  shippingCity?: string | null;
+  cardCode?: string | null;
+  cardBalance?: string | null;
+  qrPayload?: string | null;
+  barcodePayload?: string | null;
+};
+
 export default function GiftCardConfirmPage() {
   const { t } = useI18n();
   const { merchantSlug, purchaseId = '' } = useParams<{
     merchantSlug?: string;
     purchaseId?: string;
   }>();
-  const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const base = shopBasePath(shopKey);
   const accountPath = `${base}/account`.replace(/\/+/g, '/');
+  const giftCardsPath = `${base}/gift-cards`.replace(/\/+/g, '/');
   const loggedIn = !!loadCustomerToken(shopKey);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<PurchaseView | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!shopKey || !purchaseId) return;
-    const run = async () => {
-      try {
-        if (searchParams.get('paid') === '1') {
-          try {
-            await axios.post(
-              `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}/confirm-payment`,
-              {}
-            );
-          } catch {
-            /* may already be confirmed */
-          }
-        }
-        const res = await axios.get(
-          `/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}`
-        );
-        setData(res.data?.purchase);
-      } catch (err: any) {
-        setError(err?.response?.data?.error || t('loadFailed'));
-      }
-    };
-    void run();
-  }, [shopKey, purchaseId, searchParams, t]);
+    try {
+      const res = await axios.get(`/api/shop/${shopKey}/gift-cards/purchase/${purchaseId}`);
+      setData(res.data?.purchase);
+      setError('');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || t('loadFailed'));
+    }
+  }, [shopKey, purchaseId, t]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!data || data.paymentStatus === 'completed' || data.paymentStatus === 'failed') return;
+    const poll = window.setInterval(() => void load(), 3000);
+    return () => window.clearInterval(poll);
+  }, [data?.paymentStatus, load]);
 
   const isPhysical = data?.deliveryType === 'physical';
+  const isPaid = data?.paymentStatus === 'completed';
+  const isFailed = data?.paymentStatus === 'failed' || data?.paymentStatus === 'cancelled';
+  const isPending = !!data && !isPaid && !isFailed;
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-stone-900">
@@ -58,7 +74,40 @@ export default function GiftCardConfirmPage() {
       />
       <main className="shop-page-content max-w-lg py-12">
         {error && <p className="text-center text-red-600">{error}</p>}
-        {data && (
+
+        {isFailed && (
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-2xl">
+              !
+            </div>
+            <h1 className="text-2xl font-semibold mb-2">{t('shopPaymentCancelled')}</h1>
+            <p className="text-stone-600 mb-6">{t('shopPaymentCancelledMsg')}</p>
+            <Link
+              to={giftCardsPath}
+              className="inline-flex px-6 py-3 rounded-full bg-stone-900 text-white font-medium"
+            >
+              {t('shopGiftCardTitle')} →
+            </Link>
+          </div>
+        )}
+
+        {isPending && (
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-stone-100 text-stone-600 flex items-center justify-center text-2xl">
+              …
+            </div>
+            <h1 className="text-2xl font-semibold mb-2">{t('shopGiftCardPayment')}</h1>
+            <p className="text-stone-600 mb-6">{t('shopGiftCardConfirmPending')}</p>
+            <Link
+              to={giftCardsPath}
+              className="inline-flex px-6 py-3 rounded-full border border-stone-300 bg-white font-medium text-stone-900"
+            >
+              {t('shopGiftCardTitle')}
+            </Link>
+          </div>
+        )}
+
+        {isPaid && data && (
           <>
             <div className="text-center mb-6">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl">
@@ -122,6 +171,7 @@ export default function GiftCardConfirmPage() {
             </div>
           </>
         )}
+
         {!data && !error && <p className="text-center text-stone-500">…</p>}
       </main>
     </div>

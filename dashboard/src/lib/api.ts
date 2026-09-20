@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
 
 /** Prefer same-origin /api in production; Vite dev proxies /api on any port. */
 export function resolveApiBaseUrl(): string {
@@ -123,11 +124,8 @@ api.interceptors.response.use(
       if (reqUrl.includes('/staff/verify-pin')) {
         return Promise.reject(error);
       }
-      // Online shop checkout uses its own customer token; don't redirect to staff login.
-      const isShopCustomerPath =
-        /\/(menu|checkout|order|account)(\/|$)/.test(path) ||
-        /\/shop\/[^/]+\/(menu|checkout|order|account)(\/|$)/.test(path);
-      if (isShopCustomerPath) {
+      // Online shop uses its own customer token; don't redirect to staff login.
+      if (isShopCustomerSurface(path, window.location.hostname)) {
         return Promise.reject(error);
       }
       if (
