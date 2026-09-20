@@ -383,7 +383,7 @@ const en: Dict = {
   posRetailTileMedium: 'Medium',
   posRetailTileLarge: 'Large',
   posRetailPaymentBar: 'Retail payment bar',
-  posRetailPaymentBarHint: 'Show Cash, Card, Pay, and More buttons at the bottom of the cart panel.',
+  posRetailPaymentBarHint: 'Show Cash, Card, Terminal, and More buttons at the bottom of the cart panel.',
   posRetailClearSearchAfterAdd: 'Clear search after add',
   posRetailClearSearchAfterAddHint: 'Reset the scan/search field after a barcode scan or product tap.',
   webPosRetailScanSearch: 'Scan or search [F10]',
