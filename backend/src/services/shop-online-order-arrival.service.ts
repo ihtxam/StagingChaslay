@@ -48,8 +48,9 @@ export async function runOnlineShopOrderArrivalSideEffects(
   try {
     const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
     await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-      printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-      printNotification: order.fulfillmentChannel !== "delivery",
+      // Kitchen / delivery slips print on staff accept — not a separate arrival alert ticket.
+      printDeliveryReceipt: false,
+      printNotification: false,
       printKitchen: kitchenOnArrival,
       printReceipt: opts?.printGuestReceipt === true && order.fulfillmentChannel !== "delivery",
       independentOfMasterAutoPrint: kitchenOnArrival,

@@ -16,7 +16,7 @@ import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isT
 import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
-import { printOrderCenterTickets } from '@/lib/order-center-print';
+import { printOrderCenterTicketsOnAccept } from '@/lib/order-center-print';
 
 type Props = {
   enabled: boolean;
@@ -283,7 +283,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
           ...(typeof prepMinutes === 'number' ? { etaAdjustMinutes: prepMinutes } : {}),
         });
         try {
-          await printOrderCenterTickets(order.id, order.orderSource, order.fulfillmentChannel);
+          await printOrderCenterTicketsOnAccept(order.id, order.orderSource, order.fulfillmentChannel);
         } catch {
           /* print optional */
         }

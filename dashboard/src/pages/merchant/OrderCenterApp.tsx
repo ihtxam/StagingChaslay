@@ -46,7 +46,7 @@ import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { isAndroidDevice } from '@/lib/print-agent-platform';
 import { probeDeviceBridgeHealth, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
-import { printOrderCenterTickets } from '@/lib/order-center-print';
+import { printOrderCenterTickets, printOrderCenterTicketsOnAccept } from '@/lib/order-center-print';
 import { printOrderCenterOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import OrderCenterPrintOptions from '@/components/merchant/OrderCenterPrintOptions';
@@ -404,7 +404,7 @@ export default function OrderCenterApp() {
         toast.success(t('orderAccepted'));
         if (opts?.printAfterAccept !== false) {
           try {
-            await printOrderCenterTickets(orderId, opts?.orderSource, opts?.fulfillmentChannel);
+            await printOrderCenterTicketsOnAccept(orderId, opts?.orderSource, opts?.fulfillmentChannel);
             toast.success(t('orderCenterPrinted'));
           } catch (e: unknown) {
             toastPrintError(e, t, 'orderCenterPrintFailed');
