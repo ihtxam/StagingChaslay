@@ -259,6 +259,7 @@ export default function GiftCardsPage() {
             logoUrl={merchant?.shopLogoUrl}
             shopKey={shopKey}
             loggedIn={loggedIn}
+            showGiftCards={!!settings?.enabled}
           />
           <div className="shop-page-content py-12 text-center">
             <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
@@ -280,6 +281,7 @@ export default function GiftCardsPage() {
         logoUrl={merchant?.shopLogoUrl}
         shopKey={shopKey}
         loggedIn={loggedIn}
+        showGiftCards={!!settings?.enabled}
       />
 
       <main className="shop-page-content max-w-3xl py-10">

@@ -32,6 +32,8 @@ export default function ChaslayStorefrontNavbar({
   const [contact, setContact] = useState(null);
   const [merchantDisplayName, setMerchantDisplayName] = useState(null);
   const [storeHours, setStoreHours] = useState(null);
+  const [giftCardsEnabled, setGiftCardsEnabled] = useState(false);
+  const [reservationsEnabled, setReservationsEnabled] = useState(false);
 
   useEffect(() => {
     if (!shopKey) {
@@ -64,6 +66,8 @@ export default function ChaslayStorefrontNavbar({
             city: m.city,
             country: m.country,
           });
+          setGiftCardsEnabled(!!m.giftCards?.enabled);
+          setReservationsEnabled(!!m.reservationsEnabled);
         }
         const navRows = navRes?.data?.data;
         if (Array.isArray(navRows)) {
@@ -121,6 +125,8 @@ export default function ChaslayStorefrontNavbar({
         accountPath={`${basePath}/account`.replace(/\/+/g, '/')}
         storeHours={storeHours}
         surface="shop"
+        giftCardsEnabled={giftCardsEnabled}
+        reservationsEnabled={reservationsEnabled}
       >
         <div className="chaslay-pagebuilder-root chaslay-storefront-page chaslay-navbar-only">
           <CraftEditor enabled={false} resolver={chaslayPageBuilderResolver}>

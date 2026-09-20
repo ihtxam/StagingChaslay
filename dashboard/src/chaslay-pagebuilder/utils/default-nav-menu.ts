@@ -1,6 +1,6 @@
 export type NavbarMenuItem = { label: string; link: string };
 
-/** Default storefront top bar — Home, Menu, Contact only. */
+/** Default storefront anchors — Home, Menu, Contact (contact is drawer-only on live shop). */
 export const DEFAULT_SMOOTH_SCROLL_MENU: NavbarMenuItem[] = [
   { label: 'Home', link: '#home' },
   { label: 'Menu', link: '#menu' },

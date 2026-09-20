@@ -14,6 +14,23 @@ const CONTACT_LABELS = new Set([
   'contatti',
   'contattaci',
 ]);
+const GIFT_CARD_LABELS = new Set([
+  'gift card',
+  'gift cards',
+  'carte cadeau',
+  'cartes cadeau',
+  'geschenkkarte',
+  'geschenkkarten',
+  'buono regalo',
+]);
+const RESERVATIONS_LABELS = new Set([
+  'reservations',
+  'reservation',
+  'réservations',
+  'reservierungen',
+  'reservationen',
+  'prenotazioni',
+]);
 
 function normLabel(label: string | undefined | null): string {
   return String(label || '')
@@ -35,16 +52,74 @@ export function isStorefrontContactNavItem(item: NavbarMenuItem): boolean {
   return isContactNavLink(item.link) || CONTACT_LABELS.has(normLabel(item.label));
 }
 
+export function isStorefrontGiftCardNavItem(item: NavbarMenuItem): boolean {
+  const link = String(item.link || '').toLowerCase();
+  return link.includes('gift-card') || GIFT_CARD_LABELS.has(normLabel(item.label));
+}
+
+export function isStorefrontReservationsNavItem(item: NavbarMenuItem): boolean {
+  const link = String(item.link || '').toLowerCase();
+  return link.includes('reservation') || RESERVATIONS_LABELS.has(normLabel(item.label));
+}
+
+export type StorefrontTopNavOptions = {
+  showGiftCards?: boolean;
+  showReservations?: boolean;
+  giftCardLabel?: string;
+  reservationsLabel?: string;
+};
+
 /**
- * Public homepage + shop top bar: keep only Home, Menu, Contact.
- * Drops About / À propos, Reviews / Avis, gallery, hours, and extra CMS pages.
+ * Public homepage + shop top bar: Home, Menu, optional Gift Card / Reservations.
+ * Contact and other CMS sections belong in the mobile drawer only.
  */
-export function constrainStorefrontTopNav(items: NavbarMenuItem[] | undefined | null): NavbarMenuItem[] {
+export function buildStorefrontTopbarItems(
+  items: NavbarMenuItem[] | undefined | null,
+  opts?: StorefrontTopNavOptions
+): NavbarMenuItem[] {
   const list = Array.isArray(items) ? items : [];
   const home = list.find(isStorefrontHomeNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[0];
   const menu = list.find(isStorefrontMenuNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[1];
+  const topbar: NavbarMenuItem[] = [home, menu];
+  if (opts?.showGiftCards) {
+    const existing = list.find(isStorefrontGiftCardNavItem);
+    topbar.push(existing || { label: opts.giftCardLabel || 'Gift Card', link: '/gift-cards' });
+  }
+  if (opts?.showReservations) {
+    const existing = list.find(isStorefrontReservationsNavItem);
+    topbar.push(existing || { label: opts.reservationsLabel || 'Reservations', link: '/reservations' });
+  }
+  return topbar;
+}
+
+/** Items that stay in the hamburger menu (contact, about, gallery, extra CMS pages, …). */
+export function buildStorefrontDrawerExtras(
+  items: NavbarMenuItem[] | undefined | null,
+  topbar: NavbarMenuItem[]
+): NavbarMenuItem[] {
+  const list = Array.isArray(items) ? items : [];
+  const topKeys = new Set(topbar.map((item) => `${item.link}::${normLabel(item.label)}`));
+  const isTopbar = (item: NavbarMenuItem) =>
+    topKeys.has(`${item.link}::${normLabel(item.label)}`) ||
+    isStorefrontHomeNavItem(item) ||
+    isStorefrontMenuNavItem(item) ||
+    isStorefrontGiftCardNavItem(item) ||
+    isStorefrontReservationsNavItem(item);
+
+  const extras = list.filter((item) => !isTopbar(item));
   const contact = list.find(isStorefrontContactNavItem) || DEFAULT_SMOOTH_SCROLL_MENU[2];
-  return [home, menu, contact];
+  if (!extras.some(isStorefrontContactNavItem) && !isTopbar(contact)) {
+    extras.unshift(contact);
+  }
+  return extras;
+}
+
+/** @deprecated Use buildStorefrontTopbarItems — kept for existing imports during migration. */
+export function constrainStorefrontTopNav(
+  items: NavbarMenuItem[] | undefined | null,
+  opts?: StorefrontTopNavOptions
+): NavbarMenuItem[] {
+  return buildStorefrontTopbarItems(items, opts);
 }
 
 /** Build header links from published builder pages (homepage + extra pages + menu). */

@@ -4,7 +4,6 @@ import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
-import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import {
   emptyOpenPageBlocks,
   isOpenPageBlocks,
@@ -124,8 +123,6 @@ export default function ShopHomePage() {
       currency: 'CHF',
     }).format(n);
 
-  const showReservationsNav = Boolean(merchant?.reservationsEnabled);
-
   if (loading) {
     return (
       <ShopThemeShell site={shopSite} pageTitle={seoTitle} pageDescription={seoDescription}>
@@ -165,6 +162,8 @@ export default function ShopHomePage() {
         merchantName={merchant?.name}
         logoUrl={merchant?.shopLogoUrl}
         shopKey={shopKey}
+        showGiftCards={!!merchant?.giftCards?.enabled}
+        showReservations={!!merchant?.reservationsEnabled}
       />
 
       <div className="cms-homepage flex flex-col pb-6">
@@ -190,7 +189,6 @@ export default function ShopHomePage() {
         )}
       </div>
 
-      <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />
     </ShopThemeShell>
   );
 }

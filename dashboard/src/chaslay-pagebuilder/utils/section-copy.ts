@@ -35,6 +35,8 @@ const PHRASES: Record<string, LocaleMap> = {
   Team: { fr: 'Équipe', de: 'Team', it: 'Team' },
   Blog: { fr: 'Blog', de: 'Blog', it: 'Blog' },
   Reservations: { fr: 'Réservations', de: 'Reservierungen', it: 'Prenotazioni' },
+  'Gift Card': { fr: 'Carte cadeau', de: 'Geschenkkarte', it: 'Buono regalo' },
+  'Gift cards': { fr: 'Cartes cadeau', de: 'Geschenkkarten', it: 'Buoni regalo' },
   Map: { fr: 'Plan', de: 'Karte', it: 'Mappa' },
   Footer: { fr: 'Pied de page', de: 'Fußzeile', it: 'Piè di pagina' },
   'Quick Links': { fr: 'Liens rapides', de: 'Schnellzugriff', it: 'Link rapidi' },
