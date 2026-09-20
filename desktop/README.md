@@ -39,6 +39,8 @@ npm run build:nsis
 # Output: src-tauri/target/release/bundle/nsis/
 ```
 
+CI also builds on every `main` push that touches `desktop/` — see `.github/workflows/build-chaslay-pos-windows.yml`. Download the `chaslay-pos-windows-*` artifact from GitHub Actions (NSIS `.exe`, ~5–15 MB).
+
 Release builds open `https://app.chaslay.com/login` unless `CHASLAY_POS_URL` is set at compile/runtime.
 
 ## Behaviour
