@@ -19,16 +19,18 @@ export default function ShopStorefrontFooter({
   const shopKey = resolveShopKey(merchantSlug);
   const menuPath = `${basePath}/menu`.replace(/\/+/g, '/');
 
+  const shellClass = `shop-full-bleed mt-auto w-full ${className}`.trim();
+
   if (shopKey) {
     return (
-      <div className={className}>
+      <div className={shellClass}>
         <ShopFooter shopKey={shopKey} />
       </div>
     );
   }
 
   return (
-    <footer className={`shop-storefront-footer border-t border-stone-200 bg-white ${className}`}>
+    <footer className={`shop-storefront-footer border-t border-stone-200 bg-white ${shellClass}`}>
       <div className="shop-page-content py-8 pb-6">
         {merchantName ? (
           <p className="text-base font-bold tracking-tight text-stone-900">{merchantName}</p>

@@ -4,7 +4,6 @@ import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
-import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import {
   emptyOpenPageBlocks,
@@ -189,7 +188,6 @@ export default function ShopHomePage() {
         ) : (
           <div dangerouslySetInnerHTML={{ __html: extractOpenPageBody(fullHtml) }} />
         )}
-        <ShopStorefrontFooter basePath={base} merchantName={merchant?.name} />
       </div>
 
       <ShopFloatingActions basePath={base} showReservations={showReservationsNav} />

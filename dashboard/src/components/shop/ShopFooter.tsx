@@ -73,8 +73,8 @@ export default function ShopFooter({ shopKey }: Props) {
     'text-sm text-[#666666] hover:text-stone-900 transition-colors underline-offset-2 hover:underline';
 
   return (
-    <footer className="mt-auto border-t border-stone-200 bg-white text-stone-700">
-      <div className="mx-auto max-w-6xl px-6 py-10 sm:px-6 lg:px-8">
+    <footer className="shop-global-footer mt-auto w-full border-t border-stone-200 bg-white text-stone-700">
+      <div className="mx-auto w-full max-w-6xl px-6 py-10 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-6 border-b border-stone-200 pb-8 lg:grid-cols-3 lg:gap-8">
           <div>
             <h2 className="text-base font-bold text-stone-900">{info.name}</h2>

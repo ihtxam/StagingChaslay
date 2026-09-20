@@ -40,7 +40,6 @@ import ShopComboWizard, {
 import { Bike, Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
 import { isLocale, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
-import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopTopShell from '@/components/shop/ShopTopShell';
 import ShopFloatingActions from '@/components/shop/ShopFloatingActions';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
@@ -2145,11 +2144,6 @@ export default function OrderingPage() {
         zones={deliveryZones}
       />
 
-      <ShopStorefrontFooter
-        basePath={shopBasePath(shopKey, locSlug)}
-        merchantName={merchant?.name}
-        className="mt-10"
-      />
     </div>
     </ShopThemeShell>
   );

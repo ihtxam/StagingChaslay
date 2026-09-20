@@ -2,7 +2,11 @@ import { useMemo } from 'react';
 import { useStorefront } from '../StorefrontContext';
 import { resolveTranslatedProp } from './resolve-translated-prop';
 import { translateSectionCopy } from './section-copy';
-import { constrainStorefrontTopNav, resolveNavbarMenuItems, type NavbarMenuItem } from './navbar-site-nav';
+import {
+  constrainStorefrontTopNav,
+  resolveNavbarMenuItems,
+  type NavbarMenuItem,
+} from './navbar-site-nav';
 
 export function useNavbarDisplay(
   props: Record<string, unknown>,
@@ -23,11 +27,13 @@ export function useNavbarDisplay(
       };
     });
     if (!isStorefront) return translated;
+    // Builder-configured links (Gallery, hours, etc.) must appear on the live shop.
+    if (configuredItems?.length) return translated;
     return constrainStorefrontTopNav(translated).map((item) => ({
       ...item,
       label: translateSectionCopy(item.label, locale, defaultLanguage),
     }));
-  }, [configuredItems, sitePages, useSitePagesNav, isStorefront, props, locale, defaultLanguage]);
+  }, [configuredItems, configuredItems?.length, sitePages, useSitePagesNav, isStorefront, props, locale, defaultLanguage]);
   const t = (key: string) => {
     const resolved = resolveTranslatedProp(props, key, locale, defaultLanguage);
     const base = typeof props[key] === 'string' ? (props[key] as string) : '';

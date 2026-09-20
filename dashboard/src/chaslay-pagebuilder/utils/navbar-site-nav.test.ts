@@ -26,6 +26,10 @@ assert.deepEqual(
   constrained.map((i) => i.link),
   ['#home', '#menu', '#contact']
 );
+assert.ok(
+  !constrained.some((i) => i.link === '#gallery'),
+  'fallback constrain still drops extra builder sections'
+);
 
 const fr = constrainStorefrontTopNav([
   { label: 'Accueil', link: '#home' },

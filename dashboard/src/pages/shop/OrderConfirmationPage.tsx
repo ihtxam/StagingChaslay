@@ -24,7 +24,6 @@ import {
 } from '@/lib/adyen-checkout';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
-import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
 
@@ -394,7 +393,6 @@ export default function OrderConfirmationPage() {
             {t('shopBackToMenu')}
           </Link>
         </div>
-        <ShopStorefrontFooter basePath={basePath} className="mt-auto" />
       </ShopThemeShell>
     );
   }
@@ -706,11 +704,6 @@ export default function OrderConfirmationPage() {
           </div>
         </section>
 
-        <ShopStorefrontFooter
-          basePath={basePath}
-          merchantName={order.store?.name}
-          className="mt-10"
-        />
           </div>
         </div>
       </div>
