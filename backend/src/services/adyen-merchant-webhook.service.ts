@@ -177,6 +177,16 @@ export class AdyenMerchantWebhookService {
     }
   }
 
+  private static purchaseIdFromReference(
+    merchantId: string,
+    merchantReference: string,
+  ): string | null {
+    const ref = merchantReference.trim();
+    if (!ref) return null;
+    if (ref.startsWith(`${merchantId}-`)) return ref.slice(merchantId.length + 1);
+    return null;
+  }
+
   private static async findOrderByReference(merchantId: string, merchantReference: string) {
     const db = getDb();
     const ref = merchantReference.trim();
@@ -187,7 +197,7 @@ export class AdyenMerchantWebhookService {
     });
     if (byClientId) return byClientId;
 
-    const prefixed = ref.startsWith(`${merchantId}-`) ? ref.slice(merchantId.length + 1) : null;
+    const prefixed = this.purchaseIdFromReference(merchantId, ref);
     if (prefixed) {
       const byId = await db.query.orders.findFirst({
         where: and(eq(schema.orders.merchantId, merchantId), eq(schema.orders.id, prefixed)),
@@ -196,6 +206,21 @@ export class AdyenMerchantWebhookService {
     }
 
     return null;
+  }
+
+  private static async findGiftCardPurchaseByReference(
+    merchantId: string,
+    merchantReference: string,
+  ) {
+    const purchaseId = this.purchaseIdFromReference(merchantId, merchantReference);
+    if (!purchaseId) return null;
+    const db = getDb();
+    return db.query.giftCardPurchases.findFirst({
+      where: and(
+        eq(schema.giftCardPurchases.merchantId, merchantId),
+        eq(schema.giftCardPurchases.id, purchaseId),
+      ),
+    });
   }
 
   private static async recordAuthorisedPayment(
@@ -219,79 +244,90 @@ export class AdyenMerchantWebhookService {
     }
 
     const order = await this.findOrderByReference(merchantId, merchantReference);
-    if (order) {
-      const effectiveAmount = amount > 0 ? amount : Number(order.total) || 0;
-      try {
-        await AdyenService.recordPaymentTransaction(
+    if (!order) {
+      const purchase = await this.findGiftCardPurchaseByReference(merchantId, merchantReference);
+      if (purchase) {
+        if (purchase.paymentStatus === "completed") return;
+        const { ShopGiftCardService } = await import("@/services/shop-gift-card.service");
+        await ShopGiftCardService.confirmPurchasePayment(
           merchantId,
-          order.id,
-          effectiveAmount,
-          paymentMethod,
-          pspReference || `auth-${Date.now()}`,
-          "captured",
-          { currency },
+          purchase.id,
+          pspReference || purchase.adyenReference || undefined,
         );
-      } catch (err) {
-        console.warn("[adyen-webhook] recordPaymentTransaction failed:", err);
+        return;
       }
-
-      if (pspReference) {
-        const merchant = await db.query.merchants.findFirst({
-          where: eq(schema.merchants.id, merchantId),
-        });
-        const isAwaitingShopCard =
-          order.orderType === "web_shop" &&
-          order.paymentStatus === "awaiting_payment" &&
-          String(order.paymentMethod || "").toLowerCase() === "card" &&
-          (order.status === "awaiting_payment" ||
-            order.status === "pending" ||
-            order.status === "pending_approval");
-        if (isAwaitingShopCard && merchant) {
-          const { finalizePaidOnlineShopCardOrder } = await import(
-            "@/services/shop-online-order-arrival.service"
+      if (merchantReference) {
+        try {
+          await AdyenService.recordPaymentTransactionByClientRef(
+            merchantId,
+            merchantReference,
+            amount,
+            paymentMethod,
+            pspReference || `auth-${Date.now()}`,
+            "captured",
+            { currency },
           );
-          await finalizePaidOnlineShopCardOrder(merchant, order, {
-            pspReference,
-            adyenPaymentMethod: paymentMethod,
-          });
-        } else {
-          await db
-            .update(schema.orders)
-            .set({
-              adyenReference: pspReference,
-              paymentStatus:
-                order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
-            })
-            .where(eq(schema.orders.id, order.id));
-          if (merchant) {
-            try {
-              const { ShopLoyaltyService } = await import("@/services/shop-loyalty.service");
-              const latest = await db.query.orders.findFirst({
-                where: eq(schema.orders.id, order.id),
-              });
-              if (latest) await ShopLoyaltyService.earnForPaidOrder(merchant, latest);
-            } catch (earnErr) {
-              console.error("[adyen-webhook] loyalty earn failed:", earnErr);
-            }
-          }
+        } catch (err) {
+          console.warn("[adyen-webhook] recordPaymentTransactionByClientRef failed:", err);
         }
       }
       return;
     }
 
-    if (merchantReference) {
-      try {
-        await AdyenService.recordPaymentTransactionByClientRef(
-          merchantId,
-          merchantReference,
-          amount,
-          paymentMethod,
-          pspReference || `auth-${Date.now()}`,
-          "captured",
-          { currency },
+    const effectiveAmount = amount > 0 ? amount : Number(order.total) || 0;
+    try {
+      await AdyenService.recordPaymentTransaction(
+        merchantId,
+        order.id,
+        effectiveAmount,
+        paymentMethod,
+        pspReference || `auth-${Date.now()}`,
+        "captured",
+        { currency },
+      );
+    } catch (err) {
+      console.warn("[adyen-webhook] recordPaymentTransaction failed:", err);
+    }
+
+    if (pspReference) {
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      const isAwaitingShopCard =
+        order.orderType === "web_shop" &&
+        order.paymentStatus === "awaiting_payment" &&
+        String(order.paymentMethod || "").toLowerCase() === "card" &&
+        (order.status === "awaiting_payment" ||
+          order.status === "pending" ||
+          order.status === "pending_approval");
+      if (isAwaitingShopCard && merchant) {
+        const { finalizePaidOnlineShopCardOrder } = await import(
+          "@/services/shop-online-order-arrival.service"
         );
-      } catch (err) {
-        console.warn("[adyen-webhook] recordPaymentTransactionByClientRef failed:", err);
+        await finalizePaidOnlineShopCardOrder(merchant, order, {
+          pspReference,
+          adyenPaymentMethod: paymentMethod,
+        });
+      } else {
+        await db
+          .update(schema.orders)
+          .set({
+            adyenReference: pspReference,
+            paymentStatus:
+              order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
+          })
+          .where(eq(schema.orders.id, order.id));
+        if (merchant) {
+          try {
+            const { ShopLoyaltyService } = await import("@/services/shop-loyalty.service");
+            const latest = await db.query.orders.findFirst({
+              where: eq(schema.orders.id, order.id),
+            });
+            if (latest) await ShopLoyaltyService.earnForPaidOrder(merchant, latest);
+          } catch (earnErr) {
+            console.error("[adyen-webhook] loyalty earn failed:", earnErr);
+          }
+        }
       }
     }
   }
@@ -338,14 +374,23 @@ export class AdyenMerchantWebhookService {
     merchantId: string,
     merchantReference: string,
   ): Promise<void> {
-    const order = await this.findOrderByReference(merchantId, merchantReference);
-    if (!order) return;
-    if (order.paymentStatus === "completed" || order.paymentStatus === "paid") return;
-
     const db = getDb();
+    const order = await this.findOrderByReference(merchantId, merchantReference);
+    if (order) {
+      if (order.paymentStatus === "completed" || order.paymentStatus === "paid") return;
+      await db
+        .update(schema.orders)
+        .set({ paymentStatus: "failed" })
+        .where(eq(schema.orders.id, order.id));
+      return;
+    }
+
+    const purchase = await this.findGiftCardPurchaseByReference(merchantId, merchantReference);
+    if (!purchase) return;
+    if (purchase.paymentStatus === "completed") return;
     await db
-      .update(schema.orders)
-      .set({ paymentStatus: "failed" })
-      .where(eq(schema.orders.id, order.id));
+      .update(schema.giftCardPurchases)
+      .set({ paymentStatus: "failed", updatedAt: new Date() })
+      .where(eq(schema.giftCardPurchases.id, purchase.id));
   }
 }
