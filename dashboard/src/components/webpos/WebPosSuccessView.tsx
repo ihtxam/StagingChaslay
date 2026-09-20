@@ -24,6 +24,8 @@ type Props = {
   onOpenDrawer?: () => void;
   onBack?: () => void;
   compact?: boolean;
+  /** Retail cash UX: total/change left, QR + actions right. */
+  twoColumn?: boolean;
 };
 
 type IconActionProps = {
@@ -140,6 +142,7 @@ export default function WebPosSuccessView({
   onOpenDrawer,
   onBack,
   compact = false,
+  twoColumn = false,
 }: Props) {
   const { t } = useI18n();
   const iconSize = compact ? 20 : 22;
@@ -148,6 +151,93 @@ export default function WebPosSuccessView({
   const splitTotal = isSplit
     ? splitParts!.reduce((sum, part) => sum + part.amount, 0)
     : amount;
+  const displayAmount = isSplit ? splitTotal : amount;
+  const showTwoColumn = twoColumn && !isSplit;
+
+  const actionButtons = (
+    <>
+      {onBack ? (
+        <IconActionButton
+          compact={compact}
+          label={t('webPosBack')}
+          onClick={onBack}
+          icon={<ChevronLeft size={iconSize} strokeWidth={2} />}
+        />
+      ) : null}
+      {!isSplit && onPrint ? (
+        <IconActionButton
+          compact={compact}
+          label={t('webPosPrint')}
+          onClick={onPrint}
+          icon={<Printer size={iconSize} strokeWidth={2} />}
+        />
+      ) : null}
+      {onOpenDrawer ? (
+        <IconActionButton
+          compact={compact}
+          label={t('webPosOpenDrawer')}
+          onClick={onOpenDrawer}
+          icon={<Vault size={iconSize} strokeWidth={2} />}
+        />
+      ) : null}
+      {onSendReceipt ? (
+        <IconActionButton
+          compact={compact}
+          label={t('webPosSendReceipt')}
+          onClick={onSendReceipt}
+          icon={<Send size={iconSize} strokeWidth={2} />}
+        />
+      ) : null}
+      <IconActionButton
+        compact={compact}
+        primary
+        label={t('webPosContinue')}
+        onClick={onContinue}
+        icon={<ArrowRight size={continueIconSize} strokeWidth={2.25} />}
+      />
+    </>
+  );
+
+  if (showTwoColumn) {
+    return (
+      <div
+        className={`flex min-h-0 flex-1 flex-col bg-white ${
+          compact
+            ? 'rounded-3xl border border-stone-200 shadow-2xl'
+            : ''
+        }`}
+      >
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
+          <div className="flex flex-col items-center justify-center border-b border-stone-100 px-6 py-8 text-center md:border-b-0 md:border-r">
+            <CheckCircle2 size={compact ? 72 : 64} className="text-emerald-500" strokeWidth={1.5} />
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
+              {t('webPosAmountPaid')}
+            </p>
+            <AmountDisplay amount={displayAmount} compact={compact} />
+            {changeDue != null && changeDue > 0 ? (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">
+                  {t('webPosChangeDue')}
+                </p>
+                <p className={`mt-1 font-bold tabular-nums text-emerald-800 ${compact ? 'text-3xl' : 'text-2xl'}`}>
+                  CHF {changeDue.toFixed(2)}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
+            {receiptUrl ? (
+              <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
+            ) : null}
+            <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
+              {actionButtons}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -257,45 +347,7 @@ export default function WebPosSuccessView({
           compact ? 'mt-8 gap-4' : 'mt-10 gap-5'
         }`}
       >
-        {onBack ? (
-          <IconActionButton
-            compact={compact}
-            label={t('webPosBack')}
-            onClick={onBack}
-            icon={<ChevronLeft size={iconSize} strokeWidth={2} />}
-          />
-        ) : null}
-        {!isSplit && onPrint ? (
-          <IconActionButton
-            compact={compact}
-            label={t('webPosPrint')}
-            onClick={onPrint}
-            icon={<Printer size={iconSize} strokeWidth={2} />}
-          />
-        ) : null}
-        {onOpenDrawer ? (
-          <IconActionButton
-            compact={compact}
-            label={t('webPosOpenDrawer')}
-            onClick={onOpenDrawer}
-            icon={<Vault size={iconSize} strokeWidth={2} />}
-          />
-        ) : null}
-        {onSendReceipt ? (
-          <IconActionButton
-            compact={compact}
-            label={t('webPosSendReceipt')}
-            onClick={onSendReceipt}
-            icon={<Send size={iconSize} strokeWidth={2} />}
-          />
-        ) : null}
-        <IconActionButton
-          compact={compact}
-          primary
-          label={t('webPosContinue')}
-          onClick={onContinue}
-          icon={<ArrowRight size={continueIconSize} strokeWidth={2.25} />}
-        />
+        {actionButtons}
       </div>
     </div>
   );

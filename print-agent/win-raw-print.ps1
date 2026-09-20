@@ -5,7 +5,10 @@ param(
     # Prefer -PrinterNameFile (UTF-8) so accents/dashes are not mangled via argv/console CP.
     [string]$PrinterName = "",
 
-    [string]$PrinterNameFile = ""
+    [string]$PrinterNameFile = "",
+
+    # Cash drawer pulse only — never append BT cut trailer or paced drain sleeps.
+    [switch]$DrawerKick
 )
 
 $ErrorActionPreference = "Stop"
@@ -265,12 +268,13 @@ function Write-RawChunks {
 function Send-RawToPrinter {
     param(
         [string]$Printer,
-        [byte[]]$Data
+        [byte[]]$Data,
+        [switch]$DrawerKick
     )
 
     $portName = Get-WinPrinterPortName -Printer $Printer
     $isComPort = Test-ComSerialPort -PortName $portName
-    $paced = Test-NeedsPacedWrite -Port $portName -Printer $Printer -ByteCount $Data.Length
+    $paced = -not $DrawerKick -and (Test-NeedsPacedWrite -Port $portName -Printer $Printer -ByteCount $Data.Length)
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
@@ -287,7 +291,7 @@ function Send-RawToPrinter {
     Write-PrintLog "spooler printer='$Printer' port='$portName' bytes=$($Data.Length) body=$($body.Length) chunk=$writeChunk delayMs=$writeDelay paced=$paced com=$isComPort"
 
     $docInfo = New-Object RawPrinterHelper+DOCINFO
-    $docInfo.pDocName = "Reborn Receipt"
+    $docInfo.pDocName = if ($DrawerKick) { "Reborn Drawer" } else { "Reborn Receipt" }
     $docInfo.pDataType = "RAW"
 
     $handle = [IntPtr]::Zero
@@ -337,6 +341,6 @@ function Send-RawToPrinter {
     }
 }
 
-Send-RawToPrinter -Printer $PrinterName -Data $bytes
+Send-RawToPrinter -Printer $PrinterName -Data $bytes -DrawerKick:$DrawerKick
 # Console OutputEncoding is UTF-8 above so Node receives accents intact.
 Write-Output $PrinterName

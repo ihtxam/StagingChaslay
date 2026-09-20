@@ -79,6 +79,9 @@ type Props = {
   pointsDiscount?: number;
   /** Public order number and/or kitchen ticket, e.g. `WP-5M8RGFQHJT / #1658`. */
   orderRef?: string | null;
+  /** Retail: Cash opens Swiss note modal instead of inline tender. */
+  retailCashPay?: boolean;
+  onRetailCashPay?: () => void;
 };
 
 function newPayId() {
@@ -127,6 +130,8 @@ export default function WebPosCheckoutView({
   pointsRedeemed = 0,
   pointsDiscount = 0,
   orderRef,
+  retailCashPay = false,
+  onRetailCashPay,
 }: Props) {
   const { t } = useI18n();
   const [buffer, setBuffer] = useState('');
@@ -433,6 +438,11 @@ export default function WebPosCheckoutView({
   const applyMethod = (method: PosPaymentMethod) => {
     if (busy) return;
     setPaymentFocusDismissed(false);
+
+    if (method === 'cash' && retailCashPay && onRetailCashPay) {
+      onRetailCashPay();
+      return;
+    }
 
     if (method === 'invoice' || method === 'pay_later') {
       const id = selectedPaymentId || payments[0]?.id || newPayId();

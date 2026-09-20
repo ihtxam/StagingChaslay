@@ -1055,8 +1055,8 @@ export async function printNiimbotLabelViaAgent(opts: {
   }
 }
 
-/** ESC/POS initialize + cash drawer kick (pin 2): 1B 40 1B 70 00 19 FA */
-const DRAWER_KICK_BASE64 = 'G0AbcAAZ+g==';
+/** ESC/POS cash drawer kick (pin 2): 1B 70 00 19 FA — no init/feed/cut */
+const DRAWER_KICK_BASE64 = 'G3AAGfo=';
 
 /**
  * Open cash drawer via print agent.

@@ -387,6 +387,7 @@ import WebPosProductArea, {
 } from '@/components/webpos/WebPosProductArea';
 import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategorySidebar';
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
+import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
@@ -803,6 +804,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     () => bootActive?.ticketOrderNumber ?? null
   );
   const [expressSuccessOpen, setExpressSuccessOpen] = useState(false);
+  const [retailCashPayOpen, setRetailCashPayOpen] = useState(false);
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
   const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readStoredTextSize());
@@ -7236,6 +7238,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const runExpressPay = async (method: PosPaymentMethod) => {
+    if (method === 'cash' && isRetail) {
+      openRetailCashPay();
+      return;
+    }
     if (!cart.length || busy) return;
     if (!guardOfflineCheckout(method)) return;
     let whenForPay: FulfillmentWhen | undefined;
@@ -7284,6 +7290,59 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setExpressSuccessOpen(true);
     } catch (e: any) {
       logWebPosError('payment', 'Express pay failed', e, { autoSend: true });
+      toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openRetailCashPay = () => {
+    if (!cart.length || busy || paymentModalOpen) return;
+    if (!guardOfflineCheckout('cash')) return;
+    if (channel === 'delivery' && !selectedCustomer) {
+      setPendingPayMethod('cash');
+      setCustomerOpen(true);
+      return;
+    }
+    setRetailCashPayOpen(true);
+  };
+
+  const completeRetailCashPay = async (tendered: number, changeDue: number) => {
+    if (busy) return;
+    if (!guardOfflineCheckout('cash')) return;
+    let whenForPay: FulfillmentWhen | undefined;
+    if ((channel === 'delivery' || channel === 'takeaway') && !fulfillmentWhen) {
+      whenForPay = asapFulfillment();
+      setFulfillmentWhen(whenForPay);
+    }
+    const discExtras = checkoutBillDiscountExtras();
+    const paidTotal = totals.total;
+    const extras: CheckoutResult = {
+      method: 'cash',
+      discountPercent: discExtras.discountPercent,
+      discountAmount: discExtras.discountAmount,
+      tipAmount: 0,
+      roundingAmount: totals.rounding,
+      total: paidTotal,
+      amountTendered: roundMoney2(tendered),
+      changeDue: changeDue > 0 ? roundMoney2(changeDue) : 0,
+    };
+    setRetailCashPayOpen(false);
+    setBusy(true);
+    try {
+      await finalizeSale('cash', undefined, whenForPay, extras, false);
+      setSuccessInfo({
+        amount: paidTotal,
+        changeDue: changeDue > 0 ? roundMoney2(changeDue) : null,
+        orderNumber:
+          guestOrderNumber({
+            orderNumber: splitReceiptsRef.current[0]?.orderNumber || lastReceiptOrderNumber,
+          }) || null,
+        paymentMethod: paymentMethodLabel('cash', t),
+      });
+      setExpressSuccessOpen(true);
+    } catch (e: any) {
+      logWebPosError('payment', 'Retail cash pay failed', e, { autoSend: true });
       toast.error(e.response?.data?.error || e.message || t('webPosSaleFailed'));
     } finally {
       setBusy(false);
@@ -8385,7 +8444,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ? clientId
       : backendOrderId ||
         (await resolvePublishedReceiptRef(backendOrderId, clientId, ticket.orderNumber, {
-          maxWaitMs: 400,
+          maxWaitMs: 0,
         })) ||
         clientId;
     const receiptUrl = buildReceiptUrl(receiptRef);
@@ -9551,7 +9610,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (e.key === 'F1' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         if (enabledMethods.cash && cart.length && !busy && !paymentModalOpen) {
-          void runExpressPay('cash');
+          openRetailCashPay();
         }
       }
     };
@@ -10177,6 +10236,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             pointsDiscount={membershipCheckout.pointsDiscount}
             onCustomer={collectOrderRef ? undefined : () => setCustomerOpen(true)}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
+            retailCashPay={isRetail}
+            onRetailCashPay={openRetailCashPay}
             onSplit={
               !collectOrderRef && checkoutSettings.splitBillsEnabled && !splitQueue.length
                 ? () => {
@@ -10247,6 +10308,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onPrintPart={successSplitParts ? (id) => void printSuccessPart(id) : undefined}
             onPrintAll={successSplitParts ? () => void printSuccessAll() : undefined}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
+            twoColumn={isRetail}
             onSendReceipt={() => setSendReceiptOpen(true)}
             onContinue={() => {
               setSuccessInfo(null);
@@ -10377,8 +10439,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ) : (
           <div
             className={`flex min-h-0 flex-1 flex-col lg:flex-row ${
+              useRetailLayout ? 'webpos-retail-layout' : ''
+            } ${
               useRetailLayout
-                ? 'webpos-retail-layout'
+                ? ''
                 : cartSide === 'right'
                   ? 'lg:flex-row-reverse'
                   : ''
@@ -10399,7 +10463,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               className={
                 mobileCartOpen && isNarrowViewport
                   ? 'flex min-h-0 flex-1 flex-col'
-                  : 'hidden min-h-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:self-stretch'
+                  : `hidden min-h-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:self-stretch ${
+                      useRetailLayout
+                        ? cartSide === 'right'
+                          ? 'lg:order-3'
+                          : 'lg:order-2'
+                        : ''
+                    }`
               }
             >
               <WebPosCartPanel
@@ -10506,7 +10576,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   canCancelOrders &&
                   !!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen
                 }
-                dockSide={useRetailLayout ? 'right' : cartSide}
+                dockSide={cartSide}
                 showChannelTabs={showChannelTabs}
                 channelTabOptions={channelTabOptions}
                 kitchenEnabled={kitchenEnabled}
@@ -10539,7 +10609,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 retailPaymentBar={
                   useRetailLayout && checkoutSettings.retailPaymentBar !== false
                 }
-                onExpressCash={() => void runExpressPay('cash')}
+                onExpressCash={openRetailCashPay}
                 onExpressCard={() => void runExpressPay('card')}
                 onMorePayments={openRegisterCheckout}
                 paymentMethods={{
@@ -10581,7 +10651,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
             {/* Products (mobile default). Hidden on narrow viewports while cart page is open. */}
             {(!isNarrowViewport || !mobileCartOpen) ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div
+              className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+                useRetailLayout
+                  ? cartSide === 'right'
+                    ? 'lg:order-2'
+                    : 'lg:order-3'
+                  : ''
+              }`}
+            >
               {useRetailLayout && isNarrowViewport ? (
                 <WebPosRetailCategorySidebar
                   categories={visibleCategories}
@@ -10814,7 +10892,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
         {expressSuccessOpen && successInfo ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-6">
-            <div className="w-full max-w-xl">
+            <div className={`w-full ${isRetail ? 'max-w-4xl' : 'max-w-xl'}`}>
               <WebPosSuccessView
                 compact
                 amount={successInfo.amount}
@@ -10825,6 +10903,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onPrintPart={successSplitParts ? (id) => void printSuccessPart(id) : undefined}
                 onPrintAll={successSplitParts ? () => void printSuccessAll() : undefined}
                 onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
+                twoColumn={isRetail}
                 onSendReceipt={() => setSendReceiptOpen(true)}
                 onContinue={() => {
                   setExpressSuccessOpen(false);
@@ -10837,6 +10916,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           </div>
         ) : null}
       </div>
+
+      <WebPosRetailCashPayModal
+        open={retailCashPayOpen}
+        total={totals.total}
+        busy={busy}
+        onClose={() => {
+          if (!busy) setRetailCashPayOpen(false);
+        }}
+        onComplete={(tendered, changeDue) => void completeRetailCashPay(tendered, changeDue)}
+      />
 
       <WebPosSendReceiptModal
         open={sendReceiptOpen}
