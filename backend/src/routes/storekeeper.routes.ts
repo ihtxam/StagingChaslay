@@ -120,4 +120,20 @@ router.post("/intake", async (req: Request, res: Response) => {
   }
 });
 
+/** PATCH /api/merchant/storekeeper/intake/revise — correct a saved intake line. */
+router.patch(
+  "/intake/revise",
+  requirePermission("STOREKEEPER_EDIT_INTAKE", "MANAGE_INVENTORY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const result = await InventoryService.storekeeperReviseIntake(merchantId, req.body || {});
+      res.json({ success: true, ...result });
+    } catch (error) {
+      handleError(res, error, "Could not revise intake");
+    }
+  }
+);
+
 export default router;

@@ -36,6 +36,7 @@ export type Permission =
   | 'END_OF_DAY'
   | 'MANAGE_INVENTORY'
   | 'STOREKEEPER_INTAKE'
+  | 'STOREKEEPER_EDIT_INTAKE'
   | 'MANAGE_KIOSK';
 
 /** Permissions shown in role editor — hide kiosk when addon is off. */
@@ -103,6 +104,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'END_OF_DAY',
   'MANAGE_INVENTORY',
   'STOREKEEPER_INTAKE',
+  'STOREKEEPER_EDIT_INTAKE',
   'MANAGE_KIOSK',
 ];
 

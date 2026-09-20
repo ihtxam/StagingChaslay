@@ -44,10 +44,11 @@ import {
 {
   const storekeeper = applyRolePermissionPolicy("Storekeeper", [
     "STOREKEEPER_INTAKE",
+    "STOREKEEPER_EDIT_INTAKE",
     "ACCESS_PANEL",
     "MANAGE_SETTINGS",
   ]);
-  assert.deepEqual(storekeeper, ["STOREKEEPER_INTAKE"]);
+  assert.deepEqual(storekeeper, ["STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE"]);
 }
 
 console.log("permissions: all assertions passed");

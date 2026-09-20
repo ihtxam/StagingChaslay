@@ -841,6 +841,20 @@ export class InventoryService {
       expiryDate: input.expiryDate,
     });
 
+    let lotId: string | null = null;
+    if (parseExpiryDate(input.expiryDate)) {
+      const db = getDb();
+      const lot = await db.query.inventoryStockLots.findFirst({
+        where: and(
+          eq(schema.inventoryStockLots.merchantId, merchantId),
+          eq(schema.inventoryStockLots.itemId, item.id)
+        ),
+        orderBy: [desc(schema.inventoryStockLots.createdAt)],
+        columns: { id: true },
+      });
+      lotId = lot?.id ?? null;
+    }
+
     let menuProduct: Record<string, unknown> | null = null;
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -861,7 +875,7 @@ export class InventoryService {
       });
     }
 
-    return { item: updated, created, menuProduct };
+    return { item: updated, created, menuProduct, lotId };
   }
 
   /** Create or update a sellable menu product after storekeeper intake (retail). */
@@ -954,17 +968,113 @@ export class InventoryService {
     qty: number,
     expiryDate: Date,
     note?: string
-  ) {
+  ): Promise<string> {
     const db = getDb();
-    await db.insert(schema.inventoryStockLots).values({
-      merchantId,
-      itemId,
-      movementId,
-      qty: qtyStr(qty),
-      remainingQty: qtyStr(qty),
-      expiryDate,
-      note: note ? String(note).slice(0, 500) : null,
+    const [row] = await db
+      .insert(schema.inventoryStockLots)
+      .values({
+        merchantId,
+        itemId,
+        movementId,
+        qty: qtyStr(qty),
+        remainingQty: qtyStr(qty),
+        expiryDate,
+        note: note ? String(note).slice(0, 500) : null,
+      })
+      .returning({ id: schema.inventoryStockLots.id });
+    return row!.id;
+  }
+
+  static async storekeeperReviseIntake(
+    merchantId: string,
+    input: {
+      itemId: string;
+      barcode: string;
+      name?: string;
+      unit?: string;
+      categoryId?: string | null;
+      qty: number;
+      previousQty: number;
+      expiryDate?: string | null;
+      lotId?: string | null;
+      salePrice?: number;
+      imageUrl?: string | null;
+      updateImageUrl?: boolean;
+    }
+  ) {
+    await assertStorekeeperLicensed(merchantId);
+    const item = await this.getOwnedItem(merchantId, input.itemId);
+    const barcode = String(input.barcode || "").trim();
+    if (!barcode || String(item.barcode || "").trim() !== barcode) {
+      throw new Error("Barcode does not match this stock item");
+    }
+    const nextQty = num(input.qty);
+    const prevQty = num(input.previousQty);
+    if (!(nextQty > 0)) throw new Error("Quantity must be greater than 0");
+
+    const patch: Parameters<typeof InventoryService.updateItem>[2] = {};
+    const name = String(input.name || "").trim();
+    if (name && name !== item.name) patch.name = name;
+    if (input.unit) patch.unit = input.unit;
+    if (input.categoryId !== undefined) patch.categoryId = input.categoryId;
+    if (parseExpiryDate(input.expiryDate)) patch.perishable = true;
+    let current = item;
+    if (Object.keys(patch).length) {
+      current = await this.updateItem(merchantId, item.id, patch);
+    }
+
+    const delta = nextQty - prevQty;
+    if (delta > 0) {
+      current = await this.stockIn(merchantId, item.id, {
+        qty: delta,
+        unit: input.unit,
+        note: "Storekeeper correction",
+        expiryDate: input.expiryDate,
+      });
+    } else if (delta < 0) {
+      current = await this.stockOut(merchantId, item.id, {
+        qty: Math.abs(delta),
+        note: "Storekeeper correction",
+        reason: "out",
+      });
+    }
+
+    const lotId = String(input.lotId || "").trim();
+    const expiry = parseExpiryDate(input.expiryDate);
+    if (lotId && expiry) {
+      const db = getDb();
+      await db
+        .update(schema.inventoryStockLots)
+        .set({ expiryDate: expiry })
+        .where(
+          and(
+            eq(schema.inventoryStockLots.id, lotId),
+            eq(schema.inventoryStockLots.merchantId, merchantId),
+            eq(schema.inventoryStockLots.itemId, item.id)
+          )
+        );
+    }
+
+    let menuProduct: Record<string, unknown> | null = null;
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { businessCategory: true },
     });
+    const businessModule = normalizeBusinessModule(merchant?.businessCategory);
+    const publishToPos = businessModule === "retail" || businessModule === null;
+    if (publishToPos) {
+      menuProduct = await this.publishStorekeeperToPos(merchantId, {
+        barcode,
+        name: String(input.name || current.name).trim(),
+        salePrice: input.salePrice,
+        qty: 0,
+        imageUrl: input.imageUrl,
+        updateImageUrl: input.updateImageUrl === true,
+      });
+    }
+
+    return { item: current, menuProduct };
   }
 
   static async usageReport(merchantId: string, days = 30) {

@@ -5,11 +5,13 @@ import {
   CheckCircle,
   ImagePlus,
   Package,
+  Pencil,
   Plus,
   Printer,
   ScanLine,
   Sparkles,
   UserCircle2,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -59,14 +61,6 @@ type MenuProduct = {
   stock?: number;
 };
 
-type RecentIntake = {
-  id: string;
-  name: string;
-  qty: number;
-  unit: string;
-  at: string;
-};
-
 type LookupSuggestion = {
   name: string;
   brand?: string | null;
@@ -74,8 +68,25 @@ type LookupSuggestion = {
   categoryId?: string | null;
   packageSize?: string | null;
   unit?: string | null;
+  weightGrams?: number | null;
   imageUrl?: string | null;
   source?: string;
+};
+
+type SessionIntakeEntry = {
+  sessionId: string;
+  itemId: string;
+  barcode: string;
+  name: string;
+  qty: number;
+  unit: string;
+  categoryId: string;
+  categoryName: string;
+  expiryDate: string;
+  salePrice: string;
+  photoUrl: string | null;
+  lotId: string | null;
+  at: string;
 };
 
 function fillI18n(template: string, values: Record<string, string | number>) {
@@ -97,6 +108,24 @@ function stockLabel(qty: unknown, unitCode: string, units: Unit[]): string {
   const amount = formatStockQty(qty);
   const unitName = units.find((u) => u.code === unitCode)?.name || unitCode;
   return `${amount} ${unitName}`;
+}
+
+function newSessionId(): string {
+  return `sk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function qtyFromSuggestion(ext: LookupSuggestion | null): string {
+  if (!ext) return '1';
+  const pkg = String(ext.packageSize || '').trim();
+  const multi = pkg.match(/^(\d+(?:[.,]\d+)?)\s*(x|×)/i);
+  if (multi) return multi[1]!.replace(',', '.');
+  const pieces = pkg.match(/^(\d+(?:[.,]\d+)?)\s*(pcs|pieces|piece|pack|pk|unit|units)\b/i);
+  if (pieces) return pieces[1]!.replace(',', '.');
+  return '1';
+}
+
+function onlinePhotoUrl(ext: LookupSuggestion | null, menu: MenuProduct | null): string | null {
+  return ext?.imageUrl || menu?.imageUrl || null;
 }
 
 type SavedLabel = {
@@ -138,7 +167,9 @@ export default function StorekeeperApp() {
   const [lookupBusy, setLookupBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  const [recent, setRecent] = useState<RecentIntake[]>([]);
+  const [sessionEntries, setSessionEntries] = useState<SessionIntakeEntry[]>([]);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [defaultCategoryId, setDefaultCategoryId] = useState('');
   const [salePrice, setSalePrice] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoSource, setPhotoSource] = useState<'upload' | 'online' | null>(null);
@@ -172,6 +203,8 @@ export default function StorekeeperApp() {
     (actingAsOwner ||
       hasPermission(effectivePerms, 'MANAGE_INVENTORY', false) ||
       hasPermission(effectivePerms, 'ACCESS_PANEL', false));
+  const canEditSession =
+    actingAsOwner || hasPermission(effectivePerms, 'STOREKEEPER_EDIT_INTAKE', false);
   const clockedIn = !!pinStaff || managerPanelAccess;
   const showBackToPanel = canReturnToInventoryPanel;
   const pinLogout = () => {
@@ -249,6 +282,7 @@ export default function StorekeeperApp() {
       setPhotoSource(null);
       setCurrentMenuPhoto(null);
       setExistingAction('stock');
+      setEditingSessionId(null);
       setLookupBusy(true);
       try {
         const res = await api.get(`/merchant/storekeeper/lookup/${encodeURIComponent(trimmed)}`, {
@@ -265,7 +299,7 @@ export default function StorekeeperApp() {
           });
           setName(item.name);
           setUnit(item.unit || 'piece');
-          setCategoryId(item.categoryId || '');
+          setCategoryId(item.categoryId || defaultCategoryId || '');
           setCurrentMenuPhoto(menu?.imageUrl || null);
           if (menu?.price != null && menu.price > 0) setSalePrice(String(menu.price));
           setExistingAction('stock');
@@ -275,6 +309,7 @@ export default function StorekeeperApp() {
 
         setExistingItem(null);
         const ext = res.data.suggestion as LookupSuggestion | null;
+        const onlinePhoto = onlinePhotoUrl(ext, menu);
         if (ext?.name) {
           setSuggestion(ext);
           setName(ext.name);
@@ -282,15 +317,27 @@ export default function StorekeeperApp() {
             const hasUnit = units.some((u) => u.code === ext.unit);
             if (hasUnit) setUnit(ext.unit);
           }
-          if (ext.categoryId) setCategoryId(ext.categoryId);
+          setCategoryId(ext.categoryId || defaultCategoryId || '');
+          setQty(qtyFromSuggestion(ext));
+          if (onlinePhoto) {
+            setPhotoUrl(onlinePhoto);
+            setPhotoSource('online');
+          }
           toast.success(t('storekeeperOnlineFound'));
         } else if (menu) {
           setName(menu.name);
+          setCategoryId(defaultCategoryId || '');
+          setQty('1');
           if (menu.price > 0) setSalePrice(String(menu.price));
+          if (onlinePhoto) {
+            setPhotoUrl(onlinePhoto);
+            setPhotoSource('online');
+          }
           toast.success(t('storekeeperMenuProductFound'));
         } else {
           setName('');
-          setCategoryId('');
+          setCategoryId(defaultCategoryId || '');
+          setQty('1');
           setSalePrice('');
           toast(t('storekeeperOnlineNotFound'), { icon: 'ℹ️' });
         }
@@ -301,7 +348,7 @@ export default function StorekeeperApp() {
         setLookupBusy(false);
       }
     },
-    [apiHeaders, t, units]
+    [apiHeaders, t, units, defaultCategoryId]
   );
 
   // Bluetooth / USB keyboard-wedge scanner
@@ -346,6 +393,28 @@ export default function StorekeeperApp() {
     setSuggestion(null);
     setNewProductMode(false);
     setPendingLabel(null);
+    setEditingSessionId(null);
+    setCategoryId(defaultCategoryId);
+  };
+
+  const loadSessionForEdit = (entry: SessionIntakeEntry) => {
+    setEditingSessionId(entry.sessionId);
+    setBarcode(entry.barcode);
+    setName(entry.name);
+    setUnit(entry.unit);
+    setCategoryId(entry.categoryId || defaultCategoryId);
+    setQty(String(entry.qty));
+    setExpiryDate(entry.expiryDate);
+    setSalePrice(entry.salePrice);
+    setPhotoUrl(entry.photoUrl);
+    setPhotoSource(entry.photoUrl ? 'online' : null);
+    setExistingItem(null);
+    setMenuProduct(null);
+    setSuggestion(null);
+    setNewProductMode(false);
+    setPendingLabel(null);
+    setExistingAction('stock');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const onUploadPhoto = async (file: File | null) => {
@@ -478,10 +547,62 @@ export default function StorekeeperApp() {
       toast.error(t('storekeeperExpiryRequired'));
       return;
     }
+    if (editingSessionId && !canEditSession) {
+      toast.error(t('storekeeperEditNotAllowed'));
+      return;
+    }
     setBusy(true);
     try {
       const priceNum = salePrice.trim() ? Number(salePrice) : undefined;
-      const chosenImageUrl = photoSource ? photoUrl : null;
+      const chosenImageUrl = photoUrl;
+      const editingEntry = editingSessionId
+        ? sessionEntries.find((e) => e.sessionId === editingSessionId)
+        : null;
+
+      if (editingEntry && canEditSession) {
+        const res = await api.patch(
+          '/merchant/storekeeper/intake/revise',
+          {
+            itemId: editingEntry.itemId,
+            barcode: barcode.trim(),
+            name: name.trim(),
+            unit,
+            categoryId: categoryId || null,
+            qty: q,
+            previousQty: editingEntry.qty,
+            expiryDate: expiryDate || null,
+            lotId: editingEntry.lotId,
+            salePrice: priceNum != null && Number.isFinite(priceNum) ? priceNum : undefined,
+            imageUrl: chosenImageUrl,
+            updateImageUrl: !!chosenImageUrl,
+          },
+          { headers: apiHeaders }
+        );
+        const item = res.data.item as InvItem;
+        const categoryName =
+          categories.find((c) => c.id === (categoryId || ''))?.name || editingEntry.categoryName;
+        setSessionEntries((prev) =>
+          prev.map((row) =>
+            row.sessionId === editingEntry.sessionId
+              ? {
+                  ...row,
+                  name: item.name,
+                  qty: q,
+                  unit: item.unit,
+                  categoryId: categoryId || '',
+                  categoryName,
+                  expiryDate: expiryDate || '',
+                  salePrice: salePrice.trim(),
+                  photoUrl: chosenImageUrl,
+                }
+              : row
+          )
+        );
+        toast.success(t('storekeeperSessionUpdated'));
+        resetForm();
+        return;
+      }
+
       const res = await api.post(
         '/merchant/storekeeper/intake',
         {
@@ -503,16 +624,28 @@ export default function StorekeeperApp() {
       );
 
       const item = res.data.item as InvItem;
-      setRecent((prev) => [
-        {
-          id: item.id,
-          name: item.name,
-          qty: q,
-          unit: item.unit,
-          at: new Date().toISOString(),
-        },
-        ...prev.slice(0, 9),
-      ]);
+      const lotId = (res.data.lotId as string | null | undefined) ?? null;
+      const categoryName = categories.find((c) => c.id === (categoryId || ''))?.name || '';
+      if (!photoOnly) {
+        setSessionEntries((prev) => [
+          {
+            sessionId: newSessionId(),
+            itemId: item.id,
+            barcode: barcode.trim(),
+            name: item.name,
+            qty: q,
+            unit: item.unit,
+            categoryId: categoryId || '',
+            categoryName,
+            expiryDate: expiryDate || '',
+            salePrice: salePrice.trim(),
+            photoUrl: chosenImageUrl,
+            lotId,
+            at: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
+      }
       toast.success(
         photoOnly
           ? t('storekeeperPhotoOnlySaved')
@@ -533,18 +666,7 @@ export default function StorekeeperApp() {
         });
       }
       setNewProductMode(false);
-      setBarcode('');
-      setName('');
-      setQty('1');
-      setExpiryDate('');
-      setSalePrice('');
-      setPhotoUrl(null);
-      setPhotoSource(null);
-      setCurrentMenuPhoto(null);
-      setExistingAction('stock');
-      setExistingItem(null);
-      setMenuProduct(null);
-      setSuggestion(null);
+      resetForm();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       toast.error(msg || t('storekeeperIntakeFailed'));
@@ -679,6 +801,20 @@ export default function StorekeeperApp() {
               {t('dismiss')}
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {editingSessionId ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+          <span className="font-medium text-amber-950 dark:text-amber-100">{t('storekeeperEditingSession')}</span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-xs font-semibold"
+            onClick={resetForm}
+          >
+            <X size={14} />
+            {t('cancel')}
+          </button>
         </div>
       ) : null}
 
@@ -823,7 +959,7 @@ export default function StorekeeperApp() {
           <>
             {!existingItem ? (
               <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-muted)]/50 p-3">
-                <p className="text-xs text-[var(--text-muted)]">{t('storekeeperPhotoOptionalHint')}</p>
+                <p className="text-xs text-[var(--text-muted)]">{t('storekeeperPhotoOnlineAutoHint')}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -891,7 +1027,11 @@ export default function StorekeeperApp() {
                   <select
                     className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCategoryId(next);
+                      setDefaultCategoryId(next);
+                    }}
                   >
                     <option value="">{t('storekeeperNoCategory')}</option>
                     {categories.map((c) => (
@@ -981,11 +1121,13 @@ export default function StorekeeperApp() {
           <CheckCircle size={20} />
           {busy
             ? t('loading')
-            : existingItem && existingAction === 'photo'
-              ? t('storekeeperSavePhoto')
-              : existingItem && existingAction === 'expiry'
-                ? t('storekeeperSaveExpiry')
-                : t('storekeeperSaveStock')}
+            : editingSessionId
+              ? t('storekeeperSaveSessionEdit')
+              : existingItem && existingAction === 'photo'
+                ? t('storekeeperSavePhoto')
+                : existingItem && existingAction === 'expiry'
+                  ? t('storekeeperSaveExpiry')
+                  : t('storekeeperSaveStock')}
         </button>
 
         {!existingItem && barcode.trim() && name.trim() ? (
@@ -1008,16 +1150,39 @@ export default function StorekeeperApp() {
         ) : null}
       </form>
 
-      {recent.length > 0 ? (
+      {sessionEntries.length > 0 ? (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-          <h2 className="mb-2 text-sm font-bold">{t('storekeeperRecent')}</h2>
+          <h2 className="mb-1 text-sm font-bold">{t('storekeeperSessionList')}</h2>
+          <p className="mb-3 text-xs text-[var(--text-muted)]">{t('storekeeperSessionListHint')}</p>
           <ul className="space-y-2 text-sm">
-            {recent.map((r) => (
-              <li key={`${r.id}-${r.at}`} className="flex justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0">
-                <span className="font-medium">{r.name}</span>
-                <span className="muted">
-                  +{r.qty} {r.unit}
-                </span>
+            {sessionEntries.map((r) => (
+              <li
+                key={r.sessionId}
+                className={`flex items-start justify-between gap-2 rounded-xl border px-3 py-2 ${
+                  editingSessionId === r.sessionId
+                    ? 'border-teal-500/40 bg-teal-500/10'
+                    : 'border-[var(--border)]'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{r.name}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    +{formatStockQty(r.qty)} {units.find((u) => u.code === r.unit)?.name || r.unit}
+                    {r.categoryName ? ` · ${r.categoryName}` : ''}
+                    {r.expiryDate ? ` · ${r.expiryDate}` : ''}
+                  </p>
+                  <p className="font-mono text-[10px] text-[var(--text-muted)]">{r.barcode}</p>
+                </div>
+                {canEditSession ? (
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-xs font-semibold"
+                    onClick={() => loadSessionForEdit(r)}
+                  >
+                    <Pencil size={14} />
+                    {t('edit')}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
