@@ -1,0 +1,15 @@
+{
+  "name": "chaslay-pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chaslay / Reborn Windows POS kiosk (Tauri 2 shell around hosted WebPOS)",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:nsis": "tauri build --bundles nsis"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}

@@ -5,6 +5,7 @@ import AppErrorBoundary from './components/AppErrorBoundary'
 import { ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import { isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
+import { isDesktopApp } from './lib/platform'
 import './index.css'
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */
@@ -29,7 +30,7 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 }
 
 if (import.meta.env.PROD && typeof window !== 'undefined') {
-  if (!isShopStorefrontHost()) {
+  if (!isShopStorefrontHost() && !isDesktopApp()) {
     probeRebornPwaInstalled();
     bindRebornPwaInstallGuard();
   }
@@ -38,7 +39,11 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 /** Register SW before React boot so static assets get cached on the first online visit.
  * Shop storefronts must never install the POS offline shell — it hijacks custom domains. */
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  if (isShopStorefrontHost()) {
+  if (isDesktopApp()) {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      for (const reg of regs) void reg.unregister();
+    }).catch(() => undefined);
+  } else if (isShopStorefrontHost()) {
     void unregisterRebornShellOnShop();
   } else {
     navigator.serviceWorker
