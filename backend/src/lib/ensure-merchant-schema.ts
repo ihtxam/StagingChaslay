@@ -109,6 +109,14 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
   category_pricing_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
+  webpos_express_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_express_enabled boolean NOT NULL DEFAULT true",
+  webpos_cash_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_cash_enabled boolean NOT NULL DEFAULT true",
+  webpos_card_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_card_enabled boolean NOT NULL DEFAULT true",
+  webpos_terminal_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_terminal_enabled boolean NOT NULL DEFAULT true",
   webpos_gift_card_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_gift_card_enabled boolean NOT NULL DEFAULT false",
   adyen_use_legacy_endpoint:
