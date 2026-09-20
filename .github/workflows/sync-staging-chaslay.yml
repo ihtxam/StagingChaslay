@@ -60,6 +60,8 @@ jobs:
           rm -f .github/workflows/restart-rebornsense.yml
           rm -f .github/workflows/restore-rebornsense-now.yml
           rm -f .github/workflows/sync-staging-chaslay.yml
+          # Windows POS build runs on rebornSense only (PAT lacks workflow scope on mirror)
+          rm -f .github/workflows/build-chaslay-pos-windows.yml
           # STAGING_CHASLAY_SYNC_TOKEN often lacks workflow scope — keep StagingChaslay's
           # build-bridge-apk.yml so the mirror push is not rejected.
           if git fetch "https://x-access-token:${SYNC_TOKEN}@github.com/ihtxam/StagingChaslay.git" main:staging-main-ref 2>/dev/null; then
