@@ -809,6 +809,32 @@ function MerchantShell() {
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
+    ...(isRestaurantModule(businessModule)
+      ? []
+      : [
+          {
+            id: 'retail',
+            label: t('navRetail'),
+            icon: '🏪',
+            children: [
+              { label: t('products'), path: '/merchant/products', icon: '🛍️' },
+              { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
+              { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+              ...(allowInventory('/merchant/inventory')
+                ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
+                : []),
+              ...(allowStorekeeper('/merchant/storekeeper')
+                ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
+                : []),
+            ].filter((item) => {
+              if (item.path === '/merchant/inventory' || item.path.startsWith('/merchant/inventory')) {
+                return allowInventory(item.path);
+              }
+              if (item.path === '/merchant/storekeeper') return allowStorekeeper(item.path);
+              return allow(item.path);
+            }),
+          },
+        ]),
     {
       id: 'sales',
       label: t('navSales'),
@@ -816,7 +842,9 @@ function MerchantShell() {
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
-        { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
+        ...(isRestaurantModule(businessModule)
+          ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
+          : []),
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
       ].filter((item) => allow(item.path)),
     },
@@ -825,8 +853,12 @@ function MerchantShell() {
       label: t('navCatalog'),
       icon: '🛍️',
       children: [
-        { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-        { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
+        ...(isRestaurantModule(businessModule)
+          ? [
+              { label: t('products'), path: '/merchant/products', icon: '🛍️' },
+              { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
+            ]
+          : []),
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path)),
     },

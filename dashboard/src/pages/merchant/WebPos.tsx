@@ -388,6 +388,13 @@ import WebPosProductArea, {
 import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategorySidebar';
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
+import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
+import { productMatchesScan } from '@/lib/product-scan-codes';
+import {
+  readDeviceRegisterProfileId,
+  writeDeviceRegisterProfileId,
+  profileLayoutPatch,
+} from '@/lib/retail-register-profile';
 import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
@@ -768,6 +775,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [search, setSearch] = useState('');
+  const [retailTillSettingsOpen, setRetailTillSettingsOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
   const effectiveChannel: Channel = channel ?? 'takeaway';
@@ -1652,10 +1660,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Tax-exclusive: VAT on discounted net (default) vs pre-discount net. */
   const vatAfterDiscount = merchant?.vatAfterDiscount !== false;
 
-  const checkoutSettings = useMemo(
-    () => normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings),
-    [paymentConfig?.posCheckoutSettings]
-  );
+  const checkoutSettings = useMemo(() => {
+    const base = normalizePosCheckoutSettings(paymentConfig?.posCheckoutSettings);
+    const id = readDeviceRegisterProfileId();
+    const profile = base.retailRegisterProfiles.find((p) => p.id === id);
+    if (!profile) return base;
+    return { ...base, ...profileLayoutPatch(profile) };
+  }, [paymentConfig?.posCheckoutSettings]);
   useEffect(() => {
     writeShowPosToasts(checkoutSettings.showPosToasts === true);
   }, [checkoutSettings.showPosToasts]);
@@ -2075,10 +2086,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const raw = search.trim();
         const barcode = String(p.barcode || '').trim();
         const sku = String(p.sku || '').trim();
-        const nameHit = p.name.toLowerCase().includes(q);
+        const nameHit = p.name.toLowerCase().includes(q) || String(p.brand || '').toLowerCase().includes(q);
         const codeHit =
-          (barcode && (barcode === raw || barcode.toLowerCase() === q)) ||
-          (sku && sku.toLowerCase() === q);
+          productMatchesScan(p, raw) ||
+          (sku && sku.toLowerCase() === q) ||
+          (barcode && (barcode === raw || barcode.toLowerCase() === q));
         if (!nameHit && !codeHit) return false;
       }
       return true;
@@ -2500,6 +2512,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         price: Number(p.price),
         sku: p.sku ?? null,
         barcode: p.barcode ?? null,
+        extraBarcodes: Array.isArray(p.extraBarcodes) ? p.extraBarcodes : [],
+        brand: p.brand ?? null,
         extras: Array.isArray(p.extras)
           ? p.extras.map((e: any) => ({
               ...e,
@@ -9459,19 +9473,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (code: string): Product | null => {
       const q = code.trim();
       if (!q) return null;
-      const lower = q.toLowerCase();
-      const digits = q.replace(/\s/g, '');
-      return (
-        products.find((p) => {
-          const barcode = String(p.barcode || '').trim();
-          const sku = String(p.sku || '').trim();
-          if (barcode && (barcode === q || barcode === digits || barcode.toLowerCase() === lower)) {
-            return true;
-          }
-          if (sku && sku.toLowerCase() === lower) return true;
-          return false;
-        }) || null
-      );
+      return products.find((p) => productMatchesScan(p, q)) || null;
     },
     [products]
   );
@@ -10711,6 +10713,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
                 }
                 sparseGridOnAllItems={checkoutSettings.retailScannerFirst !== false}
+                showStockOnTiles={checkoutSettings.retailShowStockOnTiles === true}
+                quickTileProducts={products.filter((p) =>
+                  checkoutSettings.retailQuickTiles.includes(p.id)
+                )}
+                onOpenSettings={() => setRetailTillSettingsOpen(true)}
               />
               ) : (
               <WebPosProductArea
@@ -10926,6 +10933,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         onComplete={(tendered, changeDue) => void completeRetailCashPay(tendered, changeDue)}
       />
+      {useRetailLayout ? (
+        <WebPosRetailSettingsDrawer
+          open={retailTillSettingsOpen}
+          onClose={() => setRetailTillSettingsOpen(false)}
+          settings={checkoutSettings}
+          products={products}
+          deviceProfileId={readDeviceRegisterProfileId()}
+          onSave={(patch, deviceProfileId) => {
+            writeDeviceRegisterProfileId(deviceProfileId);
+            const next: PosCheckoutSettings = { ...checkoutSettings, ...patch };
+            setPaymentConfig((prev) =>
+              prev ? { ...prev, posCheckoutSettings: next } : prev
+            );
+            void api.put('/merchant/settings', { posCheckoutSettings: next }).catch(() => undefined);
+          }}
+        />
+      ) : null}
 
       <WebPosSendReceiptModal
         open={sendReceiptOpen}

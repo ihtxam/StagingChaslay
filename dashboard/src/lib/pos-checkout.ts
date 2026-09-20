@@ -1,3 +1,5 @@
+import { parseRetailRegisterProfiles } from './retail-register-profile';
+
 export type PosCheckoutDiscountPreset = {
   id: string;
   name: string;
@@ -63,6 +65,12 @@ export type PosCheckoutSettings = {
   retailPaymentBar: boolean;
   /** Retail register: clear search after adding a product (barcode or tap). */
   retailClearSearchAfterAdd: boolean;
+  /** Retail register: show remaining stock on product tiles. */
+  retailShowStockOnTiles: boolean;
+  /** Retail register: merchant-pinned SKUs shown above the grid. */
+  retailQuickTiles: string[];
+  /** Named per-till layout profiles (Phase 3). */
+  retailRegisterProfiles: import('./retail-register-profile').RetailRegisterProfile[];
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -98,6 +106,9 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailTileSize: 'lg',
   retailPaymentBar: true,
   retailClearSearchAfterAdd: true,
+  retailShowStockOnTiles: false,
+  retailQuickTiles: [],
+  retailRegisterProfiles: [],
 };
 
 export function isRetailPosMode(raw: unknown): boolean {
@@ -171,5 +182,10 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         : DEFAULT_POS_CHECKOUT.retailTileSize,
     retailPaymentBar: src.retailPaymentBar !== false,
     retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
+    retailShowStockOnTiles: src.retailShowStockOnTiles === true,
+    retailQuickTiles: Array.isArray(src.retailQuickTiles)
+      ? src.retailQuickTiles.map((id) => String(id || '').trim()).filter(Boolean).slice(0, 24)
+      : [],
+    retailRegisterProfiles: parseRetailRegisterProfiles(src.retailRegisterProfiles),
   };
 }

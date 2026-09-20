@@ -18,6 +18,7 @@ import {
   Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { parseExtraBarcodes } from '@/lib/product-scan-codes';
 import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
@@ -102,6 +103,8 @@ interface Product {
   stock: number;
   sku?: string | null;
   barcode?: string | null;
+  extraBarcodes?: string[] | null;
+  brand?: string | null;
   imageUrl?: string | null;
   buttonColor?: string | null;
   productType?: string;
@@ -143,6 +146,8 @@ type FormState = {
   stock: string;
   sku: string;
   barcode: string;
+  extraBarcodes: string;
+  brand: string;
   categoryId: string;
   buttonColor: string;
   imageUrl: string;
@@ -176,6 +181,8 @@ const emptyForm = (): FormState => ({
   stock: '0',
   sku: '',
   barcode: '',
+  extraBarcodes: '',
+  brand: '',
   categoryId: '',
   buttonColor: '#0f172a',
   imageUrl: '',
@@ -670,6 +677,8 @@ export default function Products() {
         stock: String(full.stock ?? 0),
         sku: full.sku || '',
         barcode: full.barcode || '',
+        extraBarcodes: parseExtraBarcodes(full.extraBarcodes).join(', '),
+        brand: full.brand || '',
         categoryId: full.categoryId || '',
         buttonColor: full.buttonColor || '#0f172a',
         imageUrl: full.imageUrl || '',
@@ -698,6 +707,8 @@ export default function Products() {
         stock: String(product.stock ?? 0),
         sku: product.sku || '',
         barcode: product.barcode || '',
+        extraBarcodes: parseExtraBarcodes(product.extraBarcodes).join(', '),
+        brand: product.brand || '',
         categoryId: product.categoryId || '',
         buttonColor: product.buttonColor || '#0f172a',
         imageUrl: product.imageUrl || '',
@@ -777,6 +788,8 @@ export default function Products() {
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
       barcode: form.barcode.trim() || null,
+      extraBarcodes: parseExtraBarcodes(form.extraBarcodes),
+      brand: form.brand.trim() || null,
       categoryId: form.categoryId || undefined,
       buttonColor: form.buttonColor || undefined,
       imageUrl: form.imageUrl.trim() || null,
@@ -2306,6 +2319,26 @@ export default function Products() {
                           </>
                         )}
                       </div>
+                    </Field>
+                    ) : null}
+                    <Field label={t('productBrand')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('productBrandPlaceholder')}
+                        value={form.brand}
+                        maxLength={255}
+                        onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                      />
+                    </Field>
+                    {showBarcodeTools ? (
+                    <Field label={t('productExtraBarcodes')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('productExtraBarcodesPlaceholder')}
+                        value={form.extraBarcodes}
+                        onChange={(e) => setForm({ ...form, extraBarcodes: e.target.value })}
+                      />
+                      <p className="mt-1 text-xs muted">{t('productExtraBarcodesHint')}</p>
                     </Field>
                     ) : null}
                     <Field label={t('stock')}>

@@ -95,6 +95,7 @@ type ReportEmailSettings = {
 export default function ReportsPage() {
   const { t, locale, formatDateTime } = useI18n();
   const [tab, setTab] = useState<Tab>('eod');
+  const [reportQuery, setReportQuery] = useState('');
   const [preset, setPreset] = useState<Preset>('today');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -358,6 +359,10 @@ export default function ReportsPage() {
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
 
+  const visibleTabs = tabs.filter((tb) =>
+    !reportQuery.trim() || tb.label.toLowerCase().includes(reportQuery.trim().toLowerCase())
+  );
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -435,8 +440,14 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-2">
-        {tabs.map((tb) => (
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] pb-2">
+        <input
+          className="min-w-[12rem] flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm"
+          placeholder={t('reportsLibrarySearch')}
+          value={reportQuery}
+          onChange={(e) => setReportQuery(e.target.value)}
+        />
+        {visibleTabs.map((tb) => (
           <button
             key={tb.id}
             type="button"

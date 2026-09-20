@@ -1,4 +1,4 @@
-import { Search, Wallet, Gift } from 'lucide-react';
+import { Search, Settings, Wallet, Gift } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '@/lib/i18n';
 import type { RetailTileSize } from '@/lib/pos-checkout';
@@ -38,6 +38,9 @@ type Props = {
   membershipEnabled?: boolean;
   /** When true and no search, hide grid on All Items (scanner-first empty state). */
   sparseGridOnAllItems?: boolean;
+  showStockOnTiles?: boolean;
+  quickTileProducts?: Product[];
+  onOpenSettings?: () => void;
 };
 
 export default function WebPosRetailProductCenter({
@@ -60,6 +63,9 @@ export default function WebPosRetailProductCenter({
   onSellMembership,
   membershipEnabled = false,
   sparseGridOnAllItems = true,
+  showStockOnTiles = false,
+  quickTileProducts = [],
+  onOpenSettings,
 }: Props) {
   const { t } = useI18n();
   const localRef = useRef<HTMLInputElement>(null);
@@ -89,7 +95,7 @@ export default function WebPosRetailProductCenter({
           />
           <input
             ref={inputRef}
-            className="webpos-search-input webpos-retail-search h-11 w-full rounded-xl border border-[var(--webpos-accent-border)] bg-white pl-10 pr-3 text-base font-medium shadow-sm"
+            className="webpos-search-input webpos-retail-search h-11 w-full rounded-xl border border-[var(--webpos-accent-border)] bg-white pl-10 pr-12 text-base font-medium shadow-sm"
             placeholder={t('webPosRetailScanSearch')}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -104,6 +110,17 @@ export default function WebPosRetailProductCenter({
             enterKeyHint="search"
             aria-label={t('webPosRetailScanSearch')}
           />
+          {onOpenSettings ? (
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100"
+              onClick={onOpenSettings}
+              aria-label={t('webPosRetailTillSettings')}
+              title={t('webPosRetailTillSettings')}
+            >
+              <Settings size={18} />
+            </button>
+          ) : null}
         </label>
       </div>
 
@@ -112,6 +129,26 @@ export default function WebPosRetailProductCenter({
         data-webpos-retail-product-grid="1"
         onClick={() => onBackgroundClick?.()}
       >
+        {quickTileProducts.length > 0 && !isGiftCardCategory ? (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            {quickTileProducts.map((p) => (
+              <button
+                key={`quick-${p.id}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onProductClick(p);
+                }}
+                className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-2 text-left shadow-sm"
+              >
+                <span className="block max-w-[9rem] truncate text-xs font-bold text-stone-800">{p.name}</span>
+                <span className="text-xs font-semibold text-[var(--webpos-accent-text)]">
+                  {Number(p.price || 0).toFixed(2)}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {isGiftCardCategory ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
@@ -209,6 +246,9 @@ export default function WebPosRetailProductCenter({
                     <span className="line-clamp-2 text-left text-sm font-semibold leading-snug text-stone-800">
                       {p.name}
                     </span>
+                    {p.brand ? (
+                      <span className="mt-0.5 line-clamp-1 text-left text-[11px] text-stone-500">{p.brand}</span>
+                    ) : null}
                     <span className="mt-1 text-left text-sm font-bold tabular-nums text-[var(--webpos-accent-text)]">
                       {isWeighed
                         ? `${Number(p.price || 0).toFixed(2)}/kg`
@@ -219,6 +259,11 @@ export default function WebPosRetailProductCenter({
                         {isCombo ? t('webPosCombo') : t('webPosOpts')}
                       </span>
                     )}
+                    {showStockOnTiles && typeof p.stock === 'number' ? (
+                      <span className="mt-1 text-left text-[11px] text-stone-500">
+                        {t('stock')}: {p.stock}
+                      </span>
+                    ) : null}
                   </div>
                   <div
                     className="relative h-1 w-full shrink-0"

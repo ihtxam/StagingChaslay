@@ -71,6 +71,18 @@ export type PosCheckoutSettings = {
   retailPaymentBar: boolean;
   /** Retail register: clear search after adding a product. */
   retailClearSearchAfterAdd: boolean;
+  retailShowStockOnTiles: boolean;
+  retailQuickTiles: string[];
+  retailRegisterProfiles: Array<{
+    id: string;
+    name: string;
+    cartSide: CartSide;
+    retailTileSize: RetailTileSize;
+    retailScannerFirst: boolean;
+    retailPaymentBar: boolean;
+    retailShowStockOnTiles: boolean;
+    retailQuickTiles: string[];
+  }>;
 };
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
@@ -106,6 +118,9 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailTileSize: "lg",
   retailPaymentBar: true,
   retailClearSearchAfterAdd: true,
+  retailShowStockOnTiles: false,
+  retailQuickTiles: [],
+  retailRegisterProfiles: [],
 };
 
 function asNumberArray(v: unknown, fallback: number[]): number[] {
@@ -205,5 +220,32 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         : DEFAULT_POS_CHECKOUT.retailTileSize,
     retailPaymentBar: src.retailPaymentBar !== false,
     retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
+    retailShowStockOnTiles: src.retailShowStockOnTiles === true,
+    retailQuickTiles: Array.isArray(src.retailQuickTiles)
+      ? src.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
+      : [],
+    retailRegisterProfiles: Array.isArray(src.retailRegisterProfiles)
+      ? src.retailRegisterProfiles
+          .map((row, i) => {
+            const o = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+            return {
+              id: String(o.id || `reg-${i + 1}`).trim().slice(0, 40) || `reg-${i + 1}`,
+              name: String(o.name || `Register ${i + 1}`).trim().slice(0, 40) || `Register ${i + 1}`,
+              cartSide: o.cartSide === "left" ? ("left" as const) : ("right" as const),
+              retailTileSize: (
+                o.retailTileSize === "sm" || o.retailTileSize === "md" || o.retailTileSize === "lg"
+                  ? o.retailTileSize
+                  : "lg"
+              ) as RetailTileSize,
+              retailScannerFirst: o.retailScannerFirst !== false,
+              retailPaymentBar: o.retailPaymentBar !== false,
+              retailShowStockOnTiles: o.retailShowStockOnTiles === true,
+              retailQuickTiles: Array.isArray(o.retailQuickTiles)
+                ? o.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
+                : [],
+            };
+          })
+          .slice(0, 12)
+      : [],
   };
 }

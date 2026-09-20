@@ -47,6 +47,8 @@ export class ProductService {
       buttonColor?: string;
       /** Null clears; integer ≥ 1 sets free-with-points cost */
       loyaltyRewardPoints?: number | null;
+      brand?: string | null;
+      extraBarcodes?: string[];
     }
   ) {
     const db = getDb();
@@ -93,6 +95,8 @@ export class ProductService {
                 : null,
           sortOrder: Number(nextSort) || 0,
           clientId: extras?.clientId,
+          brand: extras?.brand?.trim() || null,
+          extraBarcodes: extras?.extraBarcodes || [],
         })
         .returning();
 
@@ -253,7 +257,10 @@ export class ProductService {
       const product = await db.query.products.findFirst({
         where: and(
           eq(schema.products.merchantId, merchantId),
-          eq(schema.products.barcode, barcode)
+          or(
+            eq(schema.products.barcode, barcode),
+            sql`exists (select 1 from jsonb_array_elements_text(coalesce(${schema.products.extraBarcodes}, '[]'::jsonb)) e where e = ${barcode})`
+          )
         ),
       });
 

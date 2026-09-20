@@ -570,6 +570,8 @@ router.post("/products", async (req: Request, res: Response) => {
       modifierGroupIds,
       visibility,
       similarProductIds,
+      brand,
+      extraBarcodes,
     } = req.body;
 
     if (!merchantId) {
@@ -658,6 +660,12 @@ router.post("/products", async (req: Request, res: Response) => {
         specifications,
         buttonColor,
         loyaltyRewardPoints: normalizedLoyaltyReward === undefined ? null : normalizedLoyaltyReward,
+        brand: brand != null ? String(brand).trim().slice(0, 255) : null,
+        extraBarcodes: Array.isArray(extraBarcodes)
+          ? extraBarcodes.map((s: unknown) => String(s || "").trim()).filter(Boolean).slice(0, 20)
+          : typeof extraBarcodes === "string"
+            ? extraBarcodes.split(/[,;\n]+/).map((s: string) => s.trim()).filter(Boolean).slice(0, 20)
+            : [],
       }
     );
 
@@ -778,6 +786,21 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
             .map((id: string) => String(id).trim())
             .slice(0, 12)
         : [];
+    }
+
+    if (updates.brand !== undefined) {
+      const b = String(updates.brand || "").trim().slice(0, 255);
+      updates.brand = b || null;
+    }
+
+    if (updates.extraBarcodes !== undefined) {
+      const list = Array.isArray(updates.extraBarcodes)
+        ? updates.extraBarcodes
+        : String(updates.extraBarcodes || "").split(/[,;\n]+/);
+      updates.extraBarcodes = list
+        .map((s: unknown) => String(s || "").trim())
+        .filter(Boolean)
+        .slice(0, 20);
     }
 
     const product = await ProductService.updateProduct(merchantId, productId, updates);
