@@ -653,6 +653,18 @@ export function formatQtyArticlePrefix(item: {
   return `${Number(item.quantity) || 0} x `;
 }
 
+function formatWeighedUnitPriceReceiptLine(
+  item: Pick<WebPosReceiptItem, 'unitPrice' | 'weightKg'>,
+  qtyPrefix: string,
+  width: number
+): string | null {
+  const weightKg = item.weightKg;
+  if (weightKg == null || Number(weightKg) <= 0) return null;
+  const unitPrice = roundMoney2(Number(item.unitPrice) || 0);
+  if (unitPrice <= 0) return null;
+  return `${extraIndent(qtyPrefix)}CHF ${unitPrice.toFixed(2)} / kg`.slice(0, width);
+}
+
 function stripLeadingDash(text: string): string {
   return String(text || '')
     .replace(/^[-–—•]\s*/, '')
@@ -765,6 +777,8 @@ function formatCustomerReceiptItemLines(
     const maxLeft = Math.max(8, width - right.length - 1);
     out.push(padLine(left.slice(0, maxLeft), right, width));
   }
+  const unitPriceLine = formatWeighedUnitPriceReceiptLine(item, qtyPrefix, width);
+  if (unitPriceLine) out.push(unitPriceLine);
   for (const combo of comboLines) {
     const slotLabel = combo.slotName?.trim();
     const pickName = combo.productName.trim();
