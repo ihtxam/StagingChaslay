@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, Lock, UserCircle2, X } from 'lucide-react';
+import {
+  ArrowRight,
+  Loader2,
+  Menu,
+  UserCircle2,
+  X,
+} from 'lucide-react';
 import api from '@/lib/api';
+import { APP_NAME, REBORN_LOGO_WHITE } from '@/lib/brand';
+import { BRAND_BLUE_CHARCOAL, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n } from '@/lib/i18n';
 import {
   STAFF_PIN_MAX_LENGTH,
@@ -16,6 +24,54 @@ const PIN_AUTO_DELAY_MS = 420;
 
 export type WebPosPinModalMode = 'gate' | 'switch';
 
+type GateKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'clear' | '0' | 'enter';
+
+const GATE_KEYS: GateKey[] = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  'clear',
+  '0',
+  'enter',
+];
+
+function useLiveClock(locale: string) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const timeLocale = locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-GB';
+
+  const timeParts = new Intl.DateTimeFormat(timeLocale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(now);
+
+  const hour = timeParts.find((p) => p.type === 'hour')?.value ?? '';
+  const minute = timeParts.find((p) => p.type === 'minute')?.value ?? '';
+  const dayPeriod = timeParts.find((p) => p.type === 'dayPeriod')?.value ?? '';
+
+  const dateLabel = new Intl.DateTimeFormat(timeLocale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(now);
+
+  return { hour, minute, dayPeriod, dateLabel };
+}
+
 export default function WebPosPinModal({
   open,
   mode = 'switch',
@@ -23,6 +79,8 @@ export default function WebPosPinModal({
   onSuccess,
   onLeave,
   onLogout,
+  productName,
+  logoUrl,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -41,15 +99,21 @@ export default function WebPosPinModal({
   onLeave?: () => void;
   /** Sign out of the merchant account (clears JWT + PIN session). */
   onLogout?: () => void;
+  /** Bottom-left label; defaults to translated product name. */
+  productName?: string | null;
+  /** Bottom-right logo; defaults to Reborn white logo. */
+  logoUrl?: string | null;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const busyRef = useRef(false);
   const autoTimerRef = useRef<number | null>(null);
   const isGate = mode === 'gate';
+  const clock = useLiveClock(locale);
 
   const clearAutoTimer = () => {
     if (autoTimerRef.current != null) {
@@ -64,6 +128,7 @@ export default function WebPosPinModal({
       setPin('');
       setError('');
       setShake(false);
+      setMenuOpen(false);
       busyRef.current = false;
       setBusy(false);
     }
@@ -133,59 +198,106 @@ export default function WebPosPinModal({
     setError('');
   };
 
-  const keys = isGate
-    ? (['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', ''] as const)
-    : (['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'] as const);
+  const handleGateKey = (key: GateKey) => {
+    if (key === 'clear') backspace();
+    else if (key === 'enter') void submitPin(pin);
+    else appendDigit(key);
+  };
+
+  const switchKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'] as const;
 
   const dots = Math.max(
     PIN_MIN_LENGTH,
     Math.min(pin.length > 0 ? pin.length : PIN_MIN_LENGTH, PIN_MAX_LENGTH)
   );
 
-  const keypad = (
-    <div
-      className={`grid grid-cols-3 ${
-        isGate ? 'mx-auto w-full max-w-md gap-3 sm:gap-4' : 'gap-2'
-      }`}
-    >
-      {keys.map((key, idx) => {
-        if (!key) {
-          return <div key={`empty-${idx}`} />;
-        }
-        return (
-          <button
-            key={key}
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (key === '⌫') backspace();
-              else if (key === 'OK') void submitPin(pin);
-              else appendDigit(key);
-            }}
-            className={`font-semibold disabled:opacity-50 ${
-              isGate
-                ? `rounded-2xl py-5 text-3xl sm:py-6 sm:text-4xl ${
-                    key === '⌫'
-                      ? 'bg-stone-200 text-stone-800 hover:bg-stone-300'
-                      : 'bg-stone-100 text-stone-900 hover:bg-stone-200'
-                  }`
-                : key === 'OK'
-                  ? 'webpos-accent-btn rounded-xl py-3 text-lg'
-                  : 'webpos-keypad-key'
-            }`}
-          >
-            {busy && key === 'OK' ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : key}
-          </button>
-        );
-      })}
+  const footerProductName = productName?.trim() || t('webPosPinProductName');
+  const footerLogoUrl = logoUrl?.trim() || REBORN_LOGO_WHITE;
+
+  const gateKeypad = (
+    <div className="mx-auto grid w-full max-w-[min(22rem,88vw)] grid-cols-3 gap-3 sm:gap-4">
+      {GATE_KEYS.map((key) => (
+        <button
+          key={key}
+          type="button"
+          disabled={busy}
+          onClick={() => handleGateKey(key)}
+          className="flex aspect-square items-center justify-center rounded-2xl bg-[#B8324A] text-3xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:text-4xl"
+          aria-label={
+            key === 'clear'
+              ? t('webPosPinClear')
+              : key === 'enter'
+                ? t('webPosPinEnter')
+                : key
+          }
+        >
+          {busy && key === 'enter' ? (
+            <Loader2 className="h-8 w-8 animate-spin" />
+          ) : key === 'clear' ? (
+            <X className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.5} />
+          ) : key === 'enter' ? (
+            <ArrowRight className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.5} />
+          ) : (
+            key
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
+  const switchKeypad = (
+    <div className="grid grid-cols-3 gap-2">
+      {switchKeys.map((key) => (
+        <button
+          key={key}
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (key === '⌫') backspace();
+            else if (key === 'OK') void submitPin(pin);
+            else appendDigit(key);
+          }}
+          className={`font-semibold disabled:opacity-50 ${
+            key === 'OK'
+              ? 'webpos-accent-btn rounded-xl py-3 text-lg'
+              : 'webpos-keypad-key'
+          }`}
+        >
+          {busy && key === 'OK' ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : key}
+        </button>
+      ))}
+    </div>
+  );
+
+  const pinDots = (
+    <div className="flex justify-center gap-3">
+      {Array.from({ length: dots }).map((_, i) => (
+        <span
+          key={i}
+          className={`rounded-full transition-colors ${
+            isGate ? 'h-4 w-4 sm:h-5 sm:w-5' : 'h-3 w-3'
+          } ${
+            i < pin.length
+              ? 'bg-white'
+              : isGate
+                ? 'bg-white/25'
+                : 'bg-[var(--webpos-border,var(--border))]'
+          }`}
+        />
+      ))}
     </div>
   );
 
   const portalTarget = typeof document !== 'undefined' ? document.body : null;
 
   if (isGate) {
+    const hasMenu = Boolean(onLeave || onLogout);
+
     const gate = (
-      <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-stone-950 px-4 py-8 text-white">
+      <div
+        className="fixed inset-0 z-[120] flex flex-col overflow-hidden"
+        style={{ backgroundColor: BRAND_BLUE_CHARCOAL, color: BRAND_WARM_WHITE }}
+      >
         <WebPosBlockingAlert
           open={!!error}
           title={t('webPosPinErrorTitle')}
@@ -193,66 +305,117 @@ export default function WebPosPinModal({
           onDismiss={() => setError('')}
           minMs={6000}
         />
+
+        {hasMenu ? (
+          <div className="absolute left-0 top-0 z-10 p-4 sm:p-6">
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white/90 hover:bg-white/10"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label={t('webPosPinMenu')}
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            {menuOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-10 cursor-default"
+                  aria-label={t('close')}
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div
+                  role="menu"
+                  className="relative z-20 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-white/10 bg-[#0f1c22] shadow-2xl"
+                >
+                  {onLeave ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-4 py-3 text-left text-sm font-medium text-white/90 hover:bg-white/10"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLeave();
+                      }}
+                    >
+                      {t('webPosBackOffice')}
+                    </button>
+                  ) : null}
+                  {onLogout ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-4 py-3 text-left text-sm font-medium text-white/70 hover:bg-white/10"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLogout();
+                      }}
+                    >
+                      {t('logout')}
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <div
-          className={`flex w-full max-w-lg flex-col items-center ${
+          className={`flex min-h-0 flex-1 flex-col lg:flex-row ${
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <div className="mb-6 flex flex-col items-center gap-3 text-center">
-            <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
+          <section className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-16 text-center lg:pb-12 lg:pt-12">
+            <div className="flex items-baseline justify-center gap-1 sm:gap-2">
+              <span className="text-[clamp(3.5rem,12vw,7rem)] font-extralight leading-none tracking-tight">
+                {clock.hour}:{clock.minute}
+              </span>
+              {clock.dayPeriod ? (
+                <span className="text-[clamp(1rem,3vw,1.75rem)] font-light uppercase tracking-wide text-white/80">
+                  {clock.dayPeriod}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-4 max-w-md text-[clamp(0.95rem,2.2vw,1.35rem)] font-light text-white/85">
+              {clock.dateLabel}
+            </p>
+          </section>
+
+          <section className="flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-4 lg:pb-12 lg:pt-12">
+            <div className="mb-6 flex max-w-md flex-col items-center gap-3 text-center">
               {busy ? (
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
-              ) : (
-                <Lock className="h-8 w-8 text-white" />
-              )}
-            </span>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {t('webPosPinGateTitle')}
-            </h1>
-            <p className="max-w-sm text-sm text-stone-300">{t('webPosPinGateHint')}</p>
-          </div>
-
-          <div className="mb-8 flex justify-center gap-3">
-            {Array.from({ length: dots }).map((_, i) => (
-              <span
-                key={i}
-                className={`h-4 w-4 rounded-full sm:h-5 sm:w-5 ${
-                  i < pin.length ? 'bg-white' : 'bg-white/25'
-                }`}
-              />
-            ))}
-          </div>
-
-          {error ? (
-            <div className="mb-4 w-full rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
-              <p className="text-base font-semibold text-red-100">{error}</p>
-            </div>
-          ) : null}
-
-          {keypad}
-          {onLeave || onLogout ? (
-            <div className="mt-8 flex flex-col items-center gap-3">
-              {onLeave ? (
-                <button
-                  type="button"
-                  className="text-sm font-medium text-stone-400 underline underline-offset-2 hover:text-stone-200"
-                  onClick={onLeave}
-                >
-                  {t('webPosBackOffice')}
-                </button>
+                <Loader2 className="h-7 w-7 animate-spin text-white/80" aria-hidden />
               ) : null}
-              {onLogout ? (
-                <button
-                  type="button"
-                  className="text-sm font-medium text-stone-500 underline underline-offset-2 hover:text-stone-300"
-                  onClick={onLogout}
-                >
-                  {t('logout')}
-                </button>
-              ) : null}
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                {t('webPosPinGateTitle')}
+              </h1>
+              <p className="max-w-sm text-sm text-white/65">{t('webPosPinGateHint')}</p>
             </div>
-          ) : null}
+
+            <div className="mb-6">{pinDots}</div>
+
+            {error ? (
+              <div className="mb-4 w-full max-w-md rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
+                <p className="text-base font-semibold text-red-100">{error}</p>
+              </div>
+            ) : null}
+
+            {gateKeypad}
+          </section>
         </div>
+
+        <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-5 pb-5 sm:px-8 sm:pb-8">
+          <p className="pointer-events-auto text-xs font-medium tracking-wide text-white/70 sm:text-sm">
+            {footerProductName}
+          </p>
+          <img
+            src={footerLogoUrl}
+            alt={APP_NAME}
+            className="pointer-events-auto h-8 w-auto max-w-[min(40vw,12rem)] object-contain object-right sm:h-10"
+          />
+        </footer>
       </div>
     );
     return portalTarget ? createPortal(gate, portalTarget) : gate;
@@ -286,18 +449,7 @@ export default function WebPosPinModal({
           </button>
         </div>
 
-        <div className="mb-4 flex justify-center gap-2">
-          {Array.from({ length: dots }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-3 w-3 rounded-full ${
-                i < pin.length
-                  ? 'bg-[var(--webpos-text,var(--text))]'
-                  : 'bg-[var(--webpos-border,var(--border))]'
-              }`}
-            />
-          ))}
-        </div>
+        <div className="mb-4">{pinDots}</div>
 
         {error ? (
           <div className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-center">
@@ -305,7 +457,7 @@ export default function WebPosPinModal({
           </div>
         ) : null}
 
-        {keypad}
+        {switchKeypad}
 
         {onLogout ? (
           <button

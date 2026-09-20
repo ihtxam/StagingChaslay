@@ -9749,6 +9749,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   : undefined
               }
               onLogout={() => void handlePosLogout()}
+              productName={merchant?.name || merchant?.businessName}
+              logoUrl={
+                printSettings?.receiptLogoUrl ||
+                merchant?.shopLogoUrl ||
+                paymentConfig?.shopLogoUrl
+              }
             />
           </>
         )}
@@ -11205,6 +11211,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}
         onLogout={() => void handlePosLogout()}
+        productName={merchant?.name || merchant?.businessName}
+        logoUrl={
+          printSettings?.receiptLogoUrl ||
+          merchant?.shopLogoUrl ||
+          paymentConfig?.shopLogoUrl
+        }
       />
 
       <WebPosPaymentModal
