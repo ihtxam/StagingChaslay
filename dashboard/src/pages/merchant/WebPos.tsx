@@ -149,6 +149,7 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import { isVisibleOnChannel, productVisibleOnChannel } from '@/lib/catalog-visibility';
+import { cartModifiersCompactLabel } from '@/lib/cart-modifier-lines';
 import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopModifierGroup,
@@ -589,27 +590,6 @@ type CartLine = {
   giftCard?: GiftCardLineMeta;
   membershipSell?: MembershipSellMeta;
 };
-
-function lineExtrasLabel(l: CartLine) {
-  const parts: string[] = [];
-  const combos = l.comboSelections || [];
-  const extras = l.selectedExtras || [];
-  if (combos.length) {
-    parts.push(
-      ...combos.map((c) => {
-        const productName = repairCatalogText(c.productName || '');
-        const extraNames = (c.selectedExtras || []).map((e) => repairCatalogText(e.name || ''));
-        return extraNames.length ? `${productName} (${extraNames.join(', ')})` : productName;
-      })
-    );
-  }
-  if (!combos.length && extras.length) {
-    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
-  } else if (combos.length && extras.length) {
-    parts.push(...extras.map((e) => repairCatalogText(e.name || '')));
-  }
-  return parts.join(', ');
-}
 
 /** Kitchen delta only — skip lines already fired via Send / tab draft. */
 function unsentKitchenLines(lines: CartLine[]): CartLine[] {
@@ -1926,7 +1906,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               name: repairCatalogText(l.name),
               qty: l.quantity,
               lineTotal: l.lineTotal,
-              modifiers: lineExtrasLabel(l) || undefined,
+              modifiers: cartModifiersCompactLabel(l) || undefined,
             })),
         subtotal: saleTotals.subtotal,
         discount: saleTotals.discount ?? 0,
@@ -5776,6 +5756,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             selectedExtras: l.selectedExtras,
             comboSelections: l.comboSelections,
             lineNote: l.lineNote,
+            showModifierPrices: true,
           })
         ),
         subtotal: fullTotals.subtotal,
@@ -8466,6 +8447,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           selectedExtras: l.selectedExtras,
           comboSelections: l.comboSelections,
           lineNote: l.lineNote,
+          showModifierPrices: true,
         })
       ),
       subtotal: saleTotals.subtotal,
