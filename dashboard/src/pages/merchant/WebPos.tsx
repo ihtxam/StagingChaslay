@@ -4573,7 +4573,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         isWeighed: !!l.isWeighed,
       })),
       printSettings,
-      { storeName: merchant?.name || merchant?.businessName || undefined }
+      {
+        storeName: merchant?.name || merchant?.businessName || undefined,
+        retryLocally: true,
+      }
     );
     toast.success(t('webPosOrderLabelPrinted'));
   };
@@ -4619,6 +4622,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
             toast.error(msg);
           });
+        } else {
+          toast.error(t('webPosOrderLabelHeldIdMissing'));
         }
         toast.success(t('webPosHeldOrderLabelSent'));
         releaseOperatorAfterKitchen(stamped, { ticket });
@@ -8890,15 +8895,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const ticket = ensureCartTicket();
       await persistHeldOrder(cart, sendToKitchen, { ticket });
       const heldId = resumedHeldIdRef.current;
-      if (
-        heldId &&
-        orderLabelEnabled &&
-        printSettings?.autoPrintOrderLabelOnHold !== false
-      ) {
-        void printOrderLabelForCart(heldId, cartSnapshot).catch((e: unknown) => {
-          const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
-          toast.error(msg);
-        });
+      if (orderLabelEnabled && printSettings?.autoPrintOrderLabelOnHold !== false) {
+        if (heldId) {
+          void printOrderLabelForCart(heldId, cartSnapshot).catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : t('webPosOrderLabelFailed');
+            toast.error(msg);
+          });
+        } else {
+          toast.error(t('webPosOrderLabelHeldIdMissing'));
+        }
       }
       setCart([]);
       clearCartTicket();
