@@ -71,7 +71,7 @@ export default function ShopPhoneField({
       </select>
       <input
         ref={localInputRef}
-        className="min-w-0 flex-1 px-3 py-2 text-sm outline-none"
+        className="shop-input min-w-0 flex-1 bg-white px-3 py-2 text-sm text-stone-900 outline-none placeholder:text-stone-500"
         type="tel"
         inputMode="tel"
         autoComplete="tel-national"

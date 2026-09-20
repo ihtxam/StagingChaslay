@@ -42,7 +42,7 @@ import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopStorefrontFooter from '@/components/shop/ShopStorefrontFooter';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
-import { SHOP_INPUT_CLASS, SHOP_LABEL_CLASS } from '@/lib/shop-input';
+import { SHOP_INPUT_CLASS, SHOP_INPUT_CLASS_SM, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
 import { Check, ShoppingBag, Trophy } from 'lucide-react';
@@ -2392,7 +2392,7 @@ export default function CheckoutPage() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      className="flex-1 border border-stone-300 px-3 py-2 text-sm font-mono"
+                      className={`${SHOP_INPUT_CLASS_SM} flex-1 font-mono`}
                       placeholder={t('giftCardEcardPlaceholder')}
                       value={draft.giftCardCode || ''}
                       onChange={(e) => {
