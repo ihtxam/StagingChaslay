@@ -1900,7 +1900,7 @@ export function escposKitchenTicketEnd(): Uint8Array {
  */
 export function escposKitchenCut(): Uint8Array {
   return new Uint8Array([
-    0x1b, 0x64, 0x02, // ESC d 2 — short feed before cut
+    0x1b, 0x64, 0x01, // ESC d 1 — minimal gap before cut
     0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
   ]);
 }
@@ -2657,7 +2657,15 @@ export async function buildReceiptEscPos(
 
   let qrRaster: Uint8Array | null = null;
 
-  if (digitalData && googleData) {
+  if (opts.fastQr !== false) {
+    if (digitalData && googleData) {
+      qrRaster = escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    } else if (digitalData) {
+      qrRaster = escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    } else if (googleData) {
+      qrRaster = escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    }
+  } else if (digitalData && googleData) {
     qrRaster =
       (await buildDualReceiptQrRasterEscPos({
         left: { label: L.digitalReceiptQrTitle, data: digitalData },
@@ -2676,10 +2684,8 @@ export async function buildReceiptEscPos(
         data: digitalData,
         paperWidthMm: paper,
       })) ||
-      (opts.fastQr !== false
-        ? escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE)
-        : (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-          escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE));
+      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
+      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   } else if (googleData) {
     qrRaster =
       (await buildLabeledReceiptQrRasterEscPos({

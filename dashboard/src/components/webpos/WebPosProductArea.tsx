@@ -578,7 +578,7 @@ export default function WebPosProductArea({
                   </button>
                 ) : null}
               </div>
-              {onOpenCheckout ? (
+              {onOpenCheckout && !hasQuickPay ? (
                 <button
                   type="button"
                   disabled={checkoutDisabled}

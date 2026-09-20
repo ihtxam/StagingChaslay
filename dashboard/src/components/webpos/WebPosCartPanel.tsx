@@ -1203,16 +1203,17 @@ export default function WebPosCartPanel({
                   onClick={onPayment}
                   className={`${actionBtn('text-xs uppercase tracking-wide')} bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-40`}
                 >
-                  {t('webPosPay')}
+                  {t('webPosTerminal')}
                 </button>
                 {showMorePay ? (
                   <button
                     type="button"
                     disabled={!hasItems || busy}
                     onClick={() => (onMorePayments ? onMorePayments() : onPayment())}
-                    className={`${actionBtn('text-xs uppercase tracking-wide')} border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40`}
+                    className={`${actionBtn('text-xs uppercase tracking-wide')} inline-flex items-center justify-center gap-1 border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40`}
                   >
                     {t('webPosRetailMorePay')}
+                    <ArrowRight size={14} aria-hidden />
                   </button>
                 ) : (
                   <div />

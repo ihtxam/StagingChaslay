@@ -392,6 +392,7 @@ function pumpPrintWorkerJobs() {
     cmd: "print",
     printerName: job.printerName || "",
     dataBase64: job.dataBase64,
+    drawerKick: job.drawerKick === true,
   });
   try {
     printWorker.stdin.write(`${payload}\n`);
@@ -515,13 +516,14 @@ function ensurePrintWorker() {
   return promise;
 }
 
-function printViaWorker({ printerName, dataBase64 }) {
+function printViaWorker({ printerName, dataBase64, drawerKick }) {
   return ensurePrintWorker().then(
     () =>
       new Promise((resolve, reject) => {
         printWorkerJobQueue.push({
           printerName: printerName || "",
           dataBase64,
+          drawerKick: drawerKick === true,
           resolve,
           reject,
         });
@@ -1140,7 +1142,7 @@ function enqueuePrint(task) {
   return run;
 }
 
-async function printRawFallback({ printerName, dataBase64 }) {
+async function printRawFallback({ printerName, dataBase64, drawerKick }) {
   const name = printerName && String(printerName).trim() ? String(printerName).trim() : "";
   const bytes = Buffer.from(dataBase64, "base64");
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "reborn-print-"));
@@ -1154,6 +1156,9 @@ async function printRawFallback({ printerName, dataBase64 }) {
       throw new Error(`win-raw-print.ps1 not found at ${scriptPath}`);
     }
     const args = ["-FilePath", tmpFile];
+    if (drawerKick === true) {
+      args.push("-DrawerKick");
+    }
     if (name) {
       const bom = Buffer.from([0xef, 0xbb, 0xbf]);
       fs.writeFileSync(nameFile, Buffer.concat([bom, Buffer.from(name, "utf8")]));
@@ -1176,7 +1181,7 @@ async function printRawFallback({ printerName, dataBase64 }) {
   }
 }
 
-async function printRaw({ printerName, dataBase64, dryRun }) {
+async function printRaw({ printerName, dataBase64, dryRun, drawerKick }) {
   if (!isWindows()) {
     throw new Error("Reborn Print Agent supports Windows only.");
   }
@@ -1206,7 +1211,7 @@ async function printRaw({ printerName, dataBase64, dryRun }) {
   }
 
   try {
-    const usedPrinter = await printViaWorker({ printerName: name, dataBase64 });
+    const usedPrinter = await printViaWorker({ printerName: name, dataBase64, drawerKick });
     const resolved = usedPrinter || name || "default";
     if (isUnsuitableRawPrinter(resolved)) {
       throw new Error(unsuitablePrinterError(resolved));
@@ -1218,7 +1223,7 @@ async function printRaw({ printerName, dataBase64, dryRun }) {
       workerErr && workerErr.message ? workerErr.message : workerErr
     );
     killPrintWorker();
-    return printRawFallback({ printerName: name, dataBase64 });
+    return printRawFallback({ printerName: name, dataBase64, drawerKick });
   }
 }
 
@@ -1576,17 +1581,18 @@ async function startServer() {
     }
   });
 
-  /** POST /drawer — ESC/POS cash drawer kick */
+  /** POST /drawer — ESC/POS cash drawer kick (pulse only, no print/cut) */
   app.post("/drawer", async (req, res) => {
     try {
       const name = req.body?.printerName;
       if (name && isUnsuitableRawPrinter(name)) {
         throw new Error(unsuitablePrinterError(name));
       }
-      const drawerBytes = Buffer.from([0x1b, 0x40, 0x1b, 0x70, 0x00, 0x19, 0xfa]);
+      const drawerBytes = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
       const usedPrinter = await printRaw({
         printerName: name,
         dataBase64: drawerBytes.toString("base64"),
+        drawerKick: true,
       });
       res.json({ ok: true, printer: usedPrinter });
     } catch (error) {
