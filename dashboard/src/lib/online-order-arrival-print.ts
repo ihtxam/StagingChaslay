@@ -61,15 +61,14 @@ export async function maybePrintOnlineOrderOnArrival(
   printedOnArrivalIds.add(orderId);
 
   try {
-    const delivery = String(order.fulfillmentChannel || '').toLowerCase() === 'delivery';
     const job = {
       kind: 'auto_print_order' as const,
       orderId,
       orderSource: order.orderSource || undefined,
       printKitchen: true,
-      printDeliveryReceipt: delivery,
+      printDeliveryReceipt: false,
       printReceipt: false,
-      printNotification: !delivery,
+      printNotification: false,
     };
     await processAutoPrintOrderJob({ ...job, force: true });
   } catch {

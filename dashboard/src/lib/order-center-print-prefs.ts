@@ -66,3 +66,17 @@ export function buildOrderCenterPrintJob(
     kitchenLocalOnly: prefs.kitchenRoute === 'local',
   };
 }
+
+/** Accept-time print — kitchen on accept is enqueued server-side for main till route. */
+export function buildOrderCenterAcceptPrintJob(
+  orderId: string,
+  orderSource?: string | null,
+  fulfillmentChannel?: string | null,
+  prefs: OrderCenterPrintPrefs = readOrderCenterPrintPrefs()
+): AutoPrintOrderPayload {
+  const job = buildOrderCenterPrintJob(orderId, orderSource, fulfillmentChannel, prefs);
+  if (prefs.kitchenRoute === 'till') {
+    job.printKitchen = false;
+  }
+  return job;
+}
