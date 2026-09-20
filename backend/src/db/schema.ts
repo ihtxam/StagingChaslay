@@ -1156,6 +1156,10 @@ export const products = pgTable(
       .notNull(),
     /** Product IDs suggested in online shop cart upsell slider */
     similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
+    /** Retail catalog brand (optional). */
+    brand: varchar("brand", { length: 255 }),
+    /** Additional EAN/UPC codes that scan to this product. */
+    extraBarcodes: json("extra_barcodes").$type<string[]>().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

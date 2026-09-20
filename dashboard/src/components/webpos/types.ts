@@ -87,6 +87,8 @@ export type Product = {
   productType?: string;
   sku?: string | null;
   barcode?: string | null;
+  extraBarcodes?: string[] | null;
+  brand?: string | null;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number; isDefault?: boolean }>;
   sortOrder?: number;

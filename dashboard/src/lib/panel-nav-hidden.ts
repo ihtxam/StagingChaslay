@@ -1,5 +1,12 @@
 /** Sidebar group ids and route paths a reseller can hide from a merchant panel. */
 export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
+  retail: [
+    '/merchant/products',
+    '/merchant/categories',
+    '/merchant/reports',
+    '/merchant/inventory',
+    '/merchant/storekeeper',
+  ],
   sales: [
     '/merchant/orders',
     '/merchant/order-center',

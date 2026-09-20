@@ -202,6 +202,8 @@ interface SettingsData {
     retailTileSize?: 'sm' | 'md' | 'lg';
     retailPaymentBar?: boolean;
     retailClearSearchAfterAdd?: boolean;
+    retailShowStockOnTiles?: boolean;
+    retailQuickTiles?: string[];
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -2591,6 +2593,7 @@ export default function Settings() {
                           ['retailScannerFirst', t('posRetailScannerFirst'), t('posRetailScannerFirstHint')],
                           ['retailPaymentBar', t('posRetailPaymentBar'), t('posRetailPaymentBarHint')],
                           ['retailClearSearchAfterAdd', t('posRetailClearSearchAfterAdd'), t('posRetailClearSearchAfterAddHint')],
+                          ['retailShowStockOnTiles', t('posRetailShowStockOnTiles'), t('posRetailShowStockOnTilesHint')],
                         ] as const
                       ).map(([key, label, hint]) => (
                         <label
@@ -2603,7 +2606,9 @@ export default function Settings() {
                             checked={
                               key === 'retailLayoutEnabled'
                                 ? settings.posCheckoutSettings?.retailLayoutEnabled !== false
-                                : settings.posCheckoutSettings?.[key] !== false
+                                : key === 'retailShowStockOnTiles'
+                                  ? settings.posCheckoutSettings?.retailShowStockOnTiles === true
+                                  : settings.posCheckoutSettings?.[key] !== false
                             }
                             onChange={(e) =>
                               setSettings({

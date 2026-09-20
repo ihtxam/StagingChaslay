@@ -258,6 +258,9 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   products_similar_product_ids:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS similar_product_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
+  products_brand: "ALTER TABLE products ADD COLUMN IF NOT EXISTS brand varchar(255)",
+  products_extra_barcodes:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_barcodes jsonb NOT NULL DEFAULT '[]'::jsonb",
   categories_visibility:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:
@@ -1760,18 +1763,24 @@ export async function ensureAllMerchantSchema(): Promise<{
     "visibility",
     "recipe_yield",
     "barcode",
+    "brand",
+    "extra_barcodes",
   ]).catch(() => [] as string[]);
   for (const col of stillProducts) {
     patchedColumns.delete(col);
     patchedColumns.delete(`products_${col}`);
     if (col === "visibility") await runPatch("products_visibility");
     else if (col === "barcode") await runPatch("products_barcode");
+    else if (col === "brand") await runPatch("products_brand");
+    else if (col === "extra_barcodes") await runPatch("products_extra_barcodes");
     else await runPatch("recipe_yield");
   }
   const productsMissing = await listMissingTableColumns("products", [
     "visibility",
     "recipe_yield",
     "barcode",
+    "brand",
+    "extra_barcodes",
   ]).catch(() => [] as string[]);
   const editionsExists = await tableExists("editions").catch(() => false);
   const editionsMissing = editionsExists
