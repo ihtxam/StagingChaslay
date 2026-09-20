@@ -1621,6 +1621,24 @@ button {
     @apply relative flex flex-col overflow-hidden rounded-lg border border-stone-200 bg-white text-left shadow-sm transition hover:shadow-md active:scale-[0.98];
   }
 
+  .webpos-retail-layout {
+    @apply min-h-0 flex-1;
+  }
+
+  .webpos-retail-product-tile {
+    touch-action: pan-y;
+    @apply relative flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition hover:shadow-md active:scale-[0.99];
+  }
+
+  .webpos-retail-search:focus {
+    outline: 2px solid var(--webpos-accent-ring);
+    outline-offset: 1px;
+  }
+
+  .webpos-shell[data-appearance='night'] .webpos-retail-product-tile {
+    @apply border-stone-600 bg-stone-900;
+  }
+
   .webpos-keypad-key {
     @apply min-h-[3.5rem] rounded-lg bg-white py-4 text-xl font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-50 disabled:opacity-40;
   }

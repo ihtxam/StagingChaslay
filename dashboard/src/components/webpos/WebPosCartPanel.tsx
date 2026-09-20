@@ -122,6 +122,12 @@ type Props = {
   onReleaseTable?: () => void;
   /** Retail mode — simplified cart chrome and footer. */
   isRetail?: boolean;
+  /** Retail layout: Cash / Card / Pay payment bar instead of Hold + arrow. */
+  retailPaymentBar?: boolean;
+  onExpressCash?: () => void;
+  onExpressCard?: () => void;
+  onMorePayments?: () => void;
+  paymentMethods?: { cash?: boolean; card?: boolean; terminal?: boolean; giftCard?: boolean };
   /** Record cash in/out when shift is open. */
   onCashMovement?: () => void;
   /** Lines sent but kitchen print failed. */
@@ -238,6 +244,11 @@ export default function WebPosCartPanel({
   canReleaseTable = false,
   onReleaseTable,
   isRetail = false,
+  retailPaymentBar = false,
+  onExpressCash,
+  onExpressCard,
+  onMorePayments,
+  paymentMethods,
   failedPrintCount = 0,
   onOpenPrintIssues,
   onOrderPrint,
@@ -254,6 +265,13 @@ export default function WebPosCartPanel({
   const actionBtn = (extra = '') => cartActionButtonClass(actionButtonSize, extra);
   const lineReady = (line: CartLine) =>
     cartLineKitchenReady(line, kdsTicketKeys, kdsReadyMap);
+  const retailPayBar = isRetail && retailPaymentBar;
+  const showCashPay = paymentMethods?.cash !== false;
+  const showCardPay = paymentMethods?.card !== false;
+  const showMorePay =
+    paymentMethods?.terminal === true ||
+    paymentMethods?.giftCard === true ||
+    !!onMorePayments;
   const hasItems = cart.length > 0;
   const isPage = layout === 'page';
   const effectiveShowSend = kitchenEnabled && showSend;
@@ -396,9 +414,30 @@ export default function WebPosCartPanel({
       className={`webpos-cart-panel flex min-h-0 w-full flex-1 flex-col bg-white ${
         isPage
           ? 'border-0'
-          : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
+          : retailPayBar
+            ? 'border-l border-stone-200 lg:w-[min(24rem,32vw)] lg:shrink-0'
+            : `${sideBorder} border-stone-200 lg:w-[min(22rem,34vw)] lg:shrink-0`
       }`}
     >
+      {retailPayBar ? (
+        <div className="shrink-0 border-b border-stone-100 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-800">
+              {t('webPosRetailCart')}
+            </h2>
+            {onHoldOrder ? (
+              <button
+                type="button"
+                disabled={!hasItems || busy}
+                onClick={onHoldOrder}
+                className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-violet-800 hover:bg-violet-100 disabled:opacity-40"
+              >
+                {t('webPosHoldOrder')}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {/* Channel tabs: Takeaway / Delivery / Dine-in (retail bistro: toggles live on order row) */}
       {showChannelTabs && !retailBistroMode ? (
         <div
@@ -1110,28 +1149,77 @@ export default function WebPosCartPanel({
         </div>
 
         <div
-          className={`shrink-0 grid gap-1.5 border-t border-stone-200 bg-white p-2 ${
-            isRetail
-              ? isPage && onBack
-                ? 'grid-cols-[auto_1fr_1fr]'
-                : 'grid-cols-2'
-              : isPage && onBack
-                ? 'grid-cols-[auto_1fr_1fr_1fr]'
-                : 'grid-cols-3'
+          className={`shrink-0 border-t border-stone-200 bg-white p-2 ${
+            retailPayBar ? 'space-y-2' : `grid gap-1.5 ${
+              isRetail
+                ? isPage && onBack
+                  ? 'grid-cols-[auto_1fr_1fr]'
+                  : 'grid-cols-2'
+                : isPage && onBack
+                  ? 'grid-cols-[auto_1fr_1fr_1fr]'
+                  : 'grid-cols-3'
+            }`
           }`}
         >
           {isPage && onBack ? (
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+              className={`inline-flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 ${
+                retailPayBar ? 'mb-0' : ''
+              }`}
               aria-label={t('back')}
               title={t('back')}
             >
               <ArrowLeft size={18} />
             </button>
           ) : null}
-          {isRetail ? (
+          {retailPayBar ? (
+            <>
+              {showCashPay ? (
+                <button
+                  type="button"
+                  disabled={!hasItems || busy}
+                  onClick={onExpressCash}
+                  className={`${actionBtn('uppercase tracking-wide')} w-full bg-[var(--webpos-accent)] text-white hover:opacity-95 disabled:opacity-40`}
+                >
+                  {t('webPosRetailCashF1')}
+                </button>
+              ) : null}
+              <div className="grid grid-cols-3 gap-1.5">
+                {showCardPay ? (
+                  <button
+                    type="button"
+                    disabled={!hasItems || busy}
+                    onClick={onExpressCard}
+                    className={`${actionBtn('text-xs uppercase tracking-wide')} bg-stone-800 text-white hover:bg-stone-900 disabled:opacity-40`}
+                  >
+                    {t('webPosRetailCardF2')}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={!hasItems || busy}
+                  onClick={onPayment}
+                  className={`${actionBtn('text-xs uppercase tracking-wide')} bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-40`}
+                >
+                  {t('webPosPay')}
+                </button>
+                {showMorePay ? (
+                  <button
+                    type="button"
+                    disabled={!hasItems || busy}
+                    onClick={() => (onMorePayments ? onMorePayments() : onPayment())}
+                    className={`${actionBtn('text-xs uppercase tracking-wide')} border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40`}
+                  >
+                    {t('webPosRetailMorePay')}
+                  </button>
+                ) : (
+                  <div />
+                )}
+              </div>
+            </>
+          ) : isRetail ? (
             <>
               <button
                 type="button"
@@ -1215,7 +1303,7 @@ export default function WebPosCartPanel({
               )}
             </>
           )}
-          {!isRetail ? (
+          {!retailPayBar && !isRetail ? (
             <button
               type="button"
               disabled={!hasItems || busy}

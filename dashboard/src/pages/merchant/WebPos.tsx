@@ -385,6 +385,8 @@ import WebPosProductArea, {
   type ProductGridSort,
   type ProductGridTileSize,
 } from '@/components/webpos/WebPosProductArea';
+import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategorySidebar';
+import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosCheckoutView from '@/components/webpos/WebPosCheckoutView';
 import WebPosSuccessView from '@/components/webpos/WebPosSuccessView';
 import WebPosSendReceiptModal from '@/components/webpos/WebPosSendReceiptModal';
@@ -1685,6 +1687,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const posMode = checkoutSettings.posMode === 'retail' ? 'retail' : 'restaurant';
   const isRetail = posMode === 'retail';
+  const useRetailLayout =
+    isRetail && checkoutSettings.retailLayoutEnabled !== false && posTab === 'register';
+  const retailSearchRef = useRef<HTMLInputElement>(null);
   const retailTakeawayEnabled =
     !!checkoutSettings.retailTakeawayEnabled && editionAllows('channel_takeaway');
   const retailDeliveryEnabled =
@@ -3616,6 +3621,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return;
       }
       pushConfiguredProduct(p, roundMoney2(Number(p.price) || 0), [], []);
+      if (useRetailLayout && checkoutSettings.retailClearSearchAfterAdd !== false) {
+        setSearch('');
+      }
     });
   };
 
@@ -9531,6 +9539,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       (paymentConfig?.methods.giftCard === true) && canPay && giftCardsEditionOk && !offlineNow,
     invoice: (paymentConfig?.methods.invoice !== false) && canPay,
   };
+
+  useEffect(() => {
+    if (!useRetailLayout || posView !== 'register' || pinGateRequired || pinModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F10') {
+        e.preventDefault();
+        retailSearchRef.current?.focus();
+        retailSearchRef.current?.select();
+      }
+      if (e.key === 'F1' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (enabledMethods.cash && cart.length && !busy && !paymentModalOpen) {
+          void runExpressPay('cash');
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    useRetailLayout,
+    posView,
+    pinGateRequired,
+    pinModalOpen,
+    enabledMethods.cash,
+    cart.length,
+    busy,
+    paymentModalOpen,
+  ]);
   const giftCardsSellingOn =
     giftCardsEditionOk &&
     (paymentConfig?.giftCardSettings?.enabled === true ||
@@ -9876,7 +9912,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             setSearch('');
           }
         }}
-        showSearch={posView === 'register' && !isPhoneViewport}
+        showSearch={posView === 'register' && !isPhoneViewport && !useRetailLayout}
         onlinePendingCount={onlinePendingCount}
         notificationCount={notificationCount}
         orderAlertRing={orderAlertRing}
@@ -10341,9 +10377,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ) : (
           <div
             className={`flex min-h-0 flex-1 flex-col lg:flex-row ${
-              cartSide === 'right' ? 'lg:flex-row-reverse' : ''
+              useRetailLayout
+                ? 'webpos-retail-layout'
+                : cartSide === 'right'
+                  ? 'lg:flex-row-reverse'
+                  : ''
             }`}
           >
+            {useRetailLayout ? (
+              <WebPosRetailCategorySidebar
+                categories={visibleCategories}
+                categoryId={categoryId}
+                onCategoryChange={setCategoryId}
+                giftCardsEnabled={giftCardsSellingOn}
+                layout="sidebar"
+              />
+            ) : null}
             {/* Desktop: side cart. Mobile (<1024): full-screen cart only when open — JS-gated. */}
             {(mobileCartOpen || !isNarrowViewport) ? (
             <div
@@ -10457,7 +10506,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   canCancelOrders &&
                   !!cart.find((l) => l.lineId === selectedLineId)?.sentToKitchen
                 }
-                dockSide={cartSide}
+                dockSide={useRetailLayout ? 'right' : cartSide}
                 showChannelTabs={showChannelTabs}
                 channelTabOptions={channelTabOptions}
                 kitchenEnabled={kitchenEnabled}
@@ -10487,6 +10536,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 canReleaseTable={!!tableLabel && cart.length === 0}
                 onReleaseTable={releaseEmptyTable}
                 isRetail={isRetail}
+                retailPaymentBar={
+                  useRetailLayout && checkoutSettings.retailPaymentBar !== false
+                }
+                onExpressCash={() => void runExpressPay('cash')}
+                onExpressCard={() => void runExpressPay('card')}
+                onMorePayments={openRegisterCheckout}
+                paymentMethods={{
+                  cash: enabledMethods.cash,
+                  card: enabledMethods.card,
+                  terminal: enabledMethods.terminal,
+                  giftCard: enabledMethods.giftCard,
+                }}
                 layout={isNarrowViewport && mobileCartOpen ? 'page' : 'side'}
                 onBack={
                   isNarrowViewport && mobileCartOpen
@@ -10521,6 +10582,59 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             {/* Products (mobile default). Hidden on narrow viewports while cart page is open. */}
             {(!isNarrowViewport || !mobileCartOpen) ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {useRetailLayout && isNarrowViewport ? (
+                <WebPosRetailCategorySidebar
+                  categories={visibleCategories}
+                  categoryId={categoryId}
+                  onCategoryChange={setCategoryId}
+                  giftCardsEnabled={giftCardsSellingOn}
+                  layout="chips"
+                />
+              ) : null}
+              {useRetailLayout ? (
+              <WebPosRetailProductCenter
+                categories={visibleCategories}
+                products={visibleProducts}
+                categoryId={categoryId}
+                search={search}
+                onSearchChange={setSearch}
+                onSearchSubmit={() => {
+                  const product = findProductByScanCode(search);
+                  if (product) onProductClick(product);
+                }}
+                searchInputRef={retailSearchRef}
+                autoFocusSearch={checkoutSettings.retailScannerFirst !== false}
+                tileSize={checkoutSettings.retailTileSize || 'lg'}
+                onProductClick={onProductClick}
+                cartQtyByProduct={cartQtyByProduct}
+                productHasCombo={(p) => productHasComboSlots(p)}
+                productHasMods={(p) => productHasModifiers(p as ShopProductForModifiers)}
+                onCustomAmount={openCustomAmountModal}
+                onBackgroundClick={() => handleSelectLine(null)}
+                onSellGiftCard={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  void ensureShift(() => setGiftCardOpsOpen(true));
+                }}
+                onSellMembership={() => {
+                  if (offlineNow) {
+                    toast.error(t('webPosOfflineGiftCardBlocked'));
+                    return;
+                  }
+                  if (!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled) {
+                    toast.error(t('membershipEnabled'));
+                    return;
+                  }
+                  void ensureShift(() => setMembershipSellOpen(true));
+                }}
+                membershipEnabled={
+                  !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
+                }
+                sparseGridOnAllItems={checkoutSettings.retailScannerFirst !== false}
+              />
+              ) : (
               <WebPosProductArea
                 categories={visibleCategories}
                 products={visibleProducts}
@@ -10662,6 +10776,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 }}
                 actionButtonSize={checkoutSettings.actionButtonSize}
               />
+              )}
               {/* Odoo-style sticky Pay | Cart — only on narrow viewports (JS + CSS). */}
               {isNarrowViewport ? (
               <div className="webpos-mobile-pay-cart shrink-0 border-t border-stone-200 bg-white p-2">
