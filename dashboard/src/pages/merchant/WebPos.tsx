@@ -170,6 +170,7 @@ import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
 import {
   BARCODE_WEDGE_IDLE_MS,
   BARCODE_WEDGE_MIN_LENGTH,
+  isBarcodeWedgeInput,
   useBarcodeWedge,
 } from '@/lib/barcode-wedge';
 import { isDesktopApp } from '@/lib/platform';
@@ -333,6 +334,7 @@ function readStoredGridSort(): 'default' | 'alpha' | 'bestseller' {
 
 function blurPosInputs() {
   const el = document.activeElement;
+  if (el instanceof HTMLInputElement && isBarcodeWedgeInput(el)) return;
   if (
     el instanceof HTMLInputElement ||
     el instanceof HTMLTextAreaElement ||
@@ -398,7 +400,7 @@ import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategor
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
-import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch } from '@/lib/product-scan-codes';
+import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch, sanitizeScanCode } from '@/lib/product-scan-codes';
 import {
   readDeviceRegisterProfileId,
   writeDeviceRegisterProfileId,
@@ -9576,7 +9578,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const handlePosScan = useCallback(
-    async (code: string) => {
+    async (rawCode: string) => {
+      const code = sanitizeScanCode(rawCode);
+      if (!code) return;
       if (pinGateRequired || pinModalOpen) return;
       const onCheckout = posView === 'checkout';
       if (posView !== 'register' && !onCheckout) return;
@@ -9643,8 +9647,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setSearch('');
         return;
       }
-      const browsingByName = /\s/.test(code) || !looksLikeRetailBarcodeInput(code);
-      if (browsingByName) return;
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
       setSearch('');
     },

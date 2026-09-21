@@ -75,7 +75,7 @@ export function useBarcodeWedge({
 
   const submit = useCallback(
     (raw: string) => {
-      const code = raw.trim();
+      const code = raw.replace(/[\x00-\x1F\x7F]/g, '').trim();
       bufferRef.current = '';
       clearTimers();
       if (code.length >= minLength) {
@@ -128,7 +128,7 @@ export function useBarcodeWedge({
       if (!enabled) return;
       if (isTerminatorKey(e.key)) {
         e.preventDefault();
-        submit(bufferRef.current);
+        submit(bufferRef.current || e.currentTarget.value);
         e.currentTarget.value = '';
       }
     },
@@ -143,7 +143,11 @@ export function useBarcodeWedge({
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (shouldYieldBarcodeFocus(e.target instanceof Element ? e.target : null, null)) {
+      const target = e.target instanceof Element ? e.target : null;
+      if (isBarcodeWedgeInput(target)) {
+        return;
+      }
+      if (shouldYieldBarcodeFocus(target, null)) {
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -160,11 +164,13 @@ export function useBarcodeWedge({
       }
 
       if (e.key === 'Backspace') {
+        e.preventDefault();
         bufferRef.current = bufferRef.current.slice(0, -1);
         return;
       }
 
       if (e.key.length === 1) {
+        e.preventDefault();
         appendChar(e.key);
       }
     };

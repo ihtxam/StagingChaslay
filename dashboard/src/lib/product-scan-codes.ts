@@ -1,5 +1,12 @@
 /** Scan / barcode matching for POS (primary + extra barcodes + SKU). */
 
+/** Strip HID control chars (GS/RS/etc.) that scanners inject into the scan bar. */
+export function sanitizeScanCode(raw: string): string {
+  return String(raw || '')
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .trim();
+}
+
 export function productScanCodes(p: {
   barcode?: string | null;
   sku?: string | null;

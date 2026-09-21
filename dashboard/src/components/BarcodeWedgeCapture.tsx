@@ -48,7 +48,7 @@ export default function BarcodeWedgeCapture({ active, onInput, onKeyDown }: Prop
       onChange={(e) => onInput(e.target.value)}
       onKeyDown={onKeyDown}
       onBlur={() => {
-        window.setTimeout(() => tryFocusWedge(inputRef.current, active), 800);
+        window.setTimeout(() => tryFocusWedge(inputRef.current, active), 120);
       }}
     />
   );
