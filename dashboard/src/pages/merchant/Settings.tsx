@@ -289,6 +289,7 @@ interface SettingsData {
   } | null;
   shopLogoUrl?: string | null;
   posPrintSettings?: {
+    receiptHeaderTitle?: string;
     receiptHeader?: string;
     receiptFooter?: string;
     receiptHeaderAlign?: 'left' | 'center' | 'right';
@@ -1056,6 +1057,20 @@ export default function Settings() {
           ...s,
           name: s.name || '',
           email: s.email || '',
+          posPrintSettings: s.posPrintSettings
+            ? (() => {
+                const ps = s.posPrintSettings as NonNullable<SettingsData['posPrintSettings']>;
+                const title = String(ps.receiptHeaderTitle ?? '').trim();
+                const body = String(ps.receiptHeader ?? '').trim();
+                if (title || !body.includes('\n')) return ps;
+                const lines = body.split(/\r?\n/);
+                return {
+                  ...ps,
+                  receiptHeaderTitle: (lines[0] ?? '').trim(),
+                  receiptHeader: lines.slice(1).join('\n').trim(),
+                };
+              })()
+            : s.posPrintSettings,
         });
         applyAdyenCreds(adyenCredsFromSettings(s as SettingsData));
         setCardFeeFixed(String(s?.onlineCardFeeFixed ?? '0'));
@@ -1540,6 +1555,7 @@ export default function Settings() {
         linkedProductIds: Array.isArray(p.linkedProductIds) ? p.linkedProductIds.filter(Boolean) : [],
       }));
       return {
+        receiptHeaderTitle: ps.receiptHeaderTitle || '',
         receiptHeader: ps.receiptHeader || '',
         receiptFooter: ps.receiptFooter || '',
         receiptHeaderAlign:
@@ -4263,7 +4279,24 @@ export default function Settings() {
                     <span className="text-sm text-[var(--muted-fg)]">px</span>
                   </div>
                 </Field>
-                <Field label={t('receiptHeader')}>
+                <Field label={t('receiptHeaderTitle')} hint={t('receiptHeaderTitleHint')}>
+                  <input
+                    type="text"
+                    className="input"
+                    value={settings.posPrintSettings?.receiptHeaderTitle || ''}
+                    placeholder={settings.name || ''}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptHeaderTitle: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label={t('receiptHeaderDetails')} hint={t('receiptHeaderDetailsHint')}>
                   <textarea
                     className="input min-h-[5rem]"
                     value={settings.posPrintSettings?.receiptHeader || ''}

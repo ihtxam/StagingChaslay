@@ -31,6 +31,9 @@ export type PosPrinterProfile = {
 };
 
 export type PosPrintSettings = {
+  /** Store name printed large/bold at top of receipt header. */
+  receiptHeaderTitle?: string;
+  /** Address and other details printed below store name at normal size. */
   receiptHeader?: string;
   receiptFooter?: string;
   /** Receipt header alignment: left, center (default), or right. */
@@ -146,6 +149,7 @@ export function parseLabelHeightMm(value: unknown): LabelHeightMm {
 export const DEFAULT_POS_PRINT_SETTINGS: Required<
   Omit<PosPrintSettings, "receiptLogoUrl" | "printers" | "kitchenPrintRouting" | "kitchenExcludedCategoryIds">
 > & { receiptLogoUrl: string | null; printers: PosPrinterProfile[] } = {
+  receiptHeaderTitle: "",
   receiptHeader: "",
   receiptFooter: "Merci / Danke / Thank you",
   receiptHeaderAlign: "center",
@@ -317,6 +321,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   }
 
   return {
+    receiptHeaderTitle: String(src.receiptHeaderTitle ?? "").slice(0, 500),
     receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
     receiptHeaderAlign,

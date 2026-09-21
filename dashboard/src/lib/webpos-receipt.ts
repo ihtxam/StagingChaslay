@@ -259,6 +259,9 @@ export type WebPosReceiptItem = {
 };
 
 export type PosPrintSettingsClient = {
+  /** Store name printed large/bold at top of receipt header. */
+  receiptHeaderTitle?: string;
+  /** Address and other details printed below store name at normal size. */
   receiptHeader?: string;
   receiptFooter?: string;
   /** Receipt header alignment when custom header or business block is printed. */
@@ -400,6 +403,9 @@ export type WebPosReceipt = {
   staffName?: string | null;
   language?: ReceiptLang | string;
   paperWidthMm?: 58 | 80;
+  /** Store name line(s) for receipt header. */
+  headerTitle?: string;
+  /** Address/details lines below store name. */
   header?: string;
   footer?: string;
   headerAlign?: ReceiptHeaderAlign;
@@ -698,18 +704,51 @@ function alignLine(text: string, width: number, align: ReceiptHeaderAlign = 'cen
   return centerLine(t, width);
 }
 
+/** Split legacy single-field receipt headers into store name + address/details. */
+export function normalizeReceiptHeaderFields(settings?: {
+  receiptHeaderTitle?: string | null;
+  receiptHeader?: string | null;
+  headerTitle?: string | null;
+  header?: string | null;
+} | null): { title: string; body: string } {
+  const explicitTitle = String(settings?.receiptHeaderTitle ?? settings?.headerTitle ?? '').trim();
+  const rawBody = String(settings?.receiptHeader ?? settings?.header ?? '').trim();
+  if (explicitTitle) {
+    return { title: explicitTitle, body: rawBody };
+  }
+  if (!rawBody) {
+    return { title: '', body: '' };
+  }
+  const lines = rawBody.split(/\r?\n/);
+  if (lines.length <= 1) {
+    return { title: rawBody, body: '' };
+  }
+  return {
+    title: (lines[0] ?? '').trim(),
+    body: lines.slice(1).join('\n').trim(),
+  };
+}
+
 export function getReceiptHeaderLines(
   tx: Pick<
     WebPosReceipt,
-    'header' | 'businessName' | 'address' | 'phone' | 'vatNumber' | 'headerAlign'
+    'header' | 'headerTitle' | 'businessName' | 'address' | 'phone' | 'vatNumber' | 'headerAlign'
   >,
   width: number
 ): string[] {
   const align = tx.headerAlign ?? 'center';
+  const { title, body } = normalizeReceiptHeaderFields({
+    headerTitle: tx.headerTitle,
+    header: tx.header,
+  });
   const lines: string[] = [];
-  if (tx.header?.trim()) {
-    for (const line of tx.header.trim().split(/\r?\n/)) {
-      lines.push(alignLine(line, width, align));
+  if (title || body) {
+    if (title) lines.push(alignLine(title, width, align));
+    if (body) {
+      for (const line of body.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (trimmed) lines.push(alignLine(trimmed, width, align));
+      }
     }
     return lines;
   }
@@ -728,13 +767,14 @@ export function buildReceiptHeaderEscPos(
   const align = opts.align ?? 'center';
   const alignMode: 0 | 1 | 2 = align === 'right' ? 2 : align === 'center' ? 1 : 0;
   const scale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
-  const parts: Uint8Array[] = [
-    escAlign(alignMode),
-    escBold(opts.bold === true),
-    escKitchenSize(scale),
-  ];
-  for (const line of lines) {
-    parts.push(escposCp850Encode(`${line}\n`));
+  const parts: Uint8Array[] = [escAlign(alignMode)];
+  parts.push(escBold(opts.bold === true), escKitchenSize(scale));
+  parts.push(escposCp850Encode(`${lines[0]}\n`));
+  if (lines.length > 1) {
+    parts.push(escBold(false), escKitchenSize(1));
+    for (let i = 1; i < lines.length; i++) {
+      parts.push(escposCp850Encode(`${lines[i]}\n`));
+    }
   }
   parts.push(escBold(false), escKitchenSize(1), escAlign(0));
   return concatBytes(...parts);
@@ -3671,6 +3711,7 @@ export function posOrderToWebPosReceipt(
     staffName: order.staffName,
     language: lang,
     paperWidthMm,
+    headerTitle: ctx.printSettings?.receiptHeaderTitle,
     header: ctx.printSettings?.receiptHeader,
     footer: ctx.printSettings?.receiptFooter,
     ...receiptHeaderFieldsFromPrintSettings(ctx.printSettings),

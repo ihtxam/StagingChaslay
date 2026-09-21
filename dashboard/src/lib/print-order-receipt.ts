@@ -78,6 +78,7 @@ async function printReceiptText(
   const headerFmt = receiptHeaderFormatFromSettings(opts.printSettings);
   const headerLines = getReceiptHeaderLines(
     {
+      headerTitle: opts.printSettings?.receiptHeaderTitle,
       header: opts.printSettings?.receiptHeader,
       businessName: opts.merchantName || APP_NAME,
       address: opts.merchantAddress,
