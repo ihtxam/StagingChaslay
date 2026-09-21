@@ -45,7 +45,7 @@ import {
   normalizeCustomerDisplaySettings,
   type CustomerDisplaySettings,
 } from "@/lib/customer-display-settings";
-import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
 import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
 import { isValidAdyenClientKey } from "@/lib/adyen-checkout-env";
@@ -109,21 +109,17 @@ function normalizeTaxRatePercent(value: number, field: string): string {
 
 export class MerchantSettingsService {
   static async getMerchantSettings(merchantId: string) {
-    return withMerchantSchemaRetry(() => this.buildMerchantSettings(merchantId));
+    return this.buildMerchantSettings(merchantId);
   }
 
   private static async buildMerchantSettings(merchantId: string) {
     // Schema patches run at API startup. Do not re-run CREATE/ALTER here —
     // concurrent Settings loads were locking Postgres and leaving the panel spinning.
-    const db = getDb();
-
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-    });
-
-    if (!merchant) {
+    const merchantRaw = await loadMerchantRowById(merchantId);
+    if (!merchantRaw) {
       throw new Error("Merchant not found");
     }
+    const merchant = merchantRaw as typeof schema.merchants.$inferSelect;
 
     const inventoryOn = isInventoryAddonEnabled(merchant.inventoryAddonEnabled);
     const signage = {

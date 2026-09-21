@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
+import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
@@ -197,9 +198,14 @@ export class PosReportsService {
       range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
     }
 
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-    });
+    const merchantRaw = await loadMerchantRowById(merchantId);
+    const merchant = merchantRaw as {
+      name?: string;
+      taxTakeawayRate?: unknown;
+      taxDineInRate?: unknown;
+      taxDeliveryRate?: unknown;
+      vatRate?: unknown;
+    } | null;
 
     const money = (n: unknown) => Number(n) || 0;
     const rateTakeaway =

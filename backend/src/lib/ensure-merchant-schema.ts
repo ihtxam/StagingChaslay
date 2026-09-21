@@ -31,6 +31,38 @@ export async function queryRaw<T extends Record<string, unknown> = Record<string
   return rows;
 }
 
+/** Map a pg merchants row (snake_case) to camelCase keys expected by app code. */
+export function mapMerchantRowKeys(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw };
+  for (const [key, value] of Object.entries(raw)) {
+    const camel = key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+    if (camel !== key) out[camel] = value;
+  }
+  return out;
+}
+
+/** Load one merchant row using only columns that exist in Postgres today. */
+export async function loadMerchantRowById(
+  merchantId: string
+): Promise<Record<string, unknown> | null> {
+  const rows = await queryRaw<Record<string, unknown>>(
+    `SELECT * FROM merchants WHERE id = $1 LIMIT 1`,
+    [merchantId]
+  );
+  return rows[0] ? mapMerchantRowKeys(rows[0]) : null;
+}
+
+/** Load one merchant row by email (auth / password reset). */
+export async function loadMerchantRowByEmail(
+  email: string
+): Promise<Record<string, unknown> | null> {
+  const rows = await queryRaw<Record<string, unknown>>(
+    `SELECT * FROM merchants WHERE lower(email) = $1 LIMIT 1`,
+    [email.trim().toLowerCase()]
+  );
+  return rows[0] ? mapMerchantRowKeys(rows[0]) : null;
+}
+
 /**
  * Idempotent ALTER statements for merchant columns added after initial deploy.
  * Keeps GET /merchant/settings working when drizzle-kit push lags behind code.
