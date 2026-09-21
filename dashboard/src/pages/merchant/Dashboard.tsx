@@ -240,12 +240,7 @@ function MerchantShell() {
           (s) => !!(s as { pinSet?: boolean }).pinSet && s.isActive !== false
         );
         setHasStaffPins(pins);
-        const session = resolveWebPosStaffSession({
-          staffList,
-          authStaffId: user.staffId,
-          authRole: user.role,
-          authPermissions: user.permissions as Permission[] | undefined,
-        });
+        const session = resolveWebPosStaffSession({ staffList });
         setPinSession(session);
         notifyWebPosStaffSessionChanged();
       } catch {
@@ -255,7 +250,7 @@ function MerchantShell() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.role, user?.staffId, user?.permissions]);
+  }, [user?.id]);
 
   // Keep PIN session in sync when WebPOS switches users
   useEffect(() => {

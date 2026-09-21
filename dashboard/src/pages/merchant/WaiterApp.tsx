@@ -224,12 +224,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         const list = (staffRes.data?.staff || []) as StaffRosterRow[];
         setStaffConfigured(list.some((s) => !!(s as { pinSet?: boolean }).pinSet));
         setStaffPinsKnown(true);
-        const session = resolveWebPosStaffSession({
-          staffList: list,
-          authStaffId: authUser?.staffId,
-          authRole: authUser?.role,
-          authPermissions: authUser?.permissions,
-        });
+        const session = resolveWebPosStaffSession({ staffList: list });
         setStaff(session);
         if (session) notifyWebPosStaffSessionChanged();
         setCategories(catRes.data?.categories || []);
@@ -247,7 +242,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [t, authUser?.staffId, authUser?.role, authUser?.permissions]);
+  }, [t]);
 
   useEffect(() => {
     if (!loading && pinRequired) openPinGate();
