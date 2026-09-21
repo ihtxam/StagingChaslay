@@ -398,7 +398,7 @@ import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategor
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
-import { productMatchesScan } from '@/lib/product-scan-codes';
+import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch } from '@/lib/product-scan-codes';
 import {
   readDeviceRegisterProfileId,
   writeDeviceRegisterProfileId,
@@ -2103,7 +2103,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const raw = search.trim();
         const barcode = String(p.barcode || '').trim();
         const sku = String(p.sku || '').trim();
-        const nameHit = p.name.toLowerCase().includes(q) || String(p.brand || '').toLowerCase().includes(q);
+        const nameHit =
+          tokenizedProductSearchMatch(p.name, p.brand, raw) ||
+          p.name.toLowerCase().includes(q) ||
+          String(p.brand || '').toLowerCase().includes(q);
         const codeHit =
           productMatchesScan(p, raw) ||
           (sku && sku.toLowerCase() === q) ||
@@ -2435,7 +2438,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
         api.get('/merchant/categories', fetchOpts).catch(() => ({ data: { categories: [] } })),
-        api.get('/merchant/products', { params: { limit: 500 }, ...fetchOpts }).catch((error) => {
+        api.get('/merchant/products', { params: { limit: 2000 }, ...fetchOpts }).catch((error) => {
           catalogError = error;
           return { data: { products: [] } };
         }),
@@ -9599,6 +9602,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setSearch('');
         return;
       }
+      const browsingByName = /\s/.test(code) || !looksLikeRetailBarcodeInput(code);
+      if (browsingByName) return;
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
       setSearch('');
     },
@@ -9650,11 +9655,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [handlePosScan]
   );
 
-  // Retail scanner-first: auto-submit when wedge types into the search field (no Enter suffix).
+  // Retail scanner-first: auto-submit barcode-like input only (not multi-word name search).
   useEffect(() => {
     if (!useRetailLayout || posView !== 'register' || pinGateRequired || pinModalOpen) return;
     const code = search.trim();
     if (code.length < BARCODE_WEDGE_MIN_LENGTH) return;
+    if (!looksLikeRetailBarcodeInput(code) && !findProductByScanCode(code)) return;
     const timer = window.setTimeout(() => {
       submitRetailScan(code);
     }, BARCODE_WEDGE_IDLE_MS);
@@ -9666,6 +9672,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     pinGateRequired,
     pinModalOpen,
     submitRetailScan,
+    findProductByScanCode,
   ]);
 
   const offlineNow = isWebPosCurrentlyOffline();

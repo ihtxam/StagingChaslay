@@ -60,6 +60,21 @@ function normalizeBarcode(raw?: string | null): string | null {
   return s || null;
 }
 
+/** Alternate forms for scanner vs stored barcode (UPC/EAN leading zero, etc.). */
+export function barcodeMatchVariants(raw?: string | null): string[] {
+  const trimmed = normalizeBarcode(raw);
+  if (!trimmed) return [];
+  const variants = new Set<string>([trimmed]);
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return [...variants];
+  variants.add(digits);
+  if (digits.length === 12) variants.add(`0${digits}`);
+  if (digits.length === 13 && digits.startsWith("0")) variants.add(digits.slice(1));
+  const stripped = digits.replace(/^0+/, "") || digits;
+  variants.add(stripped);
+  return [...variants];
+}
+
 export class BarcodeService {
   static async generateMissing(
     merchantId: string,

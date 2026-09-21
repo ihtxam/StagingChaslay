@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { MerchantEntitlementsService } from "@/services/merchant-entitlements.service";
 
@@ -16,7 +16,9 @@ export class ProductEntitlementsService {
     const [row] = await db
       .select({ total: count() })
       .from(schema.products)
-      .where(eq(schema.products.merchantId, merchantId));
+      .where(
+        and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true))
+      );
     return Number(row?.total) || 0;
   }
 

@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { repairCatalogText } from "@/lib/text-encoding";
+import { BarcodeService, barcodeMatchVariants } from "@/services/barcode.service";
 import { eq, and, like, desc, asc, or, max, sql, lt, count } from "drizzle-orm";
 
 export class ProductService {
@@ -69,7 +70,7 @@ export class ProductService {
           price: price.toString(),
           categoryId,
           sku,
-          barcode: barcode && String(barcode).trim() ? String(barcode).trim() : null,
+          barcode: BarcodeService.normalizeForSave(barcode),
           cost: cost?.toString(),
           stock: stock || 0,
           isTaxable,
@@ -254,12 +255,17 @@ export class ProductService {
     const db = getDb();
 
     try {
+      const variants = barcodeMatchVariants(barcode);
+      if (!variants.length) return null;
+
       const product = await db.query.products.findFirst({
         where: and(
           eq(schema.products.merchantId, merchantId),
           or(
-            eq(schema.products.barcode, barcode),
-            sql`exists (select 1 from jsonb_array_elements_text(coalesce(${schema.products.extraBarcodes}, '[]'::jsonb)) e where e = ${barcode})`
+            ...variants.flatMap((variant) => [
+              eq(schema.products.barcode, variant),
+              sql`exists (select 1 from jsonb_array_elements_text(coalesce(${schema.products.extraBarcodes}, '[]'::jsonb)) e where e = ${variant})`,
+            ])
           )
         ),
       });

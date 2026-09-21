@@ -635,13 +635,16 @@ router.post("/products", async (req: Request, res: Response) => {
         ? sanitizeComboSlotsInput(comboItems)
         : comboItems || [];
 
+    const { BarcodeService } = await import("@/services/barcode.service");
+    const normalizedBarcode = BarcodeService.normalizeForSave(barcode);
+
     const product = await ProductService.createProduct(
       merchantId,
       name,
       price,
       categoryId,
       sku,
-      barcode,
+      normalizedBarcode ?? undefined,
       cost,
       Math.floor(stockNum),
       isTaxable !== false,

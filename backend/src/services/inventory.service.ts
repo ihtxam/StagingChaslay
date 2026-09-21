@@ -901,6 +901,7 @@ export class InventoryService {
       const patch: Record<string, unknown> = {
         name: input.name,
         stock: nextStock,
+        isActive: true,
       };
       if (input.salePrice != null && Number.isFinite(input.salePrice)) {
         patch.price = price.toString();

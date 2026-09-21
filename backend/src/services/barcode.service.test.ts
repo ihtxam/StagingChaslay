@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   allocateInternalBarcode,
   BarcodeService,
+  barcodeMatchVariants,
   formatInternalBarcode,
   INTERNAL_BARCODE_LENGTH,
   INTERNAL_BARCODE_PREFIX,
@@ -25,5 +26,9 @@ assert.equal(BarcodeService.normalizeForSave(""), null);
 assert.equal(BarcodeService.normalizeForSave("   "), null);
 assert.equal(BarcodeService.normalizeForSave(null), null);
 assert.equal(BarcodeService.normalizeForSave(undefined), null);
+
+assert.ok(barcodeMatchVariants("612345678901").includes("612345678901"));
+assert.ok(barcodeMatchVariants("0612345678901").includes("612345678901"));
+assert.ok(barcodeMatchVariants("612345678901").includes("0612345678901"));
 
 console.log("barcode.service.test.ts ok");
