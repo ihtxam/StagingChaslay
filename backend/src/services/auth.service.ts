@@ -2,7 +2,33 @@ import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
-import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { queryRaw, withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+
+type AuthMerchantRow = {
+  id: string;
+  email: string;
+  password_hash: string;
+  status: string;
+  name: string;
+  inventory_addon_enabled: boolean | null;
+  signage_addon_enabled: boolean | null;
+  kds_addon_enabled: boolean | null;
+  ods_addon_enabled: boolean | null;
+};
+
+/** Auth paths use raw SQL so login works when drizzle schema columns lag production. */
+async function findAuthMerchantByEmail(email: string): Promise<AuthMerchantRow | null> {
+  const rows = await queryRaw<AuthMerchantRow>(
+    `SELECT id, email, password_hash, status, name,
+            inventory_addon_enabled, signage_addon_enabled,
+            kds_addon_enabled, ods_addon_enabled
+     FROM merchants
+     WHERE lower(email) = $1
+     LIMIT 1`,
+    [email]
+  );
+  return rows[0] ?? null;
+}
 import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
 import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
@@ -196,23 +222,14 @@ export class AuthService {
   }
 
   static async loginMerchantOwner(email: string, password: string) {
-    const db = getDb();
     const normalizedEmail = String(email || "").trim().toLowerCase();
-
-    const merchants = await withMerchantSchemaRetry(() =>
-      db
-        .select()
-        .from(schema.merchants)
-        .where(sql`lower(${schema.merchants.email}) = ${normalizedEmail}`)
-        .limit(1)
-    );
-    const merchant = merchants[0];
+    const merchant = await findAuthMerchantByEmail(normalizedEmail);
 
     if (!merchant) {
       throw new Error("Invalid email or password");
     }
 
-    const isValid = await this.comparePassword(password, merchant.passwordHash);
+    const isValid = await this.comparePassword(password, merchant.password_hash);
     if (!isValid) {
       throw new Error("Invalid email or password");
     }
@@ -227,21 +244,21 @@ export class AuthService {
       role: "merchant",
       merchantId: merchant.id,
       name: merchant.name,
-      authEpoch: Number(merchant.authEpoch ?? 0),
+      authEpoch: 0,
     });
 
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
-      isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+      isInventoryAddonEnabled(merchant.inventory_addon_enabled)
     );
     const signage = await readSignageAddon(merchant.id).catch(() => ({
-      enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+      enabled: isSignageAddonEnabled(merchant.signage_addon_enabled),
       screenLimit: 2,
     }));
     const kdsOn = await readKdsAddonEnabled(merchant.id).catch(() =>
-      isKdsAddonEnabled(merchant.kdsAddonEnabled)
+      isKdsAddonEnabled(merchant.kds_addon_enabled)
     );
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
-      isOdsAddonEnabled(merchant.odsAddonEnabled)
+      isOdsAddonEnabled(merchant.ods_addon_enabled)
     );
     return {
       token,
@@ -260,7 +277,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+        maxLocations: 1,
       },
       isOwner: true,
     };
@@ -650,14 +667,12 @@ export class AuthService {
     const passwordHash = await this.hashPassword(newPassword);
 
     if (role === "merchant") {
-      const merchant = await db.query.merchants.findFirst({
-        where: eq(schema.merchants.email, normalized),
-      });
+      const merchant = await findAuthMerchantByEmail(normalized);
       if (!merchant) throw new Error("Merchant not found");
-      await db
-        .update(schema.merchants)
-        .set({ passwordHash, updatedAt: new Date() })
-        .where(eq(schema.merchants.id, merchant.id));
+      await queryRaw(
+        `UPDATE merchants SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+        [passwordHash, merchant.id]
+      );
       return { success: true, role: "merchant" as const, email: merchant.email };
     }
 
