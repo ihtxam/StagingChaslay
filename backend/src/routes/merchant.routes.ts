@@ -1642,6 +1642,66 @@ router.get("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), asyn
 });
 
 /**
+ * PATCH /api/merchant/customers/:customerId
+ * Update customer
+ */
+router.patch("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const { customerId } = req.params;
+    const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity } = req.body;
+
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    const customer = await CustomerService.updateCustomer(merchantId, customerId, {
+      email,
+      phone,
+      firstName,
+      lastName,
+      defaultAddress,
+      defaultZip,
+      defaultCity,
+    });
+
+    res.json({
+      success: true,
+      message: "Customer updated successfully",
+      customer,
+    });
+  } catch (error) {
+    console.error("Error updating customer:", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update customer" });
+  }
+});
+
+/**
+ * DELETE /api/merchant/customers/:customerId
+ * Delete customer
+ */
+router.delete("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    const { customerId } = req.params;
+
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    await CustomerService.deleteCustomer(merchantId, customerId);
+
+    res.json({
+      success: true,
+      message: "Customer deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting customer:", error);
+    res.status(404).json({ error: error instanceof Error ? error.message : "Failed to delete customer" });
+  }
+});
+
+/**
  * GET /api/merchant/me
  * Current merchant identity + paid addon flags (inventory).
  */

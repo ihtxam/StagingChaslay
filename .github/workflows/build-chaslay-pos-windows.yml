@@ -1,4 +1,4 @@
-name: Build Chaslay POS Windows
+name: Build RebornPOS Windows
 
 # NSIS installer for the Tauri kiosk shell. Must run on windows-latest (WebView2 + MSVC).
 
@@ -12,7 +12,7 @@ on:
       - '.github/workflows/build-chaslay-pos-windows.yml'
 
 concurrency:
-  group: build-chaslay-pos-windows
+  group: build-reborn-pos-windows
   cancel-in-progress: false
 
 jobs:
@@ -66,6 +66,7 @@ jobs:
           $exe = Get-ChildItem "$out/*.exe" | Select-Object -First 1
           if (-not $exe) { throw "NSIS installer not found under $out" }
           New-Item -ItemType Directory -Force -Path backend/public/downloads | Out-Null
+          Copy-Item $exe.FullName backend/public/downloads/reborn-pos-setup.exe
           Copy-Item $exe.FullName backend/public/downloads/chaslay-pos-setup.exe
           Write-Host "Installer: $($exe.FullName) ($($exe.Length) bytes)"
 
@@ -74,22 +75,26 @@ jobs:
         run: |
           $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
           $manifest = @{
-            name = "chaslay-pos"
-            displayName = "Chaslay POS"
-            description = "Fullscreen Windows kiosk for Chaslay WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101."
+            name = "reborn-pos"
+            displayName = "RebornPOS"
+            description = "Fullscreen Windows kiosk for Reborn WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101."
             version = $version
-            exeFile = "chaslay-pos-setup.exe"
+            exeFile = "reborn-pos-setup.exe"
             platform = "windows"
             builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             signed = $false
           }
-          $manifest | ConvertTo-Json -Depth 5 | Set-Content backend/public/downloads/chaslay-pos-setup.json
+          $json = $manifest | ConvertTo-Json -Depth 5
+          Set-Content backend/public/downloads/reborn-pos-setup.json $json
+          Set-Content backend/public/downloads/chaslay-pos-setup.json $json
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chaslay-pos-windows-${{ github.sha }}
+          name: reborn-pos-windows-${{ github.sha }}
           path: |
+            backend/public/downloads/reborn-pos-setup.exe
+            backend/public/downloads/reborn-pos-setup.json
             backend/public/downloads/chaslay-pos-setup.exe
             backend/public/downloads/chaslay-pos-setup.json
           retention-days: 90

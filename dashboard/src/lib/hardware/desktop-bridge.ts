@@ -13,7 +13,7 @@ type TauriInternals = {
 async function invoke<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const internals = (window as Window & { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
   if (typeof internals?.invoke !== 'function') {
-    throw new Error('Not running inside Chaslay POS');
+    throw new Error('Not running inside RebornPOS');
   }
   return internals.invoke(cmd, args) as Promise<T>;
 }

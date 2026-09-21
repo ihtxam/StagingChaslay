@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Minimize2, RefreshCw, Settings } from 'lucide-react';
+import { Minus, RefreshCw, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
@@ -91,7 +91,7 @@ export default function DesktopChromeBar() {
         aria-label={t('desktopChromeMinimize')}
         title={t('desktopChromeMinimize')}
       >
-        <Minimize2 size={15} />
+        <Minus size={15} strokeWidth={2.5} />
       </button>
       <button
         type="button"

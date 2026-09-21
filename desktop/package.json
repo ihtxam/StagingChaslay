@@ -1,8 +1,8 @@
 {
-  "name": "chaslay-pos",
+  "name": "reborn-pos",
   "version": "0.1.0",
   "private": true,
-  "description": "Chaslay / Reborn Windows POS kiosk (Tauri 2 shell around hosted WebPOS)",
+  "description": "RebornPOS Windows kiosk (Tauri 2 shell around hosted WebPOS)",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
