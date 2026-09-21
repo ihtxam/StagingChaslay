@@ -1,0 +1,24 @@
+[[permission]]
+identifier = "allow-pos-env"
+description = "Expose desktop shell version metadata to hosted WebPOS."
+commands.allow = ["pos_env"]
+
+[[permission]]
+identifier = "allow-desktop-chrome"
+description = "Desktop chrome bar reload and window mode controls."
+commands.allow = ["desktop_reload", "desktop_window_mode", "desktop_toggle_window_mode"]
+
+[[permission]]
+identifier = "allow-desktop-sidecar"
+description = "Print Agent sidecar health probe."
+commands.allow = ["sidecar_health"]
+
+[[permission]]
+identifier = "allow-desktop-hw"
+description = "Hardware bridge commands via Print Agent sidecar."
+commands.allow = ["hw_agent_status", "hw_list_printers", "hw_print", "hw_drawer"]
+
+[[permission]]
+identifier = "allow-desktop-autostart"
+description = "Windows autostart toggle commands."
+commands.allow = ["set_start_with_windows", "is_start_with_windows"]
