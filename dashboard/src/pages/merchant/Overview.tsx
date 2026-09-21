@@ -21,6 +21,8 @@ import {
 } from 'recharts';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useAuthStore } from '@/store/auth';
+import { canShowWebPosQuickAction } from '@/lib/permissions';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
   CashDrawerBreakdown,
@@ -189,6 +191,13 @@ export default function Overview() {
     { id: 'custom', label: t('reportsCustom') },
   ];
 
+  const user = useAuthStore((s) => s.user);
+  const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const showPosQuickAction = useMemo(
+    () => canShowWebPosQuickAction(jwtIsOwner, user?.permissions),
+    [jwtIsOwner, user?.permissions]
+  );
+
   if (loading && !data) {
     return <div className="text-center py-10 muted text-sm">{t('loading')}</div>;
   }
@@ -207,6 +216,17 @@ export default function Overview() {
           <h1 className="page-title">{t('overview')}</h1>
           <p className="page-sub">{t('overviewSub')}</p>
         </div>
+        {showPosQuickAction ? (
+          <Link
+            to="/merchant/pos"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#22c55e] px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-white shadow-md transition-colors hover:bg-emerald-400"
+          >
+            <span aria-hidden className="text-base leading-none">
+              🖥️
+            </span>
+            {t('sidebarPos')}
+          </Link>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">

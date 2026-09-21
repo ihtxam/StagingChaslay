@@ -7,6 +7,7 @@ import { repairCatalogText } from '@/lib/text-encoding';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
+import { lineWidthForPaper } from '@/lib/receipt-labels';
 import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
 import { APP_NAME } from '@/lib/brand';
 import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
@@ -31,6 +32,9 @@ import {
   computeGiftCardSaleVat,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
+  getReceiptHeaderLines,
+  receiptHeaderFormatFromSettings,
+  receiptHeaderFieldsFromPrintSettings,
   encodeOrderMetaNotes,
   parseOrderMetaNotes,
   nextWebPosTicketNumber,
@@ -3933,6 +3937,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       paperWidthMm: printSettings?.paperWidthMm || 80,
       header: printSettings?.receiptHeader,
       footer: printSettings?.receiptFooter,
+      ...receiptHeaderFieldsFromPrintSettings(printSettings),
       shiftCash:
         reportKind === 'shift'
           ? report?.shiftCash?.length
@@ -4168,6 +4173,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paperWidthMm: printSettings?.paperWidthMm || 80,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        ...receiptHeaderFieldsFromPrintSettings(printSettings),
         includeProductsSold,
         reportKind: 'eod',
       });
@@ -5821,6 +5827,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paperWidthMm: printSettings?.paperWidthMm || 80,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        ...receiptHeaderFieldsFromPrintSettings(printSettings),
         chfToEurRate: printSettings?.receiptChfToEurRate ?? null,
         showVat: printSettings?.receiptShowVatTable !== false,
         showStaff: printSettings?.receiptShowStaffLine !== false,
@@ -6227,6 +6234,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paperWidthMm: printSettings?.paperWidthMm || 80,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        ...receiptHeaderFieldsFromPrintSettings(printSettings),
       },
       locale
     );
@@ -7434,6 +7442,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       opts.forceScannable || printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
     const lang = resolveReceiptLanguage(printSettings, locale);
+    const headerFmt = receiptHeaderFormatFromSettings(printSettings);
+    const headerLines = getReceiptHeaderLines(
+      {
+        header: printSettings?.receiptHeader,
+        businessName: merchant?.name || APP_NAME,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        phone: merchant?.phone || undefined,
+        vatNumber: merchant?.vatNumber || undefined,
+        headerAlign: headerFmt.align,
+      },
+      lineWidthForPaper(paper === 58 ? 58 : 80)
+    );
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
       deliveryQrData: opts.deliveryQrUrl,
@@ -7444,6 +7464,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       barcodeData: barcode,
       paperWidthMm: paper,
       fastQr: opts.fastQr !== false,
+      headerLines,
+      headerAlign: headerFmt.align,
+      headerBold: headerFmt.bold,
+      headerTextScale: headerFmt.textScale,
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -7846,6 +7870,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paperWidthMm: printSettings?.paperWidthMm || 80,
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
+        ...receiptHeaderFieldsFromPrintSettings(printSettings),
       },
       locale
     );
@@ -8577,6 +8602,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       paperWidthMm,
       header: printSettings?.receiptHeader,
       footer: printSettings?.receiptFooter,
+      ...receiptHeaderFieldsFromPrintSettings(printSettings),
       chfToEurRate: printSettings?.receiptChfToEurRate ?? null,
       showVat: printSettings?.receiptShowVatTable !== false,
       showStaff: printSettings?.receiptShowStaffLine !== false,
@@ -9539,6 +9565,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             } else {
               applyScannedGiftCard(found.membership);
             }
+            setSearch('');
             return;
           }
         } catch (e: any) {
@@ -9550,11 +9577,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       if (onCheckout) {
         toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
+        setSearch('');
         return;
       }
       const product = findProductByScanCode(code);
       if (product) {
         onProductClick(product);
+        setSearch('');
         return;
       }
       const tableQr = parseTableQrPayload(code);
@@ -9566,9 +9595,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.success(
           t('tableQrAssigned').replace('{label}', tableQr.tableId.slice(0, 8).toUpperCase())
         );
+        setSearch('');
         return;
       }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
+      setSearch('');
     },
     // onProductClick / attach helpers are stable enough for scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9623,7 +9654,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!useRetailLayout || posView !== 'register' || pinGateRequired || pinModalOpen) return;
     const code = search.trim();
     if (code.length < BARCODE_WEDGE_MIN_LENGTH) return;
-    if (!findProductByScanCode(code)) return;
     const timer = window.setTimeout(() => {
       submitRetailScan(code);
     }, BARCODE_WEDGE_IDLE_MS);
@@ -9634,7 +9664,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     posView,
     pinGateRequired,
     pinModalOpen,
-    findProductByScanCode,
     submitRetailScan,
   ]);
 
@@ -10734,6 +10763,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 search={search}
                 onSearchChange={setSearch}
                 onSearchSubmit={() => submitRetailScan(search)}
+                onSearchClear={() => setSearch('')}
                 searchInputRef={retailSearchRef}
                 autoFocusSearch={checkoutSettings.retailScannerFirst !== false}
                 tileSize={checkoutSettings.retailTileSize || 'lg'}

@@ -33,6 +33,11 @@ export type PosPrinterProfile = {
 export type PosPrintSettings = {
   receiptHeader?: string;
   receiptFooter?: string;
+  /** Receipt header alignment: left, center (default), or right. */
+  receiptHeaderAlign?: "left" | "center" | "right";
+  receiptHeaderBold?: boolean;
+  /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
+  receiptHeaderTextScale?: 1 | 2 | 3;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
   /** Kitchen item text scale: 1=normal (plain), 2=double height, 3=double width+height */
@@ -143,6 +148,9 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
 > & { receiptLogoUrl: string | null; printers: PosPrinterProfile[] } = {
   receiptHeader: "",
   receiptFooter: "Merci / Danke / Thank you",
+  receiptHeaderAlign: "center",
+  receiptHeaderBold: false,
+  receiptHeaderTextScale: 1,
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
   kitchenItemTextScale: 1,
@@ -291,6 +299,16 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     : 1) as 1 | 2 | 3;
   let kitchenBoldText = src.kitchenBoldText === true;
 
+  const receiptHeaderAlignRaw = String(src.receiptHeaderAlign ?? "center").toLowerCase();
+  const receiptHeaderAlign =
+    receiptHeaderAlignRaw === "left" || receiptHeaderAlignRaw === "right"
+      ? receiptHeaderAlignRaw
+      : "center";
+  const receiptHeaderScale = Number(src.receiptHeaderTextScale);
+  const receiptHeaderTextScale = (receiptHeaderScale === 2 || receiptHeaderScale === 3
+    ? receiptHeaderScale
+    : 1) as 1 | 2 | 3;
+
   // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
   if (kitchenItemTextScale === 2 && kitchenHeaderTextScale === 2 && src.kitchenBoldText !== false) {
     kitchenItemTextScale = 1;
@@ -301,6 +319,9 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   return {
     receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
+    receiptHeaderAlign,
+    receiptHeaderBold: src.receiptHeaderBold === true,
+    receiptHeaderTextScale,
     kitchenTicketHeader: String(src.kitchenTicketHeader ?? "").slice(0, 2000),
     kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
     kitchenItemTextScale,

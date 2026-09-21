@@ -1,4 +1,4 @@
-import { Search, Settings, Wallet, Gift } from 'lucide-react';
+import { Search, Settings, Wallet, Gift, X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '@/lib/i18n';
 import WebPosExpressCheckoutBar from './WebPosExpressCheckoutBar';
@@ -26,6 +26,7 @@ type Props = {
   search: string;
   onSearchChange: (q: string) => void;
   onSearchSubmit?: () => void;
+  onSearchClear?: () => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
   autoFocusSearch?: boolean;
   tileSize?: RetailTileSize;
@@ -59,6 +60,7 @@ export default function WebPosRetailProductCenter({
   search,
   onSearchChange,
   onSearchSubmit,
+  onSearchClear,
   searchInputRef,
   autoFocusSearch = false,
   tileSize = 'lg',
@@ -89,6 +91,15 @@ export default function WebPosRetailProductCenter({
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
   const gridClass = RETAIL_TILE_GRID[tileSize] || RETAIL_TILE_GRID.lg;
   const hasSearch = !!search.trim();
+  const showClearButton = hasSearch && (onSearchClear || onSearchChange);
+  const handleClearSearch = () => {
+    if (onSearchClear) {
+      onSearchClear();
+    } else {
+      onSearchChange('');
+    }
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
   const showEmptyBrowse =
     sparseGridOnAllItems && categoryId === 'all' && !hasSearch && products.length > 0;
@@ -111,7 +122,9 @@ export default function WebPosRetailProductCenter({
           />
           <input
             ref={inputRef}
-            className="webpos-search-input webpos-retail-search h-11 w-full rounded-xl border border-[var(--webpos-accent-border)] bg-white pl-10 pr-12 text-base font-medium shadow-sm"
+            className={`webpos-search-input webpos-retail-search h-11 w-full rounded-xl border border-[var(--webpos-accent-border)] bg-white pl-10 text-base font-medium shadow-sm ${
+              onOpenSettings ? 'pr-24' : 'pr-14'
+            }`}
             placeholder={t('webPosRetailScanSearch')}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -126,6 +139,19 @@ export default function WebPosRetailProductCenter({
             enterKeyHint="search"
             aria-label={t('webPosRetailScanSearch')}
           />
+          {showClearButton ? (
+            <button
+              type="button"
+              className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100 ${
+                onOpenSettings ? 'right-11' : 'right-1.5'
+              }`}
+              onClick={handleClearSearch}
+              aria-label={t('clear')}
+              title={t('clear')}
+            >
+              <X size={20} strokeWidth={2.25} />
+            </button>
+          ) : null}
           {onOpenSettings ? (
             <button
               type="button"
