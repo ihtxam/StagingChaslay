@@ -261,6 +261,11 @@ export type WebPosReceiptItem = {
 export type PosPrintSettingsClient = {
   receiptHeader?: string;
   receiptFooter?: string;
+  /** Receipt header alignment when custom header or business block is printed. */
+  receiptHeaderAlign?: 'left' | 'center' | 'right';
+  receiptHeaderBold?: boolean;
+  /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
+  receiptHeaderTextScale?: 1 | 2 | 3;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
   kitchenItemTextScale?: 1 | 2 | 3;
@@ -397,6 +402,9 @@ export type WebPosReceipt = {
   paperWidthMm?: 58 | 80;
   header?: string;
   footer?: string;
+  headerAlign?: ReceiptHeaderAlign;
+  headerBold?: boolean;
+  headerTextScale?: 1 | 2 | 3;
   showVat?: boolean;
   showStaff?: boolean;
   /** Adyen terminal customer receipt appended below order receipt */
@@ -635,6 +643,101 @@ function centerLine(text: string, width: number): string {
   const t = text.slice(0, width);
   const pad = Math.max(0, Math.floor((width - t.length) / 2));
   return ' '.repeat(pad) + t;
+}
+
+export type ReceiptHeaderAlign = 'left' | 'center' | 'right';
+
+export function receiptHeaderFormatFromSettings(
+  settings?: Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderAlign' | 'receiptHeaderBold' | 'receiptHeaderTextScale'
+  > | null
+): {
+  align: ReceiptHeaderAlign;
+  bold: boolean;
+  textScale: 1 | 2 | 3;
+} {
+  const align =
+    settings?.receiptHeaderAlign === 'left' || settings?.receiptHeaderAlign === 'right'
+      ? settings.receiptHeaderAlign
+      : 'center';
+  const scaleRaw = Number(settings?.receiptHeaderTextScale);
+  const textScale = (scaleRaw === 2 || scaleRaw === 3 ? scaleRaw : 1) as 1 | 2 | 3;
+  return {
+    align,
+    bold: settings?.receiptHeaderBold === true,
+    textScale,
+  };
+}
+
+export function receiptHeaderFieldsFromPrintSettings(
+  settings?: Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderAlign' | 'receiptHeaderBold' | 'receiptHeaderTextScale'
+  > | null
+): {
+  headerAlign: ReceiptHeaderAlign;
+  headerBold: boolean;
+  headerTextScale: 1 | 2 | 3;
+} {
+  const fmt = receiptHeaderFormatFromSettings(settings);
+  return {
+    headerAlign: fmt.align,
+    headerBold: fmt.bold,
+    headerTextScale: fmt.textScale,
+  };
+}
+
+function alignLine(text: string, width: number, align: ReceiptHeaderAlign = 'center'): string {
+  const t = text.slice(0, width);
+  if (align === 'left') return t;
+  if (align === 'right') {
+    const pad = Math.max(0, width - t.length);
+    return ' '.repeat(pad) + t;
+  }
+  return centerLine(t, width);
+}
+
+export function getReceiptHeaderLines(
+  tx: Pick<
+    WebPosReceipt,
+    'header' | 'businessName' | 'address' | 'phone' | 'vatNumber' | 'headerAlign'
+  >,
+  width: number
+): string[] {
+  const align = tx.headerAlign ?? 'center';
+  const lines: string[] = [];
+  if (tx.header?.trim()) {
+    for (const line of tx.header.trim().split(/\r?\n/)) {
+      lines.push(alignLine(line, width, align));
+    }
+    return lines;
+  }
+  lines.push(alignLine((tx.businessName || APP_NAME).toUpperCase().slice(0, width), width, align));
+  if (tx.address) lines.push(alignLine(tx.address.slice(0, width), width, align));
+  if (tx.phone) lines.push(alignLine(`Tel: ${tx.phone}`.slice(0, width), width, align));
+  if (tx.vatNumber) lines.push(alignLine(`VAT: ${tx.vatNumber}`.slice(0, width), width, align));
+  return lines;
+}
+
+export function buildReceiptHeaderEscPos(
+  lines: string[],
+  opts: { align?: ReceiptHeaderAlign; bold?: boolean; textScale?: 1 | 2 | 3 }
+): Uint8Array {
+  if (!lines.length) return new Uint8Array();
+  const align = opts.align ?? 'center';
+  const alignMode: 0 | 1 | 2 = align === 'right' ? 2 : align === 'center' ? 1 : 0;
+  const scale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
+  const parts: Uint8Array[] = [
+    escAlign(alignMode),
+    escBold(opts.bold === true),
+    escKitchenSize(scale),
+  ];
+  for (const line of lines) {
+    parts.push(escposCp850Encode(`${line}\n`));
+  }
+  parts.push(escBold(false), escKitchenSize(1), escAlign(0));
+  return concatBytes(...parts);
 }
 
 /** Centered course banner: >> COURSE 1 << */
@@ -1140,16 +1243,9 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.isProvisional) {
     r += centerLine('PROVISIONAL', width) + '\n';
   }
-  r += sep + '\n';
-  if (tx.header?.trim()) {
-    for (const line of tx.header.trim().split(/\r?\n/)) r += line.slice(0, width) + '\n';
-  } else {
-    r += (tx.businessName || APP_NAME).toUpperCase().slice(0, width) + '\n';
-    if (tx.address) r += tx.address.slice(0, width) + '\n';
-    if (tx.phone) r += `Tel: ${tx.phone}`.slice(0, width) + '\n';
-    if (tx.vatNumber) r += `VAT: ${tx.vatNumber}`.slice(0, width) + '\n';
+  for (const line of getReceiptHeaderLines(tx, width)) {
+    r += line + '\n';
   }
-  r += sep + '\n';
   if (tx.tableLabel) {
     r += `${L.table} ${tx.tableLabel}`;
     if (tx.guestCount) r += ` · ${tx.guestCount} ${L.pax}`;
@@ -1186,7 +1282,6 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
   }
 
-  r += thin + '\n';
   if (tx.discount > 0) {
     r += padLine(`${L.discount}:`, `-CHF ${tx.discount.toFixed(2)}`, width) + '\n';
   }
@@ -2599,7 +2694,8 @@ export function textToEscPos(
   logoBytes?: Uint8Array | null,
   barcodeData?: string,
   barcodeLabel?: string,
-  deliveryQrRaster?: Uint8Array | null
+  deliveryQrRaster?: Uint8Array | null,
+  prefixAfterLogo?: Uint8Array | null
 ): Uint8Array {
   const hasQr = !!(qrRaster?.length || deliveryQrRaster?.length);
   const body = escposCp850Encode(hasQr ? text.replace(/\n+$/, '') + '\n' : text);
@@ -2609,6 +2705,9 @@ export function textToEscPos(
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
     parts.push(alignCenter, logoBytes, alignLeft);
+  }
+  if (prefixAfterLogo?.length) {
+    parts.push(prefixAfterLogo);
   }
   parts.push(alignLeft, body);
   if (qrRaster?.length) {
@@ -2643,6 +2742,11 @@ export async function buildReceiptEscPos(
     paperWidthMm?: 58 | 80;
     /** When true, fall back to native ESC/POS QR if raster build fails. */
     fastQr?: boolean;
+    /** When set, header lines are rendered with ESC/POS styling and omitted from plain body text. */
+    headerLines?: string[];
+    headerAlign?: ReceiptHeaderAlign;
+    headerBold?: boolean;
+    headerTextScale?: 1 | 2 | 3;
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -2695,7 +2799,33 @@ export async function buildReceiptEscPos(
       })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   }
 
-  return textToEscPos(text, qrRaster, opts.logoBytes, opts.barcodeData, opts.barcodeLabel);
+  const headerLines = opts.headerLines ?? [];
+  let bodyText = text;
+  if (headerLines.length > 0) {
+    const headerBlock = `${headerLines.join('\n')}\n`;
+    const idx = bodyText.indexOf(headerBlock);
+    if (idx >= 0) {
+      bodyText = bodyText.slice(0, idx) + bodyText.slice(idx + headerBlock.length);
+    }
+  }
+  const headerEscPos =
+    headerLines.length > 0
+      ? buildReceiptHeaderEscPos(headerLines, {
+          align: opts.headerAlign,
+          bold: opts.headerBold,
+          textScale: opts.headerTextScale,
+        })
+      : null;
+
+  return textToEscPos(
+    bodyText,
+    qrRaster,
+    opts.logoBytes,
+    opts.barcodeData,
+    opts.barcodeLabel,
+    undefined,
+    headerEscPos
+  );
 }
 
 export function uint8ToBase64(bytes: Uint8Array): string {
@@ -3543,6 +3673,7 @@ export function posOrderToWebPosReceipt(
     paperWidthMm,
     header: ctx.printSettings?.receiptHeader,
     footer: ctx.printSettings?.receiptFooter,
+    ...receiptHeaderFieldsFromPrintSettings(ctx.printSettings),
     showVat: ctx.printSettings?.receiptShowVatTable !== false,
     showStaff: ctx.printSettings?.receiptShowStaffLine !== false,
     adyenCustomerReceipt: adyen.customer,

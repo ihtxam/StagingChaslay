@@ -433,7 +433,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="panel-sidebar-footer p-3 border-t space-y-2 shrink-0">
+        <div className="panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 overflow-x-hidden">
           {shopPath ? (
             <Link
               to={shopPath}
@@ -451,14 +451,13 @@ export default function Sidebar({
             </Link>
           ) : null}
 
-          {profileMenu?.settingsPath ? (
+          {profileMenu?.settingsPath &&
+          !isPathActive(location.pathname, profileMenu.settingsPath, location.search) ? (
             <Link
               to={profileMenu.settingsPath}
               onClick={closeMobile}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
-                isPathActive(location.pathname, profileMenu.settingsPath, location.search)
-                  ? 'bg-black/25 text-white shadow-sm'
-                  : 'text-white/90 hover:bg-white/10 hover:text-white'
+                'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
             >
               <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
@@ -498,7 +497,7 @@ export default function Sidebar({
                 />
               </button>
               {profileOpen ? (
-                <div className="mt-1 rounded-lg border border-white/15 bg-black/35 overflow-hidden">
+                <div className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-[min(50vh,16rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl lg:static lg:bottom-auto lg:z-auto lg:mb-0 lg:mt-1 lg:max-h-none lg:overflow-hidden lg:bg-black/35">
                   {showStaffSwitch ? (
                     <button
                       type="button"

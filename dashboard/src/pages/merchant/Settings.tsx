@@ -291,6 +291,9 @@ interface SettingsData {
   posPrintSettings?: {
     receiptHeader?: string;
     receiptFooter?: string;
+    receiptHeaderAlign?: 'left' | 'center' | 'right';
+    receiptHeaderBold?: boolean;
+    receiptHeaderTextScale?: 1 | 2 | 3;
     kitchenTicketHeader?: string;
     kitchenTicketFooter?: string;
     kitchenItemTextScale?: 1 | 2 | 3;
@@ -1539,6 +1542,15 @@ export default function Settings() {
       return {
         receiptHeader: ps.receiptHeader || '',
         receiptFooter: ps.receiptFooter || '',
+        receiptHeaderAlign:
+          ps.receiptHeaderAlign === 'left' || ps.receiptHeaderAlign === 'right'
+            ? ps.receiptHeaderAlign
+            : 'center',
+        receiptHeaderBold: ps.receiptHeaderBold === true,
+        receiptHeaderTextScale:
+          ps.receiptHeaderTextScale === 2 || ps.receiptHeaderTextScale === 3
+            ? ps.receiptHeaderTextScale
+            : 1,
         kitchenTicketHeader: ps.kitchenTicketHeader || '',
         kitchenTicketFooter: ps.kitchenTicketFooter || '',
         kitchenItemTextScale: ps.kitchenItemTextScale === 2 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 1,
@@ -4266,6 +4278,60 @@ export default function Settings() {
                     }
                   />
                 </Field>
+                <Field label={t('receiptHeaderAlign')}>
+                  <select
+                    className="input max-w-xs"
+                    value={settings.posPrintSettings?.receiptHeaderAlign || 'center'}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptHeaderAlign: e.target.value as 'left' | 'center' | 'right',
+                        },
+                      })
+                    }
+                  >
+                    <option value="left">{t('receiptHeaderAlignLeft')}</option>
+                    <option value="center">{t('receiptHeaderAlignCenter')}</option>
+                    <option value="right">{t('receiptHeaderAlignRight')}</option>
+                  </select>
+                </Field>
+                <Field label={t('receiptHeaderTextScale')} hint={t('kitchenTextScaleHint')}>
+                  <select
+                    className="input max-w-xs"
+                    value={settings.posPrintSettings?.receiptHeaderTextScale ?? 1}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptHeaderTextScale: Number(e.target.value) as 1 | 2 | 3,
+                        },
+                      })
+                    }
+                  >
+                    <option value={1}>{t('kitchenScaleNormal')}</option>
+                    <option value={2}>{t('kitchenScaleLarge')}</option>
+                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                  </select>
+                </Field>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.posPrintSettings?.receiptHeaderBold === true}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptHeaderBold: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  {t('receiptHeaderBold')}
+                </label>
                 <Field label={t('receiptFooter')}>
                   <textarea
                     className="input min-h-[4rem]"

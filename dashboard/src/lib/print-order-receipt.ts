@@ -1,4 +1,5 @@
 import { APP_NAME } from '@/lib/brand';
+import { lineWidthForPaper } from '@/lib/receipt-labels';
 import {
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
@@ -8,11 +9,13 @@ import {
   deliveryDirectionsUrlForReceipt,
   generateRefundReceiptText,
   generateWebPosReceiptText,
+  getReceiptHeaderLines,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   posOrderToWebPosReceipt,
   printersForRole,
   resolveReceiptLanguage,
+  receiptHeaderFormatFromSettings,
   buildReceiptEscPos,
   uint8ToBase64,
   type PosOrderForReceipt,
@@ -45,6 +48,10 @@ async function printReceiptText(
     deliveryQrUrl?: string;
     logoUrl?: string | null;
     locale?: string;
+    merchantName?: string | null;
+    merchantAddress?: string | null;
+    merchantPhone?: string | null;
+    merchantVatNumber?: string | null;
   }
 ): Promise<void> {
   const targets = printersForRole(opts.printSettings, 'receipt');
@@ -68,6 +75,18 @@ async function printReceiptText(
   const logo = opts.logoUrl
     ? await logoUrlToEscPos(String(opts.logoUrl), logoWidth)
     : null;
+  const headerFmt = receiptHeaderFormatFromSettings(opts.printSettings);
+  const headerLines = getReceiptHeaderLines(
+    {
+      header: opts.printSettings?.receiptHeader,
+      businessName: opts.merchantName || APP_NAME,
+      address: opts.merchantAddress,
+      phone: opts.merchantPhone,
+      vatNumber: opts.merchantVatNumber,
+      headerAlign: headerFmt.align,
+    },
+    lineWidthForPaper(paper === 58 ? 58 : 80)
+  );
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
     deliveryQrData: opts.deliveryQrUrl,
@@ -76,6 +95,10 @@ async function printReceiptText(
     language: lang,
     logoBytes: logo,
     paperWidthMm: paper,
+    headerLines,
+    headerAlign: headerFmt.align,
+    headerBold: headerFmt.bold,
+    headerTextScale: headerFmt.textScale,
   });
   const dataBase64 = uint8ToBase64(escpos);
   for (const name of names) {
@@ -133,6 +156,10 @@ export async function printMerchantOrderReceipt(
       opts.printSettings?.receiptShowQrCode !== false ? receiptPayload.receiptUrl : undefined,
     deliveryQrUrl: deliveryDirectionsUrlForReceipt(receiptPayload),
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
+    merchantName: opts.merchant.name || APP_NAME,
+    merchantAddress: [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    merchantPhone: opts.merchant.phone || undefined,
+    merchantVatNumber: opts.merchant.vatNumber || undefined,
   });
 }
 
@@ -164,5 +191,9 @@ export async function printRefundReceipt(
     fallbackPrinterName: opts.fallbackPrinterName,
     locale: opts.locale,
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
+    merchantName: payload.businessName || opts.merchant.name || APP_NAME,
+    merchantAddress: payload.address || [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    merchantPhone: payload.phone || opts.merchant.phone || undefined,
+    merchantVatNumber: opts.merchant.vatNumber || undefined,
   });
 }
