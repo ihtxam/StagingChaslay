@@ -34,7 +34,7 @@
       }
     },
     "shortDescription": "Chaslay Windows POS",
-    "longDescription": "Fullscreen kiosk for Chaslay / Reborn WebPOS. Hardware still uses the Print Agent on 127.0.0.1:9101 (Phase C will sidecar it)."
+    "longDescription": "Kiosk shell for Chaslay / Reborn WebPOS with bundled Print Agent sidecar on 127.0.0.1:9101."
   },
   "plugins": {}
 }

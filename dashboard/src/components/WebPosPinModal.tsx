@@ -215,14 +215,14 @@ export default function WebPosPinModal({
   const footerLogoUrl = logoUrl?.trim() || REBORN_LOGO_WHITE;
 
   const gateKeypad = (
-    <div className="mx-auto grid w-full max-w-[min(22rem,88vw)] grid-cols-3 gap-3 sm:gap-4">
+    <div className="mx-auto grid w-full max-w-[min(17rem,82vw)] grid-cols-3 gap-2 sm:max-w-[18rem] sm:gap-2.5">
       {GATE_KEYS.map((key) => (
         <button
           key={key}
           type="button"
           disabled={busy}
           onClick={() => handleGateKey(key)}
-          className="flex aspect-square items-center justify-center rounded-2xl bg-[#B8324A] text-3xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:text-4xl"
+          className="flex h-[3.25rem] w-full items-center justify-center rounded-xl bg-[#B8324A] text-2xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-14 sm:text-[1.65rem]"
           aria-label={
             key === 'clear'
               ? t('webPosPinClear')
@@ -383,7 +383,7 @@ export default function WebPosPinModal({
             </p>
           </section>
 
-          <section className="flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-4 lg:pb-12 lg:pt-12">
+          <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-32 pt-4 sm:pb-36 lg:pb-16 lg:pt-12">
             <div className="mb-6 flex max-w-md flex-col items-center gap-3 text-center">
               {busy ? (
                 <Loader2 className="h-7 w-7 animate-spin text-white/80" aria-hidden />
@@ -406,7 +406,7 @@ export default function WebPosPinModal({
           </section>
         </div>
 
-        <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-5 pb-5 sm:px-8 sm:pb-8">
+        <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-4 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8">
           <p className="pointer-events-auto text-xs font-medium tracking-wide text-white/70 sm:text-sm">
             {footerProductName}
           </p>

@@ -45,3 +45,47 @@ export async function setDesktopStartWithWindows(enabled: boolean): Promise<bool
 export async function isDesktopStartWithWindows(): Promise<boolean> {
   return invoke('is_start_with_windows');
 }
+
+export type DesktopWindowMode = 'fullscreen' | 'maximized' | 'normal';
+
+export async function desktopReload(): Promise<void> {
+  if (!isDesktopApp()) {
+    window.location.reload();
+    return;
+  }
+  await invoke('desktop_reload');
+}
+
+export async function desktopWindowMode(): Promise<DesktopWindowMode> {
+  if (!isDesktopApp()) return 'normal';
+  const mode = await invoke<string>('desktop_window_mode');
+  if (mode === 'fullscreen' || mode === 'maximized' || mode === 'normal') return mode;
+  return 'normal';
+}
+
+export async function desktopToggleWindowMode(): Promise<DesktopWindowMode> {
+  if (!isDesktopApp()) {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
+      return 'normal';
+    }
+    await document.documentElement.requestFullscreen?.().catch(() => undefined);
+    return document.fullscreenElement ? 'fullscreen' : 'normal';
+  }
+  const mode = await invoke<string>('desktop_toggle_window_mode');
+  if (mode === 'fullscreen' || mode === 'maximized' || mode === 'normal') return mode;
+  return 'normal';
+}
+
+export async function desktopSidecarHealth(): Promise<{
+  ok: boolean;
+  version?: string;
+  port?: number;
+}> {
+  if (!isDesktopApp()) return { ok: false };
+  try {
+    return (await invoke('sidecar_health')) as { ok: boolean; version?: string; port?: number };
+  } catch {
+    return { ok: false };
+  }
+}

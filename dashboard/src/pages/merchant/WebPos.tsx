@@ -163,7 +163,12 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
-import { useBarcodeWedge } from '@/lib/barcode-wedge';
+import {
+  BARCODE_WEDGE_IDLE_MS,
+  BARCODE_WEDGE_MIN_LENGTH,
+  useBarcodeWedge,
+} from '@/lib/barcode-wedge';
+import { isDesktopApp } from '@/lib/platform';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
@@ -1579,8 +1584,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
+    const openSettings = () => setSettingsOpen(true);
+    window.addEventListener('webpos:open-settings', openSettings);
+    return () => window.removeEventListener('webpos:open-settings', openSettings);
+  }, []);
+
+  useEffect(() => {
     if (loading || pinGateRequired) return;
-    void enterWebPosFullscreenOnLoad();
+    if (!isDesktopApp()) {
+      void enterWebPosFullscreenOnLoad();
+    }
   }, [loading, pinGateRequired]);
 
   useEffect(() => {
@@ -1611,8 +1624,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setMobileCartOpen(false);
         return;
       }
-      // Fullscreen: exit fullscreen only. Never navigate away from POS on Escape.
-      if (typeof document !== 'undefined' && document.fullscreenElement) {
+      // Fullscreen: exit fullscreen only in browser/PWA. Tauri uses the desktop chrome bar.
+      if (!isDesktopApp() && typeof document !== 'undefined' && document.fullscreenElement) {
         e.preventDefault();
         void document.exitFullscreen().catch(() => undefined);
         return;
@@ -9588,6 +9601,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       onScan: handlePosScan,
     });
 
+  const submitRetailScan = useCallback(
+    (raw: string) => {
+      const code = raw.trim();
+      if (!code) return;
+      void handlePosScan(code);
+    },
+    [handlePosScan]
+  );
+
+  // Retail scanner-first: auto-submit when wedge types into the search field (no Enter suffix).
+  useEffect(() => {
+    if (!useRetailLayout || posView !== 'register' || pinGateRequired || pinModalOpen) return;
+    const code = search.trim();
+    if (code.length < BARCODE_WEDGE_MIN_LENGTH) return;
+    if (!findProductByScanCode(code)) return;
+    const timer = window.setTimeout(() => {
+      submitRetailScan(code);
+    }, BARCODE_WEDGE_IDLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    search,
+    useRetailLayout,
+    posView,
+    pinGateRequired,
+    pinModalOpen,
+    findProductByScanCode,
+    submitRetailScan,
+  ]);
+
   const offlineNow = isWebPosCurrentlyOffline();
   const deviceTapToPayActive =
     deviceTapToPayReady &&
@@ -10683,10 +10725,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 categoryId={categoryId}
                 search={search}
                 onSearchChange={setSearch}
-                onSearchSubmit={() => {
-                  const product = findProductByScanCode(search);
-                  if (product) onProductClick(product);
-                }}
+                onSearchSubmit={() => submitRetailScan(search)}
                 searchInputRef={retailSearchRef}
                 autoFocusSearch={checkoutSettings.retailScannerFirst !== false}
                 tileSize={checkoutSettings.retailTileSize || 'lg'}
@@ -10857,13 +10896,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 showSearch={posView === 'register' && isPhoneViewport}
                 search={search}
                 onSearchChange={setSearch}
-                onSearchSubmit={() => {
-                  const product = findProductByScanCode(search);
-                  if (product) {
-                    onProductClick(product);
-                    setSearch('');
-                  }
-                }}
+                onSearchSubmit={() => submitRetailScan(search)}
                 actionButtonSize={checkoutSettings.actionButtonSize}
               />
               )}
