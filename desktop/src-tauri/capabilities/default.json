@@ -1,8 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main POS window — minimum permissions",
+  "description": "Main POS window — hosted WebPOS + native bridge",
   "windows": ["main"],
+  "remote": {
+    "urls": [
+      "https://*.chaslay.com",
+      "https://chaslay.com",
+      "https://*.rebornsense.com",
+      "https://rebornsense.com",
+      "http://localhost:*",
+      "http://127.0.0.1:*"
+    ]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-close",
@@ -15,6 +25,11 @@
     "core:webview:allow-internal-toggle-devtools",
     "autostart:allow-enable",
     "autostart:allow-disable",
-    "autostart:allow-is-enabled"
+    "autostart:allow-is-enabled",
+    "allow-pos-env",
+    "allow-desktop-chrome",
+    "allow-desktop-sidecar",
+    "allow-desktop-hw",
+    "allow-desktop-autostart"
   ]
 }
