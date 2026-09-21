@@ -1273,9 +1273,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setWebposStaff((current) => {
         const session = resolveWebPosStaffSession({
           staffList,
-          authStaffId: authUser?.staffId,
-          authRole: authUser?.role,
-          authPermissions: authUser?.permissions,
           existing: current,
         });
         resolvedSession = session;
@@ -1285,16 +1282,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         notifyWebPosStaffSessionChanged();
       }
       const shouldOpenPinGate =
-        opts?.openPinGate !== false &&
-        hasPins &&
-        !resolvedSession &&
-        authUser?.role !== 'staff';
+        opts?.openPinGate !== false && hasPins && !resolvedSession;
       if (shouldOpenPinGate) {
         setPinModalMode('gate');
         setPinModalOpen(true);
       }
     },
-    [authUser?.staffId, authUser?.role, authUser?.permissions, authUser?.isOwner]
+    [authUser?.isOwner]
   );
 
   useEffect(() => {

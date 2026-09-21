@@ -615,7 +615,7 @@ export type WebPosStaffSession = {
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';
 /** Survives PWA relaunch when sessionStorage is cleared (offline register). */
 const WEBPOS_STAFF_PERSIST_KEY = 'webpos_staff_session_persist';
-/** Set in sessionStorage when PIN verify / staff auto-bind succeeded in this tab. */
+/** Set in sessionStorage when PIN verify succeeded in this tab. */
 const WEBPOS_STAFF_VALIDATED_KEY = 'webpos_staff_session_validated';
 
 /** Dispatched when the active register staff session changes (PIN switch, logout, reconcile). */
@@ -732,7 +732,8 @@ export function isStaleWebPosStaffSession(
 /**
  * Resolve WebPOS staff session after catalog load:
  * - drop stale PIN sessions (role changed in portal)
- * - auto-bind panel staff JWT users to their current server role (skip PIN gate)
+ * - refresh metadata for an existing PIN session from the staff roster
+ * Email/password login does not auto-bind — POS still requires PIN verify.
  */
 /** Merchant owner (or impersonated owner) already signed into the dashboard. */
 export function isMerchantOwnerJwt(user?: {
@@ -745,7 +746,7 @@ export function isMerchantOwnerJwt(user?: {
 /**
  * Hard PIN wall for WebPOS / waiter:
  * - skip when no staff PINs exist (first-run / new shop)
- * - skip when a staff PIN session is already active (incl. official staff login auto-bind)
+ * - skip when a staff PIN session is already active (PIN verify or switch-user)
  * - skip when offline cache unlock applies
  * Merchant owner JWT does not bypass — shared registers require clock-in once PINs exist.
  */
@@ -792,9 +793,6 @@ function sessionsEqual(a: WebPosStaffSession, b: WebPosStaffSession): boolean {
 
 export function resolveWebPosStaffSession(opts: {
   staffList: StaffRosterRow[];
-  authStaffId?: string | null;
-  authRole?: string | null;
-  authPermissions?: Permission[];
   existing?: WebPosStaffSession | null;
 }): WebPosStaffSession | null {
   const staffList = opts.staffList.filter((s) => s.isActive !== false);
@@ -810,26 +808,6 @@ export function resolveWebPosStaffSession(opts: {
     if (row) {
       const fresh = sessionFromRosterRow(row, session.accessToken);
       if (!sessionsEqual(session, fresh)) {
-        session = fresh;
-        saveWebPosStaffSession(session);
-      }
-    }
-  }
-
-  if (opts.authRole === 'staff' && opts.authStaffId) {
-    const row = staffList.find((s) => s.id === opts.authStaffId);
-    if (row) {
-      const fresh = webPosSessionFromStaffProfile({
-        id: row.id,
-        name: row.name,
-        roleId: row.roleId,
-        roleName: row.roleName,
-        permissions: row.permissions?.length
-          ? row.permissions
-          : opts.authPermissions || [],
-        accessToken: session?.id === row.id ? session.accessToken : undefined,
-      });
-      if (!session || !sessionsEqual(session, fresh)) {
         session = fresh;
         saveWebPosStaffSession(session);
       }
