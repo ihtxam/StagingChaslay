@@ -1,7 +1,7 @@
 import { Settings, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
-import type { CartSide, PosCheckoutSettings, RetailTileSize } from '@/lib/pos-checkout';
+import type { CartSide, PosCheckoutSettings, RetailProductSortMode, RetailTileSize } from '@/lib/pos-checkout';
 import {
   profileLayoutPatch,
   type RetailRegisterProfile,
@@ -31,6 +31,7 @@ export default function WebPosRetailSettingsDrawer({
   const [paymentBar, setPaymentBar] = useState(settings.retailPaymentBar);
   const [cartSide, setCartSide] = useState<CartSide>(settings.cartSide);
   const [showStock, setShowStock] = useState(settings.retailShowStockOnTiles);
+  const [productSort, setProductSort] = useState<RetailProductSortMode>(settings.retailProductSortMode);
   const [quickTiles, setQuickTiles] = useState<string[]>(settings.retailQuickTiles);
   const [profiles, setProfiles] = useState<RetailRegisterProfile[]>(settings.retailRegisterProfiles);
   const [activeId, setActiveId] = useState<string | null>(deviceProfileId);
@@ -54,6 +55,7 @@ export default function WebPosRetailSettingsDrawer({
     setScannerFirst(patch.retailScannerFirst);
     setPaymentBar(patch.retailPaymentBar);
     setShowStock(patch.retailShowStockOnTiles);
+    setProductSort(patch.retailProductSortMode);
     setQuickTiles(patch.retailQuickTiles);
   };
 
@@ -71,6 +73,7 @@ export default function WebPosRetailSettingsDrawer({
       retailPaymentBar: paymentBar,
       retailShowStockOnTiles: showStock,
       retailQuickTiles: quickTiles,
+      retailProductSortMode: productSort,
     };
     const others = profiles.filter((p) => p.id !== id);
     setProfiles([next, ...others].slice(0, 12));
@@ -86,6 +89,7 @@ export default function WebPosRetailSettingsDrawer({
         cartSide,
         retailShowStockOnTiles: showStock,
         retailQuickTiles: quickTiles,
+        retailProductSortMode: productSort,
         retailRegisterProfiles: profiles,
       },
       activeId
@@ -167,6 +171,20 @@ export default function WebPosRetailSettingsDrawer({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <p className="mb-1 font-semibold">{t('posRetailProductSort')}</p>
+            <p className="mb-2 text-xs text-stone-500">{t('posRetailProductSortHint')}</p>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={productSort}
+              onChange={(e) => setProductSort(e.target.value as RetailProductSortMode)}
+            >
+              <option value="catalog_order">{t('posRetailProductSortCatalog')}</option>
+              <option value="alphabetical">{t('posRetailProductSortAlpha')}</option>
+              <option value="most_sold">{t('posRetailProductSortMostSold')}</option>
+            </select>
           </div>
 
           <div>
