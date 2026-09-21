@@ -376,7 +376,7 @@ const en: Dict = {
     'Categories on the left, large product photos in the center, cart and payment bar on the right.',
   posRetailScannerFirst: 'Scanner-first register',
   posRetailScannerFirstHint:
-    'Auto-focus scan/search and show a browse prompt on All Items until a category or search is used.',
+    'Auto-focus the scan/search field when the register opens. Products stay visible on All Items.',
   posRetailTileSize: 'Retail product tile size',
   posRetailTileSizeHint: 'Size of product photo tiles in the retail register layout.',
   posRetailTileSmall: 'Small',
@@ -4729,7 +4729,7 @@ const fr: Dict = {
     'Catégories à gauche, grandes photos au centre, panier et paiement à droite.',
   posRetailScannerFirst: 'Caisse scan-first',
   posRetailScannerFirstHint:
-    'Focus auto sur scan/recherche et invite à scanner sur Toutes les catégories.',
+    'Focus auto sur scan/recherche à l’ouverture. Les produits restent visibles sur Toutes les catégories.',
   posRetailTileSize: 'Taille des tuiles produit retail',
   posRetailTileSizeHint: 'Taille des vignettes photo dans la disposition retail.',
   posRetailTileSmall: 'Petite',
@@ -8921,7 +8921,7 @@ const de: Dict = {
     'Kategorien links, große Produktfotos in der Mitte, Warenkorb und Zahlung rechts.',
   posRetailScannerFirst: 'Scanner-first Kasse',
   posRetailScannerFirstHint:
-    'Scan-/Suchfeld automatisch fokussieren und Hinweis bei Alle Artikel anzeigen.',
+    'Scan-/Suchfeld beim Öffnen automatisch fokussieren. Produkte bleiben unter Alle Artikel sichtbar.',
   posRetailTileSize: 'Retail-Produktkachelgröße',
   posRetailTileSizeHint: 'Größe der Produktfoto-Kacheln im Retail-Layout.',
   posRetailTileSmall: 'Klein',

@@ -706,26 +706,25 @@ function mergeBillDiscounts(
   return { percent: 0, amount: roundMoney2(Math.max(src.amount, tgt.amount)) };
 }
 
-/** Scanner-first empty state only when the POS grid would be crowded. */
-const RETAIL_SPARSE_GRID_MIN_PRODUCTS = 24;
-
 async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
   const pageSize = 500;
   let page = 1;
-  let total = Number.POSITIVE_INFINITY;
   const all: any[] = [];
   let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
-  while (all.length < total) {
+  for (;;) {
     try {
       const res = await api.get('/merchant/products', {
         params: { limit: pageSize, page },
         ...fetchOpts,
       });
       const batch = res.data.products || res.data || [];
-      total = Number(res.data.pagination?.total ?? batch.length);
+      if (!batch.length) break;
       all.push(...batch);
+      const reportedTotal = Number(res.data.pagination?.total);
       if (batch.length < pageSize) break;
+      if (Number.isFinite(reportedTotal) && all.length >= reportedTotal) break;
       page += 1;
+      if (page > 20) break;
     } catch (error: any) {
       catalogError = error;
       break;
@@ -2166,16 +2165,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [products, categories, categoryId, search, bestsellerIds, gridSort, useRetailLayout, checkoutSettings.retailProductSortMode]);
 
   const visibleCategories = useMemo(() => {
-    const posVisible = categories.filter((c) => isVisibleOnChannel(c.visibility, 'pos'));
-    if (posVisible.length > 0) return posVisible;
     const categoryById = new Map(categories.map((c) => [c.id, c]));
-    const withProducts = new Set<string>();
+    const withPosProducts = new Set<string>();
     for (const p of products) {
       if (!p.categoryId) continue;
       const cat = categoryById.get(p.categoryId);
-      if (productVisibleOnChannel(p, cat, 'pos')) withProducts.add(p.categoryId);
+      if (productVisibleOnChannel(p, cat, 'pos')) withPosProducts.add(p.categoryId);
     }
-    return categories.filter((c) => withProducts.has(c.id));
+    return categories.filter(
+      (c) => isVisibleOnChannel(c.visibility, 'pos') || withPosProducts.has(c.id)
+    );
   }, [categories, products]);
 
   const refreshAgent = useCallback(async () => {
@@ -2485,6 +2484,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const mappedCategories = (catRes.data.categories || catRes.data || []).map((c: any) => ({
         ...c,
         name: repairCatalogText(c.name),
+        visibility: normalizeCatalogVisibility(c.visibility),
       }));
       setCategories(mappedCategories);
       setBestsellerIds(
@@ -10838,8 +10838,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 membershipEnabled={
                   !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
                 }
-                sparseGridOnAllItems={checkoutSettings.retailScannerFirst !== false}
-                sparseGridMinProducts={RETAIL_SPARSE_GRID_MIN_PRODUCTS}
+                sparseGridOnAllItems={false}
                 showStockOnTiles={checkoutSettings.retailShowStockOnTiles === true}
                 quickTileProducts={products.filter((p) =>
                   checkoutSettings.retailQuickTiles.includes(p.id)
