@@ -2136,8 +2136,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           String(p.brand || '').toLowerCase().includes(q);
         const codeHit =
           productMatchesScan(p, raw) ||
-          (sku && sku.toLowerCase() === q) ||
-          (barcode && (barcode === raw || barcode.toLowerCase() === q));
+          (sku && (sku.toLowerCase() === q || sku.toLowerCase().includes(q))) ||
+          (barcode && (barcode === raw || barcode.toLowerCase() === q || barcode.toLowerCase().includes(q)));
         if (!nameHit && !codeHit) return false;
       }
       return true;
