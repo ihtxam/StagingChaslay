@@ -1,4 +1,4 @@
-import type { CartSide, RetailTileSize } from '@/lib/pos-checkout';
+import type { CartSide, RetailProductSortMode, RetailTileSize } from '@/lib/pos-checkout';
 
 export type RetailRegisterProfile = {
   id: string;
@@ -9,6 +9,7 @@ export type RetailRegisterProfile = {
   retailPaymentBar: boolean;
   retailShowStockOnTiles: boolean;
   retailQuickTiles: string[];
+  retailProductSortMode: RetailProductSortMode;
 };
 
 export const REGISTER_PROFILE_LS = 'webpos_retail_register_profile_id';
@@ -33,6 +34,12 @@ export function parseRetailRegisterProfiles(raw: unknown): RetailRegisterProfile
         retailPaymentBar: o.retailPaymentBar !== false,
         retailShowStockOnTiles: o.retailShowStockOnTiles === true,
         retailQuickTiles: tiles,
+        retailProductSortMode:
+          o.retailProductSortMode === 'most_sold' ||
+          o.retailProductSortMode === 'alphabetical' ||
+          o.retailProductSortMode === 'catalog_order'
+            ? o.retailProductSortMode
+            : 'catalog_order',
       } satisfies RetailRegisterProfile;
     })
     .slice(0, 12);
@@ -63,6 +70,7 @@ export function profileLayoutPatch(profile: RetailRegisterProfile): {
   retailPaymentBar: boolean;
   retailShowStockOnTiles: boolean;
   retailQuickTiles: string[];
+  retailProductSortMode: RetailProductSortMode;
 } {
   return {
     cartSide: profile.cartSide,
@@ -71,5 +79,6 @@ export function profileLayoutPatch(profile: RetailRegisterProfile): {
     retailPaymentBar: profile.retailPaymentBar,
     retailShowStockOnTiles: profile.retailShowStockOnTiles,
     retailQuickTiles: profile.retailQuickTiles,
+    retailProductSortMode: profile.retailProductSortMode,
   };
 }

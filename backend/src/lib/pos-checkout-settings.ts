@@ -12,6 +12,7 @@ export type PostSuccessTarget = "register" | "tables";
 export type PosMode = "restaurant" | "retail";
 export type ActionButtonSize = "sm" | "md" | "lg";
 export type RetailTileSize = "sm" | "md" | "lg";
+export type RetailProductSortMode = "most_sold" | "alphabetical" | "catalog_order";
 
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
@@ -73,6 +74,7 @@ export type PosCheckoutSettings = {
   retailClearSearchAfterAdd: boolean;
   retailShowStockOnTiles: boolean;
   retailQuickTiles: string[];
+  retailProductSortMode: RetailProductSortMode;
   retailRegisterProfiles: Array<{
     id: string;
     name: string;
@@ -82,6 +84,7 @@ export type PosCheckoutSettings = {
     retailPaymentBar: boolean;
     retailShowStockOnTiles: boolean;
     retailQuickTiles: string[];
+    retailProductSortMode: RetailProductSortMode;
   }>;
 };
 
@@ -120,6 +123,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailClearSearchAfterAdd: true,
   retailShowStockOnTiles: false,
   retailQuickTiles: [],
+  retailProductSortMode: "catalog_order",
   retailRegisterProfiles: [],
 };
 
@@ -224,6 +228,12 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     retailQuickTiles: Array.isArray(src.retailQuickTiles)
       ? src.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
       : [],
+    retailProductSortMode:
+      src.retailProductSortMode === "most_sold" ||
+      src.retailProductSortMode === "alphabetical" ||
+      src.retailProductSortMode === "catalog_order"
+        ? src.retailProductSortMode
+        : DEFAULT_POS_CHECKOUT.retailProductSortMode,
     retailRegisterProfiles: Array.isArray(src.retailRegisterProfiles)
       ? src.retailRegisterProfiles
           .map((row, i) => {
@@ -243,6 +253,12 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
               retailQuickTiles: Array.isArray(o.retailQuickTiles)
                 ? o.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
                 : [],
+              retailProductSortMode:
+                o.retailProductSortMode === "most_sold" ||
+                o.retailProductSortMode === "alphabetical" ||
+                o.retailProductSortMode === "catalog_order"
+                  ? o.retailProductSortMode
+                  : DEFAULT_POS_CHECKOUT.retailProductSortMode,
             };
           })
           .slice(0, 12)

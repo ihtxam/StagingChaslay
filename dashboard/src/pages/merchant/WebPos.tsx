@@ -2095,13 +2095,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       return true;
     });
-    const useBestsellerSort = gridSort === 'bestseller';
+    const useBestsellerSort = useRetailLayout
+      ? checkoutSettings.retailProductSortMode === 'most_sold'
+      : gridSort === 'bestseller';
     if (useBestsellerSort && bestsellerIds.length) {
       return filtered.sort(
         (a, b) => (bestsellerOrder.get(a.id) ?? 999) - (bestsellerOrder.get(b.id) ?? 999)
       );
     }
-    if (gridSort === 'alpha') {
+    const useAlphaSort = useRetailLayout
+      ? checkoutSettings.retailProductSortMode === 'alphabetical'
+      : gridSort === 'alpha';
+    if (useAlphaSort) {
       return filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     }
     return filtered.sort((a, b) => {
@@ -2110,7 +2115,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (sa !== sb) return sa - sb;
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
-  }, [products, categories, categoryId, search, bestsellerIds, gridSort]);
+  }, [products, categories, categoryId, search, bestsellerIds, gridSort, useRetailLayout, checkoutSettings.retailProductSortMode]);
 
   const visibleCategories = useMemo(
     () => categories.filter((c) => isVisibleOnChannel(c.visibility, 'pos')),

@@ -204,6 +204,7 @@ interface SettingsData {
     retailClearSearchAfterAdd?: boolean;
     retailShowStockOnTiles?: boolean;
     retailQuickTiles?: string[];
+    retailProductSortMode?: 'most_sold' | 'alphabetical' | 'catalog_order';
   } | null;
   shopPathUrl?: string | null;
   shopMenuUrl?: string | null;
@@ -2668,6 +2669,31 @@ export default function Settings() {
                           );
                         })}
                       </div>
+                    </Field>
+                    <Field label={t('posRetailProductSort')} hint={t('posRetailProductSortHint')}>
+                      <select
+                        className="input max-w-md"
+                        value={
+                          normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                            .retailProductSortMode
+                        }
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posCheckoutSettings: {
+                              ...(settings.posCheckoutSettings || {}),
+                              retailProductSortMode: e.target.value as
+                                | 'most_sold'
+                                | 'alphabetical'
+                                | 'catalog_order',
+                            },
+                          })
+                        }
+                      >
+                        <option value="catalog_order">{t('posRetailProductSortCatalog')}</option>
+                        <option value="alphabetical">{t('posRetailProductSortAlpha')}</option>
+                        <option value="most_sold">{t('posRetailProductSortMostSold')}</option>
+                      </select>
                     </Field>
                   </div>
                 ) : null}
