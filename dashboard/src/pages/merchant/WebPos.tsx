@@ -1880,6 +1880,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const activeSale = useMemo(() => {
     const part = splitQueue[splitIndex];
+    const linesFromSnapshot = (
+      snap: NonNullable<SplitPart['linesSnapshot']>,
+      idx: number
+    ): CartLine[] =>
+      snap.map((l, i) => ({
+        lineId: `split-snap-${idx}-${i}`,
+        productId: `split-snap-${idx}-${i}`,
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+        taxable: true,
+        selectedExtras: [],
+        comboSelections: [],
+      }));
+
     if (!part) {
       return { lines: cart, totals: payableFullTotals, label: null as string | null };
     }
@@ -1905,7 +1921,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return [];
     };
     if (part.lineIds.length > 0 || (part.lineQtys && Object.keys(part.lineQtys).length > 0)) {
-      const lines = resolveSplitLines();
+      let lines = resolveSplitLines();
+      if (!lines.length && part.linesSnapshot?.length) {
+        lines = linesFromSnapshot(part.linesSnapshot, splitIndex);
+      }
       const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
       const payableShare =
         payableFullTotals.total > 0 && fullTotals.total > 0
@@ -1918,7 +1937,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
     }
     const factor = payableFullTotals.total > 0 ? part.amount / payableFullTotals.total : 1;
-    const lines = scaleLinesByFactor(cart, factor);
+    let lines =
+      cart.length > 0
+        ? scaleLinesByFactor(cart, factor)
+        : part.linesSnapshot?.length
+          ? linesFromSnapshot(part.linesSnapshot, splitIndex)
+          : [];
     const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
     return {
       lines,
@@ -7284,7 +7308,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       || payments.find((p) => p.method === 'card')
       || payments.find((p) => p.method === 'gift_card')
       || payments[0];
-    if (!primary && partTotal > 0.001) return;
+    if (!primary && partTotal > 0.001) {
+      toast.error(t('webPosTapPaymentMethod'));
+      return;
+    }
     const amountTendered = roundMoney2(
       payments.length ? payments.reduce((s, p) => s + p.amount, 0) : 0
     );
@@ -8764,6 +8791,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     if (!moreSplits) {
       const payLaterSale = method === 'pay_later' || method === 'invoice';
+      const splitPaidTotal = roundMoney2(
+        splitReceiptsRef.current.reduce((s, p) => s + p.amount, 0)
+      );
+      if (method !== 'pay_later' && method !== 'invoice') {
+        setLastSplitReceipts([...splitReceiptsRef.current]);
+      } else {
+        splitReceiptsRef.current = [];
+        setLastSplitReceipts([]);
+      }
+      if (showSuccessScreen && !payLaterSale) {
+        setSuccessInfo({
+          amount: splitReceiptsRef.current.length > 1 ? splitPaidTotal : sale.total,
+          changeDue: extras?.changeDue ?? null,
+          orderNumber:
+            guestOrderNumber({
+              orderNumber: ticket.orderNumber,
+              orderDisplay: ticket.display,
+            }) || null,
+          paymentMethod: paymentMethodLabel(method, t),
+        });
+        setPosView('success');
+        setExpressSuccessOpen(false);
+      }
       if (!payLaterSale) {
         const odsNums = new Set<string>();
         const display = ticket.display?.trim();
@@ -8816,12 +8866,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearAttachedGiftCard();
       clearPersistedWebPosCarts();
       terminalPaymentRef.current = null;
-      if (method !== 'pay_later' && method !== 'invoice') {
-        setLastSplitReceipts([...splitReceiptsRef.current]);
-      } else {
-        splitReceiptsRef.current = [];
-        setLastSplitReceipts([]);
-      }
     }
     setCheckoutExtras(null);
     // Split flow uses WebPosCheckoutView (posView=checkout), not WebPosCheckoutModal.
@@ -8832,18 +8876,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       splitReceiptsRef.current.reduce((s, p) => s + p.amount, 0)
     );
     if (showSuccessScreen && !payLater && !moreSplits) {
-      setSuccessInfo({
-        amount: splitReceiptsRef.current.length > 1 ? splitPaidTotal : paidTotal,
-        changeDue: extras?.changeDue ?? null,
-        orderNumber:
-          guestOrderNumber({
-            orderNumber: ticket.orderNumber,
-            orderDisplay: ticket.display,
-          }) || null,
-        paymentMethod: paymentMethodLabel(method, t),
-      });
-      setPosView('success');
-      setExpressSuccessOpen(false);
+      /* success view already set above when clearing split state */
     } else if (!showSuccessScreen || payLater || moreSplits) {
       toast.success(
         method === 'invoice'

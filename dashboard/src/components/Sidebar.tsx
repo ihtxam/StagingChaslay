@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, Settings, Store, User, UserCircle2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
@@ -39,6 +39,7 @@ interface SidebarProps {
   quickAction?: {
     label: string;
     path: string;
+    icon?: ReactNode;
   } | null;
   language?: Locale;
   onLanguageChange?: (locale: Locale) => void;
@@ -268,10 +269,10 @@ export default function Sidebar({
               {!railMode ? (
                 <>
                   <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
-                  <p className="text-[11px] text-white/70 mt-0.5">{t('panel')}</p>
+                  <p className="text-[11px] text-white/70 mt-0.5">{t('partnerPanel')}</p>
                 </>
               ) : (
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">{t('panel')}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">{t('partnerPanel')}</p>
               )}
             </div>
           </div>
@@ -293,13 +294,16 @@ export default function Sidebar({
               aria-label={quickAction.label}
               title={quickAction.label}
               className={`flex w-full items-center justify-center rounded-lg transition-colors shadow-lg ${
-                railMode ? 'h-11' : 'h-12 px-3'
+                railMode ? 'h-11' : 'h-12 px-3 gap-2'
               } ${
                 isPathActive(location.pathname, quickAction.path, location.search)
                   ? 'bg-emerald-400 ring-2 ring-emerald-300/60'
                   : 'bg-[#22c55e] hover:bg-emerald-400'
               }`}
             >
+              <span className="inline-flex shrink-0 items-center justify-center text-white [&_svg]:h-5 [&_svg]:w-5">
+                {quickAction.icon ?? <MonitorSmartphone className="h-5 w-5" aria-hidden />}
+              </span>
               {!railMode ? (
                 <span className="text-sm font-semibold text-white truncate">{quickAction.label}</span>
               ) : null}
@@ -338,6 +342,24 @@ export default function Sidebar({
 
             if (children.length === 0 && entry.path) {
               const active = isPathActive(location.pathname, entry.path, location.search);
+              if (railMode) {
+                return (
+                  <Link
+                    key={entry.path}
+                    to={entry.path}
+                    onClick={closeMobile}
+                    className={`flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2.5 text-[10px] font-semibold leading-tight transition-colors ${
+                      active
+                        ? 'bg-black/25 text-white shadow-sm'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title={entry.label}
+                  >
+                    <span className="text-base leading-none">{entry.icon}</span>
+                    <span className="max-w-full truncate text-center">{entry.label}</span>
+                  </Link>
+                );
+              }
               return (
                 <Link
                   key={entry.path}

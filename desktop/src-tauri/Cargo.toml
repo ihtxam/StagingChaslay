@@ -1,12 +1,12 @@
 [package]
-name = "chaslay-pos"
+name = "reborn-pos"
 version = "0.1.0"
-description = "Chaslay POS Windows kiosk shell"
-authors = ["Chaslay"]
+description = "RebornPOS Windows kiosk shell"
+authors = ["Reborn"]
 edition = "2021"
 
 [lib]
-name = "chaslay_pos_lib"
+name = "reborn_pos_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

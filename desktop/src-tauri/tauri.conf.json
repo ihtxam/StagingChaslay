@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Chaslay POS",
+  "productName": "RebornPOS",
   "version": "0.1.0",
-  "identifier": "com.chaslay.pos",
+  "identifier": "com.reborn.pos",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:5173"
@@ -39,8 +39,8 @@
         "type": "downloadBootstrapper"
       }
     },
-    "shortDescription": "Chaslay Windows POS",
-    "longDescription": "Kiosk shell for Chaslay / Reborn WebPOS with bundled Print Agent sidecar on 127.0.0.1:9101."
+    "shortDescription": "RebornPOS Windows kiosk",
+    "longDescription": "Kiosk shell for Reborn WebPOS with bundled Print Agent sidecar on 127.0.0.1:9101."
   },
   "plugins": {}
 }

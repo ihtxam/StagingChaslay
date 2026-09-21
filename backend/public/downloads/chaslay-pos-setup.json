@@ -1,9 +1,9 @@
 {
-  "name": "chaslay-pos",
-  "displayName": "Chaslay POS",
-  "description": "Fullscreen Windows kiosk for Chaslay WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101.",
+  "name": "reborn-pos",
+  "displayName": "RebornPOS",
+  "description": "Fullscreen Windows kiosk for Reborn WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101.",
   "version": "0.1.0",
-  "exeFile": "chaslay-pos-setup.exe",
+  "exeFile": "reborn-pos-setup.exe",
   "platform": "windows",
   "builtAt": null,
   "signed": false

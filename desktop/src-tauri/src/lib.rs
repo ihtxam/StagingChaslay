@@ -266,20 +266,20 @@ fn desktop_toggle_window_mode(
         .ok_or_else(|| "main window missing".to_string())?;
     let next = {
         let guard = window_mode.mode.lock().map_err(|e| e.to_string())?;
-        if *guard == "maximized" {
+        if *guard == "fullscreen" {
             "normal".to_string()
         } else {
-            "maximized".to_string()
+            "fullscreen".to_string()
         }
     };
-    if next == "maximized" {
-        let _ = win.set_fullscreen(false);
-        let _ = win.maximize();
+    if next == "fullscreen" {
+        let _ = win.unmaximize();
+        let _ = win.set_fullscreen(true);
         let _ = win.show();
         let _ = win.set_focus();
     } else {
-        let _ = win.unmaximize();
         let _ = win.set_fullscreen(false);
+        let _ = win.unmaximize();
         let _ = win.show();
         let _ = win.set_focus();
     }
@@ -478,7 +478,7 @@ pub fn run() {
             child: Mutex::new(None),
         })
         .manage(WindowModeState {
-            mode: Mutex::new("maximized".to_string()),
+            mode: Mutex::new("fullscreen".to_string()),
         })
         .manage(HwPathState {
             printers: Mutex::new(String::new()),
@@ -511,14 +511,15 @@ pub fn run() {
                 Url::parse("https://app.chaslay.com/login").expect("static url")
             });
             let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
-                .title("Chaslay POS")
-                .fullscreen(false)
+                .title("RebornPOS")
+                .fullscreen(true)
                 .maximized(true)
                 .decorations(false)
                 .resizable(true)
                 .visible(true)
                 .on_navigation(|url| is_allowed_navigation(&url))
                 .build()?;
+            let _ = win.set_fullscreen(true);
             let _ = win.set_focus();
 
             if let Some(sidecar) = app.try_state::<SidecarState>() {
@@ -527,5 +528,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("failed to start Chaslay POS");
+        .expect("failed to start RebornPOS");
 }
