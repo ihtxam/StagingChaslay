@@ -857,6 +857,27 @@ if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
   fi
 elif deploy_stack_is_production; then
   assert_production_postgres_preserved
+  PROD_PG_ATTR_WARN_THRESHOLD="${PROD_PG_ATTR_WARN_THRESHOLD:-300}"
+  PROD_PG_ATTR_BLOCK_THRESHOLD="${PROD_PG_ATTR_BLOCK_THRESHOLD:-1500}"
+  merchant_attnum="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
+    "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.merchants'::regclass AND attnum > 0;" 2>/dev/null | tr -d '[:space:]' || echo "0")"
+  merchant_cols="$(dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -tAc \
+    "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='merchants';" 2>/dev/null | tr -d '[:space:]' || echo "0")"
+  echo "merchants columns: active=${merchant_cols:-?} total_pg_attribute=${merchant_attnum:-?}"
+  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$PROD_PG_ATTR_WARN_THRESHOLD" ]]; then
+    echo "NOTE: merchants pg_attribute=$merchant_attnum (active $merchant_cols) — schedule rebuild during maintenance"
+    echo "  REBUILD_MERCHANTS_TABLE=1 bash scripts/rebuild-merchants-table.sh"
+  fi
+  if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$PROD_PG_ATTR_BLOCK_THRESHOLD" ]]; then
+    echo "ERROR: merchants pg_attribute=$merchant_attnum is near Postgres limit 1600 (active $merchant_cols)."
+    echo "  Production data is preserved. Rebuild merchants table (no wipe):"
+    echo "    REBUILD_MERCHANTS_TABLE=1 bash scripts/rebuild-merchants-table.sh"
+    if [[ "${REBUILD_MERCHANTS_TABLE:-}" != "1" ]]; then
+      exit 1
+    fi
+    echo "REBUILD_MERCHANTS_TABLE=1 — running merchants table rebuild before migrate..."
+    bash "$REPO_DIR/scripts/rebuild-merchants-table.sh"
+  fi
 fi
 # Failed prior deploys can leave a stopped migrate container (e.g. rebornsense-migrate-1).
 docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true

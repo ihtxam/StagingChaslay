@@ -22,3 +22,10 @@ ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_express_enabled boolean NO
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_cash_enabled boolean NOT NULL DEFAULT true;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_card_enabled boolean NOT NULL DEFAULT true;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_terminal_enabled boolean NOT NULL DEFAULT true;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_hmac_key text;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tap_to_pay_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_addon_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_settings jsonb;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_locations integer NOT NULL DEFAULT 1;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS cart_layout varchar(20) NOT NULL DEFAULT 'hidden_slide';
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS plan_billing_paid boolean NOT NULL DEFAULT true;
