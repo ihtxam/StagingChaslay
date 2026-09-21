@@ -12,6 +12,7 @@ import {
   productRequiresModifierModal,
   defaultConfiguredAdd,
   selectionSummary,
+  translateModifierGroupTitle,
   validateModifierGroups,
   type ShopProductForModifiers,
 } from '@/components/shop/shop-modifier-utils';
@@ -80,8 +81,7 @@ export default function ShopProductModifiersModal({
       chooseAtLeast: (n, name) =>
         t('shopChooseAtLeastOptions').replace('{n}', String(n)).replace('{name}', name),
       tooMany: (name) => t('shopTooManyOptions').replace('{name}', name),
-      groupTitle: (title) =>
-        title === 'Extras' ? t('shopExtras') : title === 'Sizes' ? t('sizes') : title,
+      groupTitle: (title) => translateModifierGroupTitle(title, t),
     });
     if (err) {
       setError(err);
@@ -92,6 +92,7 @@ export default function ShopProductModifiersModal({
 
   const isPos = variant === 'pos';
   const gridCompact = compact ?? !isPos;
+  const multiTab = groups.length > 1;
 
   return (
     <>
@@ -101,7 +102,7 @@ export default function ShopProductModifiersModal({
       >
         <div
           className={`flex w-full flex-col overflow-hidden bg-white shadow-2xl ${
-            isPos || wide
+            isPos || wide || multiTab
               ? 'max-h-[92vh] rounded-t-2xl sm:max-w-2xl sm:rounded-2xl'
               : 'max-h-[90vh] rounded-t-2xl sm:max-w-md sm:rounded-2xl'
           }`}
@@ -212,9 +213,9 @@ export default function ShopProductModifiersModal({
               <button
                 type="button"
                 onClick={confirm}
-                className="w-full bg-stone-900 py-3 font-semibold text-white"
+                className="w-full bg-stone-900 py-3.5 text-sm font-bold text-white"
               >
-                {t('shopAddToBasket')}
+                {t('shopAddToBasket')} · CHF {unitPrice.toFixed(2)}
               </button>
             </div>
           ) : error ? (

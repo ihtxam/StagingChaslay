@@ -32,6 +32,7 @@ import {
   SHOP_SIZE_MODIFIER_GROUP_ID,
   specificationOptionPriceDelta,
 } from "@/lib/shop-product-specifications";
+import { modifierOptionTicketName } from "@/lib/modifier-nos";
 import {
   filterCatalogForChannel,
   shopMenuCatalogChannel,
@@ -517,7 +518,11 @@ async function resolveShopLineExtras(
     }
     if (seen.has(opt.id)) continue;
     seen.add(opt.id);
-    extras.push({ id: opt.id, name: opt.name, price: roundMoney2(opt.price) });
+    extras.push({
+      id: opt.id,
+      name: modifierOptionTicketName(opt.name, opt.groupTitle),
+      price: roundMoney2(opt.price),
+    });
     countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
   }
 
@@ -533,7 +538,11 @@ async function resolveShopLineExtras(
         const opt = optionById.get(s.id);
         if (!opt) continue;
         seen.add(opt.id);
-        extras.push({ id: opt.id, name: opt.name, price: roundMoney2(opt.price) });
+        extras.push({
+          id: opt.id,
+          name: modifierOptionTicketName(opt.name, opt.groupTitle),
+          price: roundMoney2(opt.price),
+        });
         countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
         pickedSpecs += 1;
       }
@@ -567,7 +576,11 @@ async function resolveShopLineExtras(
         if (count >= min) break;
         if (seen.has(o.id)) continue;
         seen.add(o.id);
-        extras.push({ id: o.id, name: o.name, price: roundMoney2(o.price) });
+        extras.push({
+          id: o.id,
+          name: modifierOptionTicketName(o.name, g.title),
+          price: roundMoney2(o.price),
+        });
         count += 1;
       }
       countsByGroup.set(g.id, count);

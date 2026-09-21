@@ -2,7 +2,10 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useI18n } from '@/lib/i18n';
 import {
   groupMax,
+  groupMin,
+  modifierOptionDisplayName,
   toggleGroupOption,
+  translateModifierGroupTitle,
   type ShopModifierGroup,
 } from '@/components/shop/shop-modifier-utils';
 
@@ -16,11 +19,6 @@ type Props = {
   /** Larger option thumbnails for kiosk / touch screens */
   touchLarge?: boolean;
 };
-
-function groupLabel(title: string, t: (k: string) => string) {
-  if (title === 'Extras') return t('shopExtras');
-  return title;
-}
 
 export default function ShopModifierTabGrid({
   groups,
@@ -80,7 +78,8 @@ export default function ShopModifierTabGrid({
                   : 'border-transparent text-stone-600 hover:text-stone-900 hover:bg-stone-100/80'
               }`}
             >
-              {groupLabel(g.title, t)}
+              {translateModifierGroupTitle(g.title, t)}
+              {groupMin(g) > 0 ? <span className="ml-0.5 text-red-500">*</span> : null}
               {count > 0 ? (
                 <span
                   className={`ml-1.5 inline-flex min-w-[1.125rem] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
@@ -140,7 +139,7 @@ export default function ShopModifierTabGrid({
                     checked ? 'text-blue-900' : 'text-stone-900'
                   }`}
                 >
-                  {opt.name}
+                  {modifierOptionDisplayName(opt.name, activeGroup.title)}
                 </span>
                 {max > 1 && checked ? (
                   <span className="mt-1 text-[10px] font-medium text-blue-700">{t('shopSelected')}</span>

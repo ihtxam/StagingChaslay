@@ -59,6 +59,43 @@ export interface ShopProductForModifiers {
 /** Synthetic modifier group id for catalogue size rows. */
 export const SIZE_MODIFIER_GROUP_ID = '__sizes__';
 
+/** Modifier groups that represent removals / exclusions (Oracle Simphony-style "No's"). */
+export function isNosModifierGroup(title: string): boolean {
+  const key = title.trim().toLowerCase().replace(/['']/g, "'");
+  return key === "no's" || key === "nos" || key === "no" || key === "removals";
+}
+
+/** Ticket / kitchen label: ensure exclusion modifiers read as "No …". */
+export function ensureNosTicketName(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return trimmed;
+  if (/^no[\s\-.]/i.test(trimmed) || /^no$/i.test(trimmed)) return trimmed;
+  return `No ${trimmed}`;
+}
+
+/** Grid display label for No's options (strip redundant "No" prefix). */
+export function nosOptionDisplayName(name: string): string {
+  const trimmed = (name || '').trim();
+  const stripped = trimmed.replace(/^no[\s\-.]+/i, '').trim();
+  return stripped || trimmed;
+}
+
+export function modifierOptionDisplayName(name: string, groupTitle: string): string {
+  return isNosModifierGroup(groupTitle) ? nosOptionDisplayName(name) : name;
+}
+
+export function modifierOptionTicketName(name: string, groupTitle: string): string {
+  return isNosModifierGroup(groupTitle) ? ensureNosTicketName(name) : name;
+}
+
+export function translateModifierGroupTitle(title: string, t: (key: string) => string): string {
+  const normalized = title.trim();
+  if (normalized === 'Extras') return t('shopExtras');
+  if (normalized === 'Sizes' || normalized === 'Size') return t('sizes');
+  if (isNosModifierGroup(normalized)) return t('shopNos');
+  return title;
+}
+
 export function inStockSpecifications(product: ShopProductForModifiers): ShopProductSpec[] {
   return (product.specifications || [])
     .filter((s) => s.name?.trim() && (s.saleStatus || 'in_stock') !== 'out_of_stock')
@@ -161,7 +198,7 @@ export function buildExtrasFromSelection(
       if (!opt) continue;
       extras.push({
         id: opt.id,
-        name: opt.name,
+        name: modifierOptionTicketName(opt.name, g.title),
         price: Number(opt.price) || 0,
         groupId: g.id,
         groupTitle: g.title,
@@ -182,11 +219,11 @@ export function selectionSummary(
     if (ids.length) {
       for (const id of ids) {
         const opt = g.options.find((o) => o.id === id);
-        if (opt) names.push(opt.name);
+        if (opt) names.push(modifierOptionTicketName(opt.name, g.title));
       }
     } else {
       for (const opt of g.options.filter((o) => o.isDefault)) {
-        names.push(opt.name);
+        names.push(modifierOptionTicketName(opt.name, g.title));
       }
     }
   }
@@ -265,9 +302,7 @@ export function productHasModifiers(product: ShopProductForModifiers) {
 }
 
 export function productRequiresModifierModal(product: ShopProductForModifiers) {
-  const groups = effectiveGroups(product);
-  if (!groups.length) return false;
-  return groups.some((g) => groupMin(g) > 0);
+  return productHasModifiers(product);
 }
 
 export function defaultConfiguredAdd(product: ShopProductForModifiers): {
