@@ -689,7 +689,7 @@ export default function StorekeeperApp() {
             setPinOpen(true);
           }}
         >
-          {t('webposPinClockIn')}
+          {t('webPosPinClockIn')}
         </button>
         <WebPosPinModal
           open={pinOpen}
@@ -717,8 +717,8 @@ export default function StorekeeperApp() {
   }
 
   return (
-    <div className="storekeeper-app mx-auto flex min-h-[100dvh] max-w-lg flex-col gap-4 bg-[var(--bg)] p-4 pb-8 text-[var(--text)]">
-      <header className="flex items-center justify-between gap-2">
+    <div className="storekeeper-app mx-auto flex h-[100dvh] max-h-[100dvh] max-w-lg flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
+      <header className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4">
         <div className="flex min-w-0 items-start gap-2">
           {showBackToPanel ? (
             <button
@@ -777,6 +777,7 @@ export default function StorekeeperApp() {
         </div>
       </header>
 
+      <div className="storekeeper-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-8 pt-4">
       {pendingLabel ? (
         <div className="rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4 shadow-sm dark:border-teal-800/40 dark:bg-teal-950/30">
           <p className="text-sm font-semibold text-teal-900 dark:text-teal-100">{t('storekeeperPrintLabelPrompt')}</p>
@@ -1206,6 +1207,7 @@ export default function StorekeeperApp() {
         }}
         onLogout={pinLogout}
       />
+      </div>
     </div>
   );
 }

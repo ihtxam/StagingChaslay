@@ -817,8 +817,6 @@ function MerchantShell() {
             label: t('navRetail'),
             icon: '🏪',
             children: [
-              { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-              { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
               { label: t('reports'), path: '/merchant/reports', icon: '📈' },
               ...(allowInventory('/merchant/inventory')
                 ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
@@ -853,12 +851,8 @@ function MerchantShell() {
       label: t('navCatalog'),
       icon: '🛍️',
       children: [
-        ...(isRestaurantModule(businessModule)
-          ? [
-              { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-              { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
-            ]
-          : []),
+        { label: t('products'), path: '/merchant/products', icon: '🛍️' },
+        { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path)),
     },

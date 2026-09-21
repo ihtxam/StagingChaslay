@@ -6,7 +6,13 @@ import { ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import { isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
 import { isDesktopApp } from './lib/platform'
+import { installDesktopHardwareBridge } from './lib/hardware/desktop-bridge'
 import './index.css'
+
+if (typeof window !== 'undefined' && isDesktopApp()) {
+  void installDesktopHardwareBridge();
+  document.documentElement.classList.add('desktop-app-shell');
+}
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */
 if (import.meta.env.PROD && typeof window !== 'undefined') {

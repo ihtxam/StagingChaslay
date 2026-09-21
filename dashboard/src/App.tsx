@@ -40,6 +40,7 @@ import SignageDisplayPage from '@/pages/SignageDisplayPage';
 import StatusPage from '@/pages/StatusPage';
 import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 import PanelLoginRedirect from '@/components/PanelLoginRedirect';
+import DesktopChromeBar from '@/components/DesktopChromeBar';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
@@ -215,6 +216,7 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <DesktopChromeBar />
         <PosViewportManager />
         <Routes>
           {statusMode && (

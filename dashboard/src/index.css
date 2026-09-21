@@ -2510,3 +2510,17 @@ html.shop-shell select:focus {
   min-height: 0;
   height: 100% !important;
 }
+
+/* Tauri desktop shell — persistent top chrome bar */
+html.desktop-app-shell body {
+  padding-top: 2.25rem;
+}
+
+html.desktop-app-shell .desktop-chrome-bar {
+  padding-top: env(safe-area-inset-top, 0px);
+  height: calc(2.25rem + env(safe-area-inset-top, 0px));
+}
+
+html.desktop-app-shell .webpos-shell--fill {
+  height: calc(100dvh - 2.25rem - env(safe-area-inset-top, 0px));
+}
