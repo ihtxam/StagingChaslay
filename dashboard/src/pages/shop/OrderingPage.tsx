@@ -1567,7 +1567,8 @@ export default function OrderingPage() {
               <ShopMobileNavMenu
                 accountPath={accountPath}
                 loggedIn={!!customer}
-                links={shopNav.drawerLinks}
+                topbarLinks={shopNav.topbarLinks}
+                drawerLinks={shopNav.drawerLinks}
               />
               </div>
             </div>

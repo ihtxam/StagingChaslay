@@ -17,8 +17,9 @@ import {
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopAccountGuestAuth from '@/components/shop/ShopAccountGuestAuth';
+import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
@@ -92,6 +93,8 @@ export default function AccountPage() {
   const [merchantInfo, setMerchantInfo] = useState<{ name?: string; shopLogoUrl?: string | null } | null>(
     null
   );
+  const [merchant, setMerchant] = useState<any>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -155,13 +158,26 @@ export default function AccountPage() {
         if (!token) {
           setCustomer(null);
           try {
-            const menuRes = await axios.get(`/api/shop/${shopKey}/menu`);
-            const m = menuRes.data?.merchant || menuRes.data?.store;
-            if (m) setMerchantInfo({ name: m.name, shopLogoUrl: m.shopLogoUrl });
+            const shopRes = await axios.get(`/api/shop/${shopKey}`);
+            const m = shopRes.data?.data;
+            if (m) {
+              setMerchant(m);
+              setMerchantInfo({ name: m.name, shopLogoUrl: m.shopLogoUrl });
+            }
           } catch {
             /* optional */
           }
           return;
+        }
+        try {
+          const shopRes = await axios.get(`/api/shop/${shopKey}`);
+          const m = shopRes.data?.data;
+          if (m) {
+            setMerchant(m);
+            setMerchantInfo({ name: m.name, shopLogoUrl: m.shopLogoUrl });
+          }
+        } catch {
+          /* optional */
         }
         await loadAll(token);
       } catch {
@@ -377,20 +393,22 @@ export default function AccountPage() {
       style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
     >
     <div className="min-h-screen bg-[#f6f5f2] text-stone-900">
-      <ShopOpenPageHeader
+      <ShopMinimalHeader
         basePath={base}
         merchantName={merchantInfo?.name}
         logoUrl={merchantInfo?.shopLogoUrl}
         shopKey={shopKey}
+        onStoreInfo={() => setInfoOpen(true)}
       />
 
-      <main className={customer ? 'max-w-2xl mx-auto px-4 py-6 space-y-5' : ''}>
+      <main className={customer ? 'shop-page-content max-w-3xl py-6 space-y-5' : 'shop-page-content py-8'}>
         {!customer ? (
           <ShopAccountGuestAuth
             shopKey={shopKey}
             base={base}
             merchantName={merchantInfo?.name || ''}
             logoUrl={merchantInfo?.shopLogoUrl}
+            hideBranding
             onAuthed={async (token) => {
               setLoading(true);
               setError('');
@@ -410,7 +428,7 @@ export default function AccountPage() {
         ) : (
           <>
             {authSuccess ? (
-              <section className="max-w-2xl mx-auto px-4">
+              <section>
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
@@ -709,6 +727,7 @@ export default function AccountPage() {
           </>
         )}
       </main>
+      <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
     </div>
     </ShopThemeShell>
   );

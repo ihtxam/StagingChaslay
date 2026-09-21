@@ -40,13 +40,12 @@ export function buildShopTopbarNav(opts: ShopTopbarNavOptions): {
     topbarLinks.push({ label: opts.labels.reservations, to: joinPath(home, 'reservations') });
   }
 
-  const drawerLinks: ShopNavLink[] = [
-    ...topbarLinks,
-    { label: opts.labels.contact, to: joinPath(home, '#contact') },
-  ];
+  /** Hamburger-only on desktop (topbar already shows Home/Menu/Gift card). Mobile shows both lists. */
+  const drawerLinks: ShopNavLink[] = [];
   if (opts.onStoreInfo && opts.labels.storeInfo) {
     drawerLinks.push({ label: opts.labels.storeInfo, onClick: opts.onStoreInfo });
   }
+  drawerLinks.push({ label: opts.labels.contact, to: joinPath(home, '#contact') });
 
   return { topbarLinks, drawerLinks };
 }

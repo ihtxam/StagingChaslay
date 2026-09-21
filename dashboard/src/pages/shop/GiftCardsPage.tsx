@@ -8,6 +8,7 @@ import { shopDocumentTitle } from '@/lib/brand';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
   adyenLocaleFor,
@@ -76,6 +77,7 @@ export default function GiftCardsPage() {
     holderName?: string | null;
   } | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -260,13 +262,15 @@ export default function GiftCardsPage() {
             shopKey={shopKey}
             loggedIn={loggedIn}
             showGiftCards={!!settings?.enabled}
+            onStoreInfo={() => setInfoOpen(true)}
           />
-          <div className="shop-page-content py-12 text-center">
+      <div className="shop-page-content py-12 text-center">
             <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
             <Link to={base || '/'} className="mt-4 inline-block text-stone-900 underline">
               {t('shopBackHome')}
             </Link>
           </div>
+          <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
         </div>
       </ShopThemeShell>
     );
@@ -282,6 +286,7 @@ export default function GiftCardsPage() {
         shopKey={shopKey}
         loggedIn={loggedIn}
         showGiftCards={!!settings?.enabled}
+        onStoreInfo={() => setInfoOpen(true)}
       />
 
       <main className="shop-page-content max-w-3xl py-10">
@@ -552,6 +557,7 @@ export default function GiftCardsPage() {
           </div>
         )}
       </main>
+      <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
     </div>
     </ShopThemeShell>
   );
