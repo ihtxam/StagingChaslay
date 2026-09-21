@@ -292,14 +292,18 @@ export default function Sidebar({
               onClick={closeMobile}
               aria-label={quickAction.label}
               title={quickAction.label}
-              className={`block w-full rounded-lg transition-colors shadow-lg ${
-                railMode ? 'h-11' : 'h-12'
+              className={`flex w-full items-center justify-center rounded-lg transition-colors shadow-lg ${
+                railMode ? 'h-11' : 'h-12 px-3'
               } ${
                 isPathActive(location.pathname, quickAction.path, location.search)
                   ? 'bg-emerald-400 ring-2 ring-emerald-300/60'
                   : 'bg-[#22c55e] hover:bg-emerald-400'
               }`}
-            />
+            >
+              {!railMode ? (
+                <span className="text-sm font-semibold text-white truncate">{quickAction.label}</span>
+              ) : null}
+            </Link>
           </div>
         )}
 
@@ -433,9 +437,7 @@ export default function Sidebar({
         </nav>
 
         <div
-          className={`panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 ${
-            railMode ? 'overflow-visible' : 'overflow-x-hidden'
-          }`}
+          className={`panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 overflow-visible`}
         >
           {shopPath ? (
             <Link
@@ -516,7 +518,7 @@ export default function Sidebar({
                   className={
                     railMode
                       ? 'absolute bottom-0 left-full z-[60] ml-2 w-56 overflow-hidden rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl'
-                      : 'absolute bottom-full left-0 right-0 z-50 mb-1 max-h-[min(50vh,16rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl lg:static lg:bottom-auto lg:z-auto lg:mb-0 lg:mt-1 lg:max-h-none lg:overflow-hidden lg:bg-black/35'
+                      : 'mt-1 w-full max-h-[min(50vh,16rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-white/15 bg-black/35 shadow-xl'
                   }
                   role="menu"
                 >
