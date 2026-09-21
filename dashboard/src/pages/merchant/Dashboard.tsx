@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
+import MerchantSubNav from '@/components/MerchantSubNav';
 import Header from '@/components/Header';
 import Overview from './Overview';
 import Orders from './Orders';
@@ -810,30 +811,45 @@ function MerchantShell() {
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
-    ...(isRestaurantModule(businessModule)
-      ? []
-      : [
-          {
-            id: 'retail',
-            label: t('navRetail'),
-            icon: '🏪',
-            children: [
-              { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-              ...(allowInventory('/merchant/inventory')
-                ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
-                : []),
-              ...(allowStorekeeper('/merchant/storekeeper')
-                ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
-                : []),
-            ].filter((item) => {
-              if (item.path === '/merchant/inventory' || item.path.startsWith('/merchant/inventory')) {
-                return allowInventory(item.path);
-              }
-              if (item.path === '/merchant/storekeeper') return allowStorekeeper(item.path);
-              return allow(item.path);
-            }),
-          },
-        ]),
+    (() => {
+      const catalogLinks = [
+        { label: t('products'), path: '/merchant/products', icon: '🛍️' },
+        { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
+        { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
+      ].filter((item) => allow(item.path));
+      const retailOpsLinks = !isRestaurantModule(businessModule)
+        ? [
+            { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+            ...(allowInventory('/merchant/inventory')
+              ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
+              : []),
+            ...(allowStorekeeper('/merchant/storekeeper')
+              ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
+              : []),
+          ].filter((item) => {
+            if (item.path === '/merchant/inventory' || item.path.startsWith('/merchant/inventory')) {
+              return allowInventory(item.path);
+            }
+            if (item.path === '/merchant/storekeeper') return allowStorekeeper(item.path);
+            return allow(item.path);
+          })
+        : [];
+      const children = [
+        ...(catalogLinks.length
+          ? [{ heading: true as const, label: t('navGroupCatalog') }, ...catalogLinks]
+          : []),
+        ...(retailOpsLinks.length
+          ? [{ heading: true as const, label: t('navGroupRetailOps') }, ...retailOpsLinks]
+          : []),
+      ];
+      if (!children.length) return null;
+      return {
+        id: 'products',
+        label: t('navProducts'),
+        icon: '🛍️',
+        children,
+      };
+    })(),
     {
       id: 'sales',
       label: t('navSales'),
@@ -844,17 +860,9 @@ function MerchantShell() {
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
           : []),
-        { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-      ].filter((item) => allow(item.path)),
-    },
-    {
-      id: 'catalog',
-      label: t('navCatalog'),
-      icon: '🛍️',
-      children: [
-        { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-        { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
-        { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
+        ...(isRestaurantModule(businessModule)
+          ? [{ label: t('reports'), path: '/merchant/reports', icon: '📈' }]
+          : []),
       ].filter((item) => allow(item.path)),
     },
     {
@@ -935,6 +943,7 @@ function MerchantShell() {
       ].filter((item) => allow(item.path)),
     },
   ]
+    .filter(Boolean)
     .filter((entry) => {
       if ('id' in entry && typeof entry.id === 'string' && isPanelNavGroupHidden(entry.id, panelNavHidden)) {
         return false;
@@ -956,11 +965,11 @@ function MerchantShell() {
     ...(allow('/merchant/products')
       ? [
           {
-            id: 'catalog',
-            label: t('navCatalog'),
+            id: 'products',
+            label: t('navProducts'),
             icon: '🛍️',
             children: fullMenuItems
-              .find((entry) => 'id' in entry && entry.id === 'catalog')
+              .find((entry) => 'id' in entry && entry.id === 'products')
               ?.children?.filter((item) => {
                 const path = 'path' in item ? item.path : '';
                 return path && allow(path);
@@ -1038,43 +1047,88 @@ function MerchantShell() {
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
       {!hideChrome && (
-        <Sidebar
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-          menuItems={menuItems}
-          panelKey="merchant"
-          registerDisplay={registerDisplay}
-          showStaffSwitch={hasStaffPins}
-          quickAction={
-            !isStorekeeperRoute &&
-            !storekeeperRestricted &&
-            !kioskRestricted &&
-            !orderCenterRestricted &&
-            showWebPosQuickAction
-              ? { label: t('sidebarPos'), path: '/merchant/pos' }
-              : null
-          }
-          language={locale}
-          onLanguageChange={changeLanguage}
-          profileMenu={{
-            settingsPath:
-              !panelChromeRestricted && allow('/merchant/settings')
-                ? '/merchant/settings'
-                : undefined,
-            billingPath:
-              !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
-            supportPath:
-              !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
-          }}
-          shopName={merchantShopName}
-          shopPath={
-            !panelChromeRestricted &&
-            !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
-            allow('/merchant/platform-shop')
-              ? '/merchant/platform-shop'
-              : null
-          }
-        />
+        <>
+          <div className="lg:hidden">
+            <Sidebar
+              isOpen={sidebarOpen}
+              onToggle={() => setSidebarOpen(!sidebarOpen)}
+              menuItems={menuItems}
+              panelKey="merchant"
+              registerDisplay={registerDisplay}
+              showStaffSwitch={hasStaffPins}
+              quickAction={
+                !isStorekeeperRoute &&
+                !storekeeperRestricted &&
+                !kioskRestricted &&
+                !orderCenterRestricted &&
+                showWebPosQuickAction
+                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  : null
+              }
+              language={locale}
+              onLanguageChange={changeLanguage}
+              profileMenu={{
+                settingsPath:
+                  !panelChromeRestricted && allow('/merchant/settings')
+                    ? '/merchant/settings'
+                    : undefined,
+                billingPath:
+                  !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
+                supportPath:
+                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+              }}
+              shopName={merchantShopName}
+              shopPath={
+                !panelChromeRestricted &&
+                !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
+                allow('/merchant/platform-shop')
+                  ? '/merchant/platform-shop'
+                  : null
+              }
+            />
+          </div>
+          <div className="hidden lg:flex shrink-0">
+            <Sidebar
+              isOpen
+              onToggle={() => setSidebarOpen(!sidebarOpen)}
+              menuItems={menuItems}
+              railMode
+              panelKey="merchant-rail"
+              registerDisplay={registerDisplay}
+              showStaffSwitch={hasStaffPins}
+              quickAction={
+                !isStorekeeperRoute &&
+                !storekeeperRestricted &&
+                !kioskRestricted &&
+                !orderCenterRestricted &&
+                showWebPosQuickAction
+                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  : null
+              }
+              language={locale}
+              onLanguageChange={changeLanguage}
+              profileMenu={{
+                settingsPath:
+                  !panelChromeRestricted && allow('/merchant/settings')
+                    ? '/merchant/settings'
+                    : undefined,
+                billingPath:
+                  !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
+                supportPath:
+                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+              }}
+              shopName={merchantShopName}
+              shopPath={
+                !panelChromeRestricted &&
+                !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
+                allow('/merchant/platform-shop')
+                  ? '/merchant/platform-shop'
+                  : null
+              }
+            />
+            {!panelChromeRestricted ? <MerchantSubNav menuItems={menuItems} /> : null}
+          </div>
+        </>
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">

@@ -1,7 +1,9 @@
 import { Search, Settings, Wallet, Gift } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '@/lib/i18n';
+import WebPosExpressCheckoutBar from './WebPosExpressCheckoutBar';
 import type { RetailTileSize } from '@/lib/pos-checkout';
+import type { WebPosActionButtonSize } from '@/lib/webpos-action-button-size';
 import { categoryColor, categoryColorMap } from './categoryColors';
 import type { PosCategoryId, Product, Category } from './types';
 import { POS_GIFT_CARDS_CATEGORY } from './types';
@@ -41,6 +43,13 @@ type Props = {
   showStockOnTiles?: boolean;
   quickTileProducts?: Product[];
   onOpenSettings?: () => void;
+  expressCheckout?: boolean;
+  expressMethods?: { cash?: boolean; card?: boolean; terminal?: boolean };
+  onExpressPay?: (method: 'cash' | 'card' | 'terminal') => void;
+  onOpenCheckout?: () => void;
+  expressDisabled?: boolean;
+  checkoutDisabled?: boolean;
+  actionButtonSize?: WebPosActionButtonSize;
 };
 
 export default function WebPosRetailProductCenter({
@@ -66,6 +75,13 @@ export default function WebPosRetailProductCenter({
   showStockOnTiles = false,
   quickTileProducts = [],
   onOpenSettings,
+  expressCheckout = false,
+  expressMethods,
+  onExpressPay,
+  onOpenCheckout,
+  expressDisabled = false,
+  checkoutDisabled = false,
+  actionButtonSize = 'md',
 }: Props) {
   const { t } = useI18n();
   const localRef = useRef<HTMLInputElement>(null);
@@ -281,6 +297,15 @@ export default function WebPosRetailProductCenter({
           </div>
         )}
       </div>
+      <WebPosExpressCheckoutBar
+        expressCheckout={expressCheckout}
+        expressMethods={expressMethods}
+        onExpressPay={onExpressPay}
+        onOpenCheckout={onOpenCheckout}
+        expressDisabled={expressDisabled}
+        checkoutDisabled={checkoutDisabled}
+        actionButtonSize={actionButtonSize}
+      />
     </section>
   );
 }

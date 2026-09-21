@@ -28,6 +28,8 @@ interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   menuItems: SidebarNavEntry[];
+  /** Icon-only primary rail on desktop (pair with MerchantSubNav). */
+  railMode?: boolean;
   /** Distinguishes open-state persistence per panel (e.g. merchant / superadmin). */
   panelKey?: string;
   showStaffSwitch?: boolean;
@@ -94,6 +96,7 @@ export default function Sidebar({
   isOpen,
   onToggle,
   menuItems,
+  railMode = false,
   panelKey = 'default',
   registerDisplay,
   showStaffSwitch = false,
@@ -248,7 +251,9 @@ export default function Sidebar({
       <aside
         className={`panel-sidebar ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
-        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto w-56 h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
+        } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto ${
+          railMode ? 'w-[4.5rem] lg:w-[4.5rem]' : 'w-56'
+        } h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
         <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -260,8 +265,14 @@ export default function Sidebar({
               />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
-              <p className="text-[11px] text-white/70 mt-0.5">{t('panel')}</p>
+              {!railMode ? (
+                <>
+                  <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
+                  <p className="text-[11px] text-white/70 mt-0.5">{t('panel')}</p>
+                </>
+              ) : (
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">{t('panel')}</p>
+              )}
             </div>
           </div>
           <button
@@ -296,6 +307,31 @@ export default function Sidebar({
         <nav ref={navRef} className="flex-1 min-h-0 p-2 space-y-0.5 overflow-y-auto">
           {menuItems.map((entry) => {
             const children = entry.children?.filter(Boolean) ?? [];
+
+            if (railMode && children.length > 0) {
+              const groupId = entry.id || entry.label;
+              const parentActive = children.some((c) =>
+                isPathActive(location.pathname, c.path, location.search)
+              );
+              const firstPath = children.find((c) => c.path)?.path || entry.path;
+              if (!firstPath) return null;
+              return (
+                <Link
+                  key={groupId}
+                  to={firstPath}
+                  onClick={closeMobile}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2.5 text-[10px] font-semibold leading-tight transition-colors ${
+                    parentActive
+                      ? 'bg-black/25 text-white shadow-sm'
+                      : 'text-white/85 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title={entry.label}
+                >
+                  <span className="text-base leading-none">{entry.icon}</span>
+                  <span className="max-w-full truncate text-center">{entry.label.split(' ')[0]}</span>
+                </Link>
+              );
+            }
 
             if (children.length === 0 && entry.path) {
               const active = isPathActive(location.pathname, entry.path, location.search);
@@ -333,6 +369,8 @@ export default function Sidebar({
             }
 
             if (children.length === 0) return null;
+
+            if (railMode) return null;
 
             const groupId = entry.id || entry.label;
             const isOpenGroup = openGroups.has(groupId);

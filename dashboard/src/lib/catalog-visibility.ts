@@ -19,6 +19,7 @@ export function normalizeCatalogVisibility(raw: unknown): CatalogVisibility {
   const channels = channelsRaw
     .map((c) => String(c).trim().toLowerCase())
     .filter((c): c is CatalogChannel => CHANNEL_SET.has(c));
+  if (!channels.length) return { ...DEFAULT_CATALOG_VISIBILITY };
   return { channels: [...new Set(channels)] };
 }
 

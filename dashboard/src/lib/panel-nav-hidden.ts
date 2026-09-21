@@ -7,6 +7,14 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     '/merchant/inventory',
     '/merchant/storekeeper',
   ],
+  products: [
+    '/merchant/products',
+    '/merchant/categories',
+    '/merchant/modifiers',
+    '/merchant/reports',
+    '/merchant/inventory',
+    '/merchant/storekeeper',
+  ],
   sales: [
     '/merchant/orders',
     '/merchant/order-center',
@@ -50,6 +58,7 @@ export const PANEL_NAV_HIDE_OPTIONS: Array<{ key: string; labelKey: string }> = 
   { key: '/merchant/online-shop', labelKey: 'panelNavHideShop' },
   { key: '/merchant/chaslay-page-builder', labelKey: 'panelNavHideWebsite' },
   { key: 'sales', labelKey: 'panelNavHideSales' },
+  { key: 'products', labelKey: 'panelNavHideCatalog' },
   { key: 'catalog', labelKey: 'panelNavHideCatalog' },
   { key: 'inventory', labelKey: 'panelNavHideInventory' },
   { key: 'hq', labelKey: 'panelNavHideHq' },

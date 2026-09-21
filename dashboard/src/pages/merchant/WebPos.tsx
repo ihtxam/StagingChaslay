@@ -2130,10 +2130,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
   }, [products, categories, categoryId, search, bestsellerIds, gridSort, useRetailLayout, checkoutSettings.retailProductSortMode]);
 
-  const visibleCategories = useMemo(
-    () => categories.filter((c) => isVisibleOnChannel(c.visibility, 'pos')),
-    [categories]
-  );
+  const visibleCategories = useMemo(() => {
+    const posVisible = categories.filter((c) => isVisibleOnChannel(c.visibility, 'pos'));
+    if (posVisible.length > 0) return posVisible;
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
+    const withProducts = new Set<string>();
+    for (const p of products) {
+      if (!p.categoryId) continue;
+      const cat = categoryById.get(p.categoryId);
+      if (productVisibleOnChannel(p, cat, 'pos')) withProducts.add(p.categoryId);
+    }
+    return categories.filter((c) => withProducts.has(c.id));
+  }, [categories, products]);
 
   const refreshAgent = useCallback(async () => {
     const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
@@ -10762,6 +10770,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   checkoutSettings.retailQuickTiles.includes(p.id)
                 )}
                 onOpenSettings={() => setRetailTillSettingsOpen(true)}
+                expressCheckout={checkoutSettings.expressCheckoutEnabled !== false}
+                expressMethods={{
+                  cash: enabledMethods.cash,
+                  card: enabledMethods.card,
+                  terminal: enabledMethods.terminal,
+                }}
+                onExpressPay={(m) => void runExpressPay(m)}
+                onOpenCheckout={openRegisterCheckout}
+                expressDisabled={!cart.length || busy || paymentModalOpen}
+                checkoutDisabled={!cart.length || busy || paymentModalOpen}
+                actionButtonSize={checkoutSettings.actionButtonSize}
               />
               ) : (
               <WebPosProductArea
