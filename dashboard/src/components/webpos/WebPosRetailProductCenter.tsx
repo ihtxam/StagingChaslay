@@ -39,8 +39,9 @@ type Props = {
   onSellGiftCard?: () => void;
   onSellMembership?: () => void;
   membershipEnabled?: boolean;
-  /** When true and no search, hide grid on All Items (scanner-first empty state). */
+  /** When true and no search, hide grid on All Items once the catalog is large (scanner-first). */
   sparseGridOnAllItems?: boolean;
+  sparseGridMinProducts?: number;
   showStockOnTiles?: boolean;
   quickTileProducts?: Product[];
   onOpenSettings?: () => void;
@@ -74,6 +75,7 @@ export default function WebPosRetailProductCenter({
   onSellMembership,
   membershipEnabled = false,
   sparseGridOnAllItems = true,
+  sparseGridMinProducts = 24,
   showStockOnTiles = false,
   quickTileProducts = [],
   onOpenSettings,
@@ -102,7 +104,10 @@ export default function WebPosRetailProductCenter({
   };
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
   const showEmptyBrowse =
-    sparseGridOnAllItems && categoryId === 'all' && !hasSearch && products.length > 0;
+    sparseGridOnAllItems &&
+    categoryId === 'all' &&
+    !hasSearch &&
+    products.length >= sparseGridMinProducts;
   const showNoProducts = products.length === 0;
 
   useEffect(() => {

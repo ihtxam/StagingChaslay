@@ -699,6 +699,12 @@ router.post("/products", async (req: Request, res: Response) => {
 
     const saved = await ProductService.getProductById(merchantId, product.id);
 
+    if (saved.categoryId && saved.visibility) {
+      const { CategoryService } = await import("@/services/category.service");
+      const vis = normalizeCatalogVisibility(saved.visibility);
+      await CategoryService.ensureChannelsEnabled(merchantId, saved.categoryId, vis.channels);
+    }
+
     res.status(201).json({
       success: true,
       message: "Product created successfully",
@@ -807,6 +813,12 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
     }
 
     const product = await ProductService.updateProduct(merchantId, productId, updates);
+
+    if (product.categoryId && product.visibility) {
+      const { CategoryService } = await import("@/services/category.service");
+      const vis = normalizeCatalogVisibility(product.visibility);
+      await CategoryService.ensureChannelsEnabled(merchantId, product.categoryId, vis.channels);
+    }
 
     let modifierGroups = undefined;
     if (Array.isArray(modifierGroupIds)) {

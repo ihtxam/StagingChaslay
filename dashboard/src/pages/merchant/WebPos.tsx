@@ -152,7 +152,7 @@ import {
   type ShopComboSelection,
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
-import { isVisibleOnChannel, productVisibleOnChannel } from '@/lib/catalog-visibility';
+import { isVisibleOnChannel, productVisibleOnChannel, normalizeCatalogVisibility } from '@/lib/catalog-visibility';
 import { cartModifiersCompactLabel } from '@/lib/cart-modifier-lines';
 import WebPosProductModifiersModal, {
   productHasModifiers,
@@ -704,6 +704,34 @@ function mergeBillDiscounts(
   }
   // Fixed amounts: keep the larger single discount (do not sum — avoids 48+10 on a CHF 10 cart).
   return { percent: 0, amount: roundMoney2(Math.max(src.amount, tgt.amount)) };
+}
+
+/** Scanner-first empty state only when the POS grid would be crowded. */
+const RETAIL_SPARSE_GRID_MIN_PRODUCTS = 24;
+
+async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
+  const pageSize = 500;
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+  const all: any[] = [];
+  let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
+  while (all.length < total) {
+    try {
+      const res = await api.get('/merchant/products', {
+        params: { limit: pageSize, page },
+        ...fetchOpts,
+      });
+      const batch = res.data.products || res.data || [];
+      total = Number(res.data.pagination?.total ?? batch.length);
+      all.push(...batch);
+      if (batch.length < pageSize) break;
+      page += 1;
+    } catch (error: any) {
+      catalogError = error;
+      break;
+    }
+  }
+  return { products: all, catalogError };
 }
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
@@ -2435,13 +2463,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
       let staffFailed = false;
-      const [settingsRes, catRes, prodRes, webposRes, staffRes, bestsellerRes] = await Promise.all([
+      const [settingsRes, catRes, prodFetch, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
         api.get('/merchant/categories', fetchOpts).catch(() => ({ data: { categories: [] } })),
-        api.get('/merchant/products', { params: { limit: 2000 }, ...fetchOpts }).catch((error) => {
-          catalogError = error;
-          return { data: { products: [] } };
-        }),
+        fetchAllMerchantProducts(fetchOpts),
         api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff', fetchOpts).catch(() => {
           staffFailed = true;
@@ -2451,6 +2476,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           .get('/merchant/bestsellers', { params: { limit: 20, days: 30 }, ...fetchOpts })
           .catch(() => ({ data: { productIds: [] } })),
       ]);
+      catalogError = prodFetch.catalogError;
+      const prodRes = { data: { products: prodFetch.products } };
 
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
@@ -2540,6 +2567,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const prods = prodRes.data.products || prodRes.data || [];
       const mappedProducts = prods.map((p: any) => ({
         ...p,
+        visibility: normalizeCatalogVisibility(p.visibility),
         image: p.image || p.imageUrl || null,
         name: repairCatalogText(p.name),
         price: Number(p.price),
@@ -2655,6 +2683,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
+    const refreshCatalog = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!catalogBootedRef.current) return;
+      void load();
+    };
+    document.addEventListener('visibilitychange', refreshCatalog);
+    return () => document.removeEventListener('visibilitychange', refreshCatalog);
   }, [load]);
 
   useEffect(() => {
@@ -10801,6 +10839,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
                 }
                 sparseGridOnAllItems={checkoutSettings.retailScannerFirst !== false}
+                sparseGridMinProducts={RETAIL_SPARSE_GRID_MIN_PRODUCTS}
                 showStockOnTiles={checkoutSettings.retailShowStockOnTiles === true}
                 quickTileProducts={products.filter((p) =>
                   checkoutSettings.retailQuickTiles.includes(p.id)

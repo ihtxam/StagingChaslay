@@ -935,6 +935,10 @@ export class InventoryService {
       undefined,
       input.imageUrl || undefined
     );
+    if (defaultCategory?.id) {
+      const { CategoryService } = await import("@/services/category.service");
+      await CategoryService.ensureChannelsEnabled(merchantId, defaultCategory.id, ["pos"]);
+    }
     return {
       id: created.id,
       name: created.name,

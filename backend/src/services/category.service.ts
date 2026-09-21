@@ -5,6 +5,7 @@ import {
   paletteColorAt,
 } from "@/lib/category-colors";
 import { repairCatalogText } from "@/lib/text-encoding";
+import { normalizeCatalogVisibility, type CatalogChannel } from "@/lib/catalog-visibility";
 import { eq, and, asc, desc, max, sql, count } from "drizzle-orm";
 
 export class CategoryService {
@@ -193,6 +194,32 @@ export class CategoryService {
       console.error("Error updating category:", error);
       throw error;
     }
+  }
+
+  /** Merge channels into category visibility when a product is enabled on those channels. */
+  static async ensureChannelsEnabled(
+    merchantId: string,
+    categoryId: string,
+    channels: CatalogChannel[]
+  ) {
+    if (!channels.length) return;
+    const db = getDb();
+    const category = await db.query.categories.findFirst({
+      where: and(
+        eq(schema.categories.id, categoryId),
+        eq(schema.categories.merchantId, merchantId)
+      ),
+      columns: { id: true, visibility: true },
+    });
+    if (!category) return;
+
+    const current = normalizeCatalogVisibility(category.visibility);
+    const merged = new Set([...current.channels, ...channels]);
+    if (merged.size === current.channels.length) return;
+
+    await this.updateCategory(merchantId, categoryId, {
+      visibility: { channels: [...merged] },
+    });
   }
 
   /**

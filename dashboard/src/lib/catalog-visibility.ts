@@ -36,6 +36,8 @@ export function productVisibleOnChannel(
 ): boolean {
   if (product.isActive === false) return false;
   if (!isVisibleOnChannel(product.visibility, channel)) return false;
+  // POS honors per-product visibility even when the category omits POS (common after shop-only setup).
+  if (channel === 'pos') return true;
   if (category && !isVisibleOnChannel(category.visibility, channel)) return false;
   return true;
 }
