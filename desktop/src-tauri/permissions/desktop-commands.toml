@@ -6,7 +6,7 @@ commands.allow = ["pos_env"]
 [[permission]]
 identifier = "allow-desktop-chrome"
 description = "Desktop chrome bar reload and window mode controls."
-commands.allow = ["desktop_reload", "desktop_window_mode", "desktop_toggle_window_mode"]
+commands.allow = ["desktop_reload", "desktop_window_mode", "desktop_minimize", "desktop_toggle_window_mode"]
 
 [[permission]]
 identifier = "allow-desktop-sidecar"

@@ -2905,6 +2905,7 @@ const en: Dict = {
   desktopChromeRefresh: 'Reload',
   desktopChromeFullscreen: 'Fullscreen',
   desktopChromeRestoreWindow: 'Restore window',
+  desktopChromeMinimize: 'Minimize to taskbar',
   desktopSettingsTitle: 'Desktop settings',
   desktopSettingsSection_appearance: 'Appearance',
   desktopSettingsSection_printer: 'Printer',
@@ -3604,6 +3605,11 @@ const en: Dict = {
   staffRoleBackOfficeHint:
     'Access menu (catalogue) and Access orders open a limited back office. End of day is allowed for own sales. Full Sales / invoices / settings stay off unless granted.',
   staffEmailPanel: 'Email (official login)',
+  staffPhone: 'Phone',
+  staffPhonePlaceholder: 'Optional — used for login recovery and duplicate checks',
+  staffIndividualAccess: 'Individual access (this user only)',
+  staffIndividualAccessHint:
+    'Grant extra permissions to this person without changing their role for everyone else.',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
   staffPanelCol: 'Panel',
@@ -7131,6 +7137,7 @@ const fr: Dict = {
   desktopChromeRefresh: 'Actualiser',
   desktopChromeFullscreen: 'Plein écran',
   desktopChromeRestoreWindow: 'Restaurer la fenêtre',
+  desktopChromeMinimize: 'Réduire dans la barre des tâches',
   desktopSettingsTitle: 'Paramètres bureau',
   desktopSettingsSection_appearance: 'Apparence',
   desktopSettingsSection_printer: 'Imprimante',
@@ -7796,6 +7803,11 @@ const fr: Dict = {
   staffRoleBackOfficeHint:
     'Accès menu et commandes = back-office limité. Fin de journée autorisée pour leurs ventes. Ventes complètes / factures / paramètres restent désactivés sauf droit explicite.',
   staffEmailPanel: 'E-mail (connexion officielle)',
+  staffPhone: 'Téléphone',
+  staffPhonePlaceholder: 'Facultatif — utilisé pour éviter les doublons',
+  staffIndividualAccess: 'Accès individuel (cet utilisateur seulement)',
+  staffIndividualAccessHint:
+    'Accordez des droits supplémentaires à cette personne sans modifier le rôle pour tous.',
   webPosOpenMenu: 'Menu',
   staffPinCol: 'PIN',
   staffPanelCol: 'Panneau',
@@ -11302,6 +11314,7 @@ const de: Dict = {
   desktopChromeRefresh: 'Neu laden',
   desktopChromeFullscreen: 'Vollbild',
   desktopChromeRestoreWindow: 'Fenster wiederherstellen',
+  desktopChromeMinimize: 'In Taskleiste minimieren',
   desktopSettingsTitle: 'Desktop-Einstellungen',
   desktopSettingsSection_appearance: 'Darstellung',
   desktopSettingsSection_printer: 'Drucker',
@@ -11967,6 +11980,11 @@ const de: Dict = {
   staffRoleBackOfficeHint:
     'Menü- und Bestellzugang = begrenztes Backoffice. Tagesabschluss für eigene Verkäufe erlaubt. Voller Verkauf / Rechnungen / Einstellungen nur mit explizitem Recht.',
   staffEmailPanel: 'E-Mail (offizielles Login)',
+  staffPhone: 'Telefon',
+  staffPhonePlaceholder: 'Optional — zur Duplikatprüfung',
+  staffIndividualAccess: 'Individueller Zugriff (nur dieser Benutzer)',
+  staffIndividualAccessHint:
+    'Zusätzliche Rechte nur für diese Person, ohne die Rolle für alle zu ändern.',
   webPosOpenMenu: 'Menü',
   staffPinCol: 'PIN',
   staffPanelCol: 'Panel',

@@ -9,6 +9,7 @@ import {
   hasAnyPermission,
   normalizePermissions,
   parsePermissions,
+  resolveStaffPermissions,
   STAFF_MERCHANT_ENTRY_PERMISSIONS,
   toAndroidPermissions,
   waiterSystemKind,
@@ -46,6 +47,49 @@ export class StaffService {
       message === this.NO_PASSWORD_LOGIN_MESSAGE ||
       message === this.NO_ENTRY_PERMISSION_MESSAGE
     );
+  }
+
+  private static normalizeStaffPhone(raw?: string | null): string | null {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (!digits) return null;
+    return digits.slice(0, 32);
+  }
+
+  private static async assertStaffEmailAvailable(
+    merchantId: string,
+    email: string | null,
+    exceptStaffId?: string
+  ) {
+    if (!email) return;
+    const db = getDb();
+    const owner = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { email: true },
+    });
+    if (owner?.email?.trim().toLowerCase() === email) {
+      throw new Error("Email already used by the merchant owner account");
+    }
+    const dup = await db.query.merchantStaff.findFirst({
+      where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.email, email)),
+    });
+    if (dup && dup.id !== exceptStaffId) {
+      throw new Error("Email already used by another staff member");
+    }
+  }
+
+  private static async assertStaffPhoneAvailable(
+    merchantId: string,
+    phone: string | null,
+    exceptStaffId?: string
+  ) {
+    if (!phone) return;
+    const db = getDb();
+    const dup = await db.query.merchantStaff.findFirst({
+      where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.phone, phone)),
+    });
+    if (dup && dup.id !== exceptStaffId) {
+      throw new Error("Phone number already used by another staff member");
+    }
   }
 
   static async ensureDefaultRoles(merchantId: string) {
@@ -257,18 +301,11 @@ export class StaffService {
       });
       return;
     }
-    const perms = parsePermissions(existing.permissions);
-    const expected = encodePermissions(template.permissions);
-    if (
-      !existing.isSystem ||
-      existing.sortOrder !== template.sortOrder ||
-      existing.permissions !== expected
-    ) {
+    if (!existing.isSystem || existing.sortOrder !== template.sortOrder) {
       await db
         .update(schema.merchantRoles)
         .set({
           name: template.name,
-          permissions: expected,
           isSystem: true,
           sortOrder: template.sortOrder,
           updatedAt: new Date(),
@@ -425,7 +462,7 @@ export class StaffService {
     }
   }
 
-  /** Restore Cashier system role permissions (USE_WEBPOS, etc.) if stripped in older installs. */
+  /** Restore Cashier system role permissions only when core POS keys were stripped. */
   static async ensureCashierRolePermissions(merchantId: string) {
     const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "cashier");
     if (!template) return;
@@ -437,35 +474,24 @@ export class StaffService {
       ),
     });
     if (!role) return;
-    const expected = encodePermissions(template.permissions);
-    if (role.permissions === expected) return;
+    const current = parsePermissions(role.permissions);
+    const required: Permission[] = ["USE_WEBPOS", "USE_POS", "PROCESS_PAYMENTS"];
+    const missing = required.filter((p) => !current.includes(p));
+    if (!missing.length) return;
+    const merged = encodePermissions([...new Set([...current, ...template.permissions])]);
+    if (role.permissions === merged) return;
     await db
       .update(schema.merchantRoles)
-      .set({ permissions: expected, updatedAt: new Date() })
+      .set({ permissions: merged, updatedAt: new Date() })
       .where(eq(schema.merchantRoles.id, role.id));
   }
 
   /**
-   * Strip full panel access from the system Storekeeper role.
-   * Mobile intake only — inventory managers should use a different role.
+   * Ensure Storekeeper role exists and login home is storekeeper app.
+   * Do not overwrite merchant-edited role permissions (Users & roles must persist).
    */
   static async enforceStorekeeperPanelRestrictions(merchantId: string) {
     await this.ensureStorekeeperSystemRole(merchantId);
-    const db = getDb();
-    const roles = await db.query.merchantRoles.findMany({
-      where: and(eq(schema.merchantRoles.merchantId, merchantId), eq(schema.merchantRoles.isSystem, true)),
-    });
-    const template = DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
-    const expected = template ? encodePermissions(template.permissions) : encodePermissions(["STOREKEEPER_INTAKE"]);
-    for (const role of roles) {
-      if (role.name.trim().toLowerCase() !== "storekeeper") continue;
-      if (role.permissions !== expected) {
-        await db
-          .update(schema.merchantRoles)
-          .set({ permissions: expected, updatedAt: new Date() })
-          .where(eq(schema.merchantRoles.id, role.id));
-      }
-    }
     await this.syncStorekeeperLoginHome(merchantId);
   }
 
@@ -506,7 +532,6 @@ export class StaffService {
       .where(eq(schema.merchantRoles.id, roleId))
       .returning();
     await this.enforceWaiterFloorRestrictions(merchantId);
-    await this.enforceStorekeeperPanelRestrictions(merchantId);
     return (
       (await db.query.merchantRoles.findFirst({
         where: eq(schema.merchantRoles.id, roleId),
@@ -581,7 +606,13 @@ export class StaffService {
         email: s.email,
         roleId: s.roleId,
         roleName: role?.name || "Unknown",
-        permissions: applyRolePermissionPolicy(role?.name || "Unknown", parsePermissions(role?.permissions)),
+        permissions: resolveStaffPermissions(
+          role?.name || "Unknown",
+          role?.permissions,
+          s.extraPermissions
+        ),
+        extraPermissions: parsePermissions(s.extraPermissions),
+        phone: s.phone || null,
         canAccessPanel: s.canAccessPanel,
         isActive: s.isActive,
         pinSet: !!s.pinHash,
@@ -602,9 +633,11 @@ export class StaffService {
       roleId: string;
       pin?: string;
       email?: string;
+      phone?: string;
       password?: string;
       canAccessPanel?: boolean;
       loginHome?: StaffLoginHome;
+      extraPermissions?: Permission[];
     }
   ) {
     const db = getDb();
@@ -618,10 +651,11 @@ export class StaffService {
 
     const email = input.email?.trim().toLowerCase() || null;
     if (email) {
-      const dup = await db.query.merchantStaff.findFirst({
-        where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.email, email)),
-      });
-      if (dup) throw new Error("Email already used by another staff member");
+      await this.assertStaffEmailAvailable(merchantId, email);
+    }
+    const phone = this.normalizeStaffPhone(input.phone);
+    if (phone) {
+      await this.assertStaffPhoneAvailable(merchantId, phone);
     }
 
     const pin = input.pin?.trim();
@@ -659,11 +693,16 @@ export class StaffService {
         roleId: input.roleId,
         name,
         email,
+        phone,
         pinHash: pin ? await AuthService.hashPassword(pin) : null,
         pinDisplay: pin || null,
         passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
         loginHome,
+        extraPermissions:
+          input.extraPermissions !== undefined
+            ? encodePermissions(normalizePermissions(input.extraPermissions))
+            : null,
         isActive: true,
       })
       .returning();
@@ -685,6 +724,8 @@ export class StaffService {
       deliveryHourlyRateOverride?: number | null;
       deliveryPerOrderFeeOverride?: number | null;
       loginHome?: StaffLoginHome;
+      phone?: string | null;
+      extraPermissions?: Permission[] | null;
     }
   ) {
     const db = getDb();
@@ -709,13 +750,19 @@ export class StaffService {
     }
     if (input.email !== undefined) {
       const email = input.email?.trim().toLowerCase() || null;
-      if (email) {
-        const dup = await db.query.merchantStaff.findFirst({
-          where: and(eq(schema.merchantStaff.merchantId, merchantId), eq(schema.merchantStaff.email, email)),
-        });
-        if (dup && dup.id !== staffId) throw new Error("Email already used");
-      }
+      await this.assertStaffEmailAvailable(merchantId, email, staffId);
       patch.email = email;
+    }
+    if (input.phone !== undefined) {
+      const phone = this.normalizeStaffPhone(input.phone);
+      await this.assertStaffPhoneAvailable(merchantId, phone, staffId);
+      patch.phone = phone;
+    }
+    if (input.extraPermissions !== undefined) {
+      patch.extraPermissions =
+        input.extraPermissions === null
+          ? null
+          : encodePermissions(normalizePermissions(input.extraPermissions));
     }
     if (input.pin !== undefined) {
       if (input.pin === null || input.pin === "") {
@@ -875,9 +922,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = applyRolePermissionPolicy(
+    const permissions = resolveStaffPermissions(
       role?.name || "Staff",
-      parsePermissions(role?.permissions)
+      role?.permissions,
+      staff.extraPermissions
     );
     const accessToken = AuthService.generateToken({
       id: staff.id,
@@ -918,9 +966,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = applyRolePermissionPolicy(
+    const permissions = resolveStaffPermissions(
       role?.name || "Staff",
-      parsePermissions(role?.permissions)
+      role?.permissions,
+      staff.extraPermissions
     );
 
     return {
@@ -930,6 +979,7 @@ export class StaffService {
       roleId: staff.roleId,
       roleName: role?.name || "Staff",
       permissions,
+      extraPermissions: parsePermissions(staff.extraPermissions),
       canAccessPanel: staff.canAccessPanel,
       loginHome: normalizeStaffLoginHome(staff.loginHome),
       preferredTerminalId: staff.preferredTerminalId || null,
@@ -1003,9 +1053,10 @@ export class StaffService {
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });
-    const permissions = applyRolePermissionPolicy(
+    const permissions = resolveStaffPermissions(
       role?.name || "Staff",
-      parsePermissions(role?.permissions)
+      role?.permissions,
+      staff.extraPermissions
     );
     if (!hasAnyPermission(permissions, STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
       throw new Error(this.NO_ENTRY_PERMISSION_MESSAGE);
@@ -1050,7 +1101,9 @@ export class StaffService {
       email: staff.email,
       roleId: staff.roleId,
       roleName: role.name,
-      permissions: applyRolePermissionPolicy(role.name, parsePermissions(role.permissions)),
+      permissions: resolveStaffPermissions(role.name, role.permissions, staff.extraPermissions),
+      extraPermissions: parsePermissions(staff.extraPermissions),
+      phone: staff.phone || null,
       canAccessPanel: staff.canAccessPanel,
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,

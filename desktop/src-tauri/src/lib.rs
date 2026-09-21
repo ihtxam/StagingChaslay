@@ -3,7 +3,12 @@ mod hardware;
 use std::path::PathBuf;
 use std::process::Child;
 #[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
 use std::process::{Command, Stdio};
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 use std::sync::Mutex;
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::MacosLauncher;
@@ -122,6 +127,7 @@ fn spawn_sidecar_process(app: &tauri::AppHandle) -> Result<Child, String> {
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
+                    .creation_flags(CREATE_NO_WINDOW)
                     .spawn()
                     .map_err(|e| e.to_string());
             }
@@ -205,6 +211,7 @@ fn pos_env() -> serde_json::Value {
         "shell": "tauri",
         "version": env!("CARGO_PKG_VERSION"),
         "debug": cfg!(debug_assertions),
+        "chromeMinimize": true,
     })
 }
 
@@ -239,6 +246,14 @@ fn desktop_reload(app: tauri::AppHandle) -> Result<(), String> {
 fn desktop_window_mode(window_mode: State<'_, WindowModeState>) -> Result<String, String> {
     let guard = window_mode.mode.lock().map_err(|e| e.to_string())?;
     Ok(guard.clone())
+}
+
+#[tauri::command]
+fn desktop_minimize(app: tauri::AppHandle) -> Result<(), String> {
+    let win = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window missing".to_string())?;
+    win.minimize().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -476,6 +491,7 @@ pub fn run() {
             is_start_with_windows,
             desktop_reload,
             desktop_window_mode,
+            desktop_minimize,
             desktop_toggle_window_mode,
             sidecar_health,
             hw_capabilities,

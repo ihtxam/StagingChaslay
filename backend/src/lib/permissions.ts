@@ -452,3 +452,15 @@ export function applyRolePermissionPolicy(roleName: string, permissions: Permiss
   }
   return permissions;
 }
+
+/** Merge role permissions with per-user extras, then apply runtime policy. */
+export function resolveStaffPermissions(
+  roleName: string,
+  rolePermissionsRaw: string | null | undefined,
+  extraPermissionsRaw?: string | null
+): Permission[] {
+  const rolePerms = parsePermissions(rolePermissionsRaw);
+  const extra = parsePermissions(extraPermissionsRaw);
+  const merged = PERMISSIONS.filter((p) => rolePerms.includes(p) || extra.includes(p));
+  return applyRolePermissionPolicy(roleName, merged);
+}

@@ -525,7 +525,7 @@ export class SyncService {
         sale.paymentMethod === "pay_later" ||
         sale.paymentMethod === "pay-later" ||
         String(sale.paymentMethod || "").toLowerCase() === "invoice";
-      if (!isCancelledEarly && !payLaterEarly) {
+      if (!isCancelledEarly && !payLaterEarly && splitBillFullyPaid(sale)) {
         const dup = await findRecentPaidDuplicateOrder(db, merchantId, {
           ticketDisplay: sale.ticketDisplay,
           tabNumber: sale.tabNumber,

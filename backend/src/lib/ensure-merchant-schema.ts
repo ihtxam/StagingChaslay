@@ -254,6 +254,12 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
   merchant_staff_pin_display:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
+  merchant_staff_extra_permissions:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS extra_permissions text",
+  merchant_staff_phone:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS phone varchar(32)",
+  merchant_staff_phone_uidx:
+    "CREATE UNIQUE INDEX IF NOT EXISTS merchant_staff_merchant_phone_idx ON merchant_staff (merchant_id, phone) WHERE phone IS NOT NULL",
   products_visibility:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   products_similar_product_ids:

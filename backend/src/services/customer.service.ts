@@ -115,6 +115,38 @@ export class CustomerService {
     }
   }
 
+  static async assertCustomerContactAvailable(
+    merchantId: string,
+    contact: { email?: string | null; phone?: string | null },
+    exceptCustomerId?: string
+  ) {
+    const db = getDb();
+    const email = contact.email ?? null;
+    const phone = contact.phone ?? null;
+    if (email) {
+      const dup = await db.query.customers.findFirst({
+        where: and(eq(schema.customers.merchantId, merchantId), eq(schema.customers.email, email)),
+      });
+      if (dup && dup.id !== exceptCustomerId) {
+        throw new Error("Email already used by another customer");
+      }
+    }
+    if (phone) {
+      const dup = await db.query.customers.findFirst({
+        where: and(
+          eq(schema.customers.merchantId, merchantId),
+          or(
+            eq(schema.customers.phone, phone),
+            sql`regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g') = ${phone}`
+          )
+        ),
+      });
+      if (dup && dup.id !== exceptCustomerId) {
+        throw new Error("Phone number already used by another customer");
+      }
+    }
+  }
+
   /**
    * Create customer
    */
@@ -147,6 +179,8 @@ export class CustomerService {
       if (!first && !last && !mail && !tel) {
         throw new Error("Name, email, or phone is required");
       }
+
+      await this.assertCustomerContactAvailable(merchantId, { email: mail, phone: tel });
 
       const customer = await db
         .insert(schema.customers)
@@ -274,12 +308,36 @@ export class CustomerService {
     const db = getDb();
 
     try {
+      const existing = await db.query.customers.findFirst({
+        where: and(eq(schema.customers.id, customerId), eq(schema.customers.merchantId, merchantId)),
+      });
+      if (!existing) throw new Error("Customer not found");
+
+      const patch: Partial<typeof schema.customers.$inferInsert> = {
+        ...updates,
+        updatedAt: new Date(),
+      };
+      if (updates.email !== undefined) {
+        patch.email = cleanOptional(updates.email)?.toLowerCase() || null;
+      }
+      if (updates.phone !== undefined) {
+        const telRaw = cleanOptional(updates.phone);
+        patch.phone = telRaw ? phoneDigits(telRaw) || telRaw.replace(/\D/g, "").slice(0, 15) || null : null;
+      }
+
+      const nextEmail =
+        patch.email !== undefined ? (patch.email as string | null) : existing.email;
+      const nextPhone =
+        patch.phone !== undefined ? (patch.phone as string | null) : existing.phone;
+      await this.assertCustomerContactAvailable(
+        merchantId,
+        { email: nextEmail, phone: nextPhone },
+        customerId
+      );
+
       const customer = await db
         .update(schema.customers)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
+        .set(patch)
         .where(
           and(
             eq(schema.customers.id, customerId),

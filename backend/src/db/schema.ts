@@ -505,9 +505,13 @@ export const merchantStaff = pgTable(
       .references(() => merchantRoles.id, { onDelete: "restrict" }),
     name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 255 }),
+    /** Optional mobile for storekeeper / delivery contact; unique per merchant when set. */
+    phone: varchar("phone", { length: 32 }),
     pinHash: varchar("pin_hash", { length: 255 }),
     /** Plain PIN digits for merchant admin display (POS quick-login codes). */
     pinDisplay: varchar("pin_display", { length: 8 }),
+    /** Per-user permission grants on top of role (comma-separated keys). */
+    extraPermissions: text("extra_permissions"),
     passwordHash: varchar("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
@@ -526,6 +530,7 @@ export const merchantStaff = pgTable(
   (table) => ({
     merchantIdIdx: index("merchant_staff_merchant_id_idx").on(table.merchantId),
     merchantEmailIdx: uniqueIndex("merchant_staff_merchant_email_idx").on(table.merchantId, table.email),
+    merchantPhoneIdx: uniqueIndex("merchant_staff_merchant_phone_idx").on(table.merchantId, table.phone),
   })
 );
 

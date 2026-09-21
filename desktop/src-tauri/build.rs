@@ -41,6 +41,7 @@ fn main() {
                 "is_start_with_windows",
                 "desktop_reload",
                 "desktop_window_mode",
+                "desktop_minimize",
                 "desktop_toggle_window_mode",
                 "sidecar_health",
                 "hw_capabilities",

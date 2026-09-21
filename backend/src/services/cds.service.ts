@@ -15,7 +15,6 @@ import {
   sweepExpiredCdsLiveState,
   type CdsLiveState,
 } from "@/lib/cds-live-state";
-import { allocateDisplayShortCode } from "@/lib/display-short-code";
 
 type MerchantRow = {
   id: string;
@@ -26,21 +25,6 @@ type MerchantRow = {
   customer_display_settings?: unknown;
   customerDisplaySettings?: unknown;
 };
-
-async function ensureCdsShortCode(
-  merchantId: string,
-  settings: CustomerDisplaySettings
-): Promise<CustomerDisplaySettings> {
-  if (settings.shortCode) return settings;
-  const db = getDb();
-  const shortCode = await allocateDisplayShortCode(db);
-  const next = { ...settings, shortCode };
-  await db
-    .update(schema.merchants)
-    .set({ customerDisplaySettings: next, updatedAt: new Date() })
-    .where(eq(schema.merchants.id, merchantId));
-  return next;
-}
 
 async function loadMerchantByAccessKey(accessKey: string): Promise<{
   merchant: MerchantRow;
@@ -68,7 +52,6 @@ async function loadMerchantByAccessKey(accessKey: string): Promise<{
     settings.accessToken === trimmed || settings.shortCode === trimmed;
   if (!matches) throw new Error("Customer display not found");
   if (!settings.enabled) throw new Error("Customer display is disabled");
-  settings = await ensureCdsShortCode(merchant.id, settings);
   return { merchant, settings };
 }
 
@@ -101,16 +84,15 @@ export class CdsService {
     );
     if (rows[0]?.customer_display_settings == null) {
       const defaults = normalizeCustomerDisplaySettings(null);
-      const withCode = await ensureCdsShortCode(merchantId, defaults);
       const db = getDb();
       await db
         .update(schema.merchants)
-        .set({ customerDisplaySettings: withCode, updatedAt: new Date() })
+        .set({ customerDisplaySettings: defaults, updatedAt: new Date() })
         .where(eq(schema.merchants.id, merchantId));
-      return withCode;
+      return defaults;
     }
     const settings = normalizeCustomerDisplaySettings(rows[0]?.customer_display_settings);
-    return ensureCdsShortCode(merchantId, settings);
+    return settings;
   }
 
   static async updateSettings(

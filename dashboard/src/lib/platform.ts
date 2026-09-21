@@ -50,8 +50,8 @@ export function isMissingDesktopCommandError(err: unknown): boolean {
 export type DesktopChromeCapabilities = {
   /** Native reload via Tauri command (vs page reload fallback). */
   nativeReload: boolean;
-  /** Native window maximize/restore via Tauri command. */
-  nativeWindowMode: boolean;
+  /** Native minimize to taskbar via Tauri command. */
+  nativeMinimize: boolean;
   shellVersion: string | null;
 };
 
@@ -60,30 +60,34 @@ let cachedChromeCapabilities: DesktopChromeCapabilities | null | undefined;
 /** Probe whether the installed desktop shell exposes chrome commands. */
 export async function probeDesktopChromeCapabilities(): Promise<DesktopChromeCapabilities> {
   if (!isDesktopApp()) {
-    return { nativeReload: false, nativeWindowMode: false, shellVersion: null };
+    return { nativeReload: false, nativeMinimize: false, shellVersion: null };
   }
   if (cachedChromeCapabilities) return cachedChromeCapabilities;
 
   let shellVersion: string | null = null;
+  let nativeMinimize = false;
   try {
-    const env = await invoke<{ version?: string }>('pos_env');
+    const env = await invoke<{ version?: string; chromeMinimize?: boolean }>('pos_env');
     shellVersion = typeof env?.version === 'string' ? env.version : null;
+    nativeMinimize = env?.chromeMinimize === true;
   } catch {
     /* old or restricted shell */
   }
 
-  let nativeWindowMode = false;
-  try {
-    const mode = await invoke<string>('desktop_window_mode');
-    nativeWindowMode =
-      mode === 'fullscreen' || mode === 'maximized' || mode === 'normal';
-  } catch {
-    nativeWindowMode = false;
+  let nativeReload = nativeMinimize;
+  if (!nativeReload) {
+    try {
+      const mode = await invoke<string>('desktop_window_mode');
+      nativeReload =
+        mode === 'fullscreen' || mode === 'maximized' || mode === 'normal';
+    } catch {
+      nativeReload = false;
+    }
   }
 
   const caps: DesktopChromeCapabilities = {
-    nativeReload: nativeWindowMode,
-    nativeWindowMode,
+    nativeReload,
+    nativeMinimize,
     shellVersion,
   };
   cachedChromeCapabilities = caps;
@@ -129,6 +133,11 @@ export async function desktopWindowMode(): Promise<DesktopWindowMode> {
   const mode = await invoke<string>('desktop_window_mode');
   if (mode === 'fullscreen' || mode === 'maximized' || mode === 'normal') return mode;
   return 'normal';
+}
+
+export async function desktopMinimize(): Promise<void> {
+  if (!isDesktopApp()) return;
+  await invoke('desktop_minimize');
 }
 
 export async function desktopToggleWindowMode(): Promise<DesktopWindowMode> {

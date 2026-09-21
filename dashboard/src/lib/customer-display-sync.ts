@@ -200,7 +200,7 @@ export function cdsPublicUrl(parts: string | CdsUrlParts): string {
   const code =
     typeof parts === 'string'
       ? parts.trim()
-      : String(parts.shortCode || parts.accessToken || '').trim();
+      : String(parts.accessToken || parts.shortCode || '').trim();
   return `${origin.replace(/\/$/, '')}/cds/${encodeURIComponent(code)}`;
 }
 
@@ -209,7 +209,7 @@ export function openCustomerDisplayWindow(parts: string | CdsUrlParts): Window |
   const code =
     typeof parts === 'string'
       ? parts.trim()
-      : String(parts.shortCode || parts.accessToken || '').trim();
+      : String(parts.accessToken || parts.shortCode || '').trim();
   if (!code || typeof window === 'undefined') return null;
   const url = cdsPublicUrl(parts);
   const screenLeft = window.screenLeft ?? window.screenX ?? 0;

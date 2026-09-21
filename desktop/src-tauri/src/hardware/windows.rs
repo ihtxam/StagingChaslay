@@ -1,16 +1,33 @@
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn hide_console(cmd: &mut Command) {
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+fn powershell_command() -> Command {
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-ExecutionPolicy",
+        "Bypass",
+    ]);
+    hide_console(&mut cmd);
+    cmd
+}
 
 fn powershell_json(script: &str) -> Result<serde_json::Value, String> {
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            script,
-        ])
+    let output = powershell_command()
+        .args(["-Command", script])
         .output()
         .map_err(|e| e.to_string())?;
     if !output.status.success() {
@@ -98,12 +115,8 @@ pub fn raw_print(printer_name: &str, data: &[u8], drawer_kick: bool) -> Result<S
     std::fs::write(&data_path, data).map_err(|e| e.to_string())?;
     std::fs::write(&name_path, printer_name).map_err(|e| e.to_string())?;
 
-    let mut cmd = Command::new("powershell");
+    let mut cmd = powershell_command();
     cmd.args([
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
         "-File",
         script.to_string_lossy().as_ref(),
         "-FilePath",

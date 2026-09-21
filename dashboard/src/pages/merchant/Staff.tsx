@@ -22,6 +22,7 @@ type StaffRow = {
   id: string;
   name: string;
   email: string | null;
+  phone?: string | null;
   roleId: string;
   roleName: string;
   canAccessPanel: boolean;
@@ -29,6 +30,7 @@ type StaffRow = {
   pinSet: boolean;
   pin?: string | null;
   passwordSet?: boolean;
+  extraPermissions?: Permission[];
   deliveryHourlyRateOverride?: string | null;
   deliveryPerOrderFeeOverride?: string | null;
   loginHome?: StaffLoginHome;
@@ -40,13 +42,17 @@ type StaffEditForm = {
   pin: string;
   clearPin: boolean;
   email: string;
+  phone: string;
   password: string;
   canAccessPanel: boolean;
+  extraPermissions: Permission[];
   deliveryHourlyRateOverride: string;
   deliveryPerOrderFeeOverride: string;
   loginHome: 'panel' | 'pos';
   locationIds: string[];
 };
+
+const STAFF_INDIVIDUAL_PERMISSIONS: Permission[] = ['STOREKEEPER_EDIT_INTAKE'];
 
 const emptyCreateForm = {
   name: '',
@@ -215,8 +221,10 @@ export default function StaffPage({
       pin: '',
       clearPin: false,
       email: row.email || '',
+      phone: row.phone || '',
       password: '',
       canAccessPanel: row.canAccessPanel,
+      extraPermissions: row.extraPermissions || [],
       deliveryHourlyRateOverride: row.deliveryHourlyRateOverride ?? '',
       deliveryPerOrderFeeOverride: row.deliveryPerOrderFeeOverride ?? '',
       loginHome:
@@ -263,6 +271,8 @@ export default function StaffPage({
         roleId: editForm.roleId,
         canAccessPanel: nextOfficial,
         email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        extraPermissions: editForm.extraPermissions,
       };
       if (editForm.clearPin) {
         body.pin = null;
@@ -805,6 +815,18 @@ export default function StaffPage({
                 />
               </label>
               <label className="block text-sm">
+                {t('staffPhone')}
+                <input
+                  className="input mt-1"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder={t('staffPhonePlaceholder')}
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
                 {t('staffNewPassword')}
                 <PasswordInput
                   wrapperClassName="mt-1"
@@ -877,6 +899,32 @@ export default function StaffPage({
                   </div>
                 </fieldset>
               ) : null}
+              <fieldset className="block text-sm sm:col-span-2">
+                <legend className="font-medium">{t('staffIndividualAccess')}</legend>
+                <p className="text-xs text-[var(--text-muted)] font-normal mt-0.5 mb-2">
+                  {t('staffIndividualAccessHint')}
+                </p>
+                <div className="grid gap-2">
+                  {STAFF_INDIVIDUAL_PERMISSIONS.map((p) => (
+                    <label key={p} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={editForm.extraPermissions.includes(p)}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            extraPermissions: e.target.checked
+                              ? [...new Set([...editForm.extraPermissions, p])]
+                              : editForm.extraPermissions.filter((key) => key !== p),
+                          })
+                        }
+                      />
+                      <span className="font-medium">{t(`perm_${p}`)}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               {locations.length > 1 ? (
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">{t('staffLocationsTitle')}</legend>

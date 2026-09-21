@@ -8,6 +8,7 @@ import {
   encodePermissions,
   normalizePermissions,
   parsePermissions,
+  resolveStaffPermissions,
   waiterSystemKind,
 } from "./permissions";
 
@@ -49,6 +50,12 @@ import {
     "MANAGE_SETTINGS",
   ]);
   assert.deepEqual(storekeeper, ["STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE"]);
+}
+
+{
+  const rolePerms = encodePermissions(["STOREKEEPER_INTAKE"]);
+  const merged = resolveStaffPermissions("Storekeeper", rolePerms, "STOREKEEPER_EDIT_INTAKE");
+  assert.deepEqual(merged, ["STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE"]);
 }
 
 console.log("permissions: all assertions passed");
