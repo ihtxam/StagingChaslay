@@ -2,6 +2,10 @@ import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { buildDefaultRestaurantTemplate } from "@/lib/chaslay-default-template";
+import {
+  isEffectivelyEmptyEditorState,
+  normalizeEditorState,
+} from "@/lib/chaslay-editor-state";
 import { CmsService } from "@/services/cms.service";
 
 const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
@@ -17,18 +21,6 @@ const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
   },
 });
 
-function normalizeEditorState(state?: string | null): string | null {
-  if (state == null) return null;
-  const trimmed = state.trim();
-  if (!trimmed || trimmed === "{}") return null;
-  try {
-    JSON.parse(trimmed);
-    return trimmed;
-  } catch {
-    return null;
-  }
-}
-
 function editorStateForCreate(state?: string | null): string {
   return normalizeEditorState(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
 }
@@ -37,6 +29,16 @@ function editorStateForUpdate(state?: string): string | undefined {
   if (state === undefined) return undefined;
   const normalized = normalizeEditorState(state);
   return normalized ?? DEFAULT_EMPTY_CANVAS_STATE;
+}
+
+function pickPublishedEditorState(pageState: string | null, builderState: string | null): string | null {
+  const fromPage = normalizeEditorState(pageState);
+  const fromBuilder = normalizeEditorState(builderState);
+  const pageHasContent = fromPage && !isEffectivelyEmptyEditorState(fromPage);
+  const builderHasContent = fromBuilder && !isEffectivelyEmptyEditorState(fromBuilder);
+  if (pageHasContent) return fromPage;
+  if (builderHasContent) return fromBuilder;
+  return fromPage || fromBuilder;
 }
 
 export class ChaslayPagebuilderService {
@@ -50,7 +52,7 @@ export class ChaslayPagebuilderService {
     return process.env.NODE_ENV !== "production";
   }
 
-  /** Prefer the homepage row in chaslay_homepage_builder_pages; fall back to builder.editor_state. */
+  /** Prefer homepage page row when it has real blocks; fall back to builder.editor_state. */
   private static async resolvePublishedEditorState(
     builderId: number,
     fallback: string | null
@@ -61,17 +63,33 @@ export class ChaslayPagebuilderService {
         eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
         eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
       ),
-      columns: { editorState: true },
+      columns: { id: true, editorState: true },
     });
-    const fromPage = normalizeEditorState(homepagePage?.editorState);
-    if (fromPage) return fromPage;
-    return normalizeEditorState(fallback);
+    const resolved = pickPublishedEditorState(
+      homepagePage?.editorState ?? null,
+      fallback
+    );
+    const fromPage = normalizeEditorState(homepagePage?.editorState ?? null);
+    const fromBuilder = normalizeEditorState(fallback);
+    if (
+      homepagePage &&
+      resolved === fromBuilder &&
+      fromBuilder &&
+      fromPage &&
+      isEffectivelyEmptyEditorState(fromPage)
+    ) {
+      await db
+        .update(schema.chaslayHomepageBuilderPages)
+        .set({ editorState: fromBuilder, updatedAt: new Date() })
+        .where(eq(schema.chaslayHomepageBuilderPages.id, homepagePage.id));
+    }
+    return resolved;
   }
 
   /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
   private static async syncHomepagePageToBuilder(builderId: number, editorState: string | null) {
     const normalized = normalizeEditorState(editorState);
-    if (!normalized) return;
+    if (!normalized || isEffectivelyEmptyEditorState(normalized)) return;
     const db = getDb();
     await db
       .update(schema.chaslayHomepageBuilders)
@@ -167,10 +185,11 @@ export class ChaslayPagebuilderService {
         ),
       });
       if (!row) throw new Error("Homepage builder not found");
+      const editor_state = await this.resolvePublishedEditorState(row.id, row.editorState);
       return {
         id: row.id,
         name: row.name,
-        editor_state: row.editorState,
+        editor_state,
         is_active: row.isActive,
         created_at: row.createdAt.toISOString(),
         updated_at: row.updatedAt.toISOString(),
@@ -287,7 +306,11 @@ export class ChaslayPagebuilderService {
         .where(eq(schema.chaslayHomepageBuilders.id, id))
         .returning();
       const publishedState = await this.resolvePublishedEditorState(row.id, row.editorState);
-      if (publishedState && publishedState !== row.editorState) {
+      if (
+        publishedState &&
+        publishedState !== row.editorState &&
+        !isEffectivelyEmptyEditorState(publishedState)
+      ) {
         await this.syncHomepagePageToBuilder(row.id, publishedState);
       }
       await db
@@ -565,8 +588,11 @@ export class ChaslayPagebuilderService {
             ),
           });
       if (!page) return null;
-      const editor_state = normalizeEditorState(page.editorState);
-      if (!editor_state) return null;
+      const editor_state = pickPublishedEditorState(
+        page.editorState,
+        builder.editorState
+      );
+      if (!editor_state || isEffectivelyEmptyEditorState(editor_state)) return null;
       return {
         builder_id: builder.id,
         builder_name: builder.name,

@@ -46,6 +46,7 @@ import Reservations from './Reservations';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
+import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
 import WaiterApp from './WaiterApp';
 import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
@@ -1343,9 +1344,11 @@ function MerchantShell() {
               path="chaslay-page-builder"
               element={
                 <PanelRouteGuard path="/merchant/chaslay-page-builder" allow={allow}>
-                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
-                    <ChaslayPageBuilderList />
-                  </Suspense>
+                  <LazyRouteErrorBoundary resetKey={location.pathname}>
+                    <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                      <ChaslayPageBuilderList />
+                    </Suspense>
+                  </LazyRouteErrorBoundary>
                 </PanelRouteGuard>
               }
             />
@@ -1353,9 +1356,11 @@ function MerchantShell() {
               path="chaslay-page-builder/edit"
               element={
                 <PanelRouteGuard path="/merchant/chaslay-page-builder" allow={allow}>
-                  <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
-                    <ChaslayPageBuilderEditor />
-                  </Suspense>
+                  <LazyRouteErrorBoundary resetKey={location.pathname}>
+                    <Suspense fallback={<div className="p-4 text-sm muted">{t('loading')}</div>}>
+                      <ChaslayPageBuilderEditor />
+                    </Suspense>
+                  </LazyRouteErrorBoundary>
                 </PanelRouteGuard>
               }
             />

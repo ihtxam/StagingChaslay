@@ -129,7 +129,12 @@ class MainActivity : AppCompatActivity() {
         if (OemSetupPreferences.isWizardCompleted(this)) return
         pendingWizardLaunch = true
         autoWizardShownThisSession = true
-        openOemSetupWizard()
+        runCatching { openOemSetupWizard() }
+            .onFailure {
+                pendingWizardLaunch = false
+                autoWizardShownThisSession = false
+                Toast.makeText(this, R.string.oem_setup_launch_failed, Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun openOemSetupWizard() {

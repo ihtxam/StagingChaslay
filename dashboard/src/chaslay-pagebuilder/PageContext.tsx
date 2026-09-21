@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { HomepageBuilderPage } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { DEFAULT_EMPTY_CANVAS_STATE } from '@/chaslay-pagebuilder/constants';
+import { isEffectivelyEmptyEditorState } from '@/lib/chaslay-pagebuilder/editor-state';
 import {
   getHomepageBuilderPages,
   createHomepageBuilderPage,
@@ -62,10 +63,14 @@ export const PageContextProvider: React.FC<PageContextProviderProps> = ({ childr
       } else {
         // Pages API works but no pages exist yet — auto-create a Home page
         try {
+          const seedState =
+            initialEditorState?.trim() && !isEffectivelyEmptyEditorState(initialEditorState)
+              ? initialEditorState
+              : DEFAULT_EMPTY_CANVAS_STATE;
           const createResponse = await createHomepageBuilderPage(id, {
             title: 'Home',
             slug: 'home',
-            editor_state: initialEditorState?.trim() ? initialEditorState : DEFAULT_EMPTY_CANVAS_STATE,
+            editor_state: seedState,
             sort_order: 0,
             is_homepage: true,
           });
