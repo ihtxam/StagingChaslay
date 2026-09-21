@@ -1972,11 +1972,11 @@ html.shop-shell #root {
 }
 
 /*
- * Shop content column: ~80% of the page. Heroes / CTAs / banners use
+ * Shop content column: ~90% of the page. Heroes / CTAs / banners use
  * `.shop-full-bleed` to stay 100% wide.
  */
 .shop-page-content {
-  width: 80%;
+  width: 90%;
   max-width: 90rem;
   margin-inline: auto;
 }
@@ -2018,7 +2018,7 @@ html.shop-shell #root {
 }
 
 .cms-homepage .wrap {
-  width: 80%;
+  width: 90%;
   max-width: 90rem;
   margin-inline: auto;
 }
@@ -2040,7 +2040,7 @@ html.shop-shell #root {
 }
 
 .chaslay-storefront-page .hb-section-padding:not(.hb-hero):not(.hb-hero-split) {
-  width: 80%;
+  width: 90%;
   margin-inline: auto;
 }
 
@@ -2075,7 +2075,7 @@ html.shop-shell #root {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  width: 80%;
+  width: 90%;
   max-width: 90rem;
   margin-inline: auto;
   padding-inline: 0;

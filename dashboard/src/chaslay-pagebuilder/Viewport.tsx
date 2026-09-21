@@ -9,6 +9,7 @@ import { Button } from '@/chaslay-pagebuilder/ui/button';
 import { cn } from '@/lib/chaslay-pagebuilder/utils';
 import { usePageContext } from './PageContext';
 import { DEFAULT_EMPTY_CANVAS_STATE } from './constants';
+import { isEffectivelyEmptyEditorState } from '@/lib/chaslay-pagebuilder/editor-state';
 
 interface ViewportProps {
   initialState?: string | null;
@@ -64,7 +65,7 @@ export const Viewport: React.FC<ViewportProps> = ({ initialState, defaultContent
     if (currentPageIdRef.current === pageKey) return;
     currentPageIdRef.current = pageKey;
 
-    if (currentPage.editor_state) {
+    if (currentPage.editor_state && !isEffectivelyEmptyEditorState(currentPage.editor_state)) {
       try {
         const parsedState = JSON.parse(currentPage.editor_state);
         if (parsedState && Object.keys(parsedState).length > 0) {
@@ -74,6 +75,11 @@ export const Viewport: React.FC<ViewportProps> = ({ initialState, defaultContent
       } catch (e) {
         console.error('Failed to deserialize page state:', e);
       }
+    }
+
+    if (initialState && !isEffectivelyEmptyEditorState(initialState)) {
+      actions.deserialize(initialState);
+      return;
     }
 
     // No editor_state or invalid — reset to empty canvas with a droppable RootContainer

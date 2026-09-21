@@ -8,6 +8,7 @@ type Props = {
   backHref?: string;
   title: string;
   subtitle?: string;
+  hideBranding?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
 };
@@ -18,13 +19,14 @@ export default function ShopAuthShell({
   backHref,
   title,
   subtitle,
+  hideBranding = false,
   children,
   footer,
 }: Props) {
   const { t } = useI18n();
 
   return (
-    <div className="min-h-[calc(100dvh-10rem)] flex flex-col items-center justify-center px-4 py-10 bg-[#FAF8F5]">
+    <div className="flex min-h-[calc(100dvh-12rem)] flex-col items-center justify-center py-8">
       {backHref ? (
         <Link
           to={backHref}
@@ -34,9 +36,9 @@ export default function ShopAuthShell({
           {t('shopBackHome')}
         </Link>
       ) : null}
-      {logoUrl ? (
+      {!hideBranding && logoUrl ? (
         <img src={logoUrl} alt="" className="mb-3 h-14 w-14 rounded-full object-cover" />
-      ) : merchantName ? (
+      ) : !hideBranding && merchantName ? (
         <p className="mb-3 text-lg font-bold text-stone-900">{merchantName}</p>
       ) : null}
       <h1 className="text-center text-2xl font-bold text-stone-900 sm:text-3xl">{title}</h1>

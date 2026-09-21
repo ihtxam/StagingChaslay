@@ -8,6 +8,7 @@ import { shopDocumentTitle } from '@/lib/brand';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
   adyenLocaleFor,
@@ -76,6 +77,8 @@ export default function GiftCardsPage() {
     holderName?: string | null;
   } | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
 
   useEffect(() => {
     if (!shopKey) return;
@@ -260,13 +263,15 @@ export default function GiftCardsPage() {
             shopKey={shopKey}
             loggedIn={loggedIn}
             showGiftCards={!!settings?.enabled}
+            onStoreInfo={() => setInfoOpen(true)}
           />
-          <div className="shop-page-content py-12 text-center">
+      <div className="shop-page-content py-12 text-center">
             <p className="text-stone-600">{t('shopGiftCardUnavailable')}</p>
             <Link to={base || '/'} className="mt-4 inline-block text-stone-900 underline">
               {t('shopBackHome')}
             </Link>
           </div>
+          <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
         </div>
       </ShopThemeShell>
     );
@@ -282,22 +287,39 @@ export default function GiftCardsPage() {
         shopKey={shopKey}
         loggedIn={loggedIn}
         showGiftCards={!!settings?.enabled}
+        onStoreInfo={() => setInfoOpen(true)}
       />
 
       <main className="shop-page-content max-w-3xl py-10">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-full bg-stone-900 text-white flex items-center justify-center">
-            <Gift size={20} />
+        <div className="mb-8">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-900 text-white">
+                <Gift size={20} />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-semibold tracking-tight">{t('shopGiftCardTitle')}</h1>
+                <p className="mt-1 text-sm text-stone-600 sm:text-base">{t('shopGiftCardSubtitleFull')}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setBalanceOpen((open) => !open);
+                if (balanceOpen) {
+                  setBalanceError(null);
+                }
+              }}
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 hover:border-stone-400"
+              aria-expanded={balanceOpen}
+            >
+              {t('shopGiftCardCheckBalance')}
+            </button>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('shopGiftCardTitle')}</h1>
-        </div>
-        <p className="text-stone-600 mb-8">{t('shopGiftCardSubtitleFull')}</p>
 
-        {!purchaseId ? (
-          <>
-            <section className="mb-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="text-base font-semibold text-stone-900">{t('shopGiftCardCheckBalance')}</h2>
-              <p className="mt-1 text-sm text-stone-500">{t('shopGiftCardCheckBalanceHint')}</p>
+          {balanceOpen ? (
+            <section className="mt-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-stone-500">{t('shopGiftCardCheckBalanceHint')}</p>
               <form
                 onSubmit={(e) => void checkBalance(e)}
                 className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
@@ -315,12 +337,13 @@ export default function GiftCardsPage() {
                     placeholder={t('shopGiftCardCode')}
                     className="w-full rounded-xl border border-stone-300 px-4 py-3 font-mono text-sm"
                     autoComplete="off"
+                    autoFocus
                   />
                 </label>
                 <button
                   type="submit"
                   disabled={balanceLoading || !balanceCode.trim()}
-                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 hover:border-stone-400 disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center justify-center rounded-full bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
                 >
                   {balanceLoading ? '…' : t('shopGiftCardCheckBalance')}
                 </button>
@@ -344,7 +367,11 @@ export default function GiftCardsPage() {
                 </div>
               ) : null}
             </section>
+          ) : null}
+        </div>
 
+        {!purchaseId ? (
+          <>
           <form
             onSubmit={startPurchase}
             className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6"
@@ -552,6 +579,7 @@ export default function GiftCardsPage() {
           </div>
         )}
       </main>
+      <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
     </div>
     </ShopThemeShell>
   );

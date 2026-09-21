@@ -13,6 +13,7 @@ type Props = {
   base: string;
   merchantName?: string;
   logoUrl?: string | null;
+  hideBranding?: boolean;
   onAuthed: (token: string) => Promise<void>;
 };
 
@@ -21,6 +22,7 @@ export default function ShopAccountGuestAuth({
   base,
   merchantName = '',
   logoUrl,
+  hideBranding = false,
   onAuthed,
 }: Props) {
   const { t } = useI18n();
@@ -109,6 +111,7 @@ export default function ShopAccountGuestAuth({
       <ShopAuthShell
         merchantName={merchantName}
         logoUrl={logoUrl}
+        hideBranding={hideBranding}
         backHref={homePath}
         title={t('shopResetPasswordTitle')}
         footer={
@@ -150,6 +153,7 @@ export default function ShopAccountGuestAuth({
     <ShopAuthShell
       merchantName={merchantName}
       logoUrl={logoUrl}
+      hideBranding={hideBranding}
       backHref={homePath}
       title={title}
       subtitle={subtitle}

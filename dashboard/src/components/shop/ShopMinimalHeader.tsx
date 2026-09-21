@@ -79,7 +79,12 @@ export default function ShopMinimalHeader({
               </Link>
             ))}
           </nav>
-          <ShopMobileNavMenu accountPath={accountPath} loggedIn={isLoggedIn} links={drawerLinks} />
+          <ShopMobileNavMenu
+            accountPath={accountPath}
+            loggedIn={isLoggedIn}
+            topbarLinks={topbarLinks}
+            drawerLinks={drawerLinks}
+          />
         </div>
       </div>
     </header>

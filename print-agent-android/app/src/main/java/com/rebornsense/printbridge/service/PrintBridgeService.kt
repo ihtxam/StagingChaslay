@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.PrintBridgeLauncher
@@ -34,15 +35,20 @@ class PrintBridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
-        UsbHostPermissions.ensureGranted(applicationContext)
-        registry.refresh(applicationContext)
-        queue.start(applicationContext)
-        server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
-            it.start(NanoTimeout, false)
+        try {
+            createChannel()
+            startForeground(NOTIFICATION_ID, buildNotification())
+            UsbHostPermissions.ensureGranted(applicationContext)
+            registry.refresh(applicationContext)
+            queue.start(applicationContext)
+            server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
+                it.start(NanoTimeout, false)
+            }
+            refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
+        } catch (t: Throwable) {
+            Log.e(TAG, "PrintBridgeService failed to start", t)
+            stopSelf()
         }
-        refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +105,7 @@ class PrintBridgeService : Service() {
     }
 
     companion object {
+        private const val TAG = "PrintBridgeService"
         const val PORT = 9101
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101

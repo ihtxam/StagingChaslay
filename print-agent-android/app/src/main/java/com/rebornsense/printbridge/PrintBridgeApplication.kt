@@ -10,10 +10,8 @@ class PrintBridgeApplication : Application() {
             val hooks = Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenApplicationHooks")
             hooks.getMethod("onCreate", Application::class.java).invoke(null, this)
         }
-        // Start the foreground service after install/update so WebPOS can reach localhost:9101
-        // without opening MainActivity first.
+        // Start USB listener registration early; foreground service starts after notification permission.
         com.rebornsense.printbridge.usb.UsbHostPermissions.register(this)
-        PrintBridgeLauncher.start(this)
         BridgeServiceWatchdog.start(this)
     }
 }
