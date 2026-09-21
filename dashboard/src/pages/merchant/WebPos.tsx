@@ -813,9 +813,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<PosCategoryId>('' as PosCategoryId);
   const [search, setSearch] = useState('');
-  const onPosSearchChange = useCallback((raw: string) => {
-    setSearch(stripScannerControlChars(raw));
+  const retailScanTimerRef = useRef<number | null>(null);
+  const clearRetailScanTimer = useCallback(() => {
+    if (retailScanTimerRef.current != null) {
+      window.clearTimeout(retailScanTimerRef.current);
+      retailScanTimerRef.current = null;
+    }
   }, []);
+  useEffect(() => () => clearRetailScanTimer(), [clearRetailScanTimer]);
   const [retailTillSettingsOpen, setRetailTillSettingsOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
@@ -2136,6 +2141,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       } else if (!categoryId || p.categoryId !== categoryId) return false;
       if (q) {
         const raw = search.trim();
+        // Barcode scans should add straight to cart — never filter the product grid.
+        if (looksLikeRetailBarcodeInput(raw)) return true;
         const barcode = String(p.barcode || '').trim();
         const sku = String(p.sku || '').trim();
         const nameHit =
@@ -9641,8 +9648,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const product = findProductByScanCode(code);
       if (product) {
-        onProductClick(product);
         setSearch('');
+        onProductClick(product);
         return;
       }
       const tableQr = parseTableQrPayload(code);
@@ -9724,30 +9731,52 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (raw: string) => {
       const code = raw.trim();
       if (!code) return;
+      clearRetailScanTimer();
       void handlePosScan(code);
     },
-    [handlePosScan]
+    [handlePosScan, clearRetailScanTimer]
   );
 
-  // Retail scanner-first: auto-submit barcode-like input only (not multi-word name search).
-  useEffect(() => {
-    if (!useRetailLayout || posView !== 'register' || pinGateRequired || pinModalOpen) return;
-    const code = search.trim();
-    if (code.length < BARCODE_WEDGE_MIN_LENGTH) return;
-    if (!looksLikeRetailBarcodeInput(code) && !findProductByScanCode(code)) return;
-    const timer = window.setTimeout(() => {
-      submitRetailScan(code);
-    }, BARCODE_WEDGE_IDLE_MS);
-    return () => window.clearTimeout(timer);
-  }, [
-    search,
-    useRetailLayout,
-    posView,
-    pinGateRequired,
-    pinModalOpen,
-    submitRetailScan,
-    findProductByScanCode,
-  ]);
+  const scheduleRetailScanSubmit = useCallback(
+    (code: string) => {
+      clearRetailScanTimer();
+      retailScanTimerRef.current = window.setTimeout(() => {
+        retailScanTimerRef.current = null;
+        void handlePosScan(code);
+      }, BARCODE_WEDGE_IDLE_MS);
+    },
+    [clearRetailScanTimer, handlePosScan]
+  );
+
+  const onPosSearchChange = useCallback(
+    (raw: string) => {
+      const cleaned = stripScannerControlChars(raw);
+      if (posView !== 'register' || pinGateRequired || pinModalOpen) {
+        setSearch(cleaned);
+        return;
+      }
+      const code = cleaned.trim();
+      const isScanInput =
+        code.length >= BARCODE_WEDGE_MIN_LENGTH &&
+        (looksLikeRetailBarcodeInput(code) || !!findProductByScanCode(code));
+      if (isScanInput) {
+        // Keep the grid on the current category; submit after the scanner finishes typing.
+        setSearch('');
+        scheduleRetailScanSubmit(code);
+        return;
+      }
+      clearRetailScanTimer();
+      setSearch(cleaned);
+    },
+    [
+      posView,
+      pinGateRequired,
+      pinModalOpen,
+      findProductByScanCode,
+      scheduleRetailScanSubmit,
+      clearRetailScanTimer,
+    ]
+  );
 
   const offlineNow = isWebPosCurrentlyOffline();
   const deviceTapToPayActive =
@@ -10143,11 +10172,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         search={search}
         onSearchChange={onPosSearchChange}
         onSearchSubmit={() => {
-          const product = findProductByScanCode(search);
-          if (product) {
-            onProductClick(product);
-            setSearch('');
-          }
+          const code = search.trim();
+          if (!code) return;
+          clearRetailScanTimer();
+          void handlePosScan(code);
         }}
         showSearch={posView === 'register' && !isPhoneViewport && !useRetailLayout}
         onlinePendingCount={onlinePendingCount}
