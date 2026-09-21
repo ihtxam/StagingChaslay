@@ -30,6 +30,12 @@ export function isBarcodeWedgeInput(el: Element | null): boolean {
   return el instanceof HTMLInputElement && el.classList.contains(BARCODE_WEDGE_INPUT_CLASS);
 }
 
+/** Touch tablets open the OS keyboard when a hidden text input is focused — use global capture only. */
+export function prefersBarcodeWedgeAutofocus(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !window.matchMedia('(pointer: coarse)').matches;
+}
+
 export function isBarcodeFieldInput(el: Element | null): boolean {
   if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
   if (el.classList.contains(BARCODE_FIELD_INPUT_CLASS)) return true;

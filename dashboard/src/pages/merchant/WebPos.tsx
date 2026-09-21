@@ -9684,7 +9684,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const barcodeWedgeEnabled =
-    !pinGateRequired && !pinModalOpen && (posView === 'register' || posView === 'checkout');
+    !pinGateRequired &&
+    !pinModalOpen &&
+    !expressSuccessOpen &&
+    !paymentModalOpen &&
+    !retailCashPayOpen &&
+    posView !== 'success' &&
+    (posView === 'register' || posView === 'checkout') &&
+    !pendingProduct &&
+    !pendingCombo &&
+    !pendingOpenPrice &&
+    !checkoutOpen &&
+    !giftCardOpsOpen &&
+    !giftCardPayOpen &&
+    !splitOpen &&
+    !scheduleOpen &&
+    !customerOpen &&
+    !kitchenMsgOpen &&
+    !noteOpen &&
+    !setTableOpen &&
+    !setTabOpen &&
+    !manualTableOpen &&
+    !cancelModal;
 
   const { onCaptureInput: onBarcodeCaptureInput, onCaptureKeyDown: onBarcodeCaptureKeyDown } =
     useBarcodeWedge({

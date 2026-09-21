@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import {
   BARCODE_WEDGE_INPUT_CLASS,
   BARCODE_WEDGE_REFOCUS_MS,
+  prefersBarcodeWedgeAutofocus,
   shouldYieldBarcodeFocus,
 } from '@/lib/barcode-wedge';
 
@@ -12,7 +13,7 @@ type Props = {
 };
 
 function tryFocusWedge(input: HTMLInputElement | null, active: boolean) {
-  if (!active || !input) return;
+  if (!active || !input || !prefersBarcodeWedgeAutofocus()) return;
   if (shouldYieldBarcodeFocus(document.activeElement, input)) return;
   input.focus({ preventScroll: true });
 }
@@ -26,6 +27,7 @@ export default function BarcodeWedgeCapture({ active, onInput, onKeyDown }: Prop
   const refocusTimerRef = useRef<number | null>(null);
 
   const scheduleRefocus = () => {
+    if (!prefersBarcodeWedgeAutofocus()) return;
     if (refocusTimerRef.current != null) {
       window.clearTimeout(refocusTimerRef.current);
     }
@@ -45,16 +47,13 @@ export default function BarcodeWedgeCapture({ active, onInput, onKeyDown }: Prop
       return;
     }
 
-    scheduleRefocus();
-
-    const onFocusIn = () => {
-      if (shouldYieldBarcodeFocus(document.activeElement, inputRef.current)) return;
+    if (prefersBarcodeWedgeAutofocus()) {
       scheduleRefocus();
-    };
+    } else {
+      inputRef.current?.blur();
+    }
 
-    document.addEventListener('focusin', onFocusIn);
     return () => {
-      document.removeEventListener('focusin', onFocusIn);
       if (refocusTimerRef.current != null) {
         window.clearTimeout(refocusTimerRef.current);
         refocusTimerRef.current = null;
@@ -68,8 +67,10 @@ export default function BarcodeWedgeCapture({ active, onInput, onKeyDown }: Prop
     <input
       ref={inputRef}
       type="text"
+      inputMode="none"
       autoComplete="off"
       autoCorrect="off"
+      autoCapitalize="off"
       spellCheck={false}
       aria-hidden
       tabIndex={-1}
@@ -81,7 +82,9 @@ export default function BarcodeWedgeCapture({ active, onInput, onKeyDown }: Prop
         });
       }}
       onKeyDown={onKeyDown}
-      onBlur={scheduleRefocus}
+      onBlur={() => {
+        if (active) scheduleRefocus();
+      }}
     />
   );
 }

@@ -15,6 +15,7 @@ type TextTarget = HTMLInputElement | HTMLTextAreaElement;
 
 function isTextTarget(el: Element | null): el is TextTarget {
   if (!el) return false;
+  if (el instanceof HTMLInputElement && el.classList.contains('barcode-wedge-capture')) return false;
   if (el instanceof HTMLTextAreaElement) return true;
   if (el instanceof HTMLInputElement) {
     const type = (el.type || 'text').toLowerCase();
