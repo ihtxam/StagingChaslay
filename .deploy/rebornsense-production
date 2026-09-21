@@ -1,2 +1,2 @@
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
-# Last deploy request: 2026-09-19T10:16:00Z — fix missing adyen_store_reference blocking login
+# Last deploy request: 2026-09-21T06:45:00Z — retail POS Phase 2/3, Tauri shell, shop topbar, retail product sort
