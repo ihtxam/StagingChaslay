@@ -18,7 +18,8 @@ import {
   Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { parseExtraBarcodes } from '@/lib/product-scan-codes';
+import { parseExtraBarcodes, sanitizeBarcodeFieldValue, stripScannerControlChars } from '@/lib/product-scan-codes';
+import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
@@ -254,8 +255,8 @@ const MAX_MONEY_DIGITS = 10;
 const MAX_STOCK_DIGITS = 5;
 const MAX_POINTS = 2_147_483_647; // PG integer max
 
-/** Barcode: digits only for easier manual entry. */
-const sanitizeBarcodeDigits = (raw: string) => raw.replace(/\D/g, '').slice(0, SKU_MAX_LEN);
+/** Barcode: digits only for easier manual entry; strip scanner control chars. */
+const sanitizeBarcodeDigits = (raw: string) => sanitizeBarcodeFieldValue(raw, SKU_MAX_LEN);
 
 /** Free-points field: digits only, hard-capped at 10 (PG integer / product rule). */
 const sanitizeFreePointsInput = (raw: string) => raw.replace(/\D/g, '').slice(0, MAX_MONEY_DIGITS);
@@ -2258,12 +2259,17 @@ export default function Products() {
                     {showBarcodeTools ? (
                     <Field label={t('barcode')}>
                       <input
-                        className="field-input"
+                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
                         placeholder={t('barcodePlaceholder')}
                         value={form.barcode}
-                        maxLength={SKU_MAX_LEN}
                         inputMode="numeric"
                         pattern="[0-9]*"
+                        onInput={(e) =>
+                          setForm({
+                            ...form,
+                            barcode: sanitizeBarcodeDigits(e.currentTarget.value),
+                          })
+                        }
                         onChange={(e) =>
                           setForm({ ...form, barcode: sanitizeBarcodeDigits(e.target.value) })
                         }
@@ -2333,10 +2339,18 @@ export default function Products() {
                     {showBarcodeTools ? (
                     <Field label={t('productExtraBarcodes')}>
                       <input
-                        className="field-input"
+                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
                         placeholder={t('productExtraBarcodesPlaceholder')}
                         value={form.extraBarcodes}
-                        onChange={(e) => setForm({ ...form, extraBarcodes: e.target.value })}
+                        onInput={(e) =>
+                          setForm({
+                            ...form,
+                            extraBarcodes: stripScannerControlChars(e.currentTarget.value),
+                          })
+                        }
+                        onChange={(e) =>
+                          setForm({ ...form, extraBarcodes: stripScannerControlChars(e.target.value) })
+                        }
                       />
                       <p className="mt-1 text-xs muted">{t('productExtraBarcodesHint')}</p>
                     </Field>

@@ -27,6 +27,8 @@ import {
   printLabelsViaAgentOrQueue,
   type LabelPrintOptions,
 } from '@/lib/barcode-labels';
+import { stripScannerControlChars } from '@/lib/product-scan-codes';
+import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import type { PosPrintSettingsClient } from '@/lib/webpos-receipt';
 import {
   clearWebPosStaffSession,
@@ -826,9 +828,10 @@ export default function StorekeeperApp() {
           </label>
           <div className="flex gap-2">
             <input
-              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+              className={`flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)] ${BARCODE_FIELD_INPUT_CLASS}`}
               value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
+              onInput={(e) => setBarcode(stripScannerControlChars(e.currentTarget.value))}
+              onChange={(e) => setBarcode(stripScannerControlChars(e.target.value))}
               onBlur={() => barcode.trim() && !newProductMode && void applyBarcode(barcode)}
               placeholder={t('storekeeperBarcodePlaceholder')}
               inputMode="numeric"

@@ -1,10 +1,18 @@
 /** Scan / barcode matching for POS (primary + extra barcodes + SKU). */
 
+/** Strip HID control chars (GS/RS/etc.) that scanners inject into inputs. */
+export function stripScannerControlChars(raw: string): string {
+  return String(raw || '').replace(/[\x00-\x1F\x7F]/g, '');
+}
+
 /** Strip HID control chars (GS/RS/etc.) that scanners inject into the scan bar. */
 export function sanitizeScanCode(raw: string): string {
-  return String(raw || '')
-    .replace(/[\x00-\x1F\x7F]/g, '')
-    .trim();
+  return stripScannerControlChars(raw).trim();
+}
+
+/** Merchant barcode fields: strip scanner control chars, keep digits only. */
+export function sanitizeBarcodeFieldValue(raw: string, maxLen = 100): string {
+  return stripScannerControlChars(raw).replace(/\D/g, '').slice(0, maxLen);
 }
 
 export function productScanCodes(p: {

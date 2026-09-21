@@ -400,7 +400,7 @@ import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategor
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
-import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch, sanitizeScanCode } from '@/lib/product-scan-codes';
+import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch, sanitizeScanCode, stripScannerControlChars } from '@/lib/product-scan-codes';
 import {
   readDeviceRegisterProfileId,
   writeDeviceRegisterProfileId,
@@ -813,6 +813,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [search, setSearch] = useState('');
+  const onPosSearchChange = useCallback((raw: string) => {
+    setSearch(stripScannerControlChars(raw));
+  }, []);
   const [retailTillSettingsOpen, setRetailTillSettingsOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
   const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
@@ -10100,7 +10103,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mainTillOnline={mainTillOnline}
         mainTillPrintAgentOnline={mainTillPrintAgentOnline}
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={onPosSearchChange}
         onSearchSubmit={() => {
           const product = findProductByScanCode(search);
           if (product) {
@@ -10810,7 +10813,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 products={visibleProducts}
                 categoryId={categoryId}
                 search={search}
-                onSearchChange={setSearch}
+                onSearchChange={onPosSearchChange}
                 onSearchSubmit={() => submitRetailScan(search)}
                 onSearchClear={() => setSearch('')}
                 searchInputRef={retailSearchRef}
@@ -10993,7 +10996,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onBackgroundClick={() => handleSelectLine(null)}
                 showSearch={posView === 'register' && isPhoneViewport}
                 search={search}
-                onSearchChange={setSearch}
+                onSearchChange={onPosSearchChange}
                 onSearchSubmit={() => submitRetailScan(search)}
                 actionButtonSize={checkoutSettings.actionButtonSize}
               />
