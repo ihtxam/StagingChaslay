@@ -7345,6 +7345,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const openRetailCashPay = () => {
+    if (posView !== 'register') return;
     if (!cart.length || busy || paymentModalOpen) return;
     if (!guardOfflineCheckout('cash')) return;
     if (channel === 'delivery' && !selectedCustomer) {
@@ -10322,8 +10323,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             pointsDiscount={membershipCheckout.pointsDiscount}
             onCustomer={collectOrderRef ? undefined : () => setCustomerOpen(true)}
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
-            retailCashPay={isRetail}
-            onRetailCashPay={openRetailCashPay}
             onSplit={
               !collectOrderRef && checkoutSettings.splitBillsEnabled && !splitQueue.length
                 ? () => {
