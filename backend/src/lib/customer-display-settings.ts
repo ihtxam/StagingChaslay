@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { APP_ORIGIN } from "@/lib/brand";
 import type { KioskPromoSlide } from "@/lib/kiosk-settings";
 
 export type CdsTheme = "light" | "dark";
@@ -49,7 +50,7 @@ export function normalizeCustomerDisplaySettings(raw: unknown): CustomerDisplayS
     : DEFAULT_CUSTOMER_DISPLAY_SETTINGS.promoSlides;
 
   let accessToken = String(src.accessToken || "").trim();
-  if (!accessToken) accessToken = generateCdsToken();
+  // Do not mint a new token on partial JSON — CdsService persists one when missing.
 
   const shortCode = String(src.shortCode || "").trim() || undefined;
 
@@ -62,11 +63,25 @@ export function normalizeCustomerDisplaySettings(raw: unknown): CustomerDisplayS
     : DEFAULT_CUSTOMER_DISPLAY_SETTINGS.slideIntervalSec!;
 
   return {
-    accessToken,
+    accessToken: accessToken || undefined,
     shortCode,
     enabled: src.enabled !== false,
     promoSlides,
     slideIntervalSec,
     theme,
   };
+}
+
+/** Stable public CDS URL — merchant slug path never rotates with access tokens. */
+export function buildCdsPublicUrl(
+  merchantSlug?: string | null,
+  shortCode?: string | null,
+  appOrigin: string = APP_ORIGIN
+): string {
+  const origin = String(appOrigin || APP_ORIGIN).replace(/\/+$/, "");
+  const slug = String(merchantSlug || "").trim();
+  if (slug) return `${origin}/cds/m/${encodeURIComponent(slug)}`;
+  const code = String(shortCode || "").trim();
+  if (code) return `${origin}/cds/${encodeURIComponent(code)}`;
+  return `${origin}/cds/`;
 }

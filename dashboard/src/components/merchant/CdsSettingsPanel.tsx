@@ -21,6 +21,8 @@ const PANEL_CARD = 'rounded-xl border border-[var(--border)] bg-[var(--bg-elevat
 export default function CdsSettingsPanel() {
   const { t } = useI18n();
   const [settings, setSettings] = useState<CdsSettings | null>(null);
+  const [displayUrl, setDisplayUrl] = useState('');
+  const [merchantSlug, setMerchantSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -29,6 +31,14 @@ export default function CdsSettingsPanel() {
     try {
       const res = await api.get('/merchant/cds/settings');
       setSettings(res.data?.settings || null);
+      setMerchantSlug(res.data?.merchantSlug || null);
+      setDisplayUrl(
+        String(res.data?.displayUrl || '') ||
+          cdsPublicUrl({
+            merchantSlug: res.data?.merchantSlug,
+            shortCode: res.data?.settings?.shortCode,
+          })
+      );
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || t('cdsLoadFailed'));
@@ -48,6 +58,8 @@ export default function CdsSettingsPanel() {
     try {
       const res = await api.put('/merchant/cds/settings', { settings: next });
       setSettings(res.data?.settings || next);
+      if (res.data?.displayUrl) setDisplayUrl(String(res.data.displayUrl));
+      if (res.data?.merchantSlug) setMerchantSlug(res.data.merchantSlug);
       toast.success(t('cdsSettingsSaved'));
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -62,6 +74,7 @@ export default function CdsSettingsPanel() {
     try {
       const res = await api.post('/merchant/cds/settings/rotate-token');
       setSettings(res.data?.settings || settings);
+      if (res.data?.displayUrl) setDisplayUrl(String(res.data.displayUrl));
       toast.success(t('cdsTokenRotated'));
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -70,8 +83,10 @@ export default function CdsSettingsPanel() {
   };
 
   const copyUrl = async () => {
-    if (!settings?.accessToken && !settings?.shortCode) return;
-    const url = cdsPublicUrl(settings);
+    const url =
+      displayUrl ||
+      cdsPublicUrl({ merchantSlug, shortCode: settings?.shortCode });
+    if (!url || url.endsWith('/cds/')) return;
     try {
       await navigator.clipboard.writeText(url);
       toast.success(t('cdsUrlCopied'));
@@ -120,7 +135,7 @@ export default function CdsSettingsPanel() {
           <p className="text-sm font-medium">{t('cdsDisplayUrl')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="flex-1 break-all rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2 text-xs">
-              {settings.accessToken || settings.shortCode ? cdsPublicUrl(settings) : '—'}
+              {displayUrl || (merchantSlug || settings.shortCode ? cdsPublicUrl({ merchantSlug, shortCode: settings.shortCode }) : '—')}
             </code>
             <button
               type="button"

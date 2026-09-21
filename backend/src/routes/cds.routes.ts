@@ -13,6 +13,24 @@ function handleError(res: Response, error: unknown, fallback: string, status = 4
 }
 
 /** Public CDS config — token in URL, no JWT */
+router.get("/m/:slug/config", async (req: Request, res: Response) => {
+  try {
+    const data = await CdsService.configForSlug(req.params.slug);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Failed to load customer display config", 500);
+  }
+});
+
+router.get("/m/:slug/state", async (req: Request, res: Response) => {
+  try {
+    const state = await CdsService.liveStateForSlug(req.params.slug);
+    res.json({ success: true, state });
+  } catch (error) {
+    handleError(res, error, "Failed to load customer display state", 500);
+  }
+});
+
 router.get("/:token/config", async (req: Request, res: Response) => {
   try {
     const data = await CdsService.configForToken(req.params.token);
@@ -41,8 +59,8 @@ cdsMerchantRouter.use(setMerchantContext);
 
 cdsMerchantRouter.get("/settings", async (req: Request, res: Response) => {
   try {
-    const settings = await CdsService.getSettings(req.merchantId!);
-    res.json({ success: true, settings });
+    const meta = await CdsService.getSettingsMeta(req.merchantId!);
+    res.json({ success: true, ...meta });
   } catch (error) {
     handleError(res, error, "Failed to load customer display settings", 500);
   }
@@ -51,7 +69,8 @@ cdsMerchantRouter.get("/settings", async (req: Request, res: Response) => {
 cdsMerchantRouter.put("/settings", async (req: Request, res: Response) => {
   try {
     const settings = await CdsService.updateSettings(req.merchantId!, req.body?.settings);
-    res.json({ success: true, settings });
+    const meta = await CdsService.getSettingsMeta(req.merchantId!);
+    res.json({ success: true, settings, ...meta });
   } catch (error) {
     handleError(res, error, "Failed to save customer display settings");
   }
@@ -59,8 +78,9 @@ cdsMerchantRouter.put("/settings", async (req: Request, res: Response) => {
 
 cdsMerchantRouter.post("/settings/rotate-token", async (req: Request, res: Response) => {
   try {
-    const settings = await CdsService.rotateToken(req.merchantId!);
-    res.json({ success: true, settings });
+    await CdsService.rotateToken(req.merchantId!);
+    const meta = await CdsService.getSettingsMeta(req.merchantId!);
+    res.json({ success: true, ...meta });
   } catch (error) {
     handleError(res, error, "Failed to rotate token");
   }

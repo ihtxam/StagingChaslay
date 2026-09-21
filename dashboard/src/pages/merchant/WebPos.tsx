@@ -2004,11 +2004,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     setSettingsOpen(false);
-    const win = openCustomerDisplayWindow({ accessToken: cdsToken, shortCode: cdsShortCode });
+    const win = openCustomerDisplayWindow({
+      merchantSlug: merchant?.slug,
+      shortCode: cdsShortCode,
+    });
     if (!win) {
       toast.error(t('cdsActionFailed'));
     }
-  }, [cdsToken, cdsShortCode, cdsEnabled, t]);
+  }, [cdsToken, cdsShortCode, cdsEnabled, merchant?.slug, t]);
 
   const membershipCheckout = useMemo(() => {
     if (

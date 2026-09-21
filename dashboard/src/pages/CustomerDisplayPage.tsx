@@ -40,8 +40,16 @@ function money(currency: string, amount: number): string {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
-export default function CustomerDisplayPage() {
-  const { token = '' } = useParams();
+export default function CustomerDisplayPage({
+  accessMode = 'token',
+}: {
+  accessMode?: 'slug' | 'token';
+}) {
+  const params = useParams();
+  const accessKey =
+    accessMode === 'slug'
+      ? String(params.slug || '').trim()
+      : String(params.token || '').trim();
   const { t, locale, setLocale } = useI18n();
   const [config, setConfig] = useState<CdsConfig | null>(null);
   const [syncToken, setSyncToken] = useState('');
@@ -63,27 +71,31 @@ export default function CustomerDisplayPage() {
   );
 
   const loadConfig = useCallback(async () => {
-    if (!token) return;
+    if (!accessKey) return;
     try {
-      const res = await publicApi.get(`/cds/${encodeURIComponent(token)}/config`);
+      const configPath =
+        accessMode === 'slug'
+          ? `/cds/m/${encodeURIComponent(accessKey)}/config`
+          : `/cds/${encodeURIComponent(accessKey)}/config`;
+      const res = await publicApi.get(configPath);
       setConfig({
         merchant: res.data.merchant,
         settings: res.data.settings,
       });
-      setSyncToken(String(res.data.settings?.syncToken || token).trim());
+      setSyncToken(String(res.data.settings?.syncToken || accessKey).trim());
       setError('');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       setError(err.response?.data?.error || t('cdsLoadFailed'));
     }
-  }, [token, t]);
+  }, [accessKey, accessMode, t]);
 
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
 
   useEffect(() => {
-    const channelToken = syncToken || token;
+    const channelToken = syncToken || accessKey;
     if (!channelToken) return;
     const unsubscribe = subscribeCustomerDisplayState(channelToken, (state) => {
       setCart(state);
@@ -96,7 +108,7 @@ export default function CustomerDisplayPage() {
       unsubscribe();
       window.clearTimeout(retry);
     };
-  }, [syncToken, token, applyPosLocale]);
+  }, [syncToken, accessKey, applyPosLocale]);
 
   const theme = config?.settings.theme === 'dark' ? 'dark' : 'light';
   const hasLines = cart.lines.length > 0;

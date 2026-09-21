@@ -1,4 +1,5 @@
 import api, { publicApi } from '@/lib/api';
+import { APP_ORIGIN, resolvePanelAppOrigin } from '@/lib/brand';
 
 export type CustomerDisplayLine = {
   name: string;
@@ -31,6 +32,8 @@ export type CustomerDisplayState = {
 export type CdsUrlParts = {
   accessToken?: string;
   shortCode?: string | null;
+  /** Stable public path — /cds/m/{slug} (does not change when tokens rotate). */
+  merchantSlug?: string | null;
 };
 
 /** localStorage key for last locale pushed from POS → CDS. */
@@ -194,24 +197,27 @@ export function subscribeCustomerDisplayRequests(
 }
 
 export function cdsPublicUrl(parts: string | CdsUrlParts): string {
-  const origin =
-    (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://app.rebornsense.com');
-  const code =
-    typeof parts === 'string'
-      ? parts.trim()
-      : String(parts.shortCode || parts.accessToken || '').trim();
+  const origin = resolvePanelAppOrigin() || APP_ORIGIN;
+  if (typeof parts === 'object') {
+    const slug = String(parts.merchantSlug || '').trim();
+    if (slug) {
+      return `${origin.replace(/\/$/, '')}/cds/m/${encodeURIComponent(slug)}`;
+    }
+    const shortCode = String(parts.shortCode || '').trim();
+    if (shortCode) {
+      return `${origin.replace(/\/$/, '')}/cds/${encodeURIComponent(shortCode)}`;
+    }
+  }
+  const code = typeof parts === 'string' ? parts.trim() : '';
+  if (!code) return `${origin.replace(/\/$/, '')}/cds/`;
   return `${origin.replace(/\/$/, '')}/cds/${encodeURIComponent(code)}`;
 }
 
 /** Open customer display on a second monitor when available (same till PC). */
 export function openCustomerDisplayWindow(parts: string | CdsUrlParts): Window | null {
-  const code =
-    typeof parts === 'string'
-      ? parts.trim()
-      : String(parts.shortCode || parts.accessToken || '').trim();
-  if (!code || typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') return null;
   const url = cdsPublicUrl(parts);
+  if (url.endsWith('/cds/')) return null;
   const screenLeft = window.screenLeft ?? window.screenX ?? 0;
   const screenTop = window.screenTop ?? window.screenY ?? 0;
   const width = Math.min(1280, window.screen.availWidth);

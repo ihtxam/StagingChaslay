@@ -313,9 +313,16 @@ export class MerchantSettingsService {
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
-      customerDisplaySettings: normalizeCustomerDisplaySettings(
-        (merchant as { customerDisplaySettings?: unknown }).customerDisplaySettings
-      ),
+      customerDisplaySettings: await (async () => {
+        try {
+          const { CdsService } = await import("@/services/cds.service");
+          return await CdsService.getSettings(merchantId);
+        } catch {
+          return normalizeCustomerDisplaySettings(
+            (merchant as { customerDisplaySettings?: unknown }).customerDisplaySettings
+          );
+        }
+      })(),
       deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,

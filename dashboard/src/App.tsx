@@ -356,10 +356,18 @@ function App() {
             }
           />
           <Route
+            path="/cds/m/:slug"
+            element={
+              <I18nProvider storageKey={CDS_LANG_KEY}>
+                <CustomerDisplayPage accessMode="slug" />
+              </I18nProvider>
+            }
+          />
+          <Route
             path="/cds/:token"
             element={
               <I18nProvider storageKey={CDS_LANG_KEY}>
-                <CustomerDisplayPage />
+                <CustomerDisplayPage accessMode="token" />
               </I18nProvider>
             }
           />
