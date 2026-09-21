@@ -69,7 +69,11 @@ dc exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
   < "$ROOT/backend/sql/ensure-merchant-columns-drift.sql"
 
 echo "=== Run full schema patches ==="
-dc run --rm migrate npx tsx src/db/run-schema-patches.ts
+if dc run --rm migrate npx tsx src/db/run-schema-patches.ts 2>/dev/null; then
+  echo "Schema patches applied via migrate container."
+else
+  echo "Migrate container patch step unavailable — will use API schema-repair after API starts."
+fi
 
 if [[ "${SKIP_API_STOP:-}" != "1" ]]; then
   echo "=== Start API ==="
@@ -80,6 +84,23 @@ if [[ "${SKIP_API_STOP:-}" != "1" ]]; then
     fi
     sleep 2
   done
+fi
+
+echo "=== Schema repair via API ==="
+repair_ok=0
+for url in \
+  "http://127.0.0.1:3000/api/health/schema-repair" \
+  "https://app.rebornsense.com/api/health/schema-repair" \
+  "http://127.0.0.1/api/health/schema-repair"; do
+  if curl -sf -X POST "$url" >/dev/null 2>&1; then
+    repair_ok=1
+    echo "Schema repair OK via $url"
+    break
+  fi
+done
+if [[ "$repair_ok" != "1" ]]; then
+  echo "ERROR: schema-repair endpoint did not succeed"
+  exit 1
 fi
 
 after_attnum="$(dc exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
@@ -102,11 +123,6 @@ if [[ "${after_attnum:-9999}" -gt 400 ]]; then
   echo "ERROR: merchants pg_attribute still high (${after_attnum})"
   exit 1
 fi
-
-echo "=== Schema repair via API ==="
-curl -sf -X POST "https://app.rebornsense.com/api/health/schema-repair" >/dev/null \
-  || curl -sf -X POST "http://127.0.0.1/api/health/schema-repair" >/dev/null \
-  || echo "WARN: schema-repair endpoint unavailable (migrate step already ran patches)"
 
 echo "=== Done ==="
 echo "Merchants table rebuilt. pg_attribute ${before_attnum:-?} -> ${after_attnum:-?}"
