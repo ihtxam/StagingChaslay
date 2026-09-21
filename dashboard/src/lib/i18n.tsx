@@ -462,10 +462,13 @@ const en: Dict = {
   loginNetworkError:
     'Cannot reach the server. Check your internet connection, or try again in a minute if the site is being updated.',
   loginApiUnavailable:
-    'Cannot reach the API server. For local development, start the backend on port 3000 (and Postgres), then try again.',
+    'Cannot reach the server. Wait a minute if the site is being updated, then hard-refresh and try again.',
   loginServerUnavailable: 'The server is temporarily unavailable. Please try again in a minute.',
   loginStaffUsePin:
     'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.',
+  loginStaffNoPassword:
+    'This staff account has no login password yet. Ask the owner to set one in Users & roles.',
+  loginStaffNoEntry: 'This account cannot sign in to the panel.',
   loginWelcome: 'Signed in',
   loginEmailInvalid: 'Enter a valid email address',
   loginPasswordMin: 'Password must be at least 6 characters',
@@ -4819,10 +4822,13 @@ const fr: Dict = {
   loginNetworkError:
     'Impossible de joindre le serveur. Vérifiez votre connexion ou réessayez dans une minute.',
   loginApiUnavailable:
-    'API inaccessible. En développement local, démarrez le backend sur le port 3000 (et Postgres), puis réessayez.',
+    'Serveur inaccessible. Attendez une minute si le site est en cours de mise à jour, puis actualisez et réessayez.',
   loginServerUnavailable: 'Le serveur est temporairement indisponible. Réessayez dans une minute.',
   loginStaffUsePin:
     'Ce compte utilise un PIN caisse. Connectez-vous à la caisse avec le PIN, ou demandez au propriétaire de définir un mot de passe officiel dans Utilisateurs et rôles.',
+  loginStaffNoPassword:
+    'Ce compte personnel n’a pas encore de mot de passe. Demandez au propriétaire d’en définir un dans Utilisateurs et rôles.',
+  loginStaffNoEntry: 'Ce compte ne peut pas se connecter au panneau.',
   loginWelcome: 'Connecté',
   loginEmailInvalid: 'Saisissez une adresse e-mail valide',
   loginPasswordMin: 'Le mot de passe doit contenir au moins 6 caractères',
@@ -9015,10 +9021,13 @@ const de: Dict = {
   loginNetworkError:
     'Server nicht erreichbar. Internet prüfen oder in einer Minute erneut versuchen.',
   loginApiUnavailable:
-    'API nicht erreichbar. Für lokale Entwicklung Backend auf Port 3000 (und Postgres) starten, dann erneut versuchen.',
+    'Server nicht erreichbar. Warten Sie eine Minute, falls die Seite aktualisiert wird, laden Sie neu und versuchen Sie es erneut.',
   loginServerUnavailable: 'Server vorübergehend nicht verfügbar. Bitte in einer Minute erneut versuchen.',
   loginStaffUsePin:
     'Dieses Konto nutzt eine Kassen-PIN. Melden Sie sich an der Kasse mit der PIN an, oder bitten Sie den Inhaber, in Benutzer & Rollen ein offizielles Login-Passwort festzulegen.',
+  loginStaffNoPassword:
+    'Für dieses Mitarbeiterkonto ist noch kein Login-Passwort gesetzt. Bitten Sie den Inhaber, eines unter Benutzer & Rollen zu setzen.',
+  loginStaffNoEntry: 'Dieses Konto kann sich nicht im Panel anmelden.',
   loginWelcome: 'Angemeldet',
   loginEmailInvalid: 'Gültige E-Mail-Adresse eingeben',
   loginPasswordMin: 'Passwort muss mindestens 6 Zeichen haben',

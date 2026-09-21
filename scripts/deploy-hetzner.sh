@@ -1038,18 +1038,19 @@ else
 fi
 
 if [[ "$DEPLOY_STACK" == "rebornsense" ]]; then
-  echo "=== Shop hub TLS check (order.rebornsense.com) ==="
+  echo "=== Shop hub TLS check (${SHOP_PUBLIC_HOST:-order.rebornsense.com}) ==="
   SHOP_HUB_HOST="${SHOP_PUBLIC_HOST:-order.rebornsense.com}"
-  SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/" 2>/dev/null || echo "000")"
-  echo "https://${SHOP_HUB_HOST}/ HTTP ${SHOP_HUB_CODE}"
-  if [[ "$SHOP_HUB_CODE" != "200" && "$SHOP_HUB_CODE" != "301" && "$SHOP_HUB_CODE" != "302" && "$SHOP_HUB_CODE" != "308" ]]; then
-    echo "WARNING: shop hub HTTPS check failed — force-recreating caddy and retrying"
+  # Path hub root (/) may legitimately 404 when no slug — verify API routing + TLS instead.
+  SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/api/health" 2>/dev/null || echo "000")"
+  echo "https://${SHOP_HUB_HOST}/api/health HTTP ${SHOP_HUB_CODE}"
+  if [[ "$SHOP_HUB_CODE" != "200" ]]; then
+    echo "WARNING: shop hub API check failed — force-recreating caddy and retrying"
     dc up -d --force-recreate caddy
     sleep 15
-    SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/" 2>/dev/null || echo "000")"
-    echo "retry https://${SHOP_HUB_HOST}/ HTTP ${SHOP_HUB_CODE}"
-    if [[ "$SHOP_HUB_CODE" != "200" && "$SHOP_HUB_CODE" != "301" && "$SHOP_HUB_CODE" != "302" && "$SHOP_HUB_CODE" != "308" ]]; then
-      echo "ERROR: shop hub still unreachable at https://${SHOP_HUB_HOST}/"
+    SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://${SHOP_HUB_HOST}/api/health" 2>/dev/null || echo "000")"
+    echo "retry https://${SHOP_HUB_HOST}/api/health HTTP ${SHOP_HUB_CODE}"
+    if [[ "$SHOP_HUB_CODE" != "200" ]]; then
+      echo "ERROR: shop hub API still unreachable at https://${SHOP_HUB_HOST}/api/health"
       echo "  Ensure DNS A record points to this server and Caddy can obtain a TLS cert."
       exit 1
     fi

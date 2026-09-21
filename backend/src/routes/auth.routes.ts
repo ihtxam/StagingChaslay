@@ -5,11 +5,32 @@ import {
   PasswordResetRateLimitError,
   PasswordResetService,
 } from "@/services/password-reset.service";
+import { StaffService } from "@/services/staff.service";
 
 function clientIp(req: Request) {
   const forwarded = req.headers["x-forwarded-for"];
   const first = Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0];
   return (first || req.ip || req.socket.remoteAddress || "unknown").trim();
+}
+
+function isLoginAuthFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (
+    message === "Invalid email or password" ||
+    message === "Email and password are required" ||
+    message.startsWith("Merchant account is") ||
+    message.startsWith("Superadmin account is") ||
+    message === StaffService.PIN_ONLY_LOGIN_MESSAGE ||
+    message === StaffService.NO_PASSWORD_LOGIN_MESSAGE ||
+    message === StaffService.NO_ENTRY_PERMISSION_MESSAGE
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function loginHttpStatus(error: unknown): number {
+  return isLoginAuthFailure(error) ? 401 : 500;
 }
 
 const router = Router();
@@ -41,7 +62,8 @@ router.post("/login", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error logging in:", error);
-    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+    const status = loginHttpStatus(error);
+    res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
   }
 });
 
@@ -105,7 +127,8 @@ router.post("/merchant/login", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error logging in merchant:", error);
-    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+    const status = loginHttpStatus(error);
+    res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
   }
 });
 
@@ -155,7 +178,8 @@ router.post("/superadmin/login", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error logging in superadmin:", error);
-    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+    const status = loginHttpStatus(error);
+    res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
   }
 });
 
@@ -173,7 +197,8 @@ router.post("/reseller/login", async (req: Request, res: Response) => {
     res.json({ success: true, token: result.token, reseller: result.reseller });
   } catch (error) {
     console.error("Error logging in reseller:", error);
-    res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+    const status = loginHttpStatus(error);
+    res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
   }
 });
 

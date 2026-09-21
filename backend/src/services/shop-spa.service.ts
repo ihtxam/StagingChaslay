@@ -54,8 +54,11 @@ export class ShopSpaService {
   }
 
   static async renderShell(req: Request): Promise<string | null> {
-    const html = await loadShopSpaIndexHtml();
-    if (!html) return null;
+    let html = await loadShopSpaIndexHtml();
+    if (!html) {
+      html =
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shop</title></head><body><div id="root"></div></body></html>';
+    }
 
     const merchant = await resolveMerchantForSpa(req);
     if (!merchant?.shopEnabled) return html;

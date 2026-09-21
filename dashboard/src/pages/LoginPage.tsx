@@ -29,6 +29,20 @@ function isLoginApiUnavailable(error: unknown): boolean {
   return apiError === 'not found' || apiError === 'route not found';
 }
 
+const STAFF_PIN_ONLY_MSG =
+  'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.';
+const STAFF_NO_PASSWORD_MSG =
+  'This staff account has no official login password. Ask the owner to set one in Users & roles.';
+const STAFF_NO_ENTRY_MSG = 'This account cannot sign in';
+
+function mapStaffLoginGuidance(error: string, t: (key: string) => string): string | null {
+  const msg = String(error || '').trim();
+  if (msg === STAFF_PIN_ONLY_MSG) return t('loginStaffUsePin');
+  if (msg === STAFF_NO_PASSWORD_MSG) return t('loginStaffNoPassword');
+  if (msg === STAFF_NO_ENTRY_MSG) return t('loginStaffNoEntry');
+  return null;
+}
+
 function loginErrorMessage(
   error: unknown,
   t: (key: string) => string
@@ -41,7 +55,11 @@ function loginErrorMessage(
   if (isLoginApiUnavailable(error)) {
     return t('loginApiUnavailable');
   }
-  if (err.response?.data?.error) return err.response.data.error;
+  if (err.response?.data?.error) {
+    const mapped = mapStaffLoginGuidance(err.response.data.error, t);
+    if (mapped) return mapped;
+    return err.response.data.error;
+  }
   if (err.response?.status === 500) {
     return t('loginServerUnavailable');
   }
