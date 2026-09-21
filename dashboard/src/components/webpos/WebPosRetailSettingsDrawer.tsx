@@ -31,6 +31,7 @@ export default function WebPosRetailSettingsDrawer({
   const [paymentBar, setPaymentBar] = useState(settings.retailPaymentBar);
   const [cartSide, setCartSide] = useState<CartSide>(settings.cartSide);
   const [showStock, setShowStock] = useState(settings.retailShowStockOnTiles);
+  const [showPhotos, setShowPhotos] = useState(settings.retailShowProductPhotos !== false);
   const [productSort, setProductSort] = useState<RetailProductSortMode>(settings.retailProductSortMode);
   const [quickTiles, setQuickTiles] = useState<string[]>(settings.retailQuickTiles);
   const [profiles, setProfiles] = useState<RetailRegisterProfile[]>(settings.retailRegisterProfiles);
@@ -55,6 +56,7 @@ export default function WebPosRetailSettingsDrawer({
     setScannerFirst(patch.retailScannerFirst);
     setPaymentBar(patch.retailPaymentBar);
     setShowStock(patch.retailShowStockOnTiles);
+    setShowPhotos(patch.retailShowProductPhotos !== false);
     setProductSort(patch.retailProductSortMode);
     setQuickTiles(patch.retailQuickTiles);
   };
@@ -72,6 +74,7 @@ export default function WebPosRetailSettingsDrawer({
       retailScannerFirst: scannerFirst,
       retailPaymentBar: paymentBar,
       retailShowStockOnTiles: showStock,
+      retailShowProductPhotos: showPhotos,
       retailQuickTiles: quickTiles,
       retailProductSortMode: productSort,
     };
@@ -88,6 +91,7 @@ export default function WebPosRetailSettingsDrawer({
         retailPaymentBar: paymentBar,
         cartSide,
         retailShowStockOnTiles: showStock,
+        retailShowProductPhotos: showPhotos,
         retailQuickTiles: quickTiles,
         retailProductSortMode: productSort,
         retailRegisterProfiles: profiles,
@@ -153,6 +157,10 @@ export default function WebPosRetailSettingsDrawer({
           <label className="flex items-center justify-between gap-3">
             <span>{t('posRetailShowStockOnTiles')}</span>
             <input type="checkbox" checked={showStock} onChange={(e) => setShowStock(e.target.checked)} />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>{t('posRetailShowProductPhotos')}</span>
+            <input type="checkbox" checked={showPhotos} onChange={(e) => setShowPhotos(e.target.checked)} />
           </label>
 
           <div>

@@ -41,7 +41,6 @@ export default function WebPosRetailCategorySidebar({
   }, [collapsed]);
 
   const items: Array<{ id: PosCategoryId; label: string; color?: string; icon?: 'gift' }> = [
-    { id: 'all', label: t('webPosAllCategories'), color: '#e7e5e4' },
     ...(giftCardsEnabled
       ? [{ id: POS_GIFT_CARDS_CATEGORY as PosCategoryId, label: t('webPosGiftCardsCategory'), icon: 'gift' as const }]
       : []),
@@ -114,7 +113,7 @@ export default function WebPosRetailCategorySidebar({
           {items.map((item) => {
             const active = categoryId === item.id;
             const catColor =
-              item.id !== 'all' && item.id !== POS_GIFT_CARDS_CATEGORY
+              item.id !== POS_GIFT_CARDS_CATEGORY
                 ? colorByCat.get(String(item.id)) || item.color
                 : item.color;
             return (

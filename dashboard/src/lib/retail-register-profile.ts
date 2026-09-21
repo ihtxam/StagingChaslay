@@ -8,6 +8,7 @@ export type RetailRegisterProfile = {
   retailScannerFirst: boolean;
   retailPaymentBar: boolean;
   retailShowStockOnTiles: boolean;
+  retailShowProductPhotos: boolean;
   retailQuickTiles: string[];
   retailProductSortMode: RetailProductSortMode;
 };
@@ -33,6 +34,7 @@ export function parseRetailRegisterProfiles(raw: unknown): RetailRegisterProfile
         retailScannerFirst: o.retailScannerFirst !== false,
         retailPaymentBar: o.retailPaymentBar !== false,
         retailShowStockOnTiles: o.retailShowStockOnTiles === true,
+        retailShowProductPhotos: o.retailShowProductPhotos !== false,
         retailQuickTiles: tiles,
         retailProductSortMode:
           o.retailProductSortMode === 'most_sold' ||
@@ -69,6 +71,7 @@ export function profileLayoutPatch(profile: RetailRegisterProfile): {
   retailScannerFirst: boolean;
   retailPaymentBar: boolean;
   retailShowStockOnTiles: boolean;
+  retailShowProductPhotos: boolean;
   retailQuickTiles: string[];
   retailProductSortMode: RetailProductSortMode;
 } {
@@ -78,6 +81,7 @@ export function profileLayoutPatch(profile: RetailRegisterProfile): {
     retailScannerFirst: profile.retailScannerFirst,
     retailPaymentBar: profile.retailPaymentBar,
     retailShowStockOnTiles: profile.retailShowStockOnTiles,
+    retailShowProductPhotos: profile.retailShowProductPhotos,
     retailQuickTiles: profile.retailQuickTiles,
     retailProductSortMode: profile.retailProductSortMode,
   };

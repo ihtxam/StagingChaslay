@@ -356,17 +356,6 @@ export default function WebPosProductArea({
             data-cat-cols={categoryLayoutMode ? undefined : String(categoryColumns)}
             data-cat-size={categoryChipSize}
           >
-          <button
-            type="button"
-            onClick={() => onCategoryChange('all')}
-            className={`webpos-category-chip ${
-              categoryId === 'all' ? 'ring-2 ring-[var(--webpos-accent-ring)] ring-offset-1' : ''
-            }`}
-            style={{ backgroundColor: '#e7e5e4' }}
-            title={t('webPosAllCategories')}
-          >
-            <span className="min-w-0 w-full truncate">{t('webPosAllCategories')}</span>
-          </button>
           {giftCardsEnabled ? (
             <button
               type="button"

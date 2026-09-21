@@ -40,11 +40,13 @@ export default function WebPosRetailCashPayModal({
   const due = roundMoney2(Math.max(0, total));
   const [tendered, setTendered] = useState(0);
   const [padBuffer, setPadBuffer] = useState('');
+  const [cashEntries, setCashEntries] = useState<number[]>([]);
 
   useEffect(() => {
     if (open) {
       setTendered(0);
       setPadBuffer('');
+      setCashEntries([]);
     }
   }, [open, due]);
 
@@ -68,6 +70,7 @@ export default function WebPosRetailCashPayModal({
     if (busy || amount <= 0) return;
     const next = roundMoney2(tendered + amount);
     setTendered(next);
+    setCashEntries((prev) => [...prev, amount]);
     setPadBuffer('');
     tryComplete(next);
   };
@@ -80,6 +83,7 @@ export default function WebPosRetailCashPayModal({
     if (!Number.isFinite(val) || val <= 0) return;
     setPadBuffer('');
     const next = roundMoney2(tendered + val);
+    setCashEntries((prev) => [...prev, val]);
     setTendered(next);
     tryComplete(next);
   };
@@ -121,13 +125,16 @@ export default function WebPosRetailCashPayModal({
     if (busy) return;
     setTendered(0);
     setPadBuffer('');
+    setCashEntries([]);
   };
 
   if (!open) return null;
 
   const dueParts = formatChfParts(due);
   const remainingParts = formatChfParts(remaining);
+  const tenderedParts = formatChfParts(tendered);
   const padDisplay = padBuffer || '0';
+  const hasProgress = tendered > 0 || !!padBuffer.trim();
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 sm:p-4">
@@ -155,7 +162,7 @@ export default function WebPosRetailCashPayModal({
           </button>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-stone-100 bg-stone-50 px-4 py-3 sm:grid-cols-3 sm:px-5">
+        <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-stone-100 bg-stone-50 px-4 py-3 sm:grid-cols-4 sm:px-5">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
               {t('total')}
@@ -164,6 +171,16 @@ export default function WebPosRetailCashPayModal({
               <span className="text-sm font-medium text-stone-500">CHF </span>
               <span className="text-3xl font-bold">{dueParts.whole}</span>
               <span className="text-lg font-semibold text-stone-500">.{dueParts.cents}</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
+              {t('webPosRetailCashEnteredSoFar')}
+            </p>
+            <p className="mt-1 tabular-nums text-emerald-800">
+              <span className="text-sm font-medium text-emerald-700/80">CHF </span>
+              <span className="text-3xl font-bold">{tenderedParts.whole}</span>
+              <span className="text-lg font-semibold text-emerald-700/80">.{tenderedParts.cents}</span>
             </p>
           </div>
           <div>
@@ -186,6 +203,31 @@ export default function WebPosRetailCashPayModal({
           ) : null}
         </div>
 
+        {hasProgress ? (
+          <div className="shrink-0 border-b border-emerald-100 bg-emerald-50/80 px-4 py-3 sm:px-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+              {t('webPosRetailCashEnteredSoFar')}: CHF {tendered.toFixed(2)}
+              {remaining > 0 ? (
+                <span className="ml-2 font-medium normal-case text-amber-800">
+                  · {t('webPosRetailCashStillToPay')}: CHF {remaining.toFixed(2)}
+                </span>
+              ) : null}
+            </p>
+            {cashEntries.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {cashEntries.map((value, index) => (
+                  <span
+                    key={`${value}-${index}`}
+                    className="inline-flex items-center rounded-lg border border-emerald-200 bg-white px-2 py-1 text-xs font-bold tabular-nums text-emerald-900"
+                  >
+                    CHF {formatDenomLabel(value)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,0.9fr)]">
           <div className="flex flex-col border-b border-stone-100 p-4 lg:border-b-0 lg:border-r">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -195,6 +237,11 @@ export default function WebPosRetailCashPayModal({
               <span className="text-sm font-medium text-stone-500">CHF </span>
               <span className="text-4xl font-bold">{tendered.toFixed(2)}</span>
             </p>
+            {remaining > 0 && tendered > 0 ? (
+              <p className="mt-2 text-sm font-semibold text-amber-800">
+                {t('webPosRetailCashStillToPay')}: CHF {remaining.toFixed(2)}
+              </p>
+            ) : null}
 
             <div className="mt-4 space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm">
               <div className="flex items-center justify-between text-stone-600">
@@ -203,7 +250,7 @@ export default function WebPosRetailCashPayModal({
               </div>
             </div>
 
-            {(tendered > 0 || padBuffer) ? (
+            {hasProgress ? (
               <button
                 type="button"
                 disabled={busy}

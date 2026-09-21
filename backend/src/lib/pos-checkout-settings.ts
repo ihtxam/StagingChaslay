@@ -73,6 +73,7 @@ export type PosCheckoutSettings = {
   /** Retail register: clear search after adding a product. */
   retailClearSearchAfterAdd: boolean;
   retailShowStockOnTiles: boolean;
+  retailShowProductPhotos: boolean;
   retailQuickTiles: string[];
   retailProductSortMode: RetailProductSortMode;
   retailRegisterProfiles: Array<{
@@ -83,6 +84,7 @@ export type PosCheckoutSettings = {
     retailScannerFirst: boolean;
     retailPaymentBar: boolean;
     retailShowStockOnTiles: boolean;
+    retailShowProductPhotos: boolean;
     retailQuickTiles: string[];
     retailProductSortMode: RetailProductSortMode;
   }>;
@@ -122,6 +124,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailPaymentBar: true,
   retailClearSearchAfterAdd: true,
   retailShowStockOnTiles: false,
+  retailShowProductPhotos: true,
   retailQuickTiles: [],
   retailProductSortMode: "catalog_order",
   retailRegisterProfiles: [],
@@ -225,6 +228,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     retailPaymentBar: src.retailPaymentBar !== false,
     retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
     retailShowStockOnTiles: src.retailShowStockOnTiles === true,
+    retailShowProductPhotos: src.retailShowProductPhotos !== false,
     retailQuickTiles: Array.isArray(src.retailQuickTiles)
       ? src.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
       : [],
@@ -250,6 +254,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
               retailScannerFirst: o.retailScannerFirst !== false,
               retailPaymentBar: o.retailPaymentBar !== false,
               retailShowStockOnTiles: o.retailShowStockOnTiles === true,
+              retailShowProductPhotos: o.retailShowProductPhotos !== false,
               retailQuickTiles: Array.isArray(o.retailQuickTiles)
                 ? o.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
                 : [],
