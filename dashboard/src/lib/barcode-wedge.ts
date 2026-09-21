@@ -9,6 +9,19 @@ export const BARCODE_WEDGE_MIN_LENGTH = 3;
 export const BARCODE_WEDGE_REFOCUS_MS = 400;
 
 export const BARCODE_WEDGE_INPUT_CLASS = 'barcode-wedge-capture';
+
+/**
+ * Merge retail POS search keystrokes after the visible field was cleared mid-scan.
+ * USB scanners type into an empty input; this ref buffer keeps the full code.
+ */
+export function mergeRetailScanBuffer(buffer: string, incoming: string): string {
+  const inc = incoming.trim();
+  const buf = buffer.trim();
+  if (!buf) return inc;
+  if (!inc) return buf;
+  if (inc.startsWith(buf)) return inc;
+  return buf + inc;
+}
 /** Visible barcode fields in merchant forms — wedge must never steal focus from these. */
 export const BARCODE_FIELD_INPUT_CLASS = 'barcode-field-input';
 

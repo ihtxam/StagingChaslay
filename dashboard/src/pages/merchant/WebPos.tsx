@@ -170,6 +170,7 @@ import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
 import {
   BARCODE_WEDGE_IDLE_MS,
   BARCODE_WEDGE_MIN_LENGTH,
+  mergeRetailScanBuffer,
   isBarcodeWedgeInput,
   useBarcodeWedge,
 } from '@/lib/barcode-wedge';
@@ -814,6 +815,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [categoryId, setCategoryId] = useState<PosCategoryId>('' as PosCategoryId);
   const [search, setSearch] = useState('');
   const retailScanTimerRef = useRef<number | null>(null);
+  const retailScanBufferRef = useRef('');
   const clearRetailScanTimer = useCallback(() => {
     if (retailScanTimerRef.current != null) {
       window.clearTimeout(retailScanTimerRef.current);
@@ -9629,6 +9631,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const handlePosScan = useCallback(
     async (rawCode: string) => {
+      retailScanBufferRef.current = '';
       const code = sanitizeScanCode(rawCode);
       if (!code) return;
       if (pinGateRequired || pinModalOpen) return;
@@ -9761,9 +9764,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     });
 
   const submitRetailScan = useCallback(
-    (raw: string) => {
-      const code = raw.trim();
+    (raw?: string) => {
+      const code = (raw?.trim() || retailScanBufferRef.current || '').trim();
       if (!code) return;
+      retailScanBufferRef.current = '';
       clearRetailScanTimer();
       void handlePosScan(code);
     },
@@ -9785,19 +9789,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (raw: string) => {
       const cleaned = stripScannerControlChars(raw);
       if (posView !== 'register' || pinGateRequired || pinModalOpen) {
+        retailScanBufferRef.current = '';
+        clearRetailScanTimer();
         setSearch(cleaned);
         return;
       }
-      const code = cleaned.trim();
+      const termIdx = cleaned.search(/[\r\n\t]/);
+      if (termIdx >= 0) {
+        const code = mergeRetailScanBuffer(
+          retailScanBufferRef.current,
+          cleaned.slice(0, termIdx)
+        ).trim();
+        retailScanBufferRef.current = '';
+        clearRetailScanTimer();
+        setSearch('');
+        if (code) void handlePosScan(code);
+        return;
+      }
+      const code = mergeRetailScanBuffer(retailScanBufferRef.current, cleaned).trim();
       const isScanInput =
         code.length >= BARCODE_WEDGE_MIN_LENGTH &&
         (looksLikeRetailBarcodeInput(code) || !!findProductByScanCode(code));
       if (isScanInput) {
         // Keep the grid on the current category; submit after the scanner finishes typing.
+        retailScanBufferRef.current = code;
         setSearch('');
         scheduleRetailScanSubmit(code);
         return;
       }
+      retailScanBufferRef.current = '';
       clearRetailScanTimer();
       setSearch(cleaned);
     },
@@ -9808,6 +9828,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       findProductByScanCode,
       scheduleRetailScanSubmit,
       clearRetailScanTimer,
+      handlePosScan,
     ]
   );
 
@@ -10204,12 +10225,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mainTillPrintAgentOnline={mainTillPrintAgentOnline}
         search={search}
         onSearchChange={onPosSearchChange}
-        onSearchSubmit={() => {
-          const code = search.trim();
-          if (!code) return;
-          clearRetailScanTimer();
-          void handlePosScan(code);
-        }}
+        onSearchSubmit={() => submitRetailScan(search)}
         showSearch={posView === 'register' && !isPhoneViewport && !useRetailLayout}
         onlinePendingCount={onlinePendingCount}
         notificationCount={notificationCount}
@@ -10914,7 +10930,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 search={search}
                 onSearchChange={onPosSearchChange}
                 onSearchSubmit={() => submitRetailScan(search)}
-                onSearchClear={() => setSearch('')}
+                onSearchClear={() => {
+                  retailScanBufferRef.current = '';
+                  clearRetailScanTimer();
+                  setSearch('');
+                }}
                 searchInputRef={retailSearchRef}
                 autoFocusSearch={checkoutSettings.retailScannerFirst !== false}
                 tileSize={checkoutSettings.retailTileSize || 'lg'}
