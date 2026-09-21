@@ -10,6 +10,7 @@ import {
   groupMax,
   initialSelection,
   selectionSummary,
+  translateModifierGroupTitle,
   validateModifierGroups,
   type ShopModifierGroup,
 } from '@/components/shop/shop-modifier-utils';
@@ -159,7 +160,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
       chooseAtLeast: (n, name) =>
         t('shopChooseAtLeastOptions').replace('{n}', String(n)).replace('{name}', name),
       tooMany: (name) => t('shopTooManyOptions').replace('{name}', name),
-      groupTitle: (title) => (title === 'Extras' ? t('shopExtras') : title),
+      groupTitle: (title) => translateModifierGroupTitle(title, t),
     });
 
   const slotHeader = (slot: ComboSlot) => {
