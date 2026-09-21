@@ -131,13 +131,23 @@ function restrictStaffMerchantWrites(req: Request, res: Response, next: NextFunc
     return requirePermission("MANAGE_BILLING")(req, res, next);
   }
 
+  // Storekeeper intake uploads product photos via POST /media (no catalog edit rights).
+  if (method === "POST" && path === "/media") {
+    return requirePermission(
+      "MANAGE_PRODUCTS",
+      "MANAGE_ONLINE_SHOP",
+      "MANAGE_SETTINGS",
+      "STOREKEEPER_INTAKE",
+      "MANAGE_INVENTORY"
+    )(req, res, next);
+  }
+
   const catalogWrite =
     /^(POST|PUT|PATCH|DELETE)$/.test(method) &&
     (/^\/products(\/|$)/.test(path) ||
       /^\/categories(\/|$)/.test(path) ||
       /^\/modifiers(\/|$)/.test(path) ||
       path === "/demo-menu-photos" ||
-      path === "/media" ||
       path === "/shop-favicon");
   if (catalogWrite) {
     return requirePermission("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(

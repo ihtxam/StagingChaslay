@@ -423,8 +423,9 @@ export default function StorekeeperApp() {
     if (!file) return;
     setPhotoUploading(true);
     try {
-      const { compressImageIfNeeded } = await import('@/lib/compress-image');
-      const compressed = await compressImageIfNeeded(file, {
+      const { compressImageIfNeeded, ensureImageFileType } = await import('@/lib/compress-image');
+      const normalized = ensureImageFileType(file);
+      const compressed = await compressImageIfNeeded(normalized, {
         maxBytes: 200 * 1024,
         targetBytes: 200 * 1024,
         maxWidth: 1200,
@@ -437,8 +438,11 @@ export default function StorekeeperApp() {
       setPhotoUrl(url);
       setPhotoSource('upload');
       toast.success(t('storekeeperPhotoUploaded'));
-    } catch {
-      toast.error(t('storekeeperPhotoUploadFailed'));
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        (err instanceof Error ? err.message : null);
+      toast.error(msg || t('storekeeperPhotoUploadFailed'));
     } finally {
       setPhotoUploading(false);
       if (photoFileRef.current) photoFileRef.current.value = '';
