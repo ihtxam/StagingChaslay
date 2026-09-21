@@ -15,6 +15,7 @@ import {
   STAFF_PIN_MAX_LENGTH,
   STAFF_PIN_MIN_LENGTH,
 } from '@/lib/staff-pin';
+import { isNetworkError } from '@/lib/webpos-offline/network';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
 const PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH;
@@ -145,11 +146,23 @@ export default function WebPosPinModal({
     window.setTimeout(() => setShake(false), 420);
   };
 
+  const pinErrorMessage = (error: unknown): string => {
+    if (!navigator.onLine || isNetworkError(error)) {
+      return t('webPosPinNoInternet');
+    }
+    const err = error as { response?: { data?: { error?: string } } };
+    return err.response?.data?.error || t('webPosPinInvalid');
+  };
+
   const submitPin = async (value: string) => {
     clearAutoTimer();
     if (busyRef.current) return;
     if (value.length < PIN_MIN_LENGTH) {
       setError(t('webPosPinHint'));
+      return;
+    }
+    if (!navigator.onLine) {
+      failPin(t('webPosPinNoInternet'));
       return;
     }
     busyRef.current = true;
@@ -159,8 +172,8 @@ export default function WebPosPinModal({
       const res = await api.post('/merchant/staff/verify-pin', { pin: value });
       onSuccess(res.data.staff);
       if (!isGate) onClose();
-    } catch (e: any) {
-      failPin(e.response?.data?.error || t('webPosPinInvalid'));
+    } catch (e: unknown) {
+      failPin(pinErrorMessage(e));
     } finally {
       busyRef.current = false;
       setBusy(false);
