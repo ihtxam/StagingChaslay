@@ -26,7 +26,8 @@ fn powershell_json(script: &str) -> Result<serde_json::Value, String> {
             }
         ));
     }
-    let stdout = String::from_utf8_lossy(&output.stdout).trim();
+    let stdout_raw = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout_raw.trim();
     if stdout.is_empty() {
         return Ok(serde_json::json!([]));
     }
@@ -135,10 +136,10 @@ pub fn raw_print(printer_name: &str, data: &[u8], drawer_kick: bool) -> Result<S
 pub fn drawer_kick(printer_name: Option<&str>) -> Result<String, String> {
     let bytes = [0x1b, 0x70, 0x00, 0x19, 0xfa];
     let name = match printer_name {
-        Some(n) if !n.trim().is_empty() => n.trim(),
+        Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => default_printer_name()?,
     };
-    raw_print(name, &bytes, true)
+    raw_print(&name, &bytes, true)
 }
 
 fn default_printer_name() -> Result<String, String> {
