@@ -290,17 +290,16 @@ export default function Sidebar({
             <Link
               to={quickAction.path}
               onClick={closeMobile}
-              className={`flex items-center justify-center gap-2 w-full px-4 py-3.5 rounded-lg text-sm font-bold uppercase tracking-wide transition-colors shadow-lg ${
+              aria-label={quickAction.label}
+              title={quickAction.label}
+              className={`block w-full rounded-lg transition-colors shadow-lg ${
+                railMode ? 'h-11' : 'h-12'
+              } ${
                 isPathActive(location.pathname, quickAction.path, location.search)
-                  ? 'bg-emerald-400 text-white ring-2 ring-emerald-300/60'
-                  : 'bg-[#22c55e] hover:bg-emerald-400 text-white'
+                  ? 'bg-emerald-400 ring-2 ring-emerald-300/60'
+                  : 'bg-[#22c55e] hover:bg-emerald-400'
               }`}
-            >
-              <span aria-hidden className="text-base leading-none">
-                🖥️
-              </span>
-              <span>{quickAction.label}</span>
-            </Link>
+            />
           </div>
         )}
 
@@ -433,7 +432,11 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 overflow-x-hidden">
+        <div
+          className={`panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 ${
+            railMode ? 'overflow-visible' : 'overflow-x-hidden'
+          }`}
+        >
           {shopPath ? (
             <Link
               to={shopPath}
@@ -479,25 +482,44 @@ export default function Sidebar({
           )}
 
           {profileMenu ? (
-            <div className="relative" ref={profileRef}>
+            <div className={`relative ${railMode ? 'flex justify-center' : ''}`} ref={profileRef}>
               <button
                 type="button"
                 onClick={() => setProfileOpen((v) => !v)}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/10 transition-colors"
+                aria-expanded={profileOpen}
+                aria-haspopup="menu"
+                aria-label={accountName}
+                title={accountName}
+                className={`rounded-md hover:bg-white/10 transition-colors ${
+                  railMode
+                    ? 'flex h-10 w-10 items-center justify-center'
+                    : 'flex w-full items-center gap-2.5 px-2 py-2'
+                }`}
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/30 text-white">
                   <User className="h-4 w-4" />
                 </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-sm font-medium text-white">{accountName}</p>
-                  <p className="truncate text-[11px] text-white/70">{roleLabel}</p>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-white/70 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
-                />
+                {!railMode ? (
+                  <>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="truncate text-sm font-medium text-white">{accountName}</p>
+                      <p className="truncate text-[11px] text-white/70">{roleLabel}</p>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-white/70 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
+                    />
+                  </>
+                ) : null}
               </button>
               {profileOpen ? (
-                <div className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-[min(50vh,16rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl lg:static lg:bottom-auto lg:z-auto lg:mb-0 lg:mt-1 lg:max-h-none lg:overflow-hidden lg:bg-black/35">
+                <div
+                  className={
+                    railMode
+                      ? 'absolute bottom-0 left-full z-[60] ml-2 w-56 overflow-hidden rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl'
+                      : 'absolute bottom-full left-0 right-0 z-50 mb-1 max-h-[min(50vh,16rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-white/15 bg-[var(--brand-burgundy)] shadow-xl lg:static lg:bottom-auto lg:z-auto lg:mb-0 lg:mt-1 lg:max-h-none lg:overflow-hidden lg:bg-black/35'
+                  }
+                  role="menu"
+                >
                   {showStaffSwitch ? (
                     <button
                       type="button"
