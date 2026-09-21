@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-drawer"
+description = "Enables the hw_drawer command without any pre-configured scope."
+commands.allow = ["hw_drawer"]
+
+[[permission]]
+identifier = "deny-hw-drawer"
+description = "Denies the hw_drawer command without any pre-configured scope."
+commands.deny = ["hw_drawer"]

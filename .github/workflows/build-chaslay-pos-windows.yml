@@ -29,6 +29,26 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install print-agent dependencies
+        working-directory: print-agent
+        run: npm ci
+
+      - name: Build Print Agent sidecar EXE
+        working-directory: print-agent
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          npx pkg . --targets node18-win-x64 --output dist/reborn-print-agent.exe
+          $bytes = [System.IO.File]::ReadAllBytes("dist/reborn-print-agent.exe")
+          if ($bytes.Length -lt 1MB) { throw "Print Agent EXE too small ($($bytes.Length) bytes)" }
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "Print Agent EXE missing MZ header" }
+
+      - name: Stage Print Agent for Tauri externalBin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path desktop/src-tauri/binaries | Out-Null
+          Copy-Item -Force print-agent/dist/reborn-print-agent.exe desktop/src-tauri/binaries/reborn-print-agent-x86_64-pc-windows-msvc.exe
+
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci

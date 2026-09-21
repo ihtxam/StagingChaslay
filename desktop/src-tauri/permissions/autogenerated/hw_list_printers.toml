@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-list-printers"
+description = "Enables the hw_list_printers command without any pre-configured scope."
+commands.allow = ["hw_list_printers"]
+
+[[permission]]
+identifier = "deny-hw-list-printers"
+description = "Denies the hw_list_printers command without any pre-configured scope."
+commands.deny = ["hw_list_printers"]

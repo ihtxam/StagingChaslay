@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-scale-reading"
+description = "Enables the hw_scale_reading command without any pre-configured scope."
+commands.allow = ["hw_scale_reading"]
+
+[[permission]]
+identifier = "deny-hw-scale-reading"
+description = "Denies the hw_scale_reading command without any pre-configured scope."
+commands.deny = ["hw_scale_reading"]

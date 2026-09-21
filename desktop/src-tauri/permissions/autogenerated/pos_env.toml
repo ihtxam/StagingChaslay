@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pos-env"
+description = "Enables the pos_env command without any pre-configured scope."
+commands.allow = ["pos_env"]
+
+[[permission]]
+identifier = "deny-pos-env"
+description = "Denies the pos_env command without any pre-configured scope."
+commands.deny = ["pos_env"]

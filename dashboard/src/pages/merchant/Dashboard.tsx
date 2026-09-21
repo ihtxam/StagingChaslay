@@ -34,6 +34,7 @@ import Offers from './Offers';
 import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
+import DesktopSettings from './DesktopSettings';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
@@ -1390,6 +1391,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/notifications" allow={allow}>
                   <PlatformNotificationsHistory />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="desktop-settings"
+              element={
+                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                  <DesktopSettings />
                 </PanelRouteGuard>
               }
             />

@@ -3,8 +3,9 @@
 Kiosk window around hosted WebPOS — not a second POS.
 
 - **UI:** existing dashboard at `/merchant/pos` (hosted URL)
-- **Hardware:** Print Agent sidecar on `http://127.0.0.1:9101` (Phase C)
-- **Native bridge:** `window.manuposDesktop` via Tauri commands → sidecar (Phase D start)
+- **Hardware:** native Win32 print/drawer when possible; Print Agent sidecar on `http://127.0.0.1:9101` as fallback
+- **Native bridge:** `window.manuposDesktop` via Tauri commands → native or sidecar
+- **Desktop settings:** `/merchant/desktop-settings` (Appearance, Printer, Scale, Cash Drawer, Device)
 - **Offline:** existing IndexedDB outbox (no SQLite catalog)
 
 See `/docs/windows-pos-tauri-plan.md`.
@@ -38,50 +39,31 @@ npm run dev
 ## Production installer
 
 ```powershell
-# Build Print Agent EXE first (bundled as sidecar)
+# 1) Build Print Agent EXE (bundled as Tauri externalBin sidecar)
 cd print-agent
 npm install
 npm run build:exe
-Copy-Item dist/reborn-print-agent.exe ../desktop/src-tauri/binaries/reborn-print-agent-x86_64-pc-windows-msvc.exe
 
-cd ../desktop
+# 2) Stage sidecar for Tauri bundle
+New-Item -ItemType Directory -Force -Path ..\desktop\src-tauri\binaries | Out-Null
+Copy-Item -Force dist\reborn-print-agent.exe ..\desktop\src-tauri\binaries\reborn-print-agent-x86_64-pc-windows-msvc.exe
+
+# 3) Build NSIS installer (also copies win-raw-print.ps1 into resources)
+cd ..\desktop
 npm install
-# Add to tauri.conf.json bundle.externalBin: ["binaries/reborn-print-agent"]
-# optional: $env:CHASLAY_POS_URL = "https://app.chaslay.com/login"
 npm run build:nsis
 # Output: src-tauri/target/release/bundle/nsis/
 ```
 
-CI also builds on every `main` push that touches `desktop/` — see `.github/workflows/build-chaslay-pos-windows.yml`.
+CI builds print-agent first, stages the sidecar, then runs `npm run build:nsis` — see `.github/workflows/build-chaslay-pos-windows.yml`.
 
-Release builds open `https://app.chaslay.com/login` unless `CHASLAY_POS_URL` is set at compile/runtime.
+## Native vs sidecar hardware paths
 
-## Behaviour
+| Operation | Primary | Fallback |
+|-----------|---------|----------|
+| List printers | Win32 via PowerShell (`hw_list_printers`) | Sidecar `GET /printers` |
+| Raw ESC/POS print | `win-raw-print.ps1` bundled in resources | Sidecar `POST /print` |
+| Cash drawer kick | Native ESC/POS pulse via `win-raw-print.ps1` | Sidecar `POST /drawer` |
+| USB scale | Sidecar `GET /scale/ports`, `GET /scale/reading` | — |
 
-| Feature | Status |
-|---------|--------|
-| Maximized kiosk, no browser chrome | Yes |
-| Desktop top bar (refresh / window / settings) | Yes |
-| ESC does not trap user (no OS fullscreen) | Yes |
-| Single instance | Yes |
-| Autostart toggle (`set_start_with_windows`) | Yes |
-| Navigation locked to chaslay.com / rebornsense.com / localhost | Yes |
-| Print Agent sidecar auto-start + `/sidecar_health` | Phase C |
-| `hw_*` Tauri commands → sidecar HTTP | Phase D start |
-| Auto-update | Phase F |
-
-## Sidecar
-
-The NSIS bundle includes `reborn-print-agent.exe` when `print-agent/dist/reborn-print-agent.exe` exists at build time. On startup Tauri:
-
-1. Probes `GET http://127.0.0.1:9101/health`
-2. Spawns bundled sidecar or `%LOCALAPPDATA%\RebornPrintAgent\reborn-print-agent.exe` if needed
-3. Exposes health via `sidecar_health` command
-
-Merchants on Tauri tills can skip the separate “Download Print Agent” step once the sidecar is bundled.
-
-## Staging
-
-```powershell
-$env:CHASLAY_POS_URL = "https://app.chaslay.com/login"
-```
+The dashboard reads active paths via `hw_capabilities` (returns `native`, `sidecar`, or `auto`).

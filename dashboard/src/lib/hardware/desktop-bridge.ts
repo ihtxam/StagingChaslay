@@ -1,9 +1,9 @@
 /**
- * Phase D: Tauri hardware bridge — delegates to Print Agent sidecar (127.0.0.1:9101)
- * via Rust commands. Keeps print-agent.ts contract via window.manuposDesktop.
+ * Phase D: Tauri hardware bridge — native Win32 first, Print Agent sidecar fallback.
+ * Keeps print-agent.ts contract via window.manuposDesktop.
  */
 
-import type { AgentPrinter } from '@/lib/print-agent';
+import type { AgentPrinter, ScaleDevice, ScaleReading } from '@/lib/print-agent';
 import { isDesktopApp } from '@/lib/platform';
 
 type TauriInternals = {
@@ -16,6 +16,25 @@ async function invoke<T = unknown>(cmd: string, args?: Record<string, unknown>):
     throw new Error('Not running inside Chaslay POS');
   }
   return internals.invoke(cmd, args) as Promise<T>;
+}
+
+export type DesktopHwCapabilities = {
+  nativePrint: boolean;
+  sidecarBundled: boolean;
+  paths: {
+    printers: string;
+    print: string;
+    drawer: string;
+  };
+};
+
+export async function desktopHwCapabilities(): Promise<DesktopHwCapabilities | null> {
+  if (!isDesktopApp()) return null;
+  try {
+    return (await invoke('hw_capabilities')) as DesktopHwCapabilities;
+  } catch {
+    return null;
+  }
 }
 
 export async function installDesktopHardwareBridge(): Promise<void> {
@@ -32,10 +51,15 @@ export async function installDesktopHardwareBridge(): Promise<void> {
       dataBase64: string;
       text?: string;
     }): Promise<{ ok: boolean; error?: string; printer?: string }> {
-      return (await invoke('hw_print', { payload })) as {
-        ok: boolean;
+      const result = (await invoke('hw_print', { payload })) as {
+        ok?: boolean;
         error?: string;
         printer?: string;
+      };
+      return {
+        ok: result?.ok !== false,
+        error: result?.error,
+        printer: result?.printer,
       };
     },
     async getAgentStatus(): Promise<{ running: boolean; port: number }> {
@@ -48,5 +72,55 @@ export async function installDesktopHardwareBridge(): Promise<void> {
         port: Number(data?.port) || 9101,
       };
     },
+  };
+}
+
+export async function desktopListPrinters(): Promise<AgentPrinter[]> {
+  const data = (await invoke('hw_list_printers')) as { printers?: AgentPrinter[] };
+  return Array.isArray(data?.printers) ? data.printers : [];
+}
+
+export async function desktopPrintEscPos(payload: {
+  printerName?: string;
+  dataBase64: string;
+  text?: string;
+}): Promise<{ ok: boolean; error?: string; printer?: string; source?: string }> {
+  return (await invoke('hw_print', { payload })) as {
+    ok: boolean;
+    error?: string;
+    printer?: string;
+    source?: string;
+  };
+}
+
+export async function desktopDrawerKick(printerName?: string): Promise<{ ok: boolean; source?: string }> {
+  return (await invoke('hw_drawer', { printerName: printerName || null })) as {
+    ok: boolean;
+    source?: string;
+  };
+}
+
+export async function desktopScalePorts(): Promise<{ ports: string[]; devices: ScaleDevice[] }> {
+  const data = (await invoke('hw_scale_ports')) as {
+    ports?: string[];
+    devices?: ScaleDevice[];
+  };
+  return {
+    ports: Array.isArray(data?.ports) ? data.ports : [],
+    devices: Array.isArray(data?.devices) ? data.devices : [],
+  };
+}
+
+export async function desktopScaleReading(
+  port: string,
+  timeoutMs = 2500
+): Promise<{ reading: ScaleReading | null; message?: string }> {
+  const data = (await invoke('hw_scale_reading', { port, timeoutMs })) as {
+    reading?: ScaleReading | null;
+    message?: string;
+  };
+  return {
+    reading: data?.reading ?? null,
+    message: data?.message,
   };
 }

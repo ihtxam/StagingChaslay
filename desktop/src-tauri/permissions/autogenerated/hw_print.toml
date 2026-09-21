@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-print"
+description = "Enables the hw_print command without any pre-configured scope."
+commands.allow = ["hw_print"]
+
+[[permission]]
+identifier = "deny-hw-print"
+description = "Denies the hw_print command without any pre-configured scope."
+commands.deny = ["hw_print"]

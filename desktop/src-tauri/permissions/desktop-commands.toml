@@ -15,8 +15,16 @@ commands.allow = ["sidecar_health"]
 
 [[permission]]
 identifier = "allow-desktop-hw"
-description = "Hardware bridge commands via Print Agent sidecar."
-commands.allow = ["hw_agent_status", "hw_list_printers", "hw_print", "hw_drawer"]
+description = "Hardware bridge commands via native Win32 or Print Agent sidecar."
+commands.allow = [
+  "hw_capabilities",
+  "hw_agent_status",
+  "hw_list_printers",
+  "hw_print",
+  "hw_drawer",
+  "hw_scale_ports",
+  "hw_scale_reading"
+]
 
 [[permission]]
 identifier = "allow-desktop-autostart"

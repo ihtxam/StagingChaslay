@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-is-start-with-windows"
+description = "Enables the is_start_with_windows command without any pre-configured scope."
+commands.allow = ["is_start_with_windows"]
+
+[[permission]]
+identifier = "deny-is-start-with-windows"
+description = "Denies the is_start_with_windows command without any pre-configured scope."
+commands.deny = ["is_start_with_windows"]

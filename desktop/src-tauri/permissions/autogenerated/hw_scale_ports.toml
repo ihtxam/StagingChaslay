@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-scale-ports"
+description = "Enables the hw_scale_ports command without any pre-configured scope."
+commands.allow = ["hw_scale_ports"]
+
+[[permission]]
+identifier = "deny-hw-scale-ports"
+description = "Denies the hw_scale_ports command without any pre-configured scope."
+commands.deny = ["hw_scale_ports"]

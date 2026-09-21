@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-agent-status"
+description = "Enables the hw_agent_status command without any pre-configured scope."
+commands.allow = ["hw_agent_status"]
+
+[[permission]]
+identifier = "deny-hw-agent-status"
+description = "Denies the hw_agent_status command without any pre-configured scope."
+commands.deny = ["hw_agent_status"]

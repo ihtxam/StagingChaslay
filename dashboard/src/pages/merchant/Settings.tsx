@@ -132,6 +132,7 @@ import { useAuthStore } from '@/store/auth';
 import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/permissions';
 import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
+import { desktopSidecarHealth, isDesktopApp } from '@/lib/platform';
 
 interface SettingsData {
   id?: string;
@@ -729,6 +730,7 @@ export default function Settings() {
   const [savingWebposPay, setSavingWebposPay] = useState(false);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [printAgentOk, setPrintAgentOk] = useState(false);
+  const [desktopBundledSidecarOk, setDesktopBundledSidecarOk] = useState(false);
   const [printAgentHealthChecked, setPrintAgentHealthChecked] = useState(false);
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
@@ -899,6 +901,16 @@ export default function Settings() {
     const timer = window.setTimeout(() => setDebouncedSettingsQuery(settingsQuery), 200);
     return () => window.clearTimeout(timer);
   }, [settingsQuery]);
+
+  useEffect(() => {
+    if (!isDesktopApp()) {
+      setDesktopBundledSidecarOk(false);
+      return;
+    }
+    void desktopSidecarHealth().then((health) => {
+      setDesktopBundledSidecarOk(health.ok === true && health.bundled === true);
+    });
+  }, []);
 
   const normalizedQuery = normalizeSettingsSearchQuery(debouncedSettingsQuery);
 
@@ -4544,7 +4556,8 @@ export default function Settings() {
               >
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    {preferredPrintCompanion() !== 'android-bridge' ? (
+                    {preferredPrintCompanion() !== 'android-bridge' &&
+                    !(isDesktopApp() && desktopBundledSidecarOk) ? (
                       <a
                         className="btn-primary inline-flex"
                         href={printAgentDownloadUrl()}
@@ -4552,6 +4565,10 @@ export default function Settings() {
                       >
                         {t('downloadPrintAgent')}
                       </a>
+                    ) : isDesktopApp() && desktopBundledSidecarOk ? (
+                      <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        {t('desktopSettingsHidePrintAgentDownload')}
+                      </p>
                     ) : null}
                     {preferredPrintCompanion() !== 'windows-agent' ? (
                       printBridgeManifest?.versionMismatch ? (
