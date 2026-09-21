@@ -1,4 +1,6 @@
 import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
+import { isDesktopApp } from '@/lib/platform';
+import { desktopDrawerKick, desktopScalePorts, desktopScaleReading } from '@/lib/hardware/desktop-bridge';
 import { looksLikeLabelPrinterName } from './printer-kind';
 
 export { looksLikeLabelPrinterName } from './printer-kind';
@@ -45,6 +47,8 @@ declare global {
         printerName?: string;
         dataBase64: string;
         text?: string;
+        portName?: string;
+        baudRate?: number;
       }) => Promise<{ ok: boolean; error?: string; printer?: string }>;
       getAgentStatus: () => Promise<{ running: boolean; port: number }>;
     };
@@ -1067,6 +1071,14 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
   if (printerName && isUnsuitableRawPrinter(printerName)) {
     throw new Error(unsuitableRawPrinterMessage(printerName));
   }
+  if (isDesktopApp()) {
+    const res = await desktopDrawerKick(printerName);
+    if (!res.ok) {
+      throw new Error('Cash drawer kick failed');
+    }
+    markPrintAgentRecentSuccess();
+    return;
+  }
   try {
     await agentFetch(
       '/drawer',
@@ -1302,6 +1314,27 @@ export async function listScalePorts(): Promise<string[]> {
 }
 
 export async function listScaleDevices(): Promise<{ ports: string[]; devices: ScaleDevice[] }> {
+  if (isDesktopApp()) {
+    try {
+      const data = await desktopScalePorts();
+      const devices: ScaleDevice[] = (data.devices || [])
+        .map((d) => ({
+          port: formatScalePortLabel(String(d.port || '')),
+          caption: d.caption,
+          manufacturer: d.manufacturer,
+          pnpDeviceId: d.pnpDeviceId,
+          name: d.name,
+          usbAddress: d.usbAddress,
+          connectionType: d.connectionType,
+          hasPermission: d.hasPermission,
+        }))
+        .filter((d) => d.port);
+      const ports = devices.map((d) => d.port).filter(Boolean);
+      if (ports.length) return { ports, devices };
+    } catch {
+      /* fall through to print agent HTTP for scale metadata */
+    }
+  }
   try {
     const data = await agentFetch('/scale/ports');
     const devices: ScaleDevice[] = Array.isArray(data?.devices)
@@ -1355,6 +1388,18 @@ export async function readScaleWeight(
   resolvedPort?: string;
   resolvedUsbAddress?: string;
 }> {
+  if (isDesktopApp()) {
+    try {
+      const data = await desktopScaleReading(port, timeoutMs);
+      return {
+        reading: data.reading,
+        message: data.message,
+        resolvedPort: formatScalePortLabel(port),
+      };
+    } catch {
+      /* fall through to print agent HTTP for Aclas frame parsing */
+    }
+  }
   const usb = String(opts?.usbAddress || (isUsbScaleAddress(port) ? port : '')).trim();
   const normalized = isUsbScaleAddress(usb) ? '' : normalizeScalePort(port);
   if (!normalized && !opts?.hint && !opts?.deviceId && !usb) {
