@@ -1611,6 +1611,8 @@ export type KitchenTicketOpts = {
   /** Items routed to another kitchen printer (cross-station footer). */
   otherStationItems?: KitchenTicketItem[];
   otherStationLabel?: string | null;
+  /** Accept-time online order: prep ticket — customer name only, no address/phone. */
+  kitchenPrepOnly?: boolean;
 };
 
 export type KitchenMessageTicketOpts = {
@@ -1877,7 +1879,12 @@ function buildKitchenTicketLines(
   )) {
     lines.push({ kind: 'header', text: w });
   }
-  if (opts.channel === 'delivery' && opts.shippingAddress?.trim()) {
+  if (opts.kitchenPrepOnly && user !== '-') {
+    for (const w of wrapKitchenWords(user, headerWidth)) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
+  if (!opts.kitchenPrepOnly && opts.channel === 'delivery' && opts.shippingAddress?.trim()) {
     for (const w of wrapKitchenWords(
       `${L.deliveryAddress}: ${opts.shippingAddress.trim()}`,
       headerWidth
@@ -1885,7 +1892,7 @@ function buildKitchenTicketLines(
       lines.push({ kind: 'header', text: w });
     }
   }
-  if (opts.customerPhone?.trim()) {
+  if (!opts.kitchenPrepOnly && opts.customerPhone?.trim()) {
     for (const w of wrapKitchenWords(`Tel: ${opts.customerPhone.trim()}`, footWidth)) {
       lines.push({ kind: 'normal', text: w });
     }
@@ -1975,7 +1982,8 @@ function buildKitchenTicketLines(
   lines.push({ kind: 'normal', text: thin });
   lines.push({ kind: 'normal', text: `${L.totalItems}: ${totalQty}` });
   lines.push({ kind: 'normal', text: thin });
-  lines.push({ kind: 'normal', text: `${user}, ${timeStr} | ${source}`, blankAfter: 0 });
+  const footerUser = opts.kitchenPrepOnly ? '-' : user;
+  lines.push({ kind: 'normal', text: `${footerUser}, ${timeStr} | ${source}`, blankAfter: 0 });
 
   return { width: footWidth, L, lines };
 }

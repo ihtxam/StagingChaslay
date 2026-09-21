@@ -41,6 +41,8 @@ export type AutoPrintOrderPayload = {
   force?: boolean;
   /** Order Center: kitchen ticket only on this device's printer (never queue to main till). */
   kitchenLocalOnly?: boolean;
+  /** Accept-time kitchen ticket: items only — no address/phone (customer name under ASAP). */
+  kitchenPrepOnly?: boolean;
 };
 
 type MerchantCtx = {
@@ -94,7 +96,8 @@ async function printKitchenTickets(
   source: string,
   printSettings: PosPrintSettingsClient | null,
   lang: string,
-  kitchenLocalOnly?: boolean
+  kitchenLocalOnly?: boolean,
+  kitchenPrepOnly?: boolean
 ) {
   const receiptItems = (order.items || []).map((i) =>
     buildKitchenTicketItemFromLine({
@@ -112,8 +115,8 @@ async function printKitchenTickets(
     orderNumber: order.orderNumber || orderId.slice(0, 8),
     orderSource: orderSourceLabel(source),
     userName: order.customerName || '-',
-    customerPhone: order.customerPhone || null,
-    shippingAddress: isDeliveryOrder(order) ? order.shippingAddress || null : null,
+    customerPhone: kitchenPrepOnly ? null : order.customerPhone || null,
+    shippingAddress: kitchenPrepOnly ? null : isDeliveryOrder(order) ? order.shippingAddress || null : null,
     scheduledFor: order.scheduledFor || null,
     channel: order.fulfillmentChannel || order.channel || 'takeaway',
     orderedAt: order.createdAt ? Date.parse(order.createdAt) : Date.now(),
@@ -122,6 +125,7 @@ async function printKitchenTickets(
     headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
     modifierTextScale: printSettings?.kitchenModifierTextScale ?? 1,
     boldText: printSettings?.kitchenBoldText === true,
+    kitchenPrepOnly: kitchenPrepOnly === true,
   };
 
   let printedAny = false;
@@ -263,7 +267,8 @@ export async function processAutoPrintOrderJob(payload: AutoPrintOrderPayload): 
       source,
       printSettings,
       lang,
-      payload.kitchenLocalOnly === true
+      payload.kitchenLocalOnly === true,
+      payload.kitchenPrepOnly === true
     );
   }
 

@@ -26,6 +26,8 @@ export async function printOrderCenterOnArrival(order: ArrivalOrder): Promise<vo
 
   try {
     const job = buildOrderCenterPrintJob(orderId, order.orderSource, order.fulfillmentChannel);
+    // Arrival: delivery/notification slip with customer details — kitchen prints on accept only.
+    job.printKitchen = false;
     if (!job.printKitchen && !job.printReceipt && !job.printDeliveryReceipt) return;
     await processAutoPrintOrderJob({ ...job, force: true });
   } catch {

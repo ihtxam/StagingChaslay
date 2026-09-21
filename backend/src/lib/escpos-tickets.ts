@@ -177,13 +177,22 @@ export function kitchenTicketEscPos(opts: {
   notes?: string | null;
   items: Array<{ name: string; quantity: number; extras?: string[] }>;
   paperWidthMm?: 58 | 80;
+  kitchenPrepOnly?: boolean;
 }): Buffer {
   const width = opts.paperWidthMm === 58 ? 32 : 42;
-  const lines = [
-    String(opts.orderNumber || "-"),
-    String(opts.orderSource || "ONLINE").toUpperCase(),
-    "---",
-  ];
+  const prepOnly = opts.kitchenPrepOnly === true;
+  const channelLabel = String(opts.channel || "takeaway").replace(/_/g, " ").toUpperCase();
+  const whenLabel = opts.scheduledFor ? formatWhen(opts.scheduledFor) : "ASAP";
+  const lines = [String(opts.orderNumber || "-")];
+  if (prepOnly) {
+    lines.push(`${channelLabel} · ${whenLabel}`);
+    if (opts.customerName?.trim()) {
+      lines.push(...wrap(opts.customerName.trim(), width));
+    }
+  } else {
+    lines.push(String(opts.orderSource || "ONLINE").toUpperCase());
+  }
+  lines.push("---");
   for (const item of opts.items) {
     const qty = Number(item.quantity) || 1;
     lines.push(...wrap(`${qty}x ${item.name || "Item"}`, width));
@@ -192,12 +201,14 @@ export function kitchenTicketEscPos(opts: {
     }
   }
   lines.push("---");
-  if (opts.customerName) lines.push(padLine("Guest", opts.customerName, width));
-  if (opts.customerPhone) lines.push(padLine("Tel", opts.customerPhone, width));
-  if (opts.channel) lines.push(padLine("Channel", opts.channel, width));
-  if (opts.scheduledFor) lines.push(padLine("When", formatWhen(opts.scheduledFor), width));
-  if (opts.shippingAddress) {
-    lines.push(...wrap(opts.shippingAddress, width));
+  if (!prepOnly) {
+    if (opts.customerName) lines.push(padLine("Guest", opts.customerName, width));
+    if (opts.customerPhone) lines.push(padLine("Tel", opts.customerPhone, width));
+    if (opts.channel) lines.push(padLine("Channel", opts.channel, width));
+    if (opts.scheduledFor) lines.push(padLine("When", formatWhen(opts.scheduledFor), width));
+    if (opts.shippingAddress) {
+      lines.push(...wrap(opts.shippingAddress, width));
+    }
   }
   if (opts.notes?.trim()) {
     lines.push("---");

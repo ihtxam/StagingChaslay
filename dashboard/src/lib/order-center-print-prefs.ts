@@ -67,16 +67,24 @@ export function buildOrderCenterPrintJob(
   };
 }
 
-/** Accept-time print — kitchen on accept is enqueued server-side for main till route. */
+/** Accept-time print — one kitchen prep ticket (no delivery slip / receipt). */
 export function buildOrderCenterAcceptPrintJob(
   orderId: string,
   orderSource?: string | null,
   fulfillmentChannel?: string | null,
   prefs: OrderCenterPrintPrefs = readOrderCenterPrintPrefs()
 ): AutoPrintOrderPayload {
-  const job = buildOrderCenterPrintJob(orderId, orderSource, fulfillmentChannel, prefs);
-  if (prefs.kitchenRoute === 'till') {
-    job.printKitchen = false;
-  }
-  return job;
+  const localKitchen = prefs.kitchenRoute === 'local' && prefs.kitchen !== false;
+  return {
+    kind: 'auto_print_order',
+    orderId,
+    orderSource: orderSource || undefined,
+    printKitchen: localKitchen,
+    printReceipt: false,
+    printDeliveryReceipt: false,
+    printNotification: false,
+    force: true,
+    kitchenLocalOnly: localKitchen,
+    kitchenPrepOnly: true,
+  };
 }

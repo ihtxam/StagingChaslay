@@ -581,6 +581,8 @@ export class OrderService {
       etaAdjustMinutes?: number | null;
       /** WebPOS already printed the guest receipt locally on collect. */
       skipReceiptPrint?: boolean;
+      /** Order Center local printer — skip server kitchen enqueue (client prints once). */
+      skipAutoPrintKitchen?: boolean;
     }
   ) {
     const db = getDb();
@@ -655,16 +657,19 @@ export class OrderService {
               : order.orderSource === "kiosk"
                 ? "kiosk"
                 : "online_shop";
-          await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
-            printKitchen: true,
-            printDeliveryReceipt: false,
-            printReceipt: false,
-            printNotification: false,
-          });
-          await db
-            .update(schema.orders)
-            .set({ printCount: sql`COALESCE(${schema.orders.printCount}, 0) + 1` })
-            .where(eq(schema.orders.id, orderId));
+          if (opts?.skipAutoPrintKitchen !== true) {
+            await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
+              printKitchen: true,
+              printDeliveryReceipt: false,
+              printReceipt: false,
+              printNotification: false,
+              kitchenPrepOnly: true,
+            });
+            await db
+              .update(schema.orders)
+              .set({ printCount: sql`COALESCE(${schema.orders.printCount}, 0) + 1` })
+              .where(eq(schema.orders.id, orderId));
+          }
         } catch (printErr) {
           console.warn("Accept auto-print enqueue failed:", printErr);
         }
