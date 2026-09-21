@@ -17,6 +17,7 @@ import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrde
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import { printOrderCenterTicketsOnAccept } from '@/lib/order-center-print';
+import { readOrderCenterPrintPrefs } from '@/lib/order-center-print-prefs';
 
 type Props = {
   enabled: boolean;
@@ -281,6 +282,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         await api.post(`/merchant/orders/${order.id}/action`, {
           action: 'accept',
           ...(typeof prepMinutes === 'number' ? { etaAdjustMinutes: prepMinutes } : {}),
+          skipAutoPrintKitchen: readOrderCenterPrintPrefs().kitchenRoute === 'local',
         });
         try {
           await printOrderCenterTicketsOnAccept(order.id, order.orderSource, order.fulfillmentChannel);

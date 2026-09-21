@@ -125,6 +125,8 @@ export class PrintJobExpandService {
       orderSource?: string;
       /** Online/reservation arrival — ignore master auto-print receipt/kitchen toggles */
       independentOfMasterAutoPrint?: boolean;
+      /** Accept-time kitchen: items + customer name only (no address/phone). */
+      kitchenPrepOnly?: boolean;
     }
   ) {
     const db = getDb();
@@ -168,6 +170,7 @@ export class PrintJobExpandService {
             notes: order.notes,
             items,
             paperWidthMm: printer.paperWidthMm,
+            kitchenPrepOnly: opts.kitchenPrepOnly === true,
           }),
         });
       }
@@ -313,6 +316,7 @@ export class PrintJobExpandService {
             notes: order.notes,
             items,
             paperWidthMm: printer.paperWidthMm,
+            kitchenPrepOnly: payload.kitchenPrepOnly === true,
           });
           return {
             kind: "escpos",

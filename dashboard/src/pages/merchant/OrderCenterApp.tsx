@@ -47,6 +47,7 @@ import { getPrintAgentHealth, isPrintAgentAvailable } from '@/lib/print-agent';
 import { isAndroidDevice } from '@/lib/print-agent-platform';
 import { probeDeviceBridgeHealth, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
 import { printOrderCenterTickets, printOrderCenterTicketsOnAccept } from '@/lib/order-center-print';
+import { readOrderCenterPrintPrefs } from '@/lib/order-center-print-prefs';
 import { printOrderCenterOnArrival } from '@/lib/online-order-arrival-print';
 import OnlineOrderOpsBar from '@/components/merchant/OnlineOrderOpsBar';
 import OrderCenterPrintOptions from '@/components/merchant/OrderCenterPrintOptions';
@@ -395,6 +396,9 @@ export default function OrderCenterApp() {
       const body: Record<string, unknown> = { action };
       if (action === 'accept' && opts?.etaAdjustMinutes != null) {
         body.etaAdjustMinutes = opts.etaAdjustMinutes;
+      }
+      if (action === 'accept' && readOrderCenterPrintPrefs().kitchenRoute === 'local') {
+        body.skipAutoPrintKitchen = true;
       }
       if (opts?.rejectReason) {
         body.rejectReason = opts.rejectReason;
