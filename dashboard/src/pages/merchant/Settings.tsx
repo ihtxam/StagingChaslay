@@ -2635,6 +2635,7 @@ export default function Settings() {
                           ['retailPaymentBar', t('posRetailPaymentBar'), t('posRetailPaymentBarHint')],
                           ['retailClearSearchAfterAdd', t('posRetailClearSearchAfterAdd'), t('posRetailClearSearchAfterAddHint')],
                           ['retailShowStockOnTiles', t('posRetailShowStockOnTiles'), t('posRetailShowStockOnTilesHint')],
+                          ['retailShowProductPhotos', t('posRetailShowProductPhotos'), t('posRetailShowProductPhotosHint')],
                         ] as const
                       ).map(([key, label, hint]) => (
                         <label
@@ -2649,7 +2650,9 @@ export default function Settings() {
                                 ? settings.posCheckoutSettings?.retailLayoutEnabled !== false
                                 : key === 'retailShowStockOnTiles'
                                   ? settings.posCheckoutSettings?.retailShowStockOnTiles === true
-                                  : settings.posCheckoutSettings?.[key] !== false
+                                  : key === 'retailShowProductPhotos'
+                                    ? settings.posCheckoutSettings?.retailShowProductPhotos !== false
+                                    : settings.posCheckoutSettings?.[key] !== false
                             }
                             onChange={(e) =>
                               setSettings({
@@ -2735,6 +2738,23 @@ export default function Settings() {
                         <option value="most_sold">{t('posRetailProductSortMostSold')}</option>
                       </select>
                     </Field>
+                    <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={settings.webposGiftCardEnabled === true}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            webposGiftCardEnabled: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="font-medium block">{t('webposGiftCardCategory')}</span>
+                        <span className="text-xs muted">{t('webposGiftCardCategoryHint')}</span>
+                      </span>
+                    </label>
                   </div>
                 ) : null}
                 <div id="pos-post-success">

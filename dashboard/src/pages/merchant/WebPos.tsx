@@ -811,7 +811,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [bestsellerIds, setBestsellerIds] = useState<string[]>([]);
-  const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
+  const [categoryId, setCategoryId] = useState<PosCategoryId>('' as PosCategoryId);
   const [search, setSearch] = useState('');
   const onPosSearchChange = useCallback((raw: string) => {
     setSearch(stripScannerControlChars(raw));
@@ -2133,7 +2133,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       if (categoryId === POS_GIFT_CARDS_CATEGORY) {
         return false;
-      } else if (categoryId !== 'all' && p.categoryId !== categoryId) return false;
+      } else if (!categoryId || p.categoryId !== categoryId) return false;
       if (q) {
         const raw = search.trim();
         const barcode = String(p.barcode || '').trim();
@@ -9800,6 +9800,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       merchant?.webposGiftCardEnabled === true) &&
     !offlineNow;
 
+  useEffect(() => {
+    if (categoryId === POS_GIFT_CARDS_CATEGORY && giftCardsSellingOn) return;
+    const categoryValid = visibleCategories.some((c) => c.id === categoryId);
+    if (categoryId === 'all' || !categoryId || !categoryValid) {
+      const first = visibleCategories[0]?.id;
+      if (first) setCategoryId(first);
+      else if (giftCardsSellingOn) setCategoryId(POS_GIFT_CARDS_CATEGORY);
+    }
+  }, [visibleCategories, categoryId, giftCardsSellingOn]);
+
   const activeTerminals = useMemo(
     () => (paymentConfig?.terminals || []).filter((t) => t.status === 'active'),
     [paymentConfig]
@@ -10874,8 +10884,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 membershipEnabled={
                   !!(paymentConfig?.giftCardSettings as { membershipEnabled?: boolean } | null)?.membershipEnabled
                 }
-                sparseGridOnAllItems={false}
                 showStockOnTiles={checkoutSettings.retailShowStockOnTiles === true}
+                showProductPhotos={checkoutSettings.retailShowProductPhotos !== false}
                 quickTileProducts={products.filter((p) =>
                   checkoutSettings.retailQuickTiles.includes(p.id)
                 )}

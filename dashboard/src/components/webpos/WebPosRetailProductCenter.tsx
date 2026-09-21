@@ -39,10 +39,8 @@ type Props = {
   onSellGiftCard?: () => void;
   onSellMembership?: () => void;
   membershipEnabled?: boolean;
-  /** When true and no search, hide grid on All Items once the catalog is large (scanner-first). */
-  sparseGridOnAllItems?: boolean;
-  sparseGridMinProducts?: number;
   showStockOnTiles?: boolean;
+  showProductPhotos?: boolean;
   quickTileProducts?: Product[];
   onOpenSettings?: () => void;
   expressCheckout?: boolean;
@@ -74,9 +72,8 @@ export default function WebPosRetailProductCenter({
   onSellGiftCard,
   onSellMembership,
   membershipEnabled = false,
-  sparseGridOnAllItems = true,
-  sparseGridMinProducts = 24,
   showStockOnTiles = false,
+  showProductPhotos = true,
   quickTileProducts = [],
   onOpenSettings,
   expressCheckout = false,
@@ -103,11 +100,6 @@ export default function WebPosRetailProductCenter({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   };
   const isGiftCardCategory = categoryId === POS_GIFT_CARDS_CATEGORY;
-  const showEmptyBrowse =
-    sparseGridOnAllItems &&
-    categoryId === 'all' &&
-    !hasSearch &&
-    products.length >= sparseGridMinProducts;
   const showNoProducts = products.length === 0;
 
   useEffect(() => {
@@ -223,17 +215,9 @@ export default function WebPosRetailProductCenter({
               </button>
             ) : null}
           </div>
-        ) : showEmptyBrowse ? (
-          <div className="flex h-full min-h-[14rem] flex-col items-center justify-center gap-2 px-4 text-center">
-            <Search size={32} className="text-stone-300" aria-hidden />
-            <p className="text-base font-semibold text-stone-600">{t('webPosRetailScanEmptyTitle')}</p>
-            <p className="max-w-sm text-sm text-stone-500">{t('webPosRetailScanEmptyHint')}</p>
-          </div>
         ) : showNoProducts ? (
           <div className="flex h-full min-h-[10rem] items-center justify-center text-sm text-stone-500">
-            {hasSearch || categoryId !== 'all'
-              ? t('webPosNoProductsMatch')
-              : t('webPosRetailScanEmptyTitle')}
+            {hasSearch ? t('webPosNoProductsMatch') : t('webPosRetailScanEmptyTitle')}
           </div>
         ) : (
           <div className={`grid gap-2.5 ${gridClass}`}>
@@ -273,23 +257,25 @@ export default function WebPosRetailProductCenter({
                   }}
                   className="webpos-retail-product-tile group"
                 >
-                  <div className="aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-100">
-                    {imageSrc ? (
-                      <img
-                        src={imageSrc}
-                        alt=""
-                        className="h-full w-full object-cover transition group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200 px-2">
-                        <span className="line-clamp-3 text-center text-xs font-semibold uppercase tracking-wide text-stone-500">
-                          {p.name}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col px-2.5 pb-2 pt-2">
+                  {showProductPhotos ? (
+                    <div className="aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-100">
+                      {imageSrc ? (
+                        <img
+                          src={imageSrc}
+                          alt=""
+                          className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200 px-2">
+                          <span className="line-clamp-3 text-center text-xs font-semibold uppercase tracking-wide text-stone-500">
+                            {p.name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                  <div className={`flex flex-1 flex-col px-2.5 pb-2 ${showProductPhotos ? 'pt-2' : 'pt-3'}`}>
                     <span className="line-clamp-2 text-left text-sm font-semibold leading-snug text-stone-800">
                       {p.name}
                     </span>

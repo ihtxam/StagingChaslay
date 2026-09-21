@@ -68,6 +68,8 @@ export type PosCheckoutSettings = {
   retailClearSearchAfterAdd: boolean;
   /** Retail register: show remaining stock on product tiles. */
   retailShowStockOnTiles: boolean;
+  /** Retail register: show product photos on tiles (off = name-only tiles). */
+  retailShowProductPhotos: boolean;
   /** Retail register: merchant-pinned SKUs shown above the grid. */
   retailQuickTiles: string[];
   /** Retail register: default product grid sort on the till. */
@@ -110,6 +112,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailPaymentBar: true,
   retailClearSearchAfterAdd: true,
   retailShowStockOnTiles: false,
+  retailShowProductPhotos: true,
   retailQuickTiles: [],
   retailProductSortMode: 'catalog_order',
   retailRegisterProfiles: [],
@@ -187,6 +190,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     retailPaymentBar: src.retailPaymentBar !== false,
     retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
     retailShowStockOnTiles: src.retailShowStockOnTiles === true,
+    retailShowProductPhotos: src.retailShowProductPhotos !== false,
     retailQuickTiles: Array.isArray(src.retailQuickTiles)
       ? src.retailQuickTiles.map((id) => String(id || '').trim()).filter(Boolean).slice(0, 24)
       : [],
