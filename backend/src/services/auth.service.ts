@@ -3,6 +3,16 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getDb, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { queryRaw, withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
+import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
+import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
+import {
+  businessModuleMerchantPatch,
+  normalizeBusinessModule,
+} from "@/lib/business-module";
+import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
+import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
 
 type AuthMerchantRow = {
   id: string;
@@ -16,12 +26,14 @@ type AuthMerchantRow = {
   ods_addon_enabled: boolean | null;
 };
 
+const AUTH_MERCHANT_SELECT = `id, email, password_hash, status, name,
+  inventory_addon_enabled, signage_addon_enabled,
+  kds_addon_enabled, ods_addon_enabled`;
+
 /** Auth paths use raw SQL so login works when drizzle schema columns lag production. */
 async function findAuthMerchantByEmail(email: string): Promise<AuthMerchantRow | null> {
   const rows = await queryRaw<AuthMerchantRow>(
-    `SELECT id, email, password_hash, status, name,
-            inventory_addon_enabled, signage_addon_enabled,
-            kds_addon_enabled, ods_addon_enabled
+    `SELECT ${AUTH_MERCHANT_SELECT}
      FROM merchants
      WHERE lower(email) = $1
      LIMIT 1`,
@@ -29,16 +41,43 @@ async function findAuthMerchantByEmail(email: string): Promise<AuthMerchantRow |
   );
   return rows[0] ?? null;
 }
-import { isInventoryAddonEnabled, readInventoryAddonEnabled } from "@/lib/inventory-addon";
-import { isSignageAddonEnabled, readSignageAddon } from "@/lib/signage-addon";
-import { isKdsAddonEnabled, readKdsAddonEnabled } from "@/lib/kds-addon";
-import { isOdsAddonEnabled, readOdsAddonEnabled } from "@/lib/ods-addon";
-import {
-  businessModuleMerchantPatch,
-  normalizeBusinessModule,
-} from "@/lib/business-module";
-import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
-import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
+
+async function findAuthMerchantById(merchantId: string): Promise<Omit<AuthMerchantRow, "password_hash"> | null> {
+  const rows = await queryRaw<Omit<AuthMerchantRow, "password_hash">>(
+    `SELECT id, email, status, name,
+            inventory_addon_enabled, signage_addon_enabled,
+            kds_addon_enabled, ods_addon_enabled
+     FROM merchants
+     WHERE id = $1
+     LIMIT 1`,
+    [merchantId]
+  );
+  return rows[0] ?? null;
+}
+
+async function readMerchantAuthEpoch(merchantId: string): Promise<number> {
+  try {
+    const rows = await queryRaw<{ auth_epoch: number | null }>(
+      `SELECT auth_epoch FROM merchants WHERE id = $1 LIMIT 1`,
+      [merchantId]
+    );
+    return Number(rows[0]?.auth_epoch ?? 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/column "auth_epoch" does not exist/i.test(message)) {
+      return 0;
+    }
+    throw error;
+  }
+}
+
+async function readMerchantStatus(merchantId: string): Promise<string | null> {
+  const rows = await queryRaw<{ status: string }>(
+    `SELECT status FROM merchants WHERE id = $1 LIMIT 1`,
+    [merchantId]
+  );
+  return rows[0]?.status ?? null;
+}
 
 export interface JWTPayload {
   id: string;
@@ -97,12 +136,7 @@ export class AuthService {
   }
 
   static async getMerchantAuthEpoch(merchantId: string): Promise<number> {
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { authEpoch: true },
-    });
-    return Number(merchant?.authEpoch ?? 0);
+    return readMerchantAuthEpoch(merchantId);
   }
 
   static async bumpMerchantAuthEpoch(merchantId: string): Promise<number> {
@@ -238,13 +272,14 @@ export class AuthService {
       throw new Error(`Merchant account is ${merchant.status}`);
     }
 
+    const authEpoch = await readMerchantAuthEpoch(merchant.id);
     const token = this.generateToken({
       id: merchant.id,
       email: merchant.email,
       role: "merchant",
       merchantId: merchant.id,
       name: merchant.name,
-      authEpoch: 0,
+      authEpoch,
     });
 
     const inventoryOn = await readInventoryAddonEnabled(merchant.id).catch(() =>
@@ -287,15 +322,12 @@ export class AuthService {
     const { StaffService } = await import("@/services/staff.service");
     const { staff, role, permissions } = await StaffService.loginStaff(email, password);
 
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, staff.merchantId),
-      columns: { status: true, maxLocations: true, authEpoch: true },
-    });
-    if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
-      throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
+    const merchantStatus = await readMerchantStatus(staff.merchantId);
+    if (!merchantStatus || (merchantStatus !== "active" && merchantStatus !== "trial")) {
+      throw new Error(`Merchant account is ${merchantStatus || "unavailable"}`);
     }
 
+    const authEpoch = await readMerchantAuthEpoch(staff.merchantId);
     const token = this.generateToken({
       id: staff.id,
       email: staff.email || email,
@@ -305,7 +337,7 @@ export class AuthService {
       name: staff.name,
       roleName: role?.name,
       permissions,
-      authEpoch: Number(merchant.authEpoch ?? 0),
+      authEpoch,
     });
 
     const inventoryOn = await readInventoryAddonEnabled(staff.merchantId).catch(() => false);
@@ -576,31 +608,24 @@ export class AuthService {
    * Verify merchant email (for password reset, etc.)
    */
   static async getMerchantById(merchantId: string) {
-    const db = getDb();
-
     try {
-      const merchant = await withMerchantSchemaRetry(() =>
-        db.query.merchants.findFirst({
-          where: eq(schema.merchants.id, merchantId),
-        })
-      );
-
+      const merchant = await findAuthMerchantById(merchantId);
       if (!merchant) {
         throw new Error("Merchant not found");
       }
 
       const inventoryOn = await readInventoryAddonEnabled(merchantId).catch(() =>
-        isInventoryAddonEnabled(merchant.inventoryAddonEnabled)
+        isInventoryAddonEnabled(merchant.inventory_addon_enabled)
       );
       const signage = await readSignageAddon(merchantId).catch(() => ({
-        enabled: isSignageAddonEnabled(merchant.signageAddonEnabled),
+        enabled: isSignageAddonEnabled(merchant.signage_addon_enabled),
         screenLimit: 2,
       }));
       const kdsOn = await readKdsAddonEnabled(merchantId).catch(() =>
-        isKdsAddonEnabled(merchant.kdsAddonEnabled)
+        isKdsAddonEnabled(merchant.kds_addon_enabled)
       );
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
-        isOdsAddonEnabled(merchant.odsAddonEnabled)
+        isOdsAddonEnabled(merchant.ods_addon_enabled)
       );
       return {
         id: merchant.id,
@@ -616,7 +641,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+        maxLocations: 1,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);
