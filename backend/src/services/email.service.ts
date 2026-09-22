@@ -3,6 +3,7 @@ import axios from "axios";
 import sgMail from "@sendgrid/mail";
 import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
+import { buildMailcoRawMessagePayload } from "@/lib/mailco-payload";
 import {
   isMailcoBrevoFallbackEnabled,
   isTransientMailcoError,
@@ -674,25 +675,6 @@ export class EmailService {
     const hasAttachments = !!(input.attachments && input.attachments.length > 0);
     const allowBrevoFallback = isMailcoBrevoFallbackEnabled();
 
-    if (cfg.provider === "mailco" && hasAttachments) {
-      if (allowBrevoFallback && cfg.fallbackBrevo) {
-        console.warn(
-          `[email] mailco does not support attachments for type=${emailType}; using Brevo (MAILCO_BREVO_FALLBACK=1)`
-        );
-        cfg = {
-          ...cfg,
-          provider: "brevo",
-          apiKey: cfg.fallbackBrevo.apiKey,
-          fromEmail: cfg.fallbackBrevo.fromEmail,
-          fromName: cfg.fallbackBrevo.fromName,
-        };
-      } else {
-        throw new Error(
-          "mailco does not support email attachments yet. Enable MAILCO_BREVO_FALLBACK=1 for outage-only Brevo fallback, or use merchant own SMTP delivery for invoices/reports."
-        );
-      }
-    }
-
     const logAndSend = async (activeCfg: ResolvedEmailConfig) => {
       console.info(
         `[email] send via ${activeCfg.provider} (${activeCfg.source}) type=${emailType} merchant=${input.merchantId || "platform"}`
@@ -744,7 +726,6 @@ export class EmailService {
           cfg.provider === "mailco" &&
           allowBrevoFallback &&
           cfg.fallbackBrevo &&
-          !hasAttachments &&
           isTransientMailcoError(primaryError)
         ) {
           const reason =
@@ -854,28 +835,22 @@ export class EmailService {
       throw new Error("mailco configuration is missing");
     }
 
-    const text = input.text || input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const idempotencyKey = randomUUID();
-    const replyTo = cfg.replyToEmail
-      ? [{ email: cfg.replyToEmail, name: cfg.replyToName || cfg.fromName || undefined }]
-      : undefined;
 
-    // Raw mode (subject + html) — Brevo htmlContent parity; no dashboard template required.
-    const payload = {
-      from: {
-        email: cfg.fromEmail,
-        name: cfg.fromName || "Reborn",
-      },
-      to: [{ email: input.to }],
-      ...(replyTo ? { reply_to: replyTo } : {}),
+    // Raw mode (subject + html + optional base64 attachments) — Brevo htmlContent parity.
+    const payload = buildMailcoRawMessagePayload({
+      fromEmail: cfg.fromEmail,
+      fromName: cfg.fromName || "Reborn",
+      to: input.to,
+      replyToEmail: cfg.replyToEmail,
+      replyToName: cfg.replyToName || cfg.fromName,
       subject: input.subject,
       html: input.html,
-      text,
-      metadata: {
-        email_type: String(input.emailType || "general"),
-        merchant_id: cfg.merchantId ? String(cfg.merchantId) : "",
-      },
-    };
+      text: input.text,
+      attachments: input.attachments,
+      emailType: String(input.emailType || "general"),
+      merchantId: cfg.merchantId,
+    });
 
     try {
       await axios.post(
