@@ -20,6 +20,8 @@ import {
 import toast from 'react-hot-toast';
 import { parseExtraBarcodes, sanitizeBarcodeFieldValue, stripScannerControlChars } from '@/lib/product-scan-codes';
 import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
+import ProductInventoryExpiryPanel from '@/components/merchant/ProductInventoryExpiryPanel';
+import { loadItems, type InvItem } from '@/pages/merchant/inventory/shared';
 import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
@@ -341,7 +343,7 @@ export default function Products() {
   const [inventoryOn, setInventoryOn] = useState(false);
   const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
   const [recipeYield, setRecipeYield] = useState('1');
-  const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
+  const [invItems, setInvItems] = useState<InvItem[]>([]);
   const [storeName, setStoreName] = useState('');
   const [importingPhotos, setImportingPhotos] = useState(false);
   const [productPage, setProductPage] = useState(1);
@@ -438,12 +440,7 @@ export default function Products() {
         }
         setInventoryOn(on);
         if (on) {
-          const inv = await api.get('/merchant/inventory/items');
-          setInvItems((inv.data.items || []).map((i: { id: string; name: string; unit: string }) => ({
-            id: i.id,
-            name: i.name,
-            unit: i.unit,
-          })));
+          setInvItems(await loadItems());
         }
       } catch {
         setInventoryOn(false);
@@ -471,6 +468,15 @@ export default function Products() {
       toast.error(error.response?.data?.error || t('failedLoadProducts'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshInvItems = async () => {
+    if (!inventoryOn) return;
+    try {
+      setInvItems(await loadItems());
+    } catch {
+      /* optional */
     }
   };
 
@@ -2354,6 +2360,17 @@ export default function Products() {
                       />
                       <p className="mt-1 text-xs muted">{t('productExtraBarcodesHint')}</p>
                     </Field>
+                    ) : null}
+                    {inventoryOn ? (
+                      <div className="md:col-span-2">
+                        <ProductInventoryExpiryPanel
+                          productName={form.name}
+                          barcode={form.barcode}
+                          extraBarcodes={form.extraBarcodes}
+                          invItems={invItems}
+                          onItemsChanged={refreshInvItems}
+                        />
+                      </div>
                     ) : null}
                     <Field label={t('stock')}>
                       <input

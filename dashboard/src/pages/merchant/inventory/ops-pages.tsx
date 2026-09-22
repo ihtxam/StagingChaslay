@@ -218,6 +218,7 @@ export function InboundStockPage() {
   const [cost, setCost] = useState('');
   const [note, setNote] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
 
   useEffect(() => {
     void loadSuppliers().then((rows) => setSuppliers(rows.filter((s) => !s.archivedAt)));
@@ -234,11 +235,13 @@ export function InboundStockPage() {
         unitCost: cost ? Number(cost) : undefined,
         note: note || undefined,
         supplierName: supplierName || undefined,
+        expiryDate: expiryDate.trim() || undefined,
       });
       toast.success(t('invStockInSaved'));
       setQty('');
       setNote('');
       setCost('');
+      setExpiryDate('');
       await reload();
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('invSaveFailed'));
@@ -282,6 +285,15 @@ export function InboundStockPage() {
           </option>
         ))}
       </select>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">{t('storekeeperExpiry')}</span>
+        <input
+          className="input"
+          type="date"
+          value={expiryDate}
+          onChange={(e) => setExpiryDate(e.target.value)}
+        />
+      </label>
       <input className="input" placeholder={t('invNote')} value={note} onChange={(e) => setNote(e.target.value)} />
       <button type="submit" className="btn-primary">{t('invRecordStockIn')}</button>
     </form>
