@@ -98,7 +98,10 @@ export default function InventoryExpiryAlerts() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link to="/merchant/inventory/list" className="text-xs font-semibold underline">
+          <Link
+            to="/merchant/inventory/list?filter=expiring"
+            className="text-xs font-semibold underline"
+          >
             {t('invNavStockTable')}
           </Link>
           <button

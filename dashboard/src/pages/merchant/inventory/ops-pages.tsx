@@ -1,9 +1,18 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { loadItems, loadSuppliers, loadUnits, type InvItem, type InvUnit } from './shared';
+import {
+  loadExpiringLots,
+  loadItems,
+  loadSuppliers,
+  loadUnits,
+  type ExpiringLot,
+  type InvItem,
+  type InvUnit,
+} from './shared';
 
 function useItems() {
   const [items, setItems] = useState<InvItem[]>([]);
@@ -20,55 +29,181 @@ function useItems() {
 }
 
 export function InventoryListPage() {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
+  const [searchParams] = useSearchParams();
+  const expirySectionRef = useRef<HTMLDivElement>(null);
   const { items } = useItems();
+  const [expiringLots, setExpiringLots] = useState<ExpiringLot[]>([]);
+  const [leadDays, setLeadDays] = useState(30);
+  const showExpiryFocus = searchParams.get('filter') === 'expiring';
+
+  useEffect(() => {
+    void loadExpiringLots()
+      .then(({ leadDays: days, lots }) => {
+        setLeadDays(days);
+        setExpiringLots(lots);
+      })
+      .catch(() => {
+        setExpiringLots([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!showExpiryFocus || !expiringLots.length) return;
+    const id = window.setTimeout(() => {
+      expirySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [showExpiryFocus, expiringLots.length]);
+
+  const expiringItemIds = useMemo(
+    () => new Set(expiringLots.map((lot) => lot.itemId)),
+    [expiringLots]
+  );
+
+  const sortedItems = useMemo(() => {
+    if (!expiringItemIds.size) return items;
+    return [...items].sort((a, b) => {
+      const aAlert = expiringItemIds.has(a.id) ? 0 : 1;
+      const bAlert = expiringItemIds.has(b.id) ? 0 : 1;
+      if (aAlert !== bAlert) return aAlert - bAlert;
+      return a.name.localeCompare(b.name);
+    });
+  }, [items, expiringItemIds]);
+
+  const expiredLots = expiringLots.filter((lot) => lot.expired);
+  const soonLots = expiringLots.filter((lot) => !lot.expired);
+
   return (
-    <div className="card !p-0 table-scroll">
-      <table className="w-full text-sm min-w-[720px]">
-        <thead className="bg-[var(--bg-muted)] text-left">
-          <tr>
-            <th className="px-3 py-2">{t('invItemName')}</th>
-            <th className="px-3 py-2">{t('invNavCategories')}</th>
-            <th className="px-3 py-2">{t('invOnHand')}</th>
-            <th className="px-3 py-2">{t('invParLevel')}</th>
-            <th className="px-3 py-2">{t('invPreferredSupplier')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.length === 0 && (
+    <div className="space-y-4">
+      {expiringLots.length > 0 ? (
+        <div
+          ref={expirySectionRef}
+          className="overflow-hidden rounded-xl border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-red-200 bg-red-100 px-4 py-3 dark:border-red-900 dark:bg-red-950/70">
+            <div className="flex min-w-0 items-start gap-2 text-red-950 dark:text-red-100">
+              <AlertTriangle className="mt-0.5 shrink-0" size={18} aria-hidden />
+              <div>
+                <h2 className="font-semibold">
+                  {t('invExpiryListTitle', { count: expiringLots.length, days: leadDays })}
+                </h2>
+                <p className="text-xs opacity-90">{t('invExpiryListHint')}</p>
+              </div>
+            </div>
+            {expiredLots.length ? (
+              <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white">
+                {t('invExpiryExpiredCount', { count: expiredLots.length })}
+              </span>
+            ) : null}
+          </div>
+          <div className="table-scroll">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-red-100/80 text-left text-red-950 dark:bg-red-950/60 dark:text-red-100">
+                <tr>
+                  <th className="px-3 py-2">{t('invItemName')}</th>
+                  <th className="px-3 py-2">{t('invQty')}</th>
+                  <th className="px-3 py-2">{t('invExpiryDate')}</th>
+                  <th className="px-3 py-2">{t('invExpiryStatus')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...expiredLots, ...soonLots].map((lot) => (
+                  <tr
+                    key={lot.id}
+                    className={`border-t border-red-200 dark:border-red-900 ${
+                      lot.expired
+                        ? 'bg-red-100/90 text-red-950 dark:bg-red-900/50 dark:text-red-50'
+                        : lot.daysLeft != null && lot.daysLeft <= 7
+                          ? 'bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-50'
+                          : 'bg-red-50/70 text-red-950 dark:bg-red-950/20 dark:text-red-100'
+                    }`}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="font-semibold">{lot.itemName}</div>
+                      <div className="text-[11px] opacity-80">{lot.unit}</div>
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {lot.qty} {lot.unit}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">{formatDate(lot.expiryDate)}</td>
+                    <td className="px-3 py-2">
+                      {lot.expired ? (
+                        <span className="inline-flex rounded-full bg-red-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                          {t('invExpiryExpired')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-amber-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                          {t('invExpiryDaysLeft', { days: lot.daysLeft ?? 0 })}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : showExpiryFocus ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] px-4 py-3 text-sm muted">
+          {t('invExpiryListEmpty')}
+        </div>
+      ) : null}
+
+      <div className="card !p-0 table-scroll">
+        <table className="w-full text-sm min-w-[720px]">
+          <thead className="bg-[var(--bg-muted)] text-left">
             <tr>
-              <td colSpan={5} className="px-3 py-8 text-center muted">
-                {t('invNoItems')}
-              </td>
+              <th className="px-3 py-2">{t('invItemName')}</th>
+              <th className="px-3 py-2">{t('invNavCategories')}</th>
+              <th className="px-3 py-2">{t('invOnHand')}</th>
+              <th className="px-3 py-2">{t('invParLevel')}</th>
+              <th className="px-3 py-2">{t('invPreferredSupplier')}</th>
             </tr>
-          )}
-          {items.map((item) => (
-            <tr key={item.id} className="border-t border-[var(--border)]">
-              <td className="px-3 py-2">
-                <div className="font-medium">{item.name}</div>
-                <div className="text-[11px] muted">{item.unit}</div>
-              </td>
-              <td className="px-3 py-2 text-xs">{item.category?.name || '—'}</td>
-              <td className="px-3 py-2 tabular-nums">
-                {item.onHand} {item.unit}
-                {item.outOfStock ? (
-                  <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
-                    {t('invOutOfStock')}
-                  </span>
-                ) : item.lowStock ? (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                    <AlertTriangle size={10} /> {t('invLowStock')}
-                  </span>
-                ) : null}
-              </td>
-              <td className="px-3 py-2 tabular-nums">
-                {item.minStock} {item.unit}
-              </td>
-              <td className="px-3 py-2">{item.supplier?.name || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sortedItems.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-8 text-center muted">
+                  {t('invNoItems')}
+                </td>
+              </tr>
+            )}
+            {sortedItems.map((item) => (
+              <tr
+                key={item.id}
+                className={`border-t border-[var(--border)] ${
+                  expiringItemIds.has(item.id)
+                    ? 'bg-red-50/40 dark:bg-red-950/15'
+                    : ''
+                }`}
+              >
+                <td className="px-3 py-2">
+                  <div className="font-medium">{item.name}</div>
+                  <div className="text-[11px] muted">{item.unit}</div>
+                </td>
+                <td className="px-3 py-2 text-xs">{item.category?.name || '—'}</td>
+                <td className="px-3 py-2 tabular-nums">
+                  {item.onHand} {item.unit}
+                  {item.outOfStock ? (
+                    <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
+                      {t('invOutOfStock')}
+                    </span>
+                  ) : item.lowStock ? (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                      <AlertTriangle size={10} /> {t('invLowStock')}
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2 tabular-nums">
+                  {item.minStock} {item.unit}
+                </td>
+                <td className="px-3 py-2">{item.supplier?.name || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -83,6 +218,7 @@ export function InboundStockPage() {
   const [cost, setCost] = useState('');
   const [note, setNote] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
 
   useEffect(() => {
     void loadSuppliers().then((rows) => setSuppliers(rows.filter((s) => !s.archivedAt)));
@@ -99,11 +235,13 @@ export function InboundStockPage() {
         unitCost: cost ? Number(cost) : undefined,
         note: note || undefined,
         supplierName: supplierName || undefined,
+        expiryDate: expiryDate.trim() || undefined,
       });
       toast.success(t('invStockInSaved'));
       setQty('');
       setNote('');
       setCost('');
+      setExpiryDate('');
       await reload();
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('invSaveFailed'));
@@ -147,6 +285,15 @@ export function InboundStockPage() {
           </option>
         ))}
       </select>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">{t('storekeeperExpiry')}</span>
+        <input
+          className="input"
+          type="date"
+          value={expiryDate}
+          onChange={(e) => setExpiryDate(e.target.value)}
+        />
+      </label>
       <input className="input" placeholder={t('invNote')} value={note} onChange={(e) => setNote(e.target.value)} />
       <button type="submit" className="btn-primary">{t('invRecordStockIn')}</button>
     </form>

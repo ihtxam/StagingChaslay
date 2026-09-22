@@ -105,6 +105,28 @@ export async function loadItems(): Promise<InvItem[]> {
   return res.data.items || [];
 }
 
+export type ExpiringLot = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  unit: string;
+  qty: number;
+  expiryDate: string;
+  daysLeft: number | null;
+  expired: boolean;
+};
+
+export async function loadExpiringLots(): Promise<{ leadDays: number; lots: ExpiringLot[] }> {
+  const res = await api.get('/merchant/inventory/expiring-soon', {
+    validateStatus: (status) => status < 500,
+  });
+  if (res.status !== 200) return { leadDays: 30, lots: [] };
+  return {
+    leadDays: Number(res.data.leadDays) || 30,
+    lots: (res.data.lots || []) as ExpiringLot[],
+  };
+}
+
 export async function loadSuppliers(): Promise<Supplier[]> {
   const res = await api.get('/merchant/inventory/suppliers');
   return res.data.suppliers || [];
