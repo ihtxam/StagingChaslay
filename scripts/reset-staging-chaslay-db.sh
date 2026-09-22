@@ -25,6 +25,9 @@ cd "$ROOT"
 PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]')"
 VOLUME="${PROJECT}_postgres_data"
 
+echo "Backing up Chaslay homepage builder tables before wipe..."
+bash "$ROOT/scripts/backup-chaslay-homepages.sh" || echo "WARNING: chaslay homepage backup failed (continuing reset)"
+
 echo "Stopping stack and removing volume ${VOLUME}..."
 docker compose stop api dashboard migrate 2>/dev/null || true
 docker compose down 2>/dev/null || true

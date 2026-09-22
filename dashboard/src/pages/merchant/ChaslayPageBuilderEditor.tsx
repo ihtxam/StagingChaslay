@@ -69,8 +69,9 @@ export default function ChaslayPageBuilderEditor() {
           if (response.success) toast.success('Homepage saved');
           else throw new Error(response.message || 'Failed to save');
         }
-      } catch {
-        toast.error('Failed to save');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to save';
+        toast.error(message);
       } finally {
         setIsSaving(false);
       }

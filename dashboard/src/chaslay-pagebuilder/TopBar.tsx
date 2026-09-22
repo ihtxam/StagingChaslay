@@ -29,9 +29,15 @@ interface TopBarProps {
   onSave?: (state: string) => void | Promise<void>;
   onFullPreview?: () => void;
   homepageName?: string;
+  confirmLeaveIfEmpty?: () => boolean;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ onSave, onFullPreview, homepageName }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  onSave,
+  onFullPreview,
+  homepageName,
+  confirmLeaveIfEmpty,
+}) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,7 +221,14 @@ export const TopBar: React.FC<TopBarProps> = ({ onSave, onFullPreview, homepageN
   return (
     <div className="h-14 border-b bg-background flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
-        <Link to="/merchant/chaslay-page-builder">
+        <Link
+          to="/merchant/chaslay-page-builder"
+          onClick={(event) => {
+            if (confirmLeaveIfEmpty && !confirmLeaveIfEmpty()) {
+              event.preventDefault();
+            }
+          }}
+        >
           <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="w-4 h-4" />
             {t('back')}

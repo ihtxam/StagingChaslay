@@ -7,6 +7,7 @@ import { ScrollArea } from '@/chaslay-pagebuilder/ui/scroll-area';
 import { Settings, Layers, Trash2, Save } from 'lucide-react';
 import { useTranslations } from '@/lib/chaslay-pagebuilder/i18n-stub';
 import { toast } from 'react-hot-toast';
+import { isEffectivelyEmptyEditorState } from '@/lib/chaslay-pagebuilder/editor-state';
 
 interface SettingsPanelProps {
   onSave?: (state: string) => void | Promise<void>;
@@ -36,6 +37,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSave }) => {
     setIsSaving(true);
     try {
       const json = query.serialize();
+      if (isEffectivelyEmptyEditorState(json)) {
+        toast.error('Nothing to save — add content to the page first');
+        return;
+      }
       if (onSave) {
         await onSave(json);
       } else {

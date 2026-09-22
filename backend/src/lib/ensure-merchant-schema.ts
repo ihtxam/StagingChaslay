@@ -240,6 +240,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES: Record<string, string> = {
+  chaslay_homepage_builders_last_good_editor_state:
+    "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
+  chaslay_homepage_builder_pages_last_good_editor_state:
+    "ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
   products_barcode: "ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
@@ -1154,6 +1158,8 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_slug_uq ON chaslay_homepage_builder_pages(homepage_builder_id, slug)`,
   `CREATE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_sort_idx ON chaslay_homepage_builder_pages(homepage_builder_id, sort_order)`,
+  `ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text`,
+  `ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text`,
   `CREATE TABLE IF NOT EXISTS locations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,

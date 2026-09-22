@@ -22,7 +22,7 @@ import { TopBar } from './TopBar';
 import { FullPagePreview } from './FullPagePreview';
 import { PageManager } from './PageManager';
 import { PageContextProvider } from './PageContext';
-import { HOMEPAGE_BUILDER_STORAGE_KEY } from '@/chaslay-pagebuilder/types/homepage-builder';
+import { useEmptyCanvasNavGuard } from './useEmptyCanvasNavGuard';
 
 interface EditorProps {
   initialState?: string | null;
@@ -91,9 +91,16 @@ const EditorContent: React.FC<EditorContentProps> = ({
   onFullPreview,
   homepageName,
 }) => {
+  const { confirmLeaveIfEmpty } = useEmptyCanvasNavGuard(initialState);
+
   return (
     <>
-      <TopBar onSave={onSave} onFullPreview={onFullPreview} homepageName={homepageName} />
+      <TopBar
+        onSave={onSave}
+        onFullPreview={onFullPreview}
+        homepageName={homepageName}
+        confirmLeaveIfEmpty={confirmLeaveIfEmpty}
+      />
       <PageManager />
       <div className="flex flex-1 overflow-hidden">
         <Toolbox />

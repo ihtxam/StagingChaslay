@@ -76,9 +76,16 @@ export type HomepageHealResult = {
 export async function maybePersistHomepagePageHeal(
   homepagePageId: number | null | undefined,
   pageState: string | null,
-  builderState: string | null
+  builderState: string | null,
+  pageLastGood?: string | null,
+  builderLastGood?: string | null
 ): Promise<HomepageHealResult> {
-  const resolved = pickPublishedEditorState(pageState, builderState);
+  const resolved = pickPublishedEditorState(
+    pageState,
+    builderState,
+    pageLastGood,
+    builderLastGood
+  );
   const fromPage = normalizeEditorState(pageState);
   const fromBuilder = normalizeEditorState(builderState);
   if (
@@ -96,7 +103,13 @@ export async function maybePersistHomepagePageHeal(
   const db = getDb();
   await db
     .update(schema.chaslayHomepageBuilderPages)
-    .set({ editorState: fromBuilder, updatedAt: new Date() })
+    .set({
+      editorState: fromBuilder,
+      lastGoodEditorState: builderLastGood && !isEffectivelyEmptyEditorState(builderLastGood)
+        ? builderLastGood
+        : fromBuilder,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.chaslayHomepageBuilderPages.id, homepagePageId));
   return { resolved, healed: true };
 }
@@ -105,9 +118,16 @@ export async function maybePersistHomepagePageHeal(
 export async function maybePersistHomepageBuilderHeal(
   builderId: number | null | undefined,
   pageState: string | null,
-  builderState: string | null
+  builderState: string | null,
+  pageLastGood?: string | null,
+  builderLastGood?: string | null
 ): Promise<HomepageHealResult> {
-  const resolved = pickPublishedEditorState(pageState, builderState);
+  const resolved = pickPublishedEditorState(
+    pageState,
+    builderState,
+    pageLastGood,
+    builderLastGood
+  );
   const fromPage = normalizeEditorState(pageState);
   const fromBuilder = normalizeEditorState(builderState);
   if (
@@ -125,7 +145,13 @@ export async function maybePersistHomepageBuilderHeal(
   const db = getDb();
   await db
     .update(schema.chaslayHomepageBuilders)
-    .set({ editorState: fromPage, updatedAt: new Date() })
+    .set({
+      editorState: fromPage,
+      lastGoodEditorState: pageLastGood && !isEffectivelyEmptyEditorState(pageLastGood)
+        ? pageLastGood
+        : fromPage,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.chaslayHomepageBuilders.id, builderId));
   return { resolved, healed: true };
 }
@@ -135,16 +161,36 @@ export async function maybePersistHomepageSplitBrainHeal(
   homepagePageId: number | null | undefined,
   builderId: number | null | undefined,
   pageState: string | null,
-  builderState: string | null
+  builderState: string | null,
+  pageLastGood?: string | null,
+  builderLastGood?: string | null
 ): Promise<HomepageHealResult> {
-  const pageHeal = await maybePersistHomepagePageHeal(homepagePageId, pageState, builderState);
+  const pageHeal = await maybePersistHomepagePageHeal(
+    homepagePageId,
+    pageState,
+    builderState,
+    pageLastGood,
+    builderLastGood
+  );
   if (pageHeal.healed) return pageHeal;
-  return maybePersistHomepageBuilderHeal(builderId, pageState, builderState);
+  return maybePersistHomepageBuilderHeal(
+    builderId,
+    pageState,
+    builderState,
+    pageLastGood,
+    builderLastGood
+  );
 }
 
 export type MerchantHomepageRepairResult = {
   merchantId: string;
-  action: "ok" | "split_brain_healed" | "empty_refilled" | "bootstrapped_from_legacy" | "bootstrapped_default";
+  action:
+    | "ok"
+    | "split_brain_healed"
+    | "empty_refilled"
+    | "restored_from_backup"
+    | "bootstrapped_from_legacy"
+    | "bootstrapped_default";
 };
 
 async function loadLegacyPublishedEditorState(
@@ -203,7 +249,11 @@ async function upsertHomepagePage(
   if (homepagePage) {
     await db
       .update(schema.chaslayHomepageBuilderPages)
-      .set({ editorState, updatedAt: new Date() })
+      .set({
+        editorState,
+        lastGoodEditorState: editorState,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.chaslayHomepageBuilderPages.id, homepagePage.id));
     return;
   }
@@ -213,6 +263,7 @@ async function upsertHomepagePage(
     title,
     slug: "home",
     editorState,
+    lastGoodEditorState: editorState,
     isHomepage: true,
     sortOrder: 0,
   });
@@ -274,6 +325,7 @@ export async function repairMerchantChaslayHomepage(
         merchantId,
         name: legacyPage?.title?.trim() || `${merchant.name} Homepage`.trim(),
         editorState,
+        lastGoodEditorState: editorState,
         isActive: true,
       })
       .returning();
@@ -294,14 +346,16 @@ export async function repairMerchantChaslayHomepage(
       eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builder.id),
       eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
     ),
-    columns: { id: true, editorState: true, title: true },
+    columns: { id: true, editorState: true, lastGoodEditorState: true, title: true },
   });
 
   const heal = await maybePersistHomepageSplitBrainHeal(
     homepagePage?.id,
     builder.id,
     homepagePage?.editorState ?? null,
-    builder.editorState
+    builder.editorState,
+    homepagePage?.lastGoodEditorState ?? null,
+    builder.lastGoodEditorState
   );
   if (heal.healed) {
     return { merchantId, action: "split_brain_healed" };
@@ -309,10 +363,36 @@ export async function repairMerchantChaslayHomepage(
 
   const resolved = pickPublishedEditorState(
     homepagePage?.editorState ?? null,
-    builder.editorState
+    builder.editorState,
+    homepagePage?.lastGoodEditorState ?? null,
+    builder.lastGoodEditorState
   );
   if (resolved && !isEffectivelyEmptyEditorState(resolved)) {
     return { merchantId, action: "ok" };
+  }
+
+  const backup = pickPublishedEditorState(
+    null,
+    null,
+    homepagePage?.lastGoodEditorState ?? null,
+    builder.lastGoodEditorState
+  );
+  if (backup && !isEffectivelyEmptyEditorState(backup)) {
+    await db
+      .update(schema.chaslayHomepageBuilders)
+      .set({
+        editorState: backup,
+        lastGoodEditorState: backup,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.chaslayHomepageBuilders.id, builder.id));
+    await upsertHomepagePage(
+      merchantId,
+      builder.id,
+      backup,
+      homepagePage?.title || builder.name || "Home"
+    );
+    return { merchantId, action: "restored_from_backup" };
   }
 
   const refill = await loadLegacyPublishedEditorState(merchantId, merchant.name);
@@ -320,7 +400,11 @@ export async function repairMerchantChaslayHomepage(
 
   await db
     .update(schema.chaslayHomepageBuilders)
-    .set({ editorState: refill, updatedAt: new Date() })
+    .set({
+      editorState: refill,
+      lastGoodEditorState: refill,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.chaslayHomepageBuilders.id, builder.id));
   await upsertHomepagePage(
     merchantId,

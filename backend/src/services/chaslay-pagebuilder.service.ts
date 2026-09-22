@@ -3,10 +3,11 @@ import { getDb, schema } from "@/db";
 import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { buildDefaultRestaurantTemplate } from "@/lib/chaslay-default-template";
 import {
+  assertPublishableHomepage,
+  buildEditorStateWritePatch,
   isEffectivelyEmptyEditorState,
   normalizeEditorState,
   pickPublishedEditorState,
-  editorStatePatchOrSkip as guardEditorStatePatch,
 } from "@/lib/chaslay-editor-state";
 import {
   maybePersistHomepageSplitBrainHeal,
@@ -27,18 +28,16 @@ const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
   },
 });
 
-function editorStateForCreate(state?: string | null): string {
-  return normalizeEditorState(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
-}
-
-function editorStateForUpdate(state?: string): string | undefined {
-  if (state === undefined) return undefined;
-  const normalized = normalizeEditorState(state);
-  return normalized ?? DEFAULT_EMPTY_CANVAS_STATE;
-}
-
-function editorStatePatchOrSkip(existing: string | null, incoming?: string): string | undefined {
-  return guardEditorStatePatch(existing, incoming, DEFAULT_EMPTY_CANVAS_STATE);
+function editorStateForCreate(state?: string | null): {
+  editorState: string;
+  lastGoodEditorState?: string;
+} {
+  const editorState = normalizeEditorState(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
+  const patch: { editorState: string; lastGoodEditorState?: string } = { editorState };
+  if (!isEffectivelyEmptyEditorState(editorState)) {
+    patch.lastGoodEditorState = editorState;
+  }
+  return patch;
 }
 
 export class ChaslayPagebuilderService {
@@ -58,20 +57,34 @@ export class ChaslayPagebuilderService {
     fallback: string | null
   ): Promise<string | null> {
     const db = getDb();
+    const builder = await db.query.chaslayHomepageBuilders.findFirst({
+      where: eq(schema.chaslayHomepageBuilders.id, builderId),
+      columns: { editorState: true, lastGoodEditorState: true },
+    });
     const homepagePage = await db.query.chaslayHomepageBuilderPages.findFirst({
       where: and(
         eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
         eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
       ),
-      columns: { id: true, editorState: true },
+      columns: { id: true, editorState: true, lastGoodEditorState: true },
     });
-    const { resolved } = await maybePersistHomepageSplitBrainHeal(
+    const heal = await maybePersistHomepageSplitBrainHeal(
       homepagePage?.id,
       builderId,
       homepagePage?.editorState ?? null,
-      fallback
+      builder?.editorState ?? fallback,
+      homepagePage?.lastGoodEditorState ?? null,
+      builder?.lastGoodEditorState ?? null
     );
-    return resolved;
+    return (
+      heal.resolved ??
+      pickPublishedEditorState(
+        homepagePage?.editorState ?? null,
+        builder?.editorState ?? fallback,
+        homepagePage?.lastGoodEditorState ?? null,
+        builder?.lastGoodEditorState ?? null
+      )
+    );
   }
 
   /** Repair missing/wiped Chaslay state before reads (legacy CMS bootstrap, split-brain heal). */
@@ -80,13 +93,26 @@ export class ChaslayPagebuilderService {
   }
 
   /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
-  private static async syncHomepagePageToBuilder(builderId: number, editorState: string | null) {
+  private static async syncHomepagePageToBuilder(
+    builderId: number,
+    editorState: string | null,
+    lastGoodEditorState?: string | null
+  ) {
     const normalized = normalizeEditorState(editorState);
     if (!normalized || isEffectivelyEmptyEditorState(normalized)) return;
     const db = getDb();
+    const patch: Partial<typeof schema.chaslayHomepageBuilders.$inferInsert> = {
+      editorState: normalized,
+      updatedAt: new Date(),
+    };
+    if (lastGoodEditorState && !isEffectivelyEmptyEditorState(lastGoodEditorState)) {
+      patch.lastGoodEditorState = lastGoodEditorState;
+    } else if (!isEffectivelyEmptyEditorState(normalized)) {
+      patch.lastGoodEditorState = normalized;
+    }
     await db
       .update(schema.chaslayHomepageBuilders)
-      .set({ editorState: normalized, updatedAt: new Date() })
+      .set(patch)
       .where(eq(schema.chaslayHomepageBuilders.id, builderId));
   }
 
@@ -146,6 +172,7 @@ export class ChaslayPagebuilderService {
   static async list(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
       await this.ensureBootstrappedFromLegacy(merchantId);
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const rows = await db.query.chaslayHomepageBuilders.findMany({
         where: eq(schema.chaslayHomepageBuilders.merchantId, merchantId),
@@ -218,12 +245,14 @@ export class ChaslayPagebuilderService {
   static async create(merchantId: string, input: { name: string; editor_state?: string | null }) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
+      const initialState = editorStateForCreate(input.editor_state);
       const [row] = await db
         .insert(schema.chaslayHomepageBuilders)
         .values({
           merchantId,
           name: input.name,
-          editorState: editorStateForCreate(input.editor_state),
+          editorState: initialState.editorState,
+          lastGoodEditorState: initialState.lastGoodEditorState,
           isActive: false,
         })
         .returning();
@@ -257,8 +286,15 @@ export class ChaslayPagebuilderService {
       };
       if (input.name !== undefined) patch.name = input.name;
       if (input.editor_state !== undefined) {
-        const next = editorStatePatchOrSkip(existing.editorState, input.editor_state);
-        if (next !== undefined) patch.editorState = next;
+        Object.assign(
+          patch,
+          buildEditorStateWritePatch(
+            existing.editorState,
+            existing.lastGoodEditorState,
+            input.editor_state,
+            DEFAULT_EMPTY_CANVAS_STATE
+          )
+        );
       }
       const [row] = await db
         .update(schema.chaslayHomepageBuilders)
@@ -296,6 +332,19 @@ export class ChaslayPagebuilderService {
         where: and(eq(schema.chaslayHomepageBuilders.id, id), eq(schema.chaslayHomepageBuilders.merchantId, merchantId)),
       });
       if (!existing) throw new Error("Homepage builder not found");
+      const homepagePage = await db.query.chaslayHomepageBuilderPages.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, id),
+          eq(schema.chaslayHomepageBuilderPages.isHomepage, true)
+        ),
+        columns: { editorState: true, lastGoodEditorState: true },
+      });
+      assertPublishableHomepage(
+        homepagePage?.editorState ?? null,
+        existing.editorState,
+        homepagePage?.lastGoodEditorState ?? null,
+        existing.lastGoodEditorState
+      );
       await db
         .update(schema.chaslayHomepageBuilders)
         .set({ isActive: false, updatedAt: new Date() })
@@ -313,7 +362,7 @@ export class ChaslayPagebuilderService {
         publishedState !== row.editorState &&
         !isEffectivelyEmptyEditorState(publishedState)
       ) {
-        await this.syncHomepagePageToBuilder(row.id, publishedState);
+        await this.syncHomepagePageToBuilder(row.id, publishedState, row.lastGoodEditorState);
       }
       await db
         .update(schema.merchants)
@@ -360,7 +409,7 @@ export class ChaslayPagebuilderService {
           eq(schema.chaslayHomepageBuilders.id, builderId),
           eq(schema.chaslayHomepageBuilders.merchantId, merchantId)
         ),
-        columns: { id: true, editorState: true },
+        columns: { id: true, editorState: true, lastGoodEditorState: true },
       });
       if (!builder) throw new Error("Homepage builder not found");
       const rows = await db.query.chaslayHomepageBuilderPages.findMany({
@@ -375,9 +424,19 @@ export class ChaslayPagebuilderService {
             p.id,
             builder.id,
             p.editorState,
-            builder.editorState
+            builder.editorState,
+            p.lastGoodEditorState,
+            builder.lastGoodEditorState
           );
-          editor_state = resolved ?? p.editorState;
+          editor_state =
+            resolved ??
+            pickPublishedEditorState(
+              p.editorState,
+              builder.editorState,
+              p.lastGoodEditorState,
+              builder.lastGoodEditorState
+            ) ??
+            p.editorState;
         }
         pages.push({
           id: p.id,
@@ -420,6 +479,7 @@ export class ChaslayPagebuilderService {
           .set({ isHomepage: false })
           .where(eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId));
       }
+      const initialState = editorStateForCreate(input.editor_state);
       const [row] = await db
         .insert(schema.chaslayHomepageBuilderPages)
         .values({
@@ -427,7 +487,8 @@ export class ChaslayPagebuilderService {
           merchantId,
           title: input.title,
           slug: input.slug,
-          editorState: editorStateForCreate(input.editor_state),
+          editorState: initialState.editorState,
+          lastGoodEditorState: initialState.lastGoodEditorState,
           isHomepage: input.is_homepage ?? false,
           sortOrder: input.sort_order ?? 0,
         })
@@ -493,8 +554,15 @@ export class ChaslayPagebuilderService {
       if (input.title !== undefined) patch.title = input.title;
       if (input.slug !== undefined) patch.slug = input.slug;
       if (input.editor_state !== undefined) {
-        const next = editorStatePatchOrSkip(page.editorState, input.editor_state);
-        if (next !== undefined) patch.editorState = next;
+        Object.assign(
+          patch,
+          buildEditorStateWritePatch(
+            page.editorState,
+            page.lastGoodEditorState,
+            input.editor_state,
+            DEFAULT_EMPTY_CANVAS_STATE
+          )
+        );
       }
       if (input.is_homepage !== undefined) patch.isHomepage = input.is_homepage;
       if (input.sort_order !== undefined) patch.sortOrder = input.sort_order;
@@ -504,7 +572,7 @@ export class ChaslayPagebuilderService {
         .where(eq(schema.chaslayHomepageBuilderPages.id, pageId))
         .returning();
       if (row.isHomepage && (input.editor_state !== undefined || input.is_homepage === true)) {
-        await this.syncHomepagePageToBuilder(builderId, row.editorState);
+        await this.syncHomepagePageToBuilder(builderId, row.editorState, row.lastGoodEditorState);
       }
       return {
         id: row.id,
@@ -554,6 +622,7 @@ export class ChaslayPagebuilderService {
   /** Published pages from the merchant's active builder layout (empty when none active). */
   static async listActivePublishedPages(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const builder = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(
@@ -618,7 +687,9 @@ export class ChaslayPagebuilderService {
       if (!page) return null;
       const editor_state = pickPublishedEditorState(
         page.editorState,
-        builder.editorState
+        builder.editorState,
+        page.lastGoodEditorState,
+        builder.lastGoodEditorState
       );
       if (!editor_state || isEffectivelyEmptyEditorState(editor_state)) return null;
       return {
