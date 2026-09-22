@@ -47,6 +47,11 @@ type EmailUsageSummary = {
   activeProvider?: string | null;
   activeFromEmail?: string;
   activeFromName?: string;
+  lastShopOrderEmail?: {
+    provider: string;
+    sentAt?: string;
+    recipient?: string;
+  } | null;
   account?: {
     email?: string;
     companyName?: string;
@@ -479,6 +484,28 @@ export default function Settings() {
                 Primary setting is <strong>{emailUsage.platformEmailPrimary}</strong> but another
                 provider is active — check credentials or save mailco settings again.
               </span>
+            ) : null}
+          </p>
+        ) : null}
+
+        {emailUsage?.lastShopOrderEmail ? (
+          <p className="text-sm mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800">
+            Last shop order email sent via <strong>{emailUsage.lastShopOrderEmail.provider}</strong>
+            {emailUsage.lastShopOrderEmail.sentAt ? (
+              <>
+                {' '}
+                ·{' '}
+                {new Date(emailUsage.lastShopOrderEmail.sentAt).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </>
+            ) : null}
+            {emailUsage.lastShopOrderEmail.recipient ? (
+              <>
+                {' '}
+                · To <code>{emailUsage.lastShopOrderEmail.recipient}</code>
+              </>
             ) : null}
           </p>
         ) : null}

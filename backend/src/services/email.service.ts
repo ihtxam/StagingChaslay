@@ -3,7 +3,7 @@ import axios from "axios";
 import sgMail from "@sendgrid/mail";
 import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
-import { isTransientMailcoError } from "@/lib/mailco-routing";
+import { isTransientMailcoError, MailcoSendError } from "@/lib/mailco-routing";
 
 export type EmailAttachment = {
   filename: string;
@@ -679,6 +679,9 @@ export class EmailService {
     }
 
     const logAndSend = async (activeCfg: ResolvedEmailConfig) => {
+      console.info(
+        `[email] send via ${activeCfg.provider} (${activeCfg.source}) type=${emailType} merchant=${input.merchantId || "platform"}`
+      );
       if (activeCfg.provider === "smtp") {
         await this.sendViaSmtp(activeCfg, input);
       } else if (activeCfg.provider === "brevo") {
@@ -730,7 +733,13 @@ export class EmailService {
         ) {
           const reason =
             primaryError instanceof Error ? primaryError.message : String(primaryError);
-          console.warn(`[email] mailco send failed (${reason}), falling back to Brevo`);
+          const status =
+            primaryError instanceof MailcoSendError
+              ? primaryError.status
+              : (primaryError as { response?: { status?: number } })?.response?.status;
+          console.warn(
+            `[email] mailco transient failure (status=${status ?? "unknown"}: ${reason}), falling back to Brevo`
+          );
           try {
             const brevoCfg: ResolvedEmailConfig = {
               ...cfg,
@@ -868,7 +877,12 @@ export class EmailService {
         }
       );
     } catch (error: any) {
+      const status = error?.response?.status;
       const data = error?.response?.data;
+      const code =
+        typeof data === "object" && data !== null
+          ? String((data as { code?: string }).code || "").trim() || undefined
+          : undefined;
       const detail =
         (typeof data === "object" && data !== null
           ? (data as { message?: string; code?: string }).message ||
@@ -877,7 +891,10 @@ export class EmailService {
         (typeof data === "string" ? data : null) ||
         error?.message ||
         "mailco send failed";
-      throw new Error(typeof detail === "string" ? detail : "mailco send failed");
+      throw new MailcoSendError(typeof detail === "string" ? detail : "mailco send failed", {
+        status,
+        code,
+      });
     }
   }
 

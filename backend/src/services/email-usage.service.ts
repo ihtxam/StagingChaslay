@@ -155,6 +155,17 @@ export class EmailUsageService {
     const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
     const platformStatus = await EmailService.status();
 
+    const [lastShopOrderRow] = await db
+      .select({
+        provider: schema.emailSendLog.provider,
+        createdAt: schema.emailSendLog.createdAt,
+        recipient: schema.emailSendLog.recipient,
+      })
+      .from(schema.emailSendLog)
+      .where(and(platformFilter, sentFilter, eq(schema.emailSendLog.emailType, "shop_order")))
+      .orderBy(desc(schema.emailSendLog.createdAt))
+      .limit(1);
+
     let account: Awaited<
       ReturnType<typeof import("@/services/email.service").EmailService.fetchBrevoAccount>
     > | null = null;
@@ -196,6 +207,13 @@ export class EmailUsageService {
       activeProvider: platformStatus.provider,
       activeFromEmail: platformStatus.fromEmail,
       activeFromName: platformStatus.fromName,
+      lastShopOrderEmail: lastShopOrderRow
+        ? {
+            provider: lastShopOrderRow.provider,
+            sentAt: lastShopOrderRow.createdAt,
+            recipient: lastShopOrderRow.recipient,
+          }
+        : null,
       account,
     };
   }
