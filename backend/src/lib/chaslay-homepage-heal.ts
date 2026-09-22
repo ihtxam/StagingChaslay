@@ -101,6 +101,47 @@ export async function maybePersistHomepagePageHeal(
   return { resolved, healed: true };
 }
 
+/** Persist page→builder heal when the builder row is empty but the homepage page has content. */
+export async function maybePersistHomepageBuilderHeal(
+  builderId: number | null | undefined,
+  pageState: string | null,
+  builderState: string | null
+): Promise<HomepageHealResult> {
+  const resolved = pickPublishedEditorState(pageState, builderState);
+  const fromPage = normalizeEditorState(pageState);
+  const fromBuilder = normalizeEditorState(builderState);
+  if (
+    !builderId ||
+    !resolved ||
+    !fromPage ||
+    isEffectivelyEmptyEditorState(fromPage) ||
+    !fromBuilder ||
+    !isEffectivelyEmptyEditorState(fromBuilder) ||
+    resolved !== fromPage
+  ) {
+    return { resolved, healed: false };
+  }
+
+  const db = getDb();
+  await db
+    .update(schema.chaslayHomepageBuilders)
+    .set({ editorState: fromPage, updatedAt: new Date() })
+    .where(eq(schema.chaslayHomepageBuilders.id, builderId));
+  return { resolved, healed: true };
+}
+
+/** Heal split-brain in both directions (page row vs builder.editor_state). */
+export async function maybePersistHomepageSplitBrainHeal(
+  homepagePageId: number | null | undefined,
+  builderId: number | null | undefined,
+  pageState: string | null,
+  builderState: string | null
+): Promise<HomepageHealResult> {
+  const pageHeal = await maybePersistHomepagePageHeal(homepagePageId, pageState, builderState);
+  if (pageHeal.healed) return pageHeal;
+  return maybePersistHomepageBuilderHeal(builderId, pageState, builderState);
+}
+
 export type MerchantHomepageRepairResult = {
   merchantId: string;
   action: "ok" | "split_brain_healed" | "empty_refilled" | "bootstrapped_from_legacy" | "bootstrapped_default";
@@ -256,8 +297,9 @@ export async function repairMerchantChaslayHomepage(
     columns: { id: true, editorState: true, title: true },
   });
 
-  const heal = await maybePersistHomepagePageHeal(
+  const heal = await maybePersistHomepageSplitBrainHeal(
     homepagePage?.id,
+    builder.id,
     homepagePage?.editorState ?? null,
     builder.editorState
   );
@@ -297,6 +339,26 @@ export async function repairMerchantChaslayHomepage(
     ? "empty_refilled"
     : "bootstrapped_default";
   return { merchantId, action };
+}
+
+/** Repair Chaslay homepages for merchants matched by shop slug (e.g. demo, brazza-pizza). */
+export async function repairChaslayHomepagesBySlug(
+  slugs: string[]
+): Promise<MerchantHomepageRepairResult[]> {
+  const db = getDb();
+  const repaired: MerchantHomepageRepairResult[] = [];
+  for (const slug of slugs) {
+    const normalized = slug.trim().toLowerCase();
+    if (!normalized) continue;
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.slug, normalized),
+      columns: { id: true },
+    });
+    if (!merchant) continue;
+    const result = await repairMerchantChaslayHomepage(merchant.id);
+    if (result) repaired.push(result);
+  }
+  return repaired;
 }
 
 /** Scan merchants with CMS homepage enabled and repair Chaslay builder state. */

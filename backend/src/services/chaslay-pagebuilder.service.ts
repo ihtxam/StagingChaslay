@@ -9,7 +9,7 @@ import {
   editorStatePatchOrSkip as guardEditorStatePatch,
 } from "@/lib/chaslay-editor-state";
 import {
-  maybePersistHomepagePageHeal,
+  maybePersistHomepageSplitBrainHeal,
   repairMerchantChaslayHomepage,
 } from "@/lib/chaslay-homepage-heal";
 import { CmsService } from "@/services/cms.service";
@@ -65,8 +65,9 @@ export class ChaslayPagebuilderService {
       ),
       columns: { id: true, editorState: true },
     });
-    const { resolved } = await maybePersistHomepagePageHeal(
+    const { resolved } = await maybePersistHomepageSplitBrainHeal(
       homepagePage?.id,
+      builderId,
       homepagePage?.editorState ?? null,
       fallback
     );
@@ -370,8 +371,9 @@ export class ChaslayPagebuilderService {
       for (const p of rows) {
         let editor_state = p.editorState;
         if (p.isHomepage) {
-          const { resolved } = await maybePersistHomepagePageHeal(
+          const { resolved } = await maybePersistHomepageSplitBrainHeal(
             p.id,
+            builder.id,
             p.editorState,
             builder.editorState
           );

@@ -31,4 +31,11 @@ const emptyLegacy = editorStateFromLegacyCmsBlocks(
 );
 assert.equal(emptyLegacy, null);
 
+import { pickPublishedEditorState } from "./chaslay-editor-state";
+
+const pageContent = buildCustomHtmlEditorState("<p>Page row</p>");
+const builderContent = buildCustomHtmlEditorState("<p>Builder row</p>");
+assert.equal(pickPublishedEditorState(pageContent, null), pageContent);
+assert.equal(pickPublishedEditorState(null, builderContent), builderContent);
+
 console.log("chaslay-homepage-heal: all assertions passed");

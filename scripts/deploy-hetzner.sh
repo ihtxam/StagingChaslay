@@ -1002,6 +1002,9 @@ curl -sf -X POST http://127.0.0.1:3000/health/schema-repair || \
   dc exec -T api wget -qO- --post-data='' http://127.0.0.1:3000/health/schema-repair || true
 curl -sf -X POST "${API_URL}/health/schema-repair" || true
 echo
+echo "=== Chaslay homepage builder repair (idempotent) ==="
+bash scripts/heal-chaslay-homepages.sh || echo "WARNING: chaslay homepage heal step failed"
+echo
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
 PRINT_HDR="$(curl -sI "${APP_URL}/downloads/reborn-print-agent-setup.exe" || true)"

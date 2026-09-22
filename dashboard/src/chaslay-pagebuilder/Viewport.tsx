@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Frame, useEditor } from '@craftjs/core';
 import { ViewportSize, VIEWPORT_SIZES, STOREFRONT_MAX_WIDTH } from '@/chaslay-pagebuilder/types/homepage-builder';
 import { Monitor, Tablet, Smartphone } from 'lucide-react';
@@ -16,75 +16,57 @@ interface ViewportProps {
   defaultContent: React.ReactElement;
 }
 
+function resolveEditorState(
+  pageState?: string | null,
+  builderState?: string | null
+): string | null {
+  if (pageState && !isEffectivelyEmptyEditorState(pageState)) return pageState;
+  if (builderState && !isEffectivelyEmptyEditorState(builderState)) return builderState;
+  return null;
+}
+
 export const Viewport: React.FC<ViewportProps> = ({ initialState, defaultContent }) => {
   const [viewportSize, setViewportSize] = useState<ViewportSize>('desktop');
   const [isLoaded, setIsLoaded] = useState(false);
-  const hasLoadedInitialState = useRef(false);
-  const currentPageIdRef = useRef<number | string | null>(null);
+  const loadedPageKeyRef = useRef<string | null>(null);
 
-  const { actions, query, enabled } = useEditor((state) => ({
+  const { actions } = useEditor((state) => ({
     enabled: state.options.enabled,
   }));
 
-  const { currentPage, isMultiPageEnabled } = usePageContext();
+  const { currentPage, isMultiPageEnabled, isLoading: pagesLoading } = usePageContext();
 
-  // Load initial state - only once
+  const resolvedState = useMemo(
+    () => resolveEditorState(currentPage?.editor_state, initialState),
+    [currentPage?.editor_state, initialState]
+  );
+
+  // Wait for pages API before deserializing — avoids empty builder snapshot winning the race.
   useEffect(() => {
-    if (hasLoadedInitialState.current) return;
+    if (pagesLoading) return;
 
-    if (initialState) {
+    const pageKey = currentPage
+      ? String(currentPage.id ?? currentPage.slug)
+      : resolvedState
+        ? 'builder'
+        : 'empty';
+
+    if (loadedPageKeyRef.current === pageKey) return;
+    loadedPageKeyRef.current = pageKey;
+
+    if (resolvedState) {
       try {
-        const parsedState = JSON.parse(initialState);
-        if (parsedState && Object.keys(parsedState).length > 0) {
-          // Small delay to ensure editor is ready
-          setTimeout(() => {
-            actions.deserialize(initialState);
-            hasLoadedInitialState.current = true;
-            setIsLoaded(true);
-          }, 100);
-        } else {
-          hasLoadedInitialState.current = true;
-          setIsLoaded(true);
-        }
+        actions.deserialize(resolvedState);
       } catch (e) {
-        console.error('Failed to load initial state:', e);
-        hasLoadedInitialState.current = true;
-        setIsLoaded(true);
+        console.error('Failed to deserialize editor state:', e);
+        actions.deserialize(DEFAULT_EMPTY_CANVAS_STATE);
       }
-    } else {
-      hasLoadedInitialState.current = true;
-      setIsLoaded(true);
-    }
-  }, [initialState, actions]);
-
-  // When switching pages in multi-page mode, deserialize the new page's editor_state
-  useEffect(() => {
-    if (!isMultiPageEnabled || !hasLoadedInitialState.current || !currentPage) return;
-
-    const pageKey = currentPage.id ?? currentPage.slug;
-    if (currentPageIdRef.current === pageKey) return;
-    currentPageIdRef.current = pageKey;
-
-    if (currentPage.editor_state && !isEffectivelyEmptyEditorState(currentPage.editor_state)) {
-      try {
-        const parsedState = JSON.parse(currentPage.editor_state);
-        if (parsedState && Object.keys(parsedState).length > 0) {
-          actions.deserialize(currentPage.editor_state);
-          return;
-        }
-      } catch (e) {
-        console.error('Failed to deserialize page state:', e);
-      }
+    } else if (!isMultiPageEnabled) {
+      actions.deserialize(DEFAULT_EMPTY_CANVAS_STATE);
     }
 
-    if (initialState && !isEffectivelyEmptyEditorState(initialState)) {
-      actions.deserialize(initialState);
-      return;
-    }
-
-    // No editor_state or invalid — reset to empty canvas with a droppable RootContainer
-    actions.deserialize(DEFAULT_EMPTY_CANVAS_STATE);
-  }, [currentPage, isMultiPageEnabled, actions]);
+    setIsLoaded(true);
+  }, [pagesLoading, currentPage, resolvedState, isMultiPageEnabled, actions]);
 
   const viewportIcons: Record<ViewportSize, React.ReactNode> = {
     desktop: <Monitor className="w-4 h-4" />,
@@ -139,7 +121,7 @@ export const Viewport: React.FC<ViewportProps> = ({ initialState, defaultContent
         >
           {isLoaded && (
             <Frame>
-              {!initialState && defaultContent}
+              {!resolvedState && defaultContent}
             </Frame>
           )}
         </div>
