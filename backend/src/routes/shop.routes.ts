@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { eq, and, asc, desc, inArray, or } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { MerchantSettingsService, type FulfillmentChannel } from "@/services/merchant-settings.service";
 import {
@@ -53,6 +53,10 @@ import {
   shopTablePaymentReturnUrl,
   resolveShopCheckoutOrigin,
 } from "@/lib/shop-public-url";
+import {
+  SHOP_PRIVACY_POLICY_SLUG,
+  buildDefaultPrivacyPolicyHtml,
+} from "@/lib/shop-privacy-policy";
 
 const router = Router();
 
@@ -610,6 +614,57 @@ async function resolveMerchant(slugOrHost: string) {
   return merchant;
 }
 
+async function resolvePrivacyManagerName(merchantId: string): Promise<string | null> {
+  const db = getDb();
+  const managerRole = await db.query.merchantRoles.findFirst({
+    where: and(
+      eq(schema.merchantRoles.merchantId, merchantId),
+      sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
+    ),
+    columns: { id: true },
+  });
+  if (!managerRole) return null;
+  const staff = await db.query.merchantStaff.findFirst({
+    where: and(
+      eq(schema.merchantStaff.merchantId, merchantId),
+      eq(schema.merchantStaff.roleId, managerRole.id),
+      eq(schema.merchantStaff.isActive, true)
+    ),
+    columns: { name: true },
+    orderBy: [desc(schema.merchantStaff.createdAt)],
+  });
+  return staff?.name ? String(staff.name).trim() : null;
+}
+
+function shopPageMerchantPayload(
+  req: Request,
+  merchant: NonNullable<Awaited<ReturnType<typeof resolveMerchant>>>,
+  seo: ReturnType<typeof shopSeoFromMerchant>
+) {
+  return {
+    id: merchant.id,
+    name: merchant.name,
+    slug: merchant.slug,
+    subdomain: merchant.subdomain,
+    customDomain: merchant.customDomain,
+    shopLogoUrl: merchant.shopLogoUrl,
+    shopBannerUrl: merchant.shopBannerUrl,
+    site: seo.site,
+    storeHours: merchant.storeHours || {},
+    address: merchant.address,
+    city: merchant.city,
+    country: merchant.country,
+    phone: merchant.phone,
+    email: merchant.email,
+    reservationsEnabled: !!merchant.reservationsEnabled,
+    giftCards: ShopGiftCardService.publicSettings(ShopGiftCardService.settingsFromMerchant(merchant)),
+    acceptingOrders: merchant.acceptingOrders !== false,
+    acceptingReservations: merchant.acceptingReservations !== false,
+    vacation: vacationPublicPayload(merchant.vacationSettings),
+    language: merchant.shopLanguage || merchant.panelLanguage || "en",
+  };
+}
+
 async function resolveShopLocationId(
   merchantId: string,
   locationSlug?: string | null,
@@ -913,33 +968,40 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
             seoTitle: seo.seoTitle,
             seoDescription: seo.seoDescription,
             publishedAt: chaslayPage.updated_at,
-            merchant: {
-              id: merchant.id,
-              name: merchant.name,
-              slug: merchant.slug,
-              subdomain: merchant.subdomain,
-              customDomain: merchant.customDomain,
-              shopLogoUrl: merchant.shopLogoUrl,
-              shopBannerUrl: merchant.shopBannerUrl,
-              site: seo.site,
-              storeHours: merchant.storeHours || {},
-              address: merchant.address,
-              city: merchant.city,
-              country: merchant.country,
-              phone: merchant.phone,
-              email: merchant.email,
-              reservationsEnabled: !!merchant.reservationsEnabled,
-              giftCards: ShopGiftCardService.publicSettings(
-                ShopGiftCardService.settingsFromMerchant(merchant)
-              ),
-              acceptingOrders: merchant.acceptingOrders !== false,
-              acceptingReservations: merchant.acceptingReservations !== false,
-              vacation: vacationPublicPayload(merchant.vacationSettings),
-              language: merchant.shopLanguage || merchant.panelLanguage || "en",
-            },
+            merchant: shopPageMerchantPayload(req, merchant, seo),
           },
         });
       }
+    }
+
+    if (pageSlug === SHOP_PRIVACY_POLICY_SLUG) {
+      const managerName = await resolvePrivacyManagerName(merchant.id);
+      const policy = buildDefaultPrivacyPolicyHtml(
+        {
+          name: merchant.name,
+          email: merchant.email,
+          phone: merchant.phone,
+          address: merchant.address,
+          city: merchant.city,
+          country: merchant.country,
+          shopLanguage: merchant.shopLanguage,
+          panelLanguage: merchant.panelLanguage,
+        },
+        managerName
+      );
+      const seo = shopSeoFromMerchant(req, merchant, policy.title, "");
+      return res.json({
+        success: true,
+        data: {
+          engine: "legal",
+          title: policy.title,
+          slug: SHOP_PRIVACY_POLICY_SLUG,
+          htmlContent: policy.htmlContent,
+          seoTitle: `${policy.title} — ${merchant.name}`,
+          seoDescription: seo.seoDescription,
+          merchant: shopPageMerchantPayload(req, merchant, seo),
+        },
+      });
     }
 
     return res.status(404).json({ error: "Page not found" });

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import ChaslayShopPageView from './ChaslayShopPageView';
+import ShopLegalPageView from './ShopLegalPageView';
 
 /** Public Chaslay builder page by slug (not homepage). */
 export default function ChaslayShopPage() {
@@ -12,6 +13,10 @@ export default function ChaslayShopPage() {
 
   if (!shopKey || !slug) {
     return null;
+  }
+
+  if (slug === 'privacy-policy') {
+    return <ShopLegalPageView shopKey={shopKey} base={base} pageSlug={slug} />;
   }
 
   return <ChaslayShopPageView shopKey={shopKey} base={base} pageSlug={slug} />;
