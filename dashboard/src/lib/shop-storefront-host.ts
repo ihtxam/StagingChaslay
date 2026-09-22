@@ -1,8 +1,8 @@
 /** Customer shop storefronts must not use the Reborn POS PWA / offline shell. */
 
+import { isShopPathHubHost } from '@/lib/brand';
+
 const PANEL_PREFIXES = ['app.', 'admin.', 'api.', 'pay.', 'status.'];
-/** Runtime fallbacks aligned with `isShopPathHubHost` in brand.ts (path shops at /{slug}). */
-const SHOP_PATH_HUB_HOSTS = new Set(['order.rebornsense.com', 'shop.chaslay.com']);
 const PLATFORM_SUBDOMAINS = new Set(['app', 'admin', 'api', 'order', 'shop', 'pay', 'status', 'www']);
 
 const SHOP_CUSTOMER_SEGMENTS =
@@ -28,7 +28,7 @@ export function isShopStorefrontHost(
   const path = String(pathname || '');
   if (/^\/shop(\/|$)/.test(path)) return true;
   // Path shops: order.rebornsense.com/{slug}, shop.chaslay.com/{slug}
-  if (host.startsWith('shop.') || SHOP_PATH_HUB_HOSTS.has(host)) return true;
+  if (host.startsWith('shop.') || isShopPathHubHost(host)) return true;
   if (PANEL_PREFIXES.some((prefix) => host.startsWith(prefix))) return false;
   if (host === 'localhost' || host === '127.0.0.1') return false;
   if (host.endsWith('.chaslay.com') || host.endsWith('.rebornsense.com')) {
@@ -38,9 +38,17 @@ export function isShopStorefrontHost(
   return true;
 }
 
+/** True when inline boot script or runtime detection says this is a public shop host. */
+export function isShopStorefrontBoot(): boolean {
+  if (typeof window !== 'undefined' && (window as Window & { __REBORN_SHOP_STOREFRONT__?: boolean }).__REBORN_SHOP_STOREFRONT__) {
+    return true;
+  }
+  return isShopStorefrontHost();
+}
+
 export async function unregisterRebornShellOnShop(): Promise<void> {
   if (typeof window === 'undefined') return;
-  if (!isShopStorefrontHost()) return;
+  if (!isShopStorefrontBoot()) return;
   try {
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();

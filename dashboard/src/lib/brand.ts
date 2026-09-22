@@ -1,6 +1,9 @@
 /** Public product name (PWA, Windows app, panel, shop chrome). */
 export const APP_NAME = 'Reborn';
 
+const viteEnv =
+  typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : ({} as ImportMetaEnv);
+
 /** White Reborn logo (icon + wordmark) for dark backgrounds — login, merchant sidebar. */
 export const REBORN_LOGO_WHITE = '/brand/reborn-logo-white.png';
 
@@ -13,12 +16,12 @@ export const APP_TAGLINE = 'Restaurant POS & online ordering';
 
 /** Apex marketing domain. */
 export const BRAND_DOMAIN = (
-  import.meta.env.VITE_PUBLIC_DOMAIN || 'rebornsense.com'
+  viteEnv.VITE_PUBLIC_DOMAIN || 'rebornsense.com'
 ).toLowerCase();
 
 /** Merchant panel + login + same-origin API (`/api`, `/v1`). */
 export const APP_ORIGIN = (
-  import.meta.env.VITE_PUBLIC_APP_URL || `https://app.${BRAND_DOMAIN}`
+  viteEnv.VITE_PUBLIC_APP_URL || `https://app.${BRAND_DOMAIN}`
 ).replace(/\/+$/, '');
 export const APP_HOST = APP_ORIGIN.replace(/^https?:\/\//, '');
 
@@ -96,7 +99,7 @@ export function resolvePanelAppOrigin(): string {
 
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
 export const PAY_ORIGIN = (
-  import.meta.env.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`
+  viteEnv.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`
 ).replace(/\/+$/, '');
 
 export const STATUS_HOST = `status.${BRAND_DOMAIN}`;

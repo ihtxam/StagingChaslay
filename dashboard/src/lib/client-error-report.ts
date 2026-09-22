@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
 
 type PendingError = {
   level: 'error' | 'warn';
@@ -70,6 +71,7 @@ export function reportClientError(
 /** Patch toast.error (and optionally toast) to forward merchant UI errors to superadmin logs. */
 export function initClientErrorReporting() {
   if (installed || typeof window === 'undefined') return;
+  if (isShopCustomerSurface()) return;
   installed = true;
 
   const originalError = toast.error.bind(toast);

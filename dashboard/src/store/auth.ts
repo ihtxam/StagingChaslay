@@ -163,6 +163,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ user: null, token: null, impersonating: false });
   },
   hydrate: () => {
+    if (typeof window !== 'undefined' && isShopCustomerSurface()) {
+      // Public shops must never hydrate merchant JWT — stale tokens trigger /login → panel PIN loops.
+      set({ user: null, token: null, impersonating: false, hydrated: true });
+      return;
+    }
     const stored = readStoredAuth();
     set({ ...stored, hydrated: true });
     void get().refreshSession();

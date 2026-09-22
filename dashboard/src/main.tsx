@@ -4,7 +4,7 @@ import App from './App.tsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import { ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
-import { isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
+import { isShopStorefrontBoot, isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
 import { isDesktopApp } from './lib/platform'
 import { installDesktopHardwareBridge } from './lib/hardware/desktop-bridge'
 import './index.css'
@@ -36,7 +36,7 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 }
 
 if (import.meta.env.PROD && typeof window !== 'undefined') {
-  if (!isShopStorefrontHost() && !isDesktopApp()) {
+  if (!isShopStorefrontBoot() && !isDesktopApp()) {
     probeRebornPwaInstalled();
     bindRebornPwaInstallGuard();
   }
@@ -49,9 +49,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then((regs) => {
       for (const reg of regs) void reg.unregister();
     }).catch(() => undefined);
-  } else if (isShopStorefrontHost()) {
+  } else if (isShopStorefrontBoot()) {
     void unregisterRebornShellOnShop();
-  } else {
+  } else if (!isShopStorefrontHost()) {
     navigator.serviceWorker
       .register('/sw.js')
       .then((reg) => {

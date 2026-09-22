@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { isShopPathHubHost } from '@/lib/brand';
 import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
 
 /** Prefer same-origin /api in production; Vite dev proxies /api on any port. */
@@ -66,8 +67,24 @@ publicApi.interceptors.request.use((config) => {
   return config;
 });
 
+function isPublicShopHost(hostname = typeof window !== 'undefined' ? window.location.hostname : ''): boolean {
+  const host = String(hostname || '').toLowerCase().split(':')[0];
+  return isShopCustomerSurface(undefined, host) || isShopPathHubHost(host);
+}
+
 // Add token to requests; never force JSON Content-Type on FormData (breaks multer).
 api.interceptors.request.use((config) => {
+  const headers = config.headers as Record<string, unknown> | undefined;
+  if (typeof window !== 'undefined' && isPublicShopHost(window.location.hostname)) {
+    if (headers && typeof (headers as { delete?: (k: string) => void }).delete === 'function') {
+      (headers as { delete: (k: string) => void }).delete('Authorization');
+      (headers as { delete: (k: string) => void }).delete('authorization');
+    } else if (headers) {
+      delete headers.Authorization;
+      delete headers.authorization;
+    }
+    return config;
+  }
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -125,7 +142,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       // Online shop uses its own customer token; don't redirect to staff login.
-      if (isShopCustomerSurface(path, window.location.hostname)) {
+      if (isPublicShopHost(window.location.hostname)) {
         return Promise.reject(error);
       }
       if (
