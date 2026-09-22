@@ -1090,7 +1090,7 @@ export default function WebPosCheckoutView({
                         <button
                           key={ticket.index}
                           type="button"
-                          disabled={busy || ticket.paid}
+                          disabled={busy || ticket.paid || ticket.index > splitActiveIndex}
                           onClick={(e) => {
                             e.stopPropagation();
                             onSplitTicketChange?.(ticket.index);
