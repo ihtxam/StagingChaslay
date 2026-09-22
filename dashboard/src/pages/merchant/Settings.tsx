@@ -1219,7 +1219,7 @@ export default function Settings() {
       const list = await listAgentPrinters();
       setAgentPrinters(list);
       setSettings((prev) => {
-        if (!prev?.posPrintSettings?.printers?.length) return prev;
+        if (!prev?.posPrintSettings?.printers?.length || !list.length) return prev;
         const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(
           prev.posPrintSettings.printers,
           list
@@ -1646,7 +1646,22 @@ export default function Settings() {
         posPrintSettings: buildPosPrintSettingsPayload(ps),
       });
       const next = response.data.merchant || response.data.settings || {};
-      setSettings((prev) => (prev ? { ...prev, ...next } : prev));
+      setSettings((prev) => {
+        if (!prev) return prev;
+        const merged = { ...prev, ...next };
+        if (next.posPrintSettings && prev.posPrintSettings) {
+          merged.posPrintSettings = {
+            ...prev.posPrintSettings,
+            ...next.posPrintSettings,
+            printers:
+              Array.isArray(next.posPrintSettings.printers) &&
+              next.posPrintSettings.printers.length > 0
+                ? next.posPrintSettings.printers
+                : prev.posPrintSettings.printers,
+          };
+        }
+        return merged;
+      });
       toast.success(successMessage);
     },
     [buildPosPrintSettingsPayload, t]

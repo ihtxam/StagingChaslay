@@ -2275,7 +2275,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return resolveEscPosPrinterName(trimmed, list) || resolveLivePrinterName(trimmed, list) || '';
       });
       setPrintSettings((ps) => {
-        if (!ps?.printers?.length) return ps;
+        if (!ps?.printers?.length || !list.length) return ps;
         const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(ps.printers, list);
         if (!changed) return ps;
         const next = { ...ps, printers: profiles };

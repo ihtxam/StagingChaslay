@@ -588,12 +588,14 @@ fn hw_scale_ports(
     sidecar: State<'_, SidecarState>,
 ) -> Result<serde_json::Value, String> {
     if hardware::native_serial_available() {
-        match hardware::try_list_serial_ports() {
+        match hardware::try_list_scale_devices() {
             Ok(entries) if !entries.is_empty() => {
                 let ports: Vec<String> = entries
                     .iter()
                     .filter_map(|e| {
-                        e.get("portName")
+                        e.get("port")
+                            .or_else(|| e.get("portName"))
+                            .or_else(|| e.get("name"))
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
                     })
@@ -624,8 +626,21 @@ fn hw_scale_reading(
     port: String,
     timeout_ms: Option<u64>,
 ) -> Result<serde_json::Value, String> {
-    let _ = ensure_sidecar(&app, &sidecar);
     let timeout = timeout_ms.unwrap_or(2500);
+    if hardware::native_serial_available() {
+        match hardware::try_read_scale(&port, timeout) {
+            Ok(result) => {
+                return Ok(serde_json::json!({
+                    "reading": result.get("reading").cloned(),
+                    "message": result.get("message").cloned(),
+                    "resolvedPort": result.get("resolvedPort").cloned(),
+                    "source": "native-serial"
+                }));
+            }
+            Err(_) => {}
+        }
+    }
+    let _ = ensure_sidecar(&app, &sidecar);
     let path = format!(
         "/scale/reading?port={}&timeoutMs={}",
         urlencoding::encode(&port),

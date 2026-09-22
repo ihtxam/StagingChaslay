@@ -1,6 +1,11 @@
 import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
 import { ensureDesktopPrintAgentSidecar, isDesktopApp } from '@/lib/platform';
-import { desktopDrawerKick, desktopScalePorts, desktopScaleReading } from '@/lib/hardware/desktop-bridge';
+import {
+  desktopDrawerKick,
+  desktopScalePorts,
+  desktopScaleReading,
+  installDesktopHardwareBridge,
+} from '@/lib/hardware/desktop-bridge';
 import { looksLikeLabelPrinterName } from './printer-kind';
 
 export { looksLikeLabelPrinterName } from './printer-kind';
@@ -342,6 +347,9 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
   livePrinters: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
+  if (!livePrinters.length) {
+    return { profiles, changed: false };
+  }
   let changed = false;
   const next = profiles.map((p) => {
     const name = String(p.name || '').trim();
@@ -371,6 +379,9 @@ export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   profiles: T[],
   livePrinters: AgentPrinter[]
 ): { profiles: T[]; changed: boolean } {
+  if (!livePrinters.length) {
+    return { profiles, changed: false };
+  }
   const next = profiles.filter((p) => {
     const name = String(p.name || '').trim();
     if (!name && !String(p.portName || '').trim()) return false;
@@ -801,7 +812,15 @@ async function agentFetchWithTimeout(
   }
 }
 
+async function ensureDesktopHardwareReady(): Promise<void> {
+  if (!isDesktopApp() || window.manuposDesktop) return;
+  await installDesktopHardwareBridge();
+}
+
 export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth> {
+  if (isDesktopApp()) {
+    await ensureDesktopHardwareReady();
+  }
   if (window.manuposDesktop) {
     try {
       const s = await window.manuposDesktop.getAgentStatus();
@@ -938,7 +957,25 @@ export async function pairPrintAgentCloudRelay(): Promise<boolean> {
   }
 }
 
+function mapDesktopScaleDevice(d: ScaleDevice & { portName?: string }): ScaleDevice | null {
+  const port = formatScalePortLabel(String(d.port || d.portName || d.name || ''));
+  if (!port) return null;
+  return {
+    port,
+    caption: d.caption,
+    manufacturer: d.manufacturer,
+    pnpDeviceId: d.pnpDeviceId,
+    name: d.name || d.caption || port,
+    usbAddress: d.usbAddress,
+    connectionType: d.connectionType,
+    hasPermission: d.hasPermission,
+  };
+}
+
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {
+  if (isDesktopApp()) {
+    await ensureDesktopHardwareReady();
+  }
   if (window.manuposDesktop?.listPrinters) {
     const list = await window.manuposDesktop.listPrinters();
     return normalizeAgentPrinterList(
@@ -1325,21 +1362,20 @@ export async function listScalePorts(): Promise<string[]> {
 export async function listScaleDevices(): Promise<{ ports: string[]; devices: ScaleDevice[] }> {
   if (isDesktopApp()) {
     try {
+      await ensureDesktopHardwareReady();
       const data = await desktopScalePorts();
       const devices: ScaleDevice[] = (data.devices || [])
-        .map((d) => ({
-          port: formatScalePortLabel(String(d.port || '')),
-          caption: d.caption,
-          manufacturer: d.manufacturer,
-          pnpDeviceId: d.pnpDeviceId,
-          name: d.name,
-          usbAddress: d.usbAddress,
-          connectionType: d.connectionType,
-          hasPermission: d.hasPermission,
-        }))
-        .filter((d) => d.port);
-      const ports = devices.map((d) => d.port).filter(Boolean);
-      if (ports.length) return { ports, devices };
+        .map((d) => mapDesktopScaleDevice(d as ScaleDevice & { portName?: string }))
+        .filter((d): d is ScaleDevice => !!d)
+        .filter(isLikelyScaleDevice);
+      const listed =
+        devices.length > 0
+          ? devices
+          : (data.devices || [])
+              .map((d) => mapDesktopScaleDevice(d as ScaleDevice & { portName?: string }))
+              .filter((d): d is ScaleDevice => !!d);
+      const ports = listed.map((d) => d.port).filter(Boolean);
+      if (ports.length) return { ports, devices: listed };
     } catch {
       /* fall through to print agent HTTP for scale metadata */
     }
