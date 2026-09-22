@@ -94,3 +94,15 @@ jobs:
             backend/public/downloads/reborn-pos-setup.exe
             backend/public/downloads/reborn-pos-setup.json
           retention-days: 90
+
+      - name: Publish RebornPOS installer to production downloads
+        if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          source: "backend/public/downloads/reborn-pos-setup.exe,backend/public/downloads/reborn-pos-setup.json"
+          target: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/
+          overwrite: true

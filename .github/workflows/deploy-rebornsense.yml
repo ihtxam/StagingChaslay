@@ -29,6 +29,24 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest RebornPOS Windows installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch-reborn-pos-installer.sh
+
+      - name: Publish RebornPOS installer to production downloads
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          source: "backend/public/downloads/reborn-pos-setup.exe,backend/public/downloads/reborn-pos-setup.json"
+          target: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/
+          overwrite: true
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:

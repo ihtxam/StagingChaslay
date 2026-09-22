@@ -1038,6 +1038,18 @@ if [[ "${BRIDGE_MAGIC:-}" != "504b" ]] || [[ "${BRIDGE_LEN:-0}" -lt 100000 ]]; t
 else
   echo "print-bridge download OK (PK zip/APK)"
 fi
+
+POS_HDR="$(curl -sI "${APP_URL}/downloads/reborn-pos-setup.exe" || true)"
+POS_LEN="$(printf '%s' "$POS_HDR" | awk -F': ' 'tolower($1)=="content-length"{gsub(/\r/,""); print $2; exit}')"
+POS_CT="$(printf '%s' "$POS_HDR" | awk -F': ' 'tolower($1)=="content-type"{gsub(/\r/,""); print $2; exit}')"
+POS_MAGIC="$(curl -sL "${APP_URL}/downloads/reborn-pos-setup.exe" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+POS_JSON_VERSION="$(curl -sf "${APP_URL}/downloads/reborn-pos-setup.json" 2>/dev/null | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+echo "reborn-pos download: Content-Type=${POS_CT:-?} Content-Length=${POS_LEN:-?} magic=${POS_MAGIC:-?} version=${POS_JSON_VERSION:-?}"
+if [[ "${POS_MAGIC:-}" != "4d5a" ]] || [[ "${POS_LEN:-0}" -lt 1000000 ]]; then
+  echo "WARNING: reborn-pos download is not a valid Windows EXE (expected MZ / >1MB)"
+else
+  echo "reborn-pos download OK (MZ PE)"
+fi
 echo
 
 POS_AUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3000/v1/pos/auth/login \

@@ -1,10 +1,10 @@
 {
+  "builtAt": "2026-09-22T21:03:54Z",
+  "signed": false,
   "name": "reborn-pos",
-  "displayName": "RebornPOS",
+  "platform": "windows",
   "description": "Fullscreen Windows kiosk for Reborn WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101.",
   "version": "0.1.1",
   "exeFile": "reborn-pos-setup.exe",
-  "platform": "windows",
-  "builtAt": null,
-  "signed": false
+  "displayName": "RebornPOS"
 }
