@@ -525,7 +525,13 @@ export class SyncService {
         sale.paymentMethod === "pay_later" ||
         sale.paymentMethod === "pay-later" ||
         String(sale.paymentMethod || "").toLowerCase() === "invoice";
-      if (!isCancelledEarly && !payLaterEarly && splitBillFullyPaid(sale)) {
+      // Split-bill parts share one kitchen ticket — sibling checks must not block the final part.
+      if (
+        !isCancelledEarly &&
+        !payLaterEarly &&
+        splitBillFullyPaid(sale) &&
+        !String(sale.masterOrderId || "").trim()
+      ) {
         const dup = await findRecentPaidDuplicateOrder(db, merchantId, {
           ticketDisplay: sale.ticketDisplay,
           tabNumber: sale.tabNumber,

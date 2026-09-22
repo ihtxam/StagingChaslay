@@ -1895,6 +1895,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (!part) {
       return { lines: cart, totals: payableFullTotals, label: null as string | null };
     }
+    const isItemSplit =
+      part.lineIds.length > 0 ||
+      (part.lineQtys && Object.keys(part.lineQtys).length > 0);
+    // Prefer frozen per-part snapshot — cart mutates after each partial payment.
+    if (part.linesSnapshot?.length) {
+      const lines = linesFromSnapshot(part.linesSnapshot, splitIndex);
+      const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
+      if (isItemSplit) {
+        const payableShare =
+          payableFullTotals.total > 0 && fullTotals.total > 0
+            ? roundMoney2((t.total / fullTotals.total) * payableFullTotals.total)
+            : t.total;
+        return {
+          lines,
+          totals: { ...t, total: part.amount || payableShare, discount: 0 },
+          label: part.label,
+        };
+      }
+      return {
+        lines,
+        totals: {
+          ...t,
+          total: part.amount,
+          rounding: roundMoney2(part.amount - t.gross),
+          discount: 0,
+        },
+        label: part.label,
+      };
+    }
     const resolveSplitLines = () => {
       if (part.lineQtys && Object.keys(part.lineQtys).length > 0) {
         return cart.flatMap((l) => {
@@ -1916,11 +1945,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       return [];
     };
-    if (part.lineIds.length > 0 || (part.lineQtys && Object.keys(part.lineQtys).length > 0)) {
-      let lines = resolveSplitLines();
-      if (!lines.length && part.linesSnapshot?.length) {
-        lines = linesFromSnapshot(part.linesSnapshot, splitIndex);
-      }
+    if (isItemSplit) {
+      const lines = resolveSplitLines();
       const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
       const payableShare =
         payableFullTotals.total > 0 && fullTotals.total > 0
@@ -1933,12 +1959,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       };
     }
     const factor = payableFullTotals.total > 0 ? part.amount / payableFullTotals.total : 1;
-    let lines =
-      cart.length > 0
-        ? scaleLinesByFactor(cart, factor)
-        : part.linesSnapshot?.length
-          ? linesFromSnapshot(part.linesSnapshot, splitIndex)
-          : [];
+    const lines = cart.length > 0 ? scaleLinesByFactor(cart, factor) : [];
     const t = computeMerchandiseTotals(lines, taxRate, vatIncludedInPrice, roundingStep);
     return {
       lines,
@@ -10454,7 +10475,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             splitTickets={checkoutSplitTickets}
             splitActiveIndex={splitIndex}
             onSplitTicketChange={(index) => {
-              if (index >= splitIndex) setSplitIndex(index);
+              if (index > splitIndex) return;
+              setSplitIndex(index);
             }}
             settings={checkoutSettings}
             methods={{
