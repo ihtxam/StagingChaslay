@@ -834,11 +834,16 @@ if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
     echo "NOTE: merchants pg_attribute=$merchant_attnum (active $merchant_cols) — migration churn; data is preserved on deploy"
   fi
   if [[ "${merchant_attnum:-0}" =~ ^[0-9]+$ && "$merchant_attnum" -gt "$STAGING_PG_ATTR_BLOCK_THRESHOLD" ]]; then
-    echo "ERROR: merchants pg_attribute=$merchant_attnum is near Postgres limit 1600 (active $merchant_cols)."
-    echo "  Routine deploys will NOT wipe staging data. To reset staging manually:"
-    echo "    RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh"
-    if [[ "${RESET_STAGING_DB:-}" != "1" ]]; then
-      echo "  Set RESET_STAGING_DB=1 on the deploy job only when you intend to delete ALL staging merchants, orders, customers, and payment credentials."
+    echo "WARNING: merchants pg_attribute=$merchant_attnum is near Postgres limit 1600 (active $merchant_cols)."
+    if [[ "${RESET_STAGING_DB:-}" == "1" ]]; then
+      echo "  RESET_STAGING_DB=1 set — full staging wipe will run below."
+    elif [[ "${REBUILD_MERCHANTS_TABLE:-}" == "1" ]] || [[ "${STAGING_AUTO_REBUILD_MERCHANTS:-1}" == "1" ]]; then
+      echo "  Rebuilding merchants table (preserves rows, reclaims pg_attribute slots)..."
+      REBUILD_MERCHANTS_TABLE=1 bash "$REPO_DIR/scripts/rebuild-merchants-table.sh"
+    else
+      echo "  Routine deploys will NOT wipe staging data. Options:"
+      echo "    REBUILD_MERCHANTS_TABLE=1 bash scripts/rebuild-merchants-table.sh  (preserve data)"
+      echo "    RESET_STAGING_DB=1 bash scripts/reset-staging-chaslay-db.sh  (delete ALL staging data)"
       exit 1
     fi
   fi

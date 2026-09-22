@@ -78,7 +78,8 @@ fn run_scale_script(args: &[&str]) -> Result<serde_json::Value, String> {
             }
         ));
     }
-    let stdout = String::from_utf8_lossy(&output.stdout).trim();
+    let stdout_owned = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout_owned.trim();
     if stdout.is_empty() {
         return Ok(serde_json::json!({}));
     }

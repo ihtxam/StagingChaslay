@@ -1,6 +1,6 @@
 {
   "name": "reborn-pos",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "RebornPOS Windows kiosk (Tauri 2 shell around hosted WebPOS)",
   "scripts": {
