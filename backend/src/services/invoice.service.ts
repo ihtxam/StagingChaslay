@@ -406,7 +406,7 @@ export class InvoiceService {
     return updated;
   }
 
-  /** Email invoice PDF to customer (uses platform Brevo when delivery mode is platform). */
+  /** Email invoice PDF to customer (uses platform mailco when delivery mode is platform). */
   static async sendEmail(
     merchantId: string,
     orderRef: string,

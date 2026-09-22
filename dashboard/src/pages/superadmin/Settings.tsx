@@ -52,6 +52,8 @@ type EmailUsageSummary = {
     sentAt?: string;
     recipient?: string;
   } | null;
+  allEmailViaMailco?: boolean;
+  mailcoBrevoFallbackEnabled?: boolean;
   account?: {
     email?: string;
     companyName?: string;
@@ -440,11 +442,12 @@ export default function Settings() {
           <div>
             <h2 className="text-xl font-bold inline-flex items-center gap-2">
               <Mail className="h-5 w-5" aria-hidden />
-              Platform email (mailco + Brevo)
+              Platform email (mailco)
             </h2>
             <p className="text-gray-600 mt-1">
-              All merchants using &quot;Use platform email&quot; send through mailco by default (Swiss
-              relay at{' '}
+              When mailco is configured, <strong>all</strong> platform transactional email — shop
+              orders, gift cards, newsletters, invites, password resets, merchant alerts — routes
+              through mailco (Swiss relay at{' '}
               <a
                 className="text-blue-700 underline"
                 href="https://mailco.ch/docs/#domains"
@@ -454,7 +457,9 @@ export default function Settings() {
                 mailco.ch
               </a>
               ). Customers see the merchant business name as sender; Reply-To is set to the merchant
-              shop email so replies go to them. Brevo remains configured as fallback.
+              shop email. Brevo is kept for credential testing only — not used unless you set{' '}
+              <code className="text-xs bg-gray-100 px-1 rounded">MAILCO_BREVO_FALLBACK=1</code> on
+              the server for outage-only fallback.
             </p>
           </div>
           <button
@@ -467,6 +472,19 @@ export default function Settings() {
             Refresh usage
           </button>
         </div>
+
+        {emailUsage?.allEmailViaMailco ? (
+          <p className="text-sm mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-950 font-medium">
+            All email via Mailco — shop orders, gift cards, newsletters, invites, password resets,
+            and platform mail use the mailco relay. Brevo fallback is{' '}
+            {emailUsage.mailcoBrevoFallbackEnabled ? (
+              <span className="text-amber-800">enabled (MAILCO_BREVO_FALLBACK=1)</span>
+            ) : (
+              <span>disabled — send failures surface in logs instead of silently switching to Brevo</span>
+            )}
+            .
+          </p>
+        ) : null}
 
         {emailUsage?.activeProvider ? (
           <p className="text-sm mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
@@ -634,12 +652,14 @@ export default function Settings() {
         <form onSubmit={saveMailco} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8 pb-8 border-b border-gray-200">
           <h3 className="md:col-span-2 text-lg font-semibold">mailco (primary)</h3>
           <p className="md:col-span-2 text-sm text-gray-600">
-            Order and platform emails are sent in <strong>raw HTML mode</strong> (like Brevo{' '}
-            <code>htmlContent</code>) — no dashboard template required. Verify your sending domain in{' '}
+            Shop orders, gift cards, newsletters, invites, password resets, inventory alerts, and
+            platform mail are sent in <strong>raw HTML mode</strong> (like Brevo{' '}
+            <code>htmlContent</code>) via{' '}
             <a className="text-blue-700 underline" href="https://ees.mailco.ch" target="_blank" rel="noreferrer">
               ees.mailco.ch
             </a>
-            . Template slug below is optional for future template-based sends.
+            . The test button uses the same <code>EmailService.send</code> path as production.
+            Verify your sending domain in mailco before going live.
           </p>
           <label className="block">
             <span className="text-sm font-medium">Primary provider</span>
@@ -727,7 +747,7 @@ export default function Settings() {
               disabled={sendingMailcoTestEmail}
               onClick={() => sendPlatformTestEmail('mailco')}
             >
-              {sendingMailcoTestEmail ? 'Sending…' : 'Send mailco test'}
+              {sendingMailcoTestEmail ? 'Sending…' : 'Send production-routing test'}
             </button>
           </div>
         </form>

@@ -214,6 +214,11 @@ export class EmailUsageService {
             recipient: lastShopOrderRow.recipient,
           }
         : null,
+      allEmailViaMailco:
+        !!mailcoPublic?.configured &&
+        (mailcoPublic?.emailPrimary || "mailco") === "mailco" &&
+        platformStatus.provider === "mailco",
+      mailcoBrevoFallbackEnabled: platformStatus.mailcoBrevoFallbackEnabled,
       account,
     };
   }

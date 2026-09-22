@@ -25,6 +25,17 @@ function readCode(error: unknown): string | undefined {
   return e.code ? String(e.code) : undefined;
 }
 
+/**
+ * When false (default), platform mailco sends never fall back to Brevo — failures are logged and thrown.
+ * Set MAILCO_BREVO_FALLBACK=1 (or true/yes) to allow Brevo only on transient mailco outages (5xx/429/timeouts).
+ */
+export function isMailcoBrevoFallbackEnabled(): boolean {
+  const raw = String(process.env.MAILCO_BREVO_FALLBACK || "")
+    .trim()
+    .toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 /** True when mailco failed transiently and Brevo fallback is appropriate (not config errors). */
 export function isTransientMailcoError(error: unknown): boolean {
   const status = readStatus(error);

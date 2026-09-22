@@ -163,7 +163,7 @@ const en: Dict = {
   emailDeliveryMode: 'Email delivery',
   emailDeliveryPlatform: 'Use platform email (mailco)',
   emailDeliveryPlatformHint:
-    'Shop orders, reservations, receipts, alerts, and newsletters send via the platform mailco relay (Brevo fallback). Recipients see your business name as the sender; replies go to your shop email below.',
+    'Shop orders, reservations, receipts, alerts, and newsletters send via the platform mailco relay. Recipients see your business name as the sender; replies go to your shop email below.',
   emailDeliveryOwn: 'Use my own SMTP',
   emailDeliveryOwnHint: 'Configure your SMTP server below. Emails send from your from address with your business name.',
   platformEmailUsageTitle: 'Platform email usage (this shop)',

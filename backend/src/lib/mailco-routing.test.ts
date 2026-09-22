@@ -2,7 +2,21 @@
  * Mailco routing helpers — run: npx tsx backend/src/lib/mailco-routing.test.ts
  */
 import assert from "node:assert/strict";
-import { isTransientMailcoError, MailcoSendError } from "./mailco-routing";
+import {
+  isMailcoBrevoFallbackEnabled,
+  isTransientMailcoError,
+  MailcoSendError,
+} from "./mailco-routing";
+
+const prevFallback = process.env.MAILCO_BREVO_FALLBACK;
+delete process.env.MAILCO_BREVO_FALLBACK;
+assert.equal(isMailcoBrevoFallbackEnabled(), false);
+process.env.MAILCO_BREVO_FALLBACK = "1";
+assert.equal(isMailcoBrevoFallbackEnabled(), true);
+process.env.MAILCO_BREVO_FALLBACK = "yes";
+assert.equal(isMailcoBrevoFallbackEnabled(), true);
+if (prevFallback === undefined) delete process.env.MAILCO_BREVO_FALLBACK;
+else process.env.MAILCO_BREVO_FALLBACK = prevFallback;
 
 assert.equal(isTransientMailcoError({ response: { status: 422 } }), false);
 assert.equal(isTransientMailcoError({ response: { status: 401 } }), false);
