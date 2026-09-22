@@ -37,11 +37,17 @@ function FitMapBounds({
 }) {
   const map = useMap();
   useEffect(() => {
-    if (fitToZones && points.length > 1) {
-      map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 13 });
-      return;
-    }
-    map.setView(center, 14);
+    const apply = () => {
+      map.invalidateSize();
+      if (fitToZones && points.length > 1) {
+        map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 12 });
+        return;
+      }
+      map.setView(center, 14);
+    };
+    apply();
+    const timer = window.setTimeout(apply, 150);
+    return () => window.clearTimeout(timer);
   }, [center, points, fitToZones, map]);
   return null;
 }
