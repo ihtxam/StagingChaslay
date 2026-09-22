@@ -32,7 +32,7 @@ import { formatShopChannelEta } from '@/lib/shop-eta';
 import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
-import { isLocale, useI18n } from '@/lib/i18n';
+import { isLocale, shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ZipCityFields from '@/components/shop/ZipCityFields';
@@ -218,7 +218,7 @@ export default function CheckoutPage() {
         setPaymentOptions(payRes.data.options);
         if (isLocale(shopRes.data.data?.language)) {
           try {
-            const stored = localStorage.getItem('manupos_shop_lang');
+            const stored = localStorage.getItem(shopLangStorageKey(shopKey));
             if (!isLocale(stored)) setLocale(shopRes.data.data.language);
           } catch {
             setLocale(shopRes.data.data.language);

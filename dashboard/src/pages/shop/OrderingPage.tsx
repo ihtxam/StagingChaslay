@@ -38,7 +38,7 @@ import ShopComboWizard, {
   type ShopComboProduct,
 } from '@/components/shop/ShopComboWizard';
 import { Bike, Info, LayoutGrid, Plus, Rows3, Search, ShoppingBag, X } from 'lucide-react';
-import { isLocale, useI18n } from '@/lib/i18n';
+import { isLocale, shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopMobileNavMenu from '@/components/shop/ShopMobileNavMenu';
 import { buildShopTopbarNav } from '@/lib/shop-topbar-nav';
 import ShopTopShell from '@/components/shop/ShopTopShell';
@@ -276,7 +276,7 @@ export default function OrderingPage() {
 
         if (isLocale(data.language)) {
           try {
-            const stored = localStorage.getItem('manupos_shop_lang');
+            const stored = localStorage.getItem(shopLangStorageKey(shopKey));
             if (!isLocale(stored)) setLocale(data.language);
           } catch {
             setLocale(data.language);
