@@ -4,6 +4,10 @@ import axios from 'axios';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
+import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
+import ShopTopShell from '@/components/shop/ShopTopShell';
+import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
+import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavbar';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-site-settings';
 import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRenderer';
@@ -93,6 +97,8 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
   const [defaultLanguage, setDefaultLanguage] = useState('en');
   const [chaslayLocale, setChaslayLocale] = useState<ChaslayLocale>('en');
   const [contact, setContact] = useState<MerchantContact | null>(null);
+  const [hasCmsNav, setHasCmsNav] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const apiPath = useMemo(
     () => `/api/shop/${shopKey}/pages/${pageSlug}`,
@@ -235,6 +241,26 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
         style={{ background: 'var(--color-bg-0)' }}
       >
         <ShopVacationPopup shopKey={shopKey} />
+        <ShopTopShell>
+          <ChaslayStorefrontNavbar
+            shopKey={shopKey}
+            basePath={base}
+            locale={chaslayLocale}
+            defaultLanguage={defaultLanguage}
+            onPresence={setHasCmsNav}
+          />
+          {hasCmsNav ? null : (
+            <ShopMinimalHeader
+              basePath={base}
+              merchantName={merchant?.name}
+              logoUrl={merchant?.shopLogoUrl}
+              shopKey={shopKey}
+              showGiftCards={!!merchant?.giftCards?.enabled}
+              showReservations={!!merchant?.reservationsEnabled}
+              onStoreInfo={() => setInfoOpen(true)}
+            />
+          )}
+        </ShopTopShell>
         <div className="cms-homepage flex flex-col pb-6">
           <ShopHomepageErrorBoundary menuHref={`${base}/menu`} fallbackLabel={t('shopOrderNow')}>
             <ChaslayHomepageRenderer
@@ -253,6 +279,12 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
             />
           </ShopHomepageErrorBoundary>
         </div>
+        <ShopInfoSheet
+          open={infoOpen}
+          onClose={() => setInfoOpen(false)}
+          merchant={merchant}
+          shopKey={shopKey}
+        />
       </ShopThemeShell>
     </BuilderLanguageProvider>
   );

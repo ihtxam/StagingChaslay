@@ -5,6 +5,9 @@ import 'leaflet/dist/leaflet.css';
 import { Bike, Clock, ExternalLink, Mail, MapPin, Phone, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { summarizeStoreHours } from '@/lib/shop-hours-display';
+import { resolveShopKey } from '@/lib/shop-cart';
+import { useShopDeliveryPricing } from '@/hooks/useShopDeliveryPricing';
+import ShopDeliveryInfoPanel from '@/components/shop/ShopDeliveryInfoPanel';
 
 type Zone = {
   id: string;
@@ -19,7 +22,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   merchant: any;
-  zones: Zone[];
+  zones?: Zone[];
+  shopKey?: string | null;
 };
 
 type InfoTab = 'contact' | 'hours' | 'delivery';
@@ -34,10 +38,23 @@ const pinIcon = L.divIcon({
 /**
  * Store info sheet: contact, hours, and delivery zones.
  */
-export default function ShopInfoSheet({ open, onClose, merchant, zones }: Props) {
+export default function ShopInfoSheet({ open, onClose, merchant, zones: zonesProp, shopKey: shopKeyProp }: Props) {
   const { t, locale } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<InfoTab>('contact');
+
+  const shopKey = useMemo(
+    () => shopKeyProp || resolveShopKey(merchant?.slug || merchant?.subdomain || merchant?.customDomain),
+    [shopKeyProp, merchant?.slug, merchant?.subdomain, merchant?.customDomain]
+  );
+
+  const shouldFetchPricing = open && (!zonesProp || zonesProp.length === 0);
+  const { zones: fetchedZones, zipRules, deliveryMode } = useShopDeliveryPricing(
+    shopKey,
+    shouldFetchPricing
+  );
+
+  const zones = zonesProp?.length ? zonesProp : fetchedZones;
 
   useEffect(() => {
     if (open) {
@@ -220,34 +237,13 @@ export default function ShopInfoSheet({ open, onClose, merchant, zones }: Props)
           ) : null}
 
           {tab === 'delivery' ? (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold">{t('shopDeliveryCosts')}</p>
-              {zones.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {zones.map((z, i) => {
-                    const color = z.color || ['#7c3aed', '#2563eb', '#ea580c', '#0d9488'][i % 4];
-                    return (
-                      <li key={z.id} className="flex items-start gap-2 text-sm">
-                        <span
-                          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ background: color }}
-                        />
-                        <span className="min-w-0">
-                          <span className="font-medium">{z.name}</span>
-                          <span className="block text-xs text-stone-500">
-                            {t('shopZoneMinFee')
-                              .replace('{min}', Number(z.minOrderAmount || 0).toFixed(2))
-                              .replace('{fee}', Number(z.deliveryFee || 0).toFixed(2))}
-                          </span>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-stone-500">{t('shopNoDeliveryZones')}</p>
-              )}
-            </div>
+            <ShopDeliveryInfoPanel
+              compact
+              storeHours={merchant?.storeHours}
+              zones={zones}
+              zipRules={zipRules}
+              deliveryMode={deliveryMode}
+            />
           ) : null}
         </div>
       </div>

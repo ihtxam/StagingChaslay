@@ -173,7 +173,7 @@ export default function ShopLegalPageView({ shopKey, base, pageSlug = 'privacy-p
           />
         </main>
 
-        <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
+        <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} shopKey={shopKey} />
       </div>
     </ShopThemeShell>
   );

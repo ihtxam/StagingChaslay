@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey } from '@/lib/shop-cart';
 import OrderingPage from './OrderingPage';
@@ -14,9 +14,18 @@ import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-sit
 export default function ShopEntry() {
   const { t } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string }>();
+  const location = useLocation();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
   const [mode, setMode] = useState<'loading' | 'chaslay' | 'menu'>('loading');
   const [site, setSite] = useState<ShopSiteSettings | null>(null);
+
+  const aboutRedirect = useMemo(() => {
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    if (path === '/about' || path.endsWith('/about')) {
+      return `${location.pathname.split('/about')[0] || ''}/#opening-hours`.replace(/\/+#/, '/#') || '/#opening-hours';
+    }
+    return null;
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!shopKey) {
@@ -50,6 +59,10 @@ export default function ShopEntry() {
       cancelled = true;
     };
   }, [shopKey]);
+
+  if (aboutRedirect && aboutRedirect !== `${location.pathname}${location.hash || ''}`) {
+    return <Navigate to={aboutRedirect} replace />;
+  }
 
   if (mode === 'loading') {
     return (

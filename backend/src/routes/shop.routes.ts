@@ -1382,6 +1382,39 @@ router.post("/:slug/table/:tableId/confirm-payment", async (req: Request, res: R
 });
 
 /**
+ * GET /api/shop/:slug/delivery-zip-rules
+ * Public PLZ-based delivery fees (when deliveryMode = zipcode).
+ */
+router.get("/:slug/delivery-zip-rules", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant || !merchant.shopEnabled) {
+      return res.status(404).json({ error: "Shop not found or closed" });
+    }
+    const db = getDb();
+    const rules = await db.query.deliveryZipRules.findMany({
+      where: and(eq(schema.deliveryZipRules.merchantId, merchant.id), eq(schema.deliveryZipRules.isActive, true)),
+      orderBy: [asc(schema.deliveryZipRules.sortOrder)],
+    });
+    res.json({
+      success: true,
+      data: rules.map((r) => ({
+        id: r.id,
+        name: r.name,
+        city: r.city,
+        zipCode: r.zipCode,
+        minOrderAmount: r.minOrderAmount,
+        deliveryFee: r.deliveryFee,
+        freeDeliveryMinOrder: r.freeDeliveryMinOrder,
+        estimatedMinutes: r.estimatedMinutes,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load ZIP rules" });
+  }
+});
+
+/**
  * GET /api/shop/:slug/delivery-zones
  */
 router.get("/:slug/delivery-zones", async (req: Request, res: Response) => {

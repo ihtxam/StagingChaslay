@@ -11,6 +11,9 @@ import { TranslatableInput } from './TranslatableInput';
 import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
 import { useStorefrontHours } from '../utils/use-storefront-hours';
+import { useStorefront } from '../StorefrontContext';
+import { useShopDeliveryPricing } from '@/hooks/useShopDeliveryPricing';
+import ShopDeliveryInfoPanel from '@/components/shop/ShopDeliveryInfoPanel';
 
 export interface HoursClassicProps {
   title?: string;
@@ -49,7 +52,9 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trText } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
+  const { isStorefront, shopKey, storeHours } = useStorefront();
   const liveHours = useStorefrontHours();
+  const { zones, zipRules, deliveryMode } = useShopDeliveryPricing(shopKey, isStorefront);
   const rows = liveHours.length
     ? liveHours
     : hours.map((item, dayIndex) => ({
@@ -99,6 +104,25 @@ export const HoursClassic: React.FC<HoursClassicProps> & {
             </div>
           ))}
         </div>
+
+        {isStorefront ? (
+          <div
+            style={{
+              marginTop: '32px',
+              padding: '24px',
+              borderRadius: '16px',
+              border: '1px solid #e9ecef',
+              backgroundColor: '#fff',
+            }}
+          >
+            <ShopDeliveryInfoPanel
+              storeHours={storeHours}
+              zones={zones}
+              zipRules={zipRules}
+              deliveryMode={deliveryMode}
+            />
+          </div>
+        ) : null}
       </div>
     </section>
   );
