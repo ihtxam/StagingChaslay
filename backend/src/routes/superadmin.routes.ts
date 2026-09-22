@@ -269,26 +269,23 @@ router.get("/email/usage", async (_req: Request, res: Response) => {
 });
 
 /**
- * POST /api/superadmin/email/test — send a test email via platform mailco (Brevo fallback)
+ * POST /api/superadmin/email/test — send a test email via platform mailco or Brevo
+ * Body: { to, provider?: "mailco" | "brevo" } (defaults to mailco)
  */
 router.post("/email/test", async (req: Request, res: Response) => {
   try {
     const to = String(req.body?.to || "").trim();
-    if (!to) {
-      res.status(400).json({ error: "Recipient email is required" });
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.status(400).json({ error: "Valid recipient email is required" });
       return;
     }
+    const providerRaw = String(req.body?.provider || "mailco").toLowerCase();
+    const provider = providerRaw === "brevo" ? "brevo" : "mailco";
     const { EmailService } = await import("@/services/email.service");
-    const status = await EmailService.status();
-    await EmailService.send({
-      to,
-      subject: "Reborn platform email test",
-      html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
-      emailType: "marketing_test",
-    });
+    await EmailService.sendPlatformTest(to, provider);
     res.json({
       success: true,
-      provider: status.provider,
+      provider,
     });
   } catch (error) {
     console.error("Error sending platform test email:", error);

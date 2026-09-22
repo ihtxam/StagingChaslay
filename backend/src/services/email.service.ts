@@ -3,6 +3,7 @@ import axios from "axios";
 import sgMail from "@sendgrid/mail";
 import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
+import { isTransientMailcoError } from "@/lib/mailco-routing";
 
 export type EmailAttachment = {
   filename: string;
@@ -222,11 +223,10 @@ export class EmailService {
       emailPrimary = await PlatformSettingsService.getPlatformEmailPrimary();
       const mailcoSettings = await PlatformSettingsService.getMailcoSettings();
       mailcoFromDb = !!mailcoSettings.apiKey?.trim();
-      try {
+      const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
+      mailcoConfigured = mailcoPublic.configured;
+      if (mailcoConfigured) {
         mailcoCreds = await PlatformSettingsService.resolveMailcoCredentials();
-        mailcoConfigured = true;
-      } catch {
-        mailcoConfigured = false;
       }
       const s = await PlatformSettingsService.getBrevoSettings();
       brevoFromDb = !!s.apiKey?.trim();
@@ -515,6 +515,74 @@ export class EmailService {
       .where(eq(schema.merchants.id, merchantId));
   }
 
+  /** Send a platform test email via mailco or Brevo only (no cross-provider fallback). */
+  static async sendPlatformTest(to: string, provider: "mailco" | "brevo") {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const { EmailUsageService } = await import("@/services/email-usage.service");
+
+    const input: SendEmailInput = {
+      to,
+      subject: "Reborn platform email test",
+      html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
+      emailType: "marketing_test",
+    };
+
+    let cfg: ResolvedEmailConfig;
+    if (provider === "mailco") {
+      const creds = await PlatformSettingsService.resolveMailcoCredentials();
+      cfg = {
+        provider: "mailco",
+        apiKey: creds.apiKey,
+        fromEmail: creds.fromEmail,
+        fromName: creds.fromName,
+        source: "database",
+        mailco: {
+          apiBase: creds.apiBase,
+          templateSlug: creds.templateSlug,
+        },
+      };
+    } else {
+      const creds = await PlatformSettingsService.resolveBrevoCredentials();
+      cfg = {
+        provider: "brevo",
+        apiKey: creds.apiKey,
+        fromEmail: creds.fromEmail,
+        fromName: creds.fromName,
+        source: "database",
+      };
+    }
+
+    try {
+      if (cfg.provider === "mailco") {
+        await this.sendViaMailco(cfg, input);
+      } else {
+        await this.sendViaBrevo(cfg, input);
+      }
+
+      await EmailUsageService.logSend({
+        merchantId: null,
+        provider: cfg.provider,
+        source: cfg.source,
+        emailType: input.emailType || "marketing_test",
+        recipient: input.to,
+        subject: input.subject,
+        status: "sent",
+      });
+    } catch (error: any) {
+      await EmailUsageService.logSend({
+        merchantId: null,
+        provider: cfg.provider,
+        source: cfg.source,
+        emailType: input.emailType || "marketing_test",
+        recipient: input.to,
+        subject: input.subject,
+        status: "failed",
+        error: error?.message || "Send failed",
+      });
+      throw error;
+    }
+  }
+
   static async status(merchantId?: string | null) {
     const cfg = await this.resolveConfig(merchantId);
     let apiKeyMasked = "";
@@ -599,7 +667,7 @@ export class EmailService {
     const { EmailUsageService } = await import("@/services/email-usage.service");
     const hasAttachments = !!(input.attachments && input.attachments.length > 0);
 
-    // mailco relay API is template-based; use Brevo when attachments are required.
+    // mailco raw API does not support attachments yet; use Brevo when attachments are required.
     if (cfg.provider === "mailco" && hasAttachments && cfg.fallbackBrevo) {
       cfg = {
         ...cfg,
@@ -654,7 +722,15 @@ export class EmailService {
         await logAndSend(cfg);
       } catch (primaryError) {
         let recovered = false;
-        if (cfg.provider === "mailco" && cfg.fallbackBrevo && !hasAttachments) {
+        if (
+          cfg.provider === "mailco" &&
+          cfg.fallbackBrevo &&
+          !hasAttachments &&
+          isTransientMailcoError(primaryError)
+        ) {
+          const reason =
+            primaryError instanceof Error ? primaryError.message : String(primaryError);
+          console.warn(`[email] mailco send failed (${reason}), falling back to Brevo`);
           try {
             const brevoCfg: ResolvedEmailConfig = {
               ...cfg,
@@ -759,27 +835,27 @@ export class EmailService {
       ? [{ email: cfg.replyToEmail, name: cfg.replyToName || cfg.fromName || undefined }]
       : undefined;
 
+    // Raw mode (subject + html) — Brevo htmlContent parity; no dashboard template required.
+    const payload = {
+      from: {
+        email: cfg.fromEmail,
+        name: cfg.fromName || "Reborn",
+      },
+      to: [{ email: input.to }],
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      subject: input.subject,
+      html: input.html,
+      text,
+      metadata: {
+        email_type: String(input.emailType || "general"),
+        merchant_id: cfg.merchantId ? String(cfg.merchantId) : "",
+      },
+    };
+
     try {
       await axios.post(
         `${mailco.apiBase}/messages`,
-        {
-          from: {
-            email: cfg.fromEmail,
-            name: cfg.fromName || "Reborn",
-          },
-          to: [{ email: input.to }],
-          ...(replyTo ? { reply_to: replyTo } : {}),
-          template: mailco.templateSlug,
-          data: {
-            subject: input.subject,
-            html: input.html,
-            text,
-          },
-          metadata: {
-            email_type: String(input.emailType || "general"),
-            merchant_id: cfg.merchantId ? String(cfg.merchantId) : "",
-          },
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${cfg.apiKey}`,

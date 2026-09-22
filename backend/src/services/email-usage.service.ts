@@ -150,8 +150,10 @@ export class EmailUsageService {
       .limit(50);
 
     const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const { EmailService } = await import("@/services/email.service");
     const brevoPublic = await PlatformSettingsService.getBrevoSettingsPublic();
     const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
+    const platformStatus = await EmailService.status();
 
     let account: Awaited<
       ReturnType<typeof import("@/services/email.service").EmailService.fetchBrevoAccount>
@@ -191,6 +193,9 @@ export class EmailUsageService {
       brevo: brevoPublic,
       mailco: mailcoPublic,
       platformEmailPrimary: mailcoPublic.emailPrimary,
+      activeProvider: platformStatus.provider,
+      activeFromEmail: platformStatus.fromEmail,
+      activeFromName: platformStatus.fromName,
       account,
     };
   }
