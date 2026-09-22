@@ -350,23 +350,44 @@ fn desktop_toggle_window_mode(
     Ok(next)
 }
 
-#[tauri::command]
-fn sidecar_health(app: tauri::AppHandle, sidecar: State<'_, SidecarState>) -> serde_json::Value {
-    let _ = ensure_sidecar(&app, &sidecar);
+fn sidecar_health_response(app: &tauri::AppHandle) -> serde_json::Value {
     match agent_get("/health") {
         Ok(data) => serde_json::json!({
             "ok": data.get("ok").and_then(|v| v.as_bool()) == Some(true),
             "version": data.get("version").and_then(|v| v.as_str()),
             "port": 9101,
-            "bundled": sidecar_binary_present(&app),
+            "bundled": sidecar_binary_present(app),
         }),
         Err(err) => serde_json::json!({
             "ok": false,
             "error": err,
             "port": 9101,
-            "bundled": sidecar_binary_present(&app),
+            "bundled": sidecar_binary_present(app),
         }),
     }
+}
+
+/// Probe 127.0.0.1:9101 without spawning the bundled sidecar (status UI only).
+#[tauri::command]
+fn sidecar_health(app: tauri::AppHandle, _sidecar: State<'_, SidecarState>) -> serde_json::Value {
+    sidecar_health_response(&app)
+}
+
+/// Lazy-start the bundled Print Agent when native Win32/COM paths are unavailable.
+#[tauri::command]
+fn ensure_print_agent_sidecar(
+    app: tauri::AppHandle,
+    sidecar: State<'_, SidecarState>,
+) -> serde_json::Value {
+    if let Err(err) = ensure_sidecar(&app, &sidecar) {
+        return serde_json::json!({
+            "ok": false,
+            "error": err,
+            "port": 9101,
+            "bundled": sidecar_binary_present(&app),
+        });
+    }
+    sidecar_health_response(&app)
 }
 
 #[tauri::command]
@@ -651,6 +672,7 @@ pub fn run() {
             desktop_minimize,
             desktop_toggle_window_mode,
             sidecar_health,
+            ensure_print_agent_sidecar,
             get_available_printers,
             print_to_thermal_device,
             hw_capabilities,

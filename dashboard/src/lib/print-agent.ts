@@ -1,5 +1,5 @@
 import { resolveAbsoluteApiBaseUrl } from '@/lib/api';
-import { isDesktopApp } from '@/lib/platform';
+import { ensureDesktopPrintAgentSidecar, isDesktopApp } from '@/lib/platform';
 import { desktopDrawerKick, desktopScalePorts, desktopScaleReading } from '@/lib/hardware/desktop-bridge';
 import { looksLikeLabelPrinterName } from './printer-kind';
 
@@ -686,6 +686,9 @@ export function formatNiimbotLabelError(opts: {
 }
 
 async function agentFetch(path: string, init?: RequestInit, printerName?: string) {
+  if (isDesktopApp()) {
+    await ensureDesktopPrintAgentSidecar();
+  }
   const method = (init?.method || 'GET').toUpperCase();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
   if (method !== 'GET' && method !== 'HEAD' && !headers['Content-Type']) {
@@ -772,6 +775,9 @@ async function agentFetchWithTimeout(
   init?: RequestInit,
   timeoutMs = 4000
 ): Promise<unknown> {
+  if (isDesktopApp()) {
+    await ensureDesktopPrintAgentSidecar();
+  }
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -1017,6 +1023,9 @@ export async function printNiimbotLabelViaAgent(opts: {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 120000);
   try {
+    if (isDesktopApp()) {
+      await ensureDesktopPrintAgentSidecar();
+    }
     const method = 'POST';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const res = await fetch(`${PRINT_AGENT_URL}/print/niimbot-label`, {

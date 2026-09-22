@@ -173,6 +173,17 @@ export async function desktopSidecarHealth(): Promise<{
   }
 }
 
+/** Start bundled Print Agent on 127.0.0.1:9101 when native printing is unavailable. */
+export async function ensureDesktopPrintAgentSidecar(): Promise<boolean> {
+  if (!isDesktopApp()) return false;
+  try {
+    const health = (await invoke('ensure_print_agent_sidecar')) as { ok?: boolean };
+    return health?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 /** True when Tauri shell is present and desktop chrome commands respond. */
 export async function desktopChromeAvailable(): Promise<boolean> {
   if (!isDesktopApp()) return false;

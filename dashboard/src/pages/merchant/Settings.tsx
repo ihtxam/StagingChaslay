@@ -912,7 +912,7 @@ export default function Settings() {
       return;
     }
     void desktopSidecarHealth().then((health) => {
-      setDesktopBundledSidecarOk(health.ok === true && health.bundled === true);
+      setDesktopBundledSidecarOk(health.bundled === true);
     });
   }, []);
 
