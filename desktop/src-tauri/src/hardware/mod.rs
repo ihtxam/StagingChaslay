@@ -1,8 +1,33 @@
 #[cfg(target_os = "windows")]
 mod windows;
 
+mod serial;
+
 pub fn native_print_available() -> bool {
     cfg!(target_os = "windows")
+}
+
+pub fn native_serial_available() -> bool {
+    true
+}
+
+pub fn try_list_serial_ports() -> Result<Vec<serde_json::Value>, String> {
+    serial::list_serial_ports()
+}
+
+pub fn try_list_serial_port_names() -> Result<Vec<String>, String> {
+    serial::list_serial_port_names()
+}
+
+pub fn try_serial_print(port_name: &str, baud_rate: u32, data: &[u8]) -> Result<String, String> {
+    serial::print_raw_to_port(port_name, baud_rate, data)
+}
+
+pub fn resolve_com_port_for_print(
+    printer_name: Option<&str>,
+    port_name: Option<&str>,
+) -> Option<String> {
+    serial::resolve_com_port_for_print(printer_name, port_name)
 }
 
 pub fn try_list_printers() -> Result<Vec<serde_json::Value>, String> {

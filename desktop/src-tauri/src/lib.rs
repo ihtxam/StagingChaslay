@@ -184,6 +184,23 @@ fn decode_base64_payload(value: &serde_json::Value) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+fn decode_payload_string(payload: &str) -> Result<Vec<u8>, String> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err("payload is empty".to_string());
+    }
+    use base64::Engine;
+    if base64::engine::general_purpose::STANDARD
+        .decode(trimmed.as_bytes())
+        .is_ok()
+    {
+        return base64::engine::general_purpose::STANDARD
+            .decode(trimmed)
+            .map_err(|e| e.to_string());
+    }
+    Ok(trimmed.as_bytes().to_vec())
+}
+
 fn printer_name_from_payload(value: &serde_json::Value) -> Option<String> {
     value
         .get("printerName")
@@ -191,6 +208,49 @@ fn printer_name_from_payload(value: &serde_json::Value) -> Option<String> {
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+fn port_name_from_payload(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("portName")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
+fn baud_rate_from_payload(value: &serde_json::Value) -> u32 {
+    value
+        .get("baudRate")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32)
+        .unwrap_or(9600)
+}
+
+fn merge_serial_printers(
+    mut printers: Vec<serde_json::Value>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let serial = hardware::try_list_serial_ports().unwrap_or_default();
+    let existing_ports: std::collections::HashSet<String> = printers
+        .iter()
+        .filter_map(|p| {
+            p.get("portName")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_ascii_uppercase())
+        })
+        .collect();
+    for entry in serial {
+        let port = entry
+            .get("portName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_ascii_uppercase();
+        if port.is_empty() || existing_ports.contains(&port) {
+            continue;
+        }
+        printers.push(entry);
+    }
+    Ok(printers)
 }
 
 fn record_hw_path(state: &HwPathState, kind: &str, path: &str) {
@@ -310,12 +370,30 @@ fn sidecar_health(app: tauri::AppHandle, sidecar: State<'_, SidecarState>) -> se
 }
 
 #[tauri::command]
+fn get_available_printers() -> Result<serde_json::Value, String> {
+    let ports = hardware::try_list_serial_port_names()?;
+    Ok(serde_json::json!({ "ports": ports, "source": "native-serial" }))
+}
+
+#[tauri::command]
+fn print_to_thermal_device(
+    port_name: String,
+    baud_rate: u32,
+    payload: String,
+) -> Result<serde_json::Value, String> {
+    let bytes = decode_payload_string(&payload)?;
+    let used = hardware::try_serial_print(&port_name, baud_rate, &bytes)?;
+    Ok(serde_json::json!({ "ok": true, "port": used, "source": "native-serial" }))
+}
+
+#[tauri::command]
 fn hw_capabilities(app: tauri::AppHandle, hw_paths: State<'_, HwPathState>) -> serde_json::Value {
     let printers = hw_paths.printers.lock().map(|g| g.clone()).unwrap_or_default();
     let print = hw_paths.print.lock().map(|g| g.clone()).unwrap_or_default();
     let drawer = hw_paths.drawer.lock().map(|g| g.clone()).unwrap_or_default();
     serde_json::json!({
         "nativePrint": hardware::native_print_available(),
+        "nativeSerial": hardware::native_serial_available(),
         "sidecarBundled": sidecar_binary_present(&app),
         "paths": {
             "printers": if printers.is_empty() { "auto" } else { printers.as_str() },
@@ -330,6 +408,15 @@ fn hw_agent_status(
     app: tauri::AppHandle,
     sidecar: State<'_, SidecarState>,
 ) -> Result<serde_json::Value, String> {
+    if hardware::native_print_available() || hardware::native_serial_available() {
+        return Ok(serde_json::json!({
+            "running": true,
+            "port": 0,
+            "version": env!("CARGO_PKG_VERSION"),
+            "bundled": false,
+            "source": "native"
+        }));
+    }
     let _ = ensure_sidecar(&app, &sidecar);
     let data = agent_get("/health")?;
     Ok(serde_json::json!({
@@ -337,6 +424,7 @@ fn hw_agent_status(
         "port": 9101,
         "version": data.get("version").and_then(|v| v.as_str()),
         "bundled": sidecar_binary_present(&app),
+        "source": "sidecar"
     }))
 }
 
@@ -350,7 +438,18 @@ fn hw_list_printers(
         match hardware::try_list_printers() {
             Ok(printers) if !printers.is_empty() => {
                 record_hw_path(&hw_paths, "printers", "native");
-                return Ok(serde_json::json!({ "printers": printers, "source": "native" }));
+                let merged = merge_serial_printers(printers)?;
+                return Ok(serde_json::json!({ "printers": merged, "source": "native" }));
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+    if hardware::native_serial_available() {
+        match hardware::try_list_serial_ports() {
+            Ok(printers) if !printers.is_empty() => {
+                record_hw_path(&hw_paths, "printers", "native-serial");
+                return Ok(serde_json::json!({ "printers": printers, "source": "native-serial" }));
             }
             Ok(_) => {}
             Err(_) => {}
@@ -372,11 +471,14 @@ fn hw_print(
     hw_paths: State<'_, HwPathState>,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    let bytes = decode_base64_payload(&payload)?;
+    let printer = printer_name_from_payload(&payload);
+    let port_hint = port_name_from_payload(&payload);
+    let baud = baud_rate_from_payload(&payload);
+
     if hardware::native_print_available() {
-        let bytes = decode_base64_payload(&payload)?;
-        let printer = printer_name_from_payload(&payload);
-        if let Some(name) = printer {
-            match hardware::try_raw_print(&name, &bytes, false) {
+        if let Some(name) = printer.as_deref() {
+            match hardware::try_raw_print(name, &bytes, false) {
                 Ok(used) => {
                     record_hw_path(&hw_paths, "print", "native");
                     return Ok(serde_json::json!({ "ok": true, "printer": used, "source": "native" }));
@@ -385,6 +487,23 @@ fn hw_print(
             }
         }
     }
+
+    if hardware::native_serial_available() {
+        let com = hardware::resolve_com_port_for_print(
+            printer.as_deref(),
+            port_hint.as_deref(),
+        );
+        if let Some(port) = com {
+            match hardware::try_serial_print(&port, baud, &bytes) {
+                Ok(used) => {
+                    record_hw_path(&hw_paths, "print", "native-serial");
+                    return Ok(serde_json::json!({ "ok": true, "printer": used, "source": "native-serial" }));
+                }
+                Err(_) => {}
+            }
+        }
+    }
+
     let _ = ensure_sidecar(&app, &sidecar);
     record_hw_path(&hw_paths, "print", "sidecar");
     let result = agent_post("/print", payload)?;
@@ -403,6 +522,8 @@ fn hw_drawer(
     hw_paths: State<'_, HwPathState>,
     printer_name: Option<String>,
 ) -> Result<serde_json::Value, String> {
+    let kick = [0x1b, 0x70, 0x00, 0x19, 0xfa];
+
     if hardware::native_print_available() {
         match hardware::try_drawer_kick(printer_name.as_deref()) {
             Ok(used) => {
@@ -412,6 +533,21 @@ fn hw_drawer(
             Err(_) => {}
         }
     }
+
+    if hardware::native_serial_available() {
+        if let Some(port) =
+            hardware::resolve_com_port_for_print(printer_name.as_deref(), None)
+        {
+            match hardware::try_serial_print(&port, 9600, &kick) {
+                Ok(used) => {
+                    record_hw_path(&hw_paths, "drawer", "native-serial");
+                    return Ok(serde_json::json!({ "ok": true, "printer": used, "source": "native-serial" }));
+                }
+                Err(_) => {}
+            }
+        }
+    }
+
     let _ = ensure_sidecar(&app, &sidecar);
     record_hw_path(&hw_paths, "drawer", "sidecar");
     let body = match printer_name {
@@ -430,6 +566,27 @@ fn hw_scale_ports(
     app: tauri::AppHandle,
     sidecar: State<'_, SidecarState>,
 ) -> Result<serde_json::Value, String> {
+    if hardware::native_serial_available() {
+        match hardware::try_list_serial_ports() {
+            Ok(entries) if !entries.is_empty() => {
+                let ports: Vec<String> = entries
+                    .iter()
+                    .filter_map(|e| {
+                        e.get("portName")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+                return Ok(serde_json::json!({
+                    "ports": ports,
+                    "devices": entries,
+                    "source": "native-serial"
+                }));
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
     let _ = ensure_sidecar(&app, &sidecar);
     let data = agent_get("/scale/ports")?;
     Ok(serde_json::json!({
@@ -494,6 +651,8 @@ pub fn run() {
             desktop_minimize,
             desktop_toggle_window_mode,
             sidecar_health,
+            get_available_printers,
+            print_to_thermal_device,
             hw_capabilities,
             hw_agent_status,
             hw_list_printers,
@@ -521,10 +680,6 @@ pub fn run() {
                 .build()?;
             let _ = win.set_fullscreen(true);
             let _ = win.set_focus();
-
-            if let Some(sidecar) = app.try_state::<SidecarState>() {
-                let _ = ensure_sidecar(&app.handle(), &sidecar);
-            }
             Ok(())
         })
         .run(tauri::generate_context!())

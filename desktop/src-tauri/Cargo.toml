@@ -22,6 +22,7 @@ url = "2"
 ureq = { version = "2", features = ["json"] }
 base64 = "0.22"
 urlencoding = "2"
+serialport = "4.6"
 
 [profile.release]
 panic = "abort"

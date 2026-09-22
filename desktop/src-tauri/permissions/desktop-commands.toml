@@ -15,7 +15,7 @@ commands.allow = ["sidecar_health"]
 
 [[permission]]
 identifier = "allow-desktop-hw"
-description = "Hardware bridge commands via native Win32 or Print Agent sidecar."
+description = "Hardware bridge commands via native Win32, serial COM, or Print Agent sidecar fallback."
 commands.allow = [
   "hw_capabilities",
   "hw_agent_status",
@@ -23,7 +23,9 @@ commands.allow = [
   "hw_print",
   "hw_drawer",
   "hw_scale_ports",
-  "hw_scale_reading"
+  "hw_scale_reading",
+  "get_available_printers",
+  "print_to_thermal_device"
 ]
 
 [[permission]]
