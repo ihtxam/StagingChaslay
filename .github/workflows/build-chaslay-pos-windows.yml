@@ -67,7 +67,6 @@ jobs:
           if (-not $exe) { throw "NSIS installer not found under $out" }
           New-Item -ItemType Directory -Force -Path backend/public/downloads | Out-Null
           Copy-Item $exe.FullName backend/public/downloads/reborn-pos-setup.exe
-          Copy-Item $exe.FullName backend/public/downloads/chaslay-pos-setup.exe
           Write-Host "Installer: $($exe.FullName) ($($exe.Length) bytes)"
 
       - name: Update download manifest
@@ -86,7 +85,6 @@ jobs:
           }
           $json = $manifest | ConvertTo-Json -Depth 5
           Set-Content backend/public/downloads/reborn-pos-setup.json $json
-          Set-Content backend/public/downloads/chaslay-pos-setup.json $json
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
@@ -95,6 +93,4 @@ jobs:
           path: |
             backend/public/downloads/reborn-pos-setup.exe
             backend/public/downloads/reborn-pos-setup.json
-            backend/public/downloads/chaslay-pos-setup.exe
-            backend/public/downloads/chaslay-pos-setup.json
           retention-days: 90
