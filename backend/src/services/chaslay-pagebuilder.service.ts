@@ -8,6 +8,10 @@ import {
   pickPublishedEditorState,
   editorStatePatchOrSkip as guardEditorStatePatch,
 } from "@/lib/chaslay-editor-state";
+import {
+  maybePersistHomepagePageHeal,
+  repairMerchantChaslayHomepage,
+} from "@/lib/chaslay-homepage-heal";
 import { CmsService } from "@/services/cms.service";
 
 const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
@@ -61,25 +65,17 @@ export class ChaslayPagebuilderService {
       ),
       columns: { id: true, editorState: true },
     });
-    const resolved = pickPublishedEditorState(
+    const { resolved } = await maybePersistHomepagePageHeal(
+      homepagePage?.id,
       homepagePage?.editorState ?? null,
       fallback
     );
-    const fromPage = normalizeEditorState(homepagePage?.editorState ?? null);
-    const fromBuilder = normalizeEditorState(fallback);
-    if (
-      homepagePage &&
-      resolved === fromBuilder &&
-      fromBuilder &&
-      fromPage &&
-      isEffectivelyEmptyEditorState(fromPage)
-    ) {
-      await db
-        .update(schema.chaslayHomepageBuilderPages)
-        .set({ editorState: fromBuilder, updatedAt: new Date() })
-        .where(eq(schema.chaslayHomepageBuilderPages.id, homepagePage.id));
-    }
     return resolved;
+  }
+
+  /** Repair missing/wiped Chaslay state before reads (legacy CMS bootstrap, split-brain heal). */
+  private static async ensureHomepageRepaired(merchantId: string): Promise<void> {
+    await repairMerchantChaslayHomepage(merchantId);
   }
 
   /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
@@ -173,6 +169,7 @@ export class ChaslayPagebuilderService {
 
   static async get(merchantId: string, id: number) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const row = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(
@@ -196,6 +193,7 @@ export class ChaslayPagebuilderService {
   static async getActive(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
       await this.ensureBootstrappedFromLegacy(merchantId);
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const row = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(
@@ -246,22 +244,26 @@ export class ChaslayPagebuilderService {
   ) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
+      const existing = await db.query.chaslayHomepageBuilders.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilders.id, id),
+          eq(schema.chaslayHomepageBuilders.merchantId, merchantId)
+        ),
+      });
+      if (!existing) throw new Error("Homepage builder not found");
       const patch: Partial<typeof schema.chaslayHomepageBuilders.$inferInsert> = {
         updatedAt: new Date(),
       };
       if (input.name !== undefined) patch.name = input.name;
       if (input.editor_state !== undefined) {
-        const next = editorStatePatchOrSkip(row.editorState, input.editor_state);
+        const next = editorStatePatchOrSkip(existing.editorState, input.editor_state);
         if (next !== undefined) patch.editorState = next;
       }
       const [row] = await db
         .update(schema.chaslayHomepageBuilders)
         .set(patch)
-        .where(
-          and(eq(schema.chaslayHomepageBuilders.id, id), eq(schema.chaslayHomepageBuilders.merchantId, merchantId))
-        )
+        .where(eq(schema.chaslayHomepageBuilders.id, id))
         .returning();
-      if (!row) throw new Error("Homepage builder not found");
       return {
         id: row.id,
         name: row.name,
@@ -350,6 +352,7 @@ export class ChaslayPagebuilderService {
 
   static async listPages(merchantId: string, builderId: number) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const builder = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(
@@ -363,11 +366,18 @@ export class ChaslayPagebuilderService {
         where: eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
         orderBy: [asc(schema.chaslayHomepageBuilderPages.sortOrder)],
       });
-      return rows.map((p) => {
-        const editor_state = p.isHomepage
-          ? pickPublishedEditorState(p.editorState, builder.editorState) ?? p.editorState
-          : p.editorState;
-        return {
+      const pages = [];
+      for (const p of rows) {
+        let editor_state = p.editorState;
+        if (p.isHomepage) {
+          const { resolved } = await maybePersistHomepagePageHeal(
+            p.id,
+            p.editorState,
+            builder.editorState
+          );
+          editor_state = resolved ?? p.editorState;
+        }
+        pages.push({
           id: p.id,
           homepage_builder_id: p.homepageBuilderId,
           title: p.title,
@@ -375,8 +385,9 @@ export class ChaslayPagebuilderService {
           editor_state,
           is_homepage: p.isHomepage,
           sort_order: p.sortOrder,
-        };
-      });
+        });
+      }
+      return pages;
     });
   }
 
@@ -579,6 +590,7 @@ export class ChaslayPagebuilderService {
   /** Resolve one published page from the active builder by slug (`home` maps to homepage row). */
   static async getActivePublishedPage(merchantId: string, pageSlug: string) {
     return withMerchantSchemaRetry(async () => {
+      await this.ensureHomepageRepaired(merchantId);
       const db = getDb();
       const builder = await db.query.chaslayHomepageBuilders.findFirst({
         where: and(

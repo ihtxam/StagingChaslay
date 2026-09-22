@@ -196,6 +196,7 @@ async function handleSchemaRepair(_req: Request, res: Response) {
       editionsMissing: result.editionsMissing,
       subscriptionPlansMissing: result.subscriptionPlansMissing,
       posSessionsMissing: result.posSessionsMissing,
+      chaslayHomepageRepair: result.chaslayHomepageRepair,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

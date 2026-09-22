@@ -6,6 +6,7 @@ import {
   missingColumnFromDbError,
   missingTableColumnFromDbError,
 } from "@/lib/db-schema-errors";
+import { repairAllChaslayHomepages } from "@/lib/chaslay-homepage-heal";
 
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool: Pool | null = null;
@@ -1738,6 +1739,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   editionsMissing: string[];
   subscriptionPlansMissing: string[];
   posSessionsMissing: string[];
+  chaslayHomepageRepair: Awaited<ReturnType<typeof repairAllChaslayHomepages>>;
 }> {
   patchedColumns.clear();
   patchedTables = false;
@@ -1874,6 +1876,19 @@ export async function ensureAllMerchantSchema(): Promise<{
       posSessions: posSessionsMissingAfter,
     });
   }
+
+  let chaslayHomepageRepair = { scanned: 0, repaired: [] as Awaited<
+    ReturnType<typeof repairAllChaslayHomepages>
+  >["repaired"] };
+  try {
+    chaslayHomepageRepair = await repairAllChaslayHomepages();
+    if (chaslayHomepageRepair.repaired.length) {
+      console.info("[schema] chaslay homepage repair:", chaslayHomepageRepair);
+    }
+  } catch (err) {
+    console.warn("[schema] chaslay homepage repair failed:", err);
+  }
+
   return {
     missingBefore,
     missingAfter,
@@ -1883,6 +1898,7 @@ export async function ensureAllMerchantSchema(): Promise<{
     editionsMissing: editionsMissingAfter,
     subscriptionPlansMissing: subscriptionPlansMissingAfter,
     posSessionsMissing: posSessionsMissingAfter,
+    chaslayHomepageRepair,
   };
 }
 
