@@ -7,7 +7,10 @@
       (function () {
         var host = (location.hostname || '').toLowerCase();
         var path = location.pathname || '';
+        var SHOP_PATH_HUB_HOSTS = { 'order.rebornsense.com': 1, 'shop.chaslay.com': 1 };
+        var isShopPathHub = SHOP_PATH_HUB_HOSTS[host] === 1;
         var isShop =
+          isShopPathHub ||
           /^\/shop(\/|$)/.test(path) ||
           host.indexOf('shop.') === 0 ||
           (!(
@@ -21,6 +24,7 @@
           ) &&
             host.length > 0);
         if (!isShop) return;
+        window.__REBORN_SHOP_STOREFRONT__ = true;
         try {
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function (regs) {
@@ -157,8 +161,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-DpYT3w9f.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DLtoLTqS.css">
+    <script type="module" crossorigin src="/assets/index-CsKRdjfS.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B2udE2sU.css">
   </head>
   <body>
     <div id="root">
@@ -190,7 +194,10 @@
 
         var host = (location.hostname || '').toLowerCase();
         var path = location.pathname || '';
+        var SHOP_PATH_HUB_HOSTS = { 'order.rebornsense.com': 1, 'shop.chaslay.com': 1 };
+        var isShopPathHub = SHOP_PATH_HUB_HOSTS[host] === 1;
         var isShop =
+          isShopPathHub ||
           /^\/shop(\/|$)/.test(path) ||
           host.indexOf('shop.') === 0 ||
           (!(

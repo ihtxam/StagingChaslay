@@ -69,7 +69,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSave }) => {
                 actions.delete(selected.id);
               }
             }}
-            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md transition-colors"
             title={t('deleteComponent')}
           >
             <Trash2 className="w-4 h-4" />

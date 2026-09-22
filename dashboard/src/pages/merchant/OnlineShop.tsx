@@ -49,7 +49,7 @@ function ShopSeoLocaleTabs({
           className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
             active === loc
               ? 'bg-teal-700 text-white'
-              : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+              : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700'
           }`}
           onClick={() => onChange(loc)}
         >
@@ -591,7 +591,7 @@ export default function OnlineShop() {
         <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-4 mb-4 space-y-3">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">{t('shopHoursNavTitle')}</h2>
-            <p className="text-xs text-stone-600 mt-0.5">{t('shopHoursNavHint')}</p>
+            <p className="text-xs muted mt-0.5">{t('shopHoursNavHint')}</p>
           </div>
           <div className="flex flex-wrap gap-2 text-sm">
             <Link to="/merchant/settings?tab=hours" className="btn-secondary text-sm">
@@ -604,7 +604,7 @@ export default function OnlineShop() {
               {t('shopHoursNavVacation')}
             </Link>
           </div>
-          <p className="text-xs text-stone-600">{t('shopHoursNavPos')}</p>
+          <p className="text-xs muted">{t('shopHoursNavPos')}</p>
         </div>
 
         <form onSubmit={onSaveShopMeta} className="space-y-5">
@@ -643,9 +643,9 @@ export default function OnlineShop() {
             </label>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+          <div className="card space-y-2">
             <label className="block text-sm font-medium">Ask pickup / delivery / dine-in</label>
-            <p className="text-xs text-stone-500 leading-snug">
+            <p className="text-xs muted leading-snug">
               Cleaner shops ask at checkout. Use a start popup if guests should choose before browsing.
             </p>
             <select
@@ -659,7 +659,7 @@ export default function OnlineShop() {
             </select>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+          <div className="card space-y-2">
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -669,33 +669,33 @@ export default function OnlineShop() {
               />
               <span>
                 <span className="font-medium block">Allow programmed / scheduled orders</span>
-                <span className="text-xs text-stone-500 leading-snug block mt-0.5">
+                <span className="text-xs muted leading-snug block mt-0.5">
                   When off, customers can only order during opening hours (no “order for later”).
                 </span>
               </span>
             </label>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-3">
+          <div className="card space-y-3">
             <div>
               <p className="text-sm font-medium">Shop branding</p>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs muted mt-0.5">
                 Logo appears in the header. Banner is the wide image at the top of the menu.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                <span className="text-xs font-semibold uppercase tracking-wide muted">
                   Logo
                 </span>
                 {settings.shopLogoUrl ? (
                   <img
                     src={settings.shopLogoUrl}
                     alt=""
-                    className="h-14 w-auto max-w-full object-contain rounded border border-stone-200 bg-stone-50 p-1"
+                    className="h-14 w-auto max-w-full object-contain rounded border border-stone-200 bg-stone-50 p-1 dark:border-stone-600 dark:bg-stone-900/50"
                   />
                 ) : (
-                  <div className="h-14 rounded border border-dashed border-stone-300 bg-stone-50 flex items-center justify-center text-xs text-stone-400">
+                  <div className="h-14 rounded border border-dashed border-stone-300 bg-stone-50 flex items-center justify-center text-xs muted dark:border-stone-600 dark:bg-stone-900/40">
                     No logo
                   </div>
                 )}
@@ -727,17 +727,17 @@ export default function OnlineShop() {
                 </div>
               </div>
               <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                <span className="text-xs font-semibold uppercase tracking-wide muted">
                   Menu banner
                 </span>
                 {settings.shopBannerUrl ? (
                   <img
                     src={settings.shopBannerUrl}
                     alt=""
-                    className="h-20 w-full object-cover rounded border border-stone-200 bg-stone-50"
+                    className="h-20 w-full object-cover rounded border border-stone-200 bg-stone-50 dark:border-stone-600 dark:bg-stone-900/50"
                   />
                 ) : (
-                  <div className="h-20 rounded border border-dashed border-stone-300 bg-stone-50 flex items-center justify-center text-xs text-stone-400">
+                  <div className="h-20 rounded border border-dashed border-stone-300 bg-stone-50 flex items-center justify-center text-xs muted dark:border-stone-600 dark:bg-stone-900/40">
                     No banner
                   </div>
                 )}
@@ -771,19 +771,19 @@ export default function OnlineShop() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-4">
+          <div className="card space-y-4">
             <div>
               <p className="text-sm font-medium">{t('shopSiteSettingsTitle')}</p>
-              <p className="text-xs text-stone-500 mt-0.5">{t('shopSiteSettingsHint')}</p>
+              <p className="text-xs muted mt-0.5">{t('shopSiteSettingsHint')}</p>
             </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">{t('shopBrandColor')}</label>
-              <p className="text-xs text-stone-500">{t('shopBrandColorHint')}</p>
+              <p className="text-xs muted">{t('shopBrandColorHint')}</p>
               <div className="flex flex-wrap items-center gap-3">
                 <input
                   type="color"
-                  className="h-10 w-14 cursor-pointer rounded border border-stone-200 bg-white p-1"
+                  className="h-10 w-14 cursor-pointer rounded border border-stone-200 bg-white p-1 dark:border-stone-600 dark:bg-stone-800"
                   value={siteSettings.brandColor || '#e11d48'}
                   onChange={(e) => patchSite({ brandColor: e.target.value })}
                   aria-label={t('shopBrandColor')}
@@ -803,12 +803,12 @@ export default function OnlineShop() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('shopFavicon')}</p>
-              <p className="text-xs text-stone-500">{t('shopFaviconHint')}</p>
+              <p className="text-xs muted">{t('shopFaviconHint')}</p>
               <div className="flex items-center gap-3">
                 <img
                   src={siteSettings.faviconUrl || DEFAULT_SHOP_FAVICON}
                   alt=""
-                  className="h-10 w-10 rounded border border-stone-200 bg-stone-50 object-contain p-1"
+                  className="h-10 w-10 rounded border border-stone-200 bg-stone-50 object-contain p-1 dark:border-stone-600 dark:bg-stone-900/50"
                 />
                 <input
                   ref={faviconFileRef}
@@ -835,7 +835,7 @@ export default function OnlineShop() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">{t('shopGaId')}</label>
-              <p className="text-xs text-stone-500">{t('shopGaIdHint')}</p>
+              <p className="text-xs muted">{t('shopGaIdHint')}</p>
               <input
                 className="input max-w-md font-mono"
                 value={siteSettings.gaMeasurementId || ''}
@@ -846,7 +846,7 @@ export default function OnlineShop() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('shopMetaTitle')}</p>
-              <p className="text-xs text-stone-500">{t('shopMetaTitleHint')}</p>
+              <p className="text-xs muted">{t('shopMetaTitleHint')}</p>
               <ShopSeoLocaleTabs active={seoLocale} onChange={setSeoLocale} />
               <input
                 className="input max-w-xl"
@@ -854,14 +854,14 @@ export default function OnlineShop() {
                 value={siteSettings.metaTitle[seoLocale] || ''}
                 onChange={(e) => patchSite({ metaTitle: { [seoLocale]: e.target.value } })}
               />
-              <span className="block text-[11px] text-stone-400">
+              <span className="block text-[11px] muted opacity-80">
                 {(siteSettings.metaTitle[seoLocale] || '').length}/60
               </span>
             </div>
 
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('shopMetaDescription')}</p>
-              <p className="text-xs text-stone-500">{t('shopMetaDescriptionHint')}</p>
+              <p className="text-xs muted">{t('shopMetaDescriptionHint')}</p>
               <ShopSeoLocaleTabs active={seoLocale} onChange={setSeoLocale} />
               <textarea
                 className="input max-w-xl min-h-[4.5rem] resize-y"
@@ -869,15 +869,15 @@ export default function OnlineShop() {
                 value={siteSettings.metaDescription[seoLocale] || ''}
                 onChange={(e) => patchSite({ metaDescription: { [seoLocale]: e.target.value } })}
               />
-              <span className="block text-[11px] text-stone-400">
+              <span className="block text-[11px] muted opacity-80">
                 {(siteSettings.metaDescription[seoLocale] || '').length}/160
               </span>
             </div>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+          <div className="card space-y-2">
             <label className="block text-sm font-medium">{t('shopCartLayout')}</label>
-            <p className="text-xs text-stone-500 leading-snug">{t('shopCartLayoutHint')}</p>
+            <p className="text-xs muted leading-snug">{t('shopCartLayoutHint')}</p>
             <select
               className="input max-w-md"
               value={settings.cartLayout || 'hidden_slide'}
@@ -888,7 +888,7 @@ export default function OnlineShop() {
             </select>
           </div>
 
-          <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+          <div className="card space-y-2">
             <p className="text-sm font-medium">Menu photos</p>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -898,7 +898,7 @@ export default function OnlineShop() {
               />
               Show product photos
             </label>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs muted">
               Photos uploaded on Products appear on the online shop menu. Uncheck to hide them (POS keeps its own display).
             </p>
             <label className="flex items-center gap-2 text-sm">
@@ -971,7 +971,7 @@ export default function OnlineShop() {
                 />
                 Enable category pricing
               </label>
-              <p className="text-xs text-stone-500 mb-3">
+              <p className="text-xs muted mb-3">
                 When enabled, delivery item prices use per-category extra charges instead of the flat
                 delivery menu markup below. Configure each category under Products → Categories.
               </p>
@@ -990,7 +990,7 @@ export default function OnlineShop() {
                 placeholder="0"
                 disabled={!!settings.categoryPricingEnabled}
               />
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs muted mt-1">
                 {settings.categoryPricingEnabled
                   ? 'Disabled while category pricing is enabled. Set extra delivery prices per category instead.'
                   : 'Added to every item for delivery (e.g. 2.00 → delivery prices = takeaway + 2.00). Zone delivery fee is separate.'}
@@ -1023,7 +1023,7 @@ export default function OnlineShop() {
               >
                 {locatingStore ? 'Locating…' : 'Locate from business address'}
               </button>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs muted">
                 Uses the address from Settings → Business. The delivery map opens on this pin.
               </p>
             </div>
@@ -1062,7 +1062,7 @@ export default function OnlineShop() {
             {t('deliveryModeZipcode')}
           </label>
         </div>
-        <p className="text-xs text-stone-500">
+        <p className="text-xs muted">
           Save shop settings above after changing the delivery mode.
         </p>
       </div>

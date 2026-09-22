@@ -156,7 +156,7 @@ export default function ChaslayPageBuilderList() {
               className={`rounded-lg border p-4 flex items-center justify-between gap-4 ${!homepage.is_active ? 'opacity-75' : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <Layout className={`h-5 w-5 shrink-0 ${homepage.is_active ? 'text-green-600' : 'text-muted-foreground'}`} />
+                <Layout className={`h-5 w-5 shrink-0 ${homepage.is_active ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold truncate">{homepage.name}</span>
@@ -172,7 +172,7 @@ export default function ChaslayPageBuilderList() {
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     {homepage.is_active && (
-                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Active</span>
+                      <span className="text-xs bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200 px-2 py-0.5 rounded-full">Active</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -207,7 +207,7 @@ export default function ChaslayPageBuilderList() {
                 </Link>
                 <button
                   type="button"
-                  className="p-2 rounded text-red-600 hover:bg-red-50"
+                  className="p-2 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                   onClick={() => setDeletingId(homepage.id)}
                   title="Delete"
                 >

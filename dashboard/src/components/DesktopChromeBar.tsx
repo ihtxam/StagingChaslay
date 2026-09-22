@@ -65,7 +65,7 @@ export default function DesktopChromeBar() {
 
   return (
     <div
-      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-9 items-center justify-end gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-white backdrop-blur-sm"
+      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-9 items-center justify-end gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
       data-tauri-drag-region
     >
       {needsShellUpdate ? (
@@ -75,7 +75,7 @@ export default function DesktopChromeBar() {
       ) : null}
       <button
         type="button"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-50"
+        className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white disabled:opacity-50"
         onClick={() => void onReload()}
         disabled={busy}
         aria-label={t('desktopChromeRefresh')}
@@ -85,7 +85,7 @@ export default function DesktopChromeBar() {
       </button>
       <button
         type="button"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-50"
+        className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white disabled:opacity-50"
         onClick={() => void onMinimize()}
         disabled={busy}
         aria-label={t('desktopChromeMinimize')}
@@ -95,7 +95,7 @@ export default function DesktopChromeBar() {
       </button>
       <button
         type="button"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white/85 hover:bg-white/10"
+        className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white"
         onClick={onSettings}
         aria-label={t('settings')}
         title={t('settings')}
