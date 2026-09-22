@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import {
   isMailcoBrevoFallbackEnabled,
+  isPlatformMailcoEmailType,
   isTransientMailcoError,
   MailcoSendError,
 } from "./mailco-routing";
@@ -39,5 +40,10 @@ assert.equal(
 );
 // Plain Error without status must NOT trigger Brevo fallback.
 assert.equal(isTransientMailcoError(new Error("mailco send failed")), false);
+
+assert.equal(isPlatformMailcoEmailType("shop_order"), true);
+assert.equal(isPlatformMailcoEmailType("platform_shop_order"), true);
+assert.equal(isPlatformMailcoEmailType("newsletter"), false);
+assert.equal(isPlatformMailcoEmailType(undefined), false);
 
 console.log("mailco-routing.test.ts: ok");

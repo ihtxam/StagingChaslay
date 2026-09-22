@@ -162,6 +162,7 @@ async function enqueueOnlineOrderReceiptPrint(
 
 async function sendOrderRejectedEmail(
   merchantId: string,
+  orderId: string,
   order: {
     customerEmail?: string | null;
     customerName?: string | null;
@@ -177,6 +178,7 @@ async function sendOrderRejectedEmail(
     const reason = String(order.cancelReason || "").trim();
     await EmailService.send({
       merchantId,
+      orderId,
       to: email,
       subject: `Order ${order.orderNumber || ""} — update from ${merchantName}`,
       html: `<p>Hello${order.customerName ? ` ${order.customerName}` : ""},</p>
@@ -853,6 +855,7 @@ export class OrderService {
           } else {
             void sendOrderRejectedEmail(
               merchantId,
+              orderId,
               { ...order, cancelReason: reasonText },
               merchant?.name || "Store"
             );

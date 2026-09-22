@@ -6,6 +6,7 @@ import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from 
 import { buildMailcoRawMessagePayload } from "@/lib/mailco-payload";
 import {
   isMailcoBrevoFallbackEnabled,
+  isPlatformMailcoEmailType,
   isTransientMailcoError,
   MailcoSendError,
 } from "@/lib/mailco-routing";
@@ -23,6 +24,8 @@ export type SendEmailInput = {
   text?: string;
   /** Optional merchant override for SMTP / from */
   merchantId?: string;
+  /** Shop/platform order id — logged in email_send_log for superadmin diagnostics */
+  orderId?: string;
   attachments?: EmailAttachment[];
   /** Category for platform usage reporting */
   emailType?: EmailSendType | string;
@@ -121,6 +124,66 @@ export class EmailService {
       replyToEmail,
       replyToName: this.merchantSenderName(merchantName),
     };
+  }
+
+  /**
+   * Platform mailco for shop order transactional mail — ignores merchant emailDeliveryMode
+   * and never attaches Brevo/SMTP fallbacks (fail loud when mailco rejects).
+   */
+  static async resolvePlatformMailcoConfig(
+    merchantId?: string | null
+  ): Promise<ResolvedEmailConfig | null> {
+    let merchantName: string | null = null;
+    let merchantEmail: string | null = null;
+
+    if (merchantId) {
+      try {
+        const { getDb, schema } = await import("@/db");
+        const { eq } = await import("drizzle-orm");
+        const db = getDb();
+        const merchant = await db.query.merchants.findFirst({
+          where: eq(schema.merchants.id, merchantId),
+          columns: { name: true, email: true },
+        });
+        merchantName = merchant?.name || null;
+        merchantEmail = merchant?.email || null;
+      } catch {
+        /* continue without merchant reply-to */
+      }
+    }
+
+    try {
+      const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+      const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
+      if (!mailcoPublic.configured) return null;
+      const mailcoCreds = await PlatformSettingsService.resolveMailcoCredentials();
+      const mailcoFromDb = !!(
+        await PlatformSettingsService.getMailcoSettings()
+      ).apiKey?.trim();
+      const platformReply =
+        merchantId && merchantEmail
+          ? this.merchantReplyTo(merchantName, merchantEmail, null)
+          : { replyToEmail: null, replyToName: "Shop" as string };
+
+      return {
+        provider: "mailco",
+        apiKey: mailcoCreds.apiKey,
+        fromEmail: mailcoCreds.fromEmail,
+        fromName: merchantId ? this.merchantSenderName(merchantName) : mailcoCreds.fromName,
+        replyToEmail: merchantId ? platformReply.replyToEmail : null,
+        replyToName: merchantId ? platformReply.replyToName : mailcoCreds.fromName,
+        source: mailcoFromDb ? "database" : "env",
+        merchantId,
+        mailco: {
+          apiBase: mailcoCreds.apiBase,
+          templateSlug: mailcoCreds.templateSlug,
+        },
+        fallbackBrevo: null,
+        fallbackSmtp: null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   static async resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig> {
@@ -652,28 +715,41 @@ export class EmailService {
   }
 
   static async send(input: SendEmailInput) {
-    let cfg = await this.resolveConfig(input.merchantId);
-    if (!cfg.provider && cfg.fallbackSmtp) {
-      const reply = this.merchantReplyTo(null, input.to, cfg.fallbackSmtp.fromEmail);
-      cfg = {
-        ...cfg,
-        provider: "smtp",
-        fromEmail: String(cfg.fallbackSmtp.fromEmail).trim(),
-        source: "merchant_smtp",
-        smtp: cfg.fallbackSmtp,
-        replyToEmail: cfg.replyToEmail || reply.replyToEmail,
-      };
-    }
-    if (!cfg.provider) {
-      throw new Error(
-        "Email is not configured. Configure platform mailco or Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email."
-      );
+    const emailType = input.emailType || "general";
+    const forcePlatformMailco = isPlatformMailcoEmailType(emailType);
+    let cfg: ResolvedEmailConfig;
+
+    if (forcePlatformMailco) {
+      const platformMailco = await this.resolvePlatformMailcoConfig(input.merchantId);
+      if (!platformMailco) {
+        throw new Error(
+          "Platform mailco is required for shop order emails but is not configured. Set it in Superadmin → Settings → Platform email (mailco)."
+        );
+      }
+      cfg = platformMailco;
+    } else {
+      cfg = await this.resolveConfig(input.merchantId);
+      if (!cfg.provider && cfg.fallbackSmtp) {
+        const reply = this.merchantReplyTo(null, input.to, cfg.fallbackSmtp.fromEmail);
+        cfg = {
+          ...cfg,
+          provider: "smtp",
+          fromEmail: String(cfg.fallbackSmtp.fromEmail).trim(),
+          source: "merchant_smtp",
+          smtp: cfg.fallbackSmtp,
+          replyToEmail: cfg.replyToEmail || reply.replyToEmail,
+        };
+      }
+      if (!cfg.provider) {
+        throw new Error(
+          "Email is not configured. Configure platform mailco or Brevo in Superadmin → Settings, or add SMTP/Brevo in Settings → Email."
+        );
+      }
     }
 
-    const emailType = input.emailType || "general";
     const { EmailUsageService } = await import("@/services/email-usage.service");
-    const hasAttachments = !!(input.attachments && input.attachments.length > 0);
-    const allowBrevoFallback = isMailcoBrevoFallbackEnabled();
+    const allowBrevoFallback = forcePlatformMailco ? false : isMailcoBrevoFallbackEnabled();
+    const allowSmtpFallback = !forcePlatformMailco;
 
     const logAndSend = async (activeCfg: ResolvedEmailConfig) => {
       console.info(
@@ -752,7 +828,12 @@ export class EmailService {
             /* try merchant SMTP next */
           }
         }
-        if (!recovered && cfg.fallbackSmtp && cfg.provider !== "smtp") {
+        if (
+          !recovered &&
+          allowSmtpFallback &&
+          cfg.fallbackSmtp &&
+          cfg.provider !== "smtp"
+        ) {
           const smtpCfg: ResolvedEmailConfig = {
             ...cfg,
             provider: "smtp",
@@ -769,6 +850,7 @@ export class EmailService {
 
       await EmailUsageService.logSend({
         merchantId: input.merchantId || cfg.merchantId,
+        orderId: input.orderId || null,
         provider: cfg.provider,
         source: cfg.source,
         emailType,
@@ -779,6 +861,7 @@ export class EmailService {
     } catch (error: any) {
       await EmailUsageService.logSend({
         merchantId: input.merchantId || cfg.merchantId,
+        orderId: input.orderId || null,
         provider: cfg.provider,
         source: cfg.source,
         emailType,

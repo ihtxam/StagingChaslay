@@ -49,8 +49,11 @@ type EmailUsageSummary = {
   activeFromName?: string;
   lastShopOrderEmail?: {
     provider: string;
+    source?: string;
     sentAt?: string;
     recipient?: string;
+    orderId?: string | null;
+    merchantId?: string | null;
   } | null;
   allEmailViaMailco?: boolean;
   mailcoBrevoFallbackEnabled?: boolean;
@@ -509,6 +512,12 @@ export default function Settings() {
         {emailUsage?.lastShopOrderEmail ? (
           <p className="text-sm mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800">
             Last shop order email sent via <strong>{emailUsage.lastShopOrderEmail.provider}</strong>
+            {emailUsage.lastShopOrderEmail.source ? (
+              <>
+                {' '}
+                · source <code>{emailUsage.lastShopOrderEmail.source}</code>
+              </>
+            ) : null}
             {emailUsage.lastShopOrderEmail.sentAt ? (
               <>
                 {' '}
@@ -524,6 +533,18 @@ export default function Settings() {
                 {' '}
                 · To <code>{emailUsage.lastShopOrderEmail.recipient}</code>
               </>
+            ) : null}
+            {emailUsage.lastShopOrderEmail.orderId ? (
+              <>
+                {' '}
+                · Order <code>{emailUsage.lastShopOrderEmail.orderId}</code>
+              </>
+            ) : null}
+            {emailUsage.lastShopOrderEmail.provider !== 'mailco' ? (
+              <span className="block mt-1 text-amber-800">
+                Shop order mail should use mailco when platform mailco is configured. Merchant-owned
+                Brevo/SMTP is no longer used for shop orders.
+              </span>
             ) : null}
           </p>
         ) : null}

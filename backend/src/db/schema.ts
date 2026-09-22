@@ -3400,6 +3400,7 @@ export const emailSendLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "set null" }),
+    orderId: uuid("order_id"),
     provider: varchar("provider", { length: 20 }).notNull(), // smtp | brevo | mailco | sendgrid
     source: varchar("source", { length: 30 }).notNull(), // platform | merchant_smtp | merchant_brevo | env
     emailType: varchar("email_type", { length: 50 }).notNull().default("general"),
@@ -3411,6 +3412,7 @@ export const emailSendLog = pgTable(
   },
   (table) => ({
     merchantIdx: index("email_send_log_merchant_idx").on(table.merchantId),
+    orderIdx: index("email_send_log_order_idx").on(table.orderId),
     typeIdx: index("email_send_log_type_idx").on(table.emailType),
     createdIdx: index("email_send_log_created_idx").on(table.createdAt),
     merchantCreatedIdx: index("email_send_log_merchant_created_idx").on(

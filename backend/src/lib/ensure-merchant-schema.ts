@@ -1118,6 +1118,7 @@ const TABLE_PATCHES: string[] = [
   `CREATE TABLE IF NOT EXISTS email_send_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
+    order_id uuid,
     provider varchar(20) NOT NULL,
     source varchar(30) NOT NULL,
     email_type varchar(50) NOT NULL DEFAULT 'general',
@@ -1127,7 +1128,9 @@ const TABLE_PATCHES: string[] = [
     error text,
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE email_send_log ADD COLUMN IF NOT EXISTS order_id uuid`,
   `CREATE INDEX IF NOT EXISTS email_send_log_merchant_idx ON email_send_log(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS email_send_log_order_idx ON email_send_log(order_id)`,
   `CREATE INDEX IF NOT EXISTS email_send_log_type_idx ON email_send_log(email_type)`,
   `CREATE INDEX IF NOT EXISTS email_send_log_created_idx ON email_send_log(created_at)`,
   `CREATE INDEX IF NOT EXISTS email_send_log_merchant_created_idx ON email_send_log(merchant_id, created_at)`,

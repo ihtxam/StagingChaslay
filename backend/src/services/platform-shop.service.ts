@@ -636,6 +636,7 @@ export class PlatformShopService {
           </div>`,
           text: `${merchantCopy.text} (#${orderRef})`,
           merchantId: merchant.id,
+          orderId: order.id,
           emailType: "platform_shop_order",
         });
       }

@@ -1,3 +1,14 @@
+/** Transactional shop order emails always use platform mailco when configured (never merchant Brevo). */
+export const PLATFORM_MAILCO_EMAIL_TYPES = new Set([
+  "shop_order",
+  "platform_shop_order",
+  "platform_shop_status",
+]);
+
+export function isPlatformMailcoEmailType(emailType?: string | null): boolean {
+  return PLATFORM_MAILCO_EMAIL_TYPES.has(String(emailType || "").trim());
+}
+
 /** Error thrown when mailco API rejects a send — preserves HTTP status for routing decisions. */
 export class MailcoSendError extends Error {
   readonly status?: number;

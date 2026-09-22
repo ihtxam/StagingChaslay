@@ -269,6 +269,27 @@ router.get("/email/usage", async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/email/order/:orderId — email send log for one shop order
+ */
+router.get("/email/order/:orderId", async (req: Request, res: Response) => {
+  try {
+    const orderId = String(req.params.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ error: "orderId is required" });
+      return;
+    }
+    const { EmailUsageService } = await import("@/services/email-usage.service");
+    const logs = await EmailUsageService.getOrderEmailLogs(orderId);
+    res.json({ success: true, orderId, logs });
+  } catch (error) {
+    console.error("Error getting order email logs:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load order email logs",
+    });
+  }
+});
+
+/**
  * POST /api/superadmin/email/test — send a test email via platform mailco or Brevo
  * Body: { to, provider?: "mailco" | "brevo" } (defaults to mailco)
  */

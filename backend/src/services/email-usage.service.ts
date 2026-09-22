@@ -35,6 +35,7 @@ function zurichMonthEnd(ym: string): Date {
 
 export type EmailLogInput = {
   merchantId?: string | null;
+  orderId?: string | null;
   provider: string;
   source: string;
   emailType: EmailSendType | string;
@@ -56,6 +57,7 @@ export class EmailUsageService {
       const db = getDb();
       await db.insert(schema.emailSendLog).values({
         merchantId: input.merchantId || null,
+        orderId: input.orderId || null,
         provider: input.provider,
         source: input.source,
         emailType: input.emailType || "general",
@@ -158,11 +160,14 @@ export class EmailUsageService {
     const [lastShopOrderRow] = await db
       .select({
         provider: schema.emailSendLog.provider,
+        source: schema.emailSendLog.source,
         createdAt: schema.emailSendLog.createdAt,
         recipient: schema.emailSendLog.recipient,
+        orderId: schema.emailSendLog.orderId,
+        merchantId: schema.emailSendLog.merchantId,
       })
       .from(schema.emailSendLog)
-      .where(and(platformFilter, sentFilter, eq(schema.emailSendLog.emailType, "shop_order")))
+      .where(and(sentFilter, eq(schema.emailSendLog.emailType, "shop_order")))
       .orderBy(desc(schema.emailSendLog.createdAt))
       .limit(1);
 
@@ -210,8 +215,11 @@ export class EmailUsageService {
       lastShopOrderEmail: lastShopOrderRow
         ? {
             provider: lastShopOrderRow.provider,
+            source: lastShopOrderRow.source,
             sentAt: lastShopOrderRow.createdAt,
             recipient: lastShopOrderRow.recipient,
+            orderId: lastShopOrderRow.orderId,
+            merchantId: lastShopOrderRow.merchantId,
           }
         : null,
       allEmailViaMailco:
@@ -221,6 +229,40 @@ export class EmailUsageService {
       mailcoBrevoFallbackEnabled: platformStatus.mailcoBrevoFallbackEnabled,
       account,
     };
+  }
+
+  static async getOrderEmailLogs(orderId: string) {
+    await this.ensureTable();
+    const db = getDb();
+    const rows = await db
+      .select({
+        id: schema.emailSendLog.id,
+        provider: schema.emailSendLog.provider,
+        source: schema.emailSendLog.source,
+        emailType: schema.emailSendLog.emailType,
+        recipient: schema.emailSendLog.recipient,
+        subject: schema.emailSendLog.subject,
+        status: schema.emailSendLog.status,
+        error: schema.emailSendLog.error,
+        createdAt: schema.emailSendLog.createdAt,
+        merchantId: schema.emailSendLog.merchantId,
+      })
+      .from(schema.emailSendLog)
+      .where(eq(schema.emailSendLog.orderId, orderId))
+      .orderBy(desc(schema.emailSendLog.createdAt));
+
+    return rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      source: row.source,
+      emailType: row.emailType,
+      recipient: row.recipient,
+      subject: row.subject,
+      status: row.status,
+      error: row.error,
+      sentAt: row.createdAt,
+      merchantId: row.merchantId,
+    }));
   }
 
   static async getMerchantPlatformUsage(merchantId: string) {

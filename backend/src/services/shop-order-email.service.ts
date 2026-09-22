@@ -163,6 +163,7 @@ export class ShopOrderEmailService {
           html,
           text,
           merchantId,
+          orderId,
           emailType: 'shop_order',
         });
       } catch (err) {
@@ -187,6 +188,7 @@ export class ShopOrderEmailService {
         await EmailService.send({
           to: merchant.email,
           subject: merchantCopy.subject,
+          orderId,
           html: `
             <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#1c1917">
               <h1 style="font-size:20px">${esc(merchantCopy.subject)}</h1>
