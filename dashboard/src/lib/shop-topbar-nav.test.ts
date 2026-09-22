@@ -20,10 +20,8 @@ const labels = {
     labels,
   });
   assert.equal(nav.topbarLinks.length, 3);
-  assert.deepEqual(
-    nav.drawerLinks.map((l) => l.label),
-    ['Contact']
-  );
+  assert.equal(nav.drawerLinks[0]?.to, '#contact');
+  assert.equal(nav.drawerLinks[0]?.label, 'Contact');
 }
 
 {

@@ -41,6 +41,7 @@ import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
+import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import { SHOP_INPUT_CLASS, SHOP_INPUT_CLASS_SM, SHOP_LABEL_CLASS } from '@/lib/shop-input';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
@@ -183,6 +184,7 @@ export default function CheckoutPage() {
   const [voucherInput, setVoucherInput] = useState('');
   const [applyingVoucher, setApplyingVoucher] = useState(false);
   const [cartPopupOpen, setCartPopupOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const firstNameRef = useRef<HTMLInputElement>(null);
@@ -1682,6 +1684,7 @@ export default function CheckoutPage() {
         loggedIn={!!customer}
         showGiftCards={!!merchant?.giftCards?.enabled}
         showReservations={!!merchant?.reservationsEnabled}
+        onStoreInfo={() => setInfoOpen(true)}
       />
 
       <div className="shop-page-content py-8 pb-32 lg:pb-10">
@@ -2782,6 +2785,7 @@ export default function CheckoutPage() {
           }
         }}
       />
+      <ShopInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} merchant={merchant} zones={[]} />
     </div>
     </ShopThemeShell>
   );

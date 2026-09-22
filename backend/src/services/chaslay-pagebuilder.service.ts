@@ -5,6 +5,8 @@ import { buildDefaultRestaurantTemplate } from "@/lib/chaslay-default-template";
 import {
   isEffectivelyEmptyEditorState,
   normalizeEditorState,
+  pickPublishedEditorState,
+  editorStatePatchOrSkip as guardEditorStatePatch,
 } from "@/lib/chaslay-editor-state";
 import { CmsService } from "@/services/cms.service";
 
@@ -31,14 +33,8 @@ function editorStateForUpdate(state?: string): string | undefined {
   return normalized ?? DEFAULT_EMPTY_CANVAS_STATE;
 }
 
-function pickPublishedEditorState(pageState: string | null, builderState: string | null): string | null {
-  const fromPage = normalizeEditorState(pageState);
-  const fromBuilder = normalizeEditorState(builderState);
-  const pageHasContent = fromPage && !isEffectivelyEmptyEditorState(fromPage);
-  const builderHasContent = fromBuilder && !isEffectivelyEmptyEditorState(fromBuilder);
-  if (pageHasContent) return fromPage;
-  if (builderHasContent) return fromBuilder;
-  return fromPage || fromBuilder;
+function editorStatePatchOrSkip(existing: string | null, incoming?: string): string | undefined {
+  return guardEditorStatePatch(existing, incoming, DEFAULT_EMPTY_CANVAS_STATE);
 }
 
 export class ChaslayPagebuilderService {
@@ -254,7 +250,10 @@ export class ChaslayPagebuilderService {
         updatedAt: new Date(),
       };
       if (input.name !== undefined) patch.name = input.name;
-      if (input.editor_state !== undefined) patch.editorState = editorStateForUpdate(input.editor_state);
+      if (input.editor_state !== undefined) {
+        const next = editorStatePatchOrSkip(row.editorState, input.editor_state);
+        if (next !== undefined) patch.editorState = next;
+      }
       const [row] = await db
         .update(schema.chaslayHomepageBuilders)
         .set(patch)
@@ -352,20 +351,32 @@ export class ChaslayPagebuilderService {
   static async listPages(merchantId: string, builderId: number) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
-      await this.assertBuilder(merchantId, builderId);
+      const builder = await db.query.chaslayHomepageBuilders.findFirst({
+        where: and(
+          eq(schema.chaslayHomepageBuilders.id, builderId),
+          eq(schema.chaslayHomepageBuilders.merchantId, merchantId)
+        ),
+        columns: { id: true, editorState: true },
+      });
+      if (!builder) throw new Error("Homepage builder not found");
       const rows = await db.query.chaslayHomepageBuilderPages.findMany({
         where: eq(schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
         orderBy: [asc(schema.chaslayHomepageBuilderPages.sortOrder)],
       });
-      return rows.map((p) => ({
-        id: p.id,
-        homepage_builder_id: p.homepageBuilderId,
-        title: p.title,
-        slug: p.slug,
-        editor_state: p.editorState,
-        is_homepage: p.isHomepage,
-        sort_order: p.sortOrder,
-      }));
+      return rows.map((p) => {
+        const editor_state = p.isHomepage
+          ? pickPublishedEditorState(p.editorState, builder.editorState) ?? p.editorState
+          : p.editorState;
+        return {
+          id: p.id,
+          homepage_builder_id: p.homepageBuilderId,
+          title: p.title,
+          slug: p.slug,
+          editor_state,
+          is_homepage: p.isHomepage,
+          sort_order: p.sortOrder,
+        };
+      });
     });
   }
 
@@ -468,7 +479,10 @@ export class ChaslayPagebuilderService {
       };
       if (input.title !== undefined) patch.title = input.title;
       if (input.slug !== undefined) patch.slug = input.slug;
-      if (input.editor_state !== undefined) patch.editorState = editorStateForUpdate(input.editor_state);
+      if (input.editor_state !== undefined) {
+        const next = editorStatePatchOrSkip(page.editorState, input.editor_state);
+        if (next !== undefined) patch.editorState = next;
+      }
       if (input.is_homepage !== undefined) patch.isHomepage = input.is_homepage;
       if (input.sort_order !== undefined) patch.sortOrder = input.sort_order;
       const [row] = await db

@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import {
   isEffectivelyEmptyEditorState,
   normalizeEditorState,
+  pickPublishedEditorState,
+  editorStatePatchOrSkip,
 } from './chaslay-editor-state';
 
 const EMPTY = JSON.stringify({
@@ -49,5 +51,12 @@ assert.equal(isEffectivelyEmptyEditorState(EMPTY), true);
 assert.equal(isEffectivelyEmptyEditorState(WITH_BLOCK), false);
 assert.equal(normalizeEditorState('{}'), null);
 assert.equal(normalizeEditorState(WITH_BLOCK), WITH_BLOCK);
+
+assert.equal(pickPublishedEditorState(null, WITH_BLOCK), WITH_BLOCK);
+assert.equal(pickPublishedEditorState(EMPTY, WITH_BLOCK), WITH_BLOCK);
+assert.equal(pickPublishedEditorState(WITH_BLOCK, EMPTY), WITH_BLOCK);
+
+assert.equal(editorStatePatchOrSkip(WITH_BLOCK, EMPTY), undefined);
+assert.equal(editorStatePatchOrSkip(null, EMPTY, EMPTY), EMPTY);
 
 console.log('chaslay-editor-state: all assertions passed');

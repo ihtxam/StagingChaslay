@@ -45,7 +45,8 @@ export function buildShopTopbarNav(opts: ShopTopbarNavOptions): {
   if (opts.onStoreInfo && opts.labels.storeInfo) {
     drawerLinks.push({ label: opts.labels.storeInfo, onClick: opts.onStoreInfo });
   }
-  drawerLinks.push({ label: opts.labels.contact, to: joinPath(home, '#contact') });
+  // Same-page footer anchor — must not prefix basePath (would leave checkout/menu routes).
+  drawerLinks.push({ label: opts.labels.contact, to: '#contact' });
 
   return { topbarLinks, drawerLinks };
 }

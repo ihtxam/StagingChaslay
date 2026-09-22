@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useTranslations } from '@/lib/chaslay-pagebuilder/i18n-stub';
 import JSZip from 'jszip';
 import { CustomHTML } from './components/CustomHTML';
+import { isEffectivelyEmptyEditorState } from '@/lib/chaslay-pagebuilder/editor-state';
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 const CSS_EXTENSIONS = ['.css'];
@@ -45,6 +46,11 @@ export const TopBar: React.FC<TopBarProps> = ({ onSave, onFullPreview, homepageN
     setIsSaving(true);
     try {
       const json = query.serialize();
+
+      if (isEffectivelyEmptyEditorState(json)) {
+        toast.error('Nothing to save — add content to the page first');
+        return;
+      }
 
       if (onSave) {
         await onSave(json);

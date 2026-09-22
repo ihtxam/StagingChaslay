@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import ShopNavActions from '@/components/shop/ShopNavActions';
+import { handleStorefrontNavClick } from '@/chaslay-pagebuilder/utils/anchor-scroll';
 import { useI18n } from '@/lib/i18n';
 
 type MenuLink = { label: string; to: string; onClick?: () => void };
@@ -38,6 +39,17 @@ export default function ShopMobileNavMenu({
       >
         {link.label}
       </button>
+    ) : link.to.startsWith('#') ? (
+      <a
+        key={link.label}
+        href={link.to}
+        className="text-sm font-medium text-stone-800"
+        onClick={(e) => {
+          handleStorefrontNavClick(e, link.to, () => setOpen(false));
+        }}
+      >
+        {link.label}
+      </a>
     ) : (
       <Link
         key={link.label}
