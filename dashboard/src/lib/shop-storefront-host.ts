@@ -1,6 +1,8 @@
 /** Customer shop storefronts must not use the Reborn POS PWA / offline shell. */
 
 const PANEL_PREFIXES = ['app.', 'admin.', 'api.', 'pay.', 'status.'];
+/** Runtime fallbacks aligned with `isShopPathHubHost` in brand.ts (path shops at /{slug}). */
+const SHOP_PATH_HUB_HOSTS = new Set(['order.rebornsense.com', 'shop.chaslay.com']);
 const PLATFORM_SUBDOMAINS = new Set(['app', 'admin', 'api', 'order', 'shop', 'pay', 'status', 'www']);
 
 const SHOP_CUSTOMER_SEGMENTS =
@@ -25,7 +27,8 @@ export function isShopStorefrontHost(
   const host = String(hostname || '').toLowerCase().split(':')[0] || '';
   const path = String(pathname || '');
   if (/^\/shop(\/|$)/.test(path)) return true;
-  if (host.startsWith('shop.')) return true;
+  // Path shops: order.rebornsense.com/{slug}, shop.chaslay.com/{slug}
+  if (host.startsWith('shop.') || SHOP_PATH_HUB_HOSTS.has(host)) return true;
   if (PANEL_PREFIXES.some((prefix) => host.startsWith(prefix))) return false;
   if (host === 'localhost' || host === '127.0.0.1') return false;
   if (host.endsWith('.chaslay.com') || host.endsWith('.rebornsense.com')) {
