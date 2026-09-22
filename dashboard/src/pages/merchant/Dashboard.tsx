@@ -51,6 +51,7 @@ import WaiterApp from './WaiterApp';
 import DeliveryDriverPage from './DeliveryDriver';
 import StorekeeperApp from './StorekeeperApp';
 import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
+import WebPosPinModal from '@/components/WebPosPinModal';
 import { useTillPrintHub } from '@/hooks/useTillPrintHub';
 import { isTillPrintHubCandidate } from '@/lib/webpos-print-relay';
 import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
@@ -108,6 +109,9 @@ import {
   loadWebPosStaffSession,
   notifyWebPosStaffSessionChanged,
   resolveWebPosStaffSession,
+  saveWebPosStaffSession,
+  webPosPinGateRequired,
+  webPosSessionFromStaffProfile,
   WEBPOS_STAFF_SESSION_EVENT,
   type Permission,
   type StaffRosterRow,
@@ -222,6 +226,8 @@ function MerchantShell() {
     loadWebPosStaffSession()
   );
   const [hasStaffPins, setHasStaffPins] = useState(false);
+  const [staffPinsKnown, setStaffPinsKnown] = useState(false);
+  const logout = useAuthStore((s) => s.logout);
   const managerPanelAccess = useMemo(
     () => jwtHasPanelAccess(user?.permissions as Permission[] | undefined, jwtIsOwner, user?.role),
     [user?.permissions, user?.role, jwtIsOwner]
@@ -245,6 +251,8 @@ function MerchantShell() {
         notifyWebPosStaffSessionChanged();
       } catch {
         /* roster fetch is best-effort for panel gating */
+      } finally {
+        if (!cancelled) setStaffPinsKnown(true);
       }
     })();
     return () => {
@@ -1039,6 +1047,71 @@ function MerchantShell() {
 
   const panelChromeRestricted =
     orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
+
+  /** POS / role apps enforce their own fullscreen PIN gate. */
+  const routeHasOwnPinGate =
+    isPosRoute || isWaiterRoute || isStorekeeperRoute || isDriverRoute;
+  const panelPinGateRequired = webPosPinGateRequired({
+    hasStaffPins,
+    pinSession,
+  });
+  const showPanelPinGate =
+    staffPinsKnown && panelPinGateRequired && !routeHasOwnPinGate;
+  const panelPinGatePending = !staffPinsKnown && !routeHasOwnPinGate;
+
+  const onPanelPinSuccess = useCallback(
+    (staff: {
+      id: string;
+      name: string;
+      roleId: string;
+      roleName: string;
+      permissions: string[];
+      accessToken?: string;
+    }) => {
+      const session = webPosSessionFromStaffProfile({
+        id: staff.id,
+        name: staff.name,
+        roleId: staff.roleId,
+        roleName: staff.roleName,
+        permissions: staff.permissions as Permission[],
+        accessToken: staff.accessToken,
+      });
+      saveWebPosStaffSession(session);
+      setPinSession(session);
+      notifyWebPosStaffSessionChanged();
+    },
+    []
+  );
+
+  const handlePanelPinLogout = useCallback(() => {
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
+
+  if (panelPinGatePending) {
+    return (
+      <div className="panel-shell flex h-full max-h-full items-center justify-center">
+        <p className="text-sm muted">{t('loading')}</p>
+      </div>
+    );
+  }
+
+  if (showPanelPinGate) {
+    return (
+      <div className="panel-shell flex h-full max-h-full">
+        <WebPosPinModal
+          open
+          mode="gate"
+          onClose={() => {
+            /* gate cannot be dismissed without PIN */
+          }}
+          onSuccess={onPanelPinSuccess}
+          onLogout={handlePanelPinLogout}
+          productName={merchantShopName}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex h-full max-h-full panel-shell${hideChrome ? ' webpos-app-mode' : ''}`}>
