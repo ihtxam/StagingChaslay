@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  formatScalePortLabel,
   isGenericBluetoothSerialDevice,
   isLikelyScaleDevice,
   isPlaceholderScaleUsbAddress,
@@ -68,6 +69,23 @@ assert.equal(
     })
   ),
   false
+);
+
+// Tauri native serial returns portName, not port — desktop mapping must accept both.
+const tauriDevice = {
+  portName: 'COM7',
+  name: 'USB-SERIAL CH340 (COM7)',
+};
+assert.equal(
+  formatScalePortLabel(
+    String(
+      (tauriDevice as { port?: string; portName?: string; name?: string }).port ||
+        tauriDevice.portName ||
+        tauriDevice.name ||
+        ''
+    )
+  ),
+  'COM7'
 );
 
 assert.equal(

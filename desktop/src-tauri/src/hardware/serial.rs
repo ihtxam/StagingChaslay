@@ -3,7 +3,7 @@ use std::time::Duration;
 
 const DEFAULT_BAUD: u32 = 9600;
 
-fn normalize_com_port(port_name: &str) -> String {
+pub fn normalize_com_port(port_name: &str) -> String {
     let raw = port_name.trim();
     let stripped = raw.trim_start_matches(r"\\.\");
     let upper = stripped.to_ascii_uppercase();

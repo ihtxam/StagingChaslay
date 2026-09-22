@@ -38,7 +38,7 @@ type PrinterProfile = {
   id: string;
   name: string;
   printReceipts?: boolean;
-  printKitchen?: boolean;
+  printKitchenTickets?: boolean;
 };
 
 type MerchantSnapshot = {
@@ -130,7 +130,7 @@ export default function DesktopSettings() {
         const profiles = data.posPrintSettings?.printers || [];
         setPrinterProfiles(profiles);
         setReceiptPrinter(profiles.find((p) => p.printReceipts)?.name || '');
-        setKitchenPrinter(profiles.find((p) => p.printKitchen)?.name || '');
+        setKitchenPrinter(profiles.find((p) => p.printKitchenTickets)?.name || '');
         setScalePort(String(data.posPrintSettings?.scalePort || ''));
         await refreshHardware();
       } catch (e: unknown) {
@@ -152,7 +152,7 @@ export default function DesktopSettings() {
       const nextProfiles = printerProfiles.map((p) => ({
         ...p,
         printReceipts: p.name === receiptPrinter,
-        printKitchen: p.name === kitchenPrinter,
+        printKitchenTickets: p.name === kitchenPrinter,
       }));
       for (const name of [receiptPrinter, kitchenPrinter].filter(Boolean)) {
         if (!nextProfiles.some((p) => p.name === name)) {
@@ -160,7 +160,7 @@ export default function DesktopSettings() {
             id: `desk-${Date.now().toString(36)}-${name.slice(0, 8)}`,
             name,
             printReceipts: name === receiptPrinter,
-            printKitchen: name === kitchenPrinter,
+            printKitchenTickets: name === kitchenPrinter,
           });
         }
       }

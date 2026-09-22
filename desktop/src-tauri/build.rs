@@ -27,9 +27,14 @@ fn main() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let resources_dir = manifest_dir.join("resources");
     std::fs::create_dir_all(&resources_dir).ok();
-    let ps1_src = manifest_dir.join("../print-agent/win-raw-print.ps1");
-    if ps1_src.is_file() {
-        let _ = std::fs::copy(&ps1_src, resources_dir.join("win-raw-print.ps1"));
+    for (src_name, dst_name) in [
+        ("win-raw-print.ps1", "win-raw-print.ps1"),
+        ("win-scale-read.ps1", "win-scale-read.ps1"),
+    ] {
+        let ps1_src = manifest_dir.join("../print-agent").join(src_name);
+        if ps1_src.is_file() {
+            let _ = std::fs::copy(&ps1_src, resources_dir.join(dst_name));
+        }
     }
     ensure_sidecar_stub(manifest_dir);
 

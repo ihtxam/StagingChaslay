@@ -1,6 +1,9 @@
 #[cfg(target_os = "windows")]
 mod windows;
+#[cfg(target_os = "windows")]
+mod windows_scale;
 
+mod scale;
 mod serial;
 
 pub fn native_print_available() -> bool {
@@ -65,4 +68,27 @@ pub fn try_drawer_kick(printer_name: Option<&str>) -> Result<String, String> {
     {
         Err("native cash drawer kick is only available on Windows".to_string())
     }
+}
+
+pub fn try_list_scale_devices() -> Result<Vec<serde_json::Value>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        match windows_scale::list_scale_devices() {
+            Ok(devices) if !devices.is_empty() => return Ok(devices),
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+    try_list_serial_ports()
+}
+
+pub fn try_read_scale(port: &str, timeout_ms: u64) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "windows")]
+    {
+        match windows_scale::read_scale_via_script(port, timeout_ms) {
+            Ok(result) => return Ok(result),
+            Err(_) => {}
+        }
+    }
+    scale::read_scale_from_port(port, timeout_ms)
 }
