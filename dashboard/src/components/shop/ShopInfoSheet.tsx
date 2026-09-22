@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, Marker, Polygon, TileLayer } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { Bike, Clock, ExternalLink, Mail, MapPin, Phone, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { summarizeStoreHours } from '@/lib/shop-hours-display';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { useShopDeliveryPricing } from '@/hooks/useShopDeliveryPricing';
 import ShopDeliveryInfoPanel from '@/components/shop/ShopDeliveryInfoPanel';
+import ShopDeliveryZoneMap from '@/components/shop/ShopDeliveryZoneMap';
 
 type Zone = {
   id: string;
@@ -27,13 +25,6 @@ type Props = {
 };
 
 type InfoTab = 'contact' | 'hours' | 'delivery';
-
-const pinIcon = L.divIcon({
-  className: '',
-  html: `<div style="width:14px;height:14px;border-radius:50%;background:#b91c1c;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
 
 /**
  * Store info sheet: contact, hours, and delivery zones.
@@ -105,7 +96,7 @@ export default function ShopInfoSheet({ open, onClose, merchant, zones: zonesPro
         onClick={onClose}
       />
       <div
-        className={`absolute inset-x-4 top-[12%] mx-auto flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-xl transition sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-h-[90dvh] ${
+        className={`absolute inset-x-3 top-[8%] mx-auto flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl transition sm:inset-x-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-h-[92dvh] sm:max-w-xl md:max-w-2xl ${
           open ? 'opacity-100' : 'translate-y-4 opacity-0'
         }`}
         role="dialog"
@@ -173,31 +164,14 @@ export default function ShopInfoSheet({ open, onClose, merchant, zones: zonesPro
                   <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
                 </a>
               ) : null}
-              <div className="h-44 w-full overflow-hidden rounded-xl bg-stone-100">
-                {mounted ? (
-                  <MapContainer center={center} zoom={14} className="h-full w-full" scrollWheelZoom={false}>
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker position={center} icon={pinIcon} />
-                    {zones.map((z, i) => {
-                      const ring = (z.polygon || [])
-                        .map((p) => [Number(p[1]), Number(p[0])] as [number, number])
-                        .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
-                      if (ring.length < 3) return null;
-                      const color = z.color || ['#7c3aed', '#2563eb', '#ea580c', '#0d9488'][i % 4];
-                      return (
-                        <Polygon
-                          key={z.id}
-                          positions={ring}
-                          pathOptions={{ color, fillColor: color, fillOpacity: 0.2, weight: 2 }}
-                        />
-                      );
-                    })}
-                  </MapContainer>
-                ) : null}
-              </div>
+              {mounted ? (
+                <ShopDeliveryZoneMap
+                  center={center}
+                  zones={zones}
+                  fitToZones={zones.some((z) => (z.polygon?.length ?? 0) >= 3)}
+                  className="h-44 w-full sm:h-48"
+                />
+              ) : null}
               {merchant?.phone ? (
                 <a
                   href={`tel:${String(merchant.phone).replace(/\s+/g, '')}`}
@@ -237,13 +211,23 @@ export default function ShopInfoSheet({ open, onClose, merchant, zones: zonesPro
           ) : null}
 
           {tab === 'delivery' ? (
-            <ShopDeliveryInfoPanel
-              compact
-              storeHours={merchant?.storeHours}
-              zones={zones}
-              zipRules={zipRules}
-              deliveryMode={deliveryMode}
-            />
+            <div className="space-y-4">
+              <ShopDeliveryInfoPanel
+                compact
+                storeHours={merchant?.storeHours}
+                zones={zones}
+                zipRules={zipRules}
+                deliveryMode={deliveryMode}
+              />
+              {mounted && deliveryMode === 'zones' && zones.some((z) => (z.polygon?.length ?? 0) >= 3) ? (
+                <ShopDeliveryZoneMap
+                  center={center}
+                  zones={zones}
+                  fitToZones
+                  className="h-52 w-full sm:h-60"
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
