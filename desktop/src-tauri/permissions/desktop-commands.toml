@@ -10,8 +10,8 @@ commands.allow = ["desktop_reload", "desktop_window_mode", "desktop_minimize", "
 
 [[permission]]
 identifier = "allow-desktop-sidecar"
-description = "Print Agent sidecar health probe."
-commands.allow = ["sidecar_health"]
+description = "Print Agent sidecar health probe and lazy start."
+commands.allow = ["sidecar_health", "ensure_print_agent_sidecar"]
 
 [[permission]]
 identifier = "allow-desktop-hw"

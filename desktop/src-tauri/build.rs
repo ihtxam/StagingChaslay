@@ -44,6 +44,7 @@ fn main() {
                 "desktop_minimize",
                 "desktop_toggle_window_mode",
                 "sidecar_health",
+                "ensure_print_agent_sidecar",
                 "hw_capabilities",
                 "hw_agent_status",
                 "hw_list_printers",
