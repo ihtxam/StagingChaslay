@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Mail, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import MailcoDnsChecklist from '@/components/superadmin/MailcoDnsChecklist';
 
 type AdyenSettings = {
   merchantAccount: string;
@@ -670,6 +671,8 @@ export default function Settings() {
           </div>
         ) : null}
 
+        <MailcoDnsChecklist fromEmail={mailcoForm.fromEmail || mailco?.fromEmail || ''} />
+
         <form onSubmit={saveMailco} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8 pb-8 border-b border-gray-200">
           <h3 className="md:col-span-2 text-lg font-semibold">mailco (primary)</h3>
           <p className="md:col-span-2 text-sm text-gray-600">
@@ -680,7 +683,8 @@ export default function Settings() {
               ees.mailco.ch
             </a>
             . The test button uses the same <code>EmailService.send</code> path as production.
-            Verify your sending domain in mailco before going live.
+            Publish the DNS records in the checklist above (at your registrar or Mailco Postal) before
+            going live.
           </p>
           <label className="block">
             <span className="text-sm font-medium">Primary provider</span>

@@ -238,6 +238,35 @@ router.get("/platform-settings/mailco", async (_req: Request, res: Response) => 
 });
 
 /**
+ * GET /api/superadmin/platform-settings/mailco/dns-guide
+ * Query: fromEmail (optional — defaults to configured platform mailco From)
+ */
+router.get("/platform-settings/mailco/dns-guide", async (req: Request, res: Response) => {
+  try {
+    const { buildMailcoDnsGuide } = await import("@/lib/mailco-dns-guide");
+    const mailco = await PlatformSettingsService.getMailcoSettingsPublic();
+    const fromEmail = String(req.query.fromEmail || mailco.fromEmail || "").trim();
+    if (!fromEmail) {
+      res.status(400).json({
+        error: "Configure a mailco From email first, or pass ?fromEmail=…",
+      });
+      return;
+    }
+    const guide = buildMailcoDnsGuide(fromEmail);
+    if (!guide) {
+      res.status(400).json({ error: "Invalid fromEmail address" });
+      return;
+    }
+    res.json({ success: true, fromEmail, guide });
+  } catch (error) {
+    console.error("Error building mailco DNS guide:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to build mailco DNS guide",
+    });
+  }
+});
+
+/**
  * PUT /api/superadmin/platform-settings/mailco
  */
 router.put("/platform-settings/mailco", async (req: Request, res: Response) => {

@@ -270,6 +270,35 @@ router.get("/platform-settings/mailco", async (_req, res) => {
     }
 });
 /**
+ * GET /api/superadmin/platform-settings/mailco/dns-guide
+ * Query: fromEmail (optional — defaults to configured platform mailco From)
+ */
+router.get("/platform-settings/mailco/dns-guide", async (req, res) => {
+    try {
+        const { buildMailcoDnsGuide } = await Promise.resolve().then(() => __importStar(require("@/lib/mailco-dns-guide")));
+        const mailco = await platform_settings_service_1.PlatformSettingsService.getMailcoSettingsPublic();
+        const fromEmail = String(req.query.fromEmail || mailco.fromEmail || "").trim();
+        if (!fromEmail) {
+            res.status(400).json({
+                error: "Configure a mailco From email first, or pass ?fromEmail=…",
+            });
+            return;
+        }
+        const guide = buildMailcoDnsGuide(fromEmail);
+        if (!guide) {
+            res.status(400).json({ error: "Invalid fromEmail address" });
+            return;
+        }
+        res.json({ success: true, fromEmail, guide });
+    }
+    catch (error) {
+        console.error("Error building mailco DNS guide:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to build mailco DNS guide",
+        });
+    }
+});
+/**
  * PUT /api/superadmin/platform-settings/mailco
  */
 router.put("/platform-settings/mailco", async (req, res) => {
@@ -301,26 +330,44 @@ router.get("/email/usage", async (_req, res) => {
     }
 });
 /**
- * POST /api/superadmin/email/test — send a test email via platform mailco (Brevo fallback)
+ * GET /api/superadmin/email/order/:orderId — email send log for one shop order
+ */
+router.get("/email/order/:orderId", async (req, res) => {
+    try {
+        const orderId = String(req.params.orderId || "").trim();
+        if (!orderId) {
+            res.status(400).json({ error: "orderId is required" });
+            return;
+        }
+        const { EmailUsageService } = await Promise.resolve().then(() => __importStar(require("@/services/email-usage.service")));
+        const logs = await EmailUsageService.getOrderEmailLogs(orderId);
+        res.json({ success: true, orderId, logs });
+    }
+    catch (error) {
+        console.error("Error getting order email logs:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load order email logs",
+        });
+    }
+});
+/**
+ * POST /api/superadmin/email/test — send a test email via platform mailco or Brevo
+ * Body: { to, provider?: "mailco" | "brevo" } (defaults to mailco)
  */
 router.post("/email/test", async (req, res) => {
     try {
         const to = String(req.body?.to || "").trim();
-        if (!to) {
-            res.status(400).json({ error: "Recipient email is required" });
+        if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+            res.status(400).json({ error: "Valid recipient email is required" });
             return;
         }
+        const providerRaw = String(req.body?.provider || "mailco").toLowerCase();
+        const provider = providerRaw === "brevo" ? "brevo" : "mailco";
         const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
-        const status = await EmailService.status();
-        await EmailService.send({
-            to,
-            subject: "Reborn platform email test",
-            html: "<p>This is a test email from the Reborn platform transactional email service.</p>",
-            emailType: "marketing_test",
-        });
+        await EmailService.sendPlatformTest(to, provider);
         res.json({
             success: true,
-            provider: status.provider,
+            provider,
         });
     }
     catch (error) {
