@@ -4,7 +4,7 @@
   "name": "reborn-pos",
   "platform": "windows",
   "description": "Fullscreen Windows kiosk for Reborn WebPOS. Hardware uses the Print Agent on 127.0.0.1:9101.",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "exeFile": "reborn-pos-setup.exe",
   "displayName": "RebornPOS"
 }
