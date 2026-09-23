@@ -97,15 +97,69 @@ Pushing to `rebornSense` `main` **only deploys staging** (sync → StagingChasla
 | Environment | Repo | Server | Path | How it deploys |
 |-------------|------|--------|------|----------------|
 | Chaslay test/staging | [StagingChaslay](https://github.com/ihtxam/StagingChaslay) | `116.202.26.15` | `/root/StagingChaslay` | Auto on push to `main` in StagingChaslay (usually via sync workflow) |
-| Rebornsense production | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | Manual: **Actions → Deploy to Rebornsense** |
+| Rebornsense production | [rebornSense](https://github.com/ihtxam/rebornSense) (this repo) | `91.98.41.165` | `/root/rebornSense` | **Webhook** on push to `main` (no GitHub Actions billing) |
 
 When asking an agent to deploy, always specify **test/chaslay** or **production/reborn**.
 
 | Environment | Workflow | Trigger | Server secret | Stack | Domains |
 |-------------|----------|---------|---------------|-------|---------|
 | Chaslay test/staging | `deploy-hetzner.yml` in **StagingChaslay** | Auto on push to `main` | `HETZNER_*` | `chaslay` | `app.chaslay.com`, `shop.chaslay.com`, … |
-| Rebornsense production | `deploy-rebornsense.yml` in **rebornSense** | Manual (`workflow_dispatch`) | `REBORN_HETZNER_*` | `rebornsense` | `app.rebornsense.com`, … |
+| Rebornsense production | **Webhook receiver** on VPS (`scripts/deploy-webhook-receiver.py`) | GitHub push to `main` or manual POST | `/root/chaslay-secrets/deploy-webhook.env` | `rebornsense` | `app.rebornsense.com`, … |
+| Rebornsense production (legacy) | `deploy-rebornsense.yml` | Manual GitHub Actions | `REBORN_HETZNER_*` | `rebornsense` | Requires GitHub billing |
 | Test sync | `sync-staging-chaslay.yml` in **rebornSense** | Auto on push to `main` | `STAGING_CHASLAY_SYNC_TOKEN` | — | Copies code → StagingChaslay |
+
+### Webhook-only production deploy (recommended)
+
+No GitHub Actions runner fees. A small Python service on the VPS listens on `127.0.0.1:9847`; nginx proxies `POST https://app.rebornsense.com/internal/git-deploy`.
+
+**One-time server setup** (on `91.98.41.165` as root):
+
+```bash
+cd /root/rebornSense
+git pull origin main
+bash scripts/install-deploy-webhook.sh
+nginx -t && systemctl reload nginx   # after nginx config includes /internal/git-deploy
+```
+
+The installer creates `/root/chaslay-secrets/deploy-webhook.env` with `DEPLOY_WEBHOOK_SECRET` and `DEPLOY_WEBHOOK_TOKEN`.
+
+**GitHub repo webhook** (Settings → Webhooks → Add webhook):
+
+| Field | Value |
+|-------|--------|
+| Payload URL | `https://app.rebornsense.com/internal/git-deploy` |
+| Content type | `application/json` |
+| Secret | value of `DEPLOY_WEBHOOK_SECRET` from server env file |
+| Events | **Just the push event** |
+| Active | ✓ |
+
+**Manual / agent trigger** (no GitHub):
+
+```bash
+# On the server:
+bash /root/rebornSense/scripts/trigger-production-deploy-webhook.sh
+
+# From a machine with the token:
+DEPLOY_WEBHOOK_TOKEN='…' bash scripts/trigger-production-deploy-webhook.sh
+```
+
+**Logs:**
+
+```bash
+tail -f /var/log/rebornsense-deploy-webhook.log   # webhook requests
+tail -f /var/log/rebornsense-deploy.log            # deploy script output
+systemctl status rebornsense-deploy-webhook
+```
+
+**Agent deploy** (uses webhook by default):
+
+```bash
+bash scripts/agent-deploy.sh production
+# Legacy GitHub Actions: bash scripts/agent-deploy.sh production-github
+# Direct SSH: bash scripts/agent-deploy.sh production-ssh
+```
+
+Set `DEPLOY_ON_ANY_MAIN_PUSH=0` in `deploy-webhook.env` to only deploy when `.deploy/rebornsense-production` changes (old behaviour).
 
 ### Chaslay staging DNS (shop hub)
 
