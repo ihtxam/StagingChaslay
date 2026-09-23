@@ -15,12 +15,20 @@ interface BuilderLanguageContextType {
   isLoaded: boolean;
 }
 
-const defaultLanguages: LanguageConfig[] = [
-  { code: 'en', is_default: 1 },
-  { code: 'de', is_default: 0 },
-  { code: 'fr', is_default: 0 },
-  { code: 'it', is_default: 0 },
-];
+const SUPPORTED_BUILDER_LANGS = ['en', 'de', 'fr', 'it'] as const;
+
+function languagesWithDefault(defaultCode: string): LanguageConfig[] {
+  const code = String(defaultCode || 'en').toLowerCase().slice(0, 2);
+  const defaultLang = SUPPORTED_BUILDER_LANGS.includes(code as (typeof SUPPORTED_BUILDER_LANGS)[number])
+    ? code
+    : 'en';
+  return SUPPORTED_BUILDER_LANGS.map((lang) => ({
+    code: lang,
+    is_default: lang === defaultLang ? 1 : 0,
+  }));
+}
+
+const defaultLanguages: LanguageConfig[] = languagesWithDefault('en');
 
 const BuilderLanguageContext = createContext<BuilderLanguageContextType>({
   languages: defaultLanguages,
@@ -47,15 +55,9 @@ export function BuilderLanguageProvider({
 
   useEffect(() => {
     if (locale) {
-      const codes = ['en', 'de', 'fr', 'it'];
-      const active = codes.includes(locale) ? codes : [locale, ...codes.filter((c) => c !== locale)];
-      setLanguages(
-        active.map((code) => ({
-          code,
-          is_default: code === (defaultLanguageProp || locale) ? 1 : 0,
-        }))
-      );
-      setDefaultLanguage(defaultLanguageProp || locale);
+      const defaultCode = defaultLanguageProp || locale;
+      setLanguages(languagesWithDefault(defaultCode));
+      setDefaultLanguage(defaultCode);
       setIsLoaded(true);
       return;
     }
@@ -65,12 +67,15 @@ export function BuilderLanguageProvider({
         if (Array.isArray(langs) && langs.length > 0) {
           setLanguages(langs);
           const defaultLang = langs.find((l: LanguageConfig) => l.is_default === 1);
-          setDefaultLanguage(defaultLang?.code || langs[0].code);
+          const code = defaultLang?.code || langs[0].code;
+          setDefaultLanguage(code);
         } else {
-          const panelLang = (res.data as any).panelLanguage || (res.data as any).shopLanguage;
-          if (panelLang && typeof panelLang === 'string') {
-            setDefaultLanguage(panelLang.slice(0, 2));
-          }
+          const shopLang =
+            (res.data as any).shopLanguage || (res.data as any).panelLanguage || 'en';
+          const code =
+            typeof shopLang === 'string' ? shopLang.slice(0, 2).toLowerCase() : 'en';
+          setDefaultLanguage(code);
+          setLanguages(languagesWithDefault(code));
         }
       }
       setIsLoaded(true);

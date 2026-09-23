@@ -9,6 +9,14 @@ export function resolveTranslatedProp(
   const base = props[key];
   const loc = String(locale || defaultLanguage).toLowerCase().slice(0, 2);
   const def = String(defaultLanguage || 'en').toLowerCase().slice(0, 2);
+  if (loc && loc === def) {
+    // Legacy pages authored with English default store FR/DE/IT in suffixed keys.
+    if (def !== 'en') {
+      const legacyLocalized = props[`${key}_${loc}`];
+      if (typeof legacyLocalized === 'string' && legacyLocalized.trim()) return legacyLocalized;
+    }
+    return typeof base === 'string' ? base : '';
+  }
   if (loc && loc !== def) {
     const localized = props[`${key}_${loc}`];
     if (typeof localized === 'string' && localized.trim()) return localized;
