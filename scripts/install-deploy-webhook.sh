@@ -82,6 +82,13 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 
+# Caddy runs in Docker — allow bridge networks to reach the host webhook port.
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi active; then
+  ufw allow from 172.16.0.0/12 to any port "${DEPLOY_WEBHOOK_PORT:-9847}" proto tcp comment 'reborn deploy webhook from docker' >/dev/null 2>&1 || true
+  ufw reload >/dev/null 2>&1 || true
+  echo "UFW: allowed Docker → port ${DEPLOY_WEBHOOK_PORT:-9847}"
+fi
+
 echo ""
 echo "=== Deploy webhook installed ==="
 echo "Service: systemctl status ${SERVICE_NAME}"
