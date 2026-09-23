@@ -7,6 +7,38 @@ Check availability without downloading the binary:
 - `GET /downloads/reborn-print-bridge.json` — `{ available, version, downloadUrl }`
 - `GET /downloads/reborn-print-agent.json` — Windows agent manifest
 
+## RebornPOS (Windows NSIS installer)
+
+`reborn-pos-setup.exe` is **gitignored** (~13MB). Built from `desktop/` (Tauri 2 kiosk shell).
+
+### Build on Windows (local — required when GitHub Actions billing blocks `windows-latest`)
+
+```powershell
+# From repo root (Node 20+, Rust MSVC, WebView2):
+powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1
+
+# Build + publish to app.rebornsense.com/downloads:
+powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish
+```
+
+Requires `~/.reborn-agent-env` or SSH config alias `production-reborn` for publish.
+
+### Publish an existing local build (Linux/macOS/WSL)
+
+```bash
+REBORN_POS_FETCH=0 bash scripts/publish-reborn-pos-download.sh
+```
+
+### Verify
+
+```bash
+curl -sL https://app.rebornsense.com/downloads/reborn-pos-setup.json
+curl -sI https://app.rebornsense.com/downloads/reborn-pos-setup.exe
+# Expect: 200, >1MB, magic MZ
+```
+
+Public URL: `https://app.rebornsense.com/downloads/reborn-pos-setup.exe`
+
 ## Print agent (Windows EXE)
 
 `*.exe` files are **gitignored** (~40MB). They must be built and present on the server at:

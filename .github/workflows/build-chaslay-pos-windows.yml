@@ -1,6 +1,9 @@
 name: Build RebornPOS Windows
 
-# NSIS installer for the Tauri kiosk shell. Must run on windows-latest (WebView2 + MSVC).
+# NSIS installer for the Tauri kiosk shell. Must run on Windows (WebView2 + MSVC).
+# Offline fallback when GitHub billing blocks windows-latest:
+#   powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish
+# Or register a self-hosted Windows runner with label "windows" and set runs-on below.
 
 on:
   workflow_dispatch:
@@ -17,6 +20,7 @@ concurrency:
 
 jobs:
   build-windows:
+    # Self-hosted: change to [self-hosted, windows] when a Cursor/company Windows worker is online.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

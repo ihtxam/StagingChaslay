@@ -14,16 +14,23 @@ SSH_ALIAS="${REBORN_POS_SSH_ALIAS:-${PRODUCTION_SSH_ALIAS:-production-reborn}}"
 REMOTE_PATH="${REBORN_POS_REMOTE_PATH:-${PRODUCTION_DEPLOY_PATH:-/root/rebornSense}/backend/public/downloads}"
 LOCAL_DIR="${REBORN_POS_DOWNLOADS_DIR:-$ROOT/backend/public/downloads}"
 FETCH="${REBORN_POS_FETCH:-1}"
-
-if [[ "$FETCH" == "1" ]]; then
-  bash "$ROOT/scripts/fetch-reborn-pos-installer.sh"
-fi
-
 EXE="$LOCAL_DIR/reborn-pos-setup.exe"
 JSON="$LOCAL_DIR/reborn-pos-setup.json"
 
+if [[ "$FETCH" == "1" ]]; then
+  if ! bash "$ROOT/scripts/fetch-reborn-pos-installer.sh"; then
+    if [[ -f "$EXE" ]]; then
+      echo "WARN: fetch failed; publishing existing local installer at $EXE"
+    else
+      echo "ERROR: fetch failed and no local installer at $EXE"
+      echo "Build on Windows: powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1"
+      exit 1
+    fi
+  fi
+fi
+
 if [[ ! -f "$EXE" ]]; then
-  echo "ERROR: $EXE missing — run scripts/fetch-reborn-pos-installer.sh first"
+  echo "ERROR: $EXE missing — build on Windows or run scripts/fetch-reborn-pos-installer.sh"
   exit 1
 fi
 
