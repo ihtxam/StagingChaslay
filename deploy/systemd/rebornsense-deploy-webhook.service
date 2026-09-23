@@ -1,0 +1,18 @@
+[Unit]
+Description=RebornSense git deploy webhook (webhook-only, no GitHub Actions)
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/root/chaslay-secrets/deploy-webhook.env
+WorkingDirectory=/root/rebornSense
+ExecStart=/usr/bin/python3 /root/rebornSense/scripts/deploy-webhook-receiver.py
+Restart=always
+RestartSec=5
+User=root
+Group=root
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
