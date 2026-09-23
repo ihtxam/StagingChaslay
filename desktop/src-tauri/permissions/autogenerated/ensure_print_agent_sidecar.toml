@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ensure-print-agent-sidecar"
+description = "Enables the ensure_print_agent_sidecar command without any pre-configured scope."
+commands.allow = ["ensure_print_agent_sidecar"]
+
+[[permission]]
+identifier = "deny-ensure-print-agent-sidecar"
+description = "Denies the ensure_print_agent_sidecar command without any pre-configured scope."
+commands.deny = ["ensure_print_agent_sidecar"]

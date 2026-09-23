@@ -2519,26 +2519,24 @@ html.desktop-app-shell body {
 html.desktop-app-shell .desktop-chrome-bar {
   padding-top: env(safe-area-inset-top, 0px);
   height: calc(2.25rem + env(safe-area-inset-top, 0px));
-}
-
-/* Desktop chrome stays dark in merchant night mode — keep controls visible */
-html.dark.desktop-app-shell .desktop-chrome-bar {
   border-bottom-color: rgba(255, 255, 255, 0.14);
   background: color-mix(in srgb, var(--brand-blue-charcoal) 92%, #000);
   color: #f8fafc;
 }
 
-html.dark.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn {
+/* Desktop chrome: always light controls on dark bar (merchant night mode sets html.dark) */
+html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn {
   color: rgba(248, 250, 252, 0.92);
 }
 
-html.dark.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn:hover:not(:disabled) {
+html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
 
-html.dark.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn svg {
+html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn svg {
   color: currentColor;
+  stroke: currentColor;
 }
 
 html.desktop-app-shell .webpos-shell--fill {

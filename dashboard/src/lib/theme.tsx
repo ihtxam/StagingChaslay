@@ -20,10 +20,17 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function applyTheme(theme: ThemeMode) {
+export function applyTheme(theme: ThemeMode) {
   const root = document.documentElement;
   root.classList.toggle('dark', theme === 'dark');
   root.dataset.theme = theme;
+}
+
+/** Apply stored panel theme before React paint (desktop shell chrome). */
+export function initThemeFromStorage(): ThemeMode {
+  const theme = readInitialTheme();
+  applyTheme(theme);
+  return theme;
 }
 
 function readInitialTheme(): ThemeMode {

@@ -471,23 +471,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "chaslay-pos"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "serde",
- "serde_json",
- "serialport",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-single-instance",
- "ureq",
- "url",
- "urlencoding",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2784,6 +2767,23 @@ name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
+
+[[package]]
+name = "reborn-pos"
+version = "0.1.2"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "serialport",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-single-instance",
+ "ureq",
+ "url",
+ "urlencoding",
+]
 
 [[package]]
 name = "redox_syscall"

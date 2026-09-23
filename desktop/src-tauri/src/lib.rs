@@ -50,7 +50,7 @@ fn pos_start_url() -> String {
     if cfg!(debug_assertions) {
         "http://127.0.0.1:5173/login".to_string()
     } else {
-        "https://app.chaslay.com/login".to_string()
+        "https://app.rebornsense.com/login".to_string()
     }
 }
 
@@ -704,7 +704,7 @@ pub fn run() {
             }
             let start = pos_start_url();
             let parsed = Url::parse(&start).unwrap_or_else(|_| {
-                Url::parse("https://app.chaslay.com/login").expect("static url")
+                Url::parse("https://app.rebornsense.com/login").expect("static url")
             });
             let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
                 .title("RebornPOS")

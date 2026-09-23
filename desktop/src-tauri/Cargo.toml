@@ -1,6 +1,6 @@
 [package]
 name = "reborn-pos"
-version = "0.1.0"
+version = "0.1.2"
 description = "RebornPOS Windows kiosk shell"
 authors = ["Reborn"]
 edition = "2021"

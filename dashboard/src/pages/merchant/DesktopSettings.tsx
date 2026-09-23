@@ -273,8 +273,8 @@ export default function DesktopSettings() {
 
   return (
     <div className="desktop-settings-page mx-auto flex min-h-[calc(100vh-2.25rem)] max-w-6xl flex-col gap-4 p-4 pt-12 md:flex-row">
-      <aside className="w-full shrink-0 rounded-xl border border-stone-200 bg-white p-3 shadow-sm md:w-56">
-        <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-stone-800">
+      <aside className="w-full shrink-0 rounded-xl border border-stone-200 bg-white p-3 shadow-sm dark:border-stone-700 dark:bg-stone-900 md:w-56">
+        <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-stone-800 dark:text-stone-100">
           <Settings2 size={16} aria-hidden />
           {t('desktopSettingsTitle')}
         </div>
@@ -284,7 +284,9 @@ export default function DesktopSettings() {
               key={id}
               type="button"
               className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium ${
-                section === id ? 'bg-teal-50 text-teal-800' : 'text-stone-700 hover:bg-stone-50'
+                section === id
+                  ? 'bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200'
+                  : 'text-stone-700 hover:bg-stone-50 dark:text-stone-300 dark:hover:bg-stone-800'
               }`}
               onClick={() => setSection(id)}
             >
@@ -295,18 +297,18 @@ export default function DesktopSettings() {
         </nav>
       </aside>
 
-      <main className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <main className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-700 dark:bg-stone-900">
         {loading ? (
-          <p className="text-sm text-stone-500">{t('loading')}</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">{t('loading')}</p>
         ) : (
           <>
             {section === 'appearance' && (
               <section className="space-y-4">
-                <h2 className="text-lg font-bold text-stone-900">{sectionLabel('appearance')}</h2>
-                <label className="flex items-center justify-between gap-3 text-sm">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('appearance')}</h2>
+                <label className="flex items-center justify-between gap-3 text-sm dark:text-stone-200">
                   <span>{t('theme')}</span>
                   <select
-                    className="rounded-lg border px-3 py-2"
+                    className="rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                     value={theme}
                     onChange={(e) => setTheme(e.target.value as 'light' | 'dark')}
                   >
@@ -315,7 +317,7 @@ export default function DesktopSettings() {
                   </select>
                 </label>
                 <div>
-                  <p className="mb-2 text-sm font-medium">{t('posRetailTileSize')}</p>
+                  <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('posRetailTileSize')}</p>
                   <div className="flex gap-2">
                     {(['sm', 'md', 'lg'] as const).map((size) => (
                       <button
@@ -323,8 +325,8 @@ export default function DesktopSettings() {
                         type="button"
                         className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
                           tileSize === size
-                            ? 'border-teal-600 bg-teal-50 text-teal-800'
-                            : 'border-stone-200'
+                            ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-200'
+                            : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
                         }`}
                         onClick={() => setTileSize(size)}
                       >
@@ -337,7 +339,7 @@ export default function DesktopSettings() {
                     ))}
                   </div>
                 </div>
-                <label className="flex items-center justify-between gap-3 text-sm">
+                <label className="flex items-center justify-between gap-3 text-sm dark:text-stone-200">
                   <span>{t('posRetailClearSearchAfterAdd')}</span>
                   <input
                     type="checkbox"
@@ -351,7 +353,7 @@ export default function DesktopSettings() {
             {section === 'printer' && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-bold text-stone-900">{sectionLabel('printer')}</h2>
+                  <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('printer')}</h2>
                   <button
                     type="button"
                     className="text-sm font-semibold text-teal-700"
@@ -360,11 +362,11 @@ export default function DesktopSettings() {
                     {t('refresh')}
                   </button>
                 </div>
-                <p className="text-sm text-stone-500">{t('desktopSettingsPrinterHint')}</p>
-                <label className="block space-y-1 text-sm">
+                <p className="text-sm text-stone-500 dark:text-stone-400">{t('desktopSettingsPrinterHint')}</p>
+                <label className="block space-y-1 text-sm dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsReceiptPrinter')}</span>
                   <select
-                    className="w-full rounded-lg border px-3 py-2"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                     value={receiptPrinter}
                     onChange={(e) => setReceiptPrinter(e.target.value)}
                   >
@@ -377,10 +379,10 @@ export default function DesktopSettings() {
                     ))}
                   </select>
                 </label>
-                <label className="block space-y-1 text-sm">
+                <label className="block space-y-1 text-sm dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsKitchenPrinter')}</span>
                   <select
-                    className="w-full rounded-lg border px-3 py-2"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                     value={kitchenPrinter}
                     onChange={(e) => setKitchenPrinter(e.target.value)}
                   >
@@ -405,16 +407,16 @@ export default function DesktopSettings() {
 
             {section === 'scale' && (
               <section className="space-y-4">
-                <h2 className="text-lg font-bold text-stone-900">{sectionLabel('scale')}</h2>
-                <p className="text-sm text-stone-500">{t('desktopSettingsScaleHint')}</p>
-                <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('scale')}</h2>
+                <p className="text-sm text-stone-500 dark:text-stone-400">{t('desktopSettingsScaleHint')}</p>
+                <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800/60 dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsScaleStatus')}: </span>
                   {sidecar.ok ? t('desktopSettingsSidecarOnline') : t('desktopSettingsSidecarOffline')}
                 </div>
-                <label className="block space-y-1 text-sm">
+                <label className="block space-y-1 text-sm dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsScalePort')}</span>
                   <select
-                    className="w-full rounded-lg border px-3 py-2"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                     value={scalePort}
                     onChange={(e) => setScalePort(e.target.value)}
                   >
@@ -426,7 +428,7 @@ export default function DesktopSettings() {
                     ))}
                   </select>
                 </label>
-                <p className="text-sm">
+                <p className="text-sm dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsScaleLastReading')}: </span>
                   {scaleReading}
                 </p>
@@ -443,9 +445,9 @@ export default function DesktopSettings() {
 
             {section === 'drawer' && (
               <section className="space-y-4">
-                <h2 className="text-lg font-bold text-stone-900">{sectionLabel('drawer')}</h2>
-                <p className="text-sm text-stone-500">{t('desktopSettingsDrawerHint')}</p>
-                <p className="text-sm text-stone-600">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('drawer')}</h2>
+                <p className="text-sm text-stone-500 dark:text-stone-400">{t('desktopSettingsDrawerHint')}</p>
+                <p className="text-sm text-stone-600 dark:text-stone-300">
                   {t('desktopSettingsDrawerUsesReceipt').replace(
                     '{name}',
                     receiptPrinter || t('desktopSettingsDefaultPrinter')
@@ -464,34 +466,34 @@ export default function DesktopSettings() {
 
             {section === 'device' && (
               <section className="space-y-4">
-                <h2 className="text-lg font-bold text-stone-900">{sectionLabel('device')}</h2>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2">
-                    <dt className="text-stone-500">{t('desktopSettingsAppVersion')}</dt>
+                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('device')}</h2>
+                <dl className="space-y-2 text-sm dark:text-stone-200">
+                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                    <dt className="text-stone-500 dark:text-stone-400">{t('desktopSettingsAppVersion')}</dt>
                     <dd className="font-medium">{shellVersion}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2">
-                    <dt className="text-stone-500">{t('printAgentVersionStatusLabel')}</dt>
+                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                    <dt className="text-stone-500 dark:text-stone-400">{t('printAgentVersionStatusLabel')}</dt>
                     <dd className="font-medium">
                       {sidecar.ok
                         ? sidecar.version || t('printAgentConnectedUnknown')
                         : t('printAgentNotDetected')}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2">
-                    <dt className="text-stone-500">{t('desktopSettingsSidecarBundled')}</dt>
+                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                    <dt className="text-stone-500 dark:text-stone-400">{t('desktopSettingsSidecarBundled')}</dt>
                     <dd className="font-medium">{sidecar.bundled ? t('yes') : t('no')}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2">
-                    <dt className="text-stone-500">{t('desktopSettingsHwPathPrint')}</dt>
+                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                    <dt className="text-stone-500 dark:text-stone-400">{t('desktopSettingsHwPathPrint')}</dt>
                     <dd className="font-medium">{hwCaps?.paths.print || 'auto'}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2">
-                    <dt className="text-stone-500">{t('desktopSettingsHwPathPrinters')}</dt>
+                  <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                    <dt className="text-stone-500 dark:text-stone-400">{t('desktopSettingsHwPathPrinters')}</dt>
                     <dd className="font-medium">{hwCaps?.paths.printers || 'auto'}</dd>
                   </div>
                 </dl>
-                <label className="flex items-center justify-between gap-3 text-sm">
+                <label className="flex items-center justify-between gap-3 text-sm dark:text-stone-200">
                   <span>{t('desktopSettingsStartWithWindows')}</span>
                   <input
                     type="checkbox"
@@ -504,14 +506,14 @@ export default function DesktopSettings() {
                     }}
                   />
                 </label>
-                <div className="flex items-center gap-2 text-xs text-stone-500">
+                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                   <Monitor size={14} aria-hidden />
                   {t('desktopSettingsDeviceHint')}
                 </div>
               </section>
             )}
 
-            <div className="mt-8 flex justify-end border-t border-stone-100 pt-4">
+            <div className="mt-8 flex justify-end border-t border-stone-100 pt-4 dark:border-stone-700">
               <button
                 type="button"
                 className="rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"

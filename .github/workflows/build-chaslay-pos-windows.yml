@@ -56,7 +56,7 @@ jobs:
       - name: Build NSIS installer
         working-directory: desktop
         env:
-          CHASLAY_POS_URL: https://app.chaslay.com/login
+          CHASLAY_POS_URL: https://app.rebornsense.com/login
         run: npm run build:nsis
 
       - name: Stage download files

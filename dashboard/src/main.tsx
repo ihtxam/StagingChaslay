@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
-import { ThemeProvider } from './lib/theme'
+import { initThemeFromStorage, ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import { isShopStorefrontBoot, isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
 import { isDesktopApp } from './lib/platform'
@@ -10,8 +10,9 @@ import { installDesktopHardwareBridge } from './lib/hardware/desktop-bridge'
 import './index.css'
 
 if (typeof window !== 'undefined' && isDesktopApp()) {
-  void installDesktopHardwareBridge();
   document.documentElement.classList.add('desktop-app-shell');
+  initThemeFromStorage();
+  void installDesktopHardwareBridge();
 }
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */
