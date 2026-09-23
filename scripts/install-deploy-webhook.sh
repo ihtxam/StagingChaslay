@@ -44,6 +44,7 @@ DEPLOY_STACK=rebornsense
 DEPLOY_PATH=${REPO_DIR}
 DEPLOY_BRANCH=main
 DEPLOY_ON_ANY_MAIN_PUSH=1
+DEPLOY_WEBHOOK_LOG=${LOG_DIR}/rebornsense-deploy-webhook.log
 DEPLOY_LOG=${LOG_DIR}/rebornsense-deploy.log
 EOF
   chmod 600 "$ENV_FILE"

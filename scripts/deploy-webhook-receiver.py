@@ -14,7 +14,8 @@ Environment (file or process env):
   DEPLOY_PATH             Repo path on server
   DEPLOY_BRANCH           Branch to deploy (default main)
   DEPLOY_ON_ANY_MAIN_PUSH 1 = deploy on any push to DEPLOY_BRANCH (default 1)
-  DEPLOY_LOG              Log file path
+  DEPLOY_LOG              Deploy script output log file
+  DEPLOY_WEBHOOK_LOG      Webhook request log file (default reborn-deploy-webhook.log)
 """
 from __future__ import annotations
 
@@ -56,7 +57,7 @@ def cfg(name: str, default: str = "") -> str:
 def log(msg: str) -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     line = f"[{stamp}] {msg}\n"
-    log_path = cfg("DEPLOY_LOG", "/var/log/rebornsense-deploy-webhook.log")
+    log_path = cfg("DEPLOY_WEBHOOK_LOG", "/var/log/rebornsense-deploy-webhook.log")
     try:
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as fh:
