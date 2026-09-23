@@ -253,7 +253,7 @@ def main() -> None:
     env_file = Path(cfg("DEPLOY_WEBHOOK_ENV_FILE", str(DEFAULT_ENV_FILE)))
     load_env_file(env_file)
 
-    host = cfg("DEPLOY_WEBHOOK_HOST", "127.0.0.1")
+    host = cfg("DEPLOY_WEBHOOK_HOST", "0.0.0.0")
     port = int(cfg("DEPLOY_WEBHOOK_PORT", "9847") or "9847")
     path = cfg("DEPLOY_WEBHOOK_PATH", "/internal/git-deploy")
 
