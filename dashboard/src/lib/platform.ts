@@ -94,6 +94,38 @@ export async function probeDesktopChromeCapabilities(): Promise<DesktopChromeCap
   return caps;
 }
 
+export type DesktopUpdateInfo = {
+  available: boolean;
+  version?: string | null;
+  currentVersion: string;
+  notes?: string | null;
+};
+
+export type DesktopUpdateProgress = {
+  phase: 'downloading' | 'ready';
+  downloaded: number;
+  contentLength?: number | null;
+};
+
+export async function checkDesktopUpdate(): Promise<DesktopUpdateInfo> {
+  if (!isDesktopApp()) {
+    return { available: false, currentVersion: '0.0.0', version: null, notes: null };
+  }
+  return invoke<DesktopUpdateInfo>('desktop_check_update');
+}
+
+export async function downloadDesktopUpdate(): Promise<DesktopUpdateProgress> {
+  return invoke<DesktopUpdateProgress>('desktop_download_update');
+}
+
+export async function applyDesktopUpdate(): Promise<void> {
+  await invoke('desktop_apply_update');
+}
+
+export async function desktopUpdateProgress(): Promise<DesktopUpdateProgress> {
+  return invoke<DesktopUpdateProgress>('desktop_update_progress');
+}
+
 export async function desktopPosEnv(): Promise<{ shell: string; version: string; debug: boolean } | null> {
   if (!isDesktopApp()) return null;
   try {

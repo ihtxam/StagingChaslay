@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-apply-update"
+description = "Enables the desktop_apply_update command without any pre-configured scope."
+commands.allow = ["desktop_apply_update"]
+
+[[permission]]
+identifier = "deny-desktop-apply-update"
+description = "Denies the desktop_apply_update command without any pre-configured scope."
+commands.deny = ["desktop_apply_update"]

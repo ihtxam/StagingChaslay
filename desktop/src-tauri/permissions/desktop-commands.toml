@@ -32,3 +32,13 @@ commands.allow = [
 identifier = "allow-desktop-autostart"
 description = "Windows autostart toggle commands."
 commands.allow = ["set_start_with_windows", "is_start_with_windows"]
+
+[[permission]]
+identifier = "allow-desktop-update"
+description = "Remote RebornPOS shell update check, download, and install."
+commands.allow = [
+  "desktop_check_update",
+  "desktop_download_update",
+  "desktop_apply_update",
+  "desktop_update_progress"
+]

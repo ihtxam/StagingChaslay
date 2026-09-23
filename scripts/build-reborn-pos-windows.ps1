@@ -71,6 +71,11 @@ $DesktopDir = Join-Path $Root "desktop"
 Push-Location $DesktopDir
 try {
   $env:CHASLAY_POS_URL = $PosUrl
+  if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+    Write-Host "Updater signing key detected — build will emit .sig artifacts"
+  } else {
+    Write-Warning "TAURI_SIGNING_PRIVATE_KEY not set — updater signatures will be skipped"
+  }
   npm ci
   Require-ExitCode "npm ci (desktop)"
   npm run build:nsis
@@ -92,6 +97,7 @@ Copy-Item -Force $installer.FullName $destExe
 Require-MzExe $destExe "RebornPOS installer"
 
 $version = (Get-Content (Join-Path $Root "desktop/package.json") | ConvertFrom-Json).version
+$signed = [bool](Get-ChildItem (Join-Path $nsisDir "*.sig") -ErrorAction SilentlyContinue | Select-Object -First 1)
 $manifest = @{
   name = "reborn-pos"
   displayName = "RebornPOS"
@@ -100,15 +106,29 @@ $manifest = @{
   exeFile = "reborn-pos-setup.exe"
   platform = "windows"
   builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-  signed = $false
+  signed = $signed
+  updater = $true
 }
 $manifestPath = Join-Path $downloads "reborn-pos-setup.json"
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $manifestPath
+
+$updateManifestPath = Join-Path $downloads "reborn-pos-update.json"
+if ($signed) {
+  & (Join-Path $Root "scripts/write-reborn-pos-update-manifest.ps1") `
+    -NsisBundleDir $nsisDir `
+    -Version $version `
+    -OutputPath $updateManifestPath
+} else {
+  Write-Warning "Skipping reborn-pos-update.json — set TAURI_SIGNING_PRIVATE_KEY before build:nsis"
+}
 
 Write-Host ""
 Write-Host "Built RebornPOS v$version"
 Write-Host "  Installer: $destExe ($((Get-Item $destExe).Length) bytes)"
 Write-Host "  Manifest:  $manifestPath"
+if (Test-Path $updateManifestPath) {
+  Write-Host "  Updater:   $updateManifestPath"
+}
 
 if ($Publish) {
   Write-Host ""

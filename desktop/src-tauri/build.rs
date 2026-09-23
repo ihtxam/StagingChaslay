@@ -57,6 +57,10 @@ fn main() {
                 "hw_drawer",
                 "hw_scale_ports",
                 "hw_scale_reading",
+                "desktop_check_update",
+                "desktop_download_update",
+                "desktop_apply_update",
+                "desktop_update_progress",
             ]),
         ),
     )

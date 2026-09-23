@@ -16,6 +16,7 @@ LOCAL_DIR="${REBORN_POS_DOWNLOADS_DIR:-$ROOT/backend/public/downloads}"
 FETCH="${REBORN_POS_FETCH:-1}"
 EXE="$LOCAL_DIR/reborn-pos-setup.exe"
 JSON="$LOCAL_DIR/reborn-pos-setup.json"
+UPDATE_JSON="$LOCAL_DIR/reborn-pos-update.json"
 
 if [[ "$FETCH" == "1" ]]; then
   if ! bash "$ROOT/scripts/fetch-reborn-pos-installer.sh"; then
@@ -44,6 +45,9 @@ ssh -o BatchMode=yes "$SSH_ALIAS" "mkdir -p '$REMOTE_PATH'"
 scp -o BatchMode=yes "$EXE" "${SSH_ALIAS}:${REMOTE_PATH}/reborn-pos-setup.exe"
 if [[ -f "$JSON" ]]; then
   scp -o BatchMode=yes "$JSON" "${SSH_ALIAS}:${REMOTE_PATH}/reborn-pos-setup.json"
+fi
+if [[ -f "$UPDATE_JSON" ]]; then
+  scp -o BatchMode=yes "$UPDATE_JSON" "${SSH_ALIAS}:${REMOTE_PATH}/reborn-pos-update.json"
 fi
 
 REMOTE_BYTES="$(ssh -o BatchMode=yes "$SSH_ALIAS" "wc -c < '${REMOTE_PATH}/reborn-pos-setup.exe' | tr -d ' '")"

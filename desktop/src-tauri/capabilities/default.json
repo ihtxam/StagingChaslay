@@ -31,6 +31,7 @@
     "allow-desktop-chrome",
     "allow-desktop-sidecar",
     "allow-desktop-hw",
-    "allow-desktop-autostart"
+    "allow-desktop-autostart",
+    "allow-desktop-update"
   ]
 }

@@ -1,3 +1,4 @@
+mod desktop_update;
 mod hardware;
 
 use std::path::PathBuf;
@@ -667,6 +668,10 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(desktop_update::PendingUpdate(Mutex::new(None)))
+        .manage(desktop_update::DownloadedBytes(Mutex::new(None)))
+        .manage(desktop_update::DownloadProgress::new())
         .manage(SidecarState {
             child: Mutex::new(None),
         })
@@ -696,7 +701,11 @@ pub fn run() {
             hw_print,
             hw_drawer,
             hw_scale_ports,
-            hw_scale_reading
+            hw_scale_reading,
+            desktop_update::desktop_check_update,
+            desktop_update::desktop_download_update,
+            desktop_update::desktop_apply_update,
+            desktop_update::desktop_update_progress
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_some() {
