@@ -823,7 +823,6 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
-            { label: t('reports'), path: '/merchant/reports', icon: '📈' },
             ...(allowInventory('/merchant/inventory')
               ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
               : []),
@@ -861,6 +860,7 @@ function MerchantShell() {
       children: [
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
+        { label: t('reports'), path: '/merchant/reports', icon: '📈' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
           : []),
