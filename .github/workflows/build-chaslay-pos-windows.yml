@@ -95,8 +95,18 @@ jobs:
             backend/public/downloads/reborn-pos-setup.json
           retention-days: 90
 
+  publish-downloads:
+    needs: build-windows
+    if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reborn-pos-windows-${{ github.sha }}
+          path: backend/public/downloads
+
       - name: Publish RebornPOS installer to production downloads
-        if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.REBORN_HETZNER_HOST }}
