@@ -14,7 +14,7 @@ cd "$ROOT"
 
 TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
-  echo "Usage: $0 staging|production|both|staging-ssh|production-ssh"
+  echo "Usage: $0 staging|production|both|staging-ssh|production-ssh|production-github"
   exit 1
 fi
 
@@ -108,8 +108,39 @@ deploy_staging_github() {
   wait_staging_health 36 || true
 }
 
+deploy_production_webhook() {
+  echo "=== Production deploy via webhook (app.rebornsense.com) ==="
+  local env_file="${PRODUCTION_WEBHOOK_ENV_FILE:-}"
+  local url="${DEPLOY_WEBHOOK_URL:-https://app.rebornsense.com/internal/git-deploy}"
+  local token="${DEPLOY_WEBHOOK_TOKEN:-}"
+
+  if [[ -z "$token" && -n "$env_file" && -f "$env_file" ]]; then
+    # shellcheck disable=SC1090
+    source "$env_file"
+    token="${DEPLOY_WEBHOOK_TOKEN:-}"
+  fi
+
+  if [[ -z "$token" ]]; then
+    echo "DEPLOY_WEBHOOK_TOKEN not set — trying SSH fallback"
+    deploy_production_ssh
+    return
+  fi
+
+  echo "POST ${url}"
+  curl -fsS -X POST "$url" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d '{"ref":"refs/heads/main","reason":"agent-deploy"}'
+  echo ""
+  echo "Deploy queued on server — tail logs on VPS: /var/log/rebornsense-deploy.log"
+}
+
 deploy_production_github() {
   echo "=== Production deploy (app.rebornsense.com) ==="
+  if [[ "${DEPLOY_USE_WEBHOOK:-1}" == "1" ]]; then
+    deploy_production_webhook
+    return
+  fi
   if command -v gh >/dev/null 2>&1; then
     gh workflow run deploy-rebornsense.yml --ref main -f ref=main
     wait_for_workflow deploy-rebornsense.yml 1200
@@ -141,7 +172,10 @@ case "$TARGET" in
     wait_staging_health 36 || true
     ;;
   production)
-    deploy_production_github
+    deploy_production_webhook
+    ;;
+  production-github)
+    DEPLOY_USE_WEBHOOK=0 deploy_production_github
     ;;
   production-ssh)
     deploy_production_ssh
