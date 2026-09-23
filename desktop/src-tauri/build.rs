@@ -44,6 +44,7 @@ fn main() {
                 "pos_env",
                 "set_start_with_windows",
                 "is_start_with_windows",
+                "desktop_app_ready",
                 "desktop_reload",
                 "desktop_window_mode",
                 "desktop_minimize",

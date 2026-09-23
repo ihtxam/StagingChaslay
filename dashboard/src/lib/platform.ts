@@ -226,3 +226,18 @@ export async function desktopChromeAvailable(): Promise<boolean> {
     return false;
   }
 }
+
+let desktopReadySent = false;
+
+/** Tell the native shell that hosted WebPOS finished booting (closes splash). */
+export async function notifyDesktopAppReady(): Promise<void> {
+  if (!isDesktopApp() || desktopReadySent) return;
+  desktopReadySent = true;
+  try {
+    await invoke('desktop_app_ready');
+  } catch (err) {
+    if (!isMissingDesktopCommandError(err)) {
+      console.warn('[desktop] desktop_app_ready failed:', formatDesktopInvokeError(err));
+    }
+  }
+}
