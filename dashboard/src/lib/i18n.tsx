@@ -368,6 +368,9 @@ const en: Dict = {
   posRequireTableForDineIn: 'Require table for dine-in',
   posRequireTableForDineInHint:
     'When off, dine-in uses a counter ticket number (D-001…) and dine-in VAT — no table picker.',
+  posRequireCustomerForDelivery: 'Require customer for delivery',
+  posRequireCustomerForDeliveryHint:
+    'When off, delivery orders can be checked out without selecting a client.',
   webPosDineInTicket: 'Dine-in ticket',
   posLayoutSettings: 'POS layout',
   posLayoutSettingsHint: 'Cart position, post-payment navigation, and Reborn theme.',
@@ -4769,6 +4772,9 @@ const fr: Dict = {
   posRequireTableForDineIn: 'Table obligatoire pour sur place',
   posRequireTableForDineInHint:
     'Désactivé : numéro comptoir (D-001…) et TVA sur place — pas de sélection de table.',
+  posRequireCustomerForDelivery: 'Client obligatoire pour livraison',
+  posRequireCustomerForDeliveryHint:
+    'Désactivé : les commandes livraison peuvent être encaissées sans sélectionner un client.',
   webPosDineInTicket: 'Ticket sur place',
   posLayoutSettings: 'Disposition POS',
   posLayoutSettingsHint: 'Position du panier, navigation après paiement et thème Reborn.',
@@ -9009,6 +9015,9 @@ const de: Dict = {
   posRequireTableForDineIn: 'Tisch für Vor Ort erforderlich',
   posRequireTableForDineInHint:
     'Aus: Thekennummer (D-001…) und Vor-Ort-MwSt. — keine Tischauswahl.',
+  posRequireCustomerForDelivery: 'Kunde für Lieferung erforderlich',
+  posRequireCustomerForDeliveryHint:
+    'Aus: Lieferbestellungen können ohne Kundenauswahl abgeschlossen werden.',
   webPosDineInTicket: 'Vor-Ort-Ticket',
   posLayoutSettings: 'POS-Layout',
   posLayoutSettingsHint: 'Warenkorb-Position, Navigation nach Zahlung und Reborn-Thema.',

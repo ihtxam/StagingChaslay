@@ -1759,6 +1759,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !!checkoutSettings.retailDeliveryEnabled && editionAllows('channel_delivery');
   const retailDineInEnabled = !!checkoutSettings.retailDineInEnabled;
   const requireTableForDineIn = checkoutSettings.requireTableForDineIn !== false;
+  const requireCustomerForDelivery = checkoutSettings.requireCustomerForDelivery !== false;
   const counterDineInEnabled = !requireTableForDineIn;
   const showChannelTabs = isRetail
     ? retailDineInEnabled || retailDeliveryEnabled
@@ -6019,7 +6020,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         setFulfillmentWhen(asapFulfillment());
       }
-      if (channel === 'delivery' && !selectedCustomer) {
+      if (channel === 'delivery' && requireCustomerForDelivery && !selectedCustomer) {
         setPendingPayMethod('cash');
         setCustomerOpen(true);
         return;
@@ -6137,16 +6138,54 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       // Resumed held tickets already have a row — cancel via held API to avoid a second CXL sale.
       const heldId = scope === 'item' ? null : resumedHeldIdRef.current;
       let recordedViaHeld = false;
+      const cancelReason = reasonId || reason;
       if (heldId) {
         try {
           await api.post(`/merchant/pos/held/${heldId}/cancel`, {
-            reason: reasonId || reason,
+            reason: cancelReason,
           });
           recordedViaHeld = true;
           resumedHeldIdRef.current = null;
           setOrdersRefreshToken((n) => n + 1);
         } catch {
-          /* fall through to push-sales */
+          /* fall through */
+        }
+      }
+      if (!recordedViaHeld && scope !== 'item') {
+        const ticketKey =
+          ticketDisplay?.trim() ||
+          lastKitchenTicketRef.current?.trim() ||
+          null;
+        if (ticketKey) {
+          try {
+            const heldRes = await api.get('/merchant/pos/held');
+            const rows = (heldRes.data?.held || heldRes.data || []) as Array<{
+              id: string;
+              label?: string | null;
+              cartJson?: unknown;
+            }>;
+            const match = rows.find((h) => {
+              if (String(h.id).startsWith('local:')) return false;
+              const meta = parseHeldCartJson(h.cartJson);
+              const label = String(h.label || '').trim();
+              return (
+                meta.ticketDisplay?.trim() === ticketKey ||
+                meta.kitchenTicketKey?.trim() === ticketKey ||
+                label === ticketKey ||
+                label.includes(ticketKey)
+              );
+            });
+            if (match?.id) {
+              await api.post(`/merchant/pos/held/${match.id}/cancel`, {
+                reason: cancelReason,
+              });
+              recordedViaHeld = true;
+              resumedHeldIdRef.current = null;
+              setOrdersRefreshToken((n) => n + 1);
+            }
+          } catch {
+            /* fall through to push-sales */
+          }
         }
       }
       if (!recordedViaHeld && recordLines.length) {
@@ -7404,7 +7443,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       whenForPay = asapFulfillment();
       setFulfillmentWhen(whenForPay);
     }
-    if (channel === 'delivery' && !selectedCustomer) {
+    if (channel === 'delivery' && requireCustomerForDelivery && !selectedCustomer) {
       setPendingPayMethod(method);
       setCustomerOpen(true);
       return;
@@ -7452,7 +7491,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (posView !== 'register') return;
     if (!cart.length || busy || paymentModalOpen) return;
     if (!guardOfflineCheckout('cash')) return;
-    if (channel === 'delivery' && !selectedCustomer) {
+    if (channel === 'delivery' && requireCustomerForDelivery && !selectedCustomer) {
       setPendingPayMethod('cash');
       setCustomerOpen(true);
       return;
@@ -9036,10 +9075,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       whenForCheckout = asapFulfillment();
       setFulfillmentWhen(whenForCheckout);
     }
-    if ((scheduleChannel === 'delivery' || method === 'invoice') && !selectedCustomer) {
-      if (method === 'invoice' && !selectedCustomer) {
-        toast.error(t('webPosInvoiceCustomerRequired'));
-      }
+    if (scheduleChannel === 'delivery' && requireCustomerForDelivery && !selectedCustomer) {
+      setPendingPayMethod(method);
+      setCustomerOpen(true);
+      return;
+    }
+    if (method === 'invoice' && !selectedCustomer) {
+      toast.error(t('webPosInvoiceCustomerRequired'));
       setPendingPayMethod(method);
       setCustomerOpen(true);
       return;
@@ -11815,7 +11857,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           onConfirm={(when) => {
             setFulfillmentWhen(when);
             setScheduleOpen(false);
-            if (channel === 'delivery' && !selectedCustomer) {
+            if (channel === 'delivery' && requireCustomerForDelivery && !selectedCustomer) {
               setCustomerOpen(true);
               return;
             }
