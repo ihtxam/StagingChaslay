@@ -561,6 +561,7 @@ export class PosOrdersService {
       .update(schema.orders)
       .set({
         status: "cancelled",
+        paymentStatus: "cancelled",
         cancelReason: reasonText,
         cancelledAt: new Date(),
         ...onlineCancelPaymentPatch(refund),

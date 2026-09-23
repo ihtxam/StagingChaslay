@@ -2548,6 +2548,26 @@ export default function Settings() {
                     <span className="text-xs muted">{t('posRequireTableForDineInHint')}</span>
                   </span>
                 </label>
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posCheckoutSettings?.requireCustomerForDelivery !== false}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          requireCustomerForDelivery: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">{t('posRequireCustomerForDelivery')}</span>
+                    <span className="text-xs muted">{t('posRequireCustomerForDeliveryHint')}</span>
+                  </span>
+                </label>
               </Section>
 
               <Section

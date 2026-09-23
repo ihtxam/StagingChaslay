@@ -41,6 +41,7 @@ import {
   INVOICE_SETTLEMENT_METHOD,
   isAwaitingApproval,
   isAwaitingPaymentOrder,
+  isCancelledOrder,
   isInvoiceOrder,
   isOnlineShopOrder,
   isOpenWebPosOrder,
@@ -792,6 +793,7 @@ export default function WebPosOrdersPanel({
       }
       if (view !== 'held') {
       for (const o of ordersForList) {
+        if (isCancelledOrder(o)) continue;
         const showOnActive =
           isOpenWebPosOrder(o) ||
           (view === 'active' && isScheduledPosKitchenTicket(o)) ||
@@ -824,6 +826,31 @@ export default function WebPosOrdersPanel({
     }
     if (view === 'completed' || view === 'all') {
       for (const o of ordersForList) {
+        if (isCancelledOrder(o)) {
+          if (!matchesChannelFilter(o, channelFilter)) continue;
+          if (q) {
+            const refs = orderPublicRefs(o);
+            if (
+              !ticketQueryMatches(
+                q,
+                formatOrderNumberDisplay(o.orderNumber),
+                o.orderNumber,
+                o.clientId,
+                o.customerName,
+                o.tableLabel,
+                o.orderType,
+                o.paymentMethod,
+                o.invoiceNumber,
+                refs.ticketDisplay,
+                refs.tabNumber
+              )
+            ) {
+              continue;
+            }
+          }
+          doneBucket.push(o);
+          continue;
+        }
         // Ongoing orders already listed under Active; skip them here (including "All").
         // Invoice sales stay in history even when unpaid / still "preparing".
         const listedInActive =

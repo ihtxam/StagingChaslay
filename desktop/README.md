@@ -17,6 +17,16 @@ See `/docs/windows-pos-tauri-plan.md`.
 - WebView2 (bootstrapper is bundled)
 - EV code-signing cert for production (unsigned = SmartScreen)
 
+## Branding (splash, icon, loading)
+
+| Asset | Path | Notes |
+|-------|------|-------|
+| App icons (taskbar, installer) | `src-tauri/icons/` | Regenerate from a 1024×1024 source: `npx tauri icon src-tauri/icons/icon-1024.png -o src-tauri/icons` |
+| Launch splash | `dist/splash.html` + `dist/brand/reborn-logo-white.png` | Native splash window; closes when hosted WebPOS calls `desktop_app_ready` |
+| Webview loading overlay | Injected by Tauri + `DesktopLoadingOverlay` in dashboard | Uses `/brand/reborn-logo-white.png` on the hosted app |
+
+Swap `dist/brand/reborn-logo-white.png` (and re-run `tauri icon` if the mark changes) to update branding.
+
 ## Develop
 
 ```powershell
@@ -56,6 +66,54 @@ npm run build:nsis
 ```
 
 CI builds print-agent first, stages the sidecar, then runs `npm run build:nsis` — see `.github/workflows/build-chaslay-pos-windows.yml`.
+
+Or run the all-in-one script on a Windows machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish
+```
+
+## Remote updates (Tauri updater)
+
+RebornPOS checks `https://app.rebornsense.com/downloads/reborn-pos-update.json` on startup. When a newer signed build is published, merchants see a banner in the desktop chrome (“Restart to install”). The same `reborn-pos-setup.exe` URL is used for manual downloads and in-app updates.
+
+### One-time signing key setup
+
+Generate a minisign key pair (keep the private key secret):
+
+```powershell
+cd desktop
+npx tauri signer generate -w $HOME\.tauri\reborn-pos.key --password ""
+```
+
+Configure GitHub Actions secrets on `ihtxam/rebornSense`:
+
+| Secret | Value |
+|--------|--------|
+| `TAURI_SIGNING_PRIVATE_KEY` | Full contents of the `.key` file (or base64-encoded key) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password (empty string if none) |
+
+The **public** key is committed in `desktop/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. If you rotate keys, update the pubkey in config and regenerate all future builds with the new private key.
+
+### Publish flow
+
+1. Bump `version` in `desktop/package.json`, `desktop/src-tauri/Cargo.toml`, and `desktop/src-tauri/tauri.conf.json`.
+2. Merge to `main` — the Windows workflow builds, signs, writes `reborn-pos-update.json`, and SCPs to production downloads.
+3. Installed clients download silently and prompt to restart.
+
+Manual publish from a Windows build machine:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $HOME\.tauri\reborn-pos.key -Raw
+powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish
+```
+
+### Manual test (Windows)
+
+1. Install an older RebornPOS build (e.g. 0.1.2) on a test PC.
+2. Publish a newer signed build (0.1.3+) to production downloads.
+3. Launch RebornPOS — confirm the update banner appears below the chrome bar.
+4. Wait for “ready to install”, click **Restart to install** — app should relaunch on the new version (`Device` section in desktop settings shows version).
 
 ## Native vs sidecar hardware paths
 

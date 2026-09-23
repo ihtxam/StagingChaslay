@@ -22,6 +22,7 @@ $localDir = if ($env:REBORN_POS_DOWNLOADS_DIR) { $env:REBORN_POS_DOWNLOADS_DIR }
 
 $exe = Join-Path $localDir "reborn-pos-setup.exe"
 $json = Join-Path $localDir "reborn-pos-setup.json"
+$updateJson = Join-Path $localDir "reborn-pos-update.json"
 
 if (-not (Test-Path $exe)) {
   throw "Missing $exe — run scripts/build-reborn-pos-windows.ps1 first"
@@ -38,6 +39,9 @@ scp -o BatchMode=yes $exe "${sshAlias}:${deployPath}/reborn-pos-setup.exe"
 if (Test-Path $json) {
   scp -o BatchMode=yes $json "${sshAlias}:${deployPath}/reborn-pos-setup.json"
 }
+if (Test-Path $updateJson) {
+  scp -o BatchMode=yes $updateJson "${sshAlias}:${deployPath}/reborn-pos-update.json"
+}
 
 $remoteBytes = ssh -o BatchMode=yes $sshAlias "wc -c < '${deployPath}/reborn-pos-setup.exe' | tr -d ' '"
 if ([int64]$remoteBytes -lt 1000000) {
@@ -46,3 +50,6 @@ if ([int64]$remoteBytes -lt 1000000) {
 
 Write-Host "Published reborn-pos-setup.exe ($remoteBytes bytes)"
 Write-Host "Download: https://app.rebornsense.com/downloads/reborn-pos-setup.exe"
+if (Test-Path $updateJson) {
+  Write-Host "Updater:  https://app.rebornsense.com/downloads/reborn-pos-update.json"
+}

@@ -864,9 +864,6 @@ function MerchantShell() {
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
           : []),
-        ...(isRestaurantModule(businessModule)
-          ? [{ label: t('reports'), path: '/merchant/reports', icon: '📈' }]
-          : []),
       ].filter((item) => allow(item.path)),
     },
     {

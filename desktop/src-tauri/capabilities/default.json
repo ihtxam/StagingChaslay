@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Main POS window — hosted WebPOS + native bridge",
-  "windows": ["main"],
+  "windows": ["main", "splash"],
   "remote": {
     "urls": [
       "https://*.chaslay.com",
@@ -31,6 +31,7 @@
     "allow-desktop-chrome",
     "allow-desktop-sidecar",
     "allow-desktop-hw",
-    "allow-desktop-autostart"
+    "allow-desktop-autostart",
+    "allow-desktop-update"
   ]
 }

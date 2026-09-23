@@ -2038,6 +2038,18 @@ export function escposKitchenTicketEnd(): Uint8Array {
 }
 
 /**
+ * Feed past the cutter for customer receipts (footer, thank-you, QR).
+ * Kitchen tickets use escposKitchenCut() with minimal feed.
+ */
+export function escposReceiptFeedAndCut(feedLines = 4): Uint8Array {
+  const feed = Math.max(1, Math.min(255, feedLines));
+  return new Uint8Array([
+    0x1b, 0x64, feed, // ESC d n
+    0x1d, 0x56, 0x00, // GS V 0 full cut
+  ]);
+}
+
+/**
  * Single feed+cut for kitchen follow-up jobs and BT/COM safety cuts.
  * Avoid stacking heavy feeds on the ticket body (was wasting ~30+ lines of paper).
  */
@@ -2053,7 +2065,7 @@ export function escposKitchenCut(): Uint8Array {
  * Used for test prints and other non-kitchen paths that need a reliable cut in one job.
  */
 export function escposFeedAndCut(): Uint8Array {
-  return escposKitchenCut();
+  return escposReceiptFeedAndCut(3);
 }
 
 /** Feed only — printKitchenViaAgentOrQueue sends the actual cut as a follow-up job. */
@@ -2770,7 +2782,7 @@ export function textToEscPos(
       parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
   }
-  parts.push(escposFeedAndCut());
+  parts.push(escposReceiptFeedAndCut(hasQr ? 5 : 4));
   return concatBytes(...parts);
 }
 
@@ -2839,6 +2851,24 @@ export async function buildReceiptEscPos(
       (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
       escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   } else if (googleData) {
+    qrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.googleReviewQrTitle,
+        data: googleData,
+        paperWidthMm: paper,
+      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  }
+
+  if (!qrRaster?.length && digitalData) {
+    qrRaster =
+      (await buildLabeledReceiptQrRasterEscPos({
+        label: L.digitalReceiptQrTitle,
+        data: digitalData,
+        paperWidthMm: paper,
+      })) ||
+      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
+      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  } else if (!qrRaster?.length && googleData) {
     qrRaster =
       (await buildLabeledReceiptQrRasterEscPos({
         label: L.googleReviewQrTitle,

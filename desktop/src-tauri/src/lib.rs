@@ -1,7 +1,9 @@
+mod desktop_update;
 mod hardware;
 
 use std::path::PathBuf;
 use std::process::Child;
+use std::time::Duration;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
@@ -10,11 +12,32 @@ use std::process::{Command, Stdio};
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 use std::sync::Mutex;
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder,
+};
+use tauri::webview::PageLoadEvent;
 use tauri_plugin_autostart::MacosLauncher;
 use url::Url;
 
 const PRINT_AGENT_URL: &str = "http://127.0.0.1:9101";
+
+const DESKTOP_BOOT_OVERLAY_SCRIPT: &str = r#"
+(function () {
+  if (document.getElementById('reborn-desktop-boot')) return;
+  var root = document.createElement('div');
+  root.id = 'reborn-desktop-boot';
+  root.setAttribute(
+    'style',
+    'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#17252b;color:#faf8f3;font-family:system-ui,sans-serif;'
+  );
+  root.innerHTML =
+    '<img src="/brand/reborn-logo-white.png" alt="RebornPOS" style="width:min(220px,70vw);height:auto;user-select:none" />' +
+    '<p style="margin:0;font-size:14px;opacity:.82">Restaurant POS &amp; online ordering</p>' +
+    '<div style="width:32px;height:32px;border-radius:999px;border:2px solid rgba(250,248,243,.18);border-top-color:#faf8f3;animation:reborn-boot-spin .9s linear infinite"></div>' +
+    '<style>@keyframes reborn-boot-spin{to{transform:rotate(360deg)}}</style>';
+  (document.documentElement || document.body).appendChild(root);
+})();
+"#;
 
 struct SidecarState {
     child: Mutex<Option<Child>>,
@@ -28,6 +51,27 @@ struct HwPathState {
     printers: Mutex<String>,
     print: Mutex<String>,
     drawer: Mutex<String>,
+}
+
+struct SplashState {
+    dismissed: Mutex<bool>,
+}
+
+fn dismiss_splash(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<SplashState>();
+    let mut guard = state.dismissed.lock().map_err(|e| e.to_string())?;
+    if *guard {
+        return Ok(());
+    }
+    *guard = true;
+    if let Some(splash) = app.get_webview_window("splash") {
+        let _ = splash.close();
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    Ok(())
 }
 
 fn host_allowed(host: &str) -> bool {
@@ -291,6 +335,11 @@ fn set_start_with_windows(app: tauri::AppHandle, enabled: bool) -> Result<bool, 
 fn is_start_with_windows(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn desktop_app_ready(app: tauri::AppHandle) -> Result<(), String> {
+    dismiss_splash(&app)
 }
 
 #[tauri::command]
@@ -667,6 +716,10 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(desktop_update::PendingUpdate(Mutex::new(None)))
+        .manage(desktop_update::DownloadedBytes(Mutex::new(None)))
+        .manage(desktop_update::DownloadProgress::new())
         .manage(SidecarState {
             child: Mutex::new(None),
         })
@@ -678,8 +731,12 @@ pub fn run() {
             print: Mutex::new(String::new()),
             drawer: Mutex::new(String::new()),
         })
+        .manage(SplashState {
+            dismissed: Mutex::new(false),
+        })
         .invoke_handler(tauri::generate_handler![
             pos_env,
+            desktop_app_ready,
             set_start_with_windows,
             is_start_with_windows,
             desktop_reload,
@@ -696,27 +753,64 @@ pub fn run() {
             hw_print,
             hw_drawer,
             hw_scale_ports,
-            hw_scale_reading
+            hw_scale_reading,
+            desktop_update::desktop_check_update,
+            desktop_update::desktop_download_update,
+            desktop_update::desktop_apply_update,
+            desktop_update::desktop_update_progress
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_some() {
                 return Ok(());
             }
+
+            let _ = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
+                .title("RebornPOS")
+                .inner_size(440.0, 320.0)
+                .resizable(false)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .center()
+                .visible(true)
+                .build()?;
+
             let start = pos_start_url();
             let parsed = Url::parse(&start).unwrap_or_else(|_| {
                 Url::parse("https://app.rebornsense.com/login").expect("static url")
             });
+            let app_handle = app.handle().clone();
             let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
                 .title("RebornPOS")
                 .fullscreen(true)
                 .maximized(true)
                 .decorations(false)
                 .resizable(true)
-                .visible(true)
+                .visible(false)
+                .initialization_script(DESKTOP_BOOT_OVERLAY_SCRIPT)
                 .on_navigation(|url| is_allowed_navigation(&url))
+                .on_page_load({
+                    let app_handle = app_handle.clone();
+                    move |_window, payload| {
+                        if payload.event() != PageLoadEvent::Finished {
+                            return;
+                        }
+                        let app_handle = app_handle.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(Duration::from_secs(3));
+                            let _ = dismiss_splash(&app_handle);
+                        });
+                    }
+                })
                 .build()?;
             let _ = win.set_fullscreen(true);
-            let _ = win.set_focus();
+
+            let fallback_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(45));
+                let _ = dismiss_splash(&fallback_handle);
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

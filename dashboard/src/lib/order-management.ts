@@ -140,6 +140,7 @@ export function isKitchenTypeOrder(o: MerchantOrder): boolean {
 const TERMINAL_ORDER_STATUSES = new Set([
   'cancelled',
   'refunded',
+  'rejected',
   'completed',
   'partially_refunded',
 ]);
@@ -149,6 +150,18 @@ function normalizeOrderStatus(status?: string | null): string {
     .toLowerCase()
     .trim()
     .replace(/-/g, '_');
+}
+
+/** Order was cancelled or rejected — hide from Active / kitchen queues. */
+export function isCancelledOrder(o: {
+  status?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  const status = normalizeOrderStatus(o.status);
+  const pay = normalizeOrderStatus(o.paymentStatus);
+  if (status === 'cancelled' || status === 'refunded' || status === 'rejected') return true;
+  if (pay === 'cancelled' || pay === 'refunded') return true;
+  return false;
 }
 
 /** Order lifecycle is closed — no longer belongs in Active / kitchen queues. */
@@ -162,8 +175,7 @@ export function isTerminalOrderStatus(status?: string | null): boolean {
  * Pay-later / invoice stay open even when fulfillment was marked completed.
  */
 export function isOpenWebPosOrder(o: MerchantOrder): boolean {
-  const status = normalizeOrderStatus(o.status);
-  if (status === 'cancelled' || status === 'refunded') return false;
+  if (isCancelledOrder(o)) return false;
   if (!isOnlineShopOrder(o) && isAwaitingPaymentOrder(o)) return true;
   if (isTerminalOrderStatus(o.status)) return false;
   if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;

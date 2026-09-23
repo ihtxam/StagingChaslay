@@ -94,6 +94,38 @@ export async function probeDesktopChromeCapabilities(): Promise<DesktopChromeCap
   return caps;
 }
 
+export type DesktopUpdateInfo = {
+  available: boolean;
+  version?: string | null;
+  currentVersion: string;
+  notes?: string | null;
+};
+
+export type DesktopUpdateProgress = {
+  phase: 'downloading' | 'ready';
+  downloaded: number;
+  contentLength?: number | null;
+};
+
+export async function checkDesktopUpdate(): Promise<DesktopUpdateInfo> {
+  if (!isDesktopApp()) {
+    return { available: false, currentVersion: '0.0.0', version: null, notes: null };
+  }
+  return invoke<DesktopUpdateInfo>('desktop_check_update');
+}
+
+export async function downloadDesktopUpdate(): Promise<DesktopUpdateProgress> {
+  return invoke<DesktopUpdateProgress>('desktop_download_update');
+}
+
+export async function applyDesktopUpdate(): Promise<void> {
+  await invoke('desktop_apply_update');
+}
+
+export async function desktopUpdateProgress(): Promise<DesktopUpdateProgress> {
+  return invoke<DesktopUpdateProgress>('desktop_update_progress');
+}
+
 export async function desktopPosEnv(): Promise<{ shell: string; version: string; debug: boolean } | null> {
   if (!isDesktopApp()) return null;
   try {
@@ -192,5 +224,20 @@ export async function desktopChromeAvailable(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+let desktopReadySent = false;
+
+/** Tell the native shell that hosted WebPOS finished booting (closes splash). */
+export async function notifyDesktopAppReady(): Promise<void> {
+  if (!isDesktopApp() || desktopReadySent) return;
+  desktopReadySent = true;
+  try {
+    await invoke('desktop_app_ready');
+  } catch (err) {
+    if (!isMissingDesktopCommandError(err)) {
+      console.warn('[desktop] desktop_app_ready failed:', formatDesktopInvokeError(err));
+    }
   }
 }

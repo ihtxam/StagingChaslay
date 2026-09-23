@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RebornPOS",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "identifier": "com.reborn.pos",
   "build": {
     "frontendDist": "../dist",
@@ -16,6 +16,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "externalBin": [
       "binaries/reborn-print-agent"
@@ -42,5 +43,15 @@
     "shortDescription": "RebornPOS Windows kiosk",
     "longDescription": "Kiosk shell for Reborn WebPOS with bundled Print Agent sidecar on 127.0.0.1:9101."
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc0OEI3RjM4NEJCMjkwRUMKUldUc2tMSkxPSCtMZENiazdVbTVOKzZJb25jdkFTRjhGanNhbi85bUFwMG5IZ3JxMDZFS0JkMHMK",
+      "endpoints": [
+        "https://app.rebornsense.com/downloads/reborn-pos-update.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

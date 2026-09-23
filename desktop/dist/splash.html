@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>RebornPOS</title>
+    <meta name="color-scheme" content="dark" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #17252b;
+        --text: #faf8f3;
+        --accent: #800020;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .splash {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      .splash img {
+        width: min(220px, 70vw);
+        height: auto;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .tagline {
+        font-size: 0.95rem;
+        letter-spacing: 0.02em;
+        opacity: 0.82;
+      }
+      .spinner {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        border: 2px solid rgba(250, 248, 243, 0.18);
+        border-top-color: var(--text);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash" role="status" aria-live="polite" aria-label="Starting RebornPOS">
+      <img src="brand/reborn-logo-white.png" width="220" height="202" alt="RebornPOS" />
+      <p class="tagline">Restaurant POS &amp; online ordering</p>
+      <div class="spinner" aria-hidden="true"></div>
+    </div>
+  </body>
+</html>

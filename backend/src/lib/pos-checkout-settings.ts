@@ -56,6 +56,11 @@ export type PosCheckoutSettings = {
    * Default: true for restaurant mode, false for retail.
    */
   requireTableForDineIn: boolean;
+  /**
+   * When true, POS delivery orders require a selected customer before checkout.
+   * When false, delivery can be sold without linking a client record.
+   */
+  requireCustomerForDelivery: boolean;
   /** Express checkout + cart action buttons (Send, Payment, Tab). */
   actionButtonSize: ActionButtonSize;
   /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
@@ -115,6 +120,7 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   retailDeliveryEnabled: false,
   retailDineInEnabled: false,
   requireTableForDineIn: true,
+  requireCustomerForDelivery: true,
   actionButtonSize: "md",
   expressCheckoutEnabled: true,
   showPosToasts: false,
@@ -212,6 +218,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     retailDeliveryEnabled: src.retailDeliveryEnabled === true,
     retailDineInEnabled: src.retailDineInEnabled === true,
     requireTableForDineIn,
+    requireCustomerForDelivery: src.requireCustomerForDelivery !== false,
     actionButtonSize:
       src.actionButtonSize === "sm" || src.actionButtonSize === "lg"
         ? src.actionButtonSize

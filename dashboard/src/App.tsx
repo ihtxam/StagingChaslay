@@ -41,6 +41,8 @@ import StatusPage from '@/pages/StatusPage';
 import PwaLaunchGuide from '@/components/PwaLaunchGuide';
 import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 import DesktopChromeBar from '@/components/DesktopChromeBar';
+import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
+import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
@@ -216,7 +218,9 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <DesktopLoadingOverlay />
         <DesktopChromeBar />
+        <DesktopUpdateBanner />
         <PosViewportManager />
         <Routes>
           {statusMode && (

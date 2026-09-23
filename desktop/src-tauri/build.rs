@@ -44,6 +44,7 @@ fn main() {
                 "pos_env",
                 "set_start_with_windows",
                 "is_start_with_windows",
+                "desktop_app_ready",
                 "desktop_reload",
                 "desktop_window_mode",
                 "desktop_minimize",
@@ -57,6 +58,10 @@ fn main() {
                 "hw_drawer",
                 "hw_scale_ports",
                 "hw_scale_reading",
+                "desktop_check_update",
+                "desktop_download_update",
+                "desktop_apply_update",
+                "desktop_update_progress",
             ]),
         ),
     )
