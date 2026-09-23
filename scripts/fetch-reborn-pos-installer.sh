@@ -20,6 +20,8 @@ fi
 
 if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
   echo "ERROR: no successful RebornPOS Windows build found for workflow $WORKFLOW"
+  echo "Hint: GitHub Actions windows-latest may be blocked (billing). Build locally instead:"
+  echo "  powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish"
   exit 1
 fi
 
