@@ -23,6 +23,11 @@ app.rebornsense.com {
 		reverse_proxy api:3000
 	}
 
+	# GitHub / manual deploy webhook → host systemd service (scripts/deploy-webhook-receiver.py)
+	handle /internal/git-deploy* {
+		reverse_proxy host.docker.internal:9847
+	}
+
 	encode gzip zstd
 
 	handle /health {
