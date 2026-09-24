@@ -9473,7 +9473,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     try {
-      await openCashDrawerViaAgent({ printerName: printerName || undefined });
+      const resolved =
+        resolveEscPosPrinterName(printerName, printers) ||
+        resolveLivePrinterName(printerName, printers) ||
+        printerName ||
+        undefined;
+      await openCashDrawerViaAgent({
+        printerName: resolved,
+        livePrinters: printers,
+      });
       toast.success(t('webPosDrawerOpened'));
     } catch (e: any) {
       notifyPrintError(e, 'webPosDrawerFailed');

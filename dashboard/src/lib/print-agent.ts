@@ -1112,13 +1112,35 @@ const DRAWER_KICK_BASE64 = 'G3AAGfo=';
  * Open cash drawer via print agent.
  * Prefers POST /drawer; falls back to POST /print with kick bytes for older agents.
  */
-export async function openCashDrawerViaAgent(opts?: { printerName?: string }): Promise<void> {
-  const printerName = opts?.printerName || undefined;
-  if (printerName && isUnsuitableRawPrinter(printerName)) {
-    throw new Error(unsuitableRawPrinterMessage(printerName));
+export async function openCashDrawerViaAgent(opts?: {
+  printerName?: string;
+  livePrinters?: AgentPrinter[];
+}): Promise<void> {
+  let printerName = String(opts?.printerName || '').trim();
+  const live = opts?.livePrinters;
+  if (live?.length) {
+    printerName =
+      resolveEscPosPrinterName(printerName, live) ||
+      resolveLivePrinterName(printerName, live) ||
+      printerName;
+  } else if (!printerName) {
+    try {
+      const list = await listAgentPrinters();
+      printerName =
+        resolveEscPosPrinterName('', list) ||
+        list.find((p) => p.isDefault && isEscPosTicketPrinterName(p.name))?.name ||
+        list.find((p) => isEscPosTicketPrinterName(p.name))?.name ||
+        '';
+    } catch {
+      /* fall through — agent may still pick default printer */
+    }
+  }
+  const resolvedName = printerName || undefined;
+  if (resolvedName && isUnsuitableRawPrinter(resolvedName)) {
+    throw new Error(unsuitableRawPrinterMessage(resolvedName));
   }
   if (isDesktopApp()) {
-    const res = await desktopDrawerKick(printerName);
+    const res = await desktopDrawerKick(resolvedName);
     if (!res.ok) {
       throw new Error('Cash drawer kick failed');
     }
@@ -1130,10 +1152,11 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
       '/drawer',
       {
         method: 'POST',
-        body: JSON.stringify({ printerName }),
+        body: JSON.stringify({ printerName: resolvedName }),
       },
-      printerName
+      resolvedName
     );
+    markPrintAgentRecentSuccess();
     return;
   } catch (e: any) {
     const msg = String(e?.message || '');
@@ -1143,7 +1166,7 @@ export async function openCashDrawerViaAgent(opts?: { printerName?: string }): P
     }
   }
   await printViaAgent({
-    printerName,
+    printerName: resolvedName,
     dataBase64: DRAWER_KICK_BASE64,
   });
 }

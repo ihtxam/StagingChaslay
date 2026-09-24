@@ -41,7 +41,7 @@ class SetupWizardActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_setup_wizard)
         steps = OemSetupSteps.forDevice()
-        stepIndex = savedInstanceState?.getInt(STATE_STEP_INDEX) ?: firstIncompleteStepIndex()
+        stepIndex = clampStepIndex(savedInstanceState?.getInt(STATE_STEP_INDEX) ?: firstIncompleteStepIndex())
 
         findViewById<TextView>(R.id.wizardDeviceLabel).text =
             getString(R.string.oem_setup_device_label, DeviceProfiler.detect().displayName)
@@ -86,10 +86,15 @@ class SetupWizardActivity : AppCompatActivity() {
 
     private fun firstIncompleteStepIndex(): Int {
         val idx = steps.indexOfFirst { !OemSetupPreferences.isStepCompleted(this, it.id) }
-        return if (idx >= 0) idx else 0
+        return clampStepIndex(if (idx >= 0) idx else 0)
     }
 
-    private fun currentStep(): OemSetupStep = steps[stepIndex]
+    private fun clampStepIndex(index: Int): Int {
+        if (steps.isEmpty()) return 0
+        return index.coerceIn(0, steps.lastIndex)
+    }
+
+    private fun currentStep(): OemSetupStep = steps[clampStepIndex(stepIndex)]
 
     private fun renderStep() {
         val step = currentStep()
@@ -394,7 +399,7 @@ class SetupWizardActivity : AppCompatActivity() {
             finishWizard()
             return
         }
-        stepIndex += 1
+        stepIndex = clampStepIndex(stepIndex + 1)
         renderStep()
     }
 
@@ -405,7 +410,7 @@ class SetupWizardActivity : AppCompatActivity() {
             finish()
             return
         }
-        stepIndex -= 1
+        stepIndex = clampStepIndex(stepIndex - 1)
         renderStep()
     }
 
