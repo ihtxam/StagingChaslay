@@ -215,6 +215,8 @@ type Props = {
   syncFailedCount?: number;
   syncing?: boolean;
   onSyncNow?: () => void;
+  /** Desktop shell: POS ⋮ menu lives in chrome Settings instead. */
+  hideSettingsMenu?: boolean;
 };
 
 export default function WebPosTopBar({
@@ -278,6 +280,7 @@ export default function WebPosTopBar({
   syncFailedCount = 0,
   syncing = false,
   onSyncNow,
+  hideSettingsMenu = false,
 }: Props) {
   const { t } = useI18n();
   const inCheckout = posView === 'checkout' || posView === 'success';
@@ -451,6 +454,17 @@ export default function WebPosTopBar({
             </button>
           ) : null}
 
+          {hideSettingsMenu && shiftsEnabled && shiftOpen && onCloseShift ? (
+            <button
+              type="button"
+              className="hidden rounded-lg border border-teal-200 bg-teal-50 px-2 py-1.5 text-[11px] font-bold text-teal-900 hover:bg-teal-100 sm:inline-flex"
+              onClick={onCloseShift}
+            >
+              {t('webPosShiftClose')}
+            </button>
+          ) : null}
+
+          {!hideSettingsMenu ? (
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
@@ -476,6 +490,7 @@ export default function WebPosTopBar({
               </>
             ) : null}
           </div>
+          ) : null}
         </div>
       </div>
 

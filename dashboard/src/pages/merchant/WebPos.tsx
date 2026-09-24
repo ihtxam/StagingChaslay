@@ -1623,10 +1623,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    const openSettings = () => setSettingsOpen(true);
+    const openSettings = () => {
+      if (isDesktopApp()) {
+        navigate('/merchant/desktop-settings');
+        return;
+      }
+      setSettingsOpen(true);
+    };
     window.addEventListener('webpos:open-settings', openSettings);
     return () => window.removeEventListener('webpos:open-settings', openSettings);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (loading || pinGateRequired) return;
@@ -2800,6 +2806,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     document.addEventListener('visibilitychange', refreshCatalog);
     return () => document.removeEventListener('visibilitychange', refreshCatalog);
+  }, [load]);
+
+  useEffect(() => {
+    const onReloadCatalog = () => {
+      void load();
+    };
+    window.addEventListener('webpos:reload-catalog', onReloadCatalog);
+    return () => window.removeEventListener('webpos:reload-catalog', onReloadCatalog);
   }, [load]);
 
   useEffect(() => {
@@ -10407,7 +10421,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
-        canShowPanel={canShowBackOffice}
+        canShowPanel={canShowBackOffice && !isDesktopApp()}
         onShowPanel={showPanelMenus}
         tableBadge={tableBadge}
         shiftsEnabled={shiftsEnabled}
@@ -10448,7 +10462,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }
           });
         }}
+        hideSettingsMenu={isDesktopApp()}
         settingsPanel={
+          isDesktopApp() ? null : (
           <WebPosSettingsDropdown
             onReloadCatalog={() => {
               void load();
@@ -10536,6 +10552,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             selectedTerminalId={selectedTerminalId}
             onTerminalChange={(id) => void changePosTerminal(id)}
           />
+          )
         }
       />
 
