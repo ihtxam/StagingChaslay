@@ -427,6 +427,8 @@ export default function WebPosTopBar({
             {notificationsOpen && notificationsPanel ? notificationsPanel : null}
           </div>
 
+          <OnScreenKeyboardToggle className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 data-[active=true]:border-teal-300 data-[active=true]:bg-teal-50 lg:h-9 lg:w-9" />
+
           <button
             type="button"
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-auto lg:max-w-[7rem] lg:gap-1 lg:px-2 lg:text-xs lg:font-medium"
@@ -688,9 +690,7 @@ export function WebPosSettingsDropdown({
             {t('webPosEnterFullscreen')}
           </button>
         </div>
-        {fullscreenActive ? (
-          <OnScreenKeyboardToggle className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50" />
-        ) : null}
+        <OnScreenKeyboardToggle className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 data-[active=true]:border-teal-300 data-[active=true]:bg-teal-50" />
         {onOpenCustomerDisplay ? (
           <button
             type="button"

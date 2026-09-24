@@ -325,7 +325,7 @@ type ToggleProps = {
   iconSize?: number;
 };
 
-/** Top-bar icon button — only render when fullscreen is active (caller checks). */
+/** Top-bar icon button to show/hide the on-screen keyboard. */
 export function OnScreenKeyboardToggle({ className, iconSize = 17 }: ToggleProps) {
   const { t } = useI18n();
   const { open, toggle } = useOnScreenKeyboard();

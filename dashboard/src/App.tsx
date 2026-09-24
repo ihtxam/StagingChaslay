@@ -44,7 +44,7 @@ import DesktopChromeBar from '@/components/DesktopChromeBar';
 import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
 import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
-import { isDesktopApp } from '@/lib/platform';
+import { shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
@@ -220,7 +220,7 @@ function App() {
   return (
     <>
       <BrowserRouter>
-        <OnScreenKeyboardProvider autoOpenOnFocus={isDesktopApp()}>
+        <OnScreenKeyboardProvider autoOpenOnFocus={shouldAutoOpenOnScreenKeyboard()}>
         <DesktopLoadingOverlay />
         <DesktopChromeBar />
         <DesktopUpdateBanner />

@@ -17,6 +17,17 @@ export function isBrowserPos(): boolean {
   return !isDesktopApp();
 }
 
+/** Touch-first device (tablet, touch PC) — OS keyboard may not appear. */
+export function isTouchPrimaryDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+/** Auto-show on-screen keyboard when a text field is focused (kiosk / touch). */
+export function shouldAutoOpenOnScreenKeyboard(): boolean {
+  return isDesktopApp() || isTouchPrimaryDevice();
+}
+
 type TauriInternals = {
   invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
