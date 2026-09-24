@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Banknote, Monitor, Palette, Printer, Scale, Settings2, Smartphone } from 'lucide-react';
+import { Banknote, FileText, Monitor, Palette, Printer, RefreshCw, Scale, Settings2, Smartphone } from 'lucide-react';
 import api from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
+import {
+  WEBPOS_COLOR_THEMES,
+  WEBPOS_TEXT_SIZES,
+  type WebPosAppearance,
+  type WebPosColorTheme,
+  type WebPosTextSize,
+} from '@/components/webpos/WebPosTopBar';
+import { openCustomerDisplayWindow } from '@/lib/customer-display-sync';
+import { sendWebPosLogsToSupport } from '@/lib/webpos-log';
 import {
   desktopPosEnv,
   desktopSidecarHealth,
@@ -31,6 +40,28 @@ import { buildPrinterTestEscPos, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { normalizePosCheckoutSettings, type RetailTileSize } from '@/lib/pos-checkout';
 
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
+const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
+const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
+
+function readPosTextSize(): WebPosTextSize {
+  try {
+    const v = localStorage.getItem(WEBPOS_TEXT_SIZE_KEY);
+    if (v && WEBPOS_TEXT_SIZES.includes(v as WebPosTextSize)) return v as WebPosTextSize;
+  } catch {
+    /* ignore */
+  }
+  return 'md';
+}
+
+function readPosAppearance(): WebPosAppearance {
+  try {
+    const v = localStorage.getItem(WEBPOS_APPEARANCE_KEY);
+    if (v === 'light' || v === 'night') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'light';
+}
 
 type SectionId = 'appearance' | 'printer' | 'scale' | 'drawer' | 'device';
 
@@ -43,7 +74,15 @@ type PrinterProfile = {
 
 type MerchantSnapshot = {
   name?: string;
+  slug?: string | null;
+  panelLanguage?: string | null;
+  posColorTheme?: string | null;
   posCheckoutSettings?: Record<string, unknown>;
+  customerDisplaySettings?: {
+    enabled?: boolean;
+    accessToken?: string | null;
+    shortCode?: string | null;
+  } | null;
   posPrintSettings?: {
     printers?: PrinterProfile[];
     scalePort?: string | null;
@@ -69,7 +108,7 @@ function readLocalTileSize(): RetailTileSize {
 }
 
 export default function DesktopSettings() {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
   const [section, setSection] = useState<SectionId>('appearance');
   const [loading, setLoading] = useState(true);
@@ -77,6 +116,10 @@ export default function DesktopSettings() {
   const [merchant, setMerchant] = useState<MerchantSnapshot | null>(null);
   const [tileSize, setTileSize] = useState<RetailTileSize>(() => readLocalTileSize());
   const [clearSearchAfterAdd, setClearSearchAfterAdd] = useState(true);
+  const [panelLanguage, setPanelLanguage] = useState<Locale>('en');
+  const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
+  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readPosTextSize());
+  const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readPosAppearance());
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
   const [receiptPrinter, setReceiptPrinter] = useState('');
@@ -124,6 +167,16 @@ export default function DesktopSettings() {
         const { data } = await api.get<MerchantSnapshot>('/merchant/settings');
         if (cancelled) return;
         setMerchant(data);
+        const lang = String(data.panelLanguage || locale || 'en').slice(0, 2);
+        setPanelLanguage(lang === 'fr' || lang === 'de' ? lang : 'en');
+        const themeRaw = String(data.posColorTheme || 'teal').toLowerCase();
+        setPosColorTheme(
+          WEBPOS_COLOR_THEMES.includes(themeRaw as WebPosColorTheme)
+            ? (themeRaw as WebPosColorTheme)
+            : 'teal'
+        );
+        setPosTextSize(readPosTextSize());
+        setPosAppearance(readPosAppearance());
         const checkoutSettings = normalizePosCheckoutSettings(data.posCheckoutSettings);
         setClearSearchAfterAdd(checkoutSettings.retailClearSearchAfterAdd);
         setTileSize(checkoutSettings.retailTileSize || readLocalTileSize());
@@ -174,11 +227,21 @@ export default function DesktopSettings() {
         printers: nextProfiles,
         scalePort: scalePort || null,
       };
-      await api.put('/merchant/settings', { posCheckoutSettings, posPrintSettings });
+      await api.put('/merchant/settings', {
+        posCheckoutSettings,
+        posPrintSettings,
+        panelLanguage,
+        posColorTheme,
+      });
       try {
         localStorage.setItem(WEBPOS_GRID_TILE_SIZE_KEY, tileSize);
+        localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, posTextSize);
+        localStorage.setItem(WEBPOS_APPEARANCE_KEY, posAppearance);
       } catch {
         /* ignore */
+      }
+      if (panelLanguage !== locale) {
+        setLocale(panelLanguage);
       }
       setMerchant((prev) =>
         prev ? { ...prev, posCheckoutSettings, posPrintSettings } : prev
@@ -199,6 +262,12 @@ export default function DesktopSettings() {
     tileSize,
     clearSearchAfterAdd,
     scalePort,
+    panelLanguage,
+    posColorTheme,
+    posTextSize,
+    posAppearance,
+    locale,
+    setLocale,
     t,
   ]);
 
@@ -305,6 +374,25 @@ export default function DesktopSettings() {
             {section === 'appearance' && (
               <section className="space-y-4">
                 <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">{sectionLabel('appearance')}</h2>
+                <div>
+                  <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('language')}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['en', 'fr', 'de'] as Locale[]).map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-xs font-bold uppercase ${
+                          panelLanguage === code
+                            ? 'border-teal-600 bg-teal-50 text-teal-900 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-100'
+                            : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
+                        }`}
+                        onClick={() => setPanelLanguage(code)}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <label className="flex items-center justify-between gap-3 text-sm dark:text-stone-200">
                   <span>{t('theme')}</span>
                   <select
@@ -316,6 +404,63 @@ export default function DesktopSettings() {
                     <option value="dark">{t('themeDark')}</option>
                   </select>
                 </label>
+                <div>
+                  <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('webPosAppearance')}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['light', 'night'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                          posAppearance === mode
+                            ? 'border-teal-600 bg-teal-50 text-teal-900 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-100'
+                            : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
+                        }`}
+                        onClick={() => setPosAppearance(mode)}
+                      >
+                        {mode === 'light' ? t('webPosAppearanceLightShort') : t('webPosAppearanceNightShort')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('posColorTheme')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {WEBPOS_COLOR_THEMES.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-bold capitalize ${
+                          posColorTheme === color
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
+                        }`}
+                        onClick={() => setPosColorTheme(color)}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('webPosTextSize')}</p>
+                  <div className="flex gap-2">
+                    {WEBPOS_TEXT_SIZES.map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold uppercase ${
+                          posTextSize === size
+                            ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-200'
+                            : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
+                        }`}
+                        onClick={() => setPosTextSize(size)}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <p className="mb-2 text-sm font-medium dark:text-stone-200">{t('posRetailTileSize')}</p>
                   <div className="flex gap-2">
@@ -509,6 +654,48 @@ export default function DesktopSettings() {
                 <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                   <Monitor size={14} aria-hidden />
                   {t('desktopSettingsDeviceHint')}
+                </div>
+                <div className="grid grid-cols-1 gap-2 border-t border-stone-100 pt-4 dark:border-stone-700 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('webpos:reload-catalog'));
+                      toast.success(t('webPosReloadCatalogShort'));
+                    }}
+                  >
+                    <RefreshCw size={16} aria-hidden />
+                    {t('webPosReloadCatalogShort')}
+                  </button>
+                  {merchant?.customerDisplaySettings?.accessToken &&
+                  merchant.customerDisplaySettings.enabled !== false ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                      onClick={() => {
+                        const win = openCustomerDisplayWindow({
+                          merchantSlug: merchant.slug || undefined,
+                          shortCode: merchant.customerDisplaySettings?.shortCode || undefined,
+                        });
+                        if (!win) toast.error(t('cdsActionFailed'));
+                      }}
+                    >
+                      <Monitor size={16} aria-hidden />
+                      {t('cdsOpenDisplay')}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-900 hover:bg-teal-100 sm:col-span-2"
+                    onClick={() => {
+                      void sendWebPosLogsToSupport({ locale: panelLanguage }).catch(() =>
+                        toast.error(t('saveFailed'))
+                      );
+                    }}
+                  >
+                    <FileText size={16} aria-hidden />
+                    {t('webPosSendLogs')}
+                  </button>
                 </div>
               </section>
             )}
