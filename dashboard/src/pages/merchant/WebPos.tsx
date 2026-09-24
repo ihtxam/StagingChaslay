@@ -522,6 +522,7 @@ import type {
 import { openCartDraftKey, POS_GIFT_CARDS_CATEGORY, POS_MOST_SOLD_CATEGORY } from '@/components/webpos/types';
 import {
   applyBillDiscountToTotals,
+  applyPromoDiscountToTotals,
   merchandiseBase,
   resolveBillDiscountAmount,
 } from '@/lib/webpos-bill-discount';
@@ -1078,6 +1079,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const [offersOpen, setOffersOpen] = useState(false);
   const [posOffers, setPosOffers] = useState<PosOffer[]>([]);
+  const [posOfferDiscount, setPosOfferDiscount] = useState(0);
   const splitMasterIdRef = useRef<string | null>(null);
   const [fulfillmentWhen, setFulfillmentWhen] = useState<FulfillmentWhen | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<WebPosCustomer | null>(() => {
@@ -1870,9 +1872,57 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [cart, taxRate, vatIncludedInPrice, roundingStep]
   );
 
+  const offerChannel = tableId ? 'dine_in' : effectiveChannel;
+
+  useEffect(() => {
+    if (!cart.length) {
+      setPosOfferDiscount(0);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void api
+        .post('/merchant/offers/preview', {
+          channel: offerChannel,
+          items: cart.map((l) => ({
+            productId: l.productId,
+            categoryId: l.categoryId ?? null,
+            name: l.name,
+            unitPrice: l.quantity > 0 ? roundMoney2(l.lineTotal / l.quantity) : l.unitPrice,
+            quantity: l.quantity,
+          })),
+        })
+        .then((res) => {
+          setPosOfferDiscount(Number(res.data?.discount) || 0);
+        })
+        .catch(() => {
+          setPosOfferDiscount(0);
+        });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [cart, offerChannel]);
+
+  const offerAdjustedTotals = useMemo(
+    () =>
+      applyPromoDiscountToTotals(
+        fullTotals,
+        posOfferDiscount,
+        vatIncludedInPrice,
+        roundingStep,
+        vatAfterDiscount
+      ),
+    [fullTotals, posOfferDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
+  );
+
   const payableFullTotals = useMemo(
-    () => applyBillDiscountToTotals(fullTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount),
-    [fullTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
+    () =>
+      applyBillDiscountToTotals(
+        offerAdjustedTotals,
+        billDiscount,
+        vatIncludedInPrice,
+        roundingStep,
+        vatAfterDiscount
+      ),
+    [offerAdjustedTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
   );
 
   const activeSale = useMemo(() => {
@@ -5874,10 +5924,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const checkoutBillDiscountExtras = () => {
-    const amount = resolveBillDiscountAmount(fullTotals, billDiscount, vatIncludedInPrice);
+    const billAmount = resolveBillDiscountAmount(offerAdjustedTotals, billDiscount, vatIncludedInPrice);
     return {
       discountPercent: billDiscount.percent,
-      discountAmount: amount,
+      discountAmount: roundMoney2(billAmount + posOfferDiscount),
     };
   };
 

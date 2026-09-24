@@ -2354,11 +2354,6 @@ export default function WebPosOrdersPanel({
                       <span className="font-semibold">
                         {formatOrderPaymentDisplay(selectedOrder, t, locale)}
                       </span>
-                      {canShowAwaitingPaymentBadge(selectedOrder) ? (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                          {t('webPosAwaitingPayment')}
-                        </span>
-                      ) : null}
                     </p>
                   ) : null}
                   {selectedOrder.cancelReason ? (

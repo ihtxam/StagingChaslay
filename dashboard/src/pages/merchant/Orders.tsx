@@ -1381,7 +1381,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                 ) : null}
                 <p>
                   <span className="text-[var(--text-muted)]">{t('ordersPayment')}:</span>{' '}
-                  {formatOrderPaymentDisplay(selected, t, locale)} / {selected.paymentStatus || '—'}
+                  {formatOrderPaymentDisplay(selected, t, locale)}
                 </p>
                 {selected.staffName ? (
                   <p>
