@@ -8,7 +8,7 @@ import type { ShopChannel } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
 import { buildScheduleDays, buildScheduleDayForDate, type StoreHours } from '@/lib/shop-hours';
 import { useI18n } from '@/lib/i18n';
-import { SHOP_INPUT_CLASS } from '@/lib/shop-input';
+import { SHOP_BTN_PRIMARY_CLASS, SHOP_INPUT_CLASS } from '@/lib/shop-input';
 
 type ChannelOption = {
   id: ShopChannel;
@@ -65,6 +65,12 @@ function buildFullAddress(street: string, houseNumber: string, floor: string) {
   if (!base) return '';
   return floorTrim ? `${base}, ${floorTrim}` : base;
 }
+
+const SHOP_ACCENT_SOLID =
+  'bg-[var(--color-primary,var(--shop-accent,#b45309))] text-white border-[var(--color-primary,var(--shop-accent,#b45309))]';
+const SHOP_ACCENT_OUTLINE =
+  'border-[var(--color-primary,var(--shop-accent,#b45309))] text-[var(--color-primary,var(--shop-accent,#b45309))]';
+const SHOP_ACCENT_HOVER = 'hover:border-[var(--color-primary,var(--shop-accent,#b45309))]';
 
 function splitAddressLine(line: string): { street: string; houseNumber: string; floor: string } {
   const trimmed = line.trim();
@@ -238,8 +244,6 @@ export default function ShopChannelPrompt({
       setDeliveryInfo(verified);
       if (!verified.deliverable) {
         setError(verified.error || t('shopOutsideDelivery'));
-      } else if (!verified.meetsMinOrder) {
-        setError(verified.message || t('shopMinOrderNotMet'));
       } else {
         setError(null);
       }
@@ -304,12 +308,6 @@ export default function ShopChannelPrompt({
       }
       if (!info?.deliverable) return;
 
-      const verified = withDeliveryMinOrderStatus(info, subtotal);
-      if (!verified.meetsMinOrder) {
-        setError(verified.message || t('shopMinOrderNotMet'));
-        return;
-      }
-
       onConfirm({
         channel: addressOnly ? 'delivery' : selected,
         scheduledFor: withSchedule && !addressOnly ? slotValue : null,
@@ -318,7 +316,7 @@ export default function ShopChannelPrompt({
         city,
         lat,
         lng,
-        deliveryInfo: verified,
+        deliveryInfo: withDeliveryMinOrderStatus(info, subtotal),
       });
       return;
     }
@@ -420,7 +418,7 @@ export default function ShopChannelPrompt({
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-stone-500 p-8">
-                <div className="h-14 w-14 rounded-full bg-amber-100 flex items-center justify-center text-2xl">
+                <div className="h-14 w-14 rounded-full bg-[var(--color-primary,var(--shop-accent,#b45309))]/10 flex items-center justify-center text-2xl">
                   📍
                 </div>
                 <p className="text-sm text-center">{t('shopMapPlaceholder')}</p>
@@ -464,7 +462,7 @@ export default function ShopChannelPrompt({
                       }}
                       className={`flex-1 rounded-full px-3 py-2.5 text-sm font-semibold transition ${
                         on
-                          ? 'bg-amber-700 text-white shadow-sm'
+                          ? `${SHOP_ACCENT_SOLID} shadow-sm`
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
@@ -568,13 +566,7 @@ export default function ShopChannelPrompt({
                   />
                 ) : null}
                 {error ? (
-                  <p
-                    className={`text-sm font-medium ${
-                      effectiveDeliveryInfo?.deliverable && effectiveDeliveryInfo.meetsMinOrder === false
-                        ? 'text-amber-800'
-                        : 'text-red-600'
-                    }`}
-                  >
+                  <p className="text-sm font-medium text-red-600">
                     {error}
                   </p>
                 ) : null}
@@ -598,7 +590,7 @@ export default function ShopChannelPrompt({
                       }}
                       className={`rounded-xl px-2 py-2.5 text-center text-sm font-medium border transition ${
                         dayTab === 'today'
-                          ? 'bg-amber-700 text-white border-amber-700'
+                          ? SHOP_ACCENT_SOLID
                           : 'bg-white text-stone-700 border-stone-200 hover:border-stone-300'
                       }`}
                     >
@@ -616,7 +608,7 @@ export default function ShopChannelPrompt({
                       }}
                       className={`rounded-xl px-2 py-2.5 text-center text-sm font-medium border transition ${
                         dayTab === 'tomorrow'
-                          ? 'bg-amber-700 text-white border-amber-700'
+                          ? SHOP_ACCENT_SOLID
                           : 'bg-white text-stone-700 border-stone-200 hover:border-stone-300'
                       }`}
                     >
@@ -636,7 +628,7 @@ export default function ShopChannelPrompt({
                       }}
                       className={`rounded-xl px-2 py-2.5 text-center text-sm font-medium border transition ${
                         dayTab === 'choose'
-                          ? 'bg-amber-700 text-white border-amber-700'
+                          ? SHOP_ACCENT_SOLID
                           : 'bg-white text-stone-700 border-stone-200 hover:border-stone-300'
                       }`}
                     >
@@ -672,7 +664,7 @@ export default function ShopChannelPrompt({
                     onClick={() => setSlotValue(null)}
                     className={`rounded-full px-3 py-1.5 text-sm font-medium border ${
                       slotValue == null
-                        ? 'bg-amber-700 text-white border-amber-700'
+                        ? SHOP_ACCENT_SOLID
                         : 'bg-white text-stone-700 border-stone-200'
                     }`}
                   >
@@ -694,8 +686,8 @@ export default function ShopChannelPrompt({
                           onClick={() => setSlotValue(s.value)}
                           className={`rounded-xl border py-2 text-sm font-semibold tabular-nums transition ${
                             slotValue === s.value
-                              ? 'bg-amber-700 text-white border-amber-700'
-                              : 'bg-white text-stone-800 border-stone-200 hover:border-amber-300'
+                              ? SHOP_ACCENT_SOLID
+                              : `bg-white text-stone-800 border-stone-200 ${SHOP_ACCENT_HOVER}`
                           }`}
                         >
                           {s.label}
@@ -706,7 +698,7 @@ export default function ShopChannelPrompt({
                       <button
                         type="button"
                         onClick={() => setShowAllSlots(true)}
-                        className="text-sm font-semibold text-amber-800 underline underline-offset-2"
+                        className={`text-sm font-semibold underline underline-offset-2 ${SHOP_ACCENT_OUTLINE}`}
                       >
                         {t('shopMoreSlots').replace('{n}', String(hiddenSlotCount))}
                       </button>
@@ -727,7 +719,7 @@ export default function ShopChannelPrompt({
                   shopKey &&
                   (!street.trim() || !houseNumber.trim() || !floor.trim()))
               }
-              className="w-full rounded-xl bg-amber-700 py-3.5 text-sm font-semibold text-white hover:bg-amber-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full ${SHOP_BTN_PRIMARY_CLASS} py-3.5 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {checking ? t('shopChecking') : resolvedConfirm}
             </button>

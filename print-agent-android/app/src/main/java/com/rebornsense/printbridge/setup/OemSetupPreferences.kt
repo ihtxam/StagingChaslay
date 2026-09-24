@@ -31,11 +31,14 @@ object OemSetupPreferences {
 
         if (!firstRun && !versionChanged && !reinstalled) return
 
-        prefs.edit()
+        val editor = prefs.edit()
             .putInt(KEY_SETUP_VERSION_CODE, versionCode)
             .putLong(KEY_FIRST_INSTALL_TIME, installTime)
             .putBoolean(KEY_WIZARD_COMPLETED, false)
-            .apply()
+        prefs.all.keys
+            .filter { it.startsWith(KEY_STEP_PREFIX) }
+            .forEach { editor.remove(it) }
+        editor.apply()
     }
 
     private fun currentVersionCode(context: Context): Int {

@@ -81,6 +81,11 @@ class BluetoothEscPosDriver : PrinterDriver {
             Thread.sleep(400)
             return
         }
+        if (data.contentEquals(PrinterDriver.DRAWER_KICK)) {
+            writePaced(socket, data, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
+            Thread.sleep(200)
+            return
+        }
         val (bodyRaw, _) = splitCutSuffix(data)
         val body = stripTrailingFeedAndCut(bodyRaw)
         val payload = if (body.isNotEmpty()) body + btCutTrailer else btCutTrailer
