@@ -86,7 +86,8 @@ async function printReceiptText(
       vatNumber: opts.merchantVatNumber,
       headerAlign: headerFmt.align,
     },
-    lineWidthForPaper(paper === 58 ? 58 : 80)
+    lineWidthForPaper(paper === 58 ? 58 : 80),
+    { padLines: false }
   );
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,

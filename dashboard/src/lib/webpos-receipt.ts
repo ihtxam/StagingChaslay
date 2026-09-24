@@ -734,28 +734,32 @@ export function getReceiptHeaderLines(
     WebPosReceipt,
     'header' | 'headerTitle' | 'businessName' | 'address' | 'phone' | 'vatNumber' | 'headerAlign'
   >,
-  width: number
+  width: number,
+  opts?: { padLines?: boolean }
 ): string[] {
   const align = tx.headerAlign ?? 'center';
+  const padLines = opts?.padLines !== false;
+  const fmt = (text: string) =>
+    padLines ? alignLine(text, width, align) : text.slice(0, width);
   const { title, body } = normalizeReceiptHeaderFields({
     headerTitle: tx.headerTitle,
     header: tx.header,
   });
   const lines: string[] = [];
   if (title || body) {
-    if (title) lines.push(alignLine(title, width, align));
+    if (title) lines.push(fmt(title));
     if (body) {
       for (const line of body.split(/\r?\n/)) {
         const trimmed = line.trim();
-        if (trimmed) lines.push(alignLine(trimmed, width, align));
+        if (trimmed) lines.push(fmt(trimmed));
       }
     }
     return lines;
   }
-  lines.push(alignLine((tx.businessName || APP_NAME).toUpperCase().slice(0, width), width, align));
-  if (tx.address) lines.push(alignLine(tx.address.slice(0, width), width, align));
-  if (tx.phone) lines.push(alignLine(`Tel: ${tx.phone}`.slice(0, width), width, align));
-  if (tx.vatNumber) lines.push(alignLine(`VAT: ${tx.vatNumber}`.slice(0, width), width, align));
+  lines.push(fmt((tx.businessName || APP_NAME).toUpperCase().slice(0, width)));
+  if (tx.address) lines.push(fmt(tx.address.slice(0, width)));
+  if (tx.phone) lines.push(fmt(`Tel: ${tx.phone}`.slice(0, width)));
+  if (tx.vatNumber) lines.push(fmt(`VAT: ${tx.vatNumber}`.slice(0, width)));
   return lines;
 }
 
@@ -776,8 +780,25 @@ export function buildReceiptHeaderEscPos(
       parts.push(escposCp850Encode(`${lines[i]}\n`));
     }
   }
-  parts.push(escBold(false), escKitchenSize(1), escAlign(0));
+  parts.push(escBold(false), escKitchenSize(1), escAlign(0), escposCp850Encode('\n'));
   return concatBytes(...parts);
+}
+
+function stripPaddedReceiptHeaderFromText(
+  bodyText: string,
+  headerLines: string[],
+  width: number,
+  align: ReceiptHeaderAlign = 'center'
+): string {
+  if (!headerLines.length) return bodyText;
+  const padded = headerLines.map((line) => alignLine(line, width, align));
+  for (const block of [`${padded.join('\n')}\n\n`, `${padded.join('\n')}\n`]) {
+    const idx = bodyText.indexOf(block);
+    if (idx >= 0) {
+      return bodyText.slice(0, idx) + bodyText.slice(idx + block.length);
+    }
+  }
+  return bodyText;
 }
 
 /** Centered course banner: >> COURSE 1 << */
@@ -1286,6 +1307,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   for (const line of getReceiptHeaderLines(tx, width)) {
     r += line + '\n';
   }
+  r += '\n';
   if (tx.tableLabel) {
     r += `${L.table} ${tx.tableLabel}`;
     if (tx.guestCount) r += ` · ${tx.guestCount} ${L.pax}`;
@@ -1425,6 +1447,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   const vatTotals = resolveOrderReceiptVat(tx);
   const vatSection = formatVatSection({ ...tx, ...vatTotals }, L, width);
   if (vatSection) {
+    r += thin + '\n';
     r += vatSection + '\n';
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
@@ -2764,7 +2787,7 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
-    parts.push(alignCenter, logoBytes, alignLeft);
+    parts.push(alignCenter, logoBytes, escposCp850Encode('\n'), alignLeft);
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
@@ -2880,11 +2903,12 @@ export async function buildReceiptEscPos(
   const headerLines = opts.headerLines ?? [];
   let bodyText = text;
   if (headerLines.length > 0) {
-    const headerBlock = `${headerLines.join('\n')}\n`;
-    const idx = bodyText.indexOf(headerBlock);
-    if (idx >= 0) {
-      bodyText = bodyText.slice(0, idx) + bodyText.slice(idx + headerBlock.length);
-    }
+    bodyText = stripPaddedReceiptHeaderFromText(
+      bodyText,
+      headerLines,
+      lineWidthForPaper(paper),
+      opts.headerAlign ?? 'center'
+    );
   }
   const headerEscPos =
     headerLines.length > 0

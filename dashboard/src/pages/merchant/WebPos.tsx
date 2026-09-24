@@ -7647,7 +7647,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         vatNumber: merchant?.vatNumber || undefined,
         headerAlign: headerFmt.align,
       },
-      lineWidthForPaper(paper === 58 ? 58 : 80)
+      lineWidthForPaper(paper === 58 ? 58 : 80),
+      { padLines: false }
     );
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
