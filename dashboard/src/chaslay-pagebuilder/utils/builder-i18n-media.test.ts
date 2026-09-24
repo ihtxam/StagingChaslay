@@ -30,14 +30,26 @@ assert.equal(
 );
 assert.equal(translateSectionCopy('Home', 'fr'), 'Accueil');
 assert.equal(translateSectionCopy('Order Now', 'en'), 'Order Now');
-assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Commander');
+assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Order Now');
+assert.equal(translateSectionCopy('Commander', 'en', 'fr'), 'Order Now');
+assert.equal(translateSectionCopy('Commander', 'de', 'fr'), 'Jetzt bestellen');
 assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
 assert.equal(translateSectionCopy('Our Story', 'de'), 'Unsere Geschichte');
 
-const props = { title: 'Our Menu', title_fr: 'La carte', buttonText: 'Order Now' };
-assert.equal(resolveTranslatedProp(props, 'title', 'fr'), 'La carte');
-assert.equal(resolveTranslatedProp(props, 'buttonText', 'fr'), 'Order Now');
-assert.equal(resolveTranslatedProp(props, 'title', 'en'), 'Our Menu');
+const propsEnDefault = { title: 'Our Menu', title_fr: 'La carte', buttonText: 'Order Now' };
+assert.equal(resolveTranslatedProp(propsEnDefault, 'title', 'fr', 'en'), 'La carte');
+assert.equal(resolveTranslatedProp(propsEnDefault, 'title', 'en', 'en'), 'Our Menu');
+assert.equal(resolveTranslatedProp(propsEnDefault, 'buttonText', 'fr', 'en'), 'Order Now');
+
+const propsFrDefault = { title: 'La carte', title_en: 'Our Menu', buttonText: 'Commander', buttonText_en: 'Order Now' };
+assert.equal(resolveTranslatedProp(propsFrDefault, 'title', 'fr', 'fr'), 'La carte');
+assert.equal(resolveTranslatedProp(propsFrDefault, 'title', 'en', 'fr'), 'Our Menu');
+assert.equal(resolveTranslatedProp(propsFrDefault, 'buttonText', 'en', 'fr'), 'Order Now');
+assert.equal(translateSectionCopy(propsFrDefault.buttonText, 'de', 'fr'), 'Jetzt bestellen');
+
+const propsLegacyFrDefault = { title: 'Our Menu', title_fr: 'La carte', buttonText: 'Order Now' };
+assert.equal(resolveTranslatedProp(propsLegacyFrDefault, 'title', 'fr', 'fr'), 'La carte');
+assert.equal(translateSectionCopy(resolveTranslatedProp(propsLegacyFrDefault, 'buttonText', 'en', 'fr'), 'en', 'fr'), 'Order Now');
 
 assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
 assert.equal(translateSectionCopy('What Our Guests Say', 'de'), 'Was unsere Gäste sagen');
@@ -45,7 +57,8 @@ assert.equal(
   resolveTranslatedProp(
     { testimonials_0_text: 'Great food', testimonials_0_text_fr: 'Excellente cuisine' },
     'testimonials_0_text',
-    'fr'
+    'fr',
+    'en'
   ),
   'Excellente cuisine'
 );

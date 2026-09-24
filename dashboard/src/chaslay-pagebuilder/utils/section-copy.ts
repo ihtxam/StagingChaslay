@@ -3,6 +3,7 @@
 /** Default template / seed copy is authored in English in the page builder. */
 export const BUILDER_COPY_SOURCE_LOCALE = 'en';
 
+type BuilderLocale = 'en' | 'fr' | 'de' | 'it';
 type LocaleMap = { fr: string; de: string; it: string };
 
 const PHRASES: Record<string, LocaleMap> = {
@@ -153,25 +154,75 @@ const PHRASES: Record<string, LocaleMap> = {
   'Crafted with love.': { fr: 'Fait avec amour.', de: 'Mit Liebe gemacht.', it: 'Fatto con amore.' },
 };
 
-const SORTED_PHRASES = Object.keys(PHRASES).sort((a, b) => b.length - a.length);
-
-function localeKey(locale: string): 'fr' | 'de' | 'it' | null {
-  const loc = String(locale || '').toLowerCase().slice(0, 2);
-  if (loc === 'fr' || loc === 'de' || loc === 'it') return loc;
-  return null;
+function normalizeBuilderLocale(raw: string | null | undefined, fallback: BuilderLocale = 'en'): BuilderLocale {
+  const code = String(raw || fallback).toLowerCase().slice(0, 2);
+  if (code === 'fr' || code === 'de' || code === 'it' || code === 'en') return code;
+  return fallback;
 }
 
-export function translateSectionCopy(text: string, locale: string, _defaultLanguage = 'en'): string {
+/** Phrase replacement maps for every supported source → target locale pair. */
+function buildPhraseMaps(): Record<BuilderLocale, Partial<Record<BuilderLocale, Record<string, string>>>> {
+  const maps: Record<BuilderLocale, Partial<Record<BuilderLocale, Record<string, string>>>> = {
+    en: {},
+    fr: {},
+    de: {},
+    it: {},
+  };
+  const ensure = (source: BuilderLocale, target: BuilderLocale) => {
+    if (!maps[source][target]) maps[source][target] = {};
+    return maps[source][target]!;
+  };
+
+  for (const [english, row] of Object.entries(PHRASES)) {
+    ensure('en', 'fr')[english] = row.fr;
+    ensure('en', 'de')[english] = row.de;
+    ensure('en', 'it')[english] = row.it;
+    ensure('fr', 'en')[row.fr] = english;
+    ensure('de', 'en')[row.de] = english;
+    ensure('it', 'en')[row.it] = english;
+    ensure('fr', 'de')[row.fr] = row.de;
+    ensure('fr', 'it')[row.fr] = row.it;
+    ensure('de', 'fr')[row.de] = row.fr;
+    ensure('de', 'it')[row.de] = row.it;
+    ensure('it', 'fr')[row.it] = row.fr;
+    ensure('it', 'de')[row.it] = row.de;
+  }
+  return maps;
+}
+
+const PHRASE_MAPS = buildPhraseMaps();
+
+const SORTED_REPLACEMENTS: Partial<
+  Record<BuilderLocale, Partial<Record<BuilderLocale, Array<[string, string]>>>>
+> = (() => {
+  const out: Partial<Record<BuilderLocale, Partial<Record<BuilderLocale, Array<[string, string]>>>>> = {};
+  for (const source of ['en', 'fr', 'de', 'it'] as BuilderLocale[]) {
+    out[source] = {};
+    for (const target of ['en', 'fr', 'de', 'it'] as BuilderLocale[]) {
+      if (source === target) continue;
+      const map = PHRASE_MAPS[source]?.[target];
+      if (!map) continue;
+      out[source]![target] = Object.entries(map).sort((a, b) => b[0].length - a[0].length);
+    }
+  }
+  return out;
+})();
+
+export function translateSectionCopy(text: string, locale: string, defaultLanguage = 'en'): string {
   if (!text) return text;
-  const loc = localeKey(locale);
-  const source = BUILDER_COPY_SOURCE_LOCALE;
-  if (!loc || loc === source) return text;
-  const exact = PHRASES[text]?.[loc];
+  const target = normalizeBuilderLocale(locale, 'en');
+  const source = normalizeBuilderLocale(defaultLanguage, BUILDER_COPY_SOURCE_LOCALE);
+  if (target === source) return text;
+
+  const map = PHRASE_MAPS[source]?.[target];
+  if (!map) return text;
+
+  const exact = map[text];
   if (exact) return exact;
+
   let out = text;
-  for (const phrase of SORTED_PHRASES) {
-    const translated = PHRASES[phrase][loc];
-    if (translated && out.includes(phrase)) out = out.split(phrase).join(translated);
+  for (const [from, to] of SORTED_REPLACEMENTS[source]?.[target] || []) {
+    if (from && to && out.includes(from)) out = out.split(from).join(to);
   }
   return out;
 }
