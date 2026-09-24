@@ -2964,6 +2964,9 @@ const en: Dict = {
   desktopHubTimingsHint: 'When your shop accepts orders and shows open on the website.',
   desktopHubAdvancedWebHint:
     'Advanced settings (CMS, payments, staff, homepage builder) are on the web back office — log in at app.rebornsense.com in your browser.',
+  desktopSettingsKeyboardHint:
+    'Use the keyboard icon in the top bar, or tap any text field — the on-screen keyboard opens automatically on touch PCs.',
+  desktopSettingsKeyboardOpenHint: 'Keyboard is open at the bottom of the screen. Tap a field, then type.',
   desktopSettingsSection_appearance: 'Appearance',
   desktopSettingsSection_printer: 'Printer',
   desktopSettingsSection_scale: 'Weighing scale',
@@ -7282,6 +7285,9 @@ const fr: Dict = {
   desktopHubTimingsHint: 'Heures d’ouverture pour les commandes et le site.',
   desktopHubAdvancedWebHint:
     'Paramètres avancés (CMS, paiements, personnel, page d’accueil) : connectez-vous sur app.rebornsense.com dans votre navigateur.',
+  desktopSettingsKeyboardHint:
+    'Icône clavier dans la barre du haut, ou touchez un champ — le clavier à l’écran s’ouvre automatiquement sur PC tactile.',
+  desktopSettingsKeyboardOpenHint: 'Clavier ouvert en bas de l’écran. Touchez un champ, puis saisissez.',
   desktopSettingsSection_appearance: 'Apparence',
   desktopSettingsSection_printer: 'Imprimante',
   desktopSettingsSection_scale: 'Balance',
@@ -11545,6 +11551,9 @@ const de: Dict = {
   desktopHubTimingsHint: 'Wann Ihr Shop Bestellungen annimmt und online geöffnet ist.',
   desktopHubAdvancedWebHint:
     'Erweiterte Einstellungen (CMS, Zahlungen, Personal, Homepage-Builder): im Web-Backoffice unter app.rebornsense.com anmelden.',
+  desktopSettingsKeyboardHint:
+    'Tastatur-Symbol in der oberen Leiste oder Textfeld antippen — Bildschirmtastatur öffnet sich automatisch auf Touch-PCs.',
+  desktopSettingsKeyboardOpenHint: 'Tastatur ist unten geöffnet. Feld antippen, dann eingeben.',
   desktopSettingsSection_appearance: 'Darstellung',
   desktopSettingsSection_printer: 'Drucker',
   desktopSettingsSection_scale: 'Waage',

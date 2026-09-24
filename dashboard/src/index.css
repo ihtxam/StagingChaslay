@@ -2534,9 +2534,9 @@ html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn:hover:not(:disabl
   color: #fff;
 }
 
-html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn svg {
-  color: currentColor;
-  stroke: currentColor;
+html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn[data-active='true'] {
+  background: rgba(13, 148, 136, 0.92);
+  color: #fff;
 }
 
 html.desktop-app-shell .webpos-shell--fill {

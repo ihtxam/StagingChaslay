@@ -38,6 +38,7 @@ import {
 } from '@/lib/print-agent';
 import { buildPrinterTestEscPos, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { normalizePosCheckoutSettings, type RetailTileSize } from '@/lib/pos-checkout';
+import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
@@ -109,6 +110,7 @@ function readLocalTileSize(): RetailTileSize {
 
 export default function DesktopSettings() {
   const { t, locale, setLocale } = useI18n();
+  const { open: keyboardOpen } = useOnScreenKeyboard();
   const { theme, setTheme } = useTheme();
   const [section, setSection] = useState<SectionId>('appearance');
   const [loading, setLoading] = useState(true);
@@ -656,6 +658,16 @@ export default function DesktopSettings() {
                   {t('desktopSettingsDeviceHint')}
                 </div>
                 <div className="grid grid-cols-1 gap-2 border-t border-stone-100 pt-4 dark:border-stone-700 sm:grid-cols-2">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-600 dark:bg-stone-800/60 sm:col-span-2">
+                    <div>
+                      <p className="text-sm font-semibold dark:text-stone-100">{t('webPosOnScreenKeyboard')}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{t('desktopSettingsKeyboardHint')}</p>
+                    </div>
+                    <OnScreenKeyboardToggle className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100" />
+                  </div>
+                  {keyboardOpen ? (
+                    <p className="text-xs text-teal-700 dark:text-teal-300 sm:col-span-2">{t('desktopSettingsKeyboardOpenHint')}</p>
+                  ) : null}
                   <button
                     type="button"
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
