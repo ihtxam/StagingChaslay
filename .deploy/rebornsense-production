@@ -1,2 +1,3 @@
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
 # Last deploy request: 2026-09-23T14:10:00Z — POS delivery client toggle, receipt cut fix, cancelled orders filter, remove Reports from Sales nav
+# Deploy request: 2026-09-24T23:24:45Z — receipt header, cash modal, desktop hub basic settings
