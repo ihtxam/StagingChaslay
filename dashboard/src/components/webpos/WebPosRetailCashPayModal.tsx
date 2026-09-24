@@ -16,6 +16,8 @@ type Props = {
   onComplete: (tendered: number, changeDue: number) => void;
 };
 
+type ChfTone = 'dark' | 'green' | 'amber' | 'red';
+
 function formatChfParts(amount: number): { whole: string; cents: string } {
   const whole = Math.floor(amount);
   const cents = Math.round((amount - whole) * 100)
@@ -29,6 +31,69 @@ function formatDenomLabel(value: number): string {
   return value.toFixed(2);
 }
 
+function denomButtonClass(value: number): string {
+  if (value >= 20) {
+    return 'border-[#c5e8ea] bg-[#dff3f4] hover:border-[#9fd4d8]';
+  }
+  if (value >= 10) {
+    return 'border-[#d5e8c4] bg-[#eaf4df] hover:border-[#b8d6a4]';
+  }
+  if (value >= 1) {
+    return 'border-[#ebe2c4] bg-[#f7f0dc] hover:border-[#d9cdb0]';
+  }
+  return 'border-[#ddd9d0] bg-[#f2f0eb] hover:border-[#c8c4bb]';
+}
+
+function ChfAmount({
+  amount,
+  tone = 'dark',
+  size = 'md',
+}: {
+  amount: number;
+  tone?: ChfTone;
+  size?: 'md' | 'lg';
+}) {
+  const { whole, cents } = formatChfParts(amount);
+  const currencyClass =
+    tone === 'green'
+      ? 'text-emerald-700/80'
+      : tone === 'amber'
+        ? 'text-amber-700/80'
+        : tone === 'red'
+          ? 'text-red-700/80'
+          : 'text-stone-500';
+  const wholeClass =
+    tone === 'green'
+      ? 'text-emerald-800'
+      : tone === 'amber'
+        ? 'text-amber-800'
+        : tone === 'red'
+          ? 'text-red-700'
+          : 'text-stone-900';
+  const centsClass =
+    tone === 'green'
+      ? 'text-emerald-700/90'
+      : tone === 'amber'
+        ? 'text-amber-700/90'
+        : tone === 'red'
+          ? 'text-red-600/90'
+          : 'text-stone-600';
+
+  return (
+    <p className="tabular-nums leading-none">
+      <span className={`font-medium ${currencyClass} ${size === 'lg' ? 'text-base' : 'text-sm'}`}>
+        CHF{' '}
+      </span>
+      <span className={`font-bold ${wholeClass} ${size === 'lg' ? 'text-5xl' : 'text-3xl'}`}>
+        {whole}
+      </span>
+      <span className={`font-semibold ${centsClass} ${size === 'lg' ? 'text-2xl' : 'text-lg'}`}>
+        .{cents}
+      </span>
+    </p>
+  );
+}
+
 export default function WebPosRetailCashPayModal({
   open,
   total,
@@ -40,13 +105,11 @@ export default function WebPosRetailCashPayModal({
   const due = roundMoney2(Math.max(0, total));
   const [tendered, setTendered] = useState(0);
   const [padBuffer, setPadBuffer] = useState('');
-  const [cashEntries, setCashEntries] = useState<number[]>([]);
 
   useEffect(() => {
     if (open) {
       setTendered(0);
       setPadBuffer('');
-      setCashEntries([]);
     }
   }, [open, due]);
 
@@ -70,7 +133,6 @@ export default function WebPosRetailCashPayModal({
     if (busy || amount <= 0) return;
     const next = roundMoney2(tendered + amount);
     setTendered(next);
-    setCashEntries((prev) => [...prev, amount]);
     setPadBuffer('');
     tryComplete(next);
   };
@@ -83,7 +145,6 @@ export default function WebPosRetailCashPayModal({
     if (!Number.isFinite(val) || val <= 0) return;
     setPadBuffer('');
     const next = roundMoney2(tendered + val);
-    setCashEntries((prev) => [...prev, val]);
     setTendered(next);
     tryComplete(next);
   };
@@ -125,16 +186,15 @@ export default function WebPosRetailCashPayModal({
     if (busy) return;
     setTendered(0);
     setPadBuffer('');
-    setCashEntries([]);
   };
 
   if (!open) return null;
 
-  const dueParts = formatChfParts(due);
-  const remainingParts = formatChfParts(remaining);
-  const tenderedParts = formatChfParts(tendered);
   const padDisplay = padBuffer || '0';
   const hasProgress = tendered > 0 || !!padBuffer.trim();
+  const balanceLabel = changeDue > 0 ? t('webPosChangeDue') : t('webPosRetailCashStillToPay');
+  const balanceAmount = changeDue > 0 ? changeDue : remaining;
+  const balanceTone: ChfTone = changeDue > 0 ? 'green' : 'red';
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 sm:p-4">
@@ -142,12 +202,12 @@ export default function WebPosRetailCashPayModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="webpos-retail-cash-title"
-        className="flex max-h-[min(96vh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl"
+        className="flex max-h-[min(96vh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-stone-100 px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-5 py-4">
           <h2
             id="webpos-retail-cash-title"
-            className="text-base font-bold uppercase tracking-wide text-stone-700"
+            className="text-lg font-bold uppercase tracking-wide text-stone-800"
           >
             {t('webPosRetailCashTitle')}
           </h2>
@@ -155,98 +215,62 @@ export default function WebPosRetailCashPayModal({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 disabled:opacity-40"
             aria-label={t('close')}
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-stone-100 bg-stone-50 px-4 py-3 sm:grid-cols-4 sm:px-5">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
-              {t('total')}
-            </p>
-            <p className="mt-1 tabular-nums text-stone-900">
-              <span className="text-sm font-medium text-stone-500">CHF </span>
-              <span className="text-3xl font-bold">{dueParts.whole}</span>
-              <span className="text-lg font-semibold text-stone-500">.{dueParts.cents}</span>
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
-              {t('webPosRetailCashEnteredSoFar')}
-            </p>
-            <p className="mt-1 tabular-nums text-emerald-800">
-              <span className="text-sm font-medium text-emerald-700/80">CHF </span>
-              <span className="text-3xl font-bold">{tenderedParts.whole}</span>
-              <span className="text-lg font-semibold text-emerald-700/80">.{tenderedParts.cents}</span>
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
-              {t('webPosRemaining')}
-            </p>
-            <p className="mt-1 tabular-nums text-amber-800">
-              <span className="text-sm font-medium text-amber-700/80">CHF </span>
-              <span className="text-3xl font-bold">{remainingParts.whole}</span>
-              <span className="text-lg font-semibold text-amber-700/80">.{remainingParts.cents}</span>
-            </p>
-          </div>
-          {changeDue > 0 ? (
-            <div className="col-span-2 sm:col-span-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">
-                {t('webPosChangeDue')}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.45fr)_minmax(0,0.85fr)]">
+          <div className="flex flex-col gap-3 border-b border-stone-200 p-5 lg:border-b-0 lg:border-r">
+            <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-sky-100/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/70">
+                {t('total')}
               </p>
-              <p className="mt-1 tabular-nums font-bold text-emerald-700">CHF {changeDue.toFixed(2)}</p>
-            </div>
-          ) : null}
-        </div>
-
-        {hasProgress ? (
-          <div className="shrink-0 border-b border-emerald-100 bg-emerald-50/80 px-4 py-3 sm:px-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
-              {t('webPosRetailCashEnteredSoFar')}: CHF {tendered.toFixed(2)}
-              {remaining > 0 ? (
-                <span className="ml-2 font-medium normal-case text-amber-800">
-                  · {t('webPosRetailCashStillToPay')}: CHF {remaining.toFixed(2)}
-                </span>
-              ) : null}
-            </p>
-            {cashEntries.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {cashEntries.map((value, index) => (
-                  <span
-                    key={`${value}-${index}`}
-                    className="inline-flex items-center rounded-lg border border-emerald-200 bg-white px-2 py-1 text-xs font-bold tabular-nums text-emerald-900"
-                  >
-                    CHF {formatDenomLabel(value)}
-                  </span>
-                ))}
+              <div className="mt-1">
+                <ChfAmount amount={due} tone="dark" />
               </div>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,0.9fr)]">
-          <div className="flex flex-col border-b border-stone-100 p-4 lg:border-b-0 lg:border-r">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-              {t('webPosRetailCashGiven')}
-            </p>
-            <p className="mt-2 tabular-nums text-stone-900">
-              <span className="text-sm font-medium text-stone-500">CHF </span>
-              <span className="text-4xl font-bold">{tendered.toFixed(2)}</span>
-            </p>
-            {remaining > 0 && tendered > 0 ? (
-              <p className="mt-2 text-sm font-semibold text-amber-800">
-                {t('webPosRetailCashStillToPay')}: CHF {remaining.toFixed(2)}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/70">
+                {t('webPosRetailCashEnteredSoFar')}
               </p>
-            ) : null}
+              <div className="mt-1">
+                <ChfAmount amount={tendered} tone="green" />
+              </div>
+            </div>
 
-            <div className="mt-4 space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm">
-              <div className="flex items-center justify-between text-stone-600">
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                changeDue > 0
+                  ? 'border-emerald-200 bg-emerald-50/60'
+                  : remaining > 0
+                    ? 'border-red-200 bg-red-50/70'
+                    : 'border-stone-200 bg-stone-50'
+              }`}
+            >
+              <p
+                className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                  changeDue > 0
+                    ? 'text-emerald-700/70'
+                    : remaining > 0
+                      ? 'text-red-700/70'
+                      : 'text-stone-400'
+                }`}
+              >
+                {balanceLabel}
+              </p>
+              <div className="mt-1">
+                <ChfAmount amount={balanceAmount} tone={balanceTone} />
+              </div>
+            </div>
+
+            <div className="mt-1 rounded-xl border border-stone-200 bg-stone-100/80 px-4 py-3">
+              <div className="flex items-center justify-between text-sm text-stone-500">
                 <span>{t('webPosRetailCashPadEntry')}</span>
-                <span className="tabular-nums font-semibold text-stone-800">{padDisplay}</span>
+                <span className="tabular-nums text-base font-semibold text-stone-700">{padDisplay}</span>
               </div>
             </div>
 
@@ -255,36 +279,30 @@ export default function WebPosRetailCashPayModal({
                 type="button"
                 disabled={busy}
                 onClick={resetAll}
-                className="mt-3 self-start rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 disabled:opacity-40"
+                className="mt-3 self-start text-xs font-semibold text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline disabled:opacity-40"
               >
                 {t('webPosRetailCashReset')}
               </button>
             ) : null}
           </div>
 
-          <div className="min-h-0 overflow-y-auto border-b border-stone-100 p-4 lg:border-b-0 lg:border-r">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          <div className="min-h-0 overflow-y-auto border-b border-stone-200 p-5 lg:border-b-0 lg:border-r">
+            <p className="mb-3 text-[11px] font-semibold uppercase leading-snug tracking-[0.1em] text-stone-400">
               {t('webPosRetailCashNotesHint')}
             </p>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-4 gap-2.5">
               {SWISS_CASH_DENOMINATIONS.map((value) => (
                 <button
                   key={value}
                   type="button"
                   disabled={busy}
                   onClick={() => addAmount(value)}
-                  className={`webpos-retail-cash-note group relative min-h-[4.25rem] touch-manipulation overflow-hidden rounded-xl border px-2 py-2.5 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-40 ${
-                    value >= 10
-                      ? 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/80 hover:border-emerald-300'
-                      : value >= 1
-                        ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/80 hover:border-amber-300'
-                        : 'border-stone-300 bg-gradient-to-br from-stone-50 to-stone-100 hover:border-stone-400'
-                  }`}
+                  className={`webpos-retail-cash-note group relative flex min-h-[4.5rem] touch-manipulation flex-col items-center justify-center rounded-2xl border px-1 py-2 transition active:scale-[0.98] disabled:opacity-40 ${denomButtonClass(value)}`}
                 >
-                  <span className="block text-[10px] font-bold uppercase tracking-wide text-stone-600/80">
+                  <span className="absolute left-2 top-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500/80">
                     CHF
                   </span>
-                  <span className="mt-0.5 block text-xl font-bold tabular-nums text-stone-900 sm:text-2xl">
+                  <span className="text-2xl font-bold tabular-nums text-stone-900 sm:text-[1.65rem]">
                     {formatDenomLabel(value)}
                   </span>
                 </button>
@@ -292,8 +310,8 @@ export default function WebPosRetailCashPayModal({
             </div>
           </div>
 
-          <div className="flex flex-col p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          <div className="flex flex-col p-5">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-400">
               {t('webPosRetailCashKeypad')}
             </p>
             <div className="grid flex-1 grid-cols-3 gap-2">
@@ -303,7 +321,7 @@ export default function WebPosRetailCashPayModal({
                   type="button"
                   disabled={busy}
                   onClick={() => appendPad(digit)}
-                  className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-950 hover:bg-sky-100 active:scale-[0.98] disabled:opacity-40"
+                  className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-900 hover:bg-sky-100 active:scale-[0.98] disabled:opacity-40"
                 >
                   {digit}
                 </button>
@@ -312,7 +330,7 @@ export default function WebPosRetailCashPayModal({
                 type="button"
                 disabled={busy}
                 onClick={() => appendPad('ce')}
-                className="min-h-[3.25rem] rounded-xl border border-sky-300 bg-sky-100 text-sm font-bold uppercase text-sky-900 hover:bg-sky-200 disabled:opacity-40"
+                className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-sm font-bold uppercase text-sky-900 hover:bg-sky-100 disabled:opacity-40"
               >
                 CE
               </button>
@@ -320,7 +338,7 @@ export default function WebPosRetailCashPayModal({
                 type="button"
                 disabled={busy}
                 onClick={() => appendPad('0')}
-                className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-950 hover:bg-sky-100 disabled:opacity-40"
+                className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-900 hover:bg-sky-100 disabled:opacity-40"
               >
                 0
               </button>
@@ -328,7 +346,7 @@ export default function WebPosRetailCashPayModal({
                 type="button"
                 disabled={busy}
                 onClick={() => appendPad('.')}
-                className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-950 hover:bg-sky-100 disabled:opacity-40"
+                className="min-h-[3.25rem] rounded-xl border border-sky-200 bg-sky-50 text-2xl font-bold text-sky-900 hover:bg-sky-100 disabled:opacity-40"
               >
                 .
               </button>
@@ -337,19 +355,19 @@ export default function WebPosRetailCashPayModal({
               type="button"
               disabled={busy}
               onClick={applyPadBuffer}
-              className="mt-2 min-h-[3rem] rounded-xl border border-sky-300 bg-sky-600 text-sm font-bold uppercase tracking-wide text-white hover:bg-sky-700 disabled:opacity-40"
+              className="mt-2.5 min-h-[3.25rem] rounded-xl bg-sky-600 text-sm font-bold uppercase tracking-wide text-white hover:bg-sky-700 disabled:opacity-40"
             >
               {t('webPosRetailCashPadAdd')}
             </button>
           </div>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-stone-100 p-3 sm:p-4">
+        <div className="grid shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] gap-3 border-t border-stone-200 p-4 sm:px-5">
           <button
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="min-h-[3.25rem] rounded-xl border border-stone-300 bg-white text-base font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+            className="min-h-[3.5rem] rounded-xl border border-stone-300 bg-white text-base font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
           >
             {t('cancel')}
           </button>
@@ -357,7 +375,7 @@ export default function WebPosRetailCashPayModal({
             type="button"
             disabled={busy || (tendered + 0.001 < due && !padBuffer.trim())}
             onClick={handleOk}
-            className="min-h-[3.25rem] rounded-xl bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+            className="min-h-[3.5rem] rounded-xl bg-emerald-500 text-base font-bold text-white hover:bg-emerald-600 disabled:opacity-40"
           >
             {t('confirm')}
           </button>
