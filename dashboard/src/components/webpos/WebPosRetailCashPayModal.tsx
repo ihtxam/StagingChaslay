@@ -16,7 +16,7 @@ type Props = {
   onComplete: (tendered: number, changeDue: number) => void;
 };
 
-type ChfTone = 'dark' | 'green' | 'amber';
+type ChfTone = 'dark' | 'green' | 'amber' | 'red';
 
 function formatChfParts(amount: number): { whole: string; cents: string } {
   const whole = Math.floor(amount);
@@ -59,19 +59,25 @@ function ChfAmount({
       ? 'text-emerald-700/80'
       : tone === 'amber'
         ? 'text-amber-700/80'
-        : 'text-stone-500';
+        : tone === 'red'
+          ? 'text-red-700/80'
+          : 'text-stone-500';
   const wholeClass =
     tone === 'green'
       ? 'text-emerald-800'
       : tone === 'amber'
         ? 'text-amber-800'
-        : 'text-stone-900';
+        : tone === 'red'
+          ? 'text-red-700'
+          : 'text-stone-900';
   const centsClass =
     tone === 'green'
       ? 'text-emerald-700/90'
       : tone === 'amber'
         ? 'text-amber-700/90'
-        : 'text-stone-600';
+        : tone === 'red'
+          ? 'text-red-600/90'
+          : 'text-stone-600';
 
   return (
     <p className="tabular-nums leading-none">
@@ -186,9 +192,9 @@ export default function WebPosRetailCashPayModal({
 
   const padDisplay = padBuffer || '0';
   const hasProgress = tendered > 0 || !!padBuffer.trim();
-  const summaryThirdLabel = changeDue > 0 ? t('webPosChangeDue') : t('webPosRemaining');
-  const summaryThirdAmount = changeDue > 0 ? changeDue : remaining;
-  const summaryThirdTone: ChfTone = changeDue > 0 ? 'green' : 'amber';
+  const balanceLabel = changeDue > 0 ? t('webPosChangeDue') : t('webPosRetailCashStillToPay');
+  const balanceAmount = changeDue > 0 ? changeDue : remaining;
+  const balanceTone: ChfTone = changeDue > 0 ? 'green' : 'red';
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 sm:p-4">
@@ -216,43 +222,52 @@ export default function WebPosRetailCashPayModal({
           </button>
         </div>
 
-        <div className="grid shrink-0 grid-cols-3 gap-4 border-b border-stone-200 px-5 py-4">
-          <div className="text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">
-              {t('total')}
-            </p>
-            <div className="mt-1 flex justify-center">
-              <ChfAmount amount={due} tone="dark" />
-            </div>
-          </div>
-          <div className="text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">
-              {t('webPosRetailCashEnteredSoFar')}
-            </p>
-            <div className="mt-1 flex justify-center">
-              <ChfAmount amount={tendered} tone="green" />
-            </div>
-          </div>
-          <div className="text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">
-              {summaryThirdLabel}
-            </p>
-            <div className="mt-1 flex justify-center">
-              <ChfAmount amount={summaryThirdAmount} tone={summaryThirdTone} />
-            </div>
-          </div>
-        </div>
-
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.45fr)_minmax(0,0.85fr)]">
-          <div className="flex flex-col border-b border-stone-200 p-5 lg:border-b-0 lg:border-r">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-400">
-              {t('webPosRetailCashGiven')}
-            </p>
-            <div className="mt-3">
-              <ChfAmount amount={tendered} tone="dark" size="lg" />
+          <div className="flex flex-col gap-3 border-b border-stone-200 p-5 lg:border-b-0 lg:border-r">
+            <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-sky-100/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/70">
+                {t('total')}
+              </p>
+              <div className="mt-1">
+                <ChfAmount amount={due} tone="dark" />
+              </div>
             </div>
 
-            <div className="mt-5 rounded-xl border border-stone-200 bg-stone-100/80 px-4 py-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/70">
+                {t('webPosRetailCashEnteredSoFar')}
+              </p>
+              <div className="mt-1">
+                <ChfAmount amount={tendered} tone="green" />
+              </div>
+            </div>
+
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                changeDue > 0
+                  ? 'border-emerald-200 bg-emerald-50/60'
+                  : remaining > 0
+                    ? 'border-red-200 bg-red-50/70'
+                    : 'border-stone-200 bg-stone-50'
+              }`}
+            >
+              <p
+                className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                  changeDue > 0
+                    ? 'text-emerald-700/70'
+                    : remaining > 0
+                      ? 'text-red-700/70'
+                      : 'text-stone-400'
+                }`}
+              >
+                {balanceLabel}
+              </p>
+              <div className="mt-1">
+                <ChfAmount amount={balanceAmount} tone={balanceTone} />
+              </div>
+            </div>
+
+            <div className="mt-1 rounded-xl border border-stone-200 bg-stone-100/80 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-stone-500">
                 <span>{t('webPosRetailCashPadEntry')}</span>
                 <span className="tabular-nums text-base font-semibold text-stone-700">{padDisplay}</span>
