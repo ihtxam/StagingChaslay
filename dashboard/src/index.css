@@ -2513,12 +2513,12 @@ html.shop-shell select:focus {
 
 /* Tauri desktop shell — persistent top chrome bar */
 html.desktop-app-shell body {
-  padding-top: 2.25rem;
+  padding-top: 2.5rem;
 }
 
 html.desktop-app-shell .desktop-chrome-bar {
   padding-top: env(safe-area-inset-top, 0px);
-  height: calc(2.25rem + env(safe-area-inset-top, 0px));
+  height: calc(2.5rem + env(safe-area-inset-top, 0px));
   border-bottom-color: rgba(255, 255, 255, 0.14);
   background: color-mix(in srgb, var(--brand-blue-charcoal) 92%, #000);
   color: #f8fafc;
@@ -2540,5 +2540,13 @@ html.desktop-app-shell .desktop-chrome-bar .desktop-chrome-btn svg {
 }
 
 html.desktop-app-shell .webpos-shell--fill {
-  height: calc(100dvh - 2.25rem - env(safe-area-inset-top, 0px));
+  height: calc(100dvh - 2.5rem - env(safe-area-inset-top, 0px));
+}
+
+html.desktop-app-shell .desktop-hub-nav {
+  scrollbar-width: none;
+}
+
+html.desktop-app-shell .desktop-hub-nav::-webkit-scrollbar {
+  display: none;
 }
