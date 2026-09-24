@@ -342,18 +342,34 @@ export class OffersService {
     return [...byProduct.values()].filter((u) => u.length > 0);
   }
 
-  private static computeBogoDiscount(rules: OfferRules, pools: number[][]): number {
+  private static computeBogoDiscount(rules: OfferRules, eligible: CartLineForOffer[]): number {
     const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
     const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
     const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
     const group = buy + get;
-    let discount = 0;
-    for (const raw of pools) {
-      const units = [...raw].sort((a, b) => a - b);
-      const freeSlots = Math.floor(units.length / group) * get;
-      for (let i = 0; i < freeSlots; i++) {
-        discount += (units[i] * getPct) / 100;
+
+    const byProduct = new Map<string, number[]>();
+    const allUnits: number[] = [];
+    for (const l of eligible) {
+      const list = byProduct.get(l.productId) || [];
+      for (let i = 0; i < l.quantity; i++) {
+        list.push(l.unitPrice);
+        allUnits.push(l.unitPrice);
       }
+      byProduct.set(l.productId, list);
+    }
+    if (allUnits.length < group) return 0;
+
+    const hasTrigger = [...byProduct.values()].some((units) => units.length >= buy);
+    if (!hasTrigger) return 0;
+
+    const freeSlots = Math.floor(allUnits.length / group) * get;
+    if (freeSlots <= 0) return 0;
+
+    const sortedDesc = [...allUnits].sort((a, b) => b - a);
+    let discount = 0;
+    for (let i = 0; i < freeSlots; i++) {
+      discount += (sortedDesc[i] * getPct) / 100;
     }
     return discount;
   }
@@ -418,9 +434,7 @@ export class OffersService {
     }
 
     if (type === "bogo") {
-      const sameProductOnly = !!rules.sameProductOnly;
-      const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
-      return roundMoney2(this.computeBogoDiscount(rules, pools));
+      return roundMoney2(this.computeBogoDiscount(rules, eligible));
     }
 
     if (type === "pay_n_get_m") {

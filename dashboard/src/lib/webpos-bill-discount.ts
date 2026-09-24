@@ -39,6 +39,34 @@ export function resolveBillDiscountAmount(
   return 0;
 }
 
+/** Apply a fixed promotional discount (same tax/rounding rules as bill discount). */
+export function applyPromoDiscountToTotals(
+  totals: {
+    subtotal: number;
+    tax: number;
+    rounding: number;
+    total: number;
+    gross?: number;
+    net?: number;
+  },
+  promoAmount: number,
+  vatIncludedInPrice: boolean,
+  roundingStep: number,
+  vatAfterDiscount = true
+): TotalsWithDiscount {
+  const amount = Math.max(0, Number(promoAmount) || 0);
+  if (amount <= 0) {
+    return { ...totals, discount: 0 };
+  }
+  return applyBillDiscountToTotals(
+    totals,
+    { percent: 0, amount },
+    vatIncludedInPrice,
+    roundingStep,
+    vatAfterDiscount
+  );
+}
+
 /** Apply whole-bill discount to merchandise totals (CheckoutModal-compatible). */
 export function applyBillDiscountToTotals(
   totals: {

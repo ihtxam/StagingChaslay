@@ -386,9 +386,7 @@ export default function WebPosOnlineOrdersView({
                         <span className="text-base font-bold text-[var(--webpos-text)]">
                           {formatOrderNumberDisplay(o.orderNumber) || o.id.slice(0, 8)}
                         </span>
-                        {isPaidOrder(o as MerchantOrder) ||
-                        o.paymentStatus === 'completed' ||
-                        o.paymentMethod === 'card' ? (
+                        {isPaidOrder(o as MerchantOrder) ? (
                           <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
                             {t('orderCenterPaidBadge')}
                           </span>

@@ -2,8 +2,9 @@ import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, setMerchantContext, requirePermission } from "@/middleware/auth.middleware";
 import { OffersService } from "@/services/offers.service";
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { resolveReportActor } from "@/lib/report-sales-scope";
+import { roundMoney2 } from "@/lib/money";
 
 const router = Router();
 
@@ -33,6 +34,74 @@ router.get("/pos", async (req: Request, res: Response) => {
     res.json({ success: true, offers });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list POS offers" });
+  }
+});
+
+/** POS checkout: estimate promotional discount for the current cart. */
+router.post("/preview", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const channel = String(req.body?.channel || "dine_in");
+    const at = req.body?.scheduledFor ? new Date(req.body.scheduledFor) : new Date();
+    const lines = Array.isArray(req.body?.items) ? req.body.items : [];
+    const offers = await OffersService.list(merchantId);
+
+    const productIds = [
+      ...new Set(
+        lines
+          .map((l: { productId?: string }) => String(l.productId || ""))
+          .filter((id: string) => !!id)
+      ),
+    ];
+    const categoryByProduct = new Map<string, string | null>();
+    if (productIds.length) {
+      const db = getDb();
+      const products = await db.query.products.findMany({
+        where: and(
+          eq(schema.products.merchantId, merchantId),
+          inArray(schema.products.id, productIds)
+        ),
+        columns: { id: true, categoryId: true },
+      });
+      for (const p of products) categoryByProduct.set(p.id, p.categoryId || null);
+    }
+
+    const result = OffersService.evaluateCart(
+      offers,
+      lines.map((l: {
+        productId?: string;
+        categoryId?: string | null;
+        name?: string;
+        unitPrice?: number;
+        price?: number;
+        quantity?: number;
+        loyaltyReward?: boolean;
+        offerId?: string | null;
+      }) => {
+        const productId = String(l.productId || "");
+        return {
+          productId,
+          categoryId: l.categoryId || categoryByProduct.get(productId) || null,
+          name: String(l.name || ""),
+          unitPrice: Number(l.unitPrice ?? l.price ?? 0),
+          quantity: Math.max(1, Math.floor(Number(l.quantity) || 1)),
+          loyaltyReward: !!l.loyaltyReward,
+          offerId: l.offerId ? String(l.offerId) : null,
+        };
+      }),
+      Number.isNaN(at.getTime()) ? new Date() : at,
+      channel
+    );
+
+    res.json({
+      success: true,
+      discount: roundMoney2(result.discount),
+      applied: result.applied,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to preview offers",
+    });
   }
 });
 
