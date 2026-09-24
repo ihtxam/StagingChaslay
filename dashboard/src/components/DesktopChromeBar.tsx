@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Minus, RefreshCw, Settings } from 'lucide-react';
+import { Minus, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
+import DesktopHubNav from '@/components/DesktopHubNav';
 import {
   desktopMinimize,
   desktopReload,
@@ -15,7 +15,6 @@ import {
 
 export default function DesktopChromeBar() {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [chromeCaps, setChromeCaps] = useState<DesktopChromeCapabilities | null>(null);
 
@@ -59,17 +58,14 @@ export default function DesktopChromeBar() {
     }
   };
 
-  const onSettings = () => {
-    navigate('/merchant/desktop-settings');
-  };
-
   return (
     <div
-      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-9 items-center justify-end gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
+      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-10 items-center gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
       data-tauri-drag-region
     >
+      <DesktopHubNav className="mr-auto" />
       {needsShellUpdate ? (
-        <span className="mr-auto truncate px-1 text-[11px] text-amber-200/90" title={t('desktopChromeUpdateRequired')}>
+        <span className="hidden max-w-[28%] truncate px-1 text-[11px] text-amber-200/90 sm:inline" title={t('desktopChromeUpdateRequired')}>
           {t('desktopChromeUpdateRequired')}
         </span>
       ) : null}
@@ -92,15 +88,6 @@ export default function DesktopChromeBar() {
         title={t('desktopChromeMinimize')}
       >
         <Minus size={15} strokeWidth={2.5} />
-      </button>
-      <button
-        type="button"
-        className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white"
-        onClick={onSettings}
-        aria-label={t('settings')}
-        title={t('settings')}
-      >
-        <Settings size={15} />
       </button>
     </div>
   );

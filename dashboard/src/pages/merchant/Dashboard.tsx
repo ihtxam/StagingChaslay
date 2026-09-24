@@ -36,6 +36,8 @@ import Vouchers from './Vouchers';
 import Terminals from './Terminals';
 import Settings from './Settings';
 import DesktopSettings from './DesktopSettings';
+import DesktopStorePage from './DesktopStorePage';
+import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
@@ -125,6 +127,13 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { isDesktopApp } from '@/lib/platform';
+import {
+  desktopHubRedirectTarget,
+  isDesktopAppAllowedRoute,
+  isDesktopHubPanelRoute,
+  normalizeDesktopPath,
+} from '@/lib/desktop-hub';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
 import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
@@ -202,6 +211,7 @@ function MerchantShell() {
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
       sessionStorage.getItem('manupos_pos_embed') === '1');
+  const isDesktopHubPanel = isDesktopApp() && isDesktopHubPanelRoute(location.pathname);
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -308,7 +318,8 @@ function MerchantShell() {
     (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       isStorekeeperRoute ||
       (isKioskRoute && (!managerPanelAccess || kioskRestricted)) ||
-      (isOrderCenterRoute && (!managerPanelAccess || orderCenterRestricted))) ||
+      (isOrderCenterRoute && (!managerPanelAccess || orderCenterRestricted)) ||
+      isDesktopHubPanel) ||
     isPosEmbed;
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
@@ -812,6 +823,16 @@ function MerchantShell() {
   useEffect(() => {
     void loadLocations();
   }, [loadLocations]);
+
+  /** RebornPOS desktop: basic hub only — full back office stays on the website. */
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    const path = normalizeDesktopPath(location.pathname);
+    if (path === '/login' || path.startsWith('/login')) return;
+    if (isDesktopAppAllowedRoute(path)) return;
+    toast(t('desktopHubAdvancedWebHint'), { id: 'desktop-hub-blocked', duration: 4000 });
+    navigate(desktopHubRedirectTarget(path), { replace: true });
+  }, [location.pathname, navigate, t]);
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
@@ -1523,6 +1544,22 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/settings" allow={allow}>
                   <DesktopSettings />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="desktop/store"
+              element={
+                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                  <DesktopStorePage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="desktop/timings"
+              element={
+                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                  <DesktopTimingsPage />
                 </PanelRouteGuard>
               }
             />

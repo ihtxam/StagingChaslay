@@ -272,7 +272,7 @@ export default function DesktopSettings() {
   const sectionLabel = (id: SectionId) => t(`desktopSettingsSection_${id}` as const);
 
   return (
-    <div className="desktop-settings-page mx-auto flex min-h-[calc(100vh-2.25rem)] max-w-6xl flex-col gap-4 p-4 pt-12 md:flex-row">
+    <div className="desktop-settings-page mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl flex-col gap-4 p-4 pt-2 md:flex-row">
       <aside className="w-full shrink-0 rounded-xl border border-stone-200 bg-white p-3 shadow-sm dark:border-stone-700 dark:bg-stone-900 md:w-56">
         <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-stone-800 dark:text-stone-100">
           <Settings2 size={16} aria-hidden />
