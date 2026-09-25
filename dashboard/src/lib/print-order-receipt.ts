@@ -115,6 +115,7 @@ async function printReceiptText(
       text,
       jobKind: 'receipt',
       jobLabel: 'receipt',
+      skipRetarget: true,
     });
   }
 }

@@ -25,19 +25,15 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
 import type { PosTab, PosView } from './types';
-
-export type WebPosColorTheme = 'teal' | 'green' | 'blue' | 'violet' | 'mono';
-export type WebPosTextSize = 'sm' | 'md' | 'lg' | 'xl';
-export type WebPosAppearance = 'light' | 'night';
-
-export const WEBPOS_COLOR_THEMES: WebPosColorTheme[] = [
-  'teal',
-  'green',
-  'blue',
-  'violet',
-  'mono',
-];
-export const WEBPOS_TEXT_SIZES: WebPosTextSize[] = ['sm', 'md', 'lg', 'xl'];
+export type {
+  WebPosAppearance,
+  WebPosColorTheme,
+  WebPosTextSize,
+} from '@/lib/webpos-appearance';
+export {
+  WEBPOS_COLOR_THEMES,
+  WEBPOS_TEXT_SIZES,
+} from '@/lib/webpos-appearance';
 export const WEBPOS_FULLSCREEN_KEY = 'webpos_fullscreen';
 
 function persistFullscreenPreference(active: boolean) {

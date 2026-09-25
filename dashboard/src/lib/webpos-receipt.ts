@@ -704,6 +704,22 @@ function alignLine(text: string, width: number, align: ReceiptHeaderAlign = 'cen
   return centerLine(t, width);
 }
 
+/** Plain-text header block as printed in generateWebPosReceiptText (for ESC/POS strip). */
+export function buildReceiptHeaderPlainTextBlock(
+  unpaddedLines: string[],
+  width: number,
+  align: ReceiptHeaderAlign = 'center',
+  titleBodyGap = false
+): string {
+  if (!unpaddedLines.length) return '';
+  let block = '';
+  for (let i = 0; i < unpaddedLines.length; i++) {
+    block += alignLine(unpaddedLines[i]!, width, align) + '\n';
+    if (i === 0 && titleBodyGap) block += '\n';
+  }
+  return `${block}\n`;
+}
+
 /** Split legacy single-field receipt headers into store name + address/details. */
 export function normalizeReceiptHeaderFields(settings?: {
   receiptHeaderTitle?: string | null;
@@ -798,10 +814,19 @@ function stripPaddedReceiptHeaderFromText(
   bodyText: string,
   headerLines: string[],
   width: number,
-  align: ReceiptHeaderAlign = 'center'
+  align: ReceiptHeaderAlign = 'center',
+  titleBodyGap = false
 ): string {
   if (!headerLines.length) return bodyText;
   const widths = width === 32 || width === 48 ? [width, width === 32 ? 48 : 32] : [width];
+  for (const w of widths) {
+    for (const gap of titleBodyGap ? [true, false] : [false]) {
+      const block = buildReceiptHeaderPlainTextBlock(headerLines, w, align, gap);
+      if (block && bodyText.startsWith(block)) {
+        return bodyText.slice(block.length);
+      }
+    }
+  }
   for (const w of widths) {
     let rest = bodyText;
     let strippedAny = false;
@@ -1354,12 +1379,14 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     headerTitle: tx.headerTitle,
     header: tx.header,
   });
-  const headerLines = getReceiptHeaderLines(tx, width);
-  for (let i = 0; i < headerLines.length; i++) {
-    r += headerLines[i] + '\n';
-    if (i === 0 && headerNorm.title && headerNorm.body) r += '\n';
-  }
-  r += '\n';
+  const headerAlign = tx.headerAlign ?? 'center';
+  const unpaddedHeaderLines = getReceiptHeaderLines(tx, width, { padLines: false });
+  r += buildReceiptHeaderPlainTextBlock(
+    unpaddedHeaderLines,
+    width,
+    headerAlign,
+    !!(headerNorm.title && headerNorm.body)
+  );
   if (tx.tableLabel) {
     r += `${L.table} ${tx.tableLabel}`;
     if (tx.guestCount) r += ` · ${tx.guestCount} ${L.pax}`;
@@ -2955,11 +2982,13 @@ export async function buildReceiptEscPos(
   const headerLines = opts.headerLines ?? [];
   let bodyText = text;
   if (headerLines.length > 0) {
+    const titleBodyGap = headerLines.length > 1;
     bodyText = stripPaddedReceiptHeaderFromText(
       bodyText,
       headerLines,
       lineWidthForPaper(paper),
-      opts.headerAlign ?? 'center'
+      opts.headerAlign ?? 'center',
+      titleBodyGap
     );
   }
   const headerEscPos =

@@ -113,9 +113,26 @@ export function isTouchPrimaryDevice(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
-/** Auto-show on-screen keyboard when a text field is focused (kiosk / touch). */
+/** WebPOS PWA / kiosk fullscreen — OS keyboard often hidden even without coarse pointer. */
+export function isWebPosKioskShell(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    if (nav.standalone === true) return true;
+    if (localStorage.getItem('webpos_fullscreen') !== '0') {
+      return /\/merchant\/(pos|waiter|order-center|order-hub)(\/|$)/.test(window.location.pathname);
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
 export function shouldAutoOpenOnScreenKeyboard(): boolean {
-  return isDesktopApp() || isTouchPrimaryDevice();
+  return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
 }
 
 type TauriInternals = {
