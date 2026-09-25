@@ -5,6 +5,11 @@ import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
 import { buildMailcoRawMessagePayload } from "@/lib/mailco-payload";
 import {
+  formatMailAddress,
+  merchantSenderDisplayName,
+  resolveMerchantContactEmail,
+} from "@/lib/merchant-email-address";
+import {
   isMailcoBrevoFallbackEnabled,
   isPlatformMailcoEmailType,
   isTransientMailcoError,
@@ -107,23 +112,39 @@ export class EmailService {
     ).trim();
   }
 
-  /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+  /** Merchant emails show the shop name as sender; platform from address stays authenticated. */
   private static merchantSenderName(merchantName: string | null | undefined): string {
-    const name = String(merchantName || "").trim();
-    return name || "Shop";
+    return merchantSenderDisplayName(merchantName);
   }
 
   /** Reply address for customer-facing mail — merchant inbox, not platform noreply. */
   private static merchantReplyTo(
     merchantName: string | null | undefined,
-    merchantEmail: string | null | undefined,
+    contactEmail: string | null | undefined,
     smtpFromEmail?: string | null
   ): { replyToEmail: string | null; replyToName: string } {
-    const replyToEmail = String(smtpFromEmail || merchantEmail || "").trim() || null;
+    const replyToEmail =
+      resolveMerchantContactEmail({
+        email: contactEmail,
+        smtpSettings: smtpFromEmail ? { fromEmail: smtpFromEmail } : null,
+      }) || null;
     return {
       replyToEmail,
       replyToName: this.merchantSenderName(merchantName),
     };
+  }
+
+  private static merchantContactEmail(merchant?: {
+    email?: string | null;
+    emailSmtpSettings?: MerchantSmtpSettings | null;
+    emailBrevoSettings?: MerchantBrevoSettings | null;
+  } | null): string | null {
+    if (!merchant) return null;
+    return resolveMerchantContactEmail({
+      email: merchant.email,
+      smtpSettings: merchant.emailSmtpSettings,
+      brevoSettings: merchant.emailBrevoSettings,
+    });
   }
 
   /**
@@ -143,10 +164,15 @@ export class EmailService {
         const db = getDb();
         const merchant = await db.query.merchants.findFirst({
           where: eq(schema.merchants.id, merchantId),
-          columns: { name: true, email: true },
+          columns: {
+            name: true,
+            email: true,
+            emailSmtpSettings: true,
+            emailBrevoSettings: true,
+          },
         });
         merchantName = merchant?.name || null;
-        merchantEmail = merchant?.email || null;
+        merchantEmail = this.merchantContactEmail(merchant);
       } catch {
         /* continue without merchant reply-to */
       }
@@ -209,7 +235,7 @@ export class EmailService {
           },
         });
         merchantName = merchant?.name || null;
-        merchantEmail = merchant?.email || null;
+        merchantEmail = this.merchantContactEmail(merchant);
         const mode = String(merchant?.emailDeliveryMode || "platform").toLowerCase();
         useOwnDelivery = mode === "own";
 
@@ -222,7 +248,7 @@ export class EmailService {
         if (smtpHasCreds) merchantSmtpFallback = smtp;
 
         if (useOwnDelivery && smtpReady) {
-          const reply = this.merchantReplyTo(merchant?.name, merchant?.email, smtp.fromEmail);
+          const reply = this.merchantReplyTo(merchant?.name, merchantEmail, smtp.fromEmail);
           return {
             provider: "smtp",
             apiKey: "",
@@ -245,7 +271,7 @@ export class EmailService {
             String(brevo.apiKey).trim() &&
             String(brevo.fromEmail).trim()
           ) {
-            const reply = this.merchantReplyTo(merchant?.name, merchant?.email, brevo.fromEmail);
+            const reply = this.merchantReplyTo(merchant?.name, merchantEmail, brevo.fromEmail);
             return {
               provider: "brevo",
               apiKey: String(brevo.apiKey).trim(),
@@ -877,8 +903,7 @@ export class EmailService {
   private static formatReplyTo(cfg: ResolvedEmailConfig): string | undefined {
     const email = String(cfg.replyToEmail || "").trim();
     if (!email) return undefined;
-    const name = String(cfg.replyToName || cfg.fromName || "").trim();
-    return name ? `"${name}" <${email}>` : email;
+    return formatMailAddress(email, cfg.replyToName || cfg.fromName);
   }
 
   private static async sendViaSmtp(cfg: ResolvedEmailConfig, input: SendEmailInput) {

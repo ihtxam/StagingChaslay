@@ -11,6 +11,8 @@ export type SendEmailInput = {
     text?: string;
     /** Optional merchant override for SMTP / from */
     merchantId?: string;
+    /** Shop/platform order id — logged in email_send_log for superadmin diagnostics */
+    orderId?: string;
     attachments?: EmailAttachment[];
     /** Category for platform usage reporting */
     emailType?: EmailSendType | string;
@@ -48,10 +50,16 @@ export declare class EmailService {
     private static envBrevoApiKey;
     private static envFromAddress;
     private static envFromName;
-    /** Merchant emails show the shop name as sender; Brevo/SMTP from address stays authenticated. */
+    /** Merchant emails show the shop name as sender; platform from address stays authenticated. */
     private static merchantSenderName;
     /** Reply address for customer-facing mail — merchant inbox, not platform noreply. */
     private static merchantReplyTo;
+    private static merchantContactEmail;
+    /**
+     * Platform mailco for shop order transactional mail — ignores merchant emailDeliveryMode
+     * and never attaches Brevo/SMTP fallbacks (fail loud when mailco rejects).
+     */
+    static resolvePlatformMailcoConfig(merchantId?: string | null): Promise<ResolvedEmailConfig | null>;
     static resolveConfig(merchantId?: string | null): Promise<ResolvedEmailConfig>;
     static isConfigured(merchantId?: string | null): Promise<boolean>;
     /** Roll daily/monthly counters for the current Zurich calendar periods. */
@@ -88,6 +96,8 @@ export declare class EmailService {
     }>;
     private static assertMerchantBrevoLimits;
     private static incrementMerchantBrevoUsage;
+    /** Send a platform test email — mailco uses the same routing as all production transactional mail. */
+    static sendPlatformTest(to: string, provider: "mailco" | "brevo"): Promise<void>;
     static status(merchantId?: string | null): Promise<{
         configured: boolean;
         provider: EmailProvider;
@@ -100,6 +110,8 @@ export declare class EmailService {
         mailcoKeySet: boolean;
         mailcoConfigured: boolean;
         platformEmailPrimary: import("@/services/platform-settings.service").PlatformEmailPrimary;
+        allEmailViaMailco: boolean;
+        mailcoBrevoFallbackEnabled: boolean;
         sendgridKeySet: boolean;
         smtpEnabled: boolean;
         usingPlatformEmail: boolean;
