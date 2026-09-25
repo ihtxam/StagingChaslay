@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Minus, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
-import DesktopHubNav from '@/components/DesktopHubNav';
+import { DesktopHubActiveLabel, DesktopHubGearMenu } from '@/components/DesktopHubNav';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import {
   desktopMinimize,
@@ -65,12 +65,13 @@ export default function DesktopChromeBar() {
       className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-10 items-center gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
       data-tauri-drag-region
     >
-      <DesktopHubNav className="mr-auto" />
+      <DesktopHubActiveLabel />
       {needsShellUpdate ? (
         <span className="hidden max-w-[28%] truncate px-1 text-[11px] text-amber-200/90 sm:inline" title={t('desktopChromeUpdateRequired')}>
           {t('desktopChromeUpdateRequired')}
         </span>
       ) : null}
+      <DesktopHubGearMenu />
       <OnScreenKeyboardToggle
         className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white data-[active=true]:bg-teal-600/90 data-[active=true]:text-white"
         iconSize={15}

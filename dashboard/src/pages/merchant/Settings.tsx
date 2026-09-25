@@ -1721,8 +1721,24 @@ export default function Settings() {
     }
   };
 
+  const scaleAutoSaveAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (!scalePortsScanned || scalePorts.length === 0 || !settings || savingReceipt) return;
+    const savedUsb = sanitizeScaleUsbAddress(settings.posPrintSettings?.scaleUsbAddress);
+    const hasSaved =
+      !!settings.posPrintSettings?.scaleComPort ||
+      !!settings.posPrintSettings?.scaleDeviceName ||
+      !!savedUsb;
+    if (hasSaved) return;
+    if (scaleAutoSaveAttemptedRef.current) return;
+    scaleAutoSaveAttemptedRef.current = true;
+    void selectScalePortAndSave(scalePorts[0]);
+  }, [scalePortsScanned, scalePorts, settings, savingReceipt, selectScalePortAndSave]);
+
   const clearSavedScale = async () => {
     if (!settings) return;
+    scaleAutoSaveAttemptedRef.current = false;
     const nextSettings: SettingsData = {
       ...settings,
       posPrintSettings: {

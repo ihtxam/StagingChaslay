@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Save } from 'lucide-react';
+import { Save, Store } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { isDesktopApp } from '@/lib/platform';
@@ -104,7 +104,11 @@ export default function DesktopStorePage() {
             </button>
           }
         />
-        <SettingsReportCard accent={settingsDash.info}>
+        <SettingsReportCard
+          icon={Store}
+          accent={settingsDash.info}
+          title={t('desktopHubStore')}
+        >
           {loading ? (
             <p className="text-sm muted">{t('loading')}</p>
           ) : (

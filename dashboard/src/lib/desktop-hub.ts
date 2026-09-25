@@ -75,3 +75,8 @@ export function isDesktopHubNavActive(pathname: string, hubPath: string): boolea
   if (target === '/merchant/pos') return path === '/merchant/pos' || path === '/merchant/waiter';
   return path === target || path.startsWith(`${target}/`);
 }
+
+export function getDesktopHubActiveItem(pathname: string) {
+  const path = normalizeDesktopPath(pathname);
+  return DESKTOP_HUB_NAV.find((item) => isDesktopHubNavActive(path, item.path));
+}
