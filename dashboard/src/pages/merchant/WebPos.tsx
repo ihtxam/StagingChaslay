@@ -7296,9 +7296,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           })
         ) {
           // Don't hold collect-payment success UI on Print Agent paced sleeps (~4–5s on USB).
-          void printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl).catch(
-            (e: unknown) => notifyPrintError(e, 'webPosPrintFailed')
-          );
+          void (async () => {
+            const dataBase64 = await resolveLastReceiptEscPosBase64(receiptText, {
+              qrUrl: receiptPayload.receiptUrl,
+              deliveryQrUrl,
+              fastQr: true,
+            }).catch(() => lastReceiptEscPosBase64Ref.current || '');
+            await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl, {
+              dataBase64: dataBase64 || undefined,
+              fastQr: true,
+            });
+          })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
         }
       } catch (e: unknown) {
         notifyPrintError(e, 'webPosPrintFailed');
@@ -7805,6 +7813,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           : undefined;
       const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
       const lang = resolveReceiptLanguage(printSettings, locale);
+      const headerFmt = receiptHeaderFormatFromSettings(printSettings);
+      const headerLines =
+        opts.role === 'receipt'
+          ? getReceiptHeaderLines(
+              {
+                headerTitle: printSettings?.receiptHeaderTitle,
+                header: printSettings?.receiptHeader,
+                businessName: merchant?.name || APP_NAME,
+                address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+                phone: merchant?.phone || undefined,
+                vatNumber: merchant?.vatNumber || undefined,
+                headerAlign: headerFmt.align,
+              },
+              lineWidthForPaper(paper === 58 ? 58 : 80),
+              { padLines: false }
+            )
+          : [];
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
         deliveryQrData: opts.deliveryQrUrl,
@@ -7815,6 +7840,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         barcodeData: barcode,
         paperWidthMm: paper,
         fastQr: opts.fastQr !== false,
+        headerLines: headerLines.length > 0 ? headerLines : undefined,
+        headerAlign: headerFmt.align,
+        headerBold: headerFmt.bold,
+        headerTextScale: headerFmt.textScale,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
@@ -7868,6 +7897,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             retryLocally: printRetryLocally,
             jobKind,
             jobLabel,
+            skipRetarget: true,
           });
           return { ok: true as const, mode, label };
         } catch (e: unknown) {

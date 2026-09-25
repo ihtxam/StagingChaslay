@@ -77,6 +77,7 @@ function deleteBackward(el: TextTarget) {
 
 type OnScreenKeyboardContextValue = {
   open: boolean;
+  openKeyboard: () => void;
   toggle: () => void;
   close: () => void;
 };
@@ -88,6 +89,7 @@ export function useOnScreenKeyboard(): OnScreenKeyboardContextValue {
   if (!ctx) {
     return {
       open: false,
+      openKeyboard: () => {},
       toggle: () => {},
       close: () => {},
     };
@@ -181,7 +183,7 @@ function OnScreenKeyboardOverlay({
 
   return (
     <div
-      className="onscreen-keyboard fixed inset-x-0 bottom-0 z-[260] border-t border-stone-300 bg-stone-100 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:border-stone-600 dark:bg-stone-900"
+      className="onscreen-keyboard fixed inset-x-0 bottom-0 z-[320] border-t border-stone-300 bg-stone-100 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:border-stone-600 dark:bg-stone-900"
       role="dialog"
       aria-label={t('webPosOnScreenKeyboard')}
     >
@@ -286,11 +288,12 @@ export function OnScreenKeyboardProvider({
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
+  const openKeyboard = useCallback(() => setOpen(true), []);
   const toggle = useCallback(() => setOpen((v) => !v), []);
 
   const value = useMemo(
-    () => ({ open, toggle, close }),
-    [open, toggle, close]
+    () => ({ open, openKeyboard, toggle, close }),
+    [open, openKeyboard, toggle, close]
   );
 
   useEffect(() => {

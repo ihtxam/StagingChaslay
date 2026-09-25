@@ -11,7 +11,7 @@ import {
   type WebPosAppearance,
   type WebPosColorTheme,
   type WebPosTextSize,
-} from '@/components/webpos/WebPosTopBar';
+} from '@/lib/webpos-appearance';
 import { openCustomerDisplayWindow } from '@/lib/customer-display-sync';
 import { sendWebPosLogsToSupport } from '@/lib/webpos-log';
 import {
@@ -209,13 +209,11 @@ export default function DesktopSettings() {
         setStartWithWindows(false);
       }
 
-      const hasSavedScale =
-        opts?.hasSavedScale ?? (!!scaleComPort || !!scaleDeviceName);
-      if (opts?.autoSaveScale && scaleScan.devices.length > 0 && !hasSavedScale) {
+      if (opts?.autoSaveScale && scaleScan.devices.length > 0 && !opts.hasSavedScale) {
         await persistScaleDevice(scaleScan.devices[0], true);
       }
     },
-    [scaleComPort, scaleDeviceName, persistScaleDevice]
+    [persistScaleDevice]
   );
 
   useEffect(() => {
@@ -274,7 +272,8 @@ export default function DesktopSettings() {
     return () => {
       cancelled = true;
     };
-  }, [refreshHardware, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount; refreshHardware is stable
+  }, [t]);
 
   const saveMerchantSettings = useCallback(async () => {
     if (!merchant) return;

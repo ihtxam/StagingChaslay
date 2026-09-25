@@ -231,9 +231,14 @@ export async function printViaAgentOrQueue(opts: {
   jobLabel?: string;
   lineIds?: string[];
   sourceDeviceId?: string;
+  /** Skip listAgentPrinters retarget when caller already resolved the queue name. */
+  skipRetarget?: boolean;
 }): Promise<'local' | 'queued'> {
   let printerName = opts.printerName;
-  if (opts.jobKind === 'kitchen' || opts.jobKind === 'receipt' || opts.jobKind === 'eod') {
+  if (
+    !opts.skipRetarget &&
+    (opts.jobKind === 'kitchen' || opts.jobKind === 'receipt' || opts.jobKind === 'eod')
+  ) {
     printerName = await retargetEscPosPrinter(opts.printerName);
     if (!printerName || looksLikeLabelPrinterName(printerName)) {
       throw new Error(

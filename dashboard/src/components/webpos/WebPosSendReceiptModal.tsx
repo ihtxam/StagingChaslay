@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 import { useModalKeyboardScroll } from '@/lib/useModalKeyboardScroll';
 
 type Props = {
@@ -19,6 +20,7 @@ export default function WebPosSendReceiptModal({
   onSend,
 }: Props) {
   const { t } = useI18n();
+  const { openKeyboard } = useOnScreenKeyboard();
   const { keyboardActive, overlayClassName, overlayStyle, modalStyle, scrollFieldIntoView, overlayFocusHandlers } =
     useModalKeyboardScroll();
   const [email, setEmail] = useState(initialEmail);
@@ -34,7 +36,7 @@ export default function WebPosSendReceiptModal({
 
   return (
     <div
-      className={`fixed inset-x-0 z-[220] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
+      className={`fixed inset-x-0 z-[280] flex justify-center overflow-y-auto bg-black/45 p-3 sm:p-4 ${
         keyboardActive ? overlayClassName : 'inset-y-0 items-end sm:items-center'
       }`}
       style={overlayStyle}
@@ -79,7 +81,10 @@ export default function WebPosSendReceiptModal({
               value={email}
               disabled={busy}
               onChange={(e) => setEmail(e.target.value)}
-              onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+              onFocus={(e) => {
+                openKeyboard();
+                scrollFieldIntoView(e.currentTarget);
+              }}
             />
           </label>
           <div className="flex gap-2">
