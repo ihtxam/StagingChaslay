@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useI18n } from '@/lib/i18n';
 import ShopNotAcceptingBanner from '@/components/shop/ShopNotAcceptingBanner';
+import {
+  formatShopVacationMessage,
+  formatShopVacationReturnLine,
+} from '@/lib/shop-ordering-status';
 
 type Slot = {
   time: string;
@@ -189,7 +193,12 @@ export default function InlineReservationsWidget({
       return;
     }
     if (config?.vacation?.active) {
-      setError(t('shopVacationReservationsBlocked'));
+      setError(
+        formatShopVacationMessage(t, 'reservations', {
+          returnDate: config.vacation.returnDate,
+          returnTime: config.vacation.returnTime,
+        })
+      );
       return;
     }
     if (!time) {
@@ -301,7 +310,7 @@ export default function InlineReservationsWidget({
       ) : null}
 
       {config?.vacation?.active ? (
-        <div className="text-sm border border-amber-200 bg-amber-50 text-amber-950 px-3 py-2 rounded-lg">
+        <div className="text-sm border border-amber-200 bg-amber-50 text-amber-950 px-3 py-2 rounded-lg space-y-1">
           {(() => {
             const msg = config.vacation.message;
             if (typeof msg === 'string' && msg.trim()) return msg.trim();
@@ -312,6 +321,11 @@ export default function InlineReservationsWidget({
             }
             return t('shopVacationReservationsBlocked');
           })()}
+          {formatShopVacationReturnLine(t, config.vacation) ? (
+            <p className="font-medium">
+              {formatShopVacationReturnLine(t, config.vacation)}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

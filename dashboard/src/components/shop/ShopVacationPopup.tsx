@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n, type Locale } from '@/lib/i18n';
+import { formatShopVacationReturnLine } from '@/lib/shop-ordering-status';
 
 export type LocalizedText = {
   en?: string | null;
@@ -12,6 +13,8 @@ export type ShopVacationInfo = {
   message?: LocalizedText | string | null;
   popupTitle?: LocalizedText | string | null;
   popupImageUrl?: string | null;
+  returnDate?: string | null;
+  returnTime?: string | null;
 };
 
 type Props = {
@@ -38,6 +41,7 @@ export default function ShopVacationPopup({ vacation, shopKey }: Props) {
   const { t, locale } = useI18n();
   const title = pickLocalized(vacation?.popupTitle, locale, t('shopVacationTitle'));
   const message = pickLocalized(vacation?.message, locale, t('shopVacationDefaultMsg'));
+  const returnLine = formatShopVacationReturnLine(t, vacation);
   const storageKey = `chaslay_vacation_dismissed:${shopKey || 'shop'}:${vacation?.popupImageUrl || ''}:${title}:${message}`;
   const [open, setOpen] = useState(false);
 
@@ -86,6 +90,9 @@ export default function ShopVacationPopup({ vacation, shopKey }: Props) {
         <div className="p-5 space-y-3 text-center">
           <h2 className="text-xl font-bold tracking-tight text-stone-900">{title}</h2>
           <p className="text-sm text-stone-600">{message}</p>
+          {returnLine ? (
+            <p className="text-sm font-medium text-stone-700">{returnLine}</p>
+          ) : null}
           <p className="text-xs text-stone-500">{t('shopVacationBrowseHint')}</p>
           <button
             type="button"
