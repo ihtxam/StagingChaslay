@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
+import { displaySidebarAccountName, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import StaffSwitchButton, { type StaffSwitchButtonHandle } from '@/components/StaffSwitchButton';
 
@@ -125,7 +125,6 @@ export default function Sidebar({
         : user?.roleName || user?.role || '');
 
   const accountName = displaySidebarAccountName(registerDisplay?.name || user?.name);
-  const headerShopName = displaySidebarShopName(shopName);
 
   const activeGroupIds = useMemo(() => {
     const ids = new Set<string>();
@@ -257,23 +256,13 @@ export default function Sidebar({
         } h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
         <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="h-9 w-9 shrink-0 overflow-hidden" aria-hidden>
+          <div className="flex min-w-0 items-center">
+            <div className="h-9 shrink-0 overflow-hidden" aria-hidden>
               <img
                 src={REBORN_LOGO_WHITE}
                 alt=""
                 className="h-9 w-auto max-w-none object-contain object-left"
               />
-            </div>
-            <div className="min-w-0">
-              {!railMode ? (
-                <>
-                  <h1 className="text-base font-semibold tracking-tight text-white truncate">{headerShopName}</h1>
-                  <p className="text-[11px] text-white/70 mt-0.5">{t('partnerPanel')}</p>
-                </>
-              ) : (
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">{t('partnerPanel')}</p>
-              )}
             </div>
           </div>
           <button

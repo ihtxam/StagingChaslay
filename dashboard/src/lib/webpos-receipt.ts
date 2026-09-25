@@ -775,13 +775,23 @@ export function buildReceiptHeaderEscPos(
   parts.push(escBold(opts.bold === true), escKitchenSize(scale));
   parts.push(escposCp850Encode(`${lines[0]}\n`));
   if (lines.length > 1) {
-    parts.push(escBold(false), escKitchenSize(1));
+    parts.push(escBold(false), escKitchenSize(1), escposCp850Encode('\n'));
     for (let i = 1; i < lines.length; i++) {
       parts.push(escposCp850Encode(`${lines[i]}\n`));
     }
   }
-  parts.push(escBold(false), escKitchenSize(1), escAlign(0), escposCp850Encode('\n'));
+  parts.push(escBold(false), escKitchenSize(1), escAlign(0), escposCp850Encode('\n\n'));
   return concatBytes(...parts);
+}
+
+/** Paper width for receipt text + ESC/POS — prefer the configured receipt printer over global default. */
+export function resolveReceiptPaperWidthMm(
+  settings?: PosPrintSettingsClient | null
+): 58 | 80 {
+  const targets = printersForRole(settings, 'receipt');
+  const fromPrinter = targets[0]?.paperWidthMm;
+  if (fromPrinter === 58 || fromPrinter === 80) return fromPrinter;
+  return settings?.paperWidthMm === 58 ? 58 : 80;
 }
 
 function stripPaddedReceiptHeaderFromText(
@@ -791,6 +801,42 @@ function stripPaddedReceiptHeaderFromText(
   align: ReceiptHeaderAlign = 'center'
 ): string {
   if (!headerLines.length) return bodyText;
+  const widths = width === 32 || width === 48 ? [width, width === 32 ? 48 : 32] : [width];
+  for (const w of widths) {
+    let rest = bodyText;
+    let strippedAny = false;
+    for (let i = 0; i < headerLines.length; i++) {
+      const line = headerLines[i];
+      if (i > 0 && rest.startsWith('\n')) {
+        const paddedNext = alignLine(line, w, align);
+        const rawNext = line.slice(0, w);
+        if (
+          !rest.startsWith(`\n${paddedNext}\n`) &&
+          !(rawNext && rest.startsWith(`\n${rawNext}\n`))
+        ) {
+          rest = rest.slice(1);
+        }
+      }
+      const padded = alignLine(line, w, align);
+      const raw = line.slice(0, w);
+      const matched =
+        (padded && rest.startsWith(`${padded}\n`)) ||
+        (raw && rest.startsWith(`${raw}\n`));
+      if (matched) {
+        rest = rest.startsWith(`${padded}\n`)
+          ? rest.slice(padded.length + 1)
+          : rest.slice(raw.length + 1);
+        strippedAny = true;
+        continue;
+      }
+      strippedAny = false;
+      break;
+    }
+    if (strippedAny) {
+      if (rest.startsWith('\n')) rest = rest.slice(1);
+      return rest;
+    }
+  }
   const padded = headerLines.map((line) => alignLine(line, width, align));
   for (const block of [`${padded.join('\n')}\n\n`, `${padded.join('\n')}\n`]) {
     const idx = bodyText.indexOf(block);
@@ -1304,8 +1350,14 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.isProvisional) {
     r += centerLine('PROVISIONAL', width) + '\n';
   }
-  for (const line of getReceiptHeaderLines(tx, width)) {
-    r += line + '\n';
+  const headerNorm = normalizeReceiptHeaderFields({
+    headerTitle: tx.headerTitle,
+    header: tx.header,
+  });
+  const headerLines = getReceiptHeaderLines(tx, width);
+  for (let i = 0; i < headerLines.length; i++) {
+    r += headerLines[i] + '\n';
+    if (i === 0 && headerNorm.title && headerNorm.body) r += '\n';
   }
   r += '\n';
   if (tx.tableLabel) {
@@ -3675,7 +3727,7 @@ export function posOrderToWebPosReceipt(
     merchantTax: ctx.merchantTax,
   });
   const lang = resolveReceiptLanguage(ctx.printSettings, ctx.panelLang);
-  const paperWidthMm = ctx.printSettings?.paperWidthMm || 80;
+  const paperWidthMm = resolveReceiptPaperWidthMm(ctx.printSettings);
   const completedAt = order.completedAt
     ? new Date(order.completedAt).getTime()
     : new Date(order.createdAt).getTime();

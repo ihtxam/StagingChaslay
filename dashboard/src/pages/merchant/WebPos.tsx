@@ -33,6 +33,7 @@ import {
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   getReceiptHeaderLines,
+  resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
   encodeOrderMetaNotes,
@@ -7632,8 +7633,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       fastQr?: boolean;
     } = {}
   ): Promise<string> => {
-    const targets = printersForRole(printSettings, 'receipt');
-    const paper = opts.paperWidthMm || targets[0]?.paperWidthMm || printSettings?.paperWidthMm || 80;
+    const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(printSettings);
     const logoUrl =
       printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
     let logo: Uint8Array | null = null;

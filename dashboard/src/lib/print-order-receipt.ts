@@ -10,6 +10,7 @@ import {
   generateRefundReceiptText,
   generateWebPosReceiptText,
   getReceiptHeaderLines,
+  resolveReceiptPaperWidthMm,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   posOrderToWebPosReceipt,
@@ -69,7 +70,7 @@ async function printReceiptText(
   if (!agentOk && named.length === 0) {
     throw new Error('Print agent is not running and no receipt printer is configured');
   }
-  const paper = targets[0]?.paperWidthMm || opts.printSettings?.paperWidthMm || 80;
+  const paper = resolveReceiptPaperWidthMm(opts.printSettings);
   const lang = resolveReceiptLanguage(opts.printSettings, opts.locale);
   const logoWidth = resolveReceiptLogoWidthPx(opts.printSettings, paper === 58 ? 58 : 80);
   const logo = opts.logoUrl
