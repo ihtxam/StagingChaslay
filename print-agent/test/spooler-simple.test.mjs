@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.5";
+const VERSION = "1.10.6";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.5 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.6 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -61,7 +61,7 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.match(src, /Test-NeedsPacedWrite/);
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
-  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 64 \} else \{ 128 \}/);
+  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 128 \} else \{ 192 \}/);
   assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
@@ -70,7 +70,7 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
-  assert.match(src, /\$drainMs = \[Math\]::Min\(400 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 20\)\), 2500\)/);
+  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 48\)\), 1200\)/);
   assert.match(src, /usb\\d\+\|usb00\|usbprint.*wsd/);
   assert.match(extractPsFunction(src, "Test-NeedsPacedWrite"), /thermal\|receipt\|escpos/);
   assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);
@@ -93,7 +93,7 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.match(src, /Split-CutSuffix/);
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
-  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 64 \} else \{ 128 \}/);
+  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 128 \} else \{ 192 \}/);
   assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
@@ -102,7 +102,7 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
-  assert.match(src, /\$drainMs = \[Math\]::Min\(400 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 20\)\), 2500\)/);
+  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 48\)\), 1200\)/);
   assert.match(src, /usb\\d\+\|usb00\|usbprint.*wsd/);
   assert.match(extractPsFunction(src, "Test-NeedsPacedWrite"), /thermal\|receipt\|escpos/);
   assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);

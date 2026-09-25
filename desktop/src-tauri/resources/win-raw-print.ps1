@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# v1.10.4: faster BT/COM paced writes; WSD + spooler thermal queues unpaced.
+# v1.10.6: tighter BT/COM pacing (~1s typical receipt vs ~2s on 1.10.5).
 
 try {
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -278,8 +278,8 @@ function Send-RawToPrinter {
     $writeChunk = 4096
     $writeDelay = 0
     if ($paced) {
-        $writeChunk = if ($isComPort) { 64 } else { 128 }
-        $writeDelay = if ($isComPort) { 50 } else { 40 }
+        $writeChunk = if ($isComPort) { 128 } else { 192 }
+        $writeDelay = if ($isComPort) { 25 } else { 30 }
     }
     $body = $Data
     $cutSuffix = [byte[]]@()
@@ -318,14 +318,14 @@ function Send-RawToPrinter {
             }
             [void](Write-RawChunks -Handle $handle -Data $body -Printer $Printer -ChunkSize $writeChunk -DelayMs $writeDelay -ComSerialPort:$isComPort)
             if ($paced) {
-                # BT/COM only — reduced sleeps vs 1.10.3 (~4–5s → ~1–2s typical receipt).
-                $drainMs = [Math]::Min(400 + [int]([Math]::Floor($body.Length / 20)), 2500)
-                if ($isComPort) { $drainMs += 100 }
+                # BT/COM only — drain/cut sleeps tuned in 1.10.6 for faster kitchen/receipt output.
+                $drainMs = [Math]::Min(180 + [int]([Math]::Floor($body.Length / 48)), 1200)
+                if ($isComPort) { $drainMs += 50 }
                 Start-Sleep -Milliseconds $drainMs
-                $cutDelay = if ($isComPort) { 50 } else { 40 }
+                $cutDelay = if ($isComPort) { 25 } else { 20 }
                 $cutBytes = if ($cutSuffix -and $cutSuffix.Length -gt 0) { $cutSuffix } else { Get-BtCutTrailer }
-                [void](Write-RawChunks -Handle $handle -Data $cutBytes -Printer $Printer -ChunkSize 64 -DelayMs $cutDelay -ComSerialPort:$isComPort)
-                Start-Sleep -Milliseconds $(if ($isComPort) { 350 } else { 250 })
+                [void](Write-RawChunks -Handle $handle -Data $cutBytes -Printer $Printer -ChunkSize 128 -DelayMs $cutDelay -ComSerialPort:$isComPort)
+                Start-Sleep -Milliseconds $(if ($isComPort) { 120 } else { 80 })
             }
             [RawPrinterHelper]::EndPagePrinter($handle) | Out-Null
         }
@@ -337,7 +337,7 @@ function Send-RawToPrinter {
         [RawPrinterHelper]::ClosePrinter($handle) | Out-Null
     }
     if ($paced) {
-        Start-Sleep -Milliseconds 150
+        Start-Sleep -Milliseconds 75
     }
 }
 
