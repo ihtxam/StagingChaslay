@@ -3,6 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="reborn-build" content="%REBORN_BUILD_STAMP%" />
+    <script>
+      (function () {
+        var stamp = document.querySelector('meta[name="reborn-build"]')?.getAttribute('content');
+        if (!stamp) return;
+        var KEY = 'reborn_build_stamp';
+        var RELOAD_KEY = 'reborn_build_reload';
+        try {
+          var prev = localStorage.getItem(KEY);
+          if (prev && prev !== stamp && !sessionStorage.getItem(RELOAD_KEY)) {
+            sessionStorage.setItem(RELOAD_KEY, '1');
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                regs.forEach(function (reg) {
+                  reg.unregister();
+                });
+              });
+            }
+            if (window.caches) {
+              caches.keys().then(function (keys) {
+                keys.forEach(function (key) {
+                  if (String(key).indexOf('reborn-shell') === 0) caches.delete(key);
+                });
+              });
+            }
+            localStorage.setItem(KEY, stamp);
+            var url = new URL(window.location.href);
+            url.searchParams.set('build', stamp);
+            window.location.replace(url.toString());
+            return;
+          }
+          localStorage.setItem(KEY, stamp);
+          sessionStorage.removeItem(RELOAD_KEY);
+        } catch (e) {}
+      })();
+    </script>
     <script>
       (function () {
         var host = (location.hostname || '').toLowerCase();

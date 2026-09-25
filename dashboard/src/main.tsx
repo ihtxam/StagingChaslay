@@ -5,14 +5,21 @@ import AppErrorBoundary from './components/AppErrorBoundary'
 import { initThemeFromStorage, ThemeProvider } from './lib/theme'
 import { bindRebornPwaInstallGuard, probeRebornPwaInstalled } from './lib/pwa'
 import { isShopStorefrontBoot, isShopStorefrontHost, unregisterRebornShellOnShop } from './lib/shop-storefront-host'
-import { isDesktopApp } from './lib/platform'
+import { initDesktopAppDetection, isDesktopApp } from './lib/platform'
 import { installDesktopHardwareBridge } from './lib/hardware/desktop-bridge'
 import './index.css'
 
-if (typeof window !== 'undefined' && isDesktopApp()) {
-  document.documentElement.classList.add('desktop-app-shell');
-  initThemeFromStorage();
-  void installDesktopHardwareBridge();
+if (typeof window !== 'undefined') {
+  initDesktopAppDetection();
+  if (isDesktopApp()) {
+    initThemeFromStorage();
+    void installDesktopHardwareBridge();
+  } else {
+    window.addEventListener('reborn-desktop-detect', () => {
+      initThemeFromStorage();
+      void installDesktopHardwareBridge();
+    }, { once: true });
+  }
 }
 
 /** Recover from stale cached chunks after deploy (common cause of blank POS screens). */

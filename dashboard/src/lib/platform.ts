@@ -3,14 +3,104 @@
  * Keep Tauri-specific checks here — do not scatter `invoke` across the till UI.
  */
 
-export function isDesktopApp(): boolean {
+import { useSyncExternalStore } from 'react';
+
+const DESKTOP_DETECT_EVENT = 'reborn-desktop-detect';
+
+type DesktopWindow = Window & {
+  __TAURI_INTERNALS__?: unknown;
+  __TAURI__?: unknown;
+  __TAURI_METADATA__?: unknown;
+  isTauri?: boolean;
+  manuposDesktop?: unknown;
+};
+
+let desktopAppDetected = false;
+let desktopDetectionStarted = false;
+const desktopListeners = new Set<() => void>();
+
+function detectDesktopApp(): boolean {
   if (typeof window === 'undefined') return false;
-  const w = window as Window & {
-    __TAURI_INTERNALS__?: unknown;
-    __TAURI__?: unknown;
-    isTauri?: boolean;
+  const w = window as DesktopWindow;
+  if (w.__TAURI_INTERNALS__ || w.__TAURI__ || w.__TAURI_METADATA__ || w.isTauri) {
+    return true;
+  }
+  if (w.manuposDesktop) return true;
+  try {
+    return /\btauri\b/i.test(navigator.userAgent || '');
+  } catch {
+    return false;
+  }
+}
+
+function notifyDesktopListeners(): void {
+  for (const listener of desktopListeners) listener();
+}
+
+function markDesktopAppDetected(): void {
+  if (!desktopAppDetected) {
+    desktopAppDetected = true;
+    notifyDesktopListeners();
+  }
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.add('desktop-app-shell');
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(DESKTOP_DETECT_EVENT));
+  }
+}
+
+/** Poll briefly for late Tauri injection on hosted remote URLs (RebornPOS shell). */
+export function initDesktopAppDetection(): void {
+  if (typeof window === 'undefined' || desktopDetectionStarted) return;
+  desktopDetectionStarted = true;
+
+  if (detectDesktopApp()) {
+    markDesktopAppDetected();
+    return;
+  }
+
+  let tries = 0;
+  const tick = () => {
+    tries += 1;
+    if (detectDesktopApp()) {
+      markDesktopAppDetected();
+      return true;
+    }
+    return tries >= 80;
   };
-  return Boolean(w.__TAURI_INTERNALS__ || w.__TAURI__ || w.isTauri);
+
+  if (tick()) return;
+
+  const intervalId = window.setInterval(() => {
+    if (tick()) window.clearInterval(intervalId);
+  }, 50);
+
+  window.addEventListener('focus', () => {
+    if (detectDesktopApp()) markDesktopAppDetected();
+  });
+}
+
+function subscribeDesktopApp(listener: () => void): () => void {
+  desktopListeners.add(listener);
+  return () => desktopListeners.delete(listener);
+}
+
+function getDesktopAppSnapshot(): boolean {
+  if (desktopAppDetected) return true;
+  if (detectDesktopApp()) {
+    markDesktopAppDetected();
+    return true;
+  }
+  return false;
+}
+
+export function isDesktopApp(): boolean {
+  return getDesktopAppSnapshot();
+}
+
+export function useIsDesktopApp(): boolean {
+  return useSyncExternalStore(subscribeDesktopApp, getDesktopAppSnapshot, () => false);
 }
 
 export function isBrowserPos(): boolean {

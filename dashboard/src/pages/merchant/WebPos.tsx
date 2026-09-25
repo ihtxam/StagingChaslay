@@ -174,7 +174,7 @@ import {
   isBarcodeWedgeInput,
   useBarcodeWedge,
 } from '@/lib/barcode-wedge';
-import { isDesktopApp } from '@/lib/platform';
+import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
@@ -739,6 +739,7 @@ async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
 
 export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const { t, locale, setLocale } = useI18n();
+  const isDesktop = useIsDesktopApp();
   const lastPrintErrorRef = useRef<{ key: string; at: number } | null>(null);
   const lastQueuedToastAtRef = useRef(0);
   const toastPrintQueuedMainTill = () => {
@@ -10421,7 +10422,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
         onSwitchUser={openSwitchUserPin}
         onOpenDrawer={() => void openCashDrawer()}
-        canShowPanel={canShowBackOffice && !isDesktopApp()}
+        canShowPanel={canShowBackOffice && !isDesktop}
         onShowPanel={showPanelMenus}
         tableBadge={tableBadge}
         shiftsEnabled={shiftsEnabled}
@@ -10462,9 +10463,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }
           });
         }}
-        hideSettingsMenu={isDesktopApp()}
+        hideSettingsMenu={isDesktop}
         settingsPanel={
-          isDesktopApp() ? null : (
+          isDesktop ? null : (
           <WebPosSettingsDropdown
             onReloadCatalog={() => {
               void load();

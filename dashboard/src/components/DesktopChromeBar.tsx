@@ -8,23 +8,24 @@ import {
   desktopMinimize,
   desktopReload,
   formatDesktopInvokeError,
-  isDesktopApp,
   isMissingDesktopCommandError,
   probeDesktopChromeCapabilities,
+  useIsDesktopApp,
   type DesktopChromeCapabilities,
 } from '@/lib/platform';
 
 export default function DesktopChromeBar() {
   const { t } = useI18n();
+  const isDesktop = useIsDesktopApp();
   const [busy, setBusy] = useState(false);
   const [chromeCaps, setChromeCaps] = useState<DesktopChromeCapabilities | null>(null);
 
   useEffect(() => {
-    if (!isDesktopApp()) return;
+    if (!isDesktop) return;
     void probeDesktopChromeCapabilities().then(setChromeCaps);
-  }, []);
+  }, [isDesktop]);
 
-  if (!isDesktopApp()) return null;
+  if (!isDesktop) return null;
 
   const needsShellUpdate = chromeCaps !== null && !chromeCaps.nativeMinimize;
 

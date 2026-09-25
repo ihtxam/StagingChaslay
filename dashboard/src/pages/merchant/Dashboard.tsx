@@ -126,7 +126,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
-import { isDesktopApp } from '@/lib/platform';
+import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
   desktopHubRedirectTarget,
   isDesktopAppAllowedRoute,
@@ -190,6 +190,7 @@ function PanelRouteGuard({
 
 function MerchantShell() {
   const { t, locale, setLocale } = useI18n();
+  const isDesktop = useIsDesktopApp();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const staffJwt = isStaffJwt(user);
@@ -210,7 +211,7 @@ function MerchantShell() {
     typeof window !== 'undefined' &&
     (new URLSearchParams(location.search).get('embed') === '1' ||
       sessionStorage.getItem('manupos_pos_embed') === '1');
-  const isDesktopHubPanel = isDesktopApp() && isDesktopHubPanelRoute(location.pathname);
+  const isDesktopHubPanel = isDesktop && isDesktopHubPanelRoute(location.pathname);
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -825,13 +826,13 @@ function MerchantShell() {
 
   /** RebornPOS desktop: basic hub only — full back office stays on the website. */
   useEffect(() => {
-    if (!isDesktopApp()) return;
+    if (!isDesktop) return;
     const path = normalizeDesktopPath(location.pathname);
     if (path === '/login' || path.startsWith('/login')) return;
     if (isDesktopAppAllowedRoute(path)) return;
     toast(t('desktopHubAdvancedWebHint'), { id: 'desktop-hub-blocked', duration: 4000 });
     navigate(desktopHubRedirectTarget(path), { replace: true });
-  }, [location.pathname, navigate, t]);
+  }, [isDesktop, location.pathname, navigate, t]);
 
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },

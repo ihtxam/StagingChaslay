@@ -44,7 +44,8 @@ import DesktopChromeBar from '@/components/DesktopChromeBar';
 import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
 import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
-import { shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
+import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
+import { activateWaitingServiceWorker } from '@/lib/pwa-recover';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
@@ -215,6 +216,8 @@ function App() {
   useEffect(() => {
     hydrate();
     initClientErrorReporting();
+    initDesktopAppDetection();
+    void activateWaitingServiceWorker();
   }, [hydrate]);
 
   return (
