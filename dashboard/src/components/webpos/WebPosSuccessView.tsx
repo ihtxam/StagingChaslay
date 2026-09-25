@@ -198,7 +198,97 @@ export default function WebPosSuccessView({
     </>
   );
 
-  if (showTwoColumn) {
+  const splitTicketCards = isSplit ? (
+    <>
+      <p className="text-center text-sm font-medium text-stone-500 md:text-left">
+        {t('webPosSplitOrderTitle').replace('{count}', String(splitParts!.length))}
+      </p>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {splitParts!.map((part, idx) => (
+          <div
+            key={part.id}
+            className="flex h-full flex-col rounded-2xl border border-stone-200 bg-stone-50 p-4"
+          >
+            <div className="flex flex-1 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                  {t('webPosTicket')} {idx + 1}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-stone-800">
+                  {part.label || t('webPosSplitBillN').replace('{n}', String(idx + 1))}
+                </p>
+                <p className="mt-2">
+                  <AmountDisplay amount={part.amount} size="inline" />
+                </p>
+              </div>
+              {part.url ? (
+                <ReceiptQr
+                  url={part.url}
+                  label={t('webPosDigitalReceipt')}
+                  compact={compact}
+                />
+              ) : null}
+            </div>
+            {onPrintPart ? (
+              <button
+                type="button"
+                onClick={() => onPrintPart(part.id)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-100"
+              >
+                <Printer size={16} />
+                {t('webPosPrintTicketN').replace('{n}', String(idx + 1))}
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {onPrintAll ? (
+        <button
+          type="button"
+          onClick={onPrintAll}
+          className="webpos-accent-btn mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold"
+        >
+          <Printer size={16} />
+          {t('webPosPrintAllSplits')}
+        </button>
+      ) : null}
+    </>
+  ) : null;
+
+  const amountSummary = (
+    <>
+      <p
+        className={`font-semibold uppercase tracking-[0.18em] text-stone-500 ${
+          compact ? 'text-xs' : 'text-[11px]'
+        }`}
+      >
+        {t('webPosAmountPaid')}
+      </p>
+      <AmountDisplay amount={displayAmount} compact={compact} />
+      {changeDue != null && changeDue > 0 ? (
+        showTwoColumn || isSplit ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">
+              {t('webPosChangeDue')}
+            </p>
+            <p className={`mt-1 font-bold tabular-nums text-emerald-800 ${compact ? 'text-3xl' : 'text-2xl'}`}>
+              CHF {changeDue.toFixed(2)}
+            </p>
+          </div>
+        ) : (
+          <p
+            className={`mt-3 font-semibold text-[var(--webpos-accent-text)] ${
+              compact ? 'text-xl' : 'text-lg'
+            }`}
+          >
+            {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
+          </p>
+        )
+      ) : null}
+    </>
+  );
+
+  if (showTwoColumn || isSplit) {
     return (
       <div
         className={`flex min-h-0 flex-1 flex-col bg-white ${
@@ -208,31 +298,40 @@ export default function WebPosSuccessView({
         }`}
       >
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
-          <div className="flex flex-col items-center justify-center border-b border-stone-100 px-6 py-8 text-center md:border-b-0 md:border-r">
-            <CheckCircle2 size={compact ? 72 : 64} className="text-emerald-500" strokeWidth={1.5} />
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
-              {t('webPosAmountPaid')}
-            </p>
-            <AmountDisplay amount={displayAmount} compact={compact} />
-            {changeDue != null && changeDue > 0 ? (
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">
-                  {t('webPosChangeDue')}
-                </p>
-                <p className={`mt-1 font-bold tabular-nums text-emerald-800 ${compact ? 'text-3xl' : 'text-2xl'}`}>
-                  CHF {changeDue.toFixed(2)}
-                </p>
-              </div>
-            ) : null}
+          <div
+            className={`flex flex-col border-b border-stone-100 px-6 py-8 md:border-b-0 md:border-r ${
+              isSplit ? 'min-h-0 overflow-y-auto' : 'items-center justify-center text-center'
+            }`}
+          >
+            {isSplit ? (
+              <div className="w-full text-left">{splitTicketCards}</div>
+            ) : (
+              <>
+                <CheckCircle2 size={compact ? 72 : 64} className="text-emerald-500" strokeWidth={1.5} />
+                {amountSummary}
+              </>
+            )}
           </div>
 
           <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
-            {receiptUrl ? (
-              <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
-            ) : null}
-            <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
-              {actionButtons}
-            </div>
+            {isSplit ? (
+              <>
+                <CheckCircle2 size={compact ? 72 : 64} className="text-emerald-500" strokeWidth={1.5} />
+                <div className="mt-4">{amountSummary}</div>
+                <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
+                  {actionButtons}
+                </div>
+              </>
+            ) : (
+              <>
+                {receiptUrl ? (
+                  <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
+                ) : null}
+                <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
+                  {actionButtons}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -253,94 +352,13 @@ export default function WebPosSuccessView({
         strokeWidth={1.5}
       />
 
-      {isSplit ? (
-        <p className={`mt-4 text-sm font-medium text-stone-500 ${compact ? 'px-2' : ''}`}>
-          {t('webPosSplitOrderTitle').replace('{count}', String(splitParts!.length))}
-        </p>
-      ) : null}
-
-      {isSplit ? (
-        <div
-          className={`mt-6 w-full text-left ${
-            compact ? 'max-w-full' : 'max-w-2xl sm:max-w-3xl'
-          } ${compact ? 'max-h-[40vh] overflow-y-auto pr-1' : ''}`}
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {splitParts!.map((part, idx) => (
-              <div
-                key={part.id}
-                className="flex h-full flex-col rounded-2xl border border-stone-200 bg-stone-50 p-4"
-              >
-                <div className="flex flex-1 items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-                      {t('webPosTicket')} {idx + 1}
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-semibold text-stone-800">
-                      {part.label || t('webPosSplitBillN').replace('{n}', String(idx + 1))}
-                    </p>
-                    <p className="mt-2">
-                      <AmountDisplay amount={part.amount} size="inline" />
-                    </p>
-                  </div>
-                  {part.url ? (
-                    <ReceiptQr
-                      url={part.url}
-                      label={t('webPosDigitalReceipt')}
-                      compact={compact}
-                    />
-                  ) : null}
-                </div>
-                {onPrintPart ? (
-                  <button
-                    type="button"
-                    onClick={() => onPrintPart(part.id)}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-100"
-                  >
-                    <Printer size={16} />
-                    {t('webPosPrintTicketN').replace('{n}', String(idx + 1))}
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          {onPrintAll ? (
-            <button
-              type="button"
-              onClick={onPrintAll}
-              className="webpos-accent-btn mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold"
-            >
-              <Printer size={16} />
-              {t('webPosPrintAllSplits')}
-            </button>
-          ) : null}
-        </div>
-      ) : receiptUrl ? (
+      {receiptUrl ? (
         <div className="mt-6">
           <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
         </div>
       ) : null}
 
-      <div className={`mt-6 ${compact ? 'px-2' : ''}`}>
-        <p
-          className={`font-semibold uppercase tracking-[0.18em] text-stone-500 ${
-            compact ? 'text-xs' : 'text-[11px]'
-          }`}
-        >
-          {t('webPosAmountPaid')}
-        </p>
-        <AmountDisplay amount={isSplit ? splitTotal : amount} compact={compact} />
-
-        {changeDue != null && changeDue > 0 ? (
-          <p
-            className={`mt-3 font-semibold text-[var(--webpos-accent-text)] ${
-              compact ? 'text-xl' : 'text-lg'
-            }`}
-          >
-            {t('webPosChangeDue')}: CHF {changeDue.toFixed(2)}
-          </p>
-        ) : null}
-      </div>
+      <div className={`mt-6 ${compact ? 'px-2' : ''}`}>{amountSummary}</div>
 
       <div
         className={`flex flex-wrap items-center justify-center ${

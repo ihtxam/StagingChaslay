@@ -11292,7 +11292,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
         {expressSuccessOpen && successInfo ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-6">
-            <div className={`w-full ${isRetail ? 'max-w-4xl' : 'max-w-xl'}`}>
+            <div
+              className={`w-full ${
+                isRetail || (successSplitParts?.length ?? 0) > 1 ? 'max-w-4xl' : 'max-w-xl'
+              }`}
+            >
               <WebPosSuccessView
                 compact
                 amount={successInfo.amount}
