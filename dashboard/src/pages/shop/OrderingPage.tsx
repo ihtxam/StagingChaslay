@@ -70,6 +70,10 @@ import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
+import {
+  resolveShopOrderingBlock,
+  shouldShowDeliveryChannelStatus,
+} from '@/lib/shop-ordering-status';
 
 interface Product {
   id: string;
@@ -891,10 +895,31 @@ export default function OrderingPage() {
     (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
     minOrderNotMet;
 
+  const orderingBlock = useMemo(
+    () =>
+      resolveShopOrderingBlock({
+        vacationActive: !!merchant?.vacation?.active,
+        acceptingOrders: merchant?.acceptingOrders,
+        t,
+        variant: 'cart',
+      }),
+    [merchant?.vacation?.active, merchant?.acceptingOrders, t]
+  );
+
+  const orderingBlockHeader = useMemo(
+    () =>
+      resolveShopOrderingBlock({
+        vacationActive: !!merchant?.vacation?.active,
+        acceptingOrders: merchant?.acceptingOrders,
+        t,
+        variant: 'header',
+      }),
+    [merchant?.vacation?.active, merchant?.acceptingOrders, t]
+  );
+
   const checkoutBlockedMessage = useMemo(() => {
     if (!cart.length) return '';
-    if (merchant?.vacation?.active) return t('shopVacationOrdersBlocked');
-    if (merchant?.acceptingOrders === false) return t('shopNotAcceptingOrders');
+    if (orderingBlock.message) return orderingBlock.message;
     if (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) {
       return t('shopStoreClosedNow');
     }
@@ -904,8 +929,7 @@ export default function OrderingPage() {
     return '';
   }, [
     cart.length,
-    merchant?.vacation?.active,
-    merchant?.acceptingOrders,
+    orderingBlock.message,
     merchant?.scheduledOrdersEnabled,
     channelMeta?.open,
     minOrderNotMet,
@@ -1023,21 +1047,23 @@ export default function OrderingPage() {
     return currentChannelClose(merchant.storeHours as StoreHours, 'delivery', new Date(nowTick));
   }, [merchant, deliveryOpen, nowTick]);
 
-  const pickupStatusText = useMemo(
-    () => formatChannelStatus(pickupOpen, pickupClose, nextPickupOpen, t('shopStoreClosed')),
-    [
-      pickupOpen,
-      pickupClose,
-      nextPickupOpen,
-      locale,
-      openLabels,
-      allowScheduledOrders,
-      t,
-      nowTick,
-    ]
-  );
+  const pickupStatusText = useMemo(() => {
+    if (orderingBlockHeader.message) return orderingBlockHeader.message;
+    return formatChannelStatus(pickupOpen, pickupClose, nextPickupOpen, t('shopStoreClosed'));
+  }, [
+    orderingBlockHeader.message,
+    pickupOpen,
+    pickupClose,
+    nextPickupOpen,
+    locale,
+    openLabels,
+    allowScheduledOrders,
+    t,
+    nowTick,
+  ]);
 
   const deliveryStatusText = useMemo(() => {
+    if (orderingBlockHeader.message) return null;
     if (!channels.delivery?.enabled) return null;
     return formatChannelStatus(
       deliveryOpen,
@@ -1046,6 +1072,7 @@ export default function OrderingPage() {
       t('shopDeliveryClosed')
     );
   }, [
+    orderingBlockHeader.message,
     channels.delivery?.enabled,
     deliveryOpen,
     deliveryClose,
@@ -1213,6 +1240,8 @@ export default function OrderingPage() {
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
+  const storeOrderingBlocked = orderingBlockHeader.blocked;
+  const pickupStatusOpen = pickupOpen && !storeOrderingBlocked;
   const showReservations = !!merchant?.reservationsEnabled;
   const showGiftCards = !!merchant?.giftCards?.enabled;
   const shopNav = buildShopTopbarNav({
@@ -1619,20 +1648,22 @@ export default function OrderingPage() {
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
                     <span
                       className={`inline-flex items-center gap-1.5 ${
-                        pickupOpen ? 'text-emerald-700' : 'text-amber-700'
+                        pickupStatusOpen ? 'text-emerald-700' : 'text-amber-700'
                       }`}
                     >
                       <span
                         className={`h-2 w-2 rounded-full ${
-                          pickupOpen ? 'bg-emerald-500' : 'bg-amber-400'
+                          pickupStatusOpen ? 'bg-emerald-500' : 'bg-amber-400'
                         }`}
                       />
                       {pickupStatusText}
                     </span>
-                    {deliveryStatusText ? (
+                    {shouldShowDeliveryChannelStatus(pickupStatusText, deliveryStatusText) ? (
                       <span
                         className={`inline-flex items-center gap-1.5 ${
-                          deliveryOpen ? 'text-emerald-700' : 'text-amber-700'
+                          deliveryOpen && !storeOrderingBlocked
+                            ? 'text-emerald-700'
+                            : 'text-amber-700'
                         }`}
                       >
                         <Bike className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
