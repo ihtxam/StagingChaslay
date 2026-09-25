@@ -474,8 +474,8 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.9.5+ warm PowerShell worker + skip FlushPrinter on all paced BT writes. */
-export const MIN_PRINT_AGENT_VERSION = '1.9.5';
+/** 1.10.5+ warm worker + faster BT/COM pacing; 1.10.6 further reduces paced drain sleeps. */
+export const MIN_PRINT_AGENT_VERSION = '1.10.5';
 
 /** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
 export const MIN_NIIMBOT_AGENT_VERSION = '1.10.2';
