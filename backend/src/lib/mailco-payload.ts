@@ -1,3 +1,5 @@
+import { formatMailAddress } from "@/lib/merchant-email-address";
+
 export type MailcoEmailAttachment = {
   filename: string;
   content: Buffer | string;
@@ -47,16 +49,26 @@ export function buildMailcoAttachments(
   });
 }
 
+export type MailcoAddress = { email: string; name?: string };
+
 export type MailcoRawMessagePayload = {
-  from: { email: string; name?: string };
-  to: Array<{ email: string; name?: string }>;
-  reply_to?: Array<{ email: string; name?: string }>;
+  from: MailcoAddress;
+  to: MailcoAddress[];
+  /** Brevo-style single reply address (mailco relay accepts object or array; object is preferred). */
+  reply_to?: MailcoAddress;
+  headers?: Record<string, string>;
   subject: string;
   html: string;
   text: string;
   attachments?: MailcoAttachmentPayload[];
   metadata: Record<string, string>;
 };
+
+const DEFAULT_FROM_NAME = "Reborn";
+
+function normalizeDisplayName(name?: string | null, fallback = DEFAULT_FROM_NAME): string {
+  return String(name || "").trim() || fallback;
+}
 
 export function buildMailcoRawMessagePayload(input: {
   fromEmail: string;
@@ -75,23 +87,33 @@ export function buildMailcoRawMessagePayload(input: {
     String(input.text || "")
       .trim() ||
     input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const replyTo = String(input.replyToEmail || "").trim();
+  const replyToEmail = String(input.replyToEmail || "").trim();
+  const fromName = normalizeDisplayName(input.fromName);
+  const replyToName = normalizeDisplayName(
+    input.replyToName || input.fromName,
+    fromName
+  );
   const attachments = buildMailcoAttachments(input.attachments);
+
+  const replyTo = replyToEmail
+    ? {
+        email: replyToEmail,
+        name: replyToName,
+      }
+    : undefined;
 
   return {
     from: {
       email: input.fromEmail,
-      name: input.fromName || undefined,
+      name: fromName,
     },
     to: [{ email: input.to }],
     ...(replyTo
       ? {
-          reply_to: [
-            {
-              email: replyTo,
-              name: input.replyToName || input.fromName || undefined,
-            },
-          ],
+          reply_to: replyTo,
+          headers: {
+            "Reply-To": formatMailAddress(replyTo.email, replyTo.name),
+          },
         }
       : {}),
     subject: input.subject,

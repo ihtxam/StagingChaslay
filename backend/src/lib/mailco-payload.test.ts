@@ -42,8 +42,11 @@ const payload = buildMailcoRawMessagePayload({
 });
 
 assert.equal(payload.from.email, "noreply@rebornsense.com");
+assert.equal(payload.from.name, "Reborn");
 assert.equal(payload.to[0].email, "customer@example.com");
-assert.equal(payload.reply_to?.[0].email, "shop@example.com");
+assert.equal(payload.reply_to?.email, "shop@example.com");
+assert.equal(payload.reply_to?.name, "Shop");
+assert.equal(payload.headers?.["Reply-To"], '"Shop" <shop@example.com>');
 assert.equal(payload.subject, "Invoice INV-1");
 assert.equal(payload.metadata.email_type, "invoice");
 assert.equal(payload.metadata.merchant_id, "m-123");
@@ -57,5 +60,27 @@ const noAttach = buildMailcoRawMessagePayload({
   html: "<p>Hi</p>",
 });
 assert.equal(noAttach.attachments, undefined);
+assert.equal(noAttach.from.name, "Reborn");
+assert.equal(noAttach.reply_to, undefined);
+assert.equal(noAttach.headers, undefined);
+
+const merchantOrder = buildMailcoRawMessagePayload({
+  fromEmail: "hello@rebornsense.com",
+  fromName: "Pola Cafe",
+  to: "guest@example.com",
+  replyToEmail: "owner@polacafe.ch",
+  replyToName: "Pola Cafe",
+  subject: "Order confirmed",
+  html: "<p>Thanks</p>",
+  emailType: "shop_order",
+  merchantId: "m-99",
+});
+assert.equal(merchantOrder.from.name, "Pola Cafe");
+assert.equal(merchantOrder.reply_to?.email, "owner@polacafe.ch");
+assert.equal(merchantOrder.reply_to?.name, "Pola Cafe");
+assert.equal(
+  merchantOrder.headers?.["Reply-To"],
+  '"Pola Cafe" <owner@polacafe.ch>'
+);
 
 console.log("mailco-payload.test.ts: ok");
