@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import AcceptingMenu from '@/components/AcceptingMenu';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import { LocationSwitcherChip } from '@/components/merchant/LocationPicker';
 import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
@@ -55,7 +56,8 @@ export default function Header({
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="min-w-0 flex-1 flex items-center justify-end">
+          <div className="min-w-0 flex-1 flex items-center justify-end gap-1.5">
+            <OnScreenKeyboardToggle className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] hover:bg-[var(--bg-muted)] data-[active=true]:border-teal-400 data-[active=true]:bg-teal-50 dark:data-[active=true]:bg-teal-950/40" />
             <MerchantCompactStatusRow
               registerDisplay={registerDisplay}
               showAcceptingMenu={showAcceptingMenu}
@@ -100,6 +102,8 @@ export default function Header({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <LocationSwitcherChip />
           {showAcceptingMenu ? <AcceptingMenu /> : null}
+
+          <OnScreenKeyboardToggle className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] hover:bg-[var(--bg-muted)] data-[active=true]:border-teal-400 data-[active=true]:bg-teal-50 dark:data-[active=true]:bg-teal-950/40" />
 
           <button
             type="button"

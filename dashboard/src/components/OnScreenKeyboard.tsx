@@ -181,7 +181,7 @@ function OnScreenKeyboardOverlay({
 
   return (
     <div
-      className="onscreen-keyboard fixed inset-x-0 bottom-0 z-[200] border-t border-stone-300 bg-stone-100 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:border-stone-600 dark:bg-stone-900"
+      className="onscreen-keyboard fixed inset-x-0 bottom-0 z-[260] border-t border-stone-300 bg-stone-100 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:border-stone-600 dark:bg-stone-900"
       role="dialog"
       aria-label={t('webPosOnScreenKeyboard')}
     >
@@ -275,7 +275,14 @@ function OnScreenKeyboardOverlay({
   );
 }
 
-export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) {
+export function OnScreenKeyboardProvider({
+  children,
+  autoOpenOnFocus = false,
+}: {
+  children: ReactNode;
+  /** Kiosk / touch desktop: show keyboard when a text field is focused. */
+  autoOpenOnFocus?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
@@ -285,6 +292,16 @@ export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) 
     () => ({ open, toggle, close }),
     [open, toggle, close]
   );
+
+  useEffect(() => {
+    if (!autoOpenOnFocus) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target instanceof Element ? e.target : null;
+      if (isTextTarget(el)) setOpen(true);
+    };
+    document.addEventListener('focusin', onFocusIn, true);
+    return () => document.removeEventListener('focusin', onFocusIn, true);
+  }, [autoOpenOnFocus]);
 
   useEffect(() => {
     if (!open) return;
@@ -308,7 +325,7 @@ type ToggleProps = {
   iconSize?: number;
 };
 
-/** Top-bar icon button — only render when fullscreen is active (caller checks). */
+/** Top-bar icon button to show/hide the on-screen keyboard. */
 export function OnScreenKeyboardToggle({ className, iconSize = 17 }: ToggleProps) {
   const { t } = useI18n();
   const { open, toggle } = useOnScreenKeyboard();
@@ -316,6 +333,7 @@ export function OnScreenKeyboardToggle({ className, iconSize = 17 }: ToggleProps
   return (
     <button
       type="button"
+      data-active={open ? 'true' : 'false'}
       className={
         className ||
         'inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9'

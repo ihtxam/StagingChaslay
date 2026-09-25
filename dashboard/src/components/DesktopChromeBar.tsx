@@ -3,6 +3,7 @@ import { Minus, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
 import DesktopHubNav from '@/components/DesktopHubNav';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import {
   desktopMinimize,
   desktopReload,
@@ -69,6 +70,10 @@ export default function DesktopChromeBar() {
           {t('desktopChromeUpdateRequired')}
         </span>
       ) : null}
+      <OnScreenKeyboardToggle
+        className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white data-[active=true]:bg-teal-600/90 data-[active=true]:text-white"
+        iconSize={15}
+      />
       <button
         type="button"
         className="desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white disabled:opacity-50"
