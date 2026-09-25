@@ -207,6 +207,10 @@ export function vacationPublicPayload(
     popupTitle: settings.popupTitle,
     popupImageUrl: settings.popupImageUrl,
     periods: settings.periods,
+    returnDate: activePeriod?.endDate ?? null,
+    returnTime: activePeriod
+      ? normalizeTime(activePeriod.endTime, "23:59")
+      : null,
   };
 }
 

@@ -37,6 +37,7 @@ import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
+import { formatShopVacationMessage } from '@/lib/shop-ordering-status';
 import ShopDeliveryAddressPopup from '@/components/shop/ShopDeliveryAddressPopup';
 import ShopPhoneField from '@/components/shop/ShopPhoneField';
 import ShopPaymentModal from '@/components/shop/ShopPaymentModal';
@@ -1141,7 +1142,12 @@ export default function CheckoutPage() {
       return;
     }
     if (merchant?.vacation?.active) {
-      showCheckoutError(t('shopVacationOrdersBlocked'));
+      showCheckoutError(
+        formatShopVacationMessage(t, 'cart', {
+          returnDate: merchant.vacation.returnDate,
+          returnTime: merchant.vacation.returnTime,
+        })
+      );
       return;
     }
     setSubmitting(true);
@@ -1372,7 +1378,10 @@ export default function CheckoutPage() {
     merchant?.acceptingOrders === false
       ? t('shopNotAcceptingOrders')
       : merchant?.vacation?.active
-        ? t('shopVacationTitle')
+        ? formatShopVacationMessage(t, 'header', {
+            returnDate: merchant.vacation.returnDate,
+            returnTime: merchant.vacation.returnTime,
+          })
         : submitting
           ? t('shopPlacingOrder')
           : pointsCoverFullOrder

@@ -71,6 +71,7 @@ import {
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
 import {
+  formatShopVacationMessage,
   resolveShopOrderingBlock,
   shouldShowDeliveryChannelStatus,
 } from '@/lib/shop-ordering-status';
@@ -895,26 +896,43 @@ export default function OrderingPage() {
     (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
     minOrderNotMet;
 
+  const vacationReturn = useMemo(
+    () =>
+      merchant?.vacation?.active
+        ? {
+            returnDate: merchant.vacation.returnDate,
+            returnTime: merchant.vacation.returnTime,
+          }
+        : null,
+    [
+      merchant?.vacation?.active,
+      merchant?.vacation?.returnDate,
+      merchant?.vacation?.returnTime,
+    ]
+  );
+
   const orderingBlock = useMemo(
     () =>
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
+        vacationReturn,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'cart',
       }),
-    [merchant?.vacation?.active, merchant?.acceptingOrders, t]
+    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
   );
 
   const orderingBlockHeader = useMemo(
     () =>
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
+        vacationReturn,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'header',
       }),
-    [merchant?.vacation?.active, merchant?.acceptingOrders, t]
+    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
   );
 
   const checkoutBlockedMessage = useMemo(() => {
@@ -948,7 +966,10 @@ export default function OrderingPage() {
       return;
     }
     if (merchant?.vacation?.active) {
-      setError(t('shopVacationOrdersBlocked'));
+      setError(
+        orderingBlock.message ||
+          formatShopVacationMessage(t, 'cart', vacationReturn)
+      );
       return;
     }
     const allowScheduled = merchant?.scheduledOrdersEnabled !== false;
