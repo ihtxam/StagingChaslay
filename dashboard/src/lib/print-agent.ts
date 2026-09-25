@@ -957,15 +957,25 @@ export async function pairPrintAgentCloudRelay(): Promise<boolean> {
   }
 }
 
-function mapDesktopScaleDevice(d: ScaleDevice & { portName?: string }): ScaleDevice | null {
+function mapDesktopScaleDevice(
+  d: ScaleDevice & {
+    portName?: string;
+    portType?: { manufacturer?: string; product?: string };
+  }
+): ScaleDevice | null {
   const port = formatScalePortLabel(String(d.port || d.portName || d.name || ''));
   if (!port) return null;
+  const usbProduct = d.portType?.product ? String(d.portType.product).trim() : '';
+  const usbManufacturer = d.portType?.manufacturer ? String(d.portType.manufacturer).trim() : '';
+  const rawName = String(d.name || d.caption || usbProduct || '').trim();
+  const friendlyName =
+    rawName && !/^com\d+$/i.test(rawName.replace(/^\\\\\.\\/i, '')) ? rawName : usbProduct || port;
   return {
     port,
-    caption: d.caption,
-    manufacturer: d.manufacturer,
+    caption: d.caption || usbProduct || undefined,
+    manufacturer: d.manufacturer || usbManufacturer || undefined,
     pnpDeviceId: d.pnpDeviceId,
-    name: d.name || d.caption || port,
+    name: friendlyName,
     usbAddress: d.usbAddress,
     connectionType: d.connectionType,
     hasPermission: d.hasPermission,

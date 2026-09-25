@@ -26,13 +26,13 @@ import {
   desktopHwCapabilities,
   desktopListPrinters,
   desktopPrintEscPos,
-  desktopScalePorts,
   desktopScaleReading,
   type DesktopHwCapabilities,
 } from '@/lib/hardware/desktop-bridge';
 import {
   formatScaleDeviceLabel,
   formatScalePortLabel,
+  listScaleDevices,
   type AgentPrinter,
   type ScaleDevice,
 } from '@/lib/print-agent';
@@ -43,6 +43,7 @@ import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScre
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
+const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
 
 function readPosTextSize(): WebPosTextSize {
   try {
@@ -86,9 +87,19 @@ type MerchantSnapshot = {
   } | null;
   posPrintSettings?: {
     printers?: PrinterProfile[];
-    scalePort?: string | null;
+    scaleComPort?: string | null;
+    scaleDeviceName?: string | null;
+    scaleDeviceId?: string | null;
+    scaleEnabled?: boolean;
   };
 };
+
+function readMerchantSettingsPayload(data: unknown): MerchantSnapshot | null {
+  if (!data || typeof data !== 'object') return null;
+  const root = data as Record<string, unknown>;
+  const snapshot = (root.settings || root.merchant || root) as MerchantSnapshot;
+  return snapshot && typeof snapshot === 'object' ? snapshot : null;
+}
 
 const SECTIONS: { id: SectionId; icon: typeof Palette }[] = [
   { id: 'appearance', icon: Palette },
@@ -126,7 +137,9 @@ export default function DesktopSettings() {
   const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
   const [receiptPrinter, setReceiptPrinter] = useState('');
   const [kitchenPrinter, setKitchenPrinter] = useState('');
-  const [scalePort, setScalePort] = useState('');
+  const [scaleComPort, setScaleComPort] = useState('');
+  const [scaleDeviceName, setScaleDeviceName] = useState('');
+  const [scaleDeviceId, setScaleDeviceId] = useState('');
   const [scaleDevices, setScaleDevices] = useState<ScaleDevice[]>([]);
   const [scaleReading, setScaleReading] = useState('—');
   const [sidecar, setSidecar] = useState<{ ok: boolean; version?: string; bundled?: boolean }>({
@@ -137,28 +150,73 @@ export default function DesktopSettings() {
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const refreshHardware = useCallback(async () => {
-    const [printerList, ports, health, caps, env] = await Promise.all([
-      desktopListPrinters().catch(() => [] as AgentPrinter[]),
-      desktopScalePorts().catch(() => ({ ports: [], devices: [] })),
-      desktopSidecarHealth(),
-      desktopHwCapabilities(),
-      desktopPosEnv(),
-    ]);
-    setPrinters(printerList);
-    setScaleDevices(ports.devices);
-    if (!scalePort && ports.devices[0]?.port) {
-      setScalePort(ports.devices[0].port);
-    }
-    setSidecar(health);
-    setHwCaps(caps);
-    setShellVersion(env?.version || '—');
-    try {
-      setStartWithWindows(await isDesktopStartWithWindows());
-    } catch {
-      setStartWithWindows(false);
-    }
-  }, [scalePort]);
+  const applyScaleDevice = useCallback((device: ScaleDevice) => {
+    const port = formatScalePortLabel(device.port);
+    if (!port) return;
+    const name = String(device.name || device.caption || '')
+      .replace(/\s*\(COM\d+\)\s*$/i, '')
+      .trim();
+    setScaleComPort(port);
+    setScaleDeviceName(name);
+    setScaleDeviceId(String(device.pnpDeviceId || '').trim());
+  }, []);
+
+  const persistScaleDevice = useCallback(
+    async (device: ScaleDevice, quiet = false) => {
+      if (!merchant) return;
+      const port = formatScalePortLabel(device.port);
+      if (!port) return;
+      const deviceName = String(device.name || device.caption || '')
+        .replace(/\s*\(COM\d+\)\s*$/i, '')
+        .trim();
+      const posPrintSettings = {
+        ...(merchant.posPrintSettings || {}),
+        scaleComPort: port,
+        scaleDeviceName: deviceName || null,
+        scaleDeviceId: device.pnpDeviceId?.trim() || null,
+        scaleEnabled: true,
+      };
+      applyScaleDevice(device);
+      try {
+        await api.put('/merchant/settings', { posPrintSettings });
+        setMerchant((prev) => (prev ? { ...prev, posPrintSettings } : prev));
+        if (!quiet) toast.success(t('settingsScaleSaved'));
+      } catch (e: unknown) {
+        const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : '';
+        toast.error(msg || t('saveFailed'));
+      }
+    },
+    [merchant, applyScaleDevice, t]
+  );
+
+  const refreshHardware = useCallback(
+    async (opts?: { autoSaveScale?: boolean; hasSavedScale?: boolean }) => {
+      const [printerList, scaleScan, health, caps, env] = await Promise.all([
+        desktopListPrinters().catch(() => [] as AgentPrinter[]),
+        listScaleDevices().catch(() => ({ ports: [], devices: [] as ScaleDevice[] })),
+        desktopSidecarHealth(),
+        desktopHwCapabilities(),
+        desktopPosEnv(),
+      ]);
+      setPrinters(printerList);
+      setScaleDevices(scaleScan.devices);
+      setSidecar(health);
+      setHwCaps(caps);
+      setShellVersion(env?.version || '—');
+      try {
+        setStartWithWindows(await isDesktopStartWithWindows());
+      } catch {
+        setStartWithWindows(false);
+      }
+
+      const hasSavedScale =
+        opts?.hasSavedScale ?? (!!scaleComPort || !!scaleDeviceName);
+      if (opts?.autoSaveScale && scaleScan.devices.length > 0 && !hasSavedScale) {
+        await persistScaleDevice(scaleScan.devices[0], true);
+      }
+    },
+    [scaleComPort, scaleDeviceName, persistScaleDevice]
+  );
 
   useEffect(() => {
     if (!isDesktopApp()) return;
@@ -166,12 +224,14 @@ export default function DesktopSettings() {
     (async () => {
       setLoading(true);
       try {
-        const { data } = await api.get<MerchantSnapshot>('/merchant/settings');
+        const { data } = await api.get('/merchant/settings');
         if (cancelled) return;
-        setMerchant(data);
-        const lang = String(data.panelLanguage || locale || 'en').slice(0, 2);
+        const snapshot = readMerchantSettingsPayload(data);
+        if (!snapshot) throw new Error('Settings response missing data');
+        setMerchant(snapshot);
+        const lang = String(snapshot.panelLanguage || locale || 'en').slice(0, 2);
         setPanelLanguage(lang === 'fr' || lang === 'de' ? lang : 'en');
-        const themeRaw = String(data.posColorTheme || 'teal').toLowerCase();
+        const themeRaw = String(snapshot.posColorTheme || 'teal').toLowerCase();
         setPosColorTheme(
           WEBPOS_COLOR_THEMES.includes(themeRaw as WebPosColorTheme)
             ? (themeRaw as WebPosColorTheme)
@@ -179,15 +239,31 @@ export default function DesktopSettings() {
         );
         setPosTextSize(readPosTextSize());
         setPosAppearance(readPosAppearance());
-        const checkoutSettings = normalizePosCheckoutSettings(data.posCheckoutSettings);
+        const checkoutSettings = normalizePosCheckoutSettings(snapshot.posCheckoutSettings);
         setClearSearchAfterAdd(checkoutSettings.retailClearSearchAfterAdd);
         setTileSize(checkoutSettings.retailTileSize || readLocalTileSize());
-        const profiles = data.posPrintSettings?.printers || [];
+        const profiles = snapshot.posPrintSettings?.printers || [];
         setPrinterProfiles(profiles);
-        setReceiptPrinter(profiles.find((p) => p.printReceipts)?.name || '');
-        setKitchenPrinter(profiles.find((p) => p.printKitchenTickets)?.name || '');
-        setScalePort(String(data.posPrintSettings?.scalePort || ''));
-        await refreshHardware();
+        const savedReceiptPrinter = profiles.find((p) => p.printReceipts)?.name || '';
+        const savedKitchenPrinter = profiles.find((p) => p.printKitchenTickets)?.name || '';
+        setReceiptPrinter(savedReceiptPrinter);
+        setKitchenPrinter(savedKitchenPrinter);
+        setScaleComPort(String(snapshot.posPrintSettings?.scaleComPort || ''));
+        setScaleDeviceName(String(snapshot.posPrintSettings?.scaleDeviceName || ''));
+        setScaleDeviceId(String(snapshot.posPrintSettings?.scaleDeviceId || ''));
+        if (savedReceiptPrinter) {
+          try {
+            localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, savedReceiptPrinter);
+          } catch {
+            /* ignore */
+          }
+        }
+        await refreshHardware({
+          autoSaveScale: true,
+          hasSavedScale:
+            !!snapshot.posPrintSettings?.scaleComPort ||
+            !!snapshot.posPrintSettings?.scaleDeviceName,
+        });
       } catch (e: unknown) {
         const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : '';
         toast.error(msg || t('desktopSettingsLoadFailed'));
@@ -227,7 +303,10 @@ export default function DesktopSettings() {
       const posPrintSettings = {
         ...(merchant.posPrintSettings || {}),
         printers: nextProfiles,
-        scalePort: scalePort || null,
+        scaleComPort: scaleComPort || null,
+        scaleDeviceName: scaleDeviceName || null,
+        scaleDeviceId: scaleDeviceId || null,
+        scaleEnabled: !!scaleComPort,
       };
       await api.put('/merchant/settings', {
         posCheckoutSettings,
@@ -239,6 +318,7 @@ export default function DesktopSettings() {
         localStorage.setItem(WEBPOS_GRID_TILE_SIZE_KEY, tileSize);
         localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, posTextSize);
         localStorage.setItem(WEBPOS_APPEARANCE_KEY, posAppearance);
+        localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, receiptPrinter || '');
       } catch {
         /* ignore */
       }
@@ -263,7 +343,9 @@ export default function DesktopSettings() {
     kitchenPrinter,
     tileSize,
     clearSearchAfterAdd,
-    scalePort,
+    scaleComPort,
+    scaleDeviceName,
+    scaleDeviceId,
     panelLanguage,
     posColorTheme,
     posTextSize,
@@ -300,13 +382,13 @@ export default function DesktopSettings() {
   };
 
   const onTestScale = async () => {
-    if (!scalePort) {
+    if (!scaleComPort) {
       toast.error(t('desktopSettingsScalePortRequired'));
       return;
     }
     setBusyAction('test-scale');
     try {
-      const { reading, message } = await desktopScaleReading(scalePort, 3000);
+      const { reading, message } = await desktopScaleReading(scaleComPort, 3000);
       if (reading?.weightKg != null) {
         setScaleReading(`${reading.weightKg.toFixed(3)} kg`);
         toast.success(t('desktopSettingsScaleReadOk'));
@@ -504,7 +586,7 @@ export default function DesktopSettings() {
                   <button
                     type="button"
                     className="text-sm font-semibold text-teal-700"
-                    onClick={() => void refreshHardware()}
+                    onClick={() => void refreshHardware({ autoSaveScale: true })}
                   >
                     {t('refresh')}
                   </button>
@@ -560,21 +642,49 @@ export default function DesktopSettings() {
                   <span className="font-medium">{t('desktopSettingsScaleStatus')}: </span>
                   {sidecar.ok ? t('desktopSettingsSidecarOnline') : t('desktopSettingsSidecarOffline')}
                 </div>
-                <label className="block space-y-1 text-sm dark:text-stone-200">
-                  <span className="font-medium">{t('desktopSettingsScalePort')}</span>
-                  <select
-                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                    value={scalePort}
-                    onChange={(e) => setScalePort(e.target.value)}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700"
+                    onClick={() => void refreshHardware({ autoSaveScale: true })}
                   >
-                    <option value="">{t('desktopSettingsSelectScale')}</option>
-                    {scaleDevices.map((d) => (
-                      <option key={d.port} value={d.port}>
-                        {formatScaleDeviceLabel(d) || formatScalePortLabel(d.port)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <RefreshCw size={14} aria-hidden />
+                    {t('settingsScaleScan')}
+                  </button>
+                </div>
+                {scaleDevices.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {scaleDevices.map((device) => {
+                      const selected =
+                        formatScalePortLabel(scaleComPort) === formatScalePortLabel(device.port) ||
+                        (!!scaleDeviceId && scaleDeviceId === device.pnpDeviceId);
+                      return (
+                        <li key={`${device.port}-${device.pnpDeviceId || device.name || ''}`}>
+                          <button
+                            type="button"
+                            className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                              selected
+                                ? 'border-teal-600 bg-teal-50 text-teal-900 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-100'
+                                : 'border-stone-200 bg-white hover:border-teal-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100'
+                            }`}
+                            onClick={() => void persistScaleDevice(device)}
+                          >
+                            <span className="font-medium">
+                              {formatScaleDeviceLabel(device) || formatScalePortLabel(device.port)}
+                            </span>
+                            {device.manufacturer ? (
+                              <span className="mt-0.5 block text-xs text-stone-500 dark:text-stone-400">
+                                {device.manufacturer}
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-stone-500 dark:text-stone-400">{t('settingsScaleNoPorts')}</p>
+                )}
                 <p className="text-sm dark:text-stone-200">
                   <span className="font-medium">{t('desktopSettingsScaleLastReading')}: </span>
                   {scaleReading}
@@ -582,7 +692,7 @@ export default function DesktopSettings() {
                 <button
                   type="button"
                   className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={!scalePort || busyAction === 'test-scale'}
+                  disabled={!scaleComPort || busyAction === 'test-scale'}
                   onClick={() => void onTestScale()}
                 >
                   {busyAction === 'test-scale' ? t('loading') : t('desktopSettingsScaleTest')}
