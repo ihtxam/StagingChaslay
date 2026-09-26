@@ -3749,6 +3749,16 @@ const en: Dict = {
   perm_MANAGE_KIOSK: 'Manage self-order kiosk',
   adyenSettingsHint:
     'One Swisspayout merchant account, Checkout API key, and client key (test_… or live_…) for the online shop and all payment terminals.',
+  paymentsEcommerceSection: 'E-commerce & online shop',
+  paymentsEcommerceSectionHint:
+    'Checkout API credentials for card payments on your public shop. No physical terminals or NFC here.',
+  paymentsTerminalSection: 'Terminals, NFC & in-store',
+  paymentsTerminalSectionHint:
+    'Register Adyen terminals, Tap to Pay (NFC), and live terminal environment. Uses the same merchant account and API key.',
+  paymentsSwisspayoutDisabledHint:
+    'Turn on Swisspayout above to configure terminals, NFC Tap to Pay, and in-store card payments.',
+  paymentsTerminalOnlyCredentialsHint:
+    'Enter Swisspayout credentials here for POS terminals only (online shop is disabled).',
   adyenStoreReference: 'Online shop store reference',
   adyenStoreReferenceHint:
     'Adyen store reference for e-commerce checkout only. Required when checkout shows duplicate TWINT options from other restaurants.',
@@ -8038,6 +8048,16 @@ const fr: Dict = {
   notes: 'Notes',
   adyenSettingsHint:
     'Un seul compte marchand, clé API Checkout et clé client Swisspayout (test_… ou live_…) pour la boutique en ligne et tous les terminaux.',
+  paymentsEcommerceSection: 'E-commerce & boutique en ligne',
+  paymentsEcommerceSectionHint:
+    'Identifiants Checkout pour les paiements carte sur la boutique publique. Pas de terminaux ni NFC ici.',
+  paymentsTerminalSection: 'Terminaux, NFC & sur place',
+  paymentsTerminalSectionHint:
+    'Enregistrez les terminaux Adyen, Tap to Pay (NFC) et l’environnement terminal live. Même compte marchand et clé API.',
+  paymentsSwisspayoutDisabledHint:
+    'Activez Swisspayout ci-dessus pour configurer terminaux, NFC Tap to Pay et paiements carte en caisse.',
+  paymentsTerminalOnlyCredentialsHint:
+    'Saisissez les identifiants Swisspayout ici pour les terminaux POS uniquement (boutique en ligne désactivée).',
   adyenStoreReference: 'Référence boutique en ligne (store)',
   adyenStoreReferenceHint:
     'Référence store Adyen pour le checkout e-commerce. Requis si la caisse affiche plusieurs TWINT d’autres restaurants.',
@@ -12305,6 +12325,16 @@ const de: Dict = {
   notes: 'Notizen',
   adyenSettingsHint:
     'Ein Swisspayout-Händlerkonto, Checkout-API-Schlüssel und Client-Schlüssel (test_… oder live_…) für Online-Shop und alle Zahlungsterminals.',
+  paymentsEcommerceSection: 'E-Commerce & Online-Shop',
+  paymentsEcommerceSectionHint:
+    'Checkout-API-Zugangsdaten für Kartenzahlungen im öffentlichen Shop. Keine physischen Terminals oder NFC.',
+  paymentsTerminalSection: 'Terminals, NFC & vor Ort',
+  paymentsTerminalSectionHint:
+    'Adyen-Terminals, Tap to Pay (NFC) und Live-Terminalumgebung. Gleiches Händlerkonto und API-Schlüssel.',
+  paymentsSwisspayoutDisabledHint:
+    'Schalten Sie Swisspayout oben ein, um Terminals, NFC Tap to Pay und Kartenzahlung an der Kasse einzurichten.',
+  paymentsTerminalOnlyCredentialsHint:
+    'Swisspayout-Zugangsdaten hier nur für POS-Terminals (Online-Shop ist deaktiviert).',
   adyenStoreReference: 'Online-Shop Store-Referenz',
   adyenStoreReferenceHint:
     'Adyen-Store-Referenz nur für E-Commerce-Checkout. Erforderlich, wenn im Checkout doppelte TWINT von anderen Restaurants erscheinen.',

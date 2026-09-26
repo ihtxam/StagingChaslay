@@ -29,6 +29,7 @@ import {
   TabletSmartphone,
   Copy,
   Wallet,
+  Store,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -1852,6 +1853,115 @@ export default function Settings() {
       normalizeBusinessModule(settings.businessCategory)
     );
   const posRetailMode = isRetailMerchant;
+  const shopPaymentsOn = settings?.shopEnabled === true;
+  const posSwisspayoutOn = settings?.webposTerminalEnabled !== false;
+
+  const renderSwisspayoutCredentials = (showWebhook: boolean) => (
+    <>
+      <p className="text-sm text-[var(--text-muted)]">
+        {t('swisspayoutNoAccount')}{' '}
+        <a
+          href="https://swisspayout.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-[var(--text)] underline underline-offset-2"
+        >
+          {t('swisspayoutCreateAccount')}
+        </a>
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={t('merchantAccount')}>
+          <input
+            className="input"
+            value={merchantAccount}
+            onChange={(e) => setMerchantAccount(e.target.value)}
+            placeholder="Reborn_COM"
+          />
+        </Field>
+        <Field label={t('adyenStoreReference')} hint={t('adyenStoreReferenceHint')}>
+          <input
+            className="input"
+            value={storeReference}
+            onChange={(e) => setStoreReference(e.target.value)}
+            placeholder="PolaCafe_ECOM"
+          />
+        </Field>
+        <Field label={t('adyenClientKey')} hint={t('adyenClientKeyHint')}>
+          <input
+            className="input"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="test_… or live_…"
+            autoComplete="off"
+          />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field
+            label={t('apiKey')}
+            hint={
+              adyen.apiKeySet
+                ? `${t('currentKey')}: ${adyen.apiKeyMasked || '••••'}`
+                : t('apiKeyHint')
+            }
+          >
+            <input
+              className="input"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={adyen.apiKeySet ? adyen.apiKeyMasked || '••••' : 'AQE...'}
+              autoComplete="new-password"
+            />
+          </Field>
+        </div>
+        {showWebhook ? (
+          <div className="sm:col-span-2">
+            <Field
+              label={t('adyenHmacKey')}
+              hint={
+                adyen.hmacKeySet
+                  ? `${t('currentKey')}: ${adyen.hmacKeyMasked || '••••'}`
+                  : t('adyenHmacKeyHint')
+              }
+            >
+              <input
+                className="input"
+                type="password"
+                value={hmacKey}
+                onChange={(e) => setHmacKey(e.target.value)}
+                placeholder={adyen.hmacKeySet ? adyen.hmacKeyMasked || '••••' : t('adyenHmacKeyPlaceholder')}
+                autoComplete="new-password"
+              />
+            </Field>
+            {adyenWebhookUrl ? (
+              <div className="mt-3 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
+                <p className="text-sm font-medium text-[var(--text)]">{t('adyenWebhookUrl')}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
+                    {adyenWebhookUrl}
+                  </code>
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0"
+                    aria-label={t('copied')}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(adyenWebhookUrl).then(
+                        () => toast.success(t('copied')),
+                        () => toast.error(t('copyFailed'))
+                      );
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{t('adyenWebhookSetupHint')}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
 
   return (
     <div
@@ -3338,239 +3448,14 @@ export default function Settings() {
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
 
-              <form onSubmit={saveAdyen} className="space-y-5">
-                <Section
-                  id="payments-adyen"
-                  icon={CreditCard}
-                  accent={settingsDash.accent}
-                  title={t('adyenCredentials')}
-                  description={t('adyenSettingsHint')}
-                  highlight={isSectionHighlight('payments-adyen')}
-                >
-                  <p className="text-sm text-[var(--text-muted)]">
-                    {t('swisspayoutNoAccount')}{' '}
-                    <a
-                      href="https://swisspayout.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-[var(--text)] underline underline-offset-2"
-                    >
-                      {t('swisspayoutCreateAccount')}
-                    </a>
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label={t('merchantAccount')}>
-                      <input
-                        className="input"
-                        value={merchantAccount}
-                        onChange={(e) => setMerchantAccount(e.target.value)}
-                        placeholder="Reborn_COM"
-                      />
-                    </Field>
-                    <Field label={t('adyenStoreReference')} hint={t('adyenStoreReferenceHint')}>
-                      <input
-                        className="input"
-                        value={storeReference}
-                        onChange={(e) => setStoreReference(e.target.value)}
-                        placeholder="PolaCafe_ECOM"
-                      />
-                    </Field>
-                    <Field label={t('adyenClientKey')} hint={t('adyenClientKeyHint')}>
-                      <input
-                        className="input"
-                        value={clientId}
-                        onChange={(e) => setClientId(e.target.value)}
-                        placeholder="test_… or live_…"
-                        autoComplete="off"
-                      />
-                    </Field>
-                    <div className="sm:col-span-2">
-                      <Field
-                        label={t('apiKey')}
-                        hint={
-                          adyen.apiKeySet
-                            ? `${t('currentKey')}: ${adyen.apiKeyMasked || '••••'}`
-                            : t('apiKeyHint')
-                        }
-                      >
-                        <input
-                          className="input"
-                          type="password"
-                          value={apiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
-                          placeholder={adyen.apiKeySet ? adyen.apiKeyMasked || '••••' : 'AQE...'}
-                          autoComplete="new-password"
-                        />
-                      </Field>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <Field
-                        label={t('adyenHmacKey')}
-                        hint={
-                          adyen.hmacKeySet
-                            ? `${t('currentKey')}: ${adyen.hmacKeyMasked || '••••'}`
-                            : t('adyenHmacKeyHint')
-                        }
-                      >
-                        <input
-                          className="input"
-                          type="password"
-                          value={hmacKey}
-                          onChange={(e) => setHmacKey(e.target.value)}
-                          placeholder={adyen.hmacKeySet ? adyen.hmacKeyMasked || '••••' : t('adyenHmacKeyPlaceholder')}
-                          autoComplete="new-password"
-                        />
-                      </Field>
-                      {adyenWebhookUrl ? (
-                        <div className="mt-3 space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
-                          <p className="text-sm font-medium text-[var(--text)]">{t('adyenWebhookUrl')}</p>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <code className="block max-w-full flex-1 break-all rounded bg-[var(--surface-muted)] px-2 py-1.5 text-xs">
-                              {adyenWebhookUrl}
-                            </code>
-                            <button
-                              type="button"
-                              className="btn-secondary shrink-0"
-                              aria-label={t('copied')}
-                              onClick={() => {
-                                void navigator.clipboard.writeText(adyenWebhookUrl).then(
-                                  () => toast.success(t('copied')),
-                                  () => toast.error(t('copyFailed'))
-                                );
-                              }}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <p className="text-xs text-[var(--text-muted)]">{t('adyenWebhookSetupHint')}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </Section>
-                <SettingsSaveBar saving={savingAdyen} />
-              </form>
-
               <form onSubmit={saveWebposPayments} className="space-y-5">
-                <Section
-                  id="payments-tap-to-pay"
-                  icon={CreditCard}
-                  accent={settingsDash.success}
-                  title={t('tapToPaySettings')}
-                  description={t('tapToPaySettingsHint')}
-                  highlight={isSectionHighlight('payments-tap-to-pay')}
-                >
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={settings?.tapToPayEnabled === true}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, tapToPayEnabled: e.target.checked } : prev
-                        )
-                      }
-                    />
-                    {t('tapToPayEnabled')}
-                  </label>
-                  <p className="text-xs muted">{t('tapToPayEnabledHint')}</p>
-                  <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-700 dark:bg-stone-900/40">
-                    <p className="mb-2 text-xs font-medium text-stone-700 dark:text-stone-300">
-                      {t('tapToPayReadyChecklist')}
-                    </p>
-                    <ul className="space-y-1 text-xs text-stone-600 dark:text-stone-400">
-                      {[
-                        {
-                          ok: adyen.apiKeySet === true && !!(adyen.merchantAccount || merchantAccount.trim()),
-                          label: t('tapToPayCheckAdyen'),
-                        },
-                        {
-                          ok: settings?.tapToPayEnabled === true,
-                          label: t('tapToPayCheckEnabled'),
-                        },
-                        {
-                          ok: adyen.hmacKeySet === true,
-                          label: t('tapToPayCheckWebhook'),
-                        },
-                        { ok: true, label: t('tapToPayCheckBridge') },
-                        { ok: true, label: t('tapToPayCheckNative') },
-                      ].map((item) => (
-                        <li key={item.label} className="flex items-start gap-2">
-                          <span className={item.ok ? 'text-teal-600' : 'text-stone-400'}>
-                            {item.ok ? '✓' : '○'}
-                          </span>
-                          <span>{item.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <TapToPayDeviceSetup
-                    adyenReady={
-                      adyen.apiKeySet === true &&
-                      !!(adyen.merchantAccount || merchantAccount.trim())
-                    }
-                    tapToPayEnabled={settings?.tapToPayEnabled === true}
-                  />
-                </Section>
-
-                <Section icon={CreditCard} accent={settingsDash.info} title={t('adyenTerminalEnv')}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={!!settings?.adyenLiveEnvironment}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, adyenLiveEnvironment: e.target.checked } : prev
-                        )
-                      }
-                    />
-                    {t('adyenLiveMode')}
-                  </label>
-                  {settings?.adyenLiveEnvironment ? (
-                    <div className="space-y-2">
-                      <p className="text-xs muted">{t('adyenLiveRegion')}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {(['EU', 'US', 'AU', 'APSE'] as const).map((region) => (
-                          <button
-                            key={region}
-                            type="button"
-                            className={`rounded-lg border px-3 py-1.5 text-sm ${
-                              (settings.adyenLiveRegion || 'EU') === region
-                                ? 'border-teal-600 bg-teal-50 text-teal-800'
-                                : 'border-stone-200 bg-white text-stone-700'
-                            }`}
-                            onClick={() =>
-                              setSettings((prev) => (prev ? { ...prev, adyenLiveRegion: region } : prev))
-                            }
-                          >
-                            {region}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={!!settings?.adyenUseLegacyEndpoint}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, adyenUseLegacyEndpoint: e.target.checked } : prev
-                        )
-                      }
-                    />
-                    {t('adyenLegacyEndpoint')}
-                  </label>
-                </Section>
-
                 <Section
                   id="payments-invoice-bank"
                   icon={Building2}
                   accent={settingsDash.info}
                   title={t('invoiceBankDetails')}
                   description={t('invoiceBankDetailsHint')}
+                  highlight={isSectionHighlight('payments-invoice-bank')}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label={t('invoiceAccountHolder')}>
@@ -3624,99 +3509,283 @@ export default function Settings() {
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
 
-              <form onSubmit={saveCardFees} className="space-y-5">
-                <Section icon={CreditCard} accent={settingsDash.warning} title={t('onlineCardFees')} description={t('onlineCardFeesHint')}>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label={t('cardFeeFixed')} hint={t('cardFeeFixedHint')}>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        step="0.05"
-                        value={cardFeeFixed}
-                        onChange={(e) => setCardFeeFixed(e.target.value)}
-                      />
-                    </Field>
-                    <Field label={t('cardFeePercent')} hint={t('cardFeePercentHint')}>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={cardFeePercent}
-                        onChange={(e) => setCardFeePercent(e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                </Section>
-                <SettingsSaveBar saving={savingFee} />
-              </form>
-
-              <Section icon={CreditCard} accent={settingsDash.success} title={t('paymentTerminals')} description={t('paymentTerminalsHint')}>
-                  <form onSubmit={addTerminal} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                    <Field label={`${t('terminalId')} *`} hint={t('terminalIdHint')}>
-                      <input
-                        className="input"
-                        value={terminalId}
-                        onChange={(e) => setTerminalId(e.target.value)}
-                        placeholder="S1F2-000158213131044"
-                        required
-                      />
-                    </Field>
-                    <Field label={t('terminalName')} hint={t('terminalNameHint')}>
-                      <input
-                        className="input"
-                        value={terminalName}
-                        onChange={(e) => setTerminalName(e.target.value)}
-                        placeholder={t('terminalNamePlaceholder')}
-                      />
-                    </Field>
-                    <div className="flex items-end">
-                      <button type="submit" className="btn-primary w-full sm:w-auto" disabled={savingTerminal}>
-                        {savingTerminal ? t('saving') : t('addTerminal')}
-                      </button>
-                    </div>
+              {shopPaymentsOn ? (
+                <>
+                  <form onSubmit={saveAdyen} className="space-y-5">
+                    <Section
+                      id="payments-ecommerce"
+                      icon={Store}
+                      accent={settingsDash.accent}
+                      title={t('paymentsEcommerceSection')}
+                      description={t('paymentsEcommerceSectionHint')}
+                      highlight={isSectionHighlight('payments-ecommerce')}
+                    >
+                      {renderSwisspayoutCredentials(true)}
+                    </Section>
+                    <SettingsSaveBar saving={savingAdyen} />
                   </form>
 
-                  <div className="table-scroll rounded-lg border border-[var(--border)]">
-                    <table className="w-full text-sm min-w-[480px]">
-                      <thead>
-                        <tr className="border-b border-[var(--border)] text-left muted">
-                          <th className="px-3 py-2 font-medium">{t('terminalName')}</th>
-                          <th className="px-3 py-2 font-medium">{t('terminalId')}</th>
-                          <th className="px-3 py-2 font-medium">{t('status')}</th>
-                          <th className="px-3 py-2 font-medium" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {terminals.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="px-3 py-6 muted">
-                              {t('noTerminals')}
-                            </td>
+                  <form onSubmit={saveCardFees} className="space-y-5">
+                    <Section
+                      icon={CreditCard}
+                      accent={settingsDash.warning}
+                      title={t('onlineCardFees')}
+                      description={t('onlineCardFeesHint')}
+                    >
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label={t('cardFeeFixed')} hint={t('cardFeeFixedHint')}>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.05"
+                            value={cardFeeFixed}
+                            onChange={(e) => setCardFeeFixed(e.target.value)}
+                          />
+                        </Field>
+                        <Field label={t('cardFeePercent')} hint={t('cardFeePercentHint')}>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={cardFeePercent}
+                            onChange={(e) => setCardFeePercent(e.target.value)}
+                          />
+                        </Field>
+                      </div>
+                    </Section>
+                    <SettingsSaveBar saving={savingFee} />
+                  </form>
+                </>
+              ) : null}
+
+              {posSwisspayoutOn ? (
+                <>
+                  {!shopPaymentsOn ? (
+                    <form onSubmit={saveAdyen} className="space-y-5">
+                      <Section
+                        id="payments-adyen"
+                        icon={CreditCard}
+                        accent={settingsDash.accent}
+                        title={t('adyenCredentials')}
+                        description={t('paymentsTerminalOnlyCredentialsHint')}
+                        highlight={isSectionHighlight('payments-adyen')}
+                      >
+                        {renderSwisspayoutCredentials(true)}
+                      </Section>
+                      <SettingsSaveBar saving={savingAdyen} />
+                    </form>
+                  ) : null}
+
+                  <form onSubmit={saveWebposPayments} className="space-y-5">
+                    <Section
+                      id="payments-terminal"
+                      icon={TabletSmartphone}
+                      accent={settingsDash.success}
+                      title={t('paymentsTerminalSection')}
+                      description={t('paymentsTerminalSectionHint')}
+                      highlight={isSectionHighlight('payments-terminal')}
+                    >
+                      {shopPaymentsOn ? (
+                        <p className="text-xs text-[var(--text-muted)]">{t('adyenSettingsHint')}</p>
+                      ) : null}
+                      <div className="space-y-5">
+                        <div>
+                          <h3 className="text-sm font-semibold text-[var(--text)]">{t('tapToPaySettings')}</h3>
+                          <p className="mt-0.5 text-xs text-[var(--text-muted)]">{t('tapToPaySettingsHint')}</p>
+                          <label className="mt-3 flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={settings?.tapToPayEnabled === true}
+                              onChange={(e) =>
+                                setSettings((prev) =>
+                                  prev ? { ...prev, tapToPayEnabled: e.target.checked } : prev
+                                )
+                              }
+                            />
+                            {t('tapToPayEnabled')}
+                          </label>
+                          <p className="text-xs muted">{t('tapToPayEnabledHint')}</p>
+                          <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 p-3">
+                            <p className="mb-2 text-xs font-medium text-[var(--text)]">
+                              {t('tapToPayReadyChecklist')}
+                            </p>
+                            <ul className="space-y-1 text-xs text-[var(--text-muted)]">
+                              {[
+                                {
+                                  ok:
+                                    adyen.apiKeySet === true &&
+                                    !!(adyen.merchantAccount || merchantAccount.trim()),
+                                  label: t('tapToPayCheckAdyen'),
+                                },
+                                {
+                                  ok: settings?.tapToPayEnabled === true,
+                                  label: t('tapToPayCheckEnabled'),
+                                },
+                                {
+                                  ok: adyen.hmacKeySet === true,
+                                  label: t('tapToPayCheckWebhook'),
+                                },
+                                { ok: true, label: t('tapToPayCheckBridge') },
+                                { ok: true, label: t('tapToPayCheckNative') },
+                              ].map((item) => (
+                                <li key={item.label} className="flex items-start gap-2">
+                                  <span className={item.ok ? 'text-teal-600' : 'text-stone-400'}>
+                                    {item.ok ? '✓' : '○'}
+                                  </span>
+                                  <span>{item.label}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <TapToPayDeviceSetup
+                            adyenReady={
+                              adyen.apiKeySet === true &&
+                              !!(adyen.merchantAccount || merchantAccount.trim())
+                            }
+                            tapToPayEnabled={settings?.tapToPayEnabled === true}
+                          />
+                        </div>
+
+                        <div className="border-t border-[var(--border)] pt-4">
+                          <h3 className="text-sm font-semibold text-[var(--text)]">{t('adyenTerminalEnv')}</h3>
+                          <label className="mt-3 flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={!!settings?.adyenLiveEnvironment}
+                              onChange={(e) =>
+                                setSettings((prev) =>
+                                  prev ? { ...prev, adyenLiveEnvironment: e.target.checked } : prev
+                                )
+                              }
+                            />
+                            {t('adyenLiveMode')}
+                          </label>
+                          {settings?.adyenLiveEnvironment ? (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-xs muted">{t('adyenLiveRegion')}</p>
+                              <div className="flex flex-wrap gap-2">
+                                {(['EU', 'US', 'AU', 'APSE'] as const).map((region) => (
+                                  <button
+                                    key={region}
+                                    type="button"
+                                    className={`rounded-lg border px-3 py-1.5 text-sm ${
+                                      (settings.adyenLiveRegion || 'EU') === region
+                                        ? 'border-teal-600 bg-teal-50 text-teal-800'
+                                        : 'border-stone-200 bg-white text-stone-700'
+                                    }`}
+                                    onClick={() =>
+                                      setSettings((prev) =>
+                                        prev ? { ...prev, adyenLiveRegion: region } : prev
+                                      )
+                                    }
+                                  >
+                                    {region}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          <label className="mt-3 flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={!!settings?.adyenUseLegacyEndpoint}
+                              onChange={(e) =>
+                                setSettings((prev) =>
+                                  prev ? { ...prev, adyenUseLegacyEndpoint: e.target.checked } : prev
+                                )
+                              }
+                            />
+                            {t('adyenLegacyEndpoint')}
+                          </label>
+                        </div>
+                      </div>
+                    </Section>
+                    <SettingsSaveBar saving={savingWebposPay} />
+                  </form>
+
+                  <Section
+                    id="payments-terminals-list"
+                    icon={CreditCard}
+                    accent={settingsDash.success}
+                    title={t('paymentTerminals')}
+                    description={t('paymentTerminalsHint')}
+                    highlight={isSectionHighlight('payments-terminals-list')}
+                  >
+                    <form onSubmit={addTerminal} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                      <Field label={`${t('terminalId')} *`} hint={t('terminalIdHint')}>
+                        <input
+                          className="input"
+                          value={terminalId}
+                          onChange={(e) => setTerminalId(e.target.value)}
+                          placeholder="S1F2-000158213131044"
+                          required
+                        />
+                      </Field>
+                      <Field label={t('terminalName')} hint={t('terminalNameHint')}>
+                        <input
+                          className="input"
+                          value={terminalName}
+                          onChange={(e) => setTerminalName(e.target.value)}
+                          placeholder={t('terminalNamePlaceholder')}
+                        />
+                      </Field>
+                      <div className="flex items-end">
+                        <button type="submit" className="btn-primary w-full sm:w-auto" disabled={savingTerminal}>
+                          {savingTerminal ? t('saving') : t('addTerminal')}
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="table-scroll rounded-lg border border-[var(--border)]">
+                      <table className="w-full text-sm min-w-[480px]">
+                        <thead>
+                          <tr className="border-b border-[var(--border)] text-left muted">
+                            <th className="px-3 py-2 font-medium">{t('terminalName')}</th>
+                            <th className="px-3 py-2 font-medium">{t('terminalId')}</th>
+                            <th className="px-3 py-2 font-medium">{t('status')}</th>
+                            <th className="px-3 py-2 font-medium" />
                           </tr>
-                        )}
-                        {terminals.map((term) => (
-                          <tr key={term.id} className="border-b border-[var(--border)] last:border-0">
-                            <td className="px-3 py-2.5 font-medium">{term.terminalName}</td>
-                            <td className="px-3 py-2.5 font-mono text-xs">{term.terminalId}</td>
-                            <td className="px-3 py-2.5 capitalize">{term.status}</td>
-                            <td className="px-3 py-2.5 text-right">
-                              <button
-                                type="button"
-                                className="text-xs font-semibold text-red-600 hover:underline"
-                                onClick={() => void removeTerminal(term.id)}
-                              >
-                                {t('delete')}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Section>
+                        </thead>
+                        <tbody>
+                          {terminals.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-3 py-6 muted">
+                                {t('noTerminals')}
+                              </td>
+                            </tr>
+                          )}
+                          {terminals.map((term) => (
+                            <tr key={term.id} className="border-b border-[var(--border)] last:border-0">
+                              <td className="px-3 py-2.5 font-medium">{term.terminalName}</td>
+                              <td className="px-3 py-2.5 font-mono text-xs">{term.terminalId}</td>
+                              <td className="px-3 py-2.5 capitalize">{term.status}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                <button
+                                  type="button"
+                                  className="text-xs font-semibold text-red-600 hover:underline"
+                                  onClick={() => void removeTerminal(term.id)}
+                                >
+                                  {t('delete')}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Section>
+                </>
+              ) : !shopPaymentsOn ? (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {t('paymentsSwisspayoutDisabledHint')}
+                </div>
+              ) : null}
             </div>
           )}
 
