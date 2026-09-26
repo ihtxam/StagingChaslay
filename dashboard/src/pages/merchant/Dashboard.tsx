@@ -618,8 +618,11 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations } = useLocationStore();
-  const showHq = hqLicensed || locations.length > 1;
+  const { locations, limits } = useLocationStore();
+  const showHq =
+    hqLicensed ||
+    isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
+    locations.length > 1;
   const allowHq = useCallback(
     (path: string) =>
       showHq &&

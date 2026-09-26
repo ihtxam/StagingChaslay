@@ -113,6 +113,21 @@ export function isTouchPrimaryDevice(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+/** Phone form factor — native OS keyboard is available; skip on-screen keyboard. */
+export function isMobilePhone(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPod/i.test(ua)) return true;
+    if (/Android/i.test(ua) && /Mobile/i.test(ua)) return true;
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const narrow = window.matchMedia('(max-width: 767px)').matches;
+    return coarse && narrow;
+  } catch {
+    return false;
+  }
+}
+
 /** WebPOS PWA / kiosk fullscreen — OS keyboard often hidden even without coarse pointer. */
 export function isWebPosKioskShell(): boolean {
   if (typeof window === 'undefined') return false;
@@ -132,6 +147,13 @@ export function isWebPosKioskShell(): boolean {
 
 /** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
 export function shouldAutoOpenOnScreenKeyboard(): boolean {
+  if (isMobilePhone()) return false;
+  return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
+}
+
+/** On-screen keyboard toggle (kiosk / tablet / desktop shell — not phones). */
+export function shouldShowOnScreenKeyboardToggle(): boolean {
+  if (isMobilePhone()) return false;
   return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
 }
 
