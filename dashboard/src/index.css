@@ -275,6 +275,8 @@ button {
     zoom: var(--webpos-zoom);
     background-color: var(--webpos-bg);
     color: var(--webpos-text);
+    /* Keep POS controls readable when merchant panel uses html.dark (light POS appearance). */
+    color-scheme: light;
   }
 
   /*

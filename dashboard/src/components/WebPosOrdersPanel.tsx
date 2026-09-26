@@ -248,6 +248,16 @@ function heldRowSentToKitchen(h: HeldRow): boolean {
   const meta = parseHeldCartJson(h.cartJson);
   return meta.cart.some((l) => l.sentToKitchen);
 }
+
+function ordersListRowClass(selected: boolean, purgeSelected?: boolean): string {
+  const base =
+    'flex w-full items-start gap-2 px-3 py-3.5 text-left bg-[var(--webpos-surface)] text-[var(--webpos-text)] hover:bg-[var(--webpos-surface-2)] sm:items-center sm:gap-3 sm:px-4';
+  if (!selected) return base;
+  if (purgeSelected) {
+    return `${base} bg-red-950/30 ring-2 ring-inset ring-red-500/50`;
+  }
+  return `${base} bg-[var(--webpos-accent-softer)] ring-2 ring-inset ring-[var(--webpos-accent-border)]`;
+}
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -1498,15 +1508,15 @@ export default function WebPosOrdersPanel({
     <div
       className={
         embedded
-          ? 'flex min-h-0 min-w-0 flex-1 flex-col bg-white'
+          ? 'flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-surface)]'
           : 'fixed inset-0 z-50 flex justify-end bg-black/40'
       }
     >
       <div
         className={
           embedded
-            ? 'flex min-h-0 flex-1 flex-col bg-white'
-            : 'flex h-full w-full max-w-5xl flex-col bg-white shadow-xl'
+            ? 'flex min-h-0 flex-1 flex-col bg-[var(--webpos-surface)]'
+            : 'flex h-full w-full max-w-5xl flex-col bg-[var(--webpos-surface)] shadow-xl'
         }
       >
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-stone-200 px-2 py-1.5 sm:px-3 sm:py-2">
@@ -1876,7 +1886,7 @@ export default function WebPosOrdersPanel({
                 })}
               </div>
             ) : (
-              <ul className="divide-y divide-stone-100">
+              <ul className="divide-y divide-[var(--webpos-border)]">
                 {pageItems.map((item) => {
                   if (item.kind === 'held') {
                     const h = item.held;
@@ -1889,23 +1899,21 @@ export default function WebPosOrdersPanel({
                         <button
                           type="button"
                           onClick={() => selectHeld(h)}
-                          className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
-                            selected ? 'bg-teal-50' : ''
-                          }`}
+                          className={ordersListRowClass(selected)}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">
+                                <p className="truncate text-sm font-semibold text-[var(--webpos-text)]">
                                   {h.label || t('webPosHeldOrder')}
                                 </p>
-                                <p className="mt-0.5 text-xs text-stone-500">
+                                <p className="mt-0.5 text-xs text-[var(--webpos-text-muted)]">
                                   {h.staffName?.trim()
                                     ? `${h.staffName.trim()} · ${formatDateTime(h.updatedAt || h.createdAt || Date.now())}`
                                     : formatDateTime(h.updatedAt || h.createdAt || Date.now())}
                                 </p>
                               </div>
-                              <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
+                              <span className="shrink-0 text-sm font-bold tabular-nums text-[var(--webpos-accent-text)]">
                                 {money(total)}
                               </span>
                             </div>
@@ -1993,9 +2001,7 @@ export default function WebPosOrdersPanel({
                       <button
                         type="button"
                         onClick={() => openOrderClick(o)}
-                        className={`flex w-full items-start gap-2 px-3 py-3.5 text-left hover:bg-stone-50 sm:items-center sm:gap-3 sm:px-4 ${
-                          selected ? (purgeMode ? 'bg-red-50' : 'bg-teal-50') : ''
-                        }`}
+                        className={ordersListRowClass(selected, purgeMode && selected)}
                       >
                         {purgeMode ? (
                           <span
@@ -2012,12 +2018,12 @@ export default function WebPosOrdersPanel({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{primaryLabel}</p>
-                              <p className="mt-0.5 text-xs text-stone-500">
+                              <p className="truncate text-sm font-semibold text-[var(--webpos-text)]">{primaryLabel}</p>
+                              <p className="mt-0.5 text-xs text-[var(--webpos-text-muted)]">
                                 {formatDateTime(o.completedAt || o.createdAt)}
                               </p>
                             </div>
-                            <span className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
+                            <span className="shrink-0 text-sm font-bold tabular-nums text-[var(--webpos-accent-text)]">
                               {money(o.total)}
                             </span>
                           </div>
@@ -2165,8 +2171,8 @@ export default function WebPosOrdersPanel({
                       embedded
                         ? 'absolute inset-0 z-[55]'
                         : 'fixed inset-0 z-[55] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
-                    } flex min-h-0 w-full flex-col bg-stone-50 lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200 lg:pt-0 lg:pb-0`
-                  : 'hidden min-h-0 w-full flex-col bg-stone-50 lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-stone-200'
+                    } flex min-h-0 w-full flex-col bg-[var(--webpos-surface-2)] lg:static lg:z-auto lg:max-w-sm lg:shrink-0 lg:border-l lg:border-[var(--webpos-border)] lg:pt-0 lg:pb-0`
+                  : 'hidden min-h-0 w-full flex-col bg-[var(--webpos-surface-2)] lg:flex lg:max-w-sm lg:shrink-0 lg:border-l lg:border-[var(--webpos-border)]'
             }
           >
             {selectedHeld ? (
