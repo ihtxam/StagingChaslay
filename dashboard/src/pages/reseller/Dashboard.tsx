@@ -30,6 +30,13 @@ import {
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
 import { PANEL_NAV_HIDE_OPTIONS } from '@/lib/panel-nav-hidden';
+import {
+  handleLimitNumberInputChange,
+  limitNumberInputDisplay,
+  limitNumberToField,
+  parseLimitNumberField,
+  type LimitNumberField,
+} from '@/lib/limit-number-input';
 import SupportInbox from '../shared/SupportInbox';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
@@ -111,7 +118,7 @@ function MerchantsPage() {
     customDays: 365,
     maxPosPosts: 1,
     maxWaiterPosts: 0,
-    maxLocations: 1,
+    maxLocations: 1 as LimitNumberField,
     inventoryAddonEnabled: false,
     signageAddonEnabled: false,
     signageScreenLimit: 2,
@@ -125,7 +132,7 @@ function MerchantsPage() {
     name: string;
     maxPosPosts: number;
     maxWaiterPosts: number;
-    maxLocations: number;
+    maxLocations: LimitNumberField;
     inventoryAddonEnabled: boolean;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
@@ -221,7 +228,7 @@ function MerchantsPage() {
         customDays: form.licenseType === 'custom' ? Number(form.customDays) : undefined,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
-        maxLocations: Number(form.maxLocations) || 1,
+        maxLocations: parseLimitNumberField(form.maxLocations, 1),
       });
       toast.success(t('resellerMerchantCreated'));
       setShowCreate(false);
@@ -304,7 +311,7 @@ function MerchantsPage() {
       await api.put(`/reseller/merchants/${limitsFor.id}/pos-limits`, {
         maxPosPosts: Number(limitsFor.maxPosPosts) || 0,
         maxWaiterPosts: Number(limitsFor.maxWaiterPosts) || 0,
-        maxLocations: Number(limitsFor.maxLocations) || 1,
+        maxLocations: parseLimitNumberField(limitsFor.maxLocations, 1),
         inventoryAddonEnabled: !!limitsFor.inventoryAddonEnabled,
         signageAddonEnabled: !!limitsFor.signageAddonEnabled,
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
@@ -609,9 +616,11 @@ function MerchantsPage() {
                 min={0}
                 max={99}
                 className="input mt-1"
-                value={form.maxLocations}
+                value={limitNumberInputDisplay(form.maxLocations)}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, maxLocations: Number(e.target.value) || 1 }))
+                  handleLimitNumberInputChange(e.target.value, (maxLocations) =>
+                    setForm((f) => ({ ...f, maxLocations }))
+                  )
                 }
               />
             </label>
@@ -814,7 +823,7 @@ function MerchantsPage() {
                         name: m.name,
                         maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
                         maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
-                        maxLocations: Math.max(0, Number(m.maxLocations) || 1),
+                        maxLocations: limitNumberToField(Math.max(0, Number(m.maxLocations) || 1)),
                         inventoryAddonEnabled: m.inventoryAddonEnabled === true,
                         signageAddonEnabled: m.signageAddonEnabled === true,
                         signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
@@ -950,12 +959,12 @@ function MerchantsPage() {
                   min={0}
                   max={99}
                   className="input mt-1"
-                  value={limitsFor.maxLocations}
+                  value={limitsFor ? limitNumberInputDisplay(limitsFor.maxLocations) : ''}
                   onChange={(e) =>
-                    setLimitsFor({
-                      ...limitsFor,
-                      maxLocations: Number(e.target.value) || 1,
-                    })
+                    limitsFor &&
+                    handleLimitNumberInputChange(e.target.value, (maxLocations) =>
+                      setLimitsFor({ ...limitsFor, maxLocations })
+                    )
                   }
                 />
               </label>

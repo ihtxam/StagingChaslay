@@ -10,6 +10,13 @@ import {
   PRODUCT_SURFACE_PRESETS,
   type MerchantProductSurface,
 } from '@/lib/merchant-product-surface';
+import {
+  handleLimitNumberInputChange,
+  limitNumberInputDisplay,
+  limitNumberToField,
+  parseLimitNumberField,
+  type LimitNumberField,
+} from '@/lib/limit-number-input';
 
 interface SubscriptionPlanOption {
   id: string;
@@ -108,7 +115,7 @@ const emptyForm = {
   businessCategory: 'restaurant' as 'retail' | 'restaurant',
   maxPosPosts: 1,
   maxWaiterPosts: 0,
-  maxLocations: 1,
+  maxLocations: 1 as LimitNumberField,
   inventoryAddonEnabled: false,
   signageAddonEnabled: false,
   signageScreenLimit: 2,
@@ -140,7 +147,19 @@ export default function Merchants() {
   const [purgeConfirm, setPurgeConfirm] = useState('');
   const [deleteCustomersToo, setDeleteCustomersToo] = useState(false);
   const [purgingSales, setPurgingSales] = useState(false);
-  const [posLimits, setPosLimits] = useState({
+  const [posLimits, setPosLimits] = useState<{
+    maxPosPosts: number;
+    maxWaiterPosts: number;
+    maxLocations: LimitNumberField;
+    inventoryAddonEnabled: boolean;
+    signageAddonEnabled: boolean;
+    signageScreenLimit: number;
+    kdsAddonEnabled: boolean;
+    odsAddonEnabled: boolean;
+    deliveryPlatformsAddonEnabled: boolean;
+    storekeeperAddonEnabled: boolean;
+    kioskAddonEnabled: boolean;
+  }>({
     maxPosPosts: 0,
     maxWaiterPosts: 0,
     maxLocations: 1,
@@ -238,7 +257,9 @@ export default function Merchants() {
       setPosLimits({
         maxPosPosts: Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(res.data.merchant?.maxWaiterPosts) || 0),
-        maxLocations: Math.max(0, Number(res.data.merchant?.maxLocations) || 1),
+        maxLocations: limitNumberToField(
+          Math.max(0, Number(res.data.merchant?.maxLocations) || 1)
+        ),
         inventoryAddonEnabled: res.data.merchant?.inventoryAddonEnabled === true,
         signageAddonEnabled: res.data.merchant?.signageAddonEnabled === true,
         signageScreenLimit: Math.max(1, Number(res.data.merchant?.signageScreenLimit) || 2),
@@ -268,7 +289,7 @@ export default function Merchants() {
       const res = await api.put(`/superadmin/merchants/${showDetail.id}`, {
         maxPosPosts: Number(posLimits.maxPosPosts) || 0,
         maxWaiterPosts: Number(posLimits.maxWaiterPosts) || 0,
-        maxLocations: Number(posLimits.maxLocations) || 1,
+        maxLocations: parseLimitNumberField(posLimits.maxLocations, 1),
         inventoryAddonEnabled: !!posLimits.inventoryAddonEnabled,
         signageAddonEnabled: !!posLimits.signageAddonEnabled,
         signageScreenLimit: Number(posLimits.signageScreenLimit) || 2,
@@ -288,7 +309,9 @@ export default function Merchants() {
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
-        maxLocations: Math.max(0, Number(saved?.maxLocations ?? posLimits.maxLocations) || 1),
+        maxLocations: limitNumberToField(
+          Math.max(0, Number(saved?.maxLocations ?? posLimits.maxLocations) || 1)
+        ),
         inventoryAddonEnabled: inventoryOn,
         signageAddonEnabled: signageOn,
         signageScreenLimit: Math.max(1, Number(saved?.signageScreenLimit ?? posLimits.signageScreenLimit) || 2),
@@ -490,7 +513,7 @@ export default function Merchants() {
         businessCategory: form.businessCategory,
         maxPosPosts: Number(form.maxPosPosts) || 0,
         maxWaiterPosts: Number(form.maxWaiterPosts) || 0,
-        maxLocations: Number(form.maxLocations) || 1,
+        maxLocations: parseLimitNumberField(form.maxLocations, 1),
         inventoryAddonEnabled: !!form.inventoryAddonEnabled,
         signageAddonEnabled: !!form.signageAddonEnabled,
         signageScreenLimit: Number(form.signageScreenLimit) || 2,
@@ -1098,8 +1121,12 @@ export default function Merchants() {
                       min={0}
                       max={99}
                       className="input mt-1"
-                      value={form.maxLocations}
-                      onChange={(e) => setForm({ ...form, maxLocations: Number(e.target.value) })}
+                      value={limitNumberInputDisplay(form.maxLocations)}
+                      onChange={(e) =>
+                        handleLimitNumberInputChange(e.target.value, (maxLocations) =>
+                          setForm({ ...form, maxLocations })
+                        )
+                      }
                     />
                     <span className="text-xs text-gray-500">{t('locationsAddonHint')}</span>
                   </label>
@@ -1474,12 +1501,11 @@ export default function Merchants() {
                         min={0}
                         max={99}
                         className="input mt-1"
-                        value={posLimits.maxLocations}
+                        value={limitNumberInputDisplay(posLimits.maxLocations)}
                         onChange={(e) =>
-                          setPosLimits({
-                            ...posLimits,
-                            maxLocations: Number(e.target.value) || 1,
-                          })
+                          handleLimitNumberInputChange(e.target.value, (maxLocations) =>
+                            setPosLimits({ ...posLimits, maxLocations })
+                          )
                         }
                       />
                       <span className="text-[10px] text-gray-500">{t('locationsAddonHint')}</span>
