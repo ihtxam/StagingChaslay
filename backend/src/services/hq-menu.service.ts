@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { CatalogChannel } from "@/lib/catalog-visibility";
 
@@ -37,6 +37,64 @@ function inTimeWindow(
   return cur >= start || cur <= end;
 }
 
+function stringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input.map((x) => String(x || "").trim()).filter(Boolean);
+}
+
+function readMenuSelection(input: {
+  productIds?: unknown;
+  product_ids?: unknown;
+  categoryIds?: unknown;
+  category_ids?: unknown;
+}) {
+  return {
+    productIds: stringArray(input.productIds ?? input.product_ids),
+    categoryIds: stringArray(input.categoryIds ?? input.category_ids),
+  };
+}
+
+async function resolveMenuProductIds(
+  merchantId: string,
+  menu: { productIds?: unknown; categoryIds?: unknown; hqVersionId?: string | null }
+): Promise<Set<string> | null> {
+  const db = getDb();
+  const explicit = stringArray(menu.productIds);
+  const categoryIds = stringArray(menu.categoryIds);
+  const ids = new Set<string>(explicit);
+
+  if (categoryIds.length) {
+    const rows = await db.query.products.findMany({
+      where: and(
+        eq(schema.products.merchantId, merchantId),
+        inArray(schema.products.categoryId, categoryIds)
+      ),
+      columns: { id: true },
+    });
+    for (const row of rows) {
+      if (row.id) ids.add(row.id);
+    }
+  }
+
+  if (ids.size) return ids;
+
+  if (menu.hqVersionId) {
+    const version = await db.query.hqCatalogVersions.findFirst({
+      where: and(
+        eq(schema.hqCatalogVersions.id, menu.hqVersionId),
+        eq(schema.hqCatalogVersions.merchantId, merchantId)
+      ),
+    });
+    const payload = (version?.payloadJson || {}) as { products?: Array<{ id: string }> };
+    const versionIds = (payload.products || []).map((p) => p.id).filter(Boolean);
+    if (versionIds.length) return new Set(versionIds);
+  }
+
+  if (explicit.length || categoryIds.length) return ids;
+
+  return null;
+}
+
 export class HqMenuService {
   static async list(merchantId: string) {
     const db = getDb();
@@ -57,6 +115,9 @@ export class HqMenuService {
       locationIds?: string[];
       hqVersionId?: string | null;
       productIds?: string[];
+      categoryIds?: string[];
+      product_ids?: string[];
+      category_ids?: string[];
       isActive?: boolean;
       sortOrder?: number;
     }
@@ -64,6 +125,7 @@ export class HqMenuService {
     const db = getDb();
     const name = String(input.name || "").trim();
     if (!name) throw new Error("Menu name is required");
+    const selection = readMenuSelection(input);
 
     const [row] = await db
       .insert(schema.hqMenus)
@@ -76,7 +138,8 @@ export class HqMenuService {
         timeEnd: input.timeEnd || "23:59",
         locationIds: input.locationIds || [],
         hqVersionId: input.hqVersionId || null,
-        productIds: input.productIds || [],
+        productIds: selection.productIds,
+        categoryIds: selection.categoryIds,
         isActive: input.isActive !== false,
         sortOrder: Number(input.sortOrder) || 0,
       })
@@ -96,6 +159,9 @@ export class HqMenuService {
       locationIds: string[];
       hqVersionId: string | null;
       productIds: string[];
+      categoryIds: string[];
+      product_ids?: string[];
+      category_ids?: string[];
       isActive: boolean;
       sortOrder: number;
     }>
@@ -114,7 +180,12 @@ export class HqMenuService {
     if (input.timeEnd !== undefined) patch.timeEnd = input.timeEnd;
     if (input.locationIds !== undefined) patch.locationIds = input.locationIds;
     if (input.hqVersionId !== undefined) patch.hqVersionId = input.hqVersionId;
-    if (input.productIds !== undefined) patch.productIds = input.productIds;
+    if (input.productIds !== undefined || input.product_ids !== undefined) {
+      patch.productIds = readMenuSelection(input).productIds;
+    }
+    if (input.categoryIds !== undefined || input.category_ids !== undefined) {
+      patch.categoryIds = readMenuSelection(input).categoryIds;
+    }
     if (input.isActive !== undefined) patch.isActive = input.isActive;
     if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
 
@@ -160,20 +231,8 @@ export class HqMenuService {
       const days = Array.isArray(menu.daysOfWeek) ? menu.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
       if (!inTimeWindow(at, days, menu.timeStart, menu.timeEnd)) continue;
 
-      const explicit = Array.isArray(menu.productIds) ? menu.productIds.filter(Boolean) : [];
-      if (explicit.length) return new Set(explicit);
-
-      if (menu.hqVersionId) {
-        const version = await db.query.hqCatalogVersions.findFirst({
-          where: and(
-            eq(schema.hqCatalogVersions.id, menu.hqVersionId),
-            eq(schema.hqCatalogVersions.merchantId, merchantId)
-          ),
-        });
-        const payload = (version?.payloadJson || {}) as { products?: Array<{ id: string }> };
-        const ids = (payload.products || []).map((p) => p.id).filter(Boolean);
-        if (ids.length) return new Set(ids);
-      }
+      const resolved = await resolveMenuProductIds(merchantId, menu);
+      if (resolved) return resolved;
     }
     return null;
   }
