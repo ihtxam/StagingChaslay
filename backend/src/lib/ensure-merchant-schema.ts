@@ -315,6 +315,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
   pos_sessions_print_agent_online:
     "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
+  hq_menus_category_ids:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS category_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
   orders_order_source: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source varchar(50)",
   orders_fulfillment_channel:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_channel varchar(50) DEFAULT 'takeaway'",
@@ -1254,6 +1256,7 @@ const TABLE_PATCHES: string[] = [
     location_ids jsonb NOT NULL DEFAULT '[]',
     hq_version_id uuid REFERENCES hq_catalog_versions(id) ON DELETE SET NULL,
     product_ids jsonb NOT NULL DEFAULT '[]',
+    category_ids jsonb NOT NULL DEFAULT '[]',
     is_active boolean NOT NULL DEFAULT true,
     sort_order integer NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -1547,6 +1550,7 @@ export async function ensureLocationsSchema(): Promise<void> {
   }
   await runPatch("orders_location_id");
   await runPatch("pos_sessions_location_id");
+  await runPatch("hq_menus_category_ids");
   await runPatch("max_locations", "merchants");
   await runPatch("subscription_plans_max_locations");
   await ensurePosSessionsSchema();

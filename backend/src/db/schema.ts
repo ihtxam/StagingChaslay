@@ -721,6 +721,7 @@ export const hqMenus = pgTable(
       onDelete: "set null",
     }),
     productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
