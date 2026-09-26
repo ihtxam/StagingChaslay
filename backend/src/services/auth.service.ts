@@ -79,6 +79,26 @@ async function readMerchantStatus(merchantId: string): Promise<string | null> {
   return rows[0]?.status ?? null;
 }
 
+async function readMerchantMaxLocations(merchantId: string): Promise<number> {
+  try {
+    const { MerchantEntitlementsService } = await import(
+      "@/services/merchant-entitlements.service"
+    );
+    const limits = await MerchantEntitlementsService.getLimits(merchantId);
+    return Math.max(0, Number(limits.maxLocations ?? 1));
+  } catch {
+    try {
+      const rows = await queryRaw<{ max_locations: number | null }>(
+        `SELECT max_locations FROM merchants WHERE id = $1 LIMIT 1`,
+        [merchantId]
+      );
+      return Math.max(0, Number(rows[0]?.max_locations ?? 1));
+    } catch {
+      return 1;
+    }
+  }
+}
+
 export interface JWTPayload {
   id: string;
   email: string;
@@ -295,6 +315,7 @@ export class AuthService {
     const odsOn = await readOdsAddonEnabled(merchant.id).catch(() =>
       isOdsAddonEnabled(merchant.ods_addon_enabled)
     );
+    const maxLocations = await readMerchantMaxLocations(merchant.id);
     return {
       token,
       merchant: {
@@ -312,7 +333,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        maxLocations: 1,
+        maxLocations,
       },
       isOwner: true,
     };
@@ -347,6 +368,7 @@ export class AuthService {
     }));
     const kdsOn = await readKdsAddonEnabled(staff.merchantId).catch(() => false);
     const odsOn = await readOdsAddonEnabled(staff.merchantId).catch(() => false);
+    const maxLocations = await readMerchantMaxLocations(staff.merchantId);
     return {
       token,
       merchant: {
@@ -366,7 +388,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+        maxLocations,
         loginHome: normalizeStaffLoginHome(staff.loginHome),
       },
       isOwner: false,
@@ -627,6 +649,7 @@ export class AuthService {
       const odsOn = await readOdsAddonEnabled(merchantId).catch(() =>
         isOdsAddonEnabled(merchant.ods_addon_enabled)
       );
+      const maxLocations = await readMerchantMaxLocations(merchantId);
       return {
         id: merchant.id,
         email: merchant.email,
@@ -641,7 +664,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
-        maxLocations: 1,
+        maxLocations,
       };
     } catch (error) {
       console.error("Error getting merchant:", error);

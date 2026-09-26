@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 
 type TextTarget = HTMLInputElement | HTMLTextAreaElement;
 
@@ -332,6 +333,8 @@ type ToggleProps = {
 export function OnScreenKeyboardToggle({ className, iconSize = 17 }: ToggleProps) {
   const { t } = useI18n();
   const { open, toggle } = useOnScreenKeyboard();
+  const showToggle = shouldShowOnScreenKeyboardToggle();
+  if (!showToggle) return null;
 
   return (
     <button
