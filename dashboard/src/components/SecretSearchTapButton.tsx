@@ -4,16 +4,19 @@ import { useSecretTap } from '@/lib/use-secret-tap';
 
 type Props = {
   onUnlock: () => void;
+  /** Fired on every tap (before the five-tap unlock). */
+  onTap?: () => void;
   className?: string;
 };
 
 /** Visible search icon beside the orders search box. Five quick taps unlock cash order delete mode. */
-export default function SecretSearchTapButton({ onUnlock, className }: Props) {
+export default function SecretSearchTapButton({ onUnlock, onTap, className }: Props) {
   const registerTap = useSecretTap(5, 3500);
 
   const handleTap = (event: MouseEvent | PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    onTap?.();
     registerTap(onUnlock);
   };
 

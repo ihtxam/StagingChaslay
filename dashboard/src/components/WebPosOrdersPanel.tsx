@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Printer,
   RefreshCw,
+  Search,
   ShoppingBag,
   Store,
   Trash2,
@@ -241,6 +242,12 @@ export type HeldRow = {
 };
 type StatusFilter = 'active' | 'completed' | 'all' | 'held';
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
+
+function heldRowSentToKitchen(h: HeldRow): boolean {
+  if (h.status === 'sent_to_kitchen') return true;
+  const meta = parseHeldCartJson(h.cartJson);
+  return meta.cart.some((l) => l.sentToKitchen);
+}
 type Props = {
   open: boolean;
   /** Full-width in-tab layout instead of slide-over overlay */
@@ -539,6 +546,8 @@ export default function WebPosOrdersPanel({
   );
   const [search, setSearch] = useState('');
   const [searchQ, setSearchQ] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [held, setHeld] = useState<HeldRow[]>([]);
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [reasons, setReasons] = useState<CancelReason[]>([]);
@@ -633,6 +642,14 @@ export default function WebPosOrdersPanel({
     const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
     return () => window.clearTimeout(id);
   }, [search]);
+
+  useEffect(() => {
+    if (search.trim()) setSearchOpen(true);
+  }, [search]);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -1492,33 +1509,57 @@ export default function WebPosOrdersPanel({
             : 'flex h-full w-full max-w-5xl flex-col bg-white shadow-xl'
         }
       >
-        <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-2 py-2 sm:px-3 sm:py-2.5">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-stone-200 px-2 py-1.5 sm:px-3 sm:py-2">
           {embedded ? (
             <button
               type="button"
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs font-bold text-stone-700 hover:bg-stone-100"
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 px-2 text-xs font-bold text-stone-700 hover:bg-stone-100"
               onClick={onClose}
               aria-label={t('webPosBack')}
             >
               <ChevronLeft size={16} aria-hidden />
-              <span className="hidden sm:inline">{t('webPosBack')}</span>
             </button>
           ) : null}
-          <div className="flex min-w-0 flex-1 basis-full items-center gap-1.5 sm:min-w-[14rem] sm:basis-auto">
-            {canGandolaPurge ? (
-              <SecretSearchTapButton onUnlock={enterPurgeMode} />
-            ) : null}
+          {canGandolaPurge ? (
+            <SecretSearchTapButton
+              onUnlock={enterPurgeMode}
+              onTap={() => setSearchOpen((open) => !open)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 active:scale-95"
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={t('webPosSearchOrders')}
+              title={t('webPosSearchOrders')}
+              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border active:scale-95 ${
+                searchOpen || search.trim()
+                  ? 'border-teal-400 bg-teal-50 text-teal-900'
+                  : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+              }`}
+              onClick={() => setSearchOpen((open) => !open)}
+            >
+              <Search size={17} strokeWidth={2.25} aria-hidden />
+            </button>
+          )}
+          {searchOpen ? (
             <input
+              ref={searchInputRef}
               type="search"
-              className="min-w-0 w-full rounded-lg border border-stone-200 bg-stone-50 py-2 px-3 text-sm"
+              className="h-8 w-[7.5rem] shrink-0 rounded-lg border border-stone-200 bg-stone-50 px-2 text-sm sm:w-36"
               placeholder={t('webPosSearchOrders')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSearch('');
+                  setSearchOpen(false);
+                }
+              }}
             />
-          </div>
+          ) : null}
           {!isOnlineMode ? (
             <select
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
+              className="h-8 shrink-0 rounded-lg border border-stone-200 bg-white px-2 text-xs font-semibold"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             >
@@ -1528,7 +1569,7 @@ export default function WebPosOrdersPanel({
               <option value="all">{t('webPosAllOrders')}</option>
             </select>
           ) : null}
-          <div className="flex flex-wrap gap-1">
+          <div className="flex shrink-0 gap-0.5">
             {channelFilters.map((f) => (
               <button
                 key={f.id}
@@ -1537,7 +1578,7 @@ export default function WebPosOrdersPanel({
                   setChannelFilter(f.id);
                   setPage(0);
                 }}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${
+                className={`whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-bold ${
                   channelFilter === f.id
                     ? 'bg-stone-800 text-white'
                     : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
@@ -1550,9 +1591,9 @@ export default function WebPosOrdersPanel({
               <button
                 type="button"
                 onClick={onOpenDeliveryHub}
-                className="inline-flex items-center gap-1 rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-900 hover:bg-teal-100"
+                className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-lg border border-teal-300 bg-teal-50 px-2 py-1 text-[11px] font-bold text-teal-900 hover:bg-teal-100"
               >
-                <Truck size={14} aria-hidden />
+                <Truck size={12} aria-hidden />
                 {t('ordersFilterPortal')}
               </button>
             ) : null}
@@ -1731,8 +1772,14 @@ export default function WebPosOrdersPanel({
                           <span className="shrink-0 tabular-nums">{idLabel}</span>
                         </div>
                         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-3">
-                          <p className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-                            {t('webPosOnHold')}
+                          <p
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              heldRowSentToKitchen(h)
+                                ? 'bg-teal-100 text-teal-900'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
+                          >
+                            {heldRowSentToKitchen(h) ? t('orderHubInKitchen') : t('webPosOnHold')}
                           </p>
                           <p className="text-[11px] text-stone-500">
                             {sentCount > 0 ? `${readyCount}/${sentCount}` : `${sentCount}/${lines.length || 0}`}
@@ -1863,8 +1910,14 @@ export default function WebPosOrdersPanel({
                               </span>
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                                {t('webPosOnHold')}
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                                  heldRowSentToKitchen(h)
+                                    ? 'bg-teal-100 text-teal-900'
+                                    : 'bg-amber-100 text-amber-900'
+                                }`}
+                              >
+                                {heldRowSentToKitchen(h) ? t('orderHubInKitchen') : t('webPosOnHold')}
                               </span>
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${channelBadgeClass(resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson }))}`}
