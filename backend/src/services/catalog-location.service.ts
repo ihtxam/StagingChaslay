@@ -1,11 +1,19 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
+  filterCatalogForChannel,
   isVisibleOnChannel,
   type CatalogChannel,
 } from "@/lib/catalog-visibility";
 
 type ProductRow = typeof schema.products.$inferSelect;
+type CategoryRow = typeof schema.categories.$inferSelect;
+
+export type LocationChannelCatalog = {
+  categories: CategoryRow[];
+  products: ProductRow[];
+  locationId: string;
+};
 
 export class CatalogLocationService {
   /** Merge per-location price, visibility, and availability overrides onto products. */
@@ -63,5 +71,71 @@ export class CatalogLocationService {
   ): boolean {
     if (product.isActive === false) return false;
     return isVisibleOnChannel(product.visibility, channel);
+  }
+
+  /**
+   * POS / shop menu for one location: overrides, optional HQ location links, channel visibility, HQ time menus.
+   */
+  static async buildLocationChannelCatalog(
+    merchantId: string,
+    locationId: string,
+    channel: CatalogChannel
+  ): Promise<LocationChannelCatalog> {
+    const db = getDb();
+    const locId = String(locationId || "").trim();
+    if (!locId) {
+      return { categories: [], products: [], locationId: locId };
+    }
+
+    const [categories, products, links] = await Promise.all([
+      db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchantId),
+        orderBy: [asc(schema.categories.sortOrder)],
+      }),
+      db.query.products.findMany({
+        where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true)),
+        orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
+      }),
+      db.query.locationCatalogLinks.findMany({
+        where: and(
+          eq(schema.locationCatalogLinks.merchantId, merchantId),
+          eq(schema.locationCatalogLinks.locationId, locId)
+        ),
+      }),
+    ]);
+
+    let productPool = products;
+    if (links.length) {
+      const allowed = new Set(
+        links.map((l) => l.localProductId).filter((id): id is string => !!id)
+      );
+      productPool = products.filter((p) => allowed.has(p.id));
+    }
+
+    const withOverrides = await this.applyLocationOverrides(merchantId, locId, productPool);
+    const filtered = filterCatalogForChannel(withOverrides, categories, channel);
+
+    const { HqMenuService } = await import("@/services/hq-menu.service");
+    const menuProductIds = await HqMenuService.resolveActiveProductIds(
+      merchantId,
+      locId,
+      channel
+    );
+    const visibleProducts = this.filterByHqMenuProductIds(filtered.products, menuProductIds);
+
+    const categoryIdsWithProducts = new Set(
+      visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
+    );
+    const visibleCategories = filtered.categories.filter(
+      (c) =>
+        categoryIdsWithProducts.has(c.id) ||
+        !!(c as { isOffersCategory?: boolean }).isOffersCategory
+    );
+
+    return {
+      categories: visibleCategories,
+      products: visibleProducts,
+      locationId: locId,
+    };
   }
 }

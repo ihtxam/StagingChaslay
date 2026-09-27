@@ -562,6 +562,7 @@ import {
   type WebPosStaffSession,
 } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
@@ -719,7 +720,7 @@ async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
   for (;;) {
     try {
       const res = await api.get('/merchant/products', {
-        params: { limit: pageSize, page },
+        params: { limit: pageSize, page, posLocationCatalog: '1' },
         ...fetchOpts,
       });
       const batch = res.data.products || res.data || [];
@@ -797,6 +798,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
+  const posLocationId = useLocationStore((s) => s.locationId);
+  const loadLocations = useLocationStore((s) => s.load);
+  const setPosLocationId = useLocationStore((s) => s.setLocationId);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -2579,7 +2583,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       let staffFailed = false;
       const [settingsRes, catRes, prodFetch, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
-        api.get('/merchant/categories', fetchOpts).catch(() => ({ data: { categories: [] } })),
+        api.get('/merchant/categories', {
+          params: { posLocationCatalog: '1' },
+          ...fetchOpts,
+        }).catch(() => ({ data: { categories: [] } })),
         fetchAllMerchantProducts(fetchOpts),
         api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff', fetchOpts).catch(() => {
@@ -2797,8 +2804,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadLocations();
+  }, [loadLocations]);
+
+  /** Branch staff: default POS catalog to their assigned location(s). */
+  useEffect(() => {
+    const staffId = authUser?.staffId;
+    if (!staffId || authUser?.role !== 'staff') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get(`/merchant/locations/staff/${staffId}`);
+        if (cancelled) return;
+        const ids: string[] = Array.isArray(res.data?.locationIds) ? res.data.locationIds : [];
+        if (!ids.length) return;
+        const stored = localStorage.getItem('manupos_selected_location');
+        if (stored && ids.includes(stored)) return;
+        setPosLocationId(ids[0]!);
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.staffId, authUser?.role, setPosLocationId]);
+
+  useEffect(() => {
+    void load();
+  }, [load, posLocationId]);
 
   useEffect(() => {
     const refreshCatalog = () => {
