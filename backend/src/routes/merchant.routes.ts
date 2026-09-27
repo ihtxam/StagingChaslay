@@ -38,6 +38,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const FAVICON_EXTENSIONS = new Set([".png", ".ico", ".svg"]);
 
+function wantsPosLocationCatalog(req: Request): boolean {
+  const raw = String(req.query.posLocationCatalog ?? req.query.locationCatalog ?? "").trim();
+  return raw === "1" || raw.toLowerCase() === "true";
+}
+
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -401,7 +406,17 @@ router.get("/products", async (req: Request, res: Response) => {
         }
       })(),
     ]);
-    const pageList = products || [];
+    let pageList = products || [];
+
+    if (wantsPosLocationCatalog(req) && req.locationId) {
+      const { CatalogLocationService } = await import("@/services/catalog-location.service");
+      const catalog = await CatalogLocationService.buildLocationChannelCatalog(
+        merchantId,
+        req.locationId,
+        "pos"
+      );
+      pageList = catalog.products;
+    }
 
     // Resolve combo option products that may not be on the current page
     const optionIds = new Set<string>();
@@ -480,7 +495,12 @@ router.get("/products", async (req: Request, res: Response) => {
     res.json({
       success: true,
       products: withCatalog,
-      pagination: { page, limit, total },
+      pagination: {
+        page: wantsPosLocationCatalog(req) ? 1 : page,
+        limit: wantsPosLocationCatalog(req) ? pageList.length : limit,
+        total: wantsPosLocationCatalog(req) ? pageList.length : total,
+      },
+      locationId: wantsPosLocationCatalog(req) ? req.locationId : undefined,
       productLimit: productLimit
         ? {
             maxProducts: productLimit.maxProducts,
@@ -1064,6 +1084,20 @@ router.get("/categories", async (req: Request, res: Response) => {
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    if (wantsPosLocationCatalog(req) && req.locationId) {
+      const { CatalogLocationService } = await import("@/services/catalog-location.service");
+      const catalog = await CatalogLocationService.buildLocationChannelCatalog(
+        merchantId,
+        req.locationId,
+        "pos"
+      );
+      return res.json({
+        success: true,
+        categories: catalog.categories,
+        locationId: catalog.locationId,
+      });
     }
 
     const categories = await CategoryService.getCategories(merchantId);
