@@ -17,8 +17,17 @@ Reference for Bridge Reborn driver development and QA devices.
 |--------|--------|
 | **Feitian F310A** | Handheld — BT + USB-C OTG; optional F310-1 print module later |
 | **Generic local Android** | 15″ tablets and OEM POS — USB OTG, BT, LAN :9100 |
+| **Nebullus Gemini1 SE 15″** | Multi-USB hub: RFID + barcode + receipt printer — Bridge ignores scanner/RFID for USB print; only printer-class devices get permission prompts |
 
-USB ESC/POS is **phase 1** alongside Sunmi built-in — not a later add-on.
+## Multi-peripheral POS (Nebullus Gemini, etc.)
+
+When **RFID**, **barcode scanner**, and **USB receipt printer** share the same USB hub:
+
+- Barcode wedges and RFID readers are **not** opened as ESC/POS printers (no permission spam on launch).
+- Bridge only auto-prompts for **USB printer class** devices or names that look like thermal/label printers.
+- HID keyboard-wedge scanners need **no** Bridge USB grant — WebPOS receives scans as keyboard input.
+- If a printer uses a rare CDC chip without “printer” in its name, grant USB once from Bridge after it appears in the printer list, or contact support with `vendorId:productId` from Android Settings → USB.
+
 
 ---
 

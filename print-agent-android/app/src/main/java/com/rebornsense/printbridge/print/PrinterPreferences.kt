@@ -73,5 +73,9 @@ object PrinterPreferences {
         prefs.edit().putStringSet(KEY_USB_DEVICES, next).apply()
     }
 
+    fun isRememberedUsbDevice(context: Context, vidPid: String): Boolean {
+        return rememberedUsbDevices(context).contains(vidPid.trim())
+    }
+
     private const val KEY_USB_DEVICES = "usb_granted_vid_pid"
 }

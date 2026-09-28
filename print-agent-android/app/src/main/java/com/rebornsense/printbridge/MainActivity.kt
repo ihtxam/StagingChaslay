@@ -244,7 +244,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPrinters() {
-        UsbHostPermissions.ensureGranted(this)
+        UsbHostPermissions.recordGrantedDevices(this)
+        if (runtimePermissionsResolved) {
+            UsbHostPermissions.requestNextMissingPermission(this)
+        }
         val printers = registry.refresh(applicationContext)
         val defaultId = PrinterPreferences.getDefaultPrinterId(this)
         printerAdapter.submit(printers, defaultId)

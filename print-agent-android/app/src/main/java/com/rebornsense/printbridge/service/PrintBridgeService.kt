@@ -38,7 +38,7 @@ class PrintBridgeService : Service() {
         try {
             createChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
-            UsbHostPermissions.ensureGranted(applicationContext)
+            UsbHostPermissions.recordGrantedDevices(applicationContext)
             registry.refresh(applicationContext)
             queue.start(applicationContext)
             server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {

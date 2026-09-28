@@ -10,7 +10,7 @@ class UsbAttachReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
             UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                UsbHostPermissions.ensureGranted(context)
+                UsbHostPermissions.recordGrantedDevices(context)
                 PrintBridgeLauncher.start(context)
                 PrintBridgeLauncher.refreshPrinters(context)
             }

@@ -14,6 +14,9 @@ class UsbEscPosDriver : PrinterDriver {
     override fun discover(context: Context): List<PrinterEndpoint> {
         val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
         return usb.deviceList.values.mapNotNull { device ->
+            if (!com.rebornsense.printbridge.usb.UsbDeviceClassifier.isUsbPrinterCandidate(context, device)) {
+                return@mapNotNull null
+            }
             if (bulkOutEndpoint(device) == null) return@mapNotNull null
             val name = device.productName?.takeIf { it.isNotBlank() }
                 ?: "USB printer ${device.vendorId}:${device.productId}"
@@ -35,9 +38,13 @@ class UsbEscPosDriver : PrinterDriver {
         val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
         val device = findDevice(usb, endpoint) ?: return Result.failure(IllegalStateException("USB printer not found"))
         if (!usb.hasPermission(device)) {
-            com.rebornsense.printbridge.usb.UsbHostPermissions.ensureGranted(context)
+            com.rebornsense.printbridge.usb.UsbHostPermissions.recordGrantedDevices(context)
             if (!usb.hasPermission(device)) {
-                return Result.failure(IllegalStateException("USB permission not granted for ${endpoint.name}"))
+                return Result.failure(
+                    IllegalStateException(
+                        "USB permission not granted for ${endpoint.name} — open Bridge Reborn and allow USB access",
+                    ),
+                )
             }
         }
         val connection = usb.openDevice(device) ?: return Result.failure(IllegalStateException("USB open failed"))
