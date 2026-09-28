@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingWizardLaunch = false
     private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
+    private var notificationPermissionResolved = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -56,12 +57,22 @@ class MainActivity : AppCompatActivity() {
             refreshPrinters()
         }
 
-    private val permissionLauncher =
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            notificationPermissionResolved = true
+            if (granted) {
+                runtimePermissionsResolved = true
+                BridgeSafeStart.markUiReady()
+                BridgeSafeStart.scheduleStartFromActivity(this)
+                window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
+            } else {
+                Toast.makeText(this, R.string.notification_permission_required, Toast.LENGTH_LONG).show()
+            }
+        }
+
+    private val bluetoothPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
-            runtimePermissionsResolved = true
-            startBridge()
-            refreshPrinters()
-            window.decorView.postDelayed({ refreshPrinters() }, 2_500)
+            refreshPrintersSafely()
             val endpoint = pendingBluetoothTestPrint
             pendingBluetoothTestPrint = null
             if (endpoint != null) {
@@ -75,6 +86,15 @@ class MainActivity : AppCompatActivity() {
                     ).show()
                 }
             }
+        }
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+            // Legacy path — unused for cold start; kept for any older call sites.
+            runtimePermissionsResolved = true
+            BridgeSafeStart.markUiReady()
+            BridgeSafeStart.scheduleStartFromActivity(this)
+            window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,21 +119,30 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.grantUsbBtn).setOnClickListener { requestUsbPrinterAccess() }
         findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
+        findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
         updateTapToPayDiagnostics()
+        window.decorView.post { BridgeSafeStart.markUiReady() }
     }
 
     override fun onResume() {
         super.onResume()
-        refreshPrinters()
+        if (notificationPermissionResolved) {
+            refreshPrintersSafely()
+        }
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
-        // Setup wizard is manual only — auto-launch caused crash loops on multi-USB POS tablets.
     }
 
     override fun onPause() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        BridgeSafeStart.cancelPending()
+        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
+        super.onDestroy()
     }
 
     private fun updateVersionHeader() {
@@ -166,21 +195,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestNeededPermissions() {
-        val needed = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            needed += Manifest.permission.POST_NOTIFICATIONS
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
         }
-        needed += bluetoothPermissionsNeeded()
-        if (needed.isEmpty()) {
-            runtimePermissionsResolved = true
-            startBridge()
-            refreshPrinters()
-        } else {
-            permissionLauncher.launch(needed.toTypedArray())
-        }
+        notificationPermissionResolved = true
+        runtimePermissionsResolved = true
+        BridgeSafeStart.markUiReady()
+        BridgeSafeStart.scheduleStartFromActivity(this)
+        window.decorView.postDelayed({ refreshPrintersSafely() }, 600L)
     }
 
     private fun hasBluetoothPermissions(): Boolean {
@@ -205,8 +231,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBridge() {
-        PrintBridgeLauncher.start(this)
+        BridgeSafeStart.startNow(this)
         updateServiceStatus()
+    }
+
+    private fun startBridgeManually() {
+        if (!BridgePermissions.hasNotificationPermission(this)) {
+            requestNeededPermissions()
+            return
+        }
+        BridgeSafeStart.markUiReady()
+        startBridge()
+        refreshPrintersSafely()
+    }
+
+    private fun refreshPrintersSafely() {
+        runCatching { refreshPrinters() }
+            .onFailure {
+                Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun updateServiceStatus() {
@@ -221,9 +264,8 @@ class MainActivity : AppCompatActivity() {
             serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
         } else {
             statusText.text = getString(R.string.status_starting)
-            hintText.text = getString(R.string.oem_step_bridge_pending)
+            hintText.text = getString(R.string.tap_start_bridge_hint)
             serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
-            PrintBridgeLauncher.start(this)
         }
         updateTapToPayDiagnostics()
     }
@@ -309,7 +351,7 @@ class MainActivity : AppCompatActivity() {
     private fun testPrint(endpoint: PrinterEndpoint) {
         if (endpoint.connectionType == "bluetooth" && !hasBluetoothPermissions()) {
             pendingBluetoothTestPrint = endpoint
-            permissionLauncher.launch(bluetoothPermissionsNeeded().toTypedArray())
+            bluetoothPermissionLauncher.launch(bluetoothPermissionsNeeded().toTypedArray())
             return
         }
         performTestPrint(endpoint)
@@ -365,11 +407,6 @@ class MainActivity : AppCompatActivity() {
         val feed = byteArrayOf(0x0A, 0x0A, 0x0A)
         val cut = byteArrayOf(0x1D, 0x56, 0x00)
         return init + text.toByteArray(Charsets.UTF_8) + feed + cut
-    }
-
-    override fun onDestroy() {
-        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
-        super.onDestroy()
     }
 
     companion object {

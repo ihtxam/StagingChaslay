@@ -24,18 +24,20 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     @SuppressLint("MissingPermission")
     override fun discover(context: Context): List<PrinterEndpoint> {
-        val adapter = bluetoothAdapter(context) ?: return emptyList()
-        if (!adapter.isEnabled) return emptyList()
-        return adapter.bondedDevices.orEmpty().map { device ->
-            val name = device.name?.takeIf { it.isNotBlank() } ?: device.address
-            PrinterEndpoint(
-                id = "bt:${device.address}",
-                name = name,
-                connectionType = "bluetooth",
-                driverKey = key,
-                meta = mapOf("address" to device.address),
-            )
-        }
+        return runCatching {
+            val adapter = bluetoothAdapter(context) ?: return@runCatching emptyList()
+            if (!adapter.isEnabled) return@runCatching emptyList()
+            adapter.bondedDevices.orEmpty().map { device ->
+                val name = device.name?.takeIf { it.isNotBlank() } ?: device.address
+                PrinterEndpoint(
+                    id = "bt:${device.address}",
+                    name = name,
+                    connectionType = "bluetooth",
+                    driverKey = key,
+                    meta = mapOf("address" to device.address),
+                )
+            }
+        }.getOrElse { emptyList() }
     }
 
     @SuppressLint("MissingPermission")
