@@ -14,6 +14,10 @@
     <string name="grant_usb_printer">USB printer access</string>
     <string name="usb_grant_wait_permissions">Allow notifications first, then tap USB printer access.</string>
     <string name="usb_grant_none_pending">No USB receipt printer needs access. Barcode/RFID scanners are ignored. Plug in the printer and tap again.</string>
+    <string name="notification_permission_required">Notifications are required so Bridge can run in the background. Allow notifications, then tap Start background service.</string>
+    <string name="start_bridge_service">Start background service</string>
+    <string name="tap_start_bridge_hint">Tap Start background service after allowing notifications.</string>
+    <string name="printer_scan_failed">Could not scan printers — try again in a moment.</string>
     <string name="add_network_printer">Add network</string>
     <string name="lan_printer_dialog_message">Enter the printer IP address on your Wi‑Fi or Ethernet network (RAW port 9100).</string>
     <string name="lan_printer_added">Network printer added</string>

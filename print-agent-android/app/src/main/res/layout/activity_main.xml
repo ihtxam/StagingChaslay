@@ -74,6 +74,14 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/startBridgeBtn"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/start_bridge_service" />
+
         <TextView
             android:id="@+id/hintText"
             android:layout_width="match_parent"

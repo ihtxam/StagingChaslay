@@ -13,6 +13,7 @@ object BridgeServiceWatchdog {
 
     private val tick = object : Runnable {
         override fun run() {
+            if (!BridgeSafeStart.canStartBackgroundService(appContext)) return@run
             if (BridgePermissions.hasNotificationPermission(appContext)) {
                 if (!BridgeHealthChecker.isHealthy()) {
                     PrintBridgeLauncher.start(appContext)
