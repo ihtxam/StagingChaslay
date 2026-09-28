@@ -98,6 +98,8 @@
             );
           }
           document.documentElement.classList.add('webpos-lock');
+          var pm = document.querySelector('link[rel="manifest"]');
+          if (pm) pm.setAttribute('href', '/pos.webmanifest');
           if (/^\/kiosk(\/|$)/.test(p)) {
             document.documentElement.classList.add('kiosk-lock');
             var km = document.querySelector('link[rel="manifest"]');

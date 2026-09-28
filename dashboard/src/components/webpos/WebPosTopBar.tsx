@@ -124,10 +124,9 @@ async function requestDocumentFullscreen(): Promise<boolean> {
 export async function enterWebPosFullscreenOnLoad() {
   window.dispatchEvent(new CustomEvent('webpos:enter-app'));
   const isPwa = isStandalonePwa();
+  if (isPwa && isPwaDisplayFullscreen()) return;
   if (!isPwa && !readWebPosFullscreenPreference()) return;
   if (document.fullscreenElement) return;
-  // Manifest display:fullscreen already fills the screen — skip Fullscreen API + gesture hook.
-  if (isPwa && isPwaDisplayFullscreen()) return;
 
   const entered = await requestDocumentFullscreen();
   if (entered) {

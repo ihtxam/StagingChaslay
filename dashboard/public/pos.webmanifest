@@ -1,8 +1,8 @@
 {
-  "id": "/",
-  "name": "Reborn",
-  "short_name": "Reborn",
-  "description": "Reborn POS — install once, open from home screen",
+  "id": "/merchant/pos",
+  "name": "Reborn POS",
+  "short_name": "Reborn POS",
+  "description": "Reborn WebPOS — full-screen kiosk mode on tablets",
   "start_url": "/merchant/pos",
   "scope": "/",
   "display": "fullscreen",

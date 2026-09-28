@@ -62,7 +62,6 @@ class MainActivity : AppCompatActivity() {
             startBridge()
             refreshPrinters()
             window.decorView.postDelayed({ refreshPrinters() }, 2_500)
-            maybeLaunchOemWizard()
             val endpoint = pendingBluetoothTestPrint
             pendingBluetoothTestPrint = null
             if (endpoint != null) {
@@ -97,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         setupAutoStartSwitch()
         requestNeededPermissions()
         findViewById<MaterialButton>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
+        findViewById<MaterialButton>(R.id.grantUsbBtn).setOnClickListener { requestUsbPrinterAccess() }
         findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         updateTapToPayDiagnostics()
@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
-        maybeLaunchOemWizard()
+        // Setup wizard is manual only — auto-launch caused crash loops on multi-USB POS tablets.
     }
 
     override fun onPause() {
@@ -178,7 +178,6 @@ class MainActivity : AppCompatActivity() {
             runtimePermissionsResolved = true
             startBridge()
             refreshPrinters()
-            maybeLaunchOemWizard()
         } else {
             permissionLauncher.launch(needed.toTypedArray())
         }
@@ -229,6 +228,18 @@ class MainActivity : AppCompatActivity() {
         updateTapToPayDiagnostics()
     }
 
+    private fun requestUsbPrinterAccess() {
+        if (!runtimePermissionsResolved) {
+            Toast.makeText(this, R.string.usb_grant_wait_permissions, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val requested = UsbHostPermissions.requestNextMissingPermission(this)
+        if (!requested) {
+            Toast.makeText(this, R.string.usb_grant_none_pending, Toast.LENGTH_LONG).show()
+        }
+        refreshPrinters()
+    }
+
     private fun setupAutoStartSwitch() {
         val autoStartSwitch = findViewById<SwitchMaterial>(R.id.autoStartSwitch)
         autoStartSwitch.isChecked = PrinterPreferences.isAutoStartEnabled(this)
@@ -245,9 +256,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshPrinters() {
         UsbHostPermissions.recordGrantedDevices(this)
-        if (runtimePermissionsResolved) {
-            UsbHostPermissions.requestNextMissingPermission(this)
-        }
         val printers = registry.refresh(applicationContext)
         val defaultId = PrinterPreferences.getDefaultPrinterId(this)
         printerAdapter.submit(printers, defaultId)

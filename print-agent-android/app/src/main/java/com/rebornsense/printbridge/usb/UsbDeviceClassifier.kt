@@ -18,7 +18,10 @@ object UsbDeviceClassifier {
         "scanner",
         "scan ",
         " scan",
+        "2d ",
+        "1d ",
         "qr ",
+        "qr-",
         "rfid",
         "mifare",
         "nfc",
@@ -31,12 +34,21 @@ object UsbDeviceClassifier {
         "keyboard",
         "wedge",
         "hid",
+        "handheld",
+        "pistol",
         "symbol",
         "zebra",
         "honeywell",
         "datalogic",
         "newland",
         "urovo",
+        "serial converter",
+        "usb serial",
+        "cp210",
+        "ftdi",
+        "silicon labs",
+        "prolific",
+        "ch340",
     )
 
     private val PRINTER_NAME_KEYWORDS = listOf(
@@ -69,6 +81,12 @@ object UsbDeviceClassifier {
         if (device.deviceClass == UsbConstants.USB_CLASS_HID) return true
         val blob = deviceNameBlob(device)
         if (SCANNER_OR_READER_KEYWORDS.any { blob.contains(it) }) return true
+        // CH340 / Prolific serial adapters are scales/scanners unless explicitly a printer name.
+        if (device.vendorId == 0x1A86 || device.vendorId == 0x067B) {
+            if (PRINTER_NAME_KEYWORDS.any { blob.contains(it) }) return false
+            if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return false
+            return true
+        }
         // CCID / smart-card class
         if ((0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == 0x0B }) {
             return true
