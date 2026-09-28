@@ -1,8 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.RebornPrintBridge" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <style name="Theme.RebornPrintBridge" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#0f766e</item>
         <item name="colorPrimaryVariant">#115e59</item>
         <item name="colorOnPrimary">#ffffff</item>
+        <item name="android:statusBarColor">#115e59</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
     </style>
     <style name="Theme.RebornPrintBridge.Transparent" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>

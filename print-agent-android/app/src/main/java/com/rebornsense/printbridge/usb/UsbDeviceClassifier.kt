@@ -76,7 +76,16 @@ object UsbDeviceClassifier {
         0x0483, // STM32 label stacks
     )
 
-    /** True for barcode scanners, RFID, keyboards — Bridge must ignore these for USB print. */
+    /** True for attach events — includes USB printer class even when product name is generic. */
+    fun shouldOfferUsbAccessOnAttach(context: android.content.Context?, device: UsbDevice): Boolean {
+        if (isScannerOrReaderPeripheral(device)) return false
+        if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
+        if (context != null && isUsbPrinterCandidate(context, device)) return true
+        return (0 until device.interfaceCount).any { index ->
+            device.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_PRINTER
+        }
+    }
+
     fun isScannerOrReaderPeripheral(device: UsbDevice): Boolean {
         if (device.deviceClass == UsbConstants.USB_CLASS_HID) return true
         val blob = deviceNameBlob(device)

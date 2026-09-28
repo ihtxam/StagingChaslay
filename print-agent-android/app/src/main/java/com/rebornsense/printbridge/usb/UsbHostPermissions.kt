@@ -73,6 +73,17 @@ object UsbHostPermissions {
             .filter { UsbDeviceClassifier.isUsbPrinterCandidate(app, it) && !usb.hasPermission(it) }
             .sortedBy { it.deviceId }
         val device = candidates.firstOrNull() ?: return false
+        return requestPermissionForDevice(activity, device)
+    }
+
+    fun requestPermissionForDevice(activity: android.app.Activity, device: UsbDevice): Boolean {
+        register(activity)
+        if (pendingPermissionDeviceId != null) return false
+        val usb = usbManager(activity) ?: return false
+        if (usb.hasPermission(device)) {
+            PrinterPreferences.rememberUsbDevice(activity, deviceKey(device))
+            return false
+        }
         requestPermission(activity, usb, device)
         return true
     }

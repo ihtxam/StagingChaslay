@@ -1,7 +1,9 @@
 package com.rebornsense.printbridge
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -14,6 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -27,6 +32,7 @@ import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
+import com.rebornsense.printbridge.usb.UsbDeviceClassifier
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.BuildConfig
 
@@ -39,6 +45,8 @@ class MainActivity : AppCompatActivity() {
     private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
     private var notificationPermissionResolved = false
+    private var pendingUsbAttachDeviceId: Int? = null
+    private val usbAttachRetryRunnable = Runnable { offerUsbPermissionForPendingAttach() }
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -106,6 +114,7 @@ class MainActivity : AppCompatActivity() {
                 .invoke(null, this)
         }
         setContentView(R.layout.activity_main)
+        applySystemBarInsets()
         updateVersionHeader()
         emptyPrintersText = findViewById(R.id.emptyPrintersText)
         printerAdapter = PrinterListAdapter(
@@ -122,10 +131,57 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
         updateTapToPayDiagnostics()
         window.decorView.post { BridgeSafeStart.markUiReady() }
+        handleUsbAttachIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUsbAttachIntent(intent)
+    }
+
+    private fun handleUsbAttachIntent(intent: Intent?) {
+        val deviceId = intent?.getIntExtra(EXTRA_USB_DEVICE_ID, -1) ?: -1
+        if (deviceId < 0) return
+        intent?.removeExtra(EXTRA_USB_DEVICE_ID)
+        pendingUsbAttachDeviceId = deviceId
+    }
+
+    private fun applySystemBarInsets() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val scroll = findViewById<ScrollView>(R.id.mainScroll)
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(view.paddingLeft, bars.top, view.paddingRight, bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(scroll)
+    }
+
+    /** System USB allow dialog must run while the activity is resumed and visible. */
+    private fun offerUsbPermissionForPendingAttach() {
+        val deviceId = pendingUsbAttachDeviceId ?: return
+        val usb = getSystemService(UsbManager::class.java) ?: return
+        val device = usb.deviceList.values.firstOrNull { it.deviceId == deviceId }
+        if (device == null) {
+            window.decorView.removeCallbacks(usbAttachRetryRunnable)
+            window.decorView.postDelayed(usbAttachRetryRunnable, 400L)
+            return
+        }
+        pendingUsbAttachDeviceId = null
+        if (!UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) return
+        if (usb.hasPermission(device)) {
+            refreshPrintersSafely()
+            return
+        }
+        val name = device.productName ?: "USB printer"
+        Toast.makeText(this, getString(R.string.usb_printer_attach_prompt, name), Toast.LENGTH_SHORT).show()
+        UsbHostPermissions.requestPermissionForDevice(this, device)
     }
 
     override fun onResume() {
         super.onResume()
+        offerUsbPermissionForPendingAttach()
         if (notificationPermissionResolved) {
             refreshPrintersSafely()
         }
@@ -136,6 +192,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
+        window.decorView.removeCallbacks(usbAttachRetryRunnable)
         super.onPause()
     }
 
@@ -410,6 +467,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val EXTRA_USB_DEVICE_ID = "usb_device_id"
         private const val SERVICE_STATUS_INTERVAL_MS = 3_000L
     }
 }
