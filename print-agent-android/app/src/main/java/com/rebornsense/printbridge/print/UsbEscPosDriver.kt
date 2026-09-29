@@ -13,7 +13,8 @@ class UsbEscPosDriver : PrinterDriver {
 
     override fun discover(context: Context): List<PrinterEndpoint> {
         val usb = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return emptyList()
-        // Let deviceList failures throw so the registry can keep the last USB rows.
+        // Only devices plugged in right now. Do not synthesize rows from
+        // PrinterPreferences.rememberedUsbDevices after the cable is removed.
         val devices = usb.deviceList.values.toList()
         val rows = ArrayList<UsbPrinterRow>()
         for (device in devices) {

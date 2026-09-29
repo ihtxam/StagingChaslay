@@ -32,11 +32,14 @@ class DriverRegistry(
         val usbResult = runCatching { usb.discover(app) }
         val usbFound = if (usbResult.isSuccess) {
             usbDiscoverSucceeded = true
+            // discover() already reads UsbManager.deviceList. Do not add remembered vid:pid rows.
             lastUsbEndpoints = usbResult.getOrThrow()
             lastUsbEndpoints
         } else {
+            // A failed scan must not keep an unplugged printer on the list.
             usbDiscoverSucceeded = false
-            lastUsbEndpoints
+            lastUsbEndpoints = emptyList()
+            emptyList()
         }
         val others = listOf(sunmi, bluetooth, network).flatMap { driver ->
             runCatching { driver.discover(app) }.getOrElse { emptyList() }

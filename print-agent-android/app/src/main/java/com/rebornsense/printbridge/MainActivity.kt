@@ -34,7 +34,6 @@ import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
-import com.rebornsense.printbridge.service.PrintBridgeService
 import com.rebornsense.printbridge.usb.UsbDeviceClassifier
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.BuildConfig
@@ -52,12 +51,15 @@ class MainActivity : AppCompatActivity() {
     private var healthProbeInFlight = false
     private var suppressAutoStartListener = false
     private var crashDialog: AlertDialog? = null
+    private var failureDialogFromStart = false
     private var shownPrinters: List<PrinterEndpoint> = emptyList()
     private var pendingUsbTestPrint: PrinterEndpoint? = null
     private var usbTestRetried = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
-    /** One read-only /health check after the user taps Start. Not a repeating timer. */
-    private val startResultCheck = Runnable { checkStartResultOnce() }
+    private val probeTasks = ArrayList<Runnable>()
+    /** Invalidates in-flight Start probes when a newer status update begins. */
+    private var statusEpoch = 0
+    private var startInProgress = false
 
     private val wizardLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -142,10 +144,11 @@ class MainActivity : AppCompatActivity() {
     /** After notifications are allowed: status text only — no USB/BT scan, no FGS. */
     private fun onNotificationReadyUiOnly() {
         if (isFinishing || isDestroyed) return
-        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_stopped)
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_checking)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
-        findViewById<View>(R.id.serviceStatusIndicator)
-            .setBackgroundResource(R.drawable.service_status_stopped)
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            refreshServiceStatusReadOnly()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -203,6 +206,10 @@ class MainActivity : AppCompatActivity() {
         UsbHostPermissions.register(this)
         UsbHostPermissions.onPermissionSettled = { onUsbPermissionSettled() }
         consumeRefreshPrintersExtra(intent)
+        dropUnpluggedUsbFromList()
+        if (runtimePermissionsResolved) {
+            refreshServiceStatusReadOnly()
+        }
     }
 
     override fun onDestroy() {
@@ -210,7 +217,7 @@ class MainActivity : AppCompatActivity() {
             UsbHostPermissions.onPermissionSettled = null
         }
         BridgeSafeStart.cancelPending()
-        serviceStatusHandler.removeCallbacks(startResultCheck)
+        clearProbeTasks()
         runCatching { crashDialog?.dismiss() }
         crashDialog = null
         super.onDestroy()
@@ -259,7 +266,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         Thread {
-            val health = BridgeHealthChecker.probeHealth()
+            val health = BridgeHealthChecker.probeResult().snapshot
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 applyTapToPayDiagnostics(card, text, health)
@@ -324,18 +331,131 @@ class MainActivity : AppCompatActivity() {
         }
         UsbHostPermissions.register(this)
         BridgeSafeStart.markUiReady()
-        Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
-        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
-        val failureGeneration = PrintBridgeService.failureGeneration()
-        val started = BridgeSafeStart.startNow(this, bypassDebounce = true)
-        // Do not submit LAN-only rows here. That replaced the adapter and hid USB printers.
-        // Do not call startForegroundService again if this attempt already failed.
-        if (!started || PrintBridgeService.failureGeneration() != failureGeneration) {
-            showStartFailure()
-            return
+        val epoch = beginStatusEpoch()
+        startInProgress = true
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_checking)
+        Thread {
+            val before = runCatching { BridgeHealthChecker.probeResult() }.getOrElse { error ->
+                BridgeHealthChecker.ProbeOutcome(failureReason = error.message ?: error.javaClass.simpleName)
+            }
+            runOnUiThread {
+                if (!epochLive(epoch)) return@runOnUiThread
+                if (before.snapshot != null) {
+                    // Already listening. Do not start, stop, or show a failure dialog.
+                    applyBridgeReady(before.snapshot)
+                    return@runOnUiThread
+                }
+                findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
+                Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
+                val invoked = BridgeSafeStart.startNow(this, bypassDebounce = true)
+                val startNote = if (invoked) {
+                    null
+                } else {
+                    BridgeCrashLog.lastReason(this) ?: "startForegroundService was not invoked"
+                }
+                // One start attempt. Probes only — never call startForegroundService again.
+                scheduleHealthProbes(epoch, startNote)
+            }
+        }.start()
+    }
+
+    /**
+     * Read-only /health when the activity is shown. Does not start or stop the service.
+     */
+    private fun refreshServiceStatusReadOnly() {
+        if (startInProgress || isFinishing || isDestroyed) return
+        val epoch = statusEpoch
+        if (healthProbeInFlight) return
+        healthProbeInFlight = true
+        Thread {
+            val result = runCatching { BridgeHealthChecker.probeResult() }.getOrNull()
+            runOnUiThread {
+                healthProbeInFlight = false
+                if (!epochLive(epoch) || startInProgress) return@runOnUiThread
+                val snapshot = result?.snapshot
+                if (snapshot != null) {
+                    applyBridgeReady(snapshot)
+                } else {
+                    applyBridgeDownQuiet()
+                }
+            }
+        }.start()
+    }
+
+    /** Try /health at about 1s, 2s, and 4s after Start. Any success means the bridge is ready. */
+    private fun scheduleHealthProbes(epoch: Int, startNote: String?) {
+        clearProbeTasks()
+        val reasons = ArrayList<String>()
+        if (!startNote.isNullOrBlank()) reasons += startNote.trim()
+        var pending = START_PROBE_DELAYS_MS.size
+        START_PROBE_DELAYS_MS.forEach { delayMs ->
+            val task = Runnable {
+                if (!epochLive(epoch)) return@Runnable
+                Thread {
+                    val result = runCatching { BridgeHealthChecker.probeResult() }.getOrElse { error ->
+                        BridgeHealthChecker.ProbeOutcome(
+                            failureReason = error.message ?: error.javaClass.simpleName,
+                        )
+                    }
+                    runOnUiThread {
+                        if (!epochLive(epoch)) return@runOnUiThread
+                        val snapshot = result.snapshot
+                        if (snapshot != null) {
+                            applyBridgeReady(snapshot)
+                            return@runOnUiThread
+                        }
+                        val reason = result.failureReason?.trim().orEmpty().ifBlank { "health check failed" }
+                        if (reason !in reasons) reasons += reason
+                        pending -= 1
+                        if (pending <= 0) {
+                            showStartFailure(reasons.joinToString("\n"))
+                        }
+                    }
+                }.start()
+            }
+            probeTasks += task
+            serviceStatusHandler.postDelayed(task, delayMs)
         }
-        serviceStatusHandler.removeCallbacks(startResultCheck)
-        serviceStatusHandler.postDelayed(startResultCheck, START_RESULT_CHECK_MS)
+    }
+
+    private fun beginStatusEpoch(): Int {
+        clearProbeTasks()
+        statusEpoch += 1
+        return statusEpoch
+    }
+
+    private fun epochLive(epoch: Int): Boolean {
+        return epoch == statusEpoch && !isFinishing && !isDestroyed
+    }
+
+    private fun clearProbeTasks() {
+        probeTasks.forEach { serviceStatusHandler.removeCallbacks(it) }
+        probeTasks.clear()
+    }
+
+    private fun applyBridgeReady(health: BridgeHealthChecker.HealthSnapshot) {
+        clearProbeTasks()
+        statusEpoch += 1
+        startInProgress = false
+        if (failureDialogFromStart) {
+            runCatching { crashDialog?.dismiss() }
+            crashDialog = null
+            failureDialogFromStart = false
+        }
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_ready)
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.main_hint_short)
+        findViewById<View>(R.id.serviceStatusIndicator)
+            .setBackgroundResource(R.drawable.service_status_running)
+        updateTapToPayDiagnostics(health)
+    }
+
+    /** Resume probe found the server down. Red dot only — no dialog, no stopService. */
+    private fun applyBridgeDownQuiet() {
+        if (isFinishing || isDestroyed) return
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_stopped)
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
+        findViewById<View>(R.id.serviceStatusIndicator)
+            .setBackgroundResource(R.drawable.service_status_stopped)
     }
 
     /** Adds saved LAN hosts without dropping USB, Bluetooth, or built-in rows. */
@@ -347,7 +467,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun publishPrinters(printers: List<PrinterEndpoint>, defaultId: String?) {
-        val deduped = dedupeDisplayedPrinters(printers)
+        val deduped = dedupeDisplayedPrinters(withoutUnpluggedUsb(printers))
         val marked = deduped.map { ep -> ep.copy(isDefault = ep.id == defaultId) }.let { list ->
             if (list.none { it.isDefault } && list.isNotEmpty()) {
                 list.mapIndexed { index, ep -> ep.copy(isDefault = index == 0) }
@@ -383,6 +503,8 @@ class MainActivity : AppCompatActivity() {
                     }
                     publishPrinters(next, defaultId)
                 }.onFailure {
+                    val defaultId = PrinterPreferences.getDefaultPrinterId(this)
+                    publishPrinters(previous.filter { it.connectionType != "usb" }, defaultId)
                     Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
                 }
             }
@@ -396,14 +518,41 @@ class MainActivity : AppCompatActivity() {
         scan.start()
     }
 
-    /** USB scan failed or was skipped — keep the USB rows already on screen. */
+    /**
+     * USB scan failed. Keep a previous USB row only when that device is still in
+     * [UsbManager.getDeviceList]. Remembered vid:pid values are not rows.
+     */
     private fun mergeKeepingUsb(
         previous: List<PrinterEndpoint>,
         discovered: List<PrinterEndpoint>,
     ): List<PrinterEndpoint> {
-        val usb = previous.filter { it.connectionType == "usb" }
         val rest = discovered.filter { it.connectionType != "usb" }
+        val usb = (previous + discovered).filter { it.connectionType == "usb" }
         return (usb + rest).distinctBy { it.id }
+    }
+
+    private fun dropUnpluggedUsbFromList() {
+        if (!::printerAdapter.isInitialized) return
+        if (shownPrinters.none { it.connectionType == "usb" }) return
+        publishPrinters(shownPrinters, PrinterPreferences.getDefaultPrinterId(this))
+    }
+
+    /**
+     * USB rows require a live [UsbManager] device. If deviceList cannot be read,
+     * drop USB rows instead of keeping an unplugged printer. LAN rows stay.
+     */
+    private fun withoutUnpluggedUsb(printers: List<PrinterEndpoint>): List<PrinterEndpoint> {
+        if (printers.none { it.connectionType == "usb" }) return printers
+        val attached = runCatching {
+            val usb = getSystemService(UsbManager::class.java) ?: return@runCatching emptySet<String>()
+            usb.deviceList.values.map { device -> "${device.vendorId}:${device.productId}" }.toSet()
+        }.getOrElse { emptySet() }
+        return printers.filter { endpoint ->
+            if (endpoint.connectionType != "usb") return@filter true
+            val vid = endpoint.meta["vendorId"]?.trim().orEmpty()
+            val pid = endpoint.meta["productId"]?.trim().orEmpty()
+            vid.isNotEmpty() && pid.isNotEmpty() && "$vid:$pid" in attached
+        }
     }
 
     private fun refreshPrinters() {
@@ -425,59 +574,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Single read-only GET http://127.0.0.1:9101/health after Start.
-     * Does not start the service, scan USB/Bluetooth, or reschedule itself.
-     */
-    private fun checkStartResultOnce() {
-        if (healthProbeInFlight || isFinishing || isDestroyed) return
-        healthProbeInFlight = true
-        val statusText = findViewById<TextView>(R.id.statusText)
-        val hintText = findViewById<TextView>(R.id.hintText)
-        val serviceIndicator = findViewById<View>(R.id.serviceStatusIndicator)
-        Thread {
-            val health = runCatching { BridgeHealthChecker.probeHealth() }.getOrNull()
-            val crashText = runCatching { BridgeCrashLog.read(this) }.getOrNull()
-            runOnUiThread {
-                healthProbeInFlight = false
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (health != null) {
-                    statusText.text = getString(R.string.status_ready)
-                    hintText.text = getString(R.string.main_hint_short)
-                    serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
-                    updateTapToPayDiagnostics(health)
-                } else {
-                    showStartFailure(crashText)
-                }
-            }
-        }.start()
-    }
-
     private fun showSavedCrashIfAny() {
         val text = runCatching { BridgeCrashLog.read(this) }.getOrNull() ?: return
         if (text.isBlank()) return
+        failureDialogFromStart = false
         showCrashLogDialog(text)
     }
 
-    private fun showStartFailure(crashText: String? = null) {
+    /**
+     * Shown only after every Start probe failed. A failed probe does not stop the service.
+     * [probeReason] is the health-check detail (timeout, connection refused, HTTP code, body).
+     */
+    private fun showStartFailure(probeReason: String? = null) {
         if (isFinishing || isDestroyed) return
-        serviceStatusHandler.removeCallbacks(startResultCheck)
+        clearProbeTasks()
+        startInProgress = false
+        statusEpoch += 1
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_start_failed)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_stopped)
-        val fresh = runCatching { BridgeCrashLog.read(this) }.getOrNull()?.trim().orEmpty()
-        val passed = crashText?.trim().orEmpty()
-        val log = fresh.ifBlank { passed }
-        val reason = runCatching { BridgeCrashLog.lastReason(this) }.getOrNull()
+        val probe = probeReason?.trim().orEmpty()
+        val log = runCatching { BridgeCrashLog.read(this) }.getOrNull()?.trim().orEmpty()
         val body = when {
+            probe.isNotBlank() && log.isNotBlank() && !log.contains(probe) -> "$probe\n\n$log"
+            probe.isNotBlank() -> getString(R.string.bridge_service_did_not_stay_reason, probe)
             log.isNotBlank() -> log
-            !reason.isNullOrBlank() -> getString(R.string.bridge_service_did_not_stay_reason, reason)
             else -> getString(R.string.bridge_service_did_not_stay)
         }
+        failureDialogFromStart = true
         Toast.makeText(this, R.string.bridge_start_failed_see_log, Toast.LENGTH_LONG).show()
         window.decorView.post {
-            if (!isFinishing && !isDestroyed) showCrashLogDialog(body)
+            if (!isFinishing && !isDestroyed && failureDialogFromStart) showCrashLogDialog(body)
         }
     }
 
@@ -706,7 +834,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_USB_DEVICE_ID = "usb_device_id"
         const val EXTRA_REFRESH_PRINTERS = "refresh_printers"
         private const val TAG = "MainActivity"
-        private const val START_RESULT_CHECK_MS = 2_000L
+        private val START_PROBE_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L)
     }
 }
 
@@ -725,6 +853,5 @@ private fun displayKey(endpoint: PrinterEndpoint): String {
     val vid = endpoint.meta["vendorId"]?.trim().orEmpty()
     val pid = endpoint.meta["productId"]?.trim().orEmpty()
     if (vid.isEmpty() || pid.isEmpty()) return endpoint.id
-    val serial = endpoint.meta["serial"]?.trim().orEmpty()
-    return if (serial.isNotEmpty()) "usb:$vid:$pid:$serial" else "usb:$vid:$pid"
+    return "usb:$vid:$pid"
 }
