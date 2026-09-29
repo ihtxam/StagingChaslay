@@ -37,9 +37,16 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady()
             return
         }
+        if (UsbHostPermissions.isRequestPending()) {
+            return
+        }
         if (!usbPromptIssued) {
             usbPromptIssued = true
-            UsbHostPermissions.requestPermissionForDevice(this, device)
+            if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
+                if (usb.hasPermission(device)) {
+                    onUsbAccessReady()
+                }
+            }
             return
         }
         // User closed the allow dialog without granting.

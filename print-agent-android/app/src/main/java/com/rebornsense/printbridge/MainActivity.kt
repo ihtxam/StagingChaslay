@@ -671,7 +671,14 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.usb_grant_wait_permissions, Toast.LENGTH_SHORT).show()
             return
         }
-        val requested = UsbHostPermissions.requestNextMissingPermission(this)
+        val preferred = shownPrinters
+            .firstOrNull { it.connectionType == "usb" && it.isDefault }
+            ?.let { ep ->
+                val vid = ep.meta["vendorId"]?.trim().orEmpty()
+                val pid = ep.meta["productId"]?.trim().orEmpty()
+                if (vid.isNotEmpty() && pid.isNotEmpty()) "$vid:$pid" else null
+            }
+        val requested = UsbHostPermissions.requestNextMissingPermission(this, preferred)
         if (!requested) {
             Toast.makeText(this, R.string.usb_grant_none_pending, Toast.LENGTH_LONG).show()
         }

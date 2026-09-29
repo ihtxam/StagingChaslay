@@ -1,11 +1,13 @@
 package com.rebornsense.printbridge
 
 import android.app.Application
+import com.rebornsense.printbridge.usb.UsbHostPermissions
 
 class PrintBridgeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         BridgeCrashLog.install(this)
+        UsbHostPermissions.recordGrantedDevices(this)
         com.rebornsense.printbridge.setup.OemSetupPreferences.syncInstalledVersion(this)
         runCatching {
             val hooks = Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenApplicationHooks")

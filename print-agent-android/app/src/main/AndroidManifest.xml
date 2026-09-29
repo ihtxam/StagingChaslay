@@ -70,6 +70,14 @@
             android:parentActivityName=".MainActivity" />
 
         <receiver
+            android:name=".usb.UsbPermissionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.rebornsense.printbridge.USB_PERMISSION" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".usb.UsbAttachReceiver"
             android:directBootAware="true"
             android:exported="true">

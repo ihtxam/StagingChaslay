@@ -108,17 +108,19 @@ class UsbEscPosDriver : PrinterDriver {
             }
         }
         if (devices.isEmpty()) return null
+        val withBulk = devices.filter { bulkOutEndpoint(it) != null }
+        if (withBulk.isEmpty()) return devices.firstOrNull()
         val serial = identity.serial
         if (!serial.isNullOrEmpty()) {
-            devices.firstOrNull { usb.hasPermission(it) && readSerial(it) == serial }?.let { return it }
+            withBulk.firstOrNull { usb.hasPermission(it) && readSerial(it) == serial }?.let { return it }
         }
         val hinted = endpoint.meta["deviceName"]
         if (!hinted.isNullOrBlank()) {
-            devices.firstOrNull { it.deviceName == hinted && bulkOutEndpoint(it) != null }?.let { return it }
+            withBulk.firstOrNull { it.deviceName == hinted && usb.hasPermission(it) }?.let { return it }
+            withBulk.firstOrNull { it.deviceName == hinted }?.let { return it }
         }
-        return devices.firstOrNull { usb.hasPermission(it) && bulkOutEndpoint(it) != null }
-            ?: devices.firstOrNull { bulkOutEndpoint(it) != null }
-            ?: devices.first()
+        return withBulk.firstOrNull { usb.hasPermission(it) }
+            ?: withBulk.firstOrNull()
     }
 
     private fun parseUsbIdentity(endpoint: PrinterEndpoint): UsbIdentity {
