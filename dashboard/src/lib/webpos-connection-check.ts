@@ -154,13 +154,14 @@ export async function runWebPosConnectionChecks(opts: {
   androidProbe?: boolean;
   paymentConfig?: WebPosPaymentCheckConfig | null;
 }): Promise<WebPosConnectionReport> {
-  if (opts.androidProbe) {
-    requestBridgeRebornAutostart();
-  }
-
-  const health = opts.androidProbe
+  let health = opts.androidProbe
     ? await probePrintAgentHealth(8).catch(() => ({ ok: false as const }))
     : await getPrintAgentHealth().catch(() => ({ ok: false as const }));
+
+  if (!health.ok && opts.androidProbe) {
+    requestBridgeRebornAutostart();
+    health = await probePrintAgentHealth(8).catch(() => ({ ok: false as const }));
+  }
 
   let livePrinters: AgentPrinter[] = [];
   if (health.ok) {
