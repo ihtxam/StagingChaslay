@@ -18,6 +18,7 @@ type MemberCard = {
   membershipPlan?: MembershipPlan | null;
   holderName?: string | null;
   holderEmail?: string | null;
+  ecardEmail?: string | null;
   holderPhone?: string | null;
   customer?: {
     id: string;
@@ -54,6 +55,15 @@ function memberName(card: MemberCard): string {
     card.holderName ||
     [card.customer?.firstName, card.customer?.lastName].filter(Boolean).join(' ') ||
     '—'
+  );
+}
+
+function memberEmail(card: MemberCard): string {
+  return (
+    card.holderEmail?.trim() ||
+    card.ecardEmail?.trim() ||
+    card.customer?.email?.trim() ||
+    ''
   );
 }
 
@@ -142,7 +152,7 @@ export default function Members() {
         const parts = memberName(card).split(/\s+/).filter(Boolean);
         setEditFirst(card.customer?.firstName || parts[0] || '');
         setEditLast(card.customer?.lastName || parts.slice(1).join(' ') || '');
-        setEditEmail(card.holderEmail || card.customer?.email || '');
+        setEditEmail(memberEmail(card));
         setEditPhone(card.holderPhone || card.customer?.phone || '');
       } catch (e: any) {
         toast.error(e.response?.data?.error || t('membersDetailFailed'));
@@ -308,8 +318,8 @@ export default function Members() {
                   {card.holderPhone || card.customer?.phone || '—'}
                 </td>
                 <td className="px-3 py-3">
-                  <span className="cell-truncate block max-w-[160px]" title={card.holderEmail || card.customer?.email || ''}>
-                    {card.holderEmail || card.customer?.email || '—'}
+                  <span className="cell-truncate block max-w-[160px]" title={memberEmail(card)}>
+                    {memberEmail(card) || '—'}
                   </span>
                 </td>
                 <td className="px-3 py-3 font-mono text-xs">{card.cardNumber}</td>
