@@ -52,6 +52,10 @@ object PrintBridgeLauncher {
             )
             return false
         }
+        if (context !is android.app.Activity && !BridgeSafeStart.canStartBackgroundService(appContext)) {
+            Log.w(TAG, "Skipping FGS start — UI not ready for background start")
+            return false
+        }
         val intent = Intent(appContext, PrintBridgeService::class.java)
         return runCatching {
             ContextCompat.startForegroundService(appContext, intent)

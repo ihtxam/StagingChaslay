@@ -13,3 +13,16 @@ export function looksLikeLabelPrinterName(name?: string | null): boolean {
   if (NIIMBOT_RE.test(n)) return true;
   return TSPL_LABEL_RE.test(n);
 }
+
+/**
+ * Realtek USB 10/100 LAN (0BDA:8152 / decimal 3034:33106) is an ethernet dongle.
+ * A saved WebPOS printer with that name must not be reused for receipts.
+ */
+export function isStaleUsbEthernetPrinterName(name?: string | null): boolean {
+  const raw = String(name || '').trim();
+  if (!raw) return false;
+  if (/0bda\s*:\s*8152/i.test(raw)) return true;
+  if (/3034\s*:\s*33106/.test(raw)) return true;
+  if (/10\s*\/\s*100\s*lan/i.test(raw)) return true;
+  return false;
+}
