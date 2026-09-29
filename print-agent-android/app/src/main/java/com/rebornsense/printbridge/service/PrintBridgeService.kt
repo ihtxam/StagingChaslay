@@ -8,10 +8,12 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
-import android.util.Log
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.rebornsense.printbridge.BridgeCrashLog
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.setup.OemSetupPreferences
@@ -25,11 +27,16 @@ class PrintBridgeService : Service() {
     private var server: BridgeHttpServer? = null
     private val registry = DriverRegistry()
     private val queue = PrintJobQueue(registry)
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var foregroundStarted = false
+
     override fun onCreate() {
         super.onCreate()
         try {
             createChannel()
-            val notification = buildNotification()
+            val notification = buildNotificationSafely()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(
                     this,
@@ -41,32 +48,67 @@ class PrintBridgeService : Service() {
                 @Suppress("DEPRECATION")
                 startForeground(NOTIFICATION_ID, notification)
             }
+            foregroundStarted = true
         } catch (t: Throwable) {
-            Log.e(TAG, "PrintBridgeService failed to enter foreground", t)
+            foregroundStarted = false
+            BridgeCrashLog.record(this, t, "onCreate/startForeground")
             stopSelf()
             return
         }
+        startHttpOffMainThread()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!foregroundStarted) {
+            return START_NOT_STICKY
+        }
+        try {
+            if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
+                refreshPrintersOnBackground()
+            }
+        } catch (t: Throwable) {
+            BridgeCrashLog.record(this, t, "onStartCommand")
+            stopSelf()
+        }
+        // A failed start must not reboot the process. START_STICKY was the crash-haptic loop.
+        return START_NOT_STICKY
+    }
+
+    private fun startHttpOffMainThread() {
         val worker = Thread {
             runCatching { queue.start(applicationContext) }
-                .onFailure { Log.e(TAG, "print queue failed", it) }
+                .onFailure { BridgeCrashLog.record(applicationContext, it, "print queue") }
             runCatching {
                 val http = BridgeHttpServer(PORT, applicationContext, registry, queue)
                 http.start(NanoTimeout, false)
                 server = http
-            }.onFailure { Log.e(TAG, "HTTP server failed", it) }
+            }.onFailure { error ->
+                BridgeCrashLog.record(applicationContext, error, "HTTP server")
+                mainHandler.post { runCatching { stopSelf() } }
+            }
         }
         worker.name = "print-bridge-http"
-        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error ->
-            Log.e(TAG, "bridge worker crashed", error)
+        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { thread, error ->
+            BridgeCrashLog.record(applicationContext, error, "bridge worker ${thread.name}")
+            mainHandler.post { runCatching { stopSelf() } }
         }
         worker.start()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
-            refreshPrintersOnBackground()
+    private fun buildNotificationSafely(): Notification {
+        return try {
+            buildNotification()
+        } catch (t: Throwable) {
+            BridgeCrashLog.record(this, t, "buildNotification")
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(getString(R.string.notification_title))
+                .setContentText(getString(R.string.notification_body))
+                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .build()
         }
-        return START_STICKY
     }
 
     private fun refreshPrintersOnBackground() {
@@ -92,9 +134,14 @@ class PrintBridgeService : Service() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.notification_channel),
-            NotificationManager.IMPORTANCE_LOW
-        )
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            setSound(null, null)
+            enableVibration(false)
+            enableLights(false)
+            setShowBadge(false)
+        }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
@@ -116,11 +163,12 @@ class PrintBridgeService : Service() {
             .setSmallIcon(R.drawable.ic_stat_bridge)
             .setContentIntent(launch)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
             .build()
     }
 
     companion object {
-        private const val TAG = "PrintBridgeService"
         const val PORT = 9101
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101

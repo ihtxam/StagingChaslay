@@ -62,16 +62,8 @@ class SetupWizardActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Do not start the foreground service just because this step is visible.
         renderStep()
-        if (currentStep().action == OemSetupAction.START_BRIDGE) {
-            if (BridgeHealthChecker.isHealthy()) {
-                renderBridgeStatus(findViewById(R.id.wizardStatusText))
-            } else if (!awaitingNotificationPermission && healthPollRunnable == null) {
-                ensureBridgeRunningWithPermission()
-            } else {
-                pollBridgeHealth(showChecking = false)
-            }
-        }
     }
 
     override fun onPause() {
@@ -277,60 +269,50 @@ class SetupWizardActivity : AppCompatActivity() {
         }
 
         var attempts = 0
-        healthPollRunnable = object : Runnable {
+        val runnable = object : Runnable {
             override fun run() {
-                attempts += 1
-                val health = BridgeHealthChecker.probeHealth()
-                if (health != null) {
-                    statusText.visibility = View.VISIBLE
-                    statusText.text = getString(
-                        R.string.oem_step_bridge_verified,
-                        health.version ?: getString(R.string.oem_step_bridge_version_unknown),
-                    )
-                    OemSetupPreferences.setStepCompleted(this@SetupWizardActivity, "start_bridge", true)
-                    stopHealthPolling()
-                    return
-                }
-
-                if (!BridgePermissions.hasNotificationPermission(this@SetupWizardActivity)) {
-                    statusText.visibility = View.VISIBLE
-                    statusText.text = getString(R.string.oem_step_bridge_notification_denied)
-                    stopHealthPolling()
-                    return
-                }
-
-                // Re-trigger FGS periodically while waiting (OEMs may delay or reject first start).
-                if (attempts % SERVICE_RESTART_EVERY_ATTEMPTS == 0) {
-                    PrintBridgeLauncher.start(this@SetupWizardActivity)
-                }
-
-                if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) {
-                    statusText.visibility = View.VISIBLE
-                    statusText.text = getString(R.string.oem_step_bridge_failed)
-                    stopHealthPolling()
-                    // Auto-retry once without requiring another tap.
-                    if (bridgeStartAttempts < MAX_BRIDGE_START_ROUNDS) {
-                        healthHandler.postDelayed({
-                            if (currentStep().action == OemSetupAction.START_BRIDGE &&
-                                !BridgeHealthChecker.isHealthy()
-                            ) {
-                                startBridgeAndPoll()
-                            }
-                        }, AUTO_RETRY_DELAY_MS)
+                val scheduled = this
+                Thread {
+                    val health = runCatching { BridgeHealthChecker.probeHealth() }.getOrNull()
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (healthPollRunnable !== scheduled) return@runOnUiThread
+                        attempts += 1
+                        if (health != null) {
+                            statusText.visibility = View.VISIBLE
+                            statusText.text = getString(
+                                R.string.oem_step_bridge_verified,
+                                health.version ?: getString(R.string.oem_step_bridge_version_unknown),
+                            )
+                            OemSetupPreferences.setStepCompleted(this@SetupWizardActivity, "start_bridge", true)
+                            stopHealthPolling()
+                            return@runOnUiThread
+                        }
+                        if (!BridgePermissions.hasNotificationPermission(this@SetupWizardActivity)) {
+                            statusText.visibility = View.VISIBLE
+                            statusText.text = getString(R.string.oem_step_bridge_notification_denied)
+                            stopHealthPolling()
+                            return@runOnUiThread
+                        }
+                        if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) {
+                            statusText.visibility = View.VISIBLE
+                            statusText.text = getString(R.string.oem_step_bridge_failed)
+                            stopHealthPolling()
+                            return@runOnUiThread
+                        }
+                        statusText.visibility = View.VISIBLE
+                        statusText.text = getString(
+                            R.string.oem_step_bridge_checking,
+                            attempts,
+                            HEALTH_POLL_MAX_ATTEMPTS,
+                        )
+                        healthHandler.postDelayed(scheduled, HEALTH_POLL_INTERVAL_MS)
                     }
-                    return
-                }
-
-                statusText.visibility = View.VISIBLE
-                statusText.text = getString(
-                    R.string.oem_step_bridge_checking,
-                    attempts,
-                    HEALTH_POLL_MAX_ATTEMPTS,
-                )
-                healthHandler.postDelayed(this, HEALTH_POLL_INTERVAL_MS)
+                }.start()
             }
         }
-        healthHandler.post(healthPollRunnable!!)
+        healthPollRunnable = runnable
+        healthHandler.post(runnable)
     }
 
     private fun stopHealthPolling() {
@@ -424,9 +406,6 @@ class SetupWizardActivity : AppCompatActivity() {
         private const val STATE_STEP_INDEX = "step_index"
         private const val HEALTH_POLL_INTERVAL_MS = 500L
         private const val HEALTH_POLL_MAX_ATTEMPTS = 60
-        private const val SERVICE_RESTART_EVERY_ATTEMPTS = 5
-        private const val MAX_BRIDGE_START_ROUNDS = 3
-        private const val AUTO_RETRY_DELAY_MS = 2_000L
 
         fun createIntent(context: android.content.Context): Intent {
             return Intent(context, SetupWizardActivity::class.java)

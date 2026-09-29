@@ -15,8 +15,7 @@ import com.rebornsense.printbridge.service.PrintBridgeService
  */
 object PrintBridgeLauncher {
     private const val TAG = "PrintBridgeLauncher"
-    private val retryHandler = Handler(Looper.getMainLooper())
-    private var retryGeneration = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     const val ACTION_REFRESH_PRINTERS = "com.rebornsense.printbridge.action.REFRESH_PRINTERS"
 
@@ -27,7 +26,9 @@ object PrintBridgeLauncher {
     }
 
     /**
-     * Start (or restart) the foreground service.
+     * Start the foreground service once.
+     * A failed start is logged and returned as false. There is no retry loop:
+     * repeated startForegroundService calls were crashing and vibrating the tablet.
      * @return true when startForegroundService was invoked; false when notification permission
      *         is missing on Android 13+ (caller should request permission first).
      */
@@ -42,18 +43,11 @@ object PrintBridgeLauncher {
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)
-        val fromActivity = context is android.app.Activity
         return runCatching {
             ContextCompat.startForegroundService(appContext, intent)
-            if (fromActivity) {
-                scheduleRetries(appContext, intent)
-            }
             true
         }.getOrElse { error ->
-            Log.w(TAG, "FGS start failed", error)
-            if (fromActivity) {
-                scheduleRetries(appContext, intent)
-            }
+            BridgeCrashLog.record(appContext, error, "startForegroundService")
             false
         }
     }
@@ -81,34 +75,14 @@ object PrintBridgeLauncher {
                 return@Thread
             }
             if (!BridgePermissions.hasNotificationPermission(appContext)) return@Thread
-            retryHandler.post {
+            mainHandler.post {
                 if (hostActivity.isFinishing || hostActivity.isDestroyed) return@post
                 if (!BridgeSafeStart.mayStartForegroundService(hostActivity)) return@post
                 runCatching { ContextCompat.startForegroundService(appContext, intent) }
-                    .onFailure { Log.w(TAG, "refresh FGS start failed", it) }
+                    .onFailure { error ->
+                        BridgeCrashLog.record(appContext, error, "refresh FGS start")
+                    }
             }
         }.start()
     }
-
-    private fun scheduleRetries(appContext: Context, intent: Intent) {
-        val generation = ++retryGeneration
-        RETRY_DELAYS_MS.forEach { delayMs ->
-            retryHandler.postDelayed({
-                if (generation != retryGeneration) return@postDelayed
-                if (!BridgePermissions.hasNotificationPermission(appContext)) return@postDelayed
-                if (!BridgeSafeStart.mainActivityVisible) return@postDelayed
-                Thread {
-                    val healthy = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
-                    if (healthy) return@Thread
-                    retryHandler.post {
-                        if (!BridgeSafeStart.mainActivityVisible) return@post
-                        runCatching { ContextCompat.startForegroundService(appContext, intent) }
-                            .onFailure { Log.w(TAG, "FGS retry after ${delayMs}ms failed", it) }
-                    }
-                }.start()
-            }, delayMs)
-        }
-    }
-
-    private val RETRY_DELAYS_MS = longArrayOf(1_500L, 3_000L, 6_000L, 10_000L)
 }

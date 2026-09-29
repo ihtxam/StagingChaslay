@@ -2,6 +2,7 @@ package com.rebornsense.printbridge.print
 
 import android.content.Context
 import android.util.Base64
+import com.rebornsense.printbridge.BridgeCrashLog
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -24,7 +25,14 @@ class PrintJobQueue(
     fun start(context: Context) {
         appContext = context.applicationContext
         if (worker?.isAlive == true) return
-        worker = Thread({ runLoop() }, "print-bridge-queue").also { it.start() }
+        val ctx = appContext
+        worker = Thread({ runLoop() }, "print-bridge-queue").also { thread ->
+            thread.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { failed, error ->
+                val app = ctx ?: return@UncaughtExceptionHandler
+                BridgeCrashLog.record(app, error, "print-queue:${failed.name}")
+            }
+            thread.start()
+        }
     }
 
     fun stop() {

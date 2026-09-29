@@ -3,12 +3,16 @@ package com.rebornsense.printbridge
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -29,7 +33,6 @@ import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
-import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
 import com.rebornsense.printbridge.usb.UsbDeviceClassifier
@@ -48,13 +51,10 @@ class MainActivity : AppCompatActivity() {
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
     private var suppressAutoStartListener = false
+    private var crashDialog: AlertDialog? = null
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
-    private val serviceStatusRunnable = object : Runnable {
-        override fun run() {
-            updateServiceStatus()
-            serviceStatusHandler.postDelayed(this, SERVICE_STATUS_INTERVAL_MS)
-        }
-    }
+    /** One read-only /health check after the user taps Start. Not a repeating timer. */
+    private val startResultCheck = Runnable { checkStartResultOnce() }
 
     private val wizardLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -130,12 +130,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
         handleUsbAttachIntent(intent)
+        showLanPrintersNow()
+        window.decorView.post {
+            if (!isFinishing && !isDestroyed) showSavedCrashIfAny()
+        }
     }
 
-    /** After notifications are allowed: update status text only — no USB/BT scan, no FGS (Nebullus crash). */
+    /** After notifications are allowed: status text only — no USB/BT scan, no FGS. */
     private fun onNotificationReadyUiOnly() {
         if (isFinishing || isDestroyed) return
-        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_stopped)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_stopped)
@@ -198,15 +202,6 @@ class MainActivity : AppCompatActivity() {
             if (!isFinishing && !isDestroyed) refreshPrintersSafely()
         }
         consumeRefreshPrintersExtra(intent)
-        if (notificationPermissionResolved) {
-            updateServiceStatus()
-        }
-        serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
-    }
-
-    override fun onPause() {
-        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
-        super.onPause()
     }
 
     override fun onDestroy() {
@@ -214,7 +209,9 @@ class MainActivity : AppCompatActivity() {
             UsbHostPermissions.onPermissionSettled = null
         }
         BridgeSafeStart.cancelPending()
-        serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
+        serviceStatusHandler.removeCallbacks(startResultCheck)
+        runCatching { crashDialog?.dismiss() }
+        crashDialog = null
         super.onDestroy()
     }
 
@@ -319,11 +316,6 @@ class MainActivity : AppCompatActivity() {
         return needed
     }
 
-    private fun startBridge() {
-        BridgeSafeStart.startNow(this, bypassDebounce = true)
-        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 600L)
-    }
-
     private fun startBridgeManually() {
         if (!BridgePermissions.hasNotificationPermission(this)) {
             requestNeededPermissions()
@@ -332,17 +324,15 @@ class MainActivity : AppCompatActivity() {
         UsbHostPermissions.register(this)
         BridgeSafeStart.markUiReady()
         Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
         val started = BridgeSafeStart.startNow(this, bypassDebounce = true)
+        showLanPrintersNow()
         if (!started) {
-            Toast.makeText(this, R.string.bridge_start_failed, Toast.LENGTH_LONG).show()
+            showStartFailure()
             return
         }
-        showLanPrintersNow()
-        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 1_200L)
-        serviceStatusHandler.postDelayed({
-            refreshPrintersSafely()
-            updateTapToPayDiagnostics()
-        }, 2_800L)
+        serviceStatusHandler.removeCallbacks(startResultCheck)
+        serviceStatusHandler.postDelayed(startResultCheck, START_RESULT_CHECK_MS)
     }
 
     private fun showLanPrintersNow() {
@@ -382,8 +372,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        scan.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error ->
-            android.util.Log.e("MainActivity", "printer scan crashed", error)
+        scan.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { thread, error ->
+            BridgeCrashLog.record(applicationContext, error, "printer scan ${thread.name}")
             runOnUiThread {
                 printerScanInFlight = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -397,15 +387,19 @@ class MainActivity : AppCompatActivity() {
         refreshPrintersSafely()
     }
 
-    private fun updateServiceStatus() {
-        if (healthProbeInFlight) return
+    /**
+     * Single read-only GET http://127.0.0.1:9101/health after Start.
+     * Does not start the service, scan USB/Bluetooth, or reschedule itself.
+     */
+    private fun checkStartResultOnce() {
+        if (healthProbeInFlight || isFinishing || isDestroyed) return
         healthProbeInFlight = true
         val statusText = findViewById<TextView>(R.id.statusText)
         val hintText = findViewById<TextView>(R.id.hintText)
         val serviceIndicator = findViewById<View>(R.id.serviceStatusIndicator)
-        statusText.text = getString(R.string.status_service_checking)
         Thread {
-            val health = BridgeHealthChecker.probeHealth()
+            val health = runCatching { BridgeHealthChecker.probeHealth() }.getOrNull()
+            val crashText = runCatching { BridgeCrashLog.read(this) }.getOrNull()
             runOnUiThread {
                 healthProbeInFlight = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -413,14 +407,63 @@ class MainActivity : AppCompatActivity() {
                     statusText.text = getString(R.string.status_ready)
                     hintText.text = getString(R.string.main_hint_short)
                     serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
+                    updateTapToPayDiagnostics(health)
                 } else {
-                    statusText.text = getString(R.string.status_starting)
-                    hintText.text = getString(R.string.tap_start_bridge_hint)
-                    serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
+                    showStartFailure(crashText)
                 }
-                updateTapToPayDiagnostics(health)
             }
         }.start()
+    }
+
+    private fun showSavedCrashIfAny() {
+        val text = runCatching { BridgeCrashLog.read(this) }.getOrNull() ?: return
+        if (text.isBlank()) return
+        showCrashLogDialog(text)
+    }
+
+    private fun showStartFailure(crashText: String? = null) {
+        if (isFinishing || isDestroyed) return
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_start_failed)
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
+        findViewById<View>(R.id.serviceStatusIndicator)
+            .setBackgroundResource(R.drawable.service_status_stopped)
+        Toast.makeText(this, R.string.bridge_start_failed_see_log, Toast.LENGTH_LONG).show()
+        val text = crashText ?: runCatching { BridgeCrashLog.read(this) }.getOrNull()
+        if (!text.isNullOrBlank()) {
+            showCrashLogDialog(text)
+        }
+    }
+
+    private fun showCrashLogDialog(text: String) {
+        if (isFinishing || isDestroyed || text.isBlank()) return
+        runCatching { crashDialog?.dismiss() }
+        runCatching {
+            val scroll = ScrollView(this)
+            val body = TextView(this).apply {
+                this.text = text
+                setTextIsSelectable(true)
+                typeface = Typeface.MONOSPACE
+                textSize = 12f
+                setPadding(48, 32, 48, 32)
+            }
+            scroll.addView(body)
+            scroll.layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (320 * resources.displayMetrics.density).toInt(),
+            )
+            val dialog = AlertDialog.Builder(this)
+                .setTitle(getString(R.string.crash_log_title, BuildConfig.VERSION_NAME))
+                .setView(scroll)
+                .setPositiveButton(R.string.crash_log_clear) { _, _ ->
+                    runCatching { BridgeCrashLog.clear(this) }
+                }
+                .setNegativeButton(android.R.string.ok, null)
+                .create()
+            crashDialog = dialog
+            dialog.show()
+        }.onFailure { error ->
+            Log.e(TAG, "Could not show crash log", error)
+        }
     }
 
     private fun requestUsbPrinterAccess() {
@@ -567,6 +610,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_USB_DEVICE_ID = "usb_device_id"
         const val EXTRA_REFRESH_PRINTERS = "refresh_printers"
-        private const val SERVICE_STATUS_INTERVAL_MS = 3_000L
+        private const val TAG = "MainActivity"
+        private const val START_RESULT_CHECK_MS = 2_000L
     }
 }
