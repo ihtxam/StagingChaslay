@@ -6,12 +6,14 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.PrintBridgeLauncher
 import com.rebornsense.printbridge.setup.OemSetupPreferences
@@ -39,15 +41,23 @@ class PrintBridgeService : Service() {
         super.onCreate()
         try {
             createChannel()
-            startForeground(NOTIFICATION_ID, buildNotification())
+            val notification = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                startForeground(NOTIFICATION_ID, notification)
+            }
             queue.start(applicationContext)
-            Thread {
-                runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
-                runCatching { registry.refresh(applicationContext) }
-            }.start()
             server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
                 it.start(NanoTimeout, false)
             }
+            refreshHandler.postDelayed({ refreshPrintersOnBackground() }, INITIAL_REFRESH_DELAY_MS)
             refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
         } catch (t: Throwable) {
             Log.e(TAG, "PrintBridgeService failed to start", t)
@@ -57,16 +67,16 @@ class PrintBridgeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
-            Thread {
-                runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
-                runCatching { registry.refresh(applicationContext) }
-            }.start()
-            return START_STICKY
+            refreshHandler.postDelayed({ refreshPrintersOnBackground() }, 400L)
         }
+        return START_STICKY
+    }
+
+    private fun refreshPrintersOnBackground() {
         Thread {
+            runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
             runCatching { registry.refresh(applicationContext) }
         }.start()
-        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -120,5 +130,6 @@ class PrintBridgeService : Service() {
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
         private const val WATCHDOG_INTERVAL_MS = 30_000L
+        private const val INITIAL_REFRESH_DELAY_MS = 2_500L
     }
 }

@@ -55,7 +55,6 @@ class BridgeHttpServer(
             }
 
             uri == "/health" && method == Method.GET -> {
-                registry.refresh(appContext)
                 val features = JSONArray()
                 features.put("queue")
                 features.put("drawer")

@@ -29,8 +29,8 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 32
-        versionName = "0.4.14"
+        versionCode = 33
+        versionName = "0.4.15"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 
@@ -107,7 +107,11 @@ val copyReleaseApk = tasks.register<Copy>("copyReleaseApkToDownloads") {
         if (manifest.exists()) {
             val builtAt = Instant.now().toString()
             val text = manifest.readText()
+            val versionName = android.defaultConfig.versionName
             val updated = text.replace(
+                Regex("\"version\"\\s*:\\s*\"[^\"]*\""),
+                "\"version\": \"$versionName\""
+            ).replace(
                 Regex("\"builtAt\"\\s*:\\s*\"[^\"]*\"|\"builtAt\"\\s*:\\s*null"),
                 "\"builtAt\": \"$builtAt\""
             ).replace(

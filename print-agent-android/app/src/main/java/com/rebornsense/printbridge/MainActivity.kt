@@ -337,11 +337,11 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.bridge_start_failed, Toast.LENGTH_LONG).show()
             return
         }
+        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 1_200L)
         serviceStatusHandler.postDelayed({
-            updateServiceStatus()
             refreshPrintersSafely()
             updateTapToPayDiagnostics()
-        }, 900L)
+        }, 2_800L)
     }
 
     private fun refreshPrintersSafely() {
