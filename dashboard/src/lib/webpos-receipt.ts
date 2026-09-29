@@ -20,6 +20,7 @@ import {
   generateReceiptQrRasterEscPos,
   escposQrCode,
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
+  giftCardRedeemQrRasterPx,
 } from '@/lib/qr';
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
@@ -434,6 +435,15 @@ export type WebPosReceipt = {
   /** Optional CHF→EUR rate (1 CHF = X EUR) for EUR equivalent under total. */
   chfToEurRate?: number | null;
   isProvisional?: boolean;
+  /** E-gift codes sold on this order — printed on the same receipt as the sale. */
+  soldGiftCards?: SoldGiftCardOnReceipt[];
+};
+
+export type SoldGiftCardOnReceipt = {
+  code: string;
+  balance: number;
+  holderName?: string | null;
+  recipientEmail?: string | null;
 };
 
 export type GiftCardSaleReceipt = {
@@ -554,6 +564,65 @@ export function generateGiftCardSaleReceiptText(
   return r;
 }
 
+/** Text block for e-gift codes merged onto the order receipt (ESC/POS adds QR + barcode). */
+export function formatSoldGiftCardsOnReceipt(
+  cards: SoldGiftCardOnReceipt[] | undefined,
+  L: ReturnType<typeof receiptLabels>,
+  width: number
+): string {
+  if (!cards?.length) return '';
+  const thin = '-'.repeat(width);
+  let r = '';
+  for (const gc of cards) {
+    const code = buildGiftCardBarcodePayload(gc.code);
+    if (!code) continue;
+    r += thin + '\n';
+    r += centerLine(L.giftCardTitle, width) + '\n';
+    if (gc.holderName?.trim()) {
+      r += `${L.customer}: ${gc.holderName.trim().slice(0, width - 12)}\n`;
+    }
+    if (gc.recipientEmail?.trim()) {
+      r += `Email: ${gc.recipientEmail.trim().slice(0, width - 7)}\n`;
+    }
+    r +=
+      padLine(`${L.giftCardBalance}:`, `CHF ${roundMoney2(gc.balance).toFixed(2)}`, width) + '\n';
+    r += `${L.giftCardCode}: ${code.slice(0, width - 8)}\n`;
+    r += centerLine(L.giftCardScanRedeem, width) + '\n';
+  }
+  return r;
+}
+
+/** ESC/POS redeem QR (120px) + Code128 for each sold e-gift on an order receipt. */
+export async function buildSoldGiftCardRedeemEscPosSections(
+  cards: SoldGiftCardOnReceipt[] | undefined,
+  paperWidthMm: 58 | 80 = 80
+): Promise<Uint8Array | null> {
+  if (!cards?.length) return null;
+  const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
+  const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
+  const parts: Uint8Array[] = [];
+  for (const gc of cards) {
+    const code = String(gc.code || '').trim();
+    if (!code) continue;
+    const payload = giftCardSaleBarcodePayload(code);
+    const label = buildGiftCardBarcodePayload(code);
+    const qrData = buildGiftCardRedeemQrPayload(code);
+    const qrRaster =
+      (await generateReceiptQrRasterEscPos(
+        qrData,
+        paperWidthMm,
+        giftCardRedeemQrRasterPx(paperWidthMm)
+      )) || escposQrCode(qrData, 4);
+    parts.push(alignCenter, qrRaster);
+    parts.push(escposCode128(payload, 72, 2));
+    if (label.trim()) {
+      parts.push(escposCp850Encode(`${label.trim()}\n`));
+    }
+    parts.push(alignLeft);
+  }
+  return parts.length ? concatBytes(...parts) : null;
+}
+
 /** Code128 payload — dashed redeem code only, e.g. EC-9E1E09C. */
 export function giftCardSaleBarcodePayload(code: string): string {
   return buildGiftCardBarcodePayload(code);
@@ -575,7 +644,11 @@ export async function buildGiftCardSaleReceiptEscPos(
   const label = buildGiftCardBarcodePayload(code);
   const qrData = buildGiftCardRedeemQrPayload(code);
   const qrRaster =
-    (await generateReceiptQrRasterEscPos(qrData, paperWidthMm)) ||
+    (await generateReceiptQrRasterEscPos(
+      qrData,
+      paperWidthMm,
+      giftCardRedeemQrRasterPx(paperWidthMm)
+    )) ||
     escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
@@ -1098,11 +1171,13 @@ function formatVatSection(
   L: ReturnType<typeof receiptLabels>,
   width: number
 ): string | null {
-  if (tx.showVat === false || tx.taxAmount <= 0 || tx.taxRate <= 0) return null;
-
-  const rateLabel = `${L.tva}: ${tx.taxRate}%`;
-  const net = roundMoney2(tx.subtotal);
+  if (tx.showVat === false) return null;
+  const rate = Number(tx.taxRate) || 0;
   const tva = roundMoney2(tx.taxAmount);
+  if (rate <= 0 || tva <= 0.001) return null;
+
+  const rateLabel = `${L.tva}: ${rate}%`;
+  const net = roundMoney2(tx.subtotal);
   const brut = roundMoney2(net + tva);
 
   if (tx.vatIncludedInPrice !== false) {
@@ -1546,6 +1621,10 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (vatSection) {
     r += thin + '\n';
     r += vatSection + '\n';
+  }
+  const soldGiftBlock = formatSoldGiftCardsOnReceipt(tx.soldGiftCards, L, width);
+  if (soldGiftBlock) {
+    r += soldGiftBlock;
   }
   if (tx.notes) r += `${L.note} ${tx.notes}\n`;
 
@@ -2875,9 +2954,10 @@ export function textToEscPos(
   barcodeData?: string,
   barcodeLabel?: string,
   deliveryQrRaster?: Uint8Array | null,
-  prefixAfterLogo?: Uint8Array | null
+  prefixAfterLogo?: Uint8Array | null,
+  postBodySections?: Uint8Array | null
 ): Uint8Array {
-  const hasQr = !!(qrRaster?.length || deliveryQrRaster?.length);
+  const hasQr = !!(qrRaster?.length || deliveryQrRaster?.length || postBodySections?.length);
   const body = escposCp850Encode(hasQr ? text.replace(/\n+$/, '') + '\n' : text);
   const init = new Uint8Array([0x1b, 0x40]);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
@@ -2902,6 +2982,9 @@ export function textToEscPos(
     if (barcodeLabel?.trim()) {
       parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
+  }
+  if (postBodySections?.length) {
+    parts.push(postBodySections);
   }
   parts.push(escposReceiptFeedAndCut(hasQr ? 5 : 4));
   return concatBytes(...parts);
@@ -2928,6 +3011,7 @@ export async function buildReceiptEscPos(
     headerAlign?: ReceiptHeaderAlign;
     headerBold?: boolean;
     headerTextScale?: 1 | 2 | 3;
+    soldGiftCards?: SoldGiftCardOnReceipt[];
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -2944,11 +3028,20 @@ export async function buildReceiptEscPos(
 
   if (opts.fastQr !== false) {
     if (digitalData && googleData) {
-      qrRaster = escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster =
+        (await buildDualReceiptQrRasterEscPos({
+          left: { label: L.digitalReceiptQrTitle, data: digitalData },
+          right: { label: L.googleReviewQrTitle, data: googleData },
+          paperWidthMm: paper,
+        })) || escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
     } else if (digitalData) {
-      qrRaster = escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster =
+        (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
+        escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
     } else if (googleData) {
-      qrRaster = escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster =
+        (await generateReceiptQrRasterEscPos(googleData, paper)) ||
+        escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
     }
   } else if (digitalData && googleData) {
     qrRaster =
@@ -3019,6 +3112,8 @@ export async function buildReceiptEscPos(
         })
       : null;
 
+  const giftCardEscPos = await buildSoldGiftCardRedeemEscPosSections(opts.soldGiftCards, paper);
+
   return textToEscPos(
     bodyText,
     qrRaster,
@@ -3026,7 +3121,8 @@ export async function buildReceiptEscPos(
     opts.barcodeData,
     opts.barcodeLabel,
     undefined,
-    headerEscPos
+    headerEscPos,
+    giftCardEscPos
   );
 }
 

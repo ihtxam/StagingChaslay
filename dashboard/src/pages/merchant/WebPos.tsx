@@ -54,6 +54,7 @@ import {
   type PosOrderForReceipt,
   type PosPrintSettingsClient,
   type WebPosReceipt,
+  type SoldGiftCardOnReceipt,
 } from '@/lib/webpos-receipt';
 import {
   normalizeAdyenTerminalReceipt,
@@ -1022,6 +1023,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const logoEscPosCacheRef = useRef<{ key: string; bytes: Uint8Array | null } | null>(null);
   /** Cached receipt ESC/POS (base64) from first build — success-screen reprint skips rebuild. */
   const lastReceiptEscPosBase64Ref = useRef<string>('');
+  const lastSoldGiftCardsRef = useRef<SoldGiftCardOnReceipt[]>([]);
   /** In-flight ESC/POS build so success-screen Print can await prefetch instead of rebuilding. */
   const lastReceiptEscPosPrefetchRef = useRef<Promise<string> | null>(null);
   const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
@@ -6349,7 +6351,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       quantity: 1,
       unitPrice: amount,
       lineTotal: amount,
-      taxable: false,
+      taxable: true,
       selectedExtras: [],
       comboSelections: [],
       isOpenPrice: true,
@@ -6530,7 +6532,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const fulfillEcardDeliveries = async (
     saleLines: CartLine[],
     orderId?: string | null
-  ) => {
+  ): Promise<SoldGiftCardOnReceipt[]> => {
+    const sold: SoldGiftCardOnReceipt[] = [];
     for (const line of saleLines) {
       const gc = line.giftCard;
       if (!gc || gc.op !== 'sell' || gc.mediaType !== 'e_card') continue;
@@ -6552,12 +6555,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!code) continue;
         const balance = Number(card?.balance ?? gc.amount);
         if (delivery === 'print' || delivery === 'both') {
-          void printGiftCardSaleReceipt({
+          sold.push({
             code,
             balance,
             recipientEmail: gc.ecardEmail,
             holderName: gc.holderName,
-          }).catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
+          });
         }
         if ((delivery === 'email' || delivery === 'both') && gc.ecardEmail) {
           await api.post('/gift-cards/send-ecard-email', {
@@ -6573,18 +6576,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.error(e.response?.data?.error || t('giftCardCreditFailed'));
       }
     }
+    return sold;
   };
 
-  const creditGiftCardLines = async (saleLines: CartLine[], orderId?: string | null) => {
+  const creditGiftCardLines = async (
+    saleLines: CartLine[],
+    orderId?: string | null
+  ): Promise<SoldGiftCardOnReceipt[]> => {
     const ecardLines = saleLines.filter(
       (l) => l.giftCard?.op === 'sell' && l.giftCard.mediaType === 'e_card'
     );
     const otherLines = saleLines.filter(
       (l) => l.giftCard && !(l.giftCard.op === 'sell' && l.giftCard.mediaType === 'e_card')
     );
-    if (ecardLines.length) {
-      await fulfillEcardDeliveries(ecardLines, orderId);
-    }
+    const soldEcards = ecardLines.length ? await fulfillEcardDeliveries(ecardLines, orderId) : [];
     for (const line of otherLines) {
       if (!line.giftCard) continue;
       try {
@@ -6617,6 +6622,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         toast.error(e.response?.data?.error || t('membershipSellFailed'));
       }
     }
+    return soldEcards;
   };
 
   const redeemGiftCardPayments = async (
@@ -7694,6 +7700,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       forceScannable?: boolean;
       paperWidthMm?: 58 | 80;
       fastQr?: boolean;
+      soldGiftCards?: SoldGiftCardOnReceipt[];
     } = {}
   ): Promise<string> => {
     const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(printSettings);
@@ -7742,6 +7749,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerAlign: headerFmt.align,
       headerBold: headerFmt.bold,
       headerTextScale: headerFmt.textScale,
+      soldGiftCards: opts.soldGiftCards,
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -7752,13 +7760,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const prefetchLastReceiptEscPos = (
     text: string,
     qrUrl?: string,
-    deliveryQrUrl?: string
+    deliveryQrUrl?: string,
+    soldGiftCards?: SoldGiftCardOnReceipt[]
   ) => {
     lastReceiptEscPosBase64Ref.current = '';
     const task = buildReceiptEscPosBase64(text, {
       qrUrl,
       deliveryQrUrl,
       fastQr: true,
+      soldGiftCards,
     })
       .then((b64) => {
         if (lastReceiptEscPosPrefetchRef.current === task) {
@@ -7778,7 +7788,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const resolveLastReceiptEscPosBase64 = async (
     text: string,
-    opts?: { qrUrl?: string; deliveryQrUrl?: string; dataBase64?: string; fastQr?: boolean }
+    opts?: {
+      qrUrl?: string;
+      deliveryQrUrl?: string;
+      dataBase64?: string;
+      fastQr?: boolean;
+      soldGiftCards?: SoldGiftCardOnReceipt[];
+    }
   ): Promise<string> => {
     if (opts?.dataBase64) return opts.dataBase64;
     if (lastReceiptEscPosBase64Ref.current) return lastReceiptEscPosBase64Ref.current;
@@ -7793,6 +7809,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       qrUrl: opts?.qrUrl,
       deliveryQrUrl: opts?.deliveryQrUrl,
       fastQr: opts?.fastQr !== false,
+      soldGiftCards: opts?.soldGiftCards ?? lastSoldGiftCardsRef.current,
     });
   };
 
@@ -7814,6 +7831,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       dataBase64?: string;
       /** Use embedded QR instead of slow network raster fetch. */
       fastQr?: boolean;
+      soldGiftCards?: SoldGiftCardOnReceipt[];
     }
   ) => {
     const targets = printersForRole(printSettings, opts.role);
@@ -7899,6 +7917,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerAlign: headerFmt.align,
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
+        soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
@@ -8036,6 +8055,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           deliveryQrUrl: lastDeliveryQrUrl || undefined,
           dataBase64: lastReceiptEscPosBase64Ref.current || undefined,
           fastQr: true,
+          soldGiftCards: lastSoldGiftCardsRef.current,
         }).catch(() => lastReceiptEscPosBase64Ref.current || '');
         await printReceipt(lastReceipt, lastReceiptUrl || undefined, lastDeliveryQrUrl || undefined, {
           dataBase64: dataBase64 || undefined,
@@ -8786,11 +8806,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     // Credit gift-card sell/reload lines after successful online persistence only
     let giftCardRemainingBalance: number | null = null;
+    let soldGiftCards: SoldGiftCardOnReceipt[] = [];
     if (!queuedOffline) {
       if (opts?.payments?.length) {
         giftCardRemainingBalance = await redeemGiftCardPayments(opts.payments, backendOrderId);
       }
-      await creditGiftCardLines(saleLines, backendOrderId);
+      soldGiftCards = await creditGiftCardLines(saleLines, backendOrderId);
       if (
         attachedMembership?.membershipEnabled &&
         backendOrderId &&
@@ -8942,12 +8963,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       adyenCustomerReceipt: normalizeAdyenTerminalReceipt(terminalCapture?.customerReceipt),
       printAdyenReceiptOnTicket: printSettings?.adyenReceiptDigitalOnly !== true,
       giftCardRemainingBalance,
+      soldGiftCards: soldGiftCards.length ? soldGiftCards : undefined,
     };
     const receiptText = generateWebPosReceiptText(receiptPayload, locale);
     const deliveryQrUrl = deliveryDirectionsUrlForReceipt(receiptPayload);
+    lastSoldGiftCardsRef.current = soldGiftCards;
     if (method !== 'pay_later' && method !== 'invoice') {
       setLastReceipt(receiptText);
-      void prefetchLastReceiptEscPos(receiptText, receiptUrl, deliveryQrUrl).catch(() => undefined);
+      void prefetchLastReceiptEscPos(
+        receiptText,
+        receiptUrl,
+        deliveryQrUrl,
+        soldGiftCards.length ? soldGiftCards : undefined
+      ).catch(() => undefined);
       setLastReceiptUrl(receiptUrl);
       setCdsThankYouSnapshot({
         subtotal: saleTotals.subtotal,
@@ -9160,6 +9188,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             qrUrl: receiptUrl,
             deliveryQrUrl,
             fastQr: true,
+            soldGiftCards: soldGiftCards.length ? soldGiftCards : undefined,
           })
         : null;
       void (async () => {

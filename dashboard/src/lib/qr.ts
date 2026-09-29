@@ -167,10 +167,14 @@ export function qrImageUrl(
   )}`;
 }
 
-/** Thermal receipt QR raster width — 40% smaller than prior 84px default on 80mm. */
-export const RECEIPT_QR_RASTER_PX_80 = 50;
-/** 58mm thermal QR — 40% smaller than prior 70px default. */
-export const RECEIPT_QR_RASTER_PX_58 = 42;
+/** Thermal digital-receipt QR raster width on 80mm (half of prior 50px default). */
+export const RECEIPT_QR_RASTER_PX_80 = 25;
+/** 58mm digital-receipt QR — half of prior 42px default. */
+export const RECEIPT_QR_RASTER_PX_58 = 21;
+
+/** E-gift redeem QR on customer receipt — minimum readable size on thermal. */
+export const GIFT_CARD_REDEEM_QR_RASTER_PX_80 = 120;
+export const GIFT_CARD_REDEEM_QR_RASTER_PX_58 = 96;
 
 /** Native ESC/POS QR module size for receipt tickets (1–16; was 2). */
 export const RECEIPT_QR_ESCPOS_MODULE_SIZE = 1;
@@ -189,6 +193,12 @@ export const DELIVERY_SLIP_QR_RASTER_PX_58 = 280;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;
+}
+
+export function giftCardRedeemQrRasterPx(paperWidthMm?: 58 | 80): number {
+  return paperWidthMm === 58
+    ? GIFT_CARD_REDEEM_QR_RASTER_PX_58
+    : GIFT_CARD_REDEEM_QR_RASTER_PX_80;
 }
 
 export function receiptQrCanvasPx(paperWidthMm?: 58 | 80): number {
@@ -246,11 +256,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 /** Bitmap receipt QR for thermal print (matches Android EscPosImageEncoder path). */
 export async function generateReceiptQrRasterEscPos(
   data: string,
-  paperWidthMm?: 58 | 80
+  paperWidthMm?: 58 | 80,
+  sizePx?: number
 ): Promise<Uint8Array | null> {
   const raw = String(data || '').trim();
   if (!raw || typeof document === 'undefined') return null;
-  const size = receiptQrRasterPx(paperWidthMm);
+  const size = sizePx ?? receiptQrRasterPx(paperWidthMm);
   try {
     const canvas = document.createElement('canvas');
     await QRCode.toCanvas(canvas, raw, {
