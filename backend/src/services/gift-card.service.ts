@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { memberSpendingOrderTransactionTypes } from "@/lib/gift-card-member-spending";
 import {
   buildGiftCardRedeemQrPayload,
   buildGiftCardRedeemUrl,
@@ -59,13 +60,7 @@ function assertLookupAllowed(card: { status: string; expiresAt?: Date | null }) 
   if (card.status !== "active") throw new Error("Card is not active");
 }
 
-const PURCHASE_TX_TYPES = [
-  "redeem",
-  "points_earn",
-  "points_redeem",
-  "stamp_earn",
-  "stamp_reward",
-] as const;
+const PURCHASE_TX_TYPES = memberSpendingOrderTransactionTypes();
 
 async function assertOpenShiftForSell(merchantId: string) {
   const db = getDb();
@@ -165,6 +160,7 @@ export class GiftCardService {
             c.ecardCode,
             c.holderName,
             c.holderEmail,
+            c.ecardEmail,
             c.holderPhone,
             c.customer?.firstName,
             c.customer?.lastName,
@@ -345,7 +341,10 @@ export class GiftCardService {
         pointsBalance: 0,
         customerId: input.customerId || null,
         holderName: input.holderName?.trim() || null,
-        holderEmail: input.holderEmail?.trim() || null,
+        holderEmail:
+          input.holderEmail?.trim() ||
+          (mediaType === "e_card" ? input.ecardEmail?.trim() : undefined) ||
+          null,
         holderPhone: input.holderPhone?.trim() || null,
         ecardEmail: input.ecardEmail?.trim() || null,
         ecardCode,
@@ -444,6 +443,31 @@ export class GiftCardService {
 
     const activeCard = card!;
     assertActive(activeCard);
+
+    const ecardEmailPatch = opts.ecardEmail?.trim();
+    const holderNamePatch = opts.holderName?.trim();
+    if (ecardEmailPatch || holderNamePatch) {
+      await db
+        .update(schema.giftCards)
+        .set({
+          ...(ecardEmailPatch
+            ? {
+                ecardEmail: ecardEmailPatch,
+                holderEmail: activeCard.holderEmail?.trim() || ecardEmailPatch,
+              }
+            : {}),
+          ...(holderNamePatch && !activeCard.holderName?.trim()
+            ? { holderName: holderNamePatch }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.giftCards.id, activeCard.id),
+            eq(schema.giftCards.merchantId, merchantId)
+          )
+        );
+    }
 
     const newBalance = money(activeCard.balance) + amount;
     const balanceCap = Math.max(settings.maxAmount, opts.type === "sell" ? amount : 0);
@@ -1008,12 +1032,18 @@ export class GiftCardService {
       holderPhone = digits;
     }
 
+    const ecardEmail =
+      card.cardMediaType === "e_card" && holderEmail
+        ? holderEmail
+        : card.ecardEmail;
+
     const updated = await db
       .update(schema.giftCards)
       .set({
         holderName: holderName ?? null,
         holderEmail: holderEmail ?? null,
         holderPhone: holderPhone ?? null,
+        ecardEmail,
         updatedAt: new Date(),
       })
       .where(
@@ -1214,8 +1244,30 @@ export class GiftCardService {
     const statsOrders = allForStats.filter(
       (o) => o.status !== "cancelled" && o.paymentStatus !== "failed"
     );
-    const totalSpent = statsOrders.reduce((sum, o) => sum + money(o.total), 0);
-    const orderCount = statsOrders.length;
+    let totalSpent = statsOrders.reduce((sum, o) => sum + money(o.total), 0);
+    let orderCount = statsOrders.length;
+
+    const orphanSellRows = await db
+      .select({
+        amount: schema.giftCardTransactions.amount,
+      })
+      .from(schema.giftCardTransactions)
+      .where(
+        and(
+          eq(schema.giftCardTransactions.merchantId, merchantId),
+          eq(schema.giftCardTransactions.cardId, cardId),
+          eq(schema.giftCardTransactions.transactionType, "sell"),
+          isNull(schema.giftCardTransactions.orderId)
+        )
+      );
+    if (orphanSellRows.length > 0) {
+      const orphanTotal = orphanSellRows.reduce(
+        (sum, row) => sum + money(row.amount),
+        0
+      );
+      totalSpent += orphanTotal;
+      orderCount += orphanSellRows.length;
+    }
 
     return {
       statistics: {
