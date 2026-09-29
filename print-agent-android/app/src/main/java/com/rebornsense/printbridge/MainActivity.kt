@@ -2,6 +2,8 @@ package com.rebornsense.printbridge
 
 import android.Manifest
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -48,6 +50,12 @@ class MainActivity : AppCompatActivity() {
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
+    private val usbPermissionSettledReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            refreshPrintersSafely()
+        }
+    }
+    private var usbPermissionReceiverRegistered = false
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
             updateServiceStatus()
@@ -136,6 +144,13 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleUsbAttachIntent(intent)
+        consumeRefreshPrintersExtra(intent)
+    }
+
+    private fun consumeRefreshPrintersExtra(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_REFRESH_PRINTERS, false) != true) return
+        intent.removeExtra(EXTRA_REFRESH_PRINTERS)
+        refreshPrintersSafely()
     }
 
     /** Legacy extra from older builds; USB attach is handled by [UsbPrinterAttachActivity]. */
@@ -166,9 +181,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        registerUsbPermissionSettledReceiver()
         if (notificationPermissionResolved) {
             refreshPrintersSafely()
         }
+        consumeRefreshPrintersExtra(intent)
         updateServiceStatus()
         updateTapToPayDiagnostics()
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
@@ -176,7 +193,26 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
+        unregisterUsbPermissionSettledReceiver()
         super.onPause()
+    }
+
+    private fun registerUsbPermissionSettledReceiver() {
+        if (usbPermissionReceiverRegistered) return
+        val filter = IntentFilter(UsbHostPermissions.ACTION_PERMISSION_SETTLED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbPermissionSettledReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(usbPermissionSettledReceiver, filter)
+        }
+        usbPermissionReceiverRegistered = true
+    }
+
+    private fun unregisterUsbPermissionSettledReceiver() {
+        if (!usbPermissionReceiverRegistered) return
+        runCatching { unregisterReceiver(usbPermissionSettledReceiver) }
+        usbPermissionReceiverRegistered = false
     }
 
     override fun onDestroy() {
@@ -496,6 +532,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_USB_DEVICE_ID = "usb_device_id"
+        const val EXTRA_REFRESH_PRINTERS = "refresh_printers"
         private const val SERVICE_STATUS_INTERVAL_MS = 3_000L
     }
 }

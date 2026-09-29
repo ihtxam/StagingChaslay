@@ -56,24 +56,32 @@ object PrintBridgeLauncher {
     /**
      * Ask the bridge to re-scan printers.
      * Never starts a foreground service from a background [Context] (USB broadcasts crash on Android 12+).
+     * Health probe runs off the main thread (USB permission callbacks are on the UI thread).
      */
     fun refreshPrinters(context: Context) {
         val appContext = context.applicationContext
+        val hostActivity = context as? android.app.Activity
         val intent = Intent(appContext, PrintBridgeService::class.java).apply {
             action = ACTION_REFRESH_PRINTERS
         }
-        if (BridgeHealthChecker.isHealthy()) {
-            runCatching { appContext.startService(intent) }
-                .onFailure { Log.w(TAG, "refresh via startService failed", it) }
-            return
-        }
-        if (context !is android.app.Activity) {
-            Log.d(TAG, "refreshPrinters skipped — service not running and caller is background")
-            return
-        }
-        if (!BridgePermissions.hasNotificationPermission(appContext)) return
-        runCatching { ContextCompat.startForegroundService(appContext, intent) }
-            .onFailure { Log.w(TAG, "refresh FGS start failed", it) }
+        Thread {
+            val healthy = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
+            if (healthy) {
+                runCatching { appContext.startService(intent) }
+                    .onFailure { Log.w(TAG, "refresh via startService failed", it) }
+                return@Thread
+            }
+            if (hostActivity == null) {
+                Log.d(TAG, "refreshPrinters skipped — service not running and caller is background")
+                return@Thread
+            }
+            if (!BridgePermissions.hasNotificationPermission(appContext)) return@Thread
+            retryHandler.post {
+                if (hostActivity.isFinishing || hostActivity.isDestroyed) return@post
+                runCatching { ContextCompat.startForegroundService(appContext, intent) }
+                    .onFailure { Log.w(TAG, "refresh FGS start failed", it) }
+            }
+        }.start()
     }
 
     private fun scheduleRetries(appContext: Context, intent: Intent) {

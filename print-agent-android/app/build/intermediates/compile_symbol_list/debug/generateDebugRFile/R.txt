@@ -43,6 +43,8 @@ int string auto_start_disabled_toast 0x0
 int string auto_start_enabled_toast 0x0
 int string auto_start_summary 0x0
 int string auto_start_title 0x0
+int string bridge_start_failed 0x0
+int string bridge_start_requested 0x0
 int string bridge_version_header 0x0
 int string bridge_version_label 0x0
 int string default_badge 0x0
@@ -52,6 +54,7 @@ int string grant_usb_printer 0x0
 int string lan_printer_added 0x0
 int string lan_printer_dialog_message 0x0
 int string lan_printer_hint 0x0
+int string lan_printer_invalid 0x0
 int string lan_printer_label 0x0
 int string main_hint_short 0x0
 int string no_printers_yet 0x0

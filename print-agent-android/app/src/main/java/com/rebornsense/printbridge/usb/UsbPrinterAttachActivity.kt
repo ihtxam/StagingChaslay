@@ -5,7 +5,6 @@ import android.hardware.usb.UsbManager
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.rebornsense.printbridge.MainActivity
-import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
  * Launched by the system when a filtered USB printer is plugged in (same pattern as Reborn POS).
@@ -48,10 +47,10 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
     }
 
     private fun onUsbAccessReady() {
-        PrintBridgeLauncher.refreshPrinters(this)
         startActivity(
             Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra(MainActivity.EXTRA_REFRESH_PRINTERS, true)
             },
         )
         finish()

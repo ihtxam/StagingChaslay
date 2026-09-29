@@ -4,24 +4,21 @@ import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
-import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.print.PrinterPreferences
-import java.lang.ref.WeakReference
 
 /**
  * USB host permission for printers only (not barcode/RFID peripherals).
  */
 object UsbHostPermissions {
     const val ACTION = "com.rebornsense.printbridge.USB_PERMISSION"
+    /** Sent on the main thread after the user responds to the system USB allow dialog. */
+    const val ACTION_PERMISSION_SETTLED = "com.rebornsense.printbridge.USB_PERMISSION_SETTLED"
 
     @Volatile
     private var receiverRegistered = false
 
     @Volatile
     private var pendingPermissionDeviceId: Int? = null
-
-    @Volatile
-    private var permissionHostActivity: WeakReference<android.app.Activity>? = null
 
     private val receiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
@@ -32,14 +29,10 @@ object UsbHostPermissions {
             if (granted) {
                 PrinterPreferences.rememberUsbDevice(context, deviceKey(device))
             }
-            val app = context.applicationContext
-            val host = permissionHostActivity?.get()
-            permissionHostActivity = null
-            when {
-                host != null -> com.rebornsense.printbridge.PrintBridgeLauncher.refreshPrinters(host)
-                BridgeHealthChecker.isHealthy() ->
-                    com.rebornsense.printbridge.PrintBridgeLauncher.refreshPrinters(app)
-            }
+            context.applicationContext.sendBroadcast(
+                android.content.Intent(ACTION_PERMISSION_SETTLED).setPackage(context.packageName),
+            )
+            // Do not start FGS or probe /health here — this receiver runs on the main thread.
         }
     }
 
@@ -89,7 +82,6 @@ object UsbHostPermissions {
 
     fun requestPermissionForDevice(activity: android.app.Activity, device: UsbDevice): Boolean {
         register(activity)
-        permissionHostActivity = WeakReference(activity)
         if (pendingPermissionDeviceId != null) return false
         val usb = usbManager(activity) ?: return false
         if (usb.hasPermission(device)) {
@@ -115,10 +107,7 @@ object UsbHostPermissions {
         val intent = android.content.Intent(ACTION).setPackage(context.packageName)
         val pi = android.app.PendingIntent.getBroadcast(context, device.deviceId, intent, flags)
         runCatching { usb.requestPermission(device, pi) }
-            .onFailure {
-                pendingPermissionDeviceId = null
-                permissionHostActivity = null
-            }
+            .onFailure { pendingPermissionDeviceId = null }
     }
 
     private fun usbManager(context: android.content.Context): UsbManager? =

@@ -44,6 +44,8 @@ string auto_start_disabled_toast
 string auto_start_enabled_toast
 string auto_start_summary
 string auto_start_title
+string bridge_start_failed
+string bridge_start_requested
 string bridge_version_header
 string bridge_version_label
 string default_badge
@@ -53,6 +55,7 @@ string grant_usb_printer
 string lan_printer_added
 string lan_printer_dialog_message
 string lan_printer_hint
+string lan_printer_invalid
 string lan_printer_label
 string main_hint_short
 string no_printers_yet
