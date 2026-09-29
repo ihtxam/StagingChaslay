@@ -37,18 +37,23 @@ object PrintBridgeLauncher {
             Log.w(TAG, "Skipping FGS start — POST_NOTIFICATIONS not granted")
             return false
         }
-        if (context !is android.app.Activity && !BridgeSafeStart.canStartBackgroundService(appContext)) {
-            Log.w(TAG, "Skipping FGS start — UI not ready for background start")
+        if (!BridgeSafeStart.mayStartForegroundService(context)) {
+            Log.w(TAG, "Skipping FGS start — no eligible foreground context")
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)
+        val fromActivity = context is android.app.Activity
         return runCatching {
             ContextCompat.startForegroundService(appContext, intent)
-            scheduleRetries(appContext, intent)
+            if (fromActivity) {
+                scheduleRetries(appContext, intent)
+            }
             true
         }.getOrElse { error ->
-            Log.w(TAG, "FGS start failed, scheduling retry", error)
-            scheduleRetries(appContext, intent)
+            Log.w(TAG, "FGS start failed", error)
+            if (fromActivity) {
+                scheduleRetries(appContext, intent)
+            }
             false
         }
     }
@@ -78,6 +83,7 @@ object PrintBridgeLauncher {
             if (!BridgePermissions.hasNotificationPermission(appContext)) return@Thread
             retryHandler.post {
                 if (hostActivity.isFinishing || hostActivity.isDestroyed) return@post
+                if (!BridgeSafeStart.mayStartForegroundService(hostActivity)) return@post
                 runCatching { ContextCompat.startForegroundService(appContext, intent) }
                     .onFailure { Log.w(TAG, "refresh FGS start failed", it) }
             }
@@ -90,10 +96,16 @@ object PrintBridgeLauncher {
             retryHandler.postDelayed({
                 if (generation != retryGeneration) return@postDelayed
                 if (!BridgePermissions.hasNotificationPermission(appContext)) return@postDelayed
-                if (!BridgeSafeStart.canStartBackgroundService(appContext)) return@postDelayed
-                if (BridgeHealthChecker.isHealthy()) return@postDelayed
-                runCatching { ContextCompat.startForegroundService(appContext, intent) }
-                    .onFailure { Log.w(TAG, "FGS retry after ${delayMs}ms failed", it) }
+                if (!BridgeSafeStart.mainActivityVisible) return@postDelayed
+                Thread {
+                    val healthy = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
+                    if (healthy) return@Thread
+                    retryHandler.post {
+                        if (!BridgeSafeStart.mainActivityVisible) return@post
+                        runCatching { ContextCompat.startForegroundService(appContext, intent) }
+                            .onFailure { Log.w(TAG, "FGS retry after ${delayMs}ms failed", it) }
+                    }
+                }.start()
             }, delayMs)
         }
     }

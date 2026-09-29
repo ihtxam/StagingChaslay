@@ -2,8 +2,6 @@ package com.rebornsense.printbridge
 
 import android.Manifest
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.BroadcastReceiver
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -50,12 +48,6 @@ class MainActivity : AppCompatActivity() {
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
-    private val usbPermissionSettledReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            refreshPrintersSafely()
-        }
-    }
-    private var usbPermissionReceiverRegistered = false
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
             updateServiceStatus()
@@ -137,6 +129,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
         updateTapToPayDiagnostics()
         window.decorView.post { BridgeSafeStart.markUiReady() }
+        UsbHostPermissions.onPermissionSettled = {
+            if (!isFinishing && !isDestroyed) refreshPrintersSafely()
+        }
         handleUsbAttachIntent(intent)
     }
 
@@ -179,9 +174,18 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.requestApplyInsets(scroll)
     }
 
+    override fun onStart() {
+        super.onStart()
+        BridgeSafeStart.mainActivityVisible = true
+    }
+
+    override fun onStop() {
+        BridgeSafeStart.mainActivityVisible = false
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
-        registerUsbPermissionSettledReceiver()
         if (notificationPermissionResolved) {
             refreshPrintersSafely()
         }
@@ -193,29 +197,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
-        unregisterUsbPermissionSettledReceiver()
         super.onPause()
     }
 
-    private fun registerUsbPermissionSettledReceiver() {
-        if (usbPermissionReceiverRegistered) return
-        val filter = IntentFilter(UsbHostPermissions.ACTION_PERMISSION_SETTLED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbPermissionSettledReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(usbPermissionSettledReceiver, filter)
-        }
-        usbPermissionReceiverRegistered = true
-    }
-
-    private fun unregisterUsbPermissionSettledReceiver() {
-        if (!usbPermissionReceiverRegistered) return
-        runCatching { unregisterReceiver(usbPermissionSettledReceiver) }
-        usbPermissionReceiverRegistered = false
-    }
-
     override fun onDestroy() {
+        if (UsbHostPermissions.onPermissionSettled != null) {
+            UsbHostPermissions.onPermissionSettled = null
+        }
         BridgeSafeStart.cancelPending()
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
         super.onDestroy()

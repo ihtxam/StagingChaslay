@@ -18,6 +18,13 @@ object BridgeSafeStart {
     @Volatile
     var allowWatchdogAndBackgroundStart: Boolean = false
 
+    /** One-shot for [BootCompletedReceiver] only — not for watchdog or Application context. */
+    @Volatile
+    private var allowBootReceiverStart: Boolean = false
+
+    @Volatile
+    var mainActivityVisible: Boolean = false
+
     fun markUiReady() {
         allowWatchdogAndBackgroundStart = true
     }
@@ -26,6 +33,22 @@ object BridgeSafeStart {
         if (!allowWatchdogAndBackgroundStart) return false
         if (!BridgePermissions.hasNotificationPermission(context)) return false
         return true
+    }
+
+    fun mayStartForegroundService(context: android.content.Context): Boolean {
+        if (context is Activity) return true
+        if (allowBootReceiverStart) return true
+        if (mainActivityVisible && canStartBackgroundService(context)) return true
+        return false
+    }
+
+    fun runWithBootReceiverStart(block: () -> Unit) {
+        allowBootReceiverStart = true
+        try {
+            block()
+        } finally {
+            allowBootReceiverStart = false
+        }
     }
 
     /** Call from MainActivity after POST_NOTIFICATIONS is granted. */

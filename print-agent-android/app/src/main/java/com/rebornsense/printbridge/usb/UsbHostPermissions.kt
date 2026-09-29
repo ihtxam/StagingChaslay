@@ -11,8 +11,6 @@ import com.rebornsense.printbridge.print.PrinterPreferences
  */
 object UsbHostPermissions {
     const val ACTION = "com.rebornsense.printbridge.USB_PERMISSION"
-    /** Sent on the main thread after the user responds to the system USB allow dialog. */
-    const val ACTION_PERMISSION_SETTLED = "com.rebornsense.printbridge.USB_PERMISSION_SETTLED"
 
     @Volatile
     private var receiverRegistered = false
@@ -29,12 +27,15 @@ object UsbHostPermissions {
             if (granted) {
                 PrinterPreferences.rememberUsbDevice(context, deviceKey(device))
             }
-            context.applicationContext.sendBroadcast(
-                android.content.Intent(ACTION_PERMISSION_SETTLED).setPackage(context.packageName),
-            )
-            // Do not start FGS or probe /health here — this receiver runs on the main thread.
+            val callback = onPermissionSettled
+            if (callback != null) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post(callback)
+            }
         }
     }
+
+    @Volatile
+    var onPermissionSettled: (() -> Unit)? = null
 
     fun register(context: android.content.Context) {
         val app = context.applicationContext
