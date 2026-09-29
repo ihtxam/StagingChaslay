@@ -108,7 +108,12 @@ import {
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { printerUsesLabelProtocol } from '@/lib/label-print-protocol';
-import { probeDeviceBridgeHealth, runDeviceBridgeTapToPay, syncBridgeWebPosOrigin } from '@/lib/device-bridge';
+import {
+  probeDeviceBridgeHealth,
+  requestBridgeRebornAutostart,
+  runDeviceBridgeTapToPay,
+  syncBridgeWebPosOrigin,
+} from '@/lib/device-bridge';
 import {
   isLocalPrintStation,
   printKitchenViaAgentOrQueue,
@@ -2302,7 +2307,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [categories, products]);
 
   const refreshAgent = useCallback(async () => {
-    const health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
+    let health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
+    if (!health.ok && isAndroidWebPosTill()) {
+      requestBridgeRebornAutostart();
+      health = await probePrintAgentHealth(8);
+    }
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));
     try {

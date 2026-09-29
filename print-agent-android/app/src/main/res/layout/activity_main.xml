@@ -163,6 +163,13 @@
                         android:text="@string/grant_usb_printer" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/addBluetoothBtn"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/add_bluetooth_printer" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/refreshBtn"
                         style="@style/Widget.MaterialComponents.Button.TextButton"
                         android:layout_width="wrap_content"

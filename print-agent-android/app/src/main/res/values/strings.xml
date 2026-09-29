@@ -13,6 +13,9 @@
     <string name="main_hint_short">WebPOS in Chrome prints through Bridge on this device.</string>
     <string name="refresh_printers">Refresh</string>
     <string name="grant_usb_printer">USB printer access</string>
+    <string name="add_bluetooth_printer">Bluetooth</string>
+    <string name="bluetooth_refresh_hint">Pair your ESC/POS printer in Android Settings, then tap Bluetooth or Refresh.</string>
+    <string name="bluetooth_permission_toast">Allow Bluetooth so Bridge can list paired printers.</string>
     <string name="usb_grant_wait_permissions">Allow notifications first, then tap USB printer access.</string>
     <string name="usb_grant_none_pending">No USB receipt printer needs access. Barcode/RFID scanners are ignored. Plug in the printer and tap again.</string>
     <string name="notification_permission_required">Notifications are required so Bridge can run in the background. Allow notifications, then tap Start background service.</string>

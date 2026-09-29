@@ -133,10 +133,12 @@ class MainActivity : AppCompatActivity() {
         requestNeededPermissions()
         findViewById<MaterialButton>(R.id.refreshBtn).setOnClickListener { refreshPrinters() }
         findViewById<MaterialButton>(R.id.grantUsbBtn).setOnClickListener { requestUsbPrinterAccess() }
+        findViewById<MaterialButton>(R.id.addBluetoothBtn).setOnClickListener { requestBluetoothPrinterAccess() }
         findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
         handleUsbAttachIntent(intent)
+        handleAutostartBridgeIntent(intent)
         showLanPrintersNow()
         window.decorView.post {
             if (!isFinishing && !isDestroyed) showSavedCrashIfAny()
@@ -148,6 +150,9 @@ class MainActivity : AppCompatActivity() {
         if (isFinishing || isDestroyed) return
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_checking)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
+        if (PrinterPreferences.isAutoStartEnabled(this)) {
+            BridgeSafeStart.scheduleStartFromActivity(this, 1_200L)
+        }
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
             refreshServiceStatusReadOnly()
         }
@@ -157,6 +162,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleUsbAttachIntent(intent)
+        handleAutostartBridgeIntent(intent)
         consumeRefreshPrintersExtra(intent)
     }
 
@@ -666,6 +672,32 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun requestBluetoothPrinterAccess() {
+        if (!runtimePermissionsResolved) {
+            Toast.makeText(this, R.string.usb_grant_wait_permissions, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val needed = bluetoothPermissionsNeeded()
+        if (needed.isNotEmpty()) {
+            bluetoothPermissionLauncher.launch(needed.toTypedArray())
+            Toast.makeText(this, R.string.bluetooth_permission_toast, Toast.LENGTH_LONG).show()
+            return
+        }
+        Toast.makeText(this, R.string.bluetooth_refresh_hint, Toast.LENGTH_LONG).show()
+        refreshPrintersSafely()
+    }
+
+    /** WebPOS PWA opens Bridge with this extra so the foreground service starts without manual taps. */
+    private fun handleAutostartBridgeIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_AUTOSTART_BRIDGE, false) != true) return
+        intent.removeExtra(EXTRA_AUTOSTART_BRIDGE)
+        if (!runtimePermissionsResolved) return
+        if (!PrinterPreferences.isAutoStartEnabled(this)) return
+        window.decorView.post {
+            if (!isFinishing && !isDestroyed) startBridgeManually()
+        }
+    }
+
     private fun requestUsbPrinterAccess() {
         if (!runtimePermissionsResolved) {
             Toast.makeText(this, R.string.usb_grant_wait_permissions, Toast.LENGTH_SHORT).show()
@@ -849,6 +881,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_USB_DEVICE_ID = "usb_device_id"
         const val EXTRA_REFRESH_PRINTERS = "refresh_printers"
+        const val EXTRA_AUTOSTART_BRIDGE = "autostart_bridge_service"
         private const val TAG = "MainActivity"
         private val START_PROBE_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L)
     }

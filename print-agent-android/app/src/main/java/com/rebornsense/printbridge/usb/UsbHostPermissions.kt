@@ -80,6 +80,9 @@ object UsbHostPermissions {
         val chosen = best ?: return
         val stableId = "usb:${chosen.vendorId}:${chosen.productId}"
         val current = PrinterPreferences.getDefaultPrinterId(app)
+        if (current == com.rebornsense.printbridge.print.StalePrinterSelection.SUNMI_INTERNAL_ID) {
+            return
+        }
         if (current.isNullOrBlank() || (current.startsWith("usb:") && !usbDeviceStillDefault(app, usb, current))) {
             PrinterPreferences.setDefaultPrinterId(app, stableId)
         }
