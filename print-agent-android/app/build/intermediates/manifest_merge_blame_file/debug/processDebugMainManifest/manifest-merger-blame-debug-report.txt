@@ -1,0 +1,285 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.rebornsense.printbridge"
+4    android:versionCode="28"
+5    android:versionName="0.4.10" >
+6
+7    <uses-sdk
+7-->INJECTED
+8        android:minSdkVersion="24"
+8-->INJECTED
+9        android:targetSdkVersion="35" />
+9-->INJECTED
+10
+11    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+11-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:5:5-77
+11-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:5:22-74
+12    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+12-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:6:5-87
+12-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:6:22-84
+13    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+13-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:7:5-77
+13-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:7:22-74
+14    <uses-permission
+14-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:8:5-95
+15        android:name="android.permission.BLUETOOTH"
+15-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:8:22-65
+16        android:maxSdkVersion="30" />
+16-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:8:66-92
+17    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+17-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:9:5-76
+17-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:9:22-73
+18    <uses-permission
+18-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:10:5-13:31
+19        android:name="android.permission.BLUETOOTH_SCAN"
+19-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:11:9-57
+20        android:usesPermissionFlags="neverForLocation" />
+20-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:12:9-55
+21    <uses-permission android:name="android.permission.INTERNET" />
+21-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:14:5-67
+21-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:14:22-64
+22    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+22-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:15:5-81
+22-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:15:22-78
+23    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+23-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:16:5-95
+23-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:16:22-92
+24
+25    <uses-feature
+25-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:17:5-87
+26        android:name="android.hardware.usb.host"
+26-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:17:19-59
+27        android:required="false" />
+27-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:17:60-84
+28
+29    <uses-permission android:name="android.permission.NFC" />
+29-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:19:5-62
+29-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:19:22-59
+30
+31    <uses-feature
+31-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:20:5-82
+32        android:name="android.hardware.nfc"
+32-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:20:19-54
+33        android:required="false" />
+33-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:20:55-79
+34
+35    <permission
+35-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+36        android:name="com.rebornsense.printbridge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+36-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+37        android:protectionLevel="signature" />
+37-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+38
+39    <uses-permission android:name="com.rebornsense.printbridge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+39-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+39-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+40
+41    <application
+41-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:22:5-96:19
+42        android:name="com.rebornsense.printbridge.PrintBridgeApplication"
+42-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:23:9-47
+43        android:allowBackup="true"
+43-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:24:9-35
+44        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+44-->[androidx.core:core:1.15.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/fdf002dc60c67f64b0a19324eb5da0f2/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+45        android:debuggable="true"
+46        android:extractNativeLibs="false"
+46-->INJECTED
+47        android:fullBackupContent="@xml/backup_rules"
+47-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:26:9-54
+48        android:icon="@drawable/ic_launcher"
+48-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:27:9-45
+49        android:label="@string/app_name"
+49-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:28:9-41
+50        android:roundIcon="@drawable/ic_launcher"
+50-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:29:9-50
+51        android:supportsRtl="true"
+51-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:30:9-35
+52        android:theme="@style/Theme.RebornPrintBridge" >
+52-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:31:9-55
+53        <activity
+53-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:33:9-41:20
+54            android:name="com.rebornsense.printbridge.MainActivity"
+54-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:34:13-41
+55            android:exported="true"
+55-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:35:13-36
+56            android:launchMode="singleTask" >
+56-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:36:13-44
+57            <intent-filter>
+57-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:37:13-40:29
+58                <action android:name="android.intent.action.MAIN" />
+58-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:38:17-69
+58-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:38:25-66
+59
+60                <category android:name="android.intent.category.LAUNCHER" />
+60-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:39:17-77
+60-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:39:27-74
+61            </intent-filter>
+62        </activity>
+63        <activity
+63-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:43:9-57:20
+64            android:name="com.rebornsense.printbridge.usb.UsbPrinterAttachActivity"
+64-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:44:13-57
+65            android:excludeFromRecents="true"
+65-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:46:13-46
+66            android:exported="true"
+66-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:45:13-36
+67            android:launchMode="singleTask"
+67-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:47:13-44
+68            android:noHistory="true"
+68-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:48:13-37
+69            android:taskAffinity=""
+69-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:49:13-36
+70            android:theme="@style/Theme.RebornPrintBridge.Transparent" >
+70-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:50:13-71
+71            <intent-filter>
+71-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:51:13-53:29
+72                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+72-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:52:17-90
+72-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:52:25-87
+73            </intent-filter>
+74
+75            <meta-data
+75-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:54:13-56:61
+76                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+76-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:55:17-79
+77                android:resource="@xml/usb_device_filter" />
+77-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:56:17-58
+78        </activity>
+79        <activity
+79-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:59:9-63:74
+80            android:name="com.rebornsense.printbridge.payment.PaymentActivity"
+80-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:60:13-52
+81            android:exported="false"
+81-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:61:13-37
+82            android:launchMode="singleTask"
+82-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:62:13-44
+83            android:theme="@style/Theme.RebornPrintBridge.Transparent" />
+83-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:63:13-71
+84        <activity
+84-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:65:9-69:58
+85            android:name="com.rebornsense.printbridge.setup.SetupWizardActivity"
+85-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:66:13-54
+86            android:exported="false"
+86-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:67:13-37
+87            android:label="@string/oem_setup_title"
+87-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:68:13-52
+88            android:parentActivityName="com.rebornsense.printbridge.MainActivity" />
+88-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:69:13-55
+89
+90        <receiver
+90-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:71:9-78:20
+91            android:name="com.rebornsense.printbridge.usb.UsbAttachReceiver"
+91-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:72:13-50
+92            android:directBootAware="true"
+92-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:73:13-43
+93            android:exported="true" >
+93-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:74:13-36
+94            <intent-filter>
+94-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:75:13-77:29
+95                <action android:name="android.hardware.usb.action.USB_DEVICE_DETACHED" />
+95-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:76:17-90
+95-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:76:25-87
+96            </intent-filter>
+97        </receiver>
+98        <receiver
+98-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:80:9-89:20
+99            android:name="com.rebornsense.printbridge.boot.BootCompletedReceiver"
+99-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:81:13-55
+100            android:directBootAware="true"
+100-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:82:13-43
+101            android:exported="true" >
+101-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:83:13-36
+102            <intent-filter>
+102-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:84:13-88:29
+103                <action android:name="android.intent.action.BOOT_COMPLETED" />
+103-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:85:17-79
+103-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:85:25-76
+104                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+104-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:86:17-82
+104-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:86:25-79
+105                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+105-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:87:17-84
+105-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:87:25-81
+106            </intent-filter>
+107        </receiver>
+108
+109        <service
+109-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:91:9-95:56
+110            android:name="com.rebornsense.printbridge.service.PrintBridgeService"
+110-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:92:13-55
+111            android:directBootAware="true"
+111-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:93:13-43
+112            android:exported="false"
+112-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:94:13-37
+113            android:foregroundServiceType="dataSync" />
+113-->/workspace/print-agent-android/app/src/main/AndroidManifest.xml:95:13-53
+114
+115        <provider
+115-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+116            android:name="androidx.startup.InitializationProvider"
+116-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+117            android:authorities="com.rebornsense.printbridge.androidx-startup"
+117-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+118            android:exported="false" >
+118-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+119            <meta-data
+119-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+120                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+120-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+121                android:value="androidx.startup" />
+121-->[androidx.emoji2:emoji2:1.3.0] /home/ubuntu/.gradle/caches/9.5.0/transforms/ef71c93a2c9f606d737a41b27982ccbd/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+122            <meta-data
+122-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/ubuntu/.gradle/caches/9.5.0/transforms/3f33114c91eb4e42b7b38ea96de8240f/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
+123                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+123-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/ubuntu/.gradle/caches/9.5.0/transforms/3f33114c91eb4e42b7b38ea96de8240f/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
+124                android:value="androidx.startup" />
+124-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/ubuntu/.gradle/caches/9.5.0/transforms/3f33114c91eb4e42b7b38ea96de8240f/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
+125            <meta-data
+125-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+126                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+127                android:value="androidx.startup" />
+127-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+128        </provider>
+129
+130        <receiver
+130-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+131            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+132            android:directBootAware="false"
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+133            android:enabled="true"
+133-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+134            android:exported="true"
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+135            android:permission="android.permission.DUMP" >
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+136            <intent-filter>
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+137                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+138            </intent-filter>
+139            <intent-filter>
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+140                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+140-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+140-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+141            </intent-filter>
+142            <intent-filter>
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+143                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+144            </intent-filter>
+145            <intent-filter>
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+146                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/ubuntu/.gradle/caches/9.5.0/transforms/0efc45da0f87ced65b50aa68313673f1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+147            </intent-filter>
+148        </receiver>
+149    </application>
+150
+151</manifest>

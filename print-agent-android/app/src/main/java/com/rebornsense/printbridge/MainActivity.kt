@@ -45,8 +45,6 @@ class MainActivity : AppCompatActivity() {
     private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
     private var notificationPermissionResolved = false
-    private var pendingUsbAttachDeviceId: Int? = null
-    private val usbAttachRetryRunnable = Runnable { offerUsbPermissionForPendingAttach() }
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -140,11 +138,19 @@ class MainActivity : AppCompatActivity() {
         handleUsbAttachIntent(intent)
     }
 
+    /** Legacy extra from older builds; USB attach is handled by [UsbPrinterAttachActivity]. */
     private fun handleUsbAttachIntent(intent: Intent?) {
         val deviceId = intent?.getIntExtra(EXTRA_USB_DEVICE_ID, -1) ?: -1
         if (deviceId < 0) return
         intent?.removeExtra(EXTRA_USB_DEVICE_ID)
-        pendingUsbAttachDeviceId = deviceId
+        val usb = getSystemService(UsbManager::class.java) ?: return
+        val device = usb.deviceList.values.firstOrNull { it.deviceId == deviceId } ?: return
+        if (!UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) return
+        if (usb.hasPermission(device)) {
+            refreshPrintersSafely()
+            return
+        }
+        UsbHostPermissions.requestPermissionForDevice(this, device)
     }
 
     private fun applySystemBarInsets() {
@@ -158,30 +164,8 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.requestApplyInsets(scroll)
     }
 
-    /** System USB allow dialog must run while the activity is resumed and visible. */
-    private fun offerUsbPermissionForPendingAttach() {
-        val deviceId = pendingUsbAttachDeviceId ?: return
-        val usb = getSystemService(UsbManager::class.java) ?: return
-        val device = usb.deviceList.values.firstOrNull { it.deviceId == deviceId }
-        if (device == null) {
-            window.decorView.removeCallbacks(usbAttachRetryRunnable)
-            window.decorView.postDelayed(usbAttachRetryRunnable, 400L)
-            return
-        }
-        pendingUsbAttachDeviceId = null
-        if (!UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) return
-        if (usb.hasPermission(device)) {
-            refreshPrintersSafely()
-            return
-        }
-        val name = device.productName ?: "USB printer"
-        Toast.makeText(this, getString(R.string.usb_printer_attach_prompt, name), Toast.LENGTH_SHORT).show()
-        UsbHostPermissions.requestPermissionForDevice(this, device)
-    }
-
     override fun onResume() {
         super.onResume()
-        offerUsbPermissionForPendingAttach()
         if (notificationPermissionResolved) {
             refreshPrintersSafely()
         }
@@ -192,7 +176,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         serviceStatusHandler.removeCallbacks(serviceStatusRunnable)
-        window.decorView.removeCallbacks(usbAttachRetryRunnable)
         super.onPause()
     }
 

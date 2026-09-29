@@ -53,14 +53,27 @@ object PrintBridgeLauncher {
         }
     }
 
-    /** Ask a running service to re-scan USB, Bluetooth, and LAN printers. */
+    /**
+     * Ask the bridge to re-scan printers.
+     * Never starts a foreground service from a background [Context] (USB broadcasts crash on Android 12+).
+     */
     fun refreshPrinters(context: Context) {
         val appContext = context.applicationContext
-        if (!BridgePermissions.hasNotificationPermission(appContext)) return
         val intent = Intent(appContext, PrintBridgeService::class.java).apply {
             action = ACTION_REFRESH_PRINTERS
         }
+        if (BridgeHealthChecker.isHealthy()) {
+            runCatching { appContext.startService(intent) }
+                .onFailure { Log.w(TAG, "refresh via startService failed", it) }
+            return
+        }
+        if (context !is android.app.Activity) {
+            Log.d(TAG, "refreshPrinters skipped — service not running and caller is background")
+            return
+        }
+        if (!BridgePermissions.hasNotificationPermission(appContext)) return
         runCatching { ContextCompat.startForegroundService(appContext, intent) }
+            .onFailure { Log.w(TAG, "refresh FGS start failed", it) }
     }
 
     private fun scheduleRetries(appContext: Context, intent: Intent) {
