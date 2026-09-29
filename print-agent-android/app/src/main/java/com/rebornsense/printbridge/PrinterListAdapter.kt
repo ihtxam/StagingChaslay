@@ -1,5 +1,7 @@
 package com.rebornsense.printbridge
 
+import android.util.Log
+import android.view.InflateException
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,8 +25,26 @@ class PrinterListAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RowHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_printer_row, parent, false)
+        val view = try {
+            LayoutInflater.from(parent.context).inflate(R.layout.item_printer_row, parent, false)
+        } catch (error: InflateException) {
+            // Layout colors are the real fix. This keeps one bad row from killing MainActivity.
+            Log.e(TAG, "printer row failed to inflate", error)
+            BridgeCrashLog.record(parent.context, error, "printer-row-inflate")
+            fallbackRow(parent)
+        }
         return RowHolder(view)
+    }
+
+    private fun fallbackRow(parent: ViewGroup): TextView {
+        return TextView(parent.context).apply {
+            layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+            val pad = (12 * parent.resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
     }
 
     override fun onBindViewHolder(holder: RowHolder, position: Int) {
@@ -34,11 +54,11 @@ class PrinterListAdapter(
     override fun getItemCount(): Int = items.size
 
     class RowHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val nameText: TextView = itemView.findViewById(R.id.printerNameText)
-        private val subtitleText: TextView = itemView.findViewById(R.id.printerSubtitleText)
-        private val typeText: TextView = itemView.findViewById(R.id.printerTypeText)
-        private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
-        private val testRowBtn: MaterialButton = itemView.findViewById(R.id.testRowBtn)
+        private val nameText: TextView? = itemView.findViewById(R.id.printerNameText)
+        private val subtitleText: TextView? = itemView.findViewById(R.id.printerSubtitleText)
+        private val typeText: TextView? = itemView.findViewById(R.id.printerTypeText)
+        private val defaultBadge: TextView? = itemView.findViewById(R.id.defaultBadge)
+        private val testRowBtn: MaterialButton? = itemView.findViewById(R.id.testRowBtn)
 
         fun bind(
             endpoint: PrinterEndpoint,
@@ -48,20 +68,34 @@ class PrinterListAdapter(
         ) {
             val isDefault = endpoint.id == defaultId
             val context = itemView.context
-            nameText.text = PrinterDisplay.title(endpoint)
-            val subtitle = PrinterDisplay.subtitle(context, endpoint)
-            if (subtitle.isNullOrBlank()) {
-                subtitleText.visibility = View.GONE
-            } else {
-                subtitleText.visibility = View.VISIBLE
-                subtitleText.text = subtitle
+            val title = PrinterDisplay.title(endpoint)
+            val name = nameText
+            if (name == null) {
+                (itemView as? TextView)?.text = title
+                itemView.setOnClickListener {
+                    if (!isDefault) onSetDefault(endpoint)
+                }
+                return
             }
-            typeText.text = PrinterDisplay.typeLabel(context, endpoint)
-            defaultBadge.visibility = if (isDefault) View.VISIBLE else View.GONE
+            name.text = title
+            val subtitle = PrinterDisplay.subtitle(context, endpoint)
+            val subtitleView = subtitleText
+            if (subtitle.isNullOrBlank() || subtitleView == null) {
+                subtitleView?.visibility = View.GONE
+            } else {
+                subtitleView.visibility = View.VISIBLE
+                subtitleView.text = subtitle
+            }
+            typeText?.text = PrinterDisplay.typeLabel(context, endpoint)
+            defaultBadge?.visibility = if (isDefault) View.VISIBLE else View.GONE
             itemView.setOnClickListener {
                 if (!isDefault) onSetDefault(endpoint)
             }
-            testRowBtn.setOnClickListener { onTestPrint(endpoint) }
+            testRowBtn?.setOnClickListener { onTestPrint(endpoint) }
         }
+    }
+
+    private companion object {
+        const val TAG = "PrinterListAdapter"
     }
 }

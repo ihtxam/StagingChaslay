@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Opaque palette colors. Do not point card stroke/ripple at theme attrs;
+         some OEMs resolve those to framework drawables and MaterialCardView crashes. -->
+    <color name="bridge_card_background">#FFFFFF</color>
+    <color name="bridge_card_ripple">#1A0F766E</color>
+</resources>

@@ -4,9 +4,11 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginTop="8dp"
+    app:cardBackgroundColor="@color/bridge_card_background"
     app:cardElevation="0dp"
-    app:strokeColor="?android:attr/listDivider"
-    app:strokeWidth="1dp">
+    app:rippleColor="@color/bridge_card_ripple"
+    app:strokeColor="@android:color/transparent"
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
