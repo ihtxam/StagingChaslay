@@ -152,16 +152,23 @@ export function isWebPosKioskShell(): boolean {
   return false;
 }
 
-/** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
-export function shouldAutoOpenOnScreenKeyboard(): boolean {
+/**
+ * Whether WebPOS should use the built-in on-screen keyboard (Windows kiosk / touch PC).
+ * False on Android and phones — native IME handles text entry there.
+ */
+export function shouldUseWebPosOnScreenKeyboard(): boolean {
   if (isMobilePhone() || isAndroidDevice()) return false;
   return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
 }
 
+/** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
+export function shouldAutoOpenOnScreenKeyboard(): boolean {
+  return shouldUseWebPosOnScreenKeyboard();
+}
+
 /** On-screen keyboard toggle (kiosk / tablet / desktop shell — not Android or phones). */
 export function shouldShowOnScreenKeyboardToggle(): boolean {
-  if (isMobilePhone() || isAndroidDevice()) return false;
-  return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
+  return shouldUseWebPosOnScreenKeyboard();
 }
 
 type TauriInternals = {

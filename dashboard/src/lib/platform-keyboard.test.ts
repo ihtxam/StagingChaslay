@@ -63,9 +63,14 @@ describe('on-screen keyboard platform gates', () => {
         '(display-mode: fullscreen)': false,
       },
     });
-    const { isAndroidDevice, shouldAutoOpenOnScreenKeyboard, shouldShowOnScreenKeyboardToggle } =
-      await import('./platform');
+    const {
+      isAndroidDevice,
+      shouldUseWebPosOnScreenKeyboard,
+      shouldAutoOpenOnScreenKeyboard,
+      shouldShowOnScreenKeyboardToggle,
+    } = await import('./platform');
     expect(isAndroidDevice()).toBe(true);
+    expect(shouldUseWebPosOnScreenKeyboard()).toBe(false);
     expect(shouldAutoOpenOnScreenKeyboard()).toBe(false);
     expect(shouldShowOnScreenKeyboardToggle()).toBe(false);
   });
