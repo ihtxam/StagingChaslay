@@ -7238,6 +7238,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           })),
         };
       }
+      let drawerKickScheduled = false;
       try {
         const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
           businessName: merchant?.name || APP_NAME,
@@ -7318,6 +7319,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ctx.isInvoice && ['cash', 'card', 'terminal'].includes(payMethod);
         const skipThermal =
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
+        const cashCollect = saleIncludesCashTender(payMethod, payments);
+        const kickCashDrawerOnce = async () => {
+          if (!cashCollect) return;
+          try {
+            await kickConfiguredCashDrawer();
+          } catch (e: unknown) {
+            notifyPrintError(e, 'webPosDrawerFailed');
+          }
+        };
         if (
           !skipThermal &&
           shouldAutoPrintReceipt(printSettings) &&
@@ -7331,19 +7341,34 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ) {
           // Don't hold collect-payment success UI on Print Agent paced sleeps (~4–5s on USB).
           void (async () => {
-            const dataBase64 = await resolveLastReceiptEscPosBase64(receiptText, {
-              qrUrl: receiptPayload.receiptUrl,
-              deliveryQrUrl,
-              fastQr: true,
-            }).catch(() => lastReceiptEscPosBase64Ref.current || '');
-            await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl, {
-              dataBase64: dataBase64 || undefined,
-              fastQr: true,
-            });
-          })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'));
+            try {
+              const dataBase64 = await resolveLastReceiptEscPosBase64(receiptText, {
+                qrUrl: receiptPayload.receiptUrl,
+                deliveryQrUrl,
+                fastQr: true,
+              }).catch(() => lastReceiptEscPosBase64Ref.current || '');
+              await printReceipt(receiptText, receiptPayload.receiptUrl, deliveryQrUrl, {
+                dataBase64: dataBase64 || undefined,
+                fastQr: true,
+              });
+            } catch (e: unknown) {
+              notifyPrintError(e, 'webPosPrintFailed');
+            } finally {
+              await kickCashDrawerOnce();
+            }
+          })();
+          drawerKickScheduled = true;
+        } else {
+          void kickCashDrawerOnce();
+          drawerKickScheduled = true;
         }
       } catch (e: unknown) {
         notifyPrintError(e, 'webPosPrintFailed');
+      }
+      if (!drawerKickScheduled && saleIncludesCashTender(payMethod, payments)) {
+        void kickConfiguredCashDrawer().catch((e: unknown) =>
+          notifyPrintError(e, 'webPosDrawerFailed')
+        );
       }
       setSuccessInfo({
         amount: ctx.total,
@@ -8607,6 +8632,41 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPaymentMessage('');
   };
 
+  /** Receipt printer drives the cash drawer. No kick when that printer is not configured. */
+  async function kickConfiguredCashDrawer() {
+    const named = printersForRole(printSettings, 'receipt')
+      .map((p) => (p.name || '').trim())
+      .filter((name) => name && !looksLikeLabelPrinterName(name));
+    const fallback =
+      printerName &&
+      !looksLikeLabelPrinterName(printerName) &&
+      !printerUsesLabelProtocol(printSettings, printerName)
+        ? printerName.trim()
+        : '';
+    const drawerPrinter = named[0] || fallback;
+    if (!drawerPrinter) return;
+    const resolved =
+      resolveEscPosPrinterName(drawerPrinter, printers) ||
+      resolveLivePrinterName(drawerPrinter, printers) ||
+      drawerPrinter;
+    await openCashDrawerViaAgent({
+      printerName: resolved,
+      livePrinters: printers,
+    });
+  }
+
+  function saleIncludesCashTender(
+    payMethod: string,
+    tenders?: Array<{ method?: string; amount?: number }> | null
+  ): boolean {
+    if (tenders && tenders.length > 0) {
+      return tenders.some(
+        (row) => String(row.method || '') === 'cash' && Number(row.amount) > 0.001
+      );
+    }
+    return payMethod === 'cash';
+  }
+
   const finalizeSale = async (
     method: PosPaymentMethod,
     presetClientId?: string,
@@ -9088,6 +9148,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const shouldPrintKitchen =
       (!moreSplits || splitIndex === 0) && kitchenDelta.length > 0;
     const shareKitchenReceiptPrinter = receiptAndKitchenSharePrinter(printSettings, printerName);
+    const cashDrawerKick = saleIncludesCashTender(method, extras?.tenders);
+    const kickCashDrawerOnce = async () => {
+      if (!cashDrawerKick) return;
+      try {
+        await kickConfiguredCashDrawer();
+      } catch (e: unknown) {
+        notifyPrintError(e, 'webPosDrawerFailed');
+      }
+    };
     // Send uses fire-and-forget kitchen print; at payment, run kitchen + receipt in parallel when safe.
     if (shouldPrintKitchen || shouldPrintReceipt) {
       const receiptBuildPromise = shouldPrintReceipt
@@ -9146,8 +9215,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           } else {
             notifyPrintError(e, 'webPosPrintFailed');
           }
+        } finally {
+          await kickCashDrawerOnce();
         }
       })();
+    } else {
+      void kickCashDrawerOnce();
     }
     if (method === 'invoice' && backendOrderId) {
       void openInvoicePdf(backendOrderId);
