@@ -28,7 +28,9 @@ class PrintBridgeService : Service() {
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            registry.refresh(applicationContext)
+            Thread {
+                runCatching { registry.refresh(applicationContext) }
+            }.start()
             refreshHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
         }
     }
@@ -38,9 +40,11 @@ class PrintBridgeService : Service() {
         try {
             createChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
-            UsbHostPermissions.recordGrantedDevices(applicationContext)
-            registry.refresh(applicationContext)
             queue.start(applicationContext)
+            Thread {
+                runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
+                runCatching { registry.refresh(applicationContext) }
+            }.start()
             server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
                 it.start(NanoTimeout, false)
             }
@@ -53,10 +57,15 @@ class PrintBridgeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
-            registry.refresh(applicationContext)
+            Thread {
+                runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
+                runCatching { registry.refresh(applicationContext) }
+            }.start()
             return START_STICKY
         }
-        registry.refresh(applicationContext)
+        Thread {
+            runCatching { registry.refresh(applicationContext) }
+        }.start()
         return START_STICKY
     }
 

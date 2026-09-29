@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var notificationPermissionResolved = false
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
+    private var suppressAutoStartListener = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -71,7 +72,7 @@ class MainActivity : AppCompatActivity() {
             if (granted) {
                 runtimePermissionsResolved = true
                 BridgeSafeStart.markUiReady()
-                window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
+                onNotificationReadyUiOnly()
             } else {
                 Toast.makeText(this, R.string.notification_permission_required, Toast.LENGTH_LONG).show()
             }
@@ -98,9 +99,10 @@ class MainActivity : AppCompatActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
             // Legacy path — unused for cold start; kept for any older call sites.
+            notificationPermissionResolved = true
             runtimePermissionsResolved = true
             BridgeSafeStart.markUiReady()
-            window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
+            onNotificationReadyUiOnly()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,12 +129,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
-        updateTapToPayDiagnostics()
-        window.decorView.post { BridgeSafeStart.markUiReady() }
-        UsbHostPermissions.onPermissionSettled = {
-            if (!isFinishing && !isDestroyed) refreshPrintersSafely()
-        }
         handleUsbAttachIntent(intent)
+    }
+
+    /** After notifications are allowed: update status text only — no USB/BT scan, no FGS (Nebullus crash). */
+    private fun onNotificationReadyUiOnly() {
+        if (isFinishing || isDestroyed) return
+        findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
+        findViewById<View>(R.id.serviceStatusIndicator)
+            .setBackgroundResource(R.drawable.service_status_stopped)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -150,6 +156,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Legacy extra from older builds; USB attach is handled by [UsbPrinterAttachActivity]. */
     private fun handleUsbAttachIntent(intent: Intent?) {
+        if (!runtimePermissionsResolved) return
         val deviceId = intent?.getIntExtra(EXTRA_USB_DEVICE_ID, -1) ?: -1
         if (deviceId < 0) return
         intent?.removeExtra(EXTRA_USB_DEVICE_ID)
@@ -186,12 +193,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (notificationPermissionResolved) {
-            refreshPrintersSafely()
+        UsbHostPermissions.register(this)
+        UsbHostPermissions.onPermissionSettled = {
+            if (!isFinishing && !isDestroyed) refreshPrintersSafely()
         }
         consumeRefreshPrintersExtra(intent)
-        updateServiceStatus()
-        updateTapToPayDiagnostics()
+        if (notificationPermissionResolved) {
+            updateServiceStatus()
+        }
         serviceStatusHandler.postDelayed(serviceStatusRunnable, SERVICE_STATUS_INTERVAL_MS)
     }
 
@@ -286,7 +295,7 @@ class MainActivity : AppCompatActivity() {
         notificationPermissionResolved = true
         runtimePermissionsResolved = true
         BridgeSafeStart.markUiReady()
-        window.decorView.postDelayed({ refreshPrintersSafely() }, 600L)
+        onNotificationReadyUiOnly()
     }
 
     private fun hasBluetoothPermissions(): Boolean {
@@ -320,14 +329,19 @@ class MainActivity : AppCompatActivity() {
             requestNeededPermissions()
             return
         }
+        UsbHostPermissions.register(this)
         BridgeSafeStart.markUiReady()
         Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
         val started = BridgeSafeStart.startNow(this, bypassDebounce = true)
         if (!started) {
             Toast.makeText(this, R.string.bridge_start_failed, Toast.LENGTH_LONG).show()
+            return
         }
-        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 800L)
-        refreshPrintersSafely()
+        serviceStatusHandler.postDelayed({
+            updateServiceStatus()
+            refreshPrintersSafely()
+            updateTapToPayDiagnostics()
+        }, 900L)
     }
 
     private fun refreshPrintersSafely() {
@@ -397,11 +411,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupAutoStartSwitch() {
         val autoStartSwitch = findViewById<SwitchMaterial>(R.id.autoStartSwitch)
+        suppressAutoStartListener = true
         autoStartSwitch.isChecked = PrinterPreferences.isAutoStartEnabled(this)
+        suppressAutoStartListener = false
         autoStartSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (suppressAutoStartListener) return@setOnCheckedChangeListener
             PrinterPreferences.setAutoStartEnabled(this, isChecked)
             if (isChecked) {
-                startBridge()
+                if (BridgePermissions.hasNotificationPermission(this)) {
+                    startBridgeManually()
+                }
                 Toast.makeText(this, R.string.auto_start_enabled_toast, Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, R.string.auto_start_disabled_toast, Toast.LENGTH_SHORT).show()

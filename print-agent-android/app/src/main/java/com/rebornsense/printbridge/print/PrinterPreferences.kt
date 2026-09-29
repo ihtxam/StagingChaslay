@@ -6,10 +6,10 @@ object PrinterPreferences {
     private const val PREFS = "reborn_print_bridge"
     private const val KEY_AUTO_START = "auto_start_enabled"
 
-    /** Whether the print bridge should start automatically on device reboot. Defaults to true. */
+    /** Whether POST_NOTIFICATIONS (or pre-13 implicit grant) is done — not permission to scan USB yet. */
     fun isAutoStartEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_START, true)
+            .getBoolean(KEY_AUTO_START, false)
     }
 
     fun setAutoStartEnabled(context: Context, enabled: Boolean) {
