@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Install Bridge Reborn 0.3.9</title>
+    <title>Install Bridge Reborn</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -31,21 +31,64 @@
         border-radius: 10px;
         font-weight: 700;
       }
+      .err { color: #b71c1c; }
     </style>
   </head>
   <body>
-    <h1>Bridge Reborn v0.3.9</h1>
-    <div class="box">
-      <p>Do not open an old file named <code>reborn-print-bridge.apk</code> in Downloads. That is v0.2.3.</p>
-      <ol>
-        <li>Android Settings → Apps → <strong>Bridge Reborn → Uninstall</strong></li>
-        <li>Files → Downloads → delete every <code>reborn-print-bridge*.apk</code></li>
-        <li>Tap the button below. Chrome must save <code>reborn-print-bridge-0.3.9.apk</code></li>
-        <li>Open that new file, then open the Bridge app</li>
-        <li>The green header must say <strong>Bridge v0.3.9</strong></li>
-      </ol>
-      <a class="btn" href="/downloads/reborn-print-bridge-0.3.9.apk" download="reborn-print-bridge-0.3.9.apk">Download Bridge v0.3.9</a>
-      <p><a href="/downloads/reborn-print-bridge.apk?v=0.3.9">Backup download link</a></p>
+    <h1 id="title">Bridge Reborn</h1>
+    <div class="box" id="content">
+      <p>Loading latest version…</p>
     </div>
+    <script>
+      (function () {
+        var content = document.getElementById("content");
+        var title = document.getElementById("title");
+        fetch("/downloads/reborn-print-bridge.json", { cache: "no-store" })
+          .then(function (r) {
+            if (!r.ok) throw new Error("manifest " + r.status);
+            return r.json();
+          })
+          .then(function (d) {
+            var version = String(d.version || d.declaredVersion || "").trim();
+            if (!version || d.available === false) {
+              throw new Error(d.message || "Bridge APK not published");
+            }
+            var file = "reborn-print-bridge-" + version + ".apk";
+            var href =
+              d.downloadUrl ||
+              "/downloads/reborn-print-bridge-" + version + ".apk?v=" + encodeURIComponent(version);
+            document.title = "Install Bridge Reborn " + version;
+            title.textContent = "Bridge Reborn v" + version;
+            content.innerHTML =
+              "<p>Do not open an old <code>reborn-print-bridge*.apk</code> already saved in Downloads. Delete old copies first.</p>" +
+              "<ol>" +
+              "<li>Android Settings → Apps → <strong>Bridge Reborn → Uninstall</strong></li>" +
+              "<li>Files → Downloads → delete every <code>reborn-print-bridge*.apk</code></li>" +
+              "<li>Tap the button below. Chrome must save <code>" +
+              file +
+              "</code></li>" +
+              "<li>Open that new file, then open the Bridge app</li>" +
+              "<li>The green header must say <strong>Bridge v" +
+              version +
+              "</strong></li>" +
+              "</ol>" +
+              '<a class="btn" href="' +
+              href +
+              '" download="' +
+              file +
+              '">Download Bridge v' +
+              version +
+              "</a>" +
+              '<p><a href="' +
+              href +
+              '">Backup download link</a></p>';
+          })
+          .catch(function (e) {
+            content.innerHTML =
+              '<p class="err">Could not load Bridge download info. Try <a href="/downloads/reborn-print-bridge.apk">/downloads/reborn-print-bridge.apk</a> or Merchant Settings → Printing.</p>';
+            console.error(e);
+          });
+      })();
+    </script>
   </body>
 </html>
