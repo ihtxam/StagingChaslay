@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.rebornsense.printbridge.BridgeCrashLog
@@ -30,6 +31,12 @@ class PrintBridgeService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
+    private var discoveryGeneration = 0
+
+    @Volatile
+    private var discoveryThread: Thread? = null
+
+    @Volatile
     private var foregroundStarted = false
 
     @Volatile
@@ -44,11 +51,12 @@ class PrintBridgeService : Service() {
             createChannel()
             val notification = buildNotificationSafely()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // connectedDevice is legal from BOOT_COMPLETED. dataSync is not (Android 15).
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
                 )
             } else {
                 @Suppress("DEPRECATION")
@@ -66,6 +74,7 @@ class PrintBridgeService : Service() {
             return
         }
         startHttpOffMainThread()
+        schedulePrinterDiscovery()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -143,13 +152,50 @@ class PrintBridgeService : Service() {
     }
 
     private fun refreshPrintersOnBackground() {
-        Thread {
-            runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
-            runCatching { registry.refresh(applicationContext) }
-        }.start()
+        val worker = Thread { discoverPrintersQuietly() }
+        worker.name = "print-bridge-refresh"
+        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { thread, error ->
+            Log.e(TAG, "printer refresh failed on ${thread.name}", error)
+        }
+        worker.start()
+    }
+
+    /**
+     * USB enumeration is not ready in the same moment as startForeground, and a scan
+     * on the main thread crashes multi-peripheral tablets. Wait, then fill the registry
+     * so /printers and /print work without opening the app. Failures are logged only.
+     */
+    private fun schedulePrinterDiscovery() {
+        val generation = ++discoveryGeneration
+        val worker = Thread {
+            try {
+                Thread.sleep(DISCOVERY_DELAY_MS)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+            if (generation != discoveryGeneration || !foregroundStarted) return@Thread
+            discoverPrintersQuietly()
+        }
+        worker.name = "print-bridge-discover"
+        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { thread, error ->
+            Log.e(TAG, "printer discovery failed on ${thread.name}", error)
+        }
+        discoveryThread?.interrupt()
+        discoveryThread = worker
+        worker.start()
+    }
+
+    private fun discoverPrintersQuietly() {
+        runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
+            .onFailure { error -> Log.w(TAG, "record granted USB devices failed", error) }
+        runCatching { registry.refresh(applicationContext) }
+            .onFailure { error -> Log.w(TAG, "printer discovery failed", error) }
     }
 
     override fun onDestroy() {
+        discoveryGeneration++
+        discoveryThread?.interrupt()
+        discoveryThread = null
         if (foregroundStarted && !httpListening && !failureRecorded) {
             failureRecorded = true
             markFailed()
@@ -209,10 +255,12 @@ class PrintBridgeService : Service() {
     }
 
     companion object {
+        private const val TAG = "PrintBridgeService"
         const val PORT = 9101
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
+        private const val DISCOVERY_DELAY_MS = 2_000L
 
         @Volatile
         private var failureGenerationCount: Int = 0

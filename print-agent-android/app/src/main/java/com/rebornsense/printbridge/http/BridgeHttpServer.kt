@@ -128,7 +128,7 @@ class BridgeHttpServer(
                         Response.Status.BAD_REQUEST
                     )
                 }
-                val endpoint = registry.findByName(printerName)
+                val endpoint = registry.findForPrint(appContext, printerName)
                     ?: return jsonResponse(
                         JSONObject().put("ok", false).put("error", "No printer available"),
                         Response.Status.BAD_REQUEST
@@ -170,7 +170,7 @@ class BridgeHttpServer(
                         Response.Status.BAD_REQUEST
                     )
                 }
-                val endpoint = registry.findByName(printerName)
+                val endpoint = registry.findForPrint(appContext, printerName)
                     ?: return jsonResponse(
                         JSONObject().put("ok", false).put("error", "No printer available"),
                         Response.Status.BAD_REQUEST
@@ -356,7 +356,7 @@ class BridgeHttpServer(
             uri == "/drawer" && method == Method.POST -> {
                 val body = readBody(session)
                 val printerName = body.optString("printerName", "")
-                val endpoint = registry.findByName(printerName)
+                val endpoint = registry.findForPrint(appContext, printerName)
                     ?: return jsonResponse(
                         JSONObject().put("ok", false).put("error", "No printer available"),
                         Response.Status.BAD_REQUEST

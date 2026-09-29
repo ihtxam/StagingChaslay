@@ -11,6 +11,6 @@ class PrintBridgeApplication : Application() {
             val hooks = Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenApplicationHooks")
             hooks.getMethod("onCreate", Application::class.java).invoke(null, this)
         }
-        // USB listeners and service start only after MainActivity + notification grant + user taps Start.
+        // Boot starts the service when auto-start is on. USB scans stay off this thread.
     }
 }

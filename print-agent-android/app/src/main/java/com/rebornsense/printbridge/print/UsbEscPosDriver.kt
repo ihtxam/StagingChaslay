@@ -206,6 +206,7 @@ internal data class UsbPrinterRow(
         )
         val serialPart = serial?.trim().orEmpty()
         if (serialPart.isNotEmpty()) meta["serial"] = serialPart
+        if (printerClass) meta["usbPrinterClass"] = "true"
         return PrinterEndpoint(
             id = id,
             name = label,

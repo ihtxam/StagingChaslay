@@ -6,10 +6,13 @@ object PrinterPreferences {
     private const val PREFS = "reborn_print_bridge"
     private const val KEY_AUTO_START = "auto_start_enabled"
 
-    /** Whether POST_NOTIFICATIONS (or pre-13 implicit grant) is done — not permission to scan USB yet. */
+    /**
+     * Production kiosks start Bridge after reboot without opening the app.
+     * Default is true so a fresh install (and any tablet that never toggled the switch) boots the service.
+     */
     fun isAutoStartEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_START, false)
+            .getBoolean(KEY_AUTO_START, true)
     }
 
     fun setAutoStartEnabled(context: Context, enabled: Boolean) {

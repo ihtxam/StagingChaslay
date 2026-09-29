@@ -16,7 +16,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             ACTION_QUICKBOOT_POWERON -> BridgeSafeStart.runWithBootReceiverStart {
-                // Auto-start defaults to off. Opening the app must not boot the service.
+                // Only when auto-start is on. The preference defaults to true for kiosks.
                 PrintBridgeLauncher.startIfEnabled(context)
             }
         }

@@ -49,6 +49,8 @@ class MainActivity : AppCompatActivity() {
     private var notificationPermissionResolved = false
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
+    /** Set when resume wants a printer scan; honored by an in-flight health probe. */
+    private var pendingLivePrinterScan = false
     private var suppressAutoStartListener = false
     private var crashDialog: AlertDialog? = null
     private var failureDialogFromStart = false
@@ -208,7 +210,7 @@ class MainActivity : AppCompatActivity() {
         consumeRefreshPrintersExtra(intent)
         dropUnpluggedUsbFromList()
         if (runtimePermissionsResolved) {
-            refreshServiceStatusReadOnly()
+            refreshServiceStatusReadOnly(scanPrinters = true)
         }
     }
 
@@ -342,7 +344,7 @@ class MainActivity : AppCompatActivity() {
                 if (!epochLive(epoch)) return@runOnUiThread
                 if (before.snapshot != null) {
                     // Already listening. Do not start, stop, or show a failure dialog.
-                    applyBridgeReady(before.snapshot)
+                    applyBridgeReady(before.snapshot, scanPrinters = true)
                     return@runOnUiThread
                 }
                 findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
@@ -362,7 +364,8 @@ class MainActivity : AppCompatActivity() {
     /**
      * Read-only /health when the activity is shown. Does not start or stop the service.
      */
-    private fun refreshServiceStatusReadOnly() {
+    private fun refreshServiceStatusReadOnly(scanPrinters: Boolean = false) {
+        if (scanPrinters) pendingLivePrinterScan = true
         if (startInProgress || isFinishing || isDestroyed) return
         val epoch = statusEpoch
         if (healthProbeInFlight) return
@@ -374,7 +377,9 @@ class MainActivity : AppCompatActivity() {
                 if (!epochLive(epoch) || startInProgress) return@runOnUiThread
                 val snapshot = result?.snapshot
                 if (snapshot != null) {
-                    applyBridgeReady(snapshot)
+                    val scan = pendingLivePrinterScan
+                    pendingLivePrinterScan = false
+                    applyBridgeReady(snapshot, scanPrinters = scan)
                 } else {
                     applyBridgeDownQuiet()
                 }
@@ -401,7 +406,7 @@ class MainActivity : AppCompatActivity() {
                         if (!epochLive(epoch)) return@runOnUiThread
                         val snapshot = result.snapshot
                         if (snapshot != null) {
-                            applyBridgeReady(snapshot)
+                            applyBridgeReady(snapshot, scanPrinters = true)
                             return@runOnUiThread
                         }
                         val reason = result.failureReason?.trim().orEmpty().ifBlank { "health check failed" }
@@ -433,7 +438,10 @@ class MainActivity : AppCompatActivity() {
         probeTasks.clear()
     }
 
-    private fun applyBridgeReady(health: BridgeHealthChecker.HealthSnapshot) {
+    private fun applyBridgeReady(
+        health: BridgeHealthChecker.HealthSnapshot,
+        scanPrinters: Boolean = false,
+    ) {
         clearProbeTasks()
         statusEpoch += 1
         startInProgress = false
@@ -447,6 +455,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_running)
         updateTapToPayDiagnostics(health)
+        if (scanPrinters) refreshPrintersSafely()
     }
 
     /** Resume probe found the server down. Red dot only — no dialog, no stopService. */
@@ -504,7 +513,7 @@ class MainActivity : AppCompatActivity() {
                     publishPrinters(next, defaultId)
                 }.onFailure {
                     val defaultId = PrinterPreferences.getDefaultPrinterId(this)
-                    publishPrinters(previous.filter { it.connectionType != "usb" }, defaultId)
+                    publishPrinters(previous, defaultId)
                     Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
                 }
             }
