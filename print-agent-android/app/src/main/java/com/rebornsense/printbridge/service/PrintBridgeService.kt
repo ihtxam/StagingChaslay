@@ -22,6 +22,7 @@ import com.rebornsense.printbridge.R
 import com.rebornsense.printbridge.http.BridgeHttpServer
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
+import com.rebornsense.printbridge.usb.UsbBootPermissionNotifier
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 
 class PrintBridgeService : Service() {
@@ -75,6 +76,7 @@ class PrintBridgeService : Service() {
         }
         startHttpOffMainThread()
         schedulePrinterDiscovery()
+        schedulePermissionRecheck()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -165,6 +167,23 @@ class PrintBridgeService : Service() {
      * on the main thread crashes multi-peripheral tablets. Wait, then fill the registry
      * so /printers and /print work without opening the app. Failures are logged only.
      */
+    /** Some Nebullus hubs enumerate the receipt printer a few seconds after boot. */
+    private fun schedulePermissionRecheck() {
+        val worker = Thread {
+            try {
+                Thread.sleep(PERMISSION_RECHECK_MS)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+            if (!foregroundStarted) return@Thread
+            runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
+                .onFailure { error -> Log.w(TAG, "USB permission recheck failed", error) }
+        }
+        worker.name = "print-bridge-usb-perm"
+        worker.isDaemon = true
+        worker.start()
+    }
+
     private fun schedulePrinterDiscovery() {
         val generation = ++discoveryGeneration
         val worker = Thread {
@@ -190,6 +209,8 @@ class PrintBridgeService : Service() {
             .onFailure { error -> Log.w(TAG, "record granted USB devices failed", error) }
         runCatching { registry.refresh(applicationContext) }
             .onFailure { error -> Log.w(TAG, "printer discovery failed", error) }
+        runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
+            .onFailure { error -> Log.w(TAG, "USB permission notifier failed", error) }
     }
 
     override fun onDestroy() {
@@ -261,6 +282,7 @@ class PrintBridgeService : Service() {
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
         private const val DISCOVERY_DELAY_MS = 2_000L
+        private const val PERMISSION_RECHECK_MS = 12_000L
 
         @Volatile
         private var failureGenerationCount: Int = 0

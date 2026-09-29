@@ -5,6 +5,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
 import com.rebornsense.printbridge.print.PrinterPreferences
+import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
  * USB host permission for printers only (not barcode/RFID peripherals).
@@ -41,6 +42,9 @@ object UsbHostPermissions {
         val app = context.applicationContext
         if (granted) {
             PrinterPreferences.rememberUsbDevice(app, deviceKey(device))
+            promoteGrantedUsbPrinters(app)
+            UsbBootPermissionNotifier.cancelNotification(app)
+            PrintBridgeLauncher.refreshPrinters(app)
             Log.i(TAG, "USB permission granted for ${deviceKey(device)} deviceId=${device.deviceId}")
         } else {
             Log.i(TAG, "USB permission denied for ${deviceKey(device)} deviceId=${device.deviceId}")
@@ -52,11 +56,49 @@ object UsbHostPermissions {
         val app = context.applicationContext
         val usb = usbManager(app) ?: return
         reconcilePendingWithGrant(usb, app)
+        promoteGrantedUsbPrinters(app)
+    }
+
+    /** When the system already granted USB access, remember vid:pid and keep a USB default selected. */
+    fun promoteGrantedUsbPrinters(context: android.content.Context) {
+        val app = context.applicationContext
+        val usb = usbManager(app) ?: return
+        var best: UsbDevice? = null
         for (device in usb.deviceList.values) {
             if (!UsbDeviceClassifier.isUsbPrinterCandidate(app, device)) continue
-            if (usb.hasPermission(device)) {
-                PrinterPreferences.rememberUsbDevice(app, deviceKey(device))
+            if (!usb.hasPermission(device)) continue
+            PrinterPreferences.rememberUsbDevice(app, deviceKey(device))
+            if (best == null) {
+                best = device
+            } else if (
+                UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, device) &&
+                !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, best)
+            ) {
+                best = device
             }
+        }
+        val chosen = best ?: return
+        val stableId = "usb:${chosen.vendorId}:${chosen.productId}"
+        val current = PrinterPreferences.getDefaultPrinterId(app)
+        if (current.isNullOrBlank() || (current.startsWith("usb:") && !usbDeviceStillDefault(app, usb, current))) {
+            PrinterPreferences.setDefaultPrinterId(app, stableId)
+        }
+    }
+
+    private fun usbDeviceStillDefault(
+        app: android.content.Context,
+        usb: UsbManager,
+        defaultId: String,
+    ): Boolean {
+        if (!defaultId.startsWith("usb:")) return true
+        val parts = defaultId.removePrefix("usb:").split(":")
+        val vid = parts.getOrNull(0)?.toIntOrNull() ?: return false
+        val pid = parts.getOrNull(1)?.toIntOrNull() ?: return false
+        return usb.deviceList.values.any { device ->
+            device.vendorId == vid &&
+                device.productId == pid &&
+                usb.hasPermission(device) &&
+                UsbDeviceClassifier.isUsbPrinterCandidate(app, device)
         }
     }
 

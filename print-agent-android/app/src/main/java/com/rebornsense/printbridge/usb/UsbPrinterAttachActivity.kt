@@ -5,6 +5,7 @@ import android.hardware.usb.UsbManager
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.rebornsense.printbridge.MainActivity
+import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
  * Launched by the system when a filtered USB printer is plugged in (same pattern as Reborn POS).
@@ -15,16 +16,29 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) {
-            finish()
-            return
+        when (intent?.action) {
+            UsbManager.ACTION_USB_DEVICE_ATTACHED,
+            UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION,
+            -> Unit
+            else -> {
+                finish()
+                return
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        val device = intent?.usbDeviceExtra()
-        if (device == null || !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) {
+        val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
+            ?: intent?.usbDeviceExtra()
+        if (device == null || !UsbDeviceClassifier.isUsbPrinterCandidate(applicationContext, device)) {
+            finish()
+            return
+        }
+        if (
+            intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
+            !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)
+        ) {
             finish()
             return
         }
@@ -34,6 +48,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         }
         UsbHostPermissions.recordGrantedDevices(this)
         if (usb.hasPermission(device)) {
+            UsbBootPermissionNotifier.cancelNotification(this)
             onUsbAccessReady()
             return
         }
@@ -54,6 +69,12 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
     }
 
     private fun onUsbAccessReady() {
+        UsbHostPermissions.promoteGrantedUsbPrinters(applicationContext)
+        PrintBridgeLauncher.refreshPrinters(applicationContext)
+        if (intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION) {
+            finish()
+            return
+        }
         startActivity(
             Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)

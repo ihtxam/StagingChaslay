@@ -28,6 +28,10 @@
     <string name="lan_printer_invalid">Enter a valid IP address (example: 192.168.1.50).</string>
     <string name="printer_scan_failed">Could not scan printers — try again in a moment.</string>
     <string name="usb_printer_attach_prompt">Allow USB access for %1$s</string>
+    <string name="usb_permission_notification_channel">USB printer access</string>
+    <string name="usb_permission_notification_channel_desc">Shown once after reboot when Bridge needs USB permission to print without opening the app.</string>
+    <string name="usb_permission_notification_title">Allow USB receipt printer</string>
+    <string name="usb_permission_notification_body">Tap once to allow %1$s so WebPOS can print without opening Bridge.</string>
     <string name="add_network_printer">Add network</string>
     <string name="lan_printer_dialog_message">Enter the printer IP address on your Wi‑Fi or Ethernet network (RAW port 9100).</string>
     <string name="lan_printer_added">Network printer added</string>
