@@ -130,7 +130,6 @@
           window.navigator.standalone === true;
         var KEYS = {
           pwa: 'reborn_pwa_installed',
-          bridge: 'reborn_bridge_installed',
           browser: 'reborn_pwa_browser_preferred',
           session: 'reborn_install_prompt_suppressed',
         };
@@ -144,7 +143,6 @@
           try {
             if (sessionStorage.getItem(KEYS.session) === '1') return true;
             if (localStorage.getItem(KEYS.pwa) === '1') return true;
-            if (localStorage.getItem(KEYS.bridge) === '1') return true;
             if (localStorage.getItem(KEYS.browser) === '1') return true;
           } catch (e) {}
           return false;
@@ -153,12 +151,6 @@
           if (standalone || isKiosk) return false;
           try {
             if (localStorage.getItem(KEYS.browser) === '1') return true;
-            if (
-              localStorage.getItem(KEYS.bridge) === '1' &&
-              localStorage.getItem(KEYS.pwa) !== '1'
-            ) {
-              return true;
-            }
           } catch (e) {}
           return false;
         }

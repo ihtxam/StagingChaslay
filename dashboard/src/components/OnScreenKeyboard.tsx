@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
+import { shouldShowOnScreenKeyboardToggle, shouldUseWebPosOnScreenKeyboard } from '@/lib/platform';
 
 type TextTarget = HTMLInputElement | HTMLTextAreaElement;
 
@@ -289,8 +289,14 @@ export function OnScreenKeyboardProvider({
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
-  const openKeyboard = useCallback(() => setOpen(true), []);
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const openKeyboard = useCallback(() => {
+    if (!shouldUseWebPosOnScreenKeyboard()) return;
+    setOpen(true);
+  }, []);
+  const toggle = useCallback(() => {
+    if (!shouldUseWebPosOnScreenKeyboard()) return;
+    setOpen((v) => !v);
+  }, []);
 
   const value = useMemo(
     () => ({ open, openKeyboard, toggle, close }),
@@ -298,8 +304,9 @@ export function OnScreenKeyboardProvider({
   );
 
   useEffect(() => {
-    if (!autoOpenOnFocus) return;
+    if (!autoOpenOnFocus || !shouldUseWebPosOnScreenKeyboard()) return;
     const onFocusIn = (e: FocusEvent) => {
+      if (!shouldUseWebPosOnScreenKeyboard()) return;
       const el = e.target instanceof Element ? e.target : null;
       if (isTextTarget(el)) setOpen(true);
     };
@@ -308,7 +315,11 @@ export function OnScreenKeyboardProvider({
   }, [autoOpenOnFocus]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!shouldUseWebPosOnScreenKeyboard()) setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !shouldUseWebPosOnScreenKeyboard()) return;
     const prev = document.body.style.paddingBottom;
     document.body.style.paddingBottom = 'min(40dvh, 280px)';
     return () => {
@@ -319,7 +330,10 @@ export function OnScreenKeyboardProvider({
   return (
     <OnScreenKeyboardContext.Provider value={value}>
       {children}
-      <OnScreenKeyboardOverlay open={open} onClose={close} />
+      <OnScreenKeyboardOverlay
+        open={open && shouldUseWebPosOnScreenKeyboard()}
+        onClose={close}
+      />
     </OnScreenKeyboardContext.Provider>
   );
 }

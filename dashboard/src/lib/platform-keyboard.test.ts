@@ -52,6 +52,29 @@ describe('on-screen keyboard platform gates', () => {
     expect(shouldShowOnScreenKeyboardToggle()).toBe(false);
   });
 
+  it('does not show or auto-open the custom keyboard on Android', async () => {
+    installWindow({
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Nebullus) AppleWebKit/537.36 Chrome/128.0.0.0',
+      pathname: '/merchant/pos',
+      media: {
+        '(pointer: coarse)': true,
+        '(max-width: 767px)': false,
+        '(display-mode: standalone)': false,
+        '(display-mode: fullscreen)': false,
+      },
+    });
+    const {
+      isAndroidDevice,
+      shouldUseWebPosOnScreenKeyboard,
+      shouldAutoOpenOnScreenKeyboard,
+      shouldShowOnScreenKeyboardToggle,
+    } = await import('./platform');
+    expect(isAndroidDevice()).toBe(true);
+    expect(shouldUseWebPosOnScreenKeyboard()).toBe(false);
+    expect(shouldAutoOpenOnScreenKeyboard()).toBe(false);
+    expect(shouldShowOnScreenKeyboardToggle()).toBe(false);
+  });
+
   it('auto-opens on coarse pointer tablet on WebPOS path', async () => {
     installWindow({
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',

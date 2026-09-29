@@ -704,6 +704,16 @@ function alignLine(text: string, width: number, align: ReceiptHeaderAlign = 'cen
   return centerLine(t, width);
 }
 
+/** Store telephone line in the receipt header (`Tel: …`, `Tél:`, `Phone:`). */
+export function isReceiptTelephoneLine(line: string): boolean {
+  const text = String(line || '').replace(/\s+/g, ' ').trim();
+  return /^(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:/i.test(text);
+}
+
+/** One blank line (LF). ESC d 1 is the same feed the cut path already uses. */
+const ESC_POS_BLANK_LINE = new Uint8Array([0x0a]);
+const ESC_POS_FEED_ONE = new Uint8Array([0x1b, 0x64, 0x01]);
+
 /** Plain-text header block as printed in generateWebPosReceiptText (for ESC/POS strip). */
 export function buildReceiptHeaderPlainTextBlock(
   unpaddedLines: string[],
@@ -716,6 +726,7 @@ export function buildReceiptHeaderPlainTextBlock(
   for (let i = 0; i < unpaddedLines.length; i++) {
     block += alignLine(unpaddedLines[i]!, width, align) + '\n';
     if (i === 0 && titleBodyGap) block += '\n';
+    if (isReceiptTelephoneLine(unpaddedLines[i] || '')) block += '\n';
   }
   return `${block}\n`;
 }
@@ -796,7 +807,14 @@ export function buildReceiptHeaderEscPos(
       parts.push(escposCp850Encode(`${lines[i]}\n`));
     }
   }
-  parts.push(escBold(false), escKitchenSize(1), escAlign(0), escposCp850Encode('\n\n'));
+  parts.push(escBold(false), escKitchenSize(1), escAlign(0));
+  const lastLine = lines[lines.length - 1] || '';
+  if (isReceiptTelephoneLine(lastLine)) {
+    // One blank line between the telephone and the separator under it.
+    parts.push(ESC_POS_FEED_ONE);
+  } else {
+    parts.push(escposCp850Encode('\n\n'));
+  }
   return concatBytes(...parts);
 }
 
@@ -2866,7 +2884,8 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
-    parts.push(alignCenter, logoBytes, escposCp850Encode('\n'), alignLeft);
+    // Finish the raster, then one blank line before the store address.
+    parts.push(alignCenter, logoBytes, escposCp850Encode('\n'), ESC_POS_BLANK_LINE, alignLeft);
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
