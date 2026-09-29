@@ -82,6 +82,7 @@ object PrintBridgeLauncher {
             retryHandler.postDelayed({
                 if (generation != retryGeneration) return@postDelayed
                 if (!BridgePermissions.hasNotificationPermission(appContext)) return@postDelayed
+                if (!BridgeSafeStart.canStartBackgroundService(appContext)) return@postDelayed
                 if (BridgeHealthChecker.isHealthy()) return@postDelayed
                 runCatching { ContextCompat.startForegroundService(appContext, intent) }
                     .onFailure { Log.w(TAG, "FGS retry after ${delayMs}ms failed", it) }

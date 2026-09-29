@@ -40,10 +40,10 @@ object BridgeSafeStart {
         mainHandler.postDelayed(runnable, delayMs)
     }
 
-    fun startNow(context: android.content.Context): Boolean {
+    fun startNow(context: android.content.Context, bypassDebounce: Boolean = false): Boolean {
         if (!BridgePermissions.hasNotificationPermission(context)) return false
         val now = System.currentTimeMillis()
-        if (now - lastStartAttemptMs < 1_500L) return false
+        if (!bypassDebounce && now - lastStartAttemptMs < 1_500L) return false
         lastStartAttemptMs = now
         return runCatching {
             PrintBridgeLauncher.start(context)

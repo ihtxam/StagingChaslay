@@ -17,6 +17,9 @@
     <string name="notification_permission_required">Notifications are required so Bridge can run in the background. Allow notifications, then tap Start background service.</string>
     <string name="start_bridge_service">Start background service</string>
     <string name="tap_start_bridge_hint">Tap Start background service after allowing notifications.</string>
+    <string name="bridge_start_failed">Could not start Bridge. Allow notifications for Bridge Reborn, then try again.</string>
+    <string name="bridge_start_requested">Starting Bridge Reborn…</string>
+    <string name="lan_printer_invalid">Enter a valid IP address (example: 192.168.1.50).</string>
     <string name="printer_scan_failed">Could not scan printers — try again in a moment.</string>
     <string name="usb_printer_attach_prompt">Allow USB access for %1$s</string>
     <string name="add_network_printer">Add network</string>

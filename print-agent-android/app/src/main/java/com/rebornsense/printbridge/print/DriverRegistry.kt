@@ -16,7 +16,7 @@ class DriverRegistry(
     fun sunmiDriver(): SunmiInternalDriver = sunmi
 
     fun refresh(context: Context): List<PrinterEndpoint> {
-        sunmi.bindIfNeeded(context.applicationContext)
+        runCatching { sunmi.bindIfNeeded(context.applicationContext) }
         val found = drivers.flatMap { driver ->
             runCatching { driver.discover(context.applicationContext) }.getOrElse { emptyList() }
         }

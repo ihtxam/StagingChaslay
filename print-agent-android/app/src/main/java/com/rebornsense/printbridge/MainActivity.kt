@@ -45,6 +45,8 @@ class MainActivity : AppCompatActivity() {
     private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
     private var notificationPermissionResolved = false
+    private var printerScanInFlight = false
+    private var healthProbeInFlight = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     private val serviceStatusRunnable = object : Runnable {
         override fun run() {
@@ -69,7 +71,6 @@ class MainActivity : AppCompatActivity() {
             if (granted) {
                 runtimePermissionsResolved = true
                 BridgeSafeStart.markUiReady()
-                BridgeSafeStart.scheduleStartFromActivity(this)
                 window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
             } else {
                 Toast.makeText(this, R.string.notification_permission_required, Toast.LENGTH_LONG).show()
@@ -99,7 +100,6 @@ class MainActivity : AppCompatActivity() {
             // Legacy path — unused for cold start; kept for any older call sites.
             runtimePermissionsResolved = true
             BridgeSafeStart.markUiReady()
-            BridgeSafeStart.scheduleStartFromActivity(this)
             window.decorView.postDelayed({ refreshPrintersSafely() }, 1_200L)
         }
 
@@ -216,14 +216,31 @@ class MainActivity : AppCompatActivity() {
         scroll.post { scroll.smoothScrollTo(0, target.top) }
     }
 
-    private fun updateTapToPayDiagnostics() {
+    private fun updateTapToPayDiagnostics(cachedHealth: BridgeHealthChecker.HealthSnapshot? = null) {
         val card = findViewById<View>(R.id.tapToPayDiagnosticsCard)
         val text = findViewById<TextView>(R.id.tapToPayDiagnosticsText)
         if (!BuildConfig.HAS_ADYEN_SDK) {
             card.visibility = View.GONE
             return
         }
-        val health = BridgeHealthChecker.probeHealth()
+        if (cachedHealth != null) {
+            applyTapToPayDiagnostics(card, text, cachedHealth)
+            return
+        }
+        Thread {
+            val health = BridgeHealthChecker.probeHealth()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                applyTapToPayDiagnostics(card, text, health)
+            }
+        }.start()
+    }
+
+    private fun applyTapToPayDiagnostics(
+        card: View,
+        text: TextView,
+        health: BridgeHealthChecker.HealthSnapshot?,
+    ) {
         val ready = health?.tapToPayReady == true
         if (ready) {
             card.visibility = View.GONE
@@ -245,7 +262,6 @@ class MainActivity : AppCompatActivity() {
         notificationPermissionResolved = true
         runtimePermissionsResolved = true
         BridgeSafeStart.markUiReady()
-        BridgeSafeStart.scheduleStartFromActivity(this)
         window.decorView.postDelayed({ refreshPrintersSafely() }, 600L)
     }
 
@@ -271,8 +287,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBridge() {
-        BridgeSafeStart.startNow(this)
-        updateServiceStatus()
+        BridgeSafeStart.startNow(this, bypassDebounce = true)
+        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 600L)
     }
 
     private fun startBridgeManually() {
@@ -281,33 +297,66 @@ class MainActivity : AppCompatActivity() {
             return
         }
         BridgeSafeStart.markUiReady()
-        startBridge()
+        Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
+        val started = BridgeSafeStart.startNow(this, bypassDebounce = true)
+        if (!started) {
+            Toast.makeText(this, R.string.bridge_start_failed, Toast.LENGTH_LONG).show()
+        }
+        serviceStatusHandler.postDelayed({ updateServiceStatus() }, 800L)
         refreshPrintersSafely()
     }
 
     private fun refreshPrintersSafely() {
-        runCatching { refreshPrinters() }
-            .onFailure {
-                Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
+        if (printerScanInFlight) return
+        printerScanInFlight = true
+        Thread {
+            val result = runCatching {
+                UsbHostPermissions.recordGrantedDevices(applicationContext)
+                val printers = registry.refresh(applicationContext)
+                val defaultId = PrinterPreferences.getDefaultPrinterId(this@MainActivity)
+                printers to defaultId
             }
+            runOnUiThread {
+                printerScanInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                result.onSuccess { (printers, defaultId) ->
+                    printerAdapter.submit(printers, defaultId)
+                    emptyPrintersText.visibility = if (printers.isEmpty()) View.VISIBLE else View.GONE
+                }.onFailure {
+                    Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun refreshPrinters() {
+        refreshPrintersSafely()
     }
 
     private fun updateServiceStatus() {
+        if (healthProbeInFlight) return
+        healthProbeInFlight = true
         val statusText = findViewById<TextView>(R.id.statusText)
         val hintText = findViewById<TextView>(R.id.hintText)
         val serviceIndicator = findViewById<View>(R.id.serviceStatusIndicator)
-
-        val health = BridgeHealthChecker.probeHealth()
-        if (health != null) {
-            statusText.text = getString(R.string.status_ready)
-            hintText.text = getString(R.string.main_hint_short)
-            serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
-        } else {
-            statusText.text = getString(R.string.status_starting)
-            hintText.text = getString(R.string.tap_start_bridge_hint)
-            serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
-        }
-        updateTapToPayDiagnostics()
+        statusText.text = getString(R.string.status_service_checking)
+        Thread {
+            val health = BridgeHealthChecker.probeHealth()
+            runOnUiThread {
+                healthProbeInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (health != null) {
+                    statusText.text = getString(R.string.status_ready)
+                    hintText.text = getString(R.string.main_hint_short)
+                    serviceIndicator.setBackgroundResource(R.drawable.service_status_running)
+                } else {
+                    statusText.text = getString(R.string.status_starting)
+                    hintText.text = getString(R.string.tap_start_bridge_hint)
+                    serviceIndicator.setBackgroundResource(R.drawable.service_status_stopped)
+                }
+                updateTapToPayDiagnostics(health)
+            }
+        }.start()
     }
 
     private fun requestUsbPrinterAccess() {
@@ -334,14 +383,6 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, R.string.auto_start_disabled_toast, Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private fun refreshPrinters() {
-        UsbHostPermissions.recordGrantedDevices(this)
-        val printers = registry.refresh(applicationContext)
-        val defaultId = PrinterPreferences.getDefaultPrinterId(this)
-        printerAdapter.submit(printers, defaultId)
-        emptyPrintersText.visibility = if (printers.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun setDefaultPrinter(endpoint: PrinterEndpoint) {
@@ -377,10 +418,14 @@ class MainActivity : AppCompatActivity() {
                 positive.isEnabled = !text.isNullOrBlank()
             }
             positive.setOnClickListener {
-                val host = input.text?.toString()?.trim().orEmpty()
-                if (host.isBlank()) return@setOnClickListener
+                val raw = input.text?.toString()?.trim().orEmpty()
+                val host = PrinterPreferences.normalizeLanHost(raw)
+                if (host == null) {
+                    Toast.makeText(this, R.string.lan_printer_invalid, Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
                 PrinterPreferences.addLanHost(this, host)
-                refreshPrinters()
+                refreshPrintersSafely()
                 Toast.makeText(this, R.string.lan_printer_added, Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }

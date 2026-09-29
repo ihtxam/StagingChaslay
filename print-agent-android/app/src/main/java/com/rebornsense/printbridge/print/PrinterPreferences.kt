@@ -40,12 +40,29 @@ object PrinterPreferences {
             ?: emptyList()
     }
 
+    fun normalizeLanHost(raw: String): String? {
+        var value = raw.trim()
+        if (value.isBlank()) return null
+        value = value.removePrefix("http://").removePrefix("https://").trim()
+        value = value.substringBefore('/').trim()
+        value = value.substringBefore('?').trim()
+        if (value.contains(':')) {
+            val hostPart = value.substringBefore(':').trim()
+            val portPart = value.substringAfter(':', "").trim()
+            if (hostPart.isNotBlank() && (portPart.isEmpty() || portPart == "9100")) {
+                value = hostPart
+            }
+        }
+        return value.takeIf { it.isNotBlank() }
+    }
+
     fun addLanHost(context: Context, host: String) {
-        val trimmed = host.trim()
-        if (trimmed.isBlank()) return
+        val normalized = normalizeLanHost(host) ?: return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val next = prefs.getStringSet("lan_hosts", emptySet())?.toMutableSet() ?: mutableSetOf()
-        next.add(trimmed)
+        val stored = prefs.getStringSet("lan_hosts", null)
+        val next = HashSet<String>(stored?.size?.coerceAtLeast(1) ?: 1)
+        if (stored != null) next.addAll(stored)
+        next.add(normalized)
         prefs.edit().putStringSet("lan_hosts", next).apply()
     }
 
