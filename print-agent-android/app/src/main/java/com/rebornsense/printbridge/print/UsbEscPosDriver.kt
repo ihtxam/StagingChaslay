@@ -12,15 +12,17 @@ class UsbEscPosDriver : PrinterDriver {
     override val key: String = "usb"
 
     override fun discover(context: Context): List<PrinterEndpoint> {
-        val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        return usb.deviceList.values.mapNotNull { device ->
-            if (!com.rebornsense.printbridge.usb.UsbDeviceClassifier.isUsbPrinterCandidate(context, device)) {
-                return@mapNotNull null
-            }
-            if (bulkOutEndpoint(device) == null) return@mapNotNull null
-            val name = device.productName?.takeIf { it.isNotBlank() }
-                ?: "USB printer ${device.vendorId}:${device.productId}"
-            PrinterEndpoint(
+        val usb = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return emptyList()
+        val devices = runCatching { usb.deviceList.values.toList() }.getOrElse { return emptyList() }
+        return devices.mapNotNull { device ->
+            runCatching {
+                if (!com.rebornsense.printbridge.usb.UsbDeviceClassifier.isUsbPrinterCandidate(context, device)) {
+                    return@runCatching null
+                }
+                if (bulkOutEndpoint(device) == null) return@runCatching null
+                val name = safeProductName(usb, device)
+                    ?: "USB printer %04X:%04X".format(device.vendorId, device.productId)
+                PrinterEndpoint(
                 id = "usb:${device.vendorId}:${device.productId}:${device.deviceName}",
                 name = name,
                 connectionType = "usb",
@@ -31,7 +33,14 @@ class UsbEscPosDriver : PrinterDriver {
                     "productId" to device.productId.toString(),
                 ),
             )
+            }.getOrNull()
         }
+    }
+
+    /** Product strings can stall the USB hub when permission is not granted. */
+    private fun safeProductName(usb: UsbManager, device: UsbDevice): String? {
+        if (!usb.hasPermission(device)) return null
+        return runCatching { device.productName?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     override fun print(context: Context, endpoint: PrinterEndpoint, data: ByteArray): Result<Unit> {

@@ -337,6 +337,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.bridge_start_failed, Toast.LENGTH_LONG).show()
             return
         }
+        showLanPrintersNow()
         serviceStatusHandler.postDelayed({ updateServiceStatus() }, 1_200L)
         serviceStatusHandler.postDelayed({
             refreshPrintersSafely()
@@ -344,10 +345,25 @@ class MainActivity : AppCompatActivity() {
         }, 2_800L)
     }
 
+    private fun showLanPrintersNow() {
+        val lan = com.rebornsense.printbridge.print.NetworkRawDriver().discover(applicationContext)
+        val defaultId = PrinterPreferences.getDefaultPrinterId(this)
+        val shown = lan.map { ep -> ep.copy(isDefault = ep.id == defaultId) }.let { list ->
+            if (list.none { it.isDefault } && list.isNotEmpty()) {
+                list.mapIndexed { index, ep -> ep.copy(isDefault = index == 0) }
+            } else {
+                list
+            }
+        }
+        printerAdapter.submit(shown, defaultId)
+        emptyPrintersText.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+    }
+
     private fun refreshPrintersSafely() {
+        showLanPrintersNow()
         if (printerScanInFlight) return
         printerScanInFlight = true
-        Thread {
+        val scan = Thread {
             val result = runCatching {
                 UsbHostPermissions.recordGrantedDevices(applicationContext)
                 val printers = registry.refresh(applicationContext)
@@ -361,10 +377,20 @@ class MainActivity : AppCompatActivity() {
                     printerAdapter.submit(printers, defaultId)
                     emptyPrintersText.visibility = if (printers.isEmpty()) View.VISIBLE else View.GONE
                 }.onFailure {
+                    showLanPrintersNow()
                     Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
                 }
             }
-        }.start()
+        }
+        scan.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error ->
+            android.util.Log.e("MainActivity", "printer scan crashed", error)
+            runOnUiThread {
+                printerScanInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                showLanPrintersNow()
+            }
+        }
+        scan.start()
     }
 
     private fun refreshPrinters() {
@@ -468,6 +494,7 @@ class MainActivity : AppCompatActivity() {
                     return@setOnClickListener
                 }
                 PrinterPreferences.addLanHost(this, host)
+                showLanPrintersNow()
                 refreshPrintersSafely()
                 Toast.makeText(this, R.string.lan_printer_added, Toast.LENGTH_SHORT).show()
                 dialog.dismiss()

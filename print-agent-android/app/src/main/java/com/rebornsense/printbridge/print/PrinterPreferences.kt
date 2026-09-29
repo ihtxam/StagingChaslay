@@ -63,7 +63,7 @@ object PrinterPreferences {
         val next = HashSet<String>(stored?.size?.coerceAtLeast(1) ?: 1)
         if (stored != null) next.addAll(stored)
         next.add(normalized)
-        prefs.edit().putStringSet("lan_hosts", next).apply()
+        prefs.edit().putStringSet("lan_hosts", next).commit()
     }
 
     fun removeLanHost(context: Context, host: String) {

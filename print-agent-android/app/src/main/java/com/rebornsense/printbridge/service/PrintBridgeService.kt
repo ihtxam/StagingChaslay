@@ -8,9 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -27,16 +25,6 @@ class PrintBridgeService : Service() {
     private var server: BridgeHttpServer? = null
     private val registry = DriverRegistry()
     private val queue = PrintJobQueue(registry)
-    private val refreshHandler = Handler(Looper.getMainLooper())
-    private val refreshRunnable = object : Runnable {
-        override fun run() {
-            Thread {
-                runCatching { registry.refresh(applicationContext) }
-            }.start()
-            refreshHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
-        }
-    }
-
     override fun onCreate() {
         super.onCreate()
         try {
@@ -53,21 +41,30 @@ class PrintBridgeService : Service() {
                 @Suppress("DEPRECATION")
                 startForeground(NOTIFICATION_ID, notification)
             }
-            queue.start(applicationContext)
-            server = BridgeHttpServer(PORT, applicationContext, registry, queue).also {
-                it.start(NanoTimeout, false)
-            }
-            refreshHandler.postDelayed({ refreshPrintersOnBackground() }, INITIAL_REFRESH_DELAY_MS)
-            refreshHandler.postDelayed(refreshRunnable, WATCHDOG_INTERVAL_MS)
         } catch (t: Throwable) {
-            Log.e(TAG, "PrintBridgeService failed to start", t)
+            Log.e(TAG, "PrintBridgeService failed to enter foreground", t)
             stopSelf()
+            return
         }
+        val worker = Thread {
+            runCatching { queue.start(applicationContext) }
+                .onFailure { Log.e(TAG, "print queue failed", it) }
+            runCatching {
+                val http = BridgeHttpServer(PORT, applicationContext, registry, queue)
+                http.start(NanoTimeout, false)
+                server = http
+            }.onFailure { Log.e(TAG, "HTTP server failed", it) }
+        }
+        worker.name = "print-bridge-http"
+        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error ->
+            Log.e(TAG, "bridge worker crashed", error)
+        }
+        worker.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
-            refreshHandler.postDelayed({ refreshPrintersOnBackground() }, 400L)
+            refreshPrintersOnBackground()
         }
         return START_STICKY
     }
@@ -80,7 +77,6 @@ class PrintBridgeService : Service() {
     }
 
     override fun onDestroy() {
-        refreshHandler.removeCallbacks(refreshRunnable)
         server?.stop()
         server = null
         queue.stop()
@@ -117,7 +113,7 @@ class PrintBridgeService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(body)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_bridge)
             .setContentIntent(launch)
             .setOngoing(true)
             .build()
@@ -129,7 +125,5 @@ class PrintBridgeService : Service() {
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
-        private const val WATCHDOG_INTERVAL_MS = 30_000L
-        private const val INITIAL_REFRESH_DELAY_MS = 2_500L
     }
 }
