@@ -4,6 +4,7 @@ import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import com.rebornsense.printbridge.usb.UsbDeviceClassifier
 
 data class ScaleUsbDevice(
     val stableAddress: String,
@@ -35,14 +36,17 @@ object ScaleUsbHelper {
     fun listDevices(context: Context): List<ScaleUsbDevice> {
         val manager = usbManager(context) ?: return emptyList()
         return manager.deviceList.values
-            .filter { isLikelyScale(it) }
+            .filter { device ->
+                !UsbDeviceClassifier.isUsbNetworkAdapter(context, device) && isLikelyScale(device)
+            }
             .map { device ->
+                val permitted = manager.hasPermission(device)
                 ScaleUsbDevice(
                     stableAddress = stableAddress(device),
                     vendorId = device.vendorId,
                     productId = device.productId,
-                    displayName = buildDisplayName(device),
-                    hasPermission = manager.hasPermission(device)
+                    displayName = buildDisplayName(device, permitted),
+                    hasPermission = permitted
                 )
             }
     }
@@ -84,11 +88,18 @@ object ScaleUsbHelper {
         }
     }
 
-    private fun buildDisplayName(device: UsbDevice): String {
-        val label = listOfNotNull(
-            device.productName?.trim()?.takeIf { it.isNotEmpty() },
-            device.manufacturerName?.trim()?.takeIf { it.isNotEmpty() }
-        ).distinct().joinToString(" ").ifBlank { "USB scale" }
+    private fun buildDisplayName(device: UsbDevice, hasPermission: Boolean): String {
+        val product = if (hasPermission) {
+            runCatching { device.productName?.trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+        val manufacturer = if (hasPermission) {
+            runCatching { device.manufacturerName?.trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+        val label = listOfNotNull(product, manufacturer).distinct().joinToString(" ").ifBlank { "USB scale" }
         return "$label (${device.vendorId}:${device.productId})"
     }
 

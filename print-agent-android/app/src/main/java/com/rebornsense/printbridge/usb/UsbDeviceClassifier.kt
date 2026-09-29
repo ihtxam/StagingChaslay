@@ -1,7 +1,9 @@
 package com.rebornsense.printbridge.usb
 
+import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import com.rebornsense.printbridge.print.PrinterPreferences
 
 /**
@@ -50,14 +52,50 @@ object UsbDeviceClassifier {
         0x0B, // CCID smart card
     )
 
+    /** Realtek. USB 10/100 LAN (0x0BDA:0x8152) is an ethernet dongle, not a printer or scale. */
+    private const val REALTEK_VENDOR_ID = 0x0BDA
+
+    /** CDC-ECM, CDC-EEM, CDC-NCM, CDC-MBIM. */
+    private val CDC_NETWORK_SUBCLASSES = setOf(0x06, 0x0C, 0x0D, 0x0E)
+
+    /** Wireless Controller / RNDIS (class 0xE0, subclass 0x01, protocol 0x03). */
+    private const val USB_CLASS_WIRELESS_CONTROLLER = 0xE0
+
+    /**
+     * Product strings already cached by the host. "lan" is a token so names like
+     * "island" are left alone; "USB 10/100 LAN" still matches.
+     */
+    private val NETWORK_PRODUCT_NAME = Regex(
+        """ethernet|802\.11|wi-?fi|rndis|usb\s*network|(^|[^a-z0-9])lan([^a-z0-9]|$)""",
+        RegexOption.IGNORE_CASE,
+    )
+
     /** True for attach events — includes USB printer class even when product name is generic. */
     fun shouldOfferUsbAccessOnAttach(context: android.content.Context?, device: UsbDevice): Boolean {
+        if (isUsbNetworkAdapter(context, device)) return false
         if (isScannerOrReaderPeripheral(device)) return false
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
         if (context != null && isUsbPrinterCandidate(context, device)) return true
         return (0 until device.interfaceCount).any { index ->
             device.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_PRINTER
         }
+    }
+
+    /**
+     * USB ethernet, RNDIS, CDC-ECM, and CDC-NCM adapters, plus Realtek (0x0BDA).
+     * A device that actually exposes [UsbConstants.USB_CLASS_PRINTER] is not excluded.
+     * Product name is read only when USB permission is already granted.
+     */
+    fun isUsbNetworkAdapter(context: Context?, device: UsbDevice): Boolean {
+        if (hasPrinterClass(device)) return false
+        if (device.vendorId == REALTEK_VENDOR_ID) return true
+        if (hasUsbNetworkInterface(device)) return true
+        val name = safeProductName(context, device) ?: return false
+        return looksLikeNetworkProductName(name)
+    }
+
+    fun looksLikeNetworkProductName(productName: String): Boolean {
+        return NETWORK_PRODUCT_NAME.containsMatchIn(productName)
     }
 
     fun isScannerOrReaderPeripheral(device: UsbDevice): Boolean {
@@ -81,6 +119,8 @@ object UsbDeviceClassifier {
      */
     fun isUsbPrinterCandidate(context: android.content.Context?, device: UsbDevice): Boolean {
         return runCatching {
+            // Before the remembered-printer shortcut: a Realtek dongle must not stay listed.
+            if (isUsbNetworkAdapter(context, device)) return@runCatching false
             if (isScannerOrReaderPeripheral(device)) return@runCatching false
             if (context != null && PrinterPreferences.isRememberedUsbDevice(context, deviceKey(device))) {
                 return@runCatching true
@@ -107,6 +147,47 @@ object UsbDeviceClassifier {
             classes.add(iface.interfaceClass)
         }
         return classes
+    }
+
+    private fun safeProductName(context: Context?, device: UsbDevice): String? {
+        if (context == null) return null
+        val usb = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return null
+        if (!usb.hasPermission(device)) return null
+        return runCatching { device.productName?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun hasUsbNetworkInterface(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_COMM &&
+            device.deviceSubclass in CDC_NETWORK_SUBCLASSES
+        ) {
+            return true
+        }
+        if (device.deviceClass == USB_CLASS_WIRELESS_CONTROLLER &&
+            device.deviceSubclass == 0x01 &&
+            device.deviceProtocol == 0x03
+        ) {
+            return true
+        }
+        for (index in 0 until device.interfaceCount) {
+            val iface = runCatching { device.getInterface(index) }.getOrNull() ?: continue
+            val cls = iface.interfaceClass
+            val sub = iface.interfaceSubclass
+            val proto = iface.interfaceProtocol
+            if (cls == UsbConstants.USB_CLASS_COMM && sub in CDC_NETWORK_SUBCLASSES) return true
+            // Microsoft RNDIS: CDC ACM with vendor protocol.
+            if (cls == UsbConstants.USB_CLASS_COMM && sub == 0x02 && proto == 0xFF) return true
+            if (cls == USB_CLASS_WIRELESS_CONTROLLER && sub == 0x01 && proto == 0x03) return true
+        }
+        return false
+    }
+
+    private fun hasPrinterClass(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
+        for (index in 0 until device.interfaceCount) {
+            val iface = runCatching { device.getInterface(index) }.getOrNull() ?: continue
+            if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER) return true
+        }
+        return false
     }
 
     private fun hasPrinterInterface(device: UsbDevice): Boolean {

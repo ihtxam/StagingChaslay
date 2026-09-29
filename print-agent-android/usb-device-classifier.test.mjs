@@ -28,4 +28,30 @@ assert.equal(shouldExcludeByName('USB Serial'), false);
 assert.equal(looksLikePrinterName('80mm Thermal Receipt Printer'), true);
 assert.equal(looksLikePrinterName('USB Barcode Scanner'), false);
 
+/** Mirror of UsbDeviceClassifier.NETWORK_PRODUCT_NAME (permission-gated name check). */
+function looksLikeNetworkProductName(productName) {
+  return /ethernet|802\.11|wi-?fi|rndis|usb\s*network|(^|[^a-z0-9])lan([^a-z0-9]|$)/i.test(productName);
+}
+
+const REALTEK_VENDOR_ID = 0x0bda;
+function isNetworkAdapter({ vendorId, interfaceClass, productName, hasPermission }) {
+  if (interfaceClass === 7) return false; // USB_CLASS_PRINTER
+  if (vendorId === REALTEK_VENDOR_ID) return true;
+  if (hasPermission && productName && looksLikeNetworkProductName(productName)) return true;
+  return false;
+}
+
+assert.equal(looksLikeNetworkProductName('USB 10/100 LAN'), true);
+assert.equal(looksLikeNetworkProductName('USB Ethernet Adapter'), true);
+assert.equal(looksLikeNetworkProductName('Remote NDIS'), false);
+assert.equal(looksLikeNetworkProductName('RNDIS Gadget'), true);
+assert.equal(looksLikeNetworkProductName('802.11n NIC'), true);
+assert.equal(looksLikeNetworkProductName('USB Network Adapter'), true);
+assert.equal(looksLikeNetworkProductName('80mm Thermal Receipt Printer'), false);
+assert.equal(isNetworkAdapter({ vendorId: 0x0bda, interfaceClass: 255, productName: 'USB 10/100 LAN', hasPermission: true }), true);
+assert.equal(isNetworkAdapter({ vendorId: 0x0bda, interfaceClass: 255, productName: null, hasPermission: false }), true);
+assert.equal(isNetworkAdapter({ vendorId: 0x0bda, interfaceClass: 7, productName: 'USB 10/100 LAN', hasPermission: true }), false);
+assert.equal(isNetworkAdapter({ vendorId: 0x04b8, interfaceClass: 255, productName: 'USB 10/100 LAN', hasPermission: true }), true);
+assert.equal(isNetworkAdapter({ vendorId: 0x04b8, interfaceClass: 255, productName: 'USB 10/100 LAN', hasPermission: false }), false);
+
 console.log('usb-device-classifier.test.mjs: ok');
