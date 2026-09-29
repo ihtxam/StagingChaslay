@@ -5,7 +5,7 @@ import {
   probePrintAgentHealth,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import { probeDeviceBridgeHealth } from '@/lib/device-bridge';
+import { probeDeviceBridgeHealth, requestBridgeRebornAutostart } from '@/lib/device-bridge';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 export type CheckStatus = 'pending' | 'checking' | 'ok' | 'warn' | 'error' | 'skipped';
@@ -154,6 +154,10 @@ export async function runWebPosConnectionChecks(opts: {
   androidProbe?: boolean;
   paymentConfig?: WebPosPaymentCheckConfig | null;
 }): Promise<WebPosConnectionReport> {
+  if (opts.androidProbe) {
+    requestBridgeRebornAutostart();
+  }
+
   const health = opts.androidProbe
     ? await probePrintAgentHealth(8).catch(() => ({ ok: false as const }))
     : await getPrintAgentHealth().catch(() => ({ ok: false as const }));
@@ -163,10 +167,9 @@ export async function runWebPosConnectionChecks(opts: {
     livePrinters = await listAgentPrinters().catch(() => []);
   }
 
-  const bridge =
-    opts.androidProbe && opts.paymentConfig?.tapToPayEnabled === true
-      ? await probeDeviceBridgeHealth(5).catch(() => ({ ok: false as const }))
-      : { ok: health.ok };
+  const bridge = opts.androidProbe
+    ? await probeDeviceBridgeHealth(5).catch(() => ({ ok: false as const }))
+    : { ok: health.ok };
 
   const agentPlatform = health.platform ? ` (${health.platform})` : '';
   const agent: ConnectionCheckResult = health.ok

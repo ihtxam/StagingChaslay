@@ -4,6 +4,7 @@ import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import com.rebornsense.printbridge.print.PrinterPreferences
 
 /**
@@ -72,6 +73,7 @@ object UsbDeviceClassifier {
 
     /** True for attach events — includes USB printer class even when product name is generic. */
     fun shouldOfferUsbAccessOnAttach(context: android.content.Context?, device: UsbDevice): Boolean {
+        if (isSunmiInternalUsbShadow(context, device)) return false
         if (isUsbNetworkAdapter(context, device)) return false
         if (isScannerOrReaderPeripheral(device)) return false
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
@@ -117,8 +119,28 @@ object UsbDeviceClassifier {
      * Devices Bridge may ask USB permission for (receipt/kitchen/label printers only).
      * Scales are handled separately when reading weight — not on app launch.
      */
+    /**
+     * Sunmi D3/D2 expose the built-in thermal as a USB gadget (often labeled AX8772B).
+     * Printing must use [com.rebornsense.printbridge.print.SunmiInternalDriver], not USB ESC/POS.
+     */
+    fun isSunmiInternalUsbShadow(context: Context?, device: UsbDevice): Boolean {
+        if (!isSunmiHardware()) return false
+        if (hasPrinterClass(device)) return false
+        val name = safeProductName(context, device)?.lowercase().orEmpty()
+        if (name.isNotEmpty() && SUNMI_INTERNAL_USB_NAME.containsMatchIn(name)) return true
+        // Vendor-class bulk OUT only — typical for the internal bridge, not a Type-A receipt printer.
+        if (!hasPrinterClass(device) && hasAnyBulkOut(device) && !hasPrinterInterface(device)) {
+            val classes = interfaceClasses(device)
+            if (classes.isNotEmpty() && classes.all { it == UsbConstants.USB_CLASS_VENDOR_SPEC }) {
+                return true
+            }
+        }
+        return false
+    }
+
     fun isUsbPrinterCandidate(context: android.content.Context?, device: UsbDevice): Boolean {
         return runCatching {
+            if (isSunmiInternalUsbShadow(context, device)) return@runCatching false
             // Before the remembered-printer shortcut: a Realtek dongle must not stay listed.
             if (isUsbNetworkAdapter(context, device)) return@runCatching false
             if (isScannerOrReaderPeripheral(device)) return@runCatching false
@@ -220,4 +242,13 @@ object UsbDeviceClassifier {
     }
 
     private fun deviceKey(device: UsbDevice): String = "${device.vendorId}:${device.productId}"
+
+    private fun isSunmiHardware(): Boolean {
+        return Build.MANUFACTURER.orEmpty().contains("SUNMI", ignoreCase = true)
+    }
+
+    private val SUNMI_INTERNAL_USB_NAME = Regex(
+        """ax8772|built-?in|internal\s*print|sunmi\s*print""",
+        RegexOption.IGNORE_CASE,
+    )
 }

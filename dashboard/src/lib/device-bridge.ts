@@ -8,7 +8,11 @@
 import { resolveApiOriginForBridge } from '@/lib/api';
 import { sanitizeBridgeWebAppPath } from '@/lib/merchant-app-home';
 import { markBridgeRebornInstalled } from '@/lib/pwa';
-import { PRINT_AGENT_URL } from '@/lib/print-agent';
+import { isAndroidWebPosTill, PRINT_AGENT_URL } from '@/lib/print-agent';
+
+const BRIDGE_REBORN_PACKAGE = 'com.rebornsense.printbridge';
+const BRIDGE_AUTOSTART_EXTRA = 'autostart_bridge_service';
+let lastBridgeAutostartAttemptMs = 0;
 
 export type DeviceBridgeHealth = {
   ok: boolean;
@@ -83,6 +87,29 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
     };
   } catch {
     return { ok: false };
+  }
+}
+
+/**
+ * Bring Bridge Reborn to the foreground so auto-start can run the localhost service.
+ * Chrome cannot start Android services directly; opening the app once is the supported path.
+ */
+export function requestBridgeRebornAutostart(cooldownMs = 90_000): boolean {
+  if (typeof window === 'undefined' || !isAndroidWebPosTill()) return false;
+  const now = Date.now();
+  if (now - lastBridgeAutostartAttemptMs < cooldownMs) return false;
+  lastBridgeAutostartAttemptMs = now;
+  const component = `${BRIDGE_REBORN_PACKAGE}/com.rebornsense.printbridge.MainActivity`;
+  const intentUrl =
+    `intent:#Intent;action=android.intent.action.MAIN;` +
+    `category=android.intent.category.LAUNCHER;` +
+    `component=${component};` +
+    `B.${BRIDGE_AUTOSTART_EXTRA}=true;end`;
+  try {
+    window.location.href = intentUrl;
+    return true;
+  } catch {
+    return false;
   }
 }
 

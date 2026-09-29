@@ -20,6 +20,8 @@ function usbVidPid(id) {
   return `${vid}:${pid}`;
 }
 
+const SUNMI_INTERNAL_ID = 'sunmi:internal';
+
 function chooseDefaultId(currentId, endpoints) {
   const current = String(currentId || '').trim() || null;
   const matchLive = (id) => {
@@ -30,8 +32,12 @@ function chooseDefaultId(currentId, endpoints) {
     return endpoints.find((ep) => usbVidPid(ep.id) === key) || null;
   };
   const liveMatch = current ? matchLive(current) : null;
+  const sunmiInternal = endpoints.find((ep) => ep.id === SUNMI_INTERNAL_ID) || null;
   const printerClass = endpoints.find((ep) => ep.usbPrinterClass) || null;
   const replace = current == null || isStaleRealtek(current) || liveMatch == null;
+  if (sunmiInternal && (replace || (current && current.startsWith('usb:')))) {
+    return sunmiInternal.id;
+  }
   if (printerClass && replace) return printerClass.id;
   return (liveMatch && liveMatch.id) || current;
 }
@@ -57,5 +63,11 @@ assert.equal(chooseDefaultId(lan.id, [printer, lan]), lan.id);
 assert.equal(chooseDefaultId(printer.id, [printer, lan]), printer.id);
 assert.equal(chooseDefaultId('usb:1046:20497', [{ id: 'usb:1046:20497:SN1', usbPrinterClass: true }]), 'usb:1046:20497:SN1');
 assert.equal(chooseDefaultId(realtekId, [lan]), realtekId);
+
+const sunmi = { id: SUNMI_INTERNAL_ID, usbPrinterClass: false };
+const sunmiUsbShadow = { id: 'usb:9999:1', usbPrinterClass: false };
+assert.equal(chooseDefaultId(null, [sunmi, sunmiUsbShadow]), SUNMI_INTERNAL_ID);
+assert.equal(chooseDefaultId(sunmiUsbShadow.id, [sunmi, sunmiUsbShadow]), SUNMI_INTERNAL_ID);
+assert.equal(chooseDefaultId(sunmi.id, [sunmi, printer]), sunmi.id);
 
 console.log('stale-printer-selection.test.mjs: ok');

@@ -54,4 +54,15 @@ assert.equal(isNetworkAdapter({ vendorId: 0x0bda, interfaceClass: 7, productName
 assert.equal(isNetworkAdapter({ vendorId: 0x04b8, interfaceClass: 255, productName: 'USB 10/100 LAN', hasPermission: true }), true);
 assert.equal(isNetworkAdapter({ vendorId: 0x04b8, interfaceClass: 255, productName: 'USB 10/100 LAN', hasPermission: false }), false);
 
+/** Mirror of Sunmi internal USB shadow name check (AX8772B on D3 Mini). */
+function isSunmiInternalUsbShadowName(productName, isSunmiDevice = true) {
+  if (!isSunmiDevice) return false;
+  if (!productName) return false;
+  return /ax8772|built-?in|internal\s*print|sunmi\s*print/i.test(productName);
+}
+
+assert.equal(isSunmiInternalUsbShadowName('AX8772B'), true);
+assert.equal(isSunmiInternalUsbShadowName('USB Printer'), false);
+assert.equal(isSunmiInternalUsbShadowName('AX8772B', false), false);
+
 console.log('usb-device-classifier.test.mjs: ok');

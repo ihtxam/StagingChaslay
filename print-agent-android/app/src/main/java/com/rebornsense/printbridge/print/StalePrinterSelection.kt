@@ -5,6 +5,8 @@ package com.rebornsense.printbridge.print
  * receipt printer. Those names must not be reused for a cash sale.
  */
 internal object StalePrinterSelection {
+    const val SUNMI_INTERNAL_ID = "sunmi:internal"
+
     private val REALTEK_HEX = Regex("""0BDA\s*:\s*8152""", RegexOption.IGNORE_CASE)
     private val REALTEK_DECIMAL = Regex("""3034\s*:\s*33106""")
     private val USB_LAN_NAME = Regex("""10\s*/\s*100\s*LAN""", RegexOption.IGNORE_CASE)
@@ -26,8 +28,12 @@ internal object StalePrinterSelection {
     fun chooseDefaultId(currentId: String?, endpoints: List<DefaultCandidate>): String? {
         val current = currentId?.trim()?.takeIf { it.isNotEmpty() }
         val liveMatch = current?.let { matchLive(it, endpoints) }
+        val sunmiInternal = endpoints.firstOrNull { it.id == SUNMI_INTERNAL_ID }
         val printerClass = endpoints.firstOrNull { it.usbPrinterClass }
         val replace = current == null || isStaleRealtek(current) || liveMatch == null
+        if (sunmiInternal != null && (replace || current?.startsWith("usb:") == true)) {
+            return sunmiInternal.id
+        }
         if (printerClass != null && replace) return printerClass.id
         return liveMatch?.id ?: current
     }

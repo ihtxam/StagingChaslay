@@ -49,7 +49,11 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         UsbHostPermissions.recordGrantedDevices(this)
         if (usb.hasPermission(device)) {
             UsbBootPermissionNotifier.cancelNotification(this)
-            onUsbAccessReady()
+            onUsbAccessReady(skipMainActivity = true)
+            return
+        }
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
+            finish()
             return
         }
         if (UsbHostPermissions.isRequestPending()) {
@@ -57,9 +61,10 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         }
         if (!usbPromptIssued) {
             usbPromptIssued = true
+            UsbAttachPromptGuard.markPromptIssued(this, device)
             if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
                 if (usb.hasPermission(device)) {
-                    onUsbAccessReady()
+                    onUsbAccessReady(skipMainActivity = true)
                 }
             }
             return
@@ -68,10 +73,13 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun onUsbAccessReady() {
+    private fun onUsbAccessReady(skipMainActivity: Boolean = false) {
         UsbHostPermissions.promoteGrantedUsbPrinters(applicationContext)
         PrintBridgeLauncher.refreshPrinters(applicationContext)
-        if (intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION) {
+        if (
+            skipMainActivity ||
+            intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION
+        ) {
             finish()
             return
         }
