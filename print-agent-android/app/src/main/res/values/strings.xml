@@ -5,7 +5,7 @@
     <string name="notification_body">WebPOS in Chrome can print and take NFC payments on http://127.0.0.1:9101</string>
     <string name="status_ready">Bridge ready on port 9101</string>
     <string name="status_starting">Starting Bridge Reborn…</string>
-    <string name="status_start_failed">Bridge did not start</string>
+    <string name="status_start_failed">Bridge stopped — start failed</string>
     <string name="status_service_running">Background service running</string>
     <string name="status_service_stopped">Background service not running</string>
     <string name="status_service_checking">Checking Bridge service…</string>
@@ -20,6 +20,8 @@
     <string name="tap_start_bridge_hint">Tap Start background service after allowing notifications.</string>
     <string name="bridge_start_failed">Could not start Bridge. Allow notifications for Bridge Reborn, then try again.</string>
     <string name="bridge_start_failed_see_log">Could not start Bridge. The crash details are shown on this screen.</string>
+    <string name="bridge_service_did_not_stay">Bridge Reborn did not stay running. No crash details were saved.</string>
+    <string name="bridge_service_did_not_stay_reason">Bridge Reborn did not stay running.\n\n%1$s</string>
     <string name="crash_log_title">Last crash — Bridge Reborn v%1$s</string>
     <string name="crash_log_clear">Clear</string>
     <string name="bridge_start_requested">Starting Bridge Reborn…</string>

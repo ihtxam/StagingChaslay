@@ -13,13 +13,35 @@ class DriverRegistry(
     @Volatile
     private var cached: List<PrinterEndpoint> = emptyList()
 
+    @Volatile
+    private var lastUsbEndpoints: List<PrinterEndpoint> = emptyList()
+
+    @Volatile
+    private var usbDiscoverSucceeded: Boolean = true
+
     fun sunmiDriver(): SunmiInternalDriver = sunmi
+
+    fun locateUsbDevice(context: Context, endpoint: PrinterEndpoint) = usb.locate(context, endpoint)
+
+    /** False when the USB scan threw. An empty successful scan is still true. */
+    fun didUsbDiscoverSucceed(): Boolean = usbDiscoverSucceeded
 
     fun refresh(context: Context): List<PrinterEndpoint> {
         runCatching { sunmi.bindIfNeeded(context.applicationContext) }
-        val found = drivers.flatMap { driver ->
-            runCatching { driver.discover(context.applicationContext) }.getOrElse { emptyList() }
+        val app = context.applicationContext
+        val usbResult = runCatching { usb.discover(app) }
+        val usbFound = if (usbResult.isSuccess) {
+            usbDiscoverSucceeded = true
+            lastUsbEndpoints = usbResult.getOrThrow()
+            lastUsbEndpoints
+        } else {
+            usbDiscoverSucceeded = false
+            lastUsbEndpoints
         }
+        val others = listOf(sunmi, bluetooth, network).flatMap { driver ->
+            runCatching { driver.discover(app) }.getOrElse { emptyList() }
+        }
+        val found = usbFound + others
         val defaultId = PrinterPreferences.getDefaultPrinterId(context)
         cached = found.map { ep ->
             ep.copy(isDefault = ep.id == defaultId || (defaultId == null && ep.isDefault))

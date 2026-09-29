@@ -17,6 +17,8 @@ import java.util.Locale
 object BridgeCrashLog {
     private const val TAG = "BridgeCrashLog"
     private const val FILE_NAME = "bridge-crash.log"
+    private const val PREFS = "bridge_crash_prefs"
+    private const val KEY_REASON = "last_reason"
     private const val MAX_BYTES = 16 * 1024
 
     private val lock = Any()
@@ -32,13 +34,52 @@ object BridgeCrashLog {
     }
 
     fun record(context: Context, error: Throwable, source: String) {
+        val reason = error.message?.trim()?.takeIf { it.isNotEmpty() } ?: error.javaClass.simpleName
+        persistReason(context, "$source: $reason")
+        appendEntry(context, source, stackOf(error))
+    }
+
+    /** Short line in the same crash log, plus a prefs copy if the file write fails. */
+    fun recordReason(context: Context, source: String, message: String) {
+        val clean = message.trim().ifBlank { source }
+        persistReason(context, "$source: $clean")
+        appendEntry(context, source, clean + "\n")
+    }
+
+    fun lastReason(context: Context): String? {
+        return runCatching {
+            context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_REASON, null)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    private fun persistReason(context: Context, reason: String) {
+        val clean = reason.trim().take(500)
+        if (clean.isEmpty()) return
         runCatching {
-            Log.e(TAG, source, error)
+            context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_REASON, clean)
+                .commit()
+        }
+    }
+
+    private fun stackOf(error: Throwable): String {
+        val stack = StringWriter().also { writer ->
+            error.printStackTrace(PrintWriter(writer))
+        }.toString()
+        return if (stack.endsWith("\n")) stack else stack + "\n"
+    }
+
+    private fun appendEntry(context: Context, source: String, body: String) {
+        runCatching {
+            Log.e(TAG, "$source\n$body")
             val appContext = context.applicationContext
             val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-            val stack = StringWriter().also { writer ->
-                error.printStackTrace(PrintWriter(writer))
-            }.toString()
             val entry = buildString {
                 append("=== ")
                 append(stamp)
@@ -49,8 +90,8 @@ object BridgeCrashLog {
                 append(") ")
                 append(source)
                 append(" ===\n")
-                append(stack)
-                if (!stack.endsWith("\n")) append('\n')
+                append(body)
+                if (!body.endsWith("\n")) append('\n')
                 append('\n')
             }
             synchronized(lock) {
@@ -79,6 +120,11 @@ object BridgeCrashLog {
             synchronized(lock) {
                 File(context.applicationContext.filesDir, FILE_NAME).delete()
             }
+            context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_REASON)
+                .commit()
         }
     }
 }

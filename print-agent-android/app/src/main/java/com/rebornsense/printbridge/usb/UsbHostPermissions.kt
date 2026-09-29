@@ -97,6 +97,8 @@ object UsbHostPermissions {
         return usbManager(context)?.hasPermission(device) == true
     }
 
+    fun isRequestPending(): Boolean = pendingPermissionDeviceId != null
+
     private fun requestPermission(context: android.content.Context, usb: UsbManager, device: UsbDevice) {
         pendingPermissionDeviceId = device.deviceId
         val flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT or

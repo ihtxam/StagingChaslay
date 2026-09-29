@@ -32,6 +32,12 @@ class PrintBridgeService : Service() {
     @Volatile
     private var foregroundStarted = false
 
+    @Volatile
+    private var httpListening = false
+
+    @Volatile
+    private var failureRecorded = false
+
     override fun onCreate() {
         super.onCreate()
         try {
@@ -51,7 +57,11 @@ class PrintBridgeService : Service() {
             foregroundStarted = true
         } catch (t: Throwable) {
             foregroundStarted = false
-            BridgeCrashLog.record(this, t, "onCreate/startForeground")
+            noteFailure(
+                "startForeground",
+                t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName,
+                t,
+            )
             stopSelf()
             return
         }
@@ -67,7 +77,11 @@ class PrintBridgeService : Service() {
                 refreshPrintersOnBackground()
             }
         } catch (t: Throwable) {
-            BridgeCrashLog.record(this, t, "onStartCommand")
+            noteFailure(
+                "onStartCommand",
+                t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName,
+                t,
+            )
             stopSelf()
         }
         // A failed start must not reboot the process. START_STICKY was the crash-haptic loop.
@@ -82,17 +96,34 @@ class PrintBridgeService : Service() {
                 val http = BridgeHttpServer(PORT, applicationContext, registry, queue)
                 http.start(NanoTimeout, false)
                 server = http
+                httpListening = true
             }.onFailure { error ->
-                BridgeCrashLog.record(applicationContext, error, "HTTP server")
+                noteFailure(
+                    "HTTP server",
+                    error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName,
+                    error,
+                )
                 mainHandler.post { runCatching { stopSelf() } }
             }
         }
         worker.name = "print-bridge-http"
         worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { thread, error ->
-            BridgeCrashLog.record(applicationContext, error, "bridge worker ${thread.name}")
+            noteFailure(
+                "bridge worker ${thread.name}",
+                error.message?.takeIf { it.isNotBlank() } ?: "bridge worker crashed",
+                error,
+            )
             mainHandler.post { runCatching { stopSelf() } }
         }
         worker.start()
+    }
+
+    /** Writes a short reason then the stack. Does not kill the activity. */
+    private fun noteFailure(source: String, reason: String, error: Throwable) {
+        failureRecorded = true
+        markFailed()
+        BridgeCrashLog.recordReason(applicationContext, source, reason)
+        BridgeCrashLog.record(applicationContext, error, source)
     }
 
     private fun buildNotificationSafely(): Notification {
@@ -119,6 +150,15 @@ class PrintBridgeService : Service() {
     }
 
     override fun onDestroy() {
+        if (foregroundStarted && !httpListening && !failureRecorded) {
+            failureRecorded = true
+            markFailed()
+            BridgeCrashLog.recordReason(
+                applicationContext,
+                "service",
+                "Bridge service stopped before it stayed running",
+            )
+        }
         server?.stop()
         server = null
         queue.stop()
@@ -173,5 +213,14 @@ class PrintBridgeService : Service() {
         private const val CHANNEL_ID = "print_bridge"
         private const val NOTIFICATION_ID = 9101
         private const val NanoTimeout = 5000
+
+        @Volatile
+        private var failureGenerationCount: Int = 0
+
+        fun failureGeneration(): Int = failureGenerationCount
+
+        fun markFailed() {
+            failureGenerationCount++
+        }
     }
 }

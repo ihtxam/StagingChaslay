@@ -36,10 +36,20 @@ object PrintBridgeLauncher {
         val appContext = context.applicationContext
         if (!BridgePermissions.hasNotificationPermission(appContext)) {
             Log.w(TAG, "Skipping FGS start — POST_NOTIFICATIONS not granted")
+            BridgeCrashLog.recordReason(
+                appContext,
+                "startForegroundService",
+                "POST_NOTIFICATIONS not granted",
+            )
             return false
         }
         if (!BridgeSafeStart.mayStartForegroundService(context)) {
             Log.w(TAG, "Skipping FGS start — no eligible foreground context")
+            BridgeCrashLog.recordReason(
+                appContext,
+                "startForegroundService",
+                "no eligible foreground context",
+            )
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)

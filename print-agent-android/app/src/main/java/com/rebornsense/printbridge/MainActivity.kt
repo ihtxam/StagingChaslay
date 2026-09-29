@@ -12,7 +12,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -35,6 +34,7 @@ import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
+import com.rebornsense.printbridge.service.PrintBridgeService
 import com.rebornsense.printbridge.usb.UsbDeviceClassifier
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.BuildConfig
@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
     private var healthProbeInFlight = false
     private var suppressAutoStartListener = false
     private var crashDialog: AlertDialog? = null
+    private var shownPrinters: List<PrinterEndpoint> = emptyList()
+    private var pendingUsbTestPrint: PrinterEndpoint? = null
+    private var usbTestRetried = false
     private val serviceStatusHandler = Handler(Looper.getMainLooper())
     /** One read-only /health check after the user taps Start. Not a repeating timer. */
     private val startResultCheck = Runnable { checkStartResultOnce() }
@@ -198,9 +201,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         UsbHostPermissions.register(this)
-        UsbHostPermissions.onPermissionSettled = {
-            if (!isFinishing && !isDestroyed) refreshPrintersSafely()
-        }
+        UsbHostPermissions.onPermissionSettled = { onUsbPermissionSettled() }
         consumeRefreshPrintersExtra(intent)
     }
 
@@ -325,9 +326,11 @@ class MainActivity : AppCompatActivity() {
         BridgeSafeStart.markUiReady()
         Toast.makeText(this, R.string.bridge_start_requested, Toast.LENGTH_SHORT).show()
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
+        val failureGeneration = PrintBridgeService.failureGeneration()
         val started = BridgeSafeStart.startNow(this, bypassDebounce = true)
-        showLanPrintersNow()
-        if (!started) {
+        // Do not submit LAN-only rows here. That replaced the adapter and hid USB printers.
+        // Do not call startForegroundService again if this attempt already failed.
+        if (!started || PrintBridgeService.failureGeneration() != failureGeneration) {
             showStartFailure()
             return
         }
@@ -335,39 +338,51 @@ class MainActivity : AppCompatActivity() {
         serviceStatusHandler.postDelayed(startResultCheck, START_RESULT_CHECK_MS)
     }
 
+    /** Adds saved LAN hosts without dropping USB, Bluetooth, or built-in rows. */
     private fun showLanPrintersNow() {
         val lan = com.rebornsense.printbridge.print.NetworkRawDriver().discover(applicationContext)
         val defaultId = PrinterPreferences.getDefaultPrinterId(this)
-        val shown = lan.map { ep -> ep.copy(isDefault = ep.id == defaultId) }.let { list ->
+        val kept = shownPrinters.filter { it.connectionType != "lan" }
+        publishPrinters((kept + lan).distinctBy { it.id }, defaultId)
+    }
+
+    private fun publishPrinters(printers: List<PrinterEndpoint>, defaultId: String?) {
+        val deduped = dedupeDisplayedPrinters(printers)
+        val marked = deduped.map { ep -> ep.copy(isDefault = ep.id == defaultId) }.let { list ->
             if (list.none { it.isDefault } && list.isNotEmpty()) {
                 list.mapIndexed { index, ep -> ep.copy(isDefault = index == 0) }
             } else {
                 list
             }
         }
-        printerAdapter.submit(shown, defaultId)
-        emptyPrintersText.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+        shownPrinters = marked
+        printerAdapter.submit(marked, defaultId)
+        emptyPrintersText.visibility = if (marked.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun refreshPrintersSafely() {
-        showLanPrintersNow()
         if (printerScanInFlight) return
         printerScanInFlight = true
+        val previous = shownPrinters.toList()
         val scan = Thread {
             val result = runCatching {
                 UsbHostPermissions.recordGrantedDevices(applicationContext)
                 val printers = registry.refresh(applicationContext)
+                val usbOk = registry.didUsbDiscoverSucceed()
                 val defaultId = PrinterPreferences.getDefaultPrinterId(this@MainActivity)
-                printers to defaultId
+                Triple(printers, defaultId, usbOk)
             }
             runOnUiThread {
                 printerScanInFlight = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                result.onSuccess { (printers, defaultId) ->
-                    printerAdapter.submit(printers, defaultId)
-                    emptyPrintersText.visibility = if (printers.isEmpty()) View.VISIBLE else View.GONE
+                result.onSuccess { (printers, defaultId, usbOk) ->
+                    val next = if (usbOk) {
+                        printers
+                    } else {
+                        mergeKeepingUsb(previous, printers)
+                    }
+                    publishPrinters(next, defaultId)
                 }.onFailure {
-                    showLanPrintersNow()
                     Toast.makeText(this, R.string.printer_scan_failed, Toast.LENGTH_SHORT).show()
                 }
             }
@@ -376,15 +391,38 @@ class MainActivity : AppCompatActivity() {
             BridgeCrashLog.record(applicationContext, error, "printer scan ${thread.name}")
             runOnUiThread {
                 printerScanInFlight = false
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                showLanPrintersNow()
             }
         }
         scan.start()
     }
 
+    /** USB scan failed or was skipped — keep the USB rows already on screen. */
+    private fun mergeKeepingUsb(
+        previous: List<PrinterEndpoint>,
+        discovered: List<PrinterEndpoint>,
+    ): List<PrinterEndpoint> {
+        val usb = previous.filter { it.connectionType == "usb" }
+        val rest = discovered.filter { it.connectionType != "usb" }
+        return (usb + rest).distinctBy { it.id }
+    }
+
     private fun refreshPrinters() {
         refreshPrintersSafely()
+    }
+
+    private fun onUsbPermissionSettled() {
+        if (isFinishing || isDestroyed) return
+        val pending = pendingUsbTestPrint
+        pendingUsbTestPrint = null
+        refreshPrintersSafely()
+        if (pending == null || usbTestRetried) return
+        usbTestRetried = true
+        val device = registry.locateUsbDevice(this, pending)
+        when {
+            device == null -> Toast.makeText(this, "USB printer not found", Toast.LENGTH_LONG).show()
+            UsbHostPermissions.hasPermission(this, device) -> performTestPrint(pending)
+            else -> Toast.makeText(this, usbPermissionDeniedMessage(pending), Toast.LENGTH_LONG).show()
+        }
     }
 
     /**
@@ -423,47 +461,72 @@ class MainActivity : AppCompatActivity() {
 
     private fun showStartFailure(crashText: String? = null) {
         if (isFinishing || isDestroyed) return
+        serviceStatusHandler.removeCallbacks(startResultCheck)
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_start_failed)
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_stopped)
+        val fresh = runCatching { BridgeCrashLog.read(this) }.getOrNull()?.trim().orEmpty()
+        val passed = crashText?.trim().orEmpty()
+        val log = fresh.ifBlank { passed }
+        val reason = runCatching { BridgeCrashLog.lastReason(this) }.getOrNull()
+        val body = when {
+            log.isNotBlank() -> log
+            !reason.isNullOrBlank() -> getString(R.string.bridge_service_did_not_stay_reason, reason)
+            else -> getString(R.string.bridge_service_did_not_stay)
+        }
         Toast.makeText(this, R.string.bridge_start_failed_see_log, Toast.LENGTH_LONG).show()
-        val text = crashText ?: runCatching { BridgeCrashLog.read(this) }.getOrNull()
-        if (!text.isNullOrBlank()) {
-            showCrashLogDialog(text)
+        window.decorView.post {
+            if (!isFinishing && !isDestroyed) showCrashLogDialog(body)
         }
     }
 
     private fun showCrashLogDialog(text: String) {
-        if (isFinishing || isDestroyed || text.isBlank()) return
+        if (isFinishing || isDestroyed) return
+        val body = text.trim().ifBlank { getString(R.string.bridge_service_did_not_stay) }
         runCatching { crashDialog?.dismiss() }
-        runCatching {
+        val shown = runCatching {
+            presentCrashDialog(body, useMessage = false)
+            true
+        }.getOrElse { error ->
+            Log.e(TAG, "Could not show crash log view", error)
+            false
+        }
+        if (shown) return
+        runCatching { presentCrashDialog(body.take(3500), useMessage = true) }
+            .onFailure { error -> Log.e(TAG, "Could not show crash log", error) }
+    }
+
+    private fun presentCrashDialog(body: String, useMessage: Boolean) {
+        val builder = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.crash_log_title, BuildConfig.VERSION_NAME))
+            .setNegativeButton(android.R.string.ok, null)
+        if (!useMessage) {
             val scroll = ScrollView(this)
-            val body = TextView(this).apply {
-                this.text = text
+            val textView = TextView(this).apply {
+                this.text = body
                 setTextIsSelectable(true)
                 typeface = Typeface.MONOSPACE
                 textSize = 12f
                 setPadding(48, 32, 48, 32)
             }
-            scroll.addView(body)
-            scroll.layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (320 * resources.displayMetrics.density).toInt(),
+            scroll.addView(
+                textView,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
             )
-            val dialog = AlertDialog.Builder(this)
-                .setTitle(getString(R.string.crash_log_title, BuildConfig.VERSION_NAME))
-                .setView(scroll)
+            builder.setView(scroll)
                 .setPositiveButton(R.string.crash_log_clear) { _, _ ->
                     runCatching { BridgeCrashLog.clear(this) }
                 }
-                .setNegativeButton(android.R.string.ok, null)
-                .create()
-            crashDialog = dialog
-            dialog.show()
-        }.onFailure { error ->
-            Log.e(TAG, "Could not show crash log", error)
+        } else {
+            builder.setMessage(body)
         }
+        val dialog = builder.create()
+        crashDialog = dialog
+        dialog.show()
     }
 
     private fun requestUsbPrinterAccess() {
@@ -552,7 +615,39 @@ class MainActivity : AppCompatActivity() {
             bluetoothPermissionLauncher.launch(bluetoothPermissionsNeeded().toTypedArray())
             return
         }
+        if (endpoint.connectionType == "usb" && !prepareUsbTestPrint(endpoint)) {
+            return
+        }
         performTestPrint(endpoint)
+    }
+
+    /**
+     * @return true when USB permission is already granted and the test should run now.
+     * A missing permission opens the system dialog and retries once from [onUsbPermissionSettled].
+     */
+    private fun prepareUsbTestPrint(endpoint: PrinterEndpoint): Boolean {
+        val device = registry.locateUsbDevice(this, endpoint)
+        if (device == null) {
+            Toast.makeText(this, "USB printer not found", Toast.LENGTH_LONG).show()
+            return false
+        }
+        if (UsbHostPermissions.hasPermission(this, device)) return true
+        pendingUsbTestPrint = endpoint
+        usbTestRetried = false
+        UsbHostPermissions.requestPermissionForDevice(this, device)
+        if (UsbHostPermissions.hasPermission(this, device)) {
+            pendingUsbTestPrint = null
+            return true
+        }
+        if (!UsbHostPermissions.isRequestPending()) {
+            pendingUsbTestPrint = null
+            Toast.makeText(this, usbPermissionDeniedMessage(endpoint), Toast.LENGTH_LONG).show()
+        }
+        return false
+    }
+
+    private fun usbPermissionDeniedMessage(endpoint: PrinterEndpoint): String {
+        return "USB permission not granted for ${endpoint.name} — open Bridge Reborn and allow USB access"
     }
 
     private fun performTestPrint(endpoint: PrinterEndpoint) {
@@ -613,4 +708,23 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val START_RESULT_CHECK_MS = 2_000L
     }
+}
+
+private fun dedupeDisplayedPrinters(printers: List<PrinterEndpoint>): List<PrinterEndpoint> {
+    val seen = LinkedHashSet<String>()
+    val out = ArrayList<PrinterEndpoint>(printers.size)
+    for (endpoint in printers) {
+        val key = displayKey(endpoint)
+        if (seen.add(key)) out += endpoint
+    }
+    return out
+}
+
+private fun displayKey(endpoint: PrinterEndpoint): String {
+    if (endpoint.connectionType != "usb") return endpoint.id
+    val vid = endpoint.meta["vendorId"]?.trim().orEmpty()
+    val pid = endpoint.meta["productId"]?.trim().orEmpty()
+    if (vid.isEmpty() || pid.isEmpty()) return endpoint.id
+    val serial = endpoint.meta["serial"]?.trim().orEmpty()
+    return if (serial.isNotEmpty()) "usb:$vid:$pid:$serial" else "usb:$vid:$pid"
 }
