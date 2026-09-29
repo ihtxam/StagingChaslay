@@ -1,4 +1,5 @@
 import {
+  isStaleUsbEthernetPrinterName,
   isUnsuitableRawPrinter,
   type AgentPrinter,
 } from '@/lib/print-agent';
@@ -11,7 +12,9 @@ export type BridgeSetupMode =
   | 'pick_printer';
 
 export function listSuitablePrinters(printers: AgentPrinter[]): AgentPrinter[] {
-  return printers.filter((p) => p.name && !isUnsuitableRawPrinter(p.name));
+  return printers.filter(
+    (p) => p.name && !isUnsuitableRawPrinter(p.name) && !isStaleUsbEthernetPrinterName(p.name)
+  );
 }
 
 export function hasKitchenPrinterProfile(

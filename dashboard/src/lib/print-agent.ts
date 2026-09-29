@@ -6,9 +6,9 @@ import {
   desktopScaleReading,
   installDesktopHardwareBridge,
 } from '@/lib/hardware/desktop-bridge';
-import { looksLikeLabelPrinterName } from './printer-kind';
+import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 
-export { looksLikeLabelPrinterName } from './printer-kind';
+export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 
 /**
  * Reborn Windows Print Agent (localhost).
@@ -228,9 +228,12 @@ export type PrinterResolutionHints = {
 };
 
 function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
-  const suitable = printers.filter((p) => isEscPosTicketPrinterName(p.name));
+  const suitable = printers.filter(
+    (p) => isEscPosTicketPrinterName(p.name) && !isStaleUsbEthernetPrinterName(p.name)
+  );
   return (
     suitable.find((p) => p.isDefault) ||
+    suitable.find((p) => p.connectionType === 'usb') ||
     suitable.find((p) => looksLikeThermal80mm(p.name)) ||
     suitable[0] ||
     null
@@ -246,30 +249,39 @@ export function resolveLivePrinterName(
   livePrinters: AgentPrinter[],
   hints?: PrinterResolutionHints
 ): string | null {
-  const want = String(configuredName || '').trim();
-  if (!livePrinters.length) return want || null;
+  const rawWant = String(configuredName || '').trim();
+  const staleWant = isStaleUsbEthernetPrinterName(rawWant);
+  const want = staleWant ? '' : rawWant;
+  const live = livePrinters.filter((p) => !isStaleUsbEthernetPrinterName(p.name));
+  if (!live.length) {
+    if (staleWant) return null;
+    return want || null;
+  }
 
   if (want) {
-    const resolved = resolveAgentPrinterName(want, livePrinters);
-    if (resolved) return resolved;
+    const resolved = resolveAgentPrinterName(want, live);
+    if (resolved && !isStaleUsbEthernetPrinterName(resolved)) return resolved;
   }
 
-  const byPort = findAgentPrinterByPort(hints?.portName, livePrinters);
-  if (byPort) return byPort.name;
+  const byPort = findAgentPrinterByPort(hints?.portName, live);
+  if (byPort && !isStaleUsbEthernetPrinterName(byPort.name)) return byPort.name;
 
-  const hint = String(hints?.matchHint || '').trim();
+  const hintRaw = String(hints?.matchHint || '').trim();
+  const hint = isStaleUsbEthernetPrinterName(hintRaw) ? '' : hintRaw;
   if (hint) {
-    const byHint = resolveAgentPrinterName(hint, livePrinters);
-    if (byHint) return byHint;
+    const byHint = resolveAgentPrinterName(hint, live);
+    if (byHint && !isStaleUsbEthernetPrinterName(byHint)) return byHint;
   }
 
-  const heal = suggestPrinterAutoHeal(want || hint, livePrinters);
-  if (heal) return heal.name;
+  const heal = suggestPrinterAutoHeal(want || hint, live);
+  if (heal && !isStaleUsbEthernetPrinterName(heal.name)) return heal.name;
 
-  const candidates = findPrinterHealCandidates(want || hint, livePrinters, 1);
-  if (candidates[0]?.name) return candidates[0].name;
+  const candidates = findPrinterHealCandidates(want || hint, live, 1);
+  if (candidates[0]?.name && !isStaleUsbEthernetPrinterName(candidates[0].name)) {
+    return candidates[0].name;
+  }
 
-  return defaultLivePrinter(livePrinters)?.name || null;
+  return defaultLivePrinter(live)?.name || null;
 }
 
 /**
@@ -282,9 +294,12 @@ export function resolveEscPosPrinterName(
   hints?: PrinterResolutionHints
 ): string | null {
   const resolved = resolveLivePrinterName(configuredName, livePrinters, hints);
-  if (resolved && isEscPosTicketPrinterName(resolved)) return resolved;
+  if (resolved && !isStaleUsbEthernetPrinterName(resolved) && isEscPosTicketPrinterName(resolved)) {
+    return resolved;
+  }
   if (!livePrinters.length) {
     const want = String(configuredName || '').trim();
+    if (isStaleUsbEthernetPrinterName(want)) return null;
     return isEscPosTicketPrinterName(want) ? want : null;
   }
   return defaultLivePrinter(livePrinters)?.name || null;
@@ -318,7 +333,7 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name || seen.has(name)) continue;
+    if (!name || seen.has(name) || isStaleUsbEthernetPrinterName(name)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
     seen.add(name);

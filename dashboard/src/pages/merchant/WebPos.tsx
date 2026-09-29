@@ -86,6 +86,7 @@ import {
   getPrintAgentHealth,
   isAndroidWebPosTill,
   isConfiguredPrinterMissing,
+  isStaleUsbEthernetPrinterName,
   probePrintAgentHealth,
   isPrintAgentVersionOutdated,
   isPrinterDisconnectedError,
@@ -99,7 +100,6 @@ import {
   resolveEscPosPrinterName,
   resolveLivePrinterName,
   looksLikeLabelPrinterName,
-  looksLikeThermal80mm,
   suggestPrinterAutoHeal,
   sanitizeScaleUsbAddress,
   syncWebPosLocalPrinterName,
@@ -993,7 +993,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [loadedFromOfflineCache, setLoadedFromOfflineCache] = useState(false);
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printersReady, setPrintersReady] = useState(false);
-  const [printerName, setPrinterName] = useState(() => localStorage.getItem('manupos_webpos_printer') || '');
+  const [printerName, setPrinterName] = useState(() => {
+    const stored = localStorage.getItem('manupos_webpos_printer') || '';
+    return isStaleUsbEthernetPrinterName(stored) ? '' : stored;
+  });
   const [bridgeSetupOpen, setBridgeSetupOpen] = useState(false);
   const [bridgeSetupMode, setBridgeSetupMode] = useState<BridgeSetupMode>('bridge_offline');
   const [bridgeSetupChecking, setBridgeSetupChecking] = useState(false);
@@ -2326,14 +2329,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const trimmed = (current || '').trim();
         if (healedLocal) return healedLocal;
         if (!trimmed) {
-          if (!list.length) return current;
-          const def =
-            list.find(
-              (p) => p.isDefault && !isUnsuitableRawPrinter(p.name) && !looksLikeLabelPrinterName(p.name)
-            ) ||
-            list.find((p) => looksLikeThermal80mm(p.name)) ||
-            list.find((p) => !isUnsuitableRawPrinter(p.name) && !looksLikeLabelPrinterName(p.name));
-          return def?.name || current;
+          return resolveEscPosPrinterName('', list) || current;
         }
         return resolveEscPosPrinterName(trimmed, list) || resolveLivePrinterName(trimmed, list) || '';
       });
