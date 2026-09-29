@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
+import { isAndroidDevice, shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 
 type TextTarget = HTMLInputElement | HTMLTextAreaElement;
 
@@ -289,8 +289,14 @@ export function OnScreenKeyboardProvider({
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
-  const openKeyboard = useCallback(() => setOpen(true), []);
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const openKeyboard = useCallback(() => {
+    if (isAndroidDevice()) return;
+    setOpen(true);
+  }, []);
+  const toggle = useCallback(() => {
+    if (isAndroidDevice()) return;
+    setOpen((v) => !v);
+  }, []);
 
   const value = useMemo(
     () => ({ open, openKeyboard, toggle, close }),
@@ -300,6 +306,7 @@ export function OnScreenKeyboardProvider({
   useEffect(() => {
     if (!autoOpenOnFocus) return;
     const onFocusIn = (e: FocusEvent) => {
+      if (isAndroidDevice()) return;
       const el = e.target instanceof Element ? e.target : null;
       if (isTextTarget(el)) setOpen(true);
     };

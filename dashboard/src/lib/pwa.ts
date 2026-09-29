@@ -52,7 +52,6 @@ export function shouldSuppressRebornInstallPromptSync(
   if (opts.standalone) return true;
   if (opts.sessionSuppressed) return true;
   if (opts.pwaInstalled) return true;
-  if (opts.bridgeInstalled) return true;
   if (opts.browserPreferred) return true;
   return false;
 }
@@ -67,7 +66,6 @@ export function shouldRemoveInstallManifestSync(
   if (opts.kioskPath) return false;
   if (opts.standalone) return false;
   if (opts.browserPreferred) return true;
-  if (opts.bridgeInstalled && !opts.pwaInstalled) return true;
   return false;
 }
 
@@ -130,9 +128,8 @@ export function markRebornPwaInstalled(): void {
 }
 
 export function markBridgeRebornInstalled(): void {
+  // Print companion only. Do not hide the web app manifest or swallow beforeinstallprompt.
   writeStorageFlag(BRIDGE_INSTALLED_KEY);
-  writeSessionFlag(SESSION_SUPPRESS_KEY);
-  removeInstallManifestIfNeeded();
 }
 
 export function getRebornPwaStartUrl(): string {
@@ -234,7 +231,6 @@ export async function isRebornPwaInstalled(): Promise<boolean> {
 }
 
 let rebornPwaInstalledCache: boolean | null = null;
-let bridgeInstalledCache: boolean | null = null;
 
 /** Warm install cache on boot so beforeinstallprompt can be suppressed synchronously. */
 export function probeRebornPwaInstalled(): void {
@@ -244,7 +240,6 @@ export function probeRebornPwaInstalled(): void {
     markRebornPwaInstalled();
     return;
   }
-  if (readStorageFlag(BRIDGE_INSTALLED_KEY)) bridgeInstalledCache = true;
   if (readStorageFlag(PWA_INSTALLED_KEY)) rebornPwaInstalledCache = true;
   removeInstallManifestIfNeeded();
 
@@ -252,23 +247,21 @@ export function probeRebornPwaInstalled(): void {
     rebornPwaInstalledCache = installed;
   });
   if (isAndroidTabletBrowser()) {
-    void isBridgeRebornInstalled().then((installed) => {
-      bridgeInstalledCache = installed;
-      if (installed) removeInstallManifestIfNeeded();
-    });
+    void isBridgeRebornInstalled();
   }
 }
 
 /**
- * Stop Chrome from re-prompting to install when Reborn is already on the home screen,
- * Bridge Reborn is installed, or the merchant chose to keep using Chrome.
+ * Stop Chrome from re-prompting when Reborn is already installed
+ * or the merchant chose to keep using Chrome.
+ * A running Bridge Reborn print companion is not an installed PWA.
  */
 export function bindRebornPwaInstallGuard(): () => void {
   if (typeof window === 'undefined') return () => undefined;
 
   const onBip = (event: Event) => {
     if (isKioskPath()) return;
-    if (rebornPwaInstalledCache === true || bridgeInstalledCache === true) {
+    if (rebornPwaInstalledCache === true) {
       event.preventDefault();
       writeSessionFlag(SESSION_SUPPRESS_KEY);
       return;

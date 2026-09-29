@@ -113,6 +113,13 @@ export function isTouchPrimaryDevice(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+/** Android phone or tablet. These devices use the system IME, not the POS keyboard. */
+export function isAndroidDevice(
+  userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+): boolean {
+  return /Android/i.test(userAgent || '');
+}
+
 /** Phone form factor — native OS keyboard is available; skip on-screen keyboard. */
 export function isMobilePhone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -147,13 +154,13 @@ export function isWebPosKioskShell(): boolean {
 
 /** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
 export function shouldAutoOpenOnScreenKeyboard(): boolean {
-  if (isMobilePhone()) return false;
+  if (isMobilePhone() || isAndroidDevice()) return false;
   return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
 }
 
-/** On-screen keyboard toggle (kiosk / tablet / desktop shell — not phones). */
+/** On-screen keyboard toggle (kiosk / tablet / desktop shell — not Android or phones). */
 export function shouldShowOnScreenKeyboardToggle(): boolean {
-  if (isMobilePhone()) return false;
+  if (isMobilePhone() || isAndroidDevice()) return false;
   return isDesktopApp() || isTouchPrimaryDevice() || isWebPosKioskShell();
 }
 

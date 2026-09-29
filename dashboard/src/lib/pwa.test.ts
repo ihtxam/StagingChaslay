@@ -47,12 +47,15 @@ test('shouldSuppressRebornInstallPromptSync respects continue-in-Chrome preferen
   );
 });
 
-test('shouldSuppressRebornInstallPromptSync respects bridge installed flag', () => {
+test('shouldSuppressRebornInstallPromptSync keeps the offer when only Bridge is installed', () => {
   assert.equal(
     shouldSuppressRebornInstallPromptSync({
       bridgeInstalled: true,
+      pwaInstalled: false,
+      browserPreferred: false,
+      standalone: false,
     }),
-    true
+    false
   );
 });
 
@@ -77,14 +80,14 @@ test('shouldRemoveInstallManifestSync keeps manifest when PWA installed for Open
   );
 });
 
-test('shouldRemoveInstallManifestSync removes manifest for bridge-only Chrome users', () => {
+test('shouldRemoveInstallManifestSync keeps manifest for bridge-only Chrome users', () => {
   assert.equal(
     shouldRemoveInstallManifestSync({
       pwaInstalled: false,
       bridgeInstalled: true,
       browserPreferred: false,
     }),
-    true
+    false
   );
 });
 
