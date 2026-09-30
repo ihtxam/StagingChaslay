@@ -2309,8 +2309,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const refreshAgent = useCallback(async () => {
     let health = await (isAndroidWebPosTill() ? probePrintAgentHealth(8) : getPrintAgentHealth());
     if (!health.ok && isAndroidWebPosTill()) {
-      requestBridgeRebornAutostart();
-      health = await probePrintAgentHealth(8);
+      const launched = requestBridgeRebornAutostart({ bypassCooldown: true });
+      if (launched) {
+        await new Promise((r) => setTimeout(r, 1_500));
+      }
+      health = await probePrintAgentHealth(launched ? 18 : 8);
     }
     setAgentOk(health.ok);
     setAgentOutdated(health.ok && isPrintAgentVersionOutdated(health.version));

@@ -8,22 +8,17 @@ import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
- * Launched by the system when a filtered USB printer is plugged in (same pattern as Reborn POS).
- * Shows the platform USB allow dialog from a visible activity — never from a broadcast receiver.
+ * Shown only from the boot notification when USB permission is missing after reboot.
+ * Hot-plug uses [UsbAttachReceiver] + [UsbManager.requestPermission] (no "Open app to handle USB?" chooser).
  */
 class UsbPrinterAttachActivity : AppCompatActivity() {
     private var usbPromptIssued = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        when (intent?.action) {
-            UsbManager.ACTION_USB_DEVICE_ATTACHED,
-            UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION,
-            -> Unit
-            else -> {
-                finish()
-                return
-            }
+        if (intent?.action != UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION) {
+            finish()
+            return
         }
     }
 
@@ -32,13 +27,6 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
             ?: intent?.usbDeviceExtra()
         if (device == null || !UsbDeviceClassifier.isUsbPrinterCandidate(applicationContext, device)) {
-            finish()
-            return
-        }
-        if (
-            intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
-            !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)
-        ) {
             finish()
             return
         }

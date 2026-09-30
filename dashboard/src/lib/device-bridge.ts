@@ -94,10 +94,22 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
  * Bring Bridge Reborn to the foreground so auto-start can run the localhost service.
  * Chrome cannot start Android services directly; opening the app once is the supported path.
  */
-export function requestBridgeRebornAutostart(cooldownMs = 90_000): boolean {
+export type BridgeRebornAutostartOptions = {
+  /** Minimum ms between intent launches (default 90s). Use 0 for launch-check retries. */
+  cooldownMs?: number;
+  /** Launch-check path: always fire the Bridge intent even inside the cooldown window. */
+  bypassCooldown?: boolean;
+};
+
+export function requestBridgeRebornAutostart(
+  options: BridgeRebornAutostartOptions | number = {}
+): boolean {
   if (typeof window === 'undefined' || !isAndroidWebPosTill()) return false;
+  const opts: BridgeRebornAutostartOptions =
+    typeof options === 'number' ? { cooldownMs: options } : options;
+  const cooldownMs = opts.bypassCooldown ? 0 : (opts.cooldownMs ?? 90_000);
   const now = Date.now();
-  if (now - lastBridgeAutostartAttemptMs < cooldownMs) return false;
+  if (!opts.bypassCooldown && now - lastBridgeAutostartAttemptMs < cooldownMs) return false;
   lastBridgeAutostartAttemptMs = now;
   const component = `${BRIDGE_REBORN_PACKAGE}/com.rebornsense.printbridge.MainActivity`;
   const intentUrl =

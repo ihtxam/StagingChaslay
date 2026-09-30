@@ -62,6 +62,8 @@ class MainActivity : AppCompatActivity() {
     /** Invalidates in-flight Start probes when a newer status update begins. */
     private var statusEpoch = 0
     private var startInProgress = false
+    /** WebPOS PWA intent to start Bridge before notification/runtime flow finishes. */
+    private var pendingWebPosAutostart = false
 
     private val wizardLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -79,7 +81,11 @@ class MainActivity : AppCompatActivity() {
             if (granted) {
                 runtimePermissionsResolved = true
                 BridgeSafeStart.markUiReady()
-                onNotificationReadyUiOnly()
+                if (pendingWebPosAutostart) {
+                    tryRunWebPosAutostart()
+                } else {
+                    onNotificationReadyUiOnly()
+                }
             } else {
                 Toast.makeText(this, R.string.notification_permission_required, Toast.LENGTH_LONG).show()
             }
@@ -308,7 +314,11 @@ class MainActivity : AppCompatActivity() {
         notificationPermissionResolved = true
         runtimePermissionsResolved = true
         BridgeSafeStart.markUiReady()
-        onNotificationReadyUiOnly()
+        if (pendingWebPosAutostart) {
+            tryRunWebPosAutostart()
+        } else {
+            onNotificationReadyUiOnly()
+        }
     }
 
     private fun hasBluetoothPermissions(): Boolean {
@@ -691,11 +701,45 @@ class MainActivity : AppCompatActivity() {
     private fun handleAutostartBridgeIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_AUTOSTART_BRIDGE, false) != true) return
         intent.removeExtra(EXTRA_AUTOSTART_BRIDGE)
-        if (!runtimePermissionsResolved) return
-        if (!PrinterPreferences.isAutoStartEnabled(this)) return
-        window.decorView.post {
-            if (!isFinishing && !isDestroyed) startBridgeManually()
+        pendingWebPosAutostart = true
+        tryRunWebPosAutostart()
+    }
+
+    /** Start Bridge for WebPOS even when the auto-start toggle is off; return user to Chrome when possible. */
+    private fun tryRunWebPosAutostart() {
+        if (!pendingWebPosAutostart || isFinishing || isDestroyed) return
+        if (!BridgePermissions.hasNotificationPermission(this)) {
+            requestNeededPermissions()
+            return
         }
+        if (!runtimePermissionsResolved) {
+            notificationPermissionResolved = true
+            runtimePermissionsResolved = true
+            BridgeSafeStart.markUiReady()
+        }
+        pendingWebPosAutostart = false
+        window.decorView.post {
+            if (!isFinishing && !isDestroyed) startBridgeFromWebPosIntent()
+        }
+    }
+
+    private fun startBridgeFromWebPosIntent() {
+        UsbHostPermissions.register(this)
+        BridgeSafeStart.markUiReady()
+        Thread {
+            val before = runCatching { BridgeHealthChecker.probeResult() }.getOrElse { error ->
+                BridgeHealthChecker.ProbeOutcome(failureReason = error.message ?: error.javaClass.simpleName)
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (before.snapshot != null) {
+                    moveTaskToBack(true)
+                    return@runOnUiThread
+                }
+                BridgeSafeStart.startNow(this, bypassDebounce = true)
+                moveTaskToBack(true)
+            }
+        }.start()
     }
 
     private fun requestUsbPrinterAccess() {

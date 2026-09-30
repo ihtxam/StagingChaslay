@@ -147,7 +147,25 @@ object UsbHostPermissions {
             }
             return false
         }
-        requestPermission(activity, usb, device)
+        requestPermission(app, usb, device)
+        return true
+    }
+
+    /** From [UsbAttachReceiver] — shows "Allow … to access USB device?" not an app-launch chooser. */
+    fun requestPermissionFromContext(context: android.content.Context, device: UsbDevice): Boolean {
+        val app = context.applicationContext
+        val usb = usbManager(app) ?: return false
+        reconcilePendingWithGrant(usb, app)
+        if (pendingPermissionDeviceId != null) return false
+        if (!needsPermissionRequest(app, usb, device)) {
+            if (usb.hasPermission(device)) {
+                PrinterPreferences.rememberUsbDevice(app, deviceKey(device))
+                promoteGrantedUsbPrinters(app)
+                PrintBridgeLauncher.refreshPrinters(app)
+            }
+            return false
+        }
+        requestPermission(app, usb, device)
         return true
     }
 
@@ -157,10 +175,10 @@ object UsbHostPermissions {
 
     fun isRequestPending(): Boolean = pendingPermissionDeviceId != null
 
-    private fun requestPermission(context: android.content.Context, usb: UsbManager, device: UsbDevice) {
+    private fun requestPermission(appContext: android.content.Context, usb: UsbManager, device: UsbDevice) {
         if (usb.hasPermission(device)) {
             Log.d(TAG, "Skip USB requestPermission — hasPermission already true for ${deviceKey(device)}")
-            PrinterPreferences.rememberUsbDevice(context.applicationContext, deviceKey(device))
+            PrinterPreferences.rememberUsbDevice(appContext, deviceKey(device))
             return
         }
         pendingPermissionDeviceId = device.deviceId
@@ -171,8 +189,8 @@ object UsbHostPermissions {
                 0
             }
         val intent = android.content.Intent(ACTION)
-            .setClass(context.applicationContext, UsbPermissionReceiver::class.java)
-        val pi = android.app.PendingIntent.getBroadcast(context.applicationContext, device.deviceId, intent, flags)
+            .setClass(appContext, UsbPermissionReceiver::class.java)
+        val pi = android.app.PendingIntent.getBroadcast(appContext, device.deviceId, intent, flags)
         Log.i(TAG, "Requesting USB permission for ${deviceKey(device)} deviceId=${device.deviceId}")
         runCatching { usb.requestPermission(device, pi) }
             .onFailure { error ->

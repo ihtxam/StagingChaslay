@@ -125,9 +125,9 @@ object UsbDeviceClassifier {
      */
     fun isSunmiInternalUsbShadow(context: Context?, device: UsbDevice): Boolean {
         if (!isSunmiHardware()) return false
-        if (hasPrinterClass(device)) return false
-        val name = safeProductName(context, device)?.lowercase().orEmpty()
-        if (name.isNotEmpty() && SUNMI_INTERNAL_USB_NAME.containsMatchIn(name)) return true
+        val blob = deviceIdentityBlob(context, device)
+        if (blob.isNotEmpty() && SUNMI_INTERNAL_USB_NAME.containsMatchIn(blob)) return true
+        if (hasPrinterClass(device) && !blob.contains("gd32")) return false
         // Vendor-class bulk OUT only — typical for the internal bridge, not a Type-A receipt printer.
         if (!hasPrinterClass(device) && hasAnyBulkOut(device) && !hasPrinterInterface(device)) {
             val classes = interfaceClasses(device)
@@ -248,7 +248,15 @@ object UsbDeviceClassifier {
     }
 
     private val SUNMI_INTERNAL_USB_NAME = Regex(
-        """ax8772|built-?in|internal\s*print|sunmi\s*print""",
+        """ax8772|gd32|usb[_\s-]*printer\s*port|built-?in|internal\s*print|sunmi\s*print""",
         RegexOption.IGNORE_CASE,
     )
+
+    private fun deviceIdentityBlob(context: Context?, device: UsbDevice): String {
+        val parts = mutableListOf<String>()
+        runCatching { device.deviceName?.trim() }.getOrNull()?.let { parts += it }
+        runCatching { device.productName?.trim() }.getOrNull()?.let { parts += it }
+        safeProductName(context, device)?.let { parts += it }
+        return parts.joinToString(" ").lowercase()
+    }
 }

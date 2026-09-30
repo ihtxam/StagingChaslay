@@ -58,10 +58,11 @@ assert.equal(isNetworkAdapter({ vendorId: 0x04b8, interfaceClass: 255, productNa
 function isSunmiInternalUsbShadowName(productName, isSunmiDevice = true) {
   if (!isSunmiDevice) return false;
   if (!productName) return false;
-  return /ax8772|built-?in|internal\s*print|sunmi\s*print/i.test(productName);
+  return /ax8772|gd32|usb[_\s-]*printer\s*port|built-?in|internal\s*print|sunmi\s*print/i.test(productName);
 }
 
 assert.equal(isSunmiInternalUsbShadowName('AX8772B'), true);
+assert.equal(isSunmiInternalUsbShadowName('GD32-USB_Printer'), true);
 assert.equal(isSunmiInternalUsbShadowName('USB Printer'), false);
 assert.equal(isSunmiInternalUsbShadowName('AX8772B', false), false);
 

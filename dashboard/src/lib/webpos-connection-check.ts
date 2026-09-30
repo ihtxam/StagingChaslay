@@ -38,7 +38,13 @@ export type WebPosConnectionReport = {
   terminal: ConnectionCheckResult;
   tapToPay: ConnectionCheckResult;
   ready: boolean;
+  /** WebPOS asked Bridge to open in the background (Chrome may switch apps briefly). */
+  bridgeAutostartRequested?: boolean;
 };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function resolveActiveTerminalId(
   terminals: WebPosPaymentCheckConfig['terminals'],
@@ -153,14 +159,30 @@ export async function runWebPosConnectionChecks(opts: {
   printSettings: PosPrintSettingsClient | null;
   androidProbe?: boolean;
   paymentConfig?: WebPosPaymentCheckConfig | null;
+  onBridgeAutostart?: () => void;
 }): Promise<WebPosConnectionReport> {
+  let bridgeAutostartRequested = false;
   let health = opts.androidProbe
     ? await probePrintAgentHealth(8).catch(() => ({ ok: false as const }))
     : await getPrintAgentHealth().catch(() => ({ ok: false as const }));
 
   if (!health.ok && opts.androidProbe) {
-    requestBridgeRebornAutostart();
-    health = await probePrintAgentHealth(8).catch(() => ({ ok: false as const }));
+    const launched = requestBridgeRebornAutostart({ bypassCooldown: true });
+    if (launched) {
+      bridgeAutostartRequested = true;
+      opts.onBridgeAutostart?.();
+      await sleep(1_500);
+    }
+    health = await probePrintAgentHealth(18).catch(() => ({ ok: false as const }));
+    if (!health.ok && !launched) {
+      const retry = requestBridgeRebornAutostart({ cooldownMs: 0 });
+      if (retry) {
+        bridgeAutostartRequested = true;
+        opts.onBridgeAutostart?.();
+        await sleep(1_800);
+        health = await probePrintAgentHealth(14).catch(() => ({ ok: false as const }));
+      }
+    }
   }
 
   let livePrinters: AgentPrinter[] = [];
@@ -169,7 +191,7 @@ export async function runWebPosConnectionChecks(opts: {
   }
 
   const bridge = opts.androidProbe
-    ? await probeDeviceBridgeHealth(5).catch(() => ({ ok: false as const }))
+    ? await probeDeviceBridgeHealth(health.ok ? 5 : 10).catch(() => ({ ok: false as const }))
     : { ok: health.ok };
 
   const agentPlatform = health.platform ? ` (${health.platform})` : '';
@@ -199,5 +221,13 @@ export async function runWebPosConnectionChecks(opts: {
     terminalPass(terminal) &&
     tapToPayPass(tapToPay);
 
-  return { agent, receipt, kitchen, terminal, tapToPay, ready };
+  return {
+    agent,
+    receipt,
+    kitchen,
+    terminal,
+    tapToPay,
+    ready,
+    bridgeAutostartRequested,
+  };
 }

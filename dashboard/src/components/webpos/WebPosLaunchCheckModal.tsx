@@ -101,6 +101,9 @@ export default function WebPosLaunchCheckModal({
       printSettings,
       androidProbe,
       paymentConfig,
+      onBridgeAutostart: () => {
+        setAgent({ status: 'checking', message: t('webPosBridgeSetupStartingTitle') });
+      },
     });
     setAgent(report.agent);
     setReceipt(report.receipt);

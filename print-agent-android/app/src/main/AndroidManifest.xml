@@ -41,21 +41,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Not exported for USB attach — avoids "Open Bridge to handle …?" chooser. Attach → [UsbAttachReceiver]. -->
         <activity
             android:name=".usb.UsbPrinterAttachActivity"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:noHistory="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.RebornPrintBridge.Transparent">
-            <intent-filter>
-                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-            </intent-filter>
-            <meta-data
-                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                android:resource="@xml/usb_device_filter" />
-        </activity>
+            android:theme="@style/Theme.RebornPrintBridge.Transparent" />
 
         <activity
             android:name=".payment.PaymentActivity"
@@ -82,8 +76,12 @@
             android:directBootAware="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
                 <action android:name="android.hardware.usb.action.USB_DEVICE_DETACHED" />
             </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </receiver>
 
         <receiver
