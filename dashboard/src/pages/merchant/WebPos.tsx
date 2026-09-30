@@ -9483,6 +9483,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setBusy(true);
 
     try {
+      const posTip = roundMoney2(extras?.tipAmount || 0);
+      const askGratuityOnTerminal =
+        checkoutSettings.tipsEnabled !== false && posTip <= 0.001;
       const terminalAmount = roundMoney2(
         extras?.total ??
           (collectOrderRef ? collectOrderRef.total : activeSale.totals.total)
@@ -9494,6 +9497,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           terminalId: selectedTerminalId,
           currency: 'CHF',
           saleRef: clientId,
+          askGratuity: askGratuityOnTerminal,
+          posTipAmount: posTip,
         },
         { signal: abort.signal, timeout: 170_000 }
       );
@@ -9503,6 +9508,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         message?: string;
         reference?: string;
         poiTransactionTimestamp?: string;
+        tipAmount?: number | null;
+        authorizedAmount?: number | null;
         customerReceipt?: AdyenTerminalReceipt | null;
         cashierReceipt?: AdyenTerminalReceipt | null;
       };
@@ -9517,16 +9524,45 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           customerReceipt: normalizeAdyenTerminalReceipt(result.customerReceipt),
           cashierReceipt: normalizeAdyenTerminalReceipt(result.cashierReceipt),
         };
+        const terminalTip = roundMoney2(Math.max(0, Number(result.tipAmount) || 0));
+        const mergedExtras: CheckoutExtras | null = (() => {
+          if (terminalTip <= 0.001) return extras ?? null;
+          const baseTip = roundMoney2(extras?.tipAmount || 0);
+          const totalTip = roundMoney2(baseTip + terminalTip);
+          const baseTotal = roundMoney2(
+            extras?.total ??
+              terminalAmount
+          );
+          const paidTotal = roundMoney2(baseTotal + terminalTip);
+          if (extras) {
+            return {
+              ...extras,
+              tipAmount: totalTip,
+              total: paidTotal,
+              amountTendered: roundMoney2(extras.amountTendered ?? paidTotal),
+            };
+          }
+          return {
+            method: 'terminal',
+            discountPercent: 0,
+            discountAmount: 0,
+            tipAmount: totalTip,
+            roundingAmount: 0,
+            total: paidTotal,
+            amountTendered: paidTotal,
+            changeDue: null,
+          };
+        })();
         closePaymentModal();
         if (collectOrderRef) {
           await finalizeCollectPayment(
-            [{ id: clientId, method: 'terminal', amount: terminalAmount }],
+            [{ id: clientId, method: 'terminal', amount: mergedExtras?.total ?? terminalAmount }],
             0,
-            extras?.tipAmount || 0
+            mergedExtras?.tipAmount || extras?.tipAmount || 0
           );
           return;
         }
-        await finalizeSale('terminal', clientId, whenOverride, extras, true);
+        await finalizeSale('terminal', clientId, whenOverride, mergedExtras ?? extras, true);
         return;
       }
 

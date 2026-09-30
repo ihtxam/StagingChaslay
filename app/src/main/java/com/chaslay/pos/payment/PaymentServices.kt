@@ -13,7 +13,8 @@ sealed class PaymentResult {
         val poiTimestamp: String? = null,
         val method: PaymentMethod,
         val adyenCustomerReceipt: AdyenTerminalReceipt? = null,
-        val adyenCashierReceipt: AdyenTerminalReceipt? = null
+        val adyenCashierReceipt: AdyenTerminalReceipt? = null,
+        val terminalTipAmount: Double? = null
     ) : PaymentResult()
     data class Failure(val message: String) : PaymentResult()
     data object Cancelled : PaymentResult()
@@ -27,8 +28,9 @@ class PaymentOrchestrator @Inject constructor(
     suspend fun processAdyenTerminalPayment(
         amount: Double,
         currencyCode: String,
-        settings: BusinessSettingsEntity
-    ): PaymentResult = adyenTerminalService.processPayment(amount, currencyCode, settings)
+        settings: BusinessSettingsEntity,
+        askGratuity: Boolean = false
+    ): PaymentResult = adyenTerminalService.processPayment(amount, currencyCode, settings, askGratuity)
 
     suspend fun processCardPayment(
         activity: Activity?,
@@ -78,15 +80,17 @@ class AdyenTerminalService @Inject constructor(
     suspend fun processPayment(
         amount: Double,
         currencyCode: String,
-        settings: BusinessSettingsEntity
+        settings: BusinessSettingsEntity,
+        askGratuity: Boolean = false
     ): PaymentResult {
-        return when (val response = adyenTerminalClient.sendPaymentRequest(amount, currencyCode, settings)) {
+        return when (val response = adyenTerminalClient.sendPaymentRequest(amount, currencyCode, settings, askGratuity)) {
             is AdyenTerminalResponse.Approved -> PaymentResult.Success(
                 reference = response.reference,
                 poiTimestamp = response.poiTimestamp,
                 method = PaymentMethod.ADYEN_TERMINAL,
                 adyenCustomerReceipt = response.customerReceipt,
-                adyenCashierReceipt = response.cashierReceipt
+                adyenCashierReceipt = response.cashierReceipt,
+                terminalTipAmount = response.tipAmount
             )
             is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
             is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)

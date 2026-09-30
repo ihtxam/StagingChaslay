@@ -25,7 +25,9 @@ sealed class AdyenTerminalResponse {
         val reference: String?,
         val poiTimestamp: String? = null,
         val customerReceipt: AdyenTerminalReceipt? = null,
-        val cashierReceipt: AdyenTerminalReceipt? = null
+        val cashierReceipt: AdyenTerminalReceipt? = null,
+        val tipAmount: Double? = null,
+        val authorizedAmount: Double? = null
     ) : AdyenTerminalResponse()
     data class Declined(val message: String) : AdyenTerminalResponse()
     data class Cancelled(val message: String = "Payment cancelled on terminal") : AdyenTerminalResponse()
@@ -222,7 +224,8 @@ class AdyenTerminalClient @Inject constructor() {
     suspend fun sendPaymentRequest(
         amount: Double,
         currencyCode: String,
-        settings: BusinessSettingsEntity
+        settings: BusinessSettingsEntity,
+        askGratuity: Boolean = false
     ): AdyenTerminalResponse = withContext(Dispatchers.IO) {
         val validation = validateSettings(settings)
         if (validation != null) {
@@ -239,7 +242,8 @@ class AdyenTerminalClient @Inject constructor() {
             amount = amount,
             currencyCode = currencyCode.uppercase(),
             saleId = saleId,
-            poiId = terminalId
+            poiId = terminalId,
+            askGratuity = askGratuity
         )
         val body = requestBody.toRequestBody(jsonMediaType)
 
@@ -515,11 +519,14 @@ class AdyenTerminalClient @Inject constructor() {
                     val poiTimestamp = poiTx?.get("TimeStamp")?.asString
                     val (customerReceipt, cashierReceipt) =
                         AdyenPaymentReceiptParser.parsePaymentReceipts(paymentResponse)
+                    val tipInfo = parseTerminalTipFromPaymentResponse(paymentResponse, additionalResponse)
                     AdyenTerminalResponse.Approved(
                         reference = transactionId,
                         poiTimestamp = poiTimestamp,
                         customerReceipt = customerReceipt,
-                        cashierReceipt = cashierReceipt
+                        cashierReceipt = cashierReceipt,
+                        tipAmount = tipInfo.first,
+                        authorizedAmount = tipInfo.second
                     )
                 }
                 result.equals("Failure", ignoreCase = true) &&
@@ -541,16 +548,55 @@ class AdyenTerminalClient @Inject constructor() {
         }
     }
 
+    private fun parseTerminalTipFromPaymentResponse(
+        paymentResponse: JsonObject,
+        additionalResponse: String?
+    ): Pair<Double?, Double?> {
+        var tip: Double? = null
+        var authorized: Double? = null
+        paymentResponse.getAsJsonObject("PaymentResult")
+            ?.getAsJsonObject("AmountsResp")
+            ?.let { amounts ->
+                amounts.get("TipAmount")?.asDouble?.takeIf { it > 0.001 }?.let { tip = it }
+                amounts.get("AuthorizedAmount")?.asDouble?.takeIf { it > 0.001 }?.let { authorized = it }
+            }
+        if (tip == null && !additionalResponse.isNullOrBlank()) {
+            additionalResponse.split("&").forEach { part ->
+                val eq = part.indexOf('=')
+                if (eq <= 0) return@forEach
+                val key = part.substring(0, eq).trim()
+                val value = part.substring(eq + 1).trim()
+                if (key == "posAmountGratuityValue") {
+                    value.toLongOrNull()?.takeIf { it > 0 }?.let { minor ->
+                        tip = minor / 100.0
+                    }
+                }
+                if (key == "authorisedAmountValue") {
+                    value.toLongOrNull()?.takeIf { it > 0 }?.let { minor ->
+                        authorized = minor / 100.0
+                    }
+                }
+            }
+        }
+        return tip to authorized
+    }
+
     private fun buildPaymentRequestBody(
         amount: Double,
         currencyCode: String,
         saleId: String,
-        poiId: String
+        poiId: String,
+        askGratuity: Boolean = false
     ): String {
         val serviceId = generateServiceId()
         val transactionId = UUID.randomUUID().toString().replace("-", "").take(16)
         val timestamp = OffsetDateTime.now(ZoneOffset.UTC).format(timestampFormatter)
         val requestedAmount = "%.2f".format(amount).toDouble()
+        val saleToAcquirerData = if (askGratuity) {
+            "tenderOption=ReceiptHandler,AskGratuity"
+        } else {
+            "tenderOption=ReceiptHandler"
+        }
 
         val payload = mapOf(
             "SaleToPOIRequest" to mapOf(
@@ -569,7 +615,7 @@ class AdyenTerminalClient @Inject constructor() {
                             "TransactionID" to transactionId,
                             "TimeStamp" to timestamp
                         ),
-                        "SaleToAcquirerData" to "tenderOption=ReceiptHandler"
+                        "SaleToAcquirerData" to saleToAcquirerData
                     ),
                     "PaymentTransaction" to mapOf(
                         "AmountsReq" to mapOf(

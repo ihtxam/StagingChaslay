@@ -4455,6 +4455,8 @@ class PosViewModel @Inject constructor(
                     if (!settings.adyenTerminalEnabled) {
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
+                        val askTerminalGratuity =
+                            settings.tipsEnabled && checkout.tipAmount <= 0.001
                         val cardCharge = resolveCardCharge(checkout, roundedTotal)
                         updateExtras {
                             it.copy(
@@ -4467,7 +4469,8 @@ class PosViewModel @Inject constructor(
                         paymentOrchestrator.processAdyenTerminalPayment(
                             cardCharge,
                             settings.defaultCurrency,
-                            settings
+                            settings,
+                            askGratuity = askTerminalGratuity
                         )
                     }
                 }
@@ -4564,7 +4567,9 @@ class PosViewModel @Inject constructor(
                     val membershipForLoyalty = _uiExtras.value.attachedMembership
                     val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
                     val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
-                    val transactionTotal = roundedTotal + redeemedGiftCardAmount
+                    val terminalTip = paymentResult.terminalTipAmount?.takeIf { it > 0.001 } ?: 0.0
+                    val checkoutTip = checkout.tipAmount + terminalTip
+                    val transactionTotal = roundedTotal + redeemedGiftCardAmount + terminalTip
                     val transaction = transactionRepository.completeSale(
                         cart = saleCart,
                         paymentMethod = resolvedMethod,
@@ -4574,7 +4579,7 @@ class PosViewModel @Inject constructor(
                             val ts = paymentResult.poiTimestamp?.trim().orEmpty()
                             if (ts.isNotBlank()) "$ref|$ts" else ref
                         },
-                        tipAmount = checkout.tipAmount,
+                        tipAmount = checkoutTip,
                         roundingAmount = roundingAmount,
                         checkoutDiscountPercent = if (equalSplitCount > 1) 0.0 else checkout.discountPercent,
                         checkoutDiscountAmount = saleDiscount,

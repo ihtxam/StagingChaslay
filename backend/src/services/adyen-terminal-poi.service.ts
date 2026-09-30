@@ -5,6 +5,7 @@ import {
   parsePaymentReceipts,
   type AdyenTerminalReceipt,
 } from "@/lib/adyen-receipt";
+import { normalizePosCheckoutSettings } from "@/lib/pos-checkout-settings";
 import { AdyenService } from "@/services/adyen.service";
 
 export type TerminalPoiResult = {
@@ -14,6 +15,9 @@ export type TerminalPoiResult = {
   poiTransactionTimestamp?: string | null;
   customerReceipt?: AdyenTerminalReceipt | null;
   cashierReceipt?: AdyenTerminalReceipt | null;
+  /** Tip added on the payment terminal (AskGratuity flow). */
+  tipAmount?: number | null;
+  authorizedAmount?: number | null;
 };
 
 type AdyenApiError = {
@@ -151,11 +155,77 @@ function generateServiceId(): string {
   return String(Date.now() % 10_000_000_000).padStart(10, "0");
 }
 
+function roundMoney2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** SaleToAcquirerData tender options for Terminal API payment requests. */
+export function buildTerminalSaleToAcquirerData(options?: { askGratuity?: boolean }): string {
+  const tenderOption = options?.askGratuity ? "ReceiptHandler,AskGratuity" : "ReceiptHandler";
+  return `tenderOption=${tenderOption}`;
+}
+
+function parseAdditionalResponseParams(additionalResponse?: string | null): URLSearchParams {
+  const params = new URLSearchParams();
+  if (!additionalResponse) return params;
+  try {
+    const decoded = decodeURIComponent(String(additionalResponse).replace(/\+/g, " "));
+    for (const part of decoded.split("&")) {
+      const [k, ...rest] = part.split("=");
+      if (k) params.set(k.trim(), rest.join("=").trim());
+    }
+  } catch {
+    /* ignore malformed */
+  }
+  return params;
+}
+
+/** Parse tip / authorized amounts from an approved Terminal API PaymentResponse. */
+export function parseTerminalTipFromPaymentResponse(
+  paymentResponse: Record<string, unknown>,
+  additionalResponse?: string | null
+): { tipAmount: number | null; authorizedAmount: number | null } {
+  let tipAmount: number | null = null;
+  let authorizedAmount: number | null = null;
+
+  const paymentResult = paymentResponse.PaymentResult as Record<string, unknown> | undefined;
+  const amountsResp = paymentResult?.AmountsResp as Record<string, unknown> | undefined;
+  if (amountsResp) {
+    if (amountsResp.TipAmount != null) {
+      const tip = Number(amountsResp.TipAmount);
+      if (Number.isFinite(tip) && tip > 0) tipAmount = roundMoney2(tip);
+    }
+    if (amountsResp.AuthorizedAmount != null) {
+      const auth = Number(amountsResp.AuthorizedAmount);
+      if (Number.isFinite(auth) && auth > 0) authorizedAmount = roundMoney2(auth);
+    }
+  }
+
+  const params = parseAdditionalResponseParams(additionalResponse);
+  if (tipAmount == null) {
+    const gratuityMinor = params.get("posAmountGratuityValue");
+    if (gratuityMinor) {
+      const minor = Number(gratuityMinor);
+      if (Number.isFinite(minor) && minor > 0) tipAmount = roundMoney2(minor / 100);
+    }
+  }
+  if (authorizedAmount == null) {
+    const authMinor = params.get("authorisedAmountValue");
+    if (authMinor) {
+      const minor = Number(authMinor);
+      if (Number.isFinite(minor) && minor > 0) authorizedAmount = roundMoney2(minor / 100);
+    }
+  }
+
+  return { tipAmount, authorizedAmount };
+}
+
 function buildPaymentRequestBody(
   amount: number,
   currencyCode: string,
   saleId: string,
-  poiId: string
+  poiId: string,
+  askGratuity = false
 ): Record<string, unknown> {
   const serviceId = generateServiceId();
   const transactionId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
@@ -179,7 +249,7 @@ function buildPaymentRequestBody(
             TransactionID: transactionId,
             TimeStamp: timestamp,
           },
-          SaleToAcquirerData: "tenderOption=ReceiptHandler",
+          SaleToAcquirerData: buildTerminalSaleToAcquirerData({ askGratuity }),
         },
         PaymentTransaction: {
           AmountsReq: {
@@ -379,12 +449,18 @@ function parsePaymentResponse(body: string): TerminalPoiResult {
     if (result.toLowerCase() === "success") {
       const { transactionId, timestamp } = extractPoiTransactionId(paymentResponse);
       const { customer, cashier } = parsePaymentReceipts(paymentResponse);
+      const { tipAmount, authorizedAmount } = parseTerminalTipFromPaymentResponse(
+        paymentResponse,
+        additionalResponse
+      );
       return {
         status: "approved",
         reference: transactionId,
         poiTransactionTimestamp: timestamp,
         customerReceipt: customer,
         cashierReceipt: cashier,
+        tipAmount,
+        authorizedAmount,
       };
     }
 
@@ -577,20 +653,47 @@ async function executeSync(
   return cloudResult;
 }
 
+function resolveAskGratuityOnTerminal(
+  merchant: { posCheckoutSettings?: Record<string, unknown> | null } | null | undefined,
+  opts: { askGratuity?: boolean; posTipAmount?: number }
+): boolean {
+  const posTip = roundMoney2(Math.max(0, Number(opts.posTipAmount) || 0));
+  if (posTip > 0) return false;
+  if (opts.askGratuity === false) return false;
+  if (opts.askGratuity === true) return true;
+  const checkout = normalizePosCheckoutSettings(merchant?.posCheckoutSettings);
+  return checkout.tipsEnabled !== false;
+}
+
 export class AdyenTerminalPoiService {
   static async processTerminalPayment(
     merchantId: string,
     amount: number,
-    opts: { terminalId?: string; currency?: string } = {}
+    opts: {
+      terminalId?: string;
+      currency?: string;
+      /** When true, send AskGratuity to the terminal (unless posTipAmount > 0). */
+      askGratuity?: boolean;
+      /** Tip already collected on the POS checkout UI ? skips terminal gratuity. */
+      posTipAmount?: number;
+    } = {}
   ): Promise<TerminalPoiResult> {
     const ctxOrErr = await resolveTerminalContext(merchantId, opts);
     if ("status" in ctxOrErr) return ctxOrErr;
+
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { posCheckoutSettings: true },
+    });
+    const askGratuity = resolveAskGratuityOnTerminal(merchant, opts);
 
     const body = buildPaymentRequestBody(
       amount,
       ctxOrErr.currency,
       ctxOrErr.saleId,
-      ctxOrErr.terminalId
+      ctxOrErr.terminalId,
+      askGratuity
     );
     return executeSync(ctxOrErr, body, parsePaymentResponse);
   }
