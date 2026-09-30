@@ -28,7 +28,7 @@
     <string name="settings_section_general">General</string>
     <string name="settings_section_vat_tables">VAT &amp; Tables</string>
     <string name="settings_section_vat">VAT / Tax</string>
-    <string name="settings_section_tables">Tables &amp; Designer</string>
+    <string name="settings_section_tables">Tables</string>
     <string name="settings_section_payments">Payments</string>
     <string name="settings_section_printers">Printers</string>
     <string name="settings_section_scale">Scale</string>
@@ -767,6 +767,7 @@
     <string name="table_plan_designer">Table plan designer</string>
     <string name="open_table_plan_designer">Open table plan designer</string>
     <string name="table_plan_help">Drag tables anywhere on the floor — position saves automatically. Tap a table to edit name, seats, and shape.</string>
+    <string name="table_plan_row_help">Tables are shown in a simple row. Tap a table to edit its name and seat count. Use the merchant panel for full floor-plan layout.</string>
     <string name="table_plan_edit_hint">Drag to move (auto-saves). Use Save below for name, seats, or shape.</string>
     <string name="table_plan_layout_saved">Layout saves automatically when you drag tables.</string>
     <string name="table_plan_cloud_managed">This floor plan is managed in the merchant panel. Layout is read-only on this device.</string>

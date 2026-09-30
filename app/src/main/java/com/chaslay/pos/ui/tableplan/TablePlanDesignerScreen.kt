@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
-import com.chaslay.pos.domain.model.FloorPlanElementType
 import com.chaslay.pos.domain.model.TableShape
 import com.chaslay.pos.ui.theme.vectronColors
 
@@ -115,8 +114,6 @@ fun TablePlanDesignerContent(
     val selectedFloor = state.floors.find { it.id == state.selectedFloorId }
     val isCloudManaged = !selectedFloor?.remoteId.isNullOrBlank() ||
         state.tables.any { !it.remoteId.isNullOrBlank() }
-    val designCanvasWidth = selectedFloor?.canvasWidth?.coerceAtLeast(320) ?: 1000
-    val designCanvasHeight = selectedFloor?.canvasHeight?.coerceAtLeast(240) ?: 700
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
@@ -170,29 +167,6 @@ fun TablePlanDesignerContent(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.add_table), fontSize = 13.sp)
             }
-            OutlinedButton(onClick = viewModel::autoLayout, enabled = !isCloudManaged) {
-                Icon(Icons.Default.GridView, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.auto_layout), fontSize = 13.sp)
-            }
-            OutlinedButton(
-                onClick = { viewModel.addElement(FloorPlanElementType.WALL) },
-                enabled = !isCloudManaged
-            ) {
-                Text(stringResource(R.string.add_wall), fontSize = 12.sp)
-            }
-            OutlinedButton(
-                onClick = { viewModel.addElement(FloorPlanElementType.DOOR) },
-                enabled = !isCloudManaged
-            ) {
-                Text(stringResource(R.string.add_door), fontSize = 12.sp)
-            }
-            OutlinedButton(
-                onClick = { viewModel.addElement(FloorPlanElementType.BAR) },
-                enabled = !isCloudManaged
-            ) {
-                Text(stringResource(R.string.add_bar), fontSize = 12.sp)
-            }
             OutlinedTextField(
                 value = state.newFloorName,
                 onValueChange = viewModel::updateNewFloorName,
@@ -218,69 +192,46 @@ fun TablePlanDesignerContent(
         }
 
         Text(
-            stringResource(
-                if (isCloudManaged) R.string.table_plan_cloud_help else R.string.table_plan_help
-            ),
+            stringResource(R.string.table_plan_row_help),
             fontSize = 11.sp,
             color = colors.textSecondary,
-            modifier = Modifier.padding(bottom = 6.dp)
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .heightIn(min = 280.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .border(1.dp, colors.gridGap, RoundedCornerShape(10.dp))
+                .padding(12.dp)
         ) {
-            FloorPlanCanvas(
-                tables = state.tables.map { table ->
-                    FloorPlanTableDisplay(
-                        id = table.id,
-                        name = table.name,
-                        seatCapacity = table.seatCapacity,
-                        planX = table.planX,
-                        planY = table.planY,
-                        planWidth = table.planWidth,
-                        planHeight = table.planHeight,
-                        shape = table.shape,
-                        rotation = table.rotation,
-                        isActive = table.id == state.selectedTableId
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                state.tables.forEach { table ->
+                    val selected = table.id == state.selectedTableId
+                    FilterChip(
+                        selected = selected,
+                        onClick = { viewModel.selectTable(table.id) },
+                        label = {
+                            Text("${table.name} · ${table.seatCapacity}", fontSize = 13.sp)
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentTeal,
+                            selectedLabelColor = Color.White
+                        )
                     )
-                },
-                elements = state.elements.map { element ->
-                    FloorPlanElementDisplay(
-                        id = element.id,
-                        elementType = element.elementType,
-                        label = element.label,
-                        planX = element.planX,
-                        planY = element.planY,
-                        planWidth = element.planWidth,
-                        planHeight = element.planHeight,
-                        rotation = element.rotation,
-                        isSelected = element.id == state.selectedElementId
-                    )
-                },
-                editable = !isCloudManaged,
-                selectedTableId = state.selectedTableId,
-                selectedElementId = state.selectedElementId,
-                onTableClick = viewModel::selectTable,
-                onTableMoved = if (isCloudManaged) null else viewModel::moveTable,
-                onTableResized = if (isCloudManaged) null else viewModel::resizeTable,
-                onElementClick = viewModel::selectElement,
-                onElementMoved = if (isCloudManaged) null else viewModel::moveElement,
-                designCanvasWidth = designCanvasWidth,
-                designCanvasHeight = designCanvasHeight,
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+            }
         }
 
-        if (state.selectedTableId != null || state.selectedElementId != null) {
+        if (state.selectedTableId != null) {
             TableEditBottomPanel(
                 state = state,
                 fieldColors = fieldColors,
-                readOnlyLayout = isCloudManaged,
+                readOnlyLayout = true,
                 onClose = viewModel::clearSelection,
                 onNameChange = viewModel::updateEditName,
                 onSeatsChange = viewModel::updateEditSeats,
@@ -309,7 +260,7 @@ fun TablePlanDesignerContent(
         ) {
             Text(
                 stringResource(
-                    if (state.selectedTableId != null || state.selectedElementId != null) {
+                    if (state.selectedTableId != null) {
                         R.string.table_plan_edit_hint
                     } else {
                         R.string.table_plan_layout_saved
@@ -322,13 +273,6 @@ fun TablePlanDesignerContent(
             if (!isCloudManaged && state.selectedTableId != null) {
                 Button(
                     onClick = viewModel::saveSelectedTable,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                ) {
-                    Text(stringResource(R.string.save))
-                }
-            } else if (!isCloudManaged && state.selectedElementId != null) {
-                Button(
-                    onClick = viewModel::saveSelectedElement,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                 ) {
                     Text(stringResource(R.string.save))

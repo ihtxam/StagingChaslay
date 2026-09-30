@@ -163,10 +163,8 @@ import com.chaslay.pos.domain.model.applyCashRounding
 import com.chaslay.pos.ui.theme.VectronColors
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.ui.theme.categoryColor
-import com.chaslay.pos.ui.tableplan.FloorPlanCanvas
-import com.chaslay.pos.ui.tableplan.FloorPlanElementDisplay
 import com.chaslay.pos.ui.tableplan.GuestCountDialog
-import com.chaslay.pos.ui.tableplan.toFloorPlanDisplay
+import com.chaslay.pos.ui.tableplan.TableRowPickerLayout
 import java.util.Date
 import kotlinx.coroutines.delay
 
@@ -1276,30 +1274,9 @@ private fun OdooTablesScreen(
     val safeFloorIndex = floorTabs.indexOfFirst { (floor, _, _) ->
         floor.id == resolvedFloorId
     }.takeIf { it >= 0 } ?: 0
-    val (currentFloor, _, floorTables) = floorTabs.getOrElse(safeFloorIndex) {
+    val (_, _, floorTables) = floorTabs.getOrElse(safeFloorIndex) {
         floorTabs.first()
     }
-    val floorId = currentFloor.id
-    val designCanvasWidth = currentFloor.canvasWidth.coerceAtLeast(320)
-    val designCanvasHeight = currentFloor.canvasHeight.coerceAtLeast(240)
-    val planViewAvailable = !currentFloor.remoteId.isNullOrBlank() ||
-        floorTables.any { it.hasPlanPosition }
-    val planElements = floorElementsByFloorId[floorId].orEmpty().map { element ->
-        FloorPlanElementDisplay(
-            id = element.id,
-            elementType = element.elementType,
-            label = element.label,
-            planX = element.planX,
-            planY = element.planY,
-            planWidth = element.planWidth,
-            planHeight = element.planHeight,
-            rotation = element.rotation
-        )
-    }
-    var usePlanView by remember(floorId, planViewAvailable) {
-        mutableStateOf(planViewAvailable)
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -1314,21 +1291,6 @@ private fun OdooTablesScreen(
                         floorTabs.getOrNull(index)?.first?.id?.let(onSelectFloor)
                     },
                     label = { Text(name, fontSize = 12.sp) }
-                )
-            }
-        }
-        if (planViewAvailable) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = usePlanView,
-                    onClick = { usePlanView = true },
-                    label = { Text(stringResource(R.string.floor_plan_view), fontSize = 12.sp) }
-                )
-                FilterChip(
-                    selected = !usePlanView,
-                    onClick = { usePlanView = false },
-                    label = { Text(stringResource(R.string.grid_view), fontSize = 12.sp) }
                 )
             }
         }
@@ -1354,38 +1316,15 @@ private fun OdooTablesScreen(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        if (usePlanView && planViewAvailable) {
-            FloorPlanCanvas(
-                tables = floorTables.map { it.toFloorPlanDisplay(activeTableName, currencySymbol) },
-                elements = planElements,
-                editable = false,
-                selectedTableId = null,
-                onTableClick = onSelectTable,
-                onTableMoved = null,
-                designCanvasWidth = designCanvasWidth,
-                designCanvasHeight = designCanvasHeight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            )
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 110.dp),
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 12.dp)
-            ) {
-                items(floorTables, key = { it.id }) { table ->
-                    OdooTableCard(
-                        table = table,
-                        currencySymbol = currencySymbol,
-                        isActive = table.name == activeTableName,
-                        onClick = { onSelectTable(table.id) }
-                    )
-                }
-            }
-        }
+        TableRowPickerLayout(
+            tables = floorTables,
+            currencySymbol = currencySymbol,
+            activeTableName = activeTableName,
+            onSelectTable = onSelectTable,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        )
     }
 }
 
