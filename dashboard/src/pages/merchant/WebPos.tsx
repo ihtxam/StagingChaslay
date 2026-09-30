@@ -7265,7 +7265,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         const payLines = payments
           .filter((p) => roundMoney2(p.amount) > 0)
-          .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }));
+          .map((p) => ({
+            method: p.method,
+            amount: roundMoney2(p.amount),
+            ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
+              ? { giftCardNumber: p.giftCardNumber.trim() }
+              : {}),
+          }));
         if (ctx.isPayLater) {
           const laterTender =
             payLaterCollectedTender(payMethod) ||
@@ -7526,7 +7532,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       total: partTotal,
       amountTendered,
       changeDue: changeDue > 0 ? changeDue : null,
-      tenders: payments.map((p) => ({ method: p.method, amount: roundMoney2(p.amount) })),
+      tenders: payments.map((p) => ({
+        method: p.method,
+        amount: roundMoney2(p.amount),
+        ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
+          ? { giftCardNumber: p.giftCardNumber.trim() }
+          : {}),
+      })),
       payLaterTender:
         primary?.method === 'pay_later' ? primary.payLaterTender : undefined,
       pointsRedeemed,
@@ -8503,7 +8515,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ? roundMoney2(extras.total)
         : roundTo005(merchandiseGross - discountAmount + tipAmount);
     const tenders = (extras?.tenders || [])
-      .map((p) => ({ method: p.method, amount: roundMoney2(p.amount) }))
+      .map((p) => ({
+        method: p.method,
+        amount: roundMoney2(p.amount),
+        ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
+          ? { giftCardNumber: p.giftCardNumber.trim() }
+          : {}),
+      }))
       .filter((p) => p.amount > 0);
     const resolvedMethod =
       tenders.length > 1 ? 'mixed' : tenders.length === 1 ? tenders[0]!.method : method;
@@ -8909,6 +8927,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ? extrasWithDisc.tenders.map((p) => ({
             method: p.method,
             amount: roundMoney2(p.amount),
+            ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
+              ? { giftCardNumber: p.giftCardNumber.trim() }
+              : {}),
           }))
         : undefined,
       amountTendered: extrasWithDisc?.amountTendered ?? null,

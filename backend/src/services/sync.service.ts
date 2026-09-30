@@ -185,7 +185,7 @@ export interface SyncSalePayload {
   adyenCustomerReceiptJson?: string | null;
   adyenCashierReceiptJson?: string | null;
   /** Split tenders for mixed payments */
-  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
+  paymentBreakdown?: Array<{ method: string; amount: number; giftCardNumber?: string | null }> | null;
   pointsEarned?: number | null;
   pointsRedeemed?: number | null;
   pointsDiscount?: number | null;

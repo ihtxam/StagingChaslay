@@ -25,6 +25,8 @@ import {
 import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
+import { normalizePaymentMethod } from '@/lib/payment-breakdown';
+import { maskGiftCardNumberForReceipt } from '@/lib/gift-card-receipt-mask';
 import {
   channelLabel,
   formatPayLaterPaymentLabel,
@@ -365,7 +367,7 @@ export type WebPosReceipt = {
   channel?: string;
   paymentMethod: string;
   /** Split tenders printed as separate lines (cash + card, etc.). */
-  paymentLines?: Array<{ method: string; amount: number }>;
+  paymentLines?: Array<{ method: string; amount: number; giftCardNumber?: string | null }>;
   /** Pay Later collected tender: cash | card | terminal. */
   payLaterTender?: 'cash' | 'card' | 'terminal' | null;
   /** True when this receipt is the collect-payment copy (show Paid). */
@@ -422,6 +424,8 @@ export type WebPosReceipt = {
   printAdyenReceiptOnTicket?: boolean;
   /** Remaining stored-value balance after gift card redemption on this sale. */
   giftCardRemainingBalance?: number | null;
+  /** Gift card numbers used as tender (from payment breakdown or redeem tx). */
+  giftCardRedeemNumbers?: string[] | null;
   /** Loyalty member printed on the customer receipt. */
   memberName?: string | null;
   /** Points earned on this sale. */
@@ -1271,6 +1275,42 @@ function hasGiftCardPayment(tx: WebPosReceipt): boolean {
   );
 }
 
+/** Show last 4–5 digits; mask the rest with asterisks (no spaces). */
+export { maskGiftCardNumberForReceipt } from '@/lib/gift-card-receipt-mask';
+
+function giftCardMaskedRefsFromReceipt(tx: WebPosReceipt): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (num: string | null | undefined) => {
+    const masked = maskGiftCardNumberForReceipt(num);
+    if (!masked || seen.has(masked)) return;
+    seen.add(masked);
+    out.push(masked);
+  };
+  for (const p of tx.paymentLines || []) {
+    if (normalizePaymentMethod(p.method) !== 'gift_card') continue;
+    push(p.giftCardNumber);
+  }
+  for (const num of tx.giftCardRedeemNumbers || []) {
+    push(num);
+  }
+  return out;
+}
+
+function appendGiftCardPaymentRefLines(
+  block: string,
+  tx: WebPosReceipt,
+  L: ReturnType<typeof receiptLabels>,
+  width: number
+): string {
+  if (!hasGiftCardPayment(tx)) return block;
+  let r = block;
+  for (const ref of giftCardMaskedRefsFromReceipt(tx)) {
+    r += padLine(`  ${L.giftCardPaymentRef}`, ref, width) + '\n';
+  }
+  return r;
+}
+
 /** Gift-card sell/reload cart lines on order receipts (not the barcode sale ticket). */
 function isGiftCardMerchandiseItem(item: WebPosReceiptItem): boolean {
   const pid = String(item.productId || '');
@@ -1566,6 +1606,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
       r += `${L.payment}: ${formatPayLaterPaymentLabel(L, tx.payLaterTender || payMethodRaw)}\n`;
     } else if (tenders.length === 1) {
       r += `${L.payment}: ${paymentLabel(L, tenders[0]!.method)}\n`;
+      r = appendGiftCardPaymentRefLines(r, tx, L, width);
     } else {
       r += `${L.payment}:\n`;
       for (const p of tenders) {
@@ -1576,6 +1617,7 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
             width
           ) + '\n';
       }
+      r = appendGiftCardPaymentRefLines(r, tx, L, width);
     }
     const payLaterCollected =
       tx.payLaterCollected === true ||
@@ -3785,9 +3827,10 @@ export type PosOrderForReceipt = {
   /** Persisted Adyen Terminal API CashierReceipt JSON (order history reprint). */
   adyenCashierReceiptJson?: string | null;
   /** Split tenders when order was paid with multiple methods. */
-  paymentBreakdown?: Array<{ method: string; amount: number }> | null;
+  paymentBreakdown?: Array<{ method: string; amount: number; giftCardNumber?: string | null }> | null;
   /** Remaining gift card balance after redemption (from notes or redeem tx). */
   giftCardRemainingBalance?: number | null;
+  giftCardRedeemNumbers?: string[] | null;
   pointsEarned?: number | null;
   pointsRedeemed?: number | null;
   memberName?: string | null;
@@ -3912,6 +3955,8 @@ export function posOrderToWebPosReceipt(
     order.giftCardRemainingBalance != null
       ? roundMoney2(Number(order.giftCardRemainingBalance))
       : parseGiftCardRemainingFromNotes(order.notes);
+  const giftCardRedeemNumbers =
+    order.giftCardRedeemNumbers?.filter((n) => String(n || '').trim()) || undefined;
   return {
     businessName: ctx.businessName,
     address: ctx.address,
@@ -3978,6 +4023,7 @@ export function posOrderToWebPosReceipt(
     adyenCustomerReceipt: adyen.customer,
     printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),
     giftCardRemainingBalance,
+    giftCardRedeemNumbers,
     refundAmount: Number(order.refundAmount ?? 0),
     refundReason: order.refundReason,
     chfToEurRate: ctx.printSettings?.receiptChfToEurRate ?? null,

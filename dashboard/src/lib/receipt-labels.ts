@@ -97,6 +97,8 @@ export type ReceiptLabels = {
   giftCardCode: string;
   giftCardBalance: string;
   giftCardRemainingBalance: string;
+  /** Masked gift card number on payment receipts (e.g. *****12345). */
+  giftCardPaymentRef: string;
   giftCardScanRedeem: string;
   member: string;
   pointsEarned: string;
@@ -196,6 +198,7 @@ const EN: ReceiptLabels = {
   giftCardCode: 'Code',
   giftCardBalance: 'Balance',
   giftCardRemainingBalance: 'Gift card remaining',
+  giftCardPaymentRef: 'Card no.',
   giftCardScanRedeem: 'Scan QR or barcode to redeem',
   member: 'Member',
   pointsEarned: 'Points this sale',
@@ -293,6 +296,7 @@ const FR: ReceiptLabels = {
   giftCardCode: 'Code',
   giftCardBalance: 'Solde',
   giftCardRemainingBalance: 'Solde carte cadeau',
+  giftCardPaymentRef: 'N° carte',
   giftCardScanRedeem: 'Scannez le QR ou le code-barres',
   member: 'Membre',
   pointsEarned: 'Points cette vente',
@@ -390,6 +394,7 @@ const DE: ReceiptLabels = {
   giftCardCode: 'Code',
   giftCardBalance: 'Guthaben',
   giftCardRemainingBalance: 'Guthaben Geschenkkarte',
+  giftCardPaymentRef: 'Karten-Nr.',
   giftCardScanRedeem: 'QR oder Barcode an der Kasse scannen',
   member: 'Mitglied',
   pointsEarned: 'Punkte dieser Verkauf',

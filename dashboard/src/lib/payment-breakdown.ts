@@ -1,6 +1,6 @@
 import { roundMoney2 } from '@/lib/money';
 
-export type PaymentTender = { method: string; amount: number };
+export type PaymentTender = { method: string; amount: number; giftCardNumber?: string | null };
 
 const TERMINAL_METHODS = new Set(['terminal', 'card']);
 const GIFT_METHODS = new Set(['gift_card']);
@@ -115,10 +115,18 @@ export function parsePaymentBreakdown(
   if (Array.isArray(raw) && raw.length) {
     return preferCollectedTenders(
       tendersFromRows(
-        raw.map((row) => ({
-          method: normalizePaymentMethod(String((row as PaymentTender).method || '')),
-          amount: roundMoney2(Number((row as PaymentTender).amount) || 0),
-        }))
+        raw.map((row) => {
+          const r = row as PaymentTender;
+          const giftCardNumber =
+            typeof r.giftCardNumber === 'string' && r.giftCardNumber.trim()
+              ? r.giftCardNumber.trim()
+              : undefined;
+          return {
+            method: normalizePaymentMethod(String(r.method || '')),
+            amount: roundMoney2(Number(r.amount) || 0),
+            ...(giftCardNumber ? { giftCardNumber } : {}),
+          };
+        })
       ),
       paymentMethod,
       orderTotal

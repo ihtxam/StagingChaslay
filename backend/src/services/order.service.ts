@@ -236,16 +236,30 @@ function withResolvedItemNames<
 
 async function withGiftCardRemainingBalance<
   T extends { id: string; notes?: string | null },
->(order: T): Promise<T & { giftCardRemainingBalance?: number | null }> {
+>(order: T): Promise<
+  T & { giftCardRemainingBalance?: number | null; giftCardRedeemNumbers?: string[] | null }
+> {
   const db = getDb();
-  const redeemTx = await db.query.giftCardTransactions.findFirst({
+  const redeemRows = await db.query.giftCardTransactions.findMany({
     where: and(
       eq(schema.giftCardTransactions.orderId, order.id),
       eq(schema.giftCardTransactions.transactionType, "redeem")
     ),
     orderBy: [desc(schema.giftCardTransactions.createdAt)],
-    columns: { balanceAfter: true },
+    with: {
+      card: {
+        columns: { cardNumber: true },
+      },
+    },
   });
+  const redeemTx = redeemRows[0];
+  const giftCardRedeemNumbers = [
+    ...new Set(
+      redeemRows
+        .map((row) => String(row.card?.cardNumber || "").trim())
+        .filter(Boolean)
+    ),
+  ];
   const fromTx =
     redeemTx?.balanceAfter != null ? Number(redeemTx.balanceAfter) : null;
   const fromNotes = String(order.notes || "").match(
@@ -264,6 +278,7 @@ async function withGiftCardRemainingBalance<
   return {
     ...order,
     giftCardRemainingBalance,
+    giftCardRedeemNumbers: giftCardRedeemNumbers.length ? giftCardRedeemNumbers : null,
   };
 }
 
