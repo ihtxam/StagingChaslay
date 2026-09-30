@@ -8,6 +8,8 @@ import { Input } from '@/chaslay-pagebuilder/ui/input';
 import { TranslatableInput } from './TranslatableInput';
 import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useStorefront } from '../StorefrontContext';
+import { summarizeStoreHours } from '@/lib/shop-hours-display';
 
 export interface HoursMinimalProps {
   title?: string;
@@ -40,6 +42,22 @@ export const HoursMinimal: React.FC<HoursMinimalProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
+  const { isStorefront, storeHours, locale } = useStorefront();
+  const liveRows =
+    isStorefront && storeHours
+      ? summarizeStoreHours(storeHours, undefined, locale)
+      : [];
+  const displayHours = liveRows.length
+    ? liveRows.map((row) => ({
+        days: row.label,
+        time: row.hours,
+        closed: row.hours === 'Closed' || row.hours === 'Fermé' || row.hours === 'Geschlossen',
+      }))
+    : hours.map((item) => ({
+        days: item.days,
+        time: item.time,
+        closed: item.time === 'Closed',
+      }));
 
   return (
     <section
@@ -59,10 +77,14 @@ export const HoursMinimal: React.FC<HoursMinimalProps> & {
         <h2 style={{ fontSize: '14px', fontWeight: 400, letterSpacing: '4px', marginBottom: '40px', opacity: 0.6 }}>{tr('title')}</h2>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {hours.map((item, i) => (
+          {displayHours.map((item, i) => (
             <div key={i}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{trText(item.days)}</div>
-              <div style={{ fontSize: '24px', fontWeight: 300, color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{trText(item.time)}</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
+                {liveRows.length ? item.days : trText(item.days)}
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 300, color: item.closed ? mergedProps.accentColor : mergedProps.textColor }}>
+                {liveRows.length ? item.time : trText(item.time)}
+              </div>
             </div>
           ))}
         </div>

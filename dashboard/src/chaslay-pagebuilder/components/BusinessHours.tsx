@@ -11,6 +11,9 @@ import { Clock } from 'lucide-react';
 import { TranslatableInput } from './TranslatableInput';
 import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useStorefrontHours } from '../utils/use-storefront-hours';
+import { useStorefront } from '../StorefrontContext';
+import { isChannelOpenAt } from '@/lib/shop-hours';
 
 const defaultProps: BusinessHoursProps = {
   sectionId: SECTION_ANCHORS.openingHours,
@@ -40,6 +43,8 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
 } = (props) => {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
+  const { isStorefront, storeHours } = useStorefront();
+  const liveHours = useStorefrontHours();
   const {
     connectors: { connect, drag },
   } = useNode();
@@ -47,6 +52,26 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
   // Get current day (0 = Sunday, 1 = Monday, etc.)
   const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1; // Adjust to match our array (Monday = 0)
+
+  const rows = liveHours.length
+    ? liveHours.map((item) => ({
+        day: item.day,
+        hours: item.time,
+        isOpen: item.open,
+        isToday: !!item.isToday,
+      }))
+    : placeholderHours.map((item, index) => ({
+        day: item.day,
+        hours: item.isOpen ? item.hours : trText('Closed'),
+        isOpen: item.isOpen,
+        isToday: index === todayIndex,
+      }));
+
+  const openNow = isStorefront && storeHours
+    ? isChannelOpenAt(storeHours, 'takeaway').open ||
+      isChannelOpenAt(storeHours, 'delivery').open ||
+      isChannelOpenAt(storeHours, 'dine_in').open
+    : placeholderHours[todayIndex].isOpen;
 
   return (
     <div
@@ -94,7 +119,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                 gap: '8px',
                 padding: '8px 16px',
                 borderRadius: '20px',
-                backgroundColor: placeholderHours[todayIndex].isOpen ? '#22c55e' : '#ef4444',
+                backgroundColor: openNow ? '#22c55e' : '#ef4444',
                 color: '#ffffff',
                 fontWeight: 600,
               }}
@@ -107,7 +132,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                   backgroundColor: '#ffffff',
                 }}
               />
-              {placeholderHours[todayIndex].isOpen ? trText('Open Now') : trText('Closed')}
+              {openNow ? trText('Open Now') : trText('Closed')}
             </span>
           </div>
         )}
@@ -120,26 +145,26 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           }}
         >
-          {placeholderHours.map((item, index) => (
+          {rows.map((item, index) => (
             <div
-              key={trText(item.day)}
+              key={`${item.day}-${index}`}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '16px 24px',
-                borderBottom: index < placeholderHours.length - 1 ? '1px solid #e9ecef' : 'none',
-                backgroundColor: mergedProps.highlightToday && index === todayIndex ? '#f0f9ff' : 'transparent',
+                borderBottom: index < rows.length - 1 ? '1px solid #e9ecef' : 'none',
+                backgroundColor: mergedProps.highlightToday && item.isToday ? '#f0f9ff' : 'transparent',
               }}
             >
               <span
                 style={{
-                  fontWeight: mergedProps.highlightToday && index === todayIndex ? 700 : 500,
+                  fontWeight: mergedProps.highlightToday && item.isToday ? 700 : 500,
                   color: mergedProps.textColor,
                 }}
               >
-                {trText(item.day)}
-                {mergedProps.highlightToday && index === todayIndex && (
+                {liveHours.length ? item.day : trText(item.day)}
+                {mergedProps.highlightToday && item.isToday && (
                   <span
                     style={{
                       marginLeft: '8px',
@@ -150,7 +175,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                       borderRadius: '10px',
                     }}
                   >
-                    Today
+                    {trText('Today')}
                   </span>
                 )}
               </span>
@@ -160,7 +185,7 @@ export const BusinessHours: React.FC<BusinessHoursProps> & {
                   fontWeight: item.isOpen ? 400 : 600,
                 }}
               >
-                {trText(item.hours)}
+                {liveHours.length ? item.hours : trText(item.hours)}
               </span>
             </div>
           ))}

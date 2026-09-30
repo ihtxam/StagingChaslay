@@ -10,6 +10,8 @@ import { BuilderImage } from './BuilderImage';
 import { TranslatableInput } from './TranslatableInput';
 import { useSectionTranslations } from '../utils/use-section-translations';
 import { sectionAnchorId, SECTION_ANCHORS } from '../utils/section-id';
+import { useStorefront } from '../StorefrontContext';
+import { summarizeStoreHours } from '@/lib/shop-hours-display';
 
 export interface HoursSplitProps {
   title?: string;
@@ -46,6 +48,22 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
   const mergedProps = { ...defaultProps, ...props };
   const { tr, trText, trList } = useSectionTranslations(mergedProps as Record<string, unknown>);
   const { connectors: { connect, drag } } = useNode();
+  const { isStorefront, storeHours, locale } = useStorefront();
+  const liveRows =
+    isStorefront && storeHours
+      ? summarizeStoreHours(storeHours, undefined, locale)
+      : [];
+  const displayHours = liveRows.length
+    ? liveRows.map((row) => ({
+        days: row.label,
+        time: row.hours,
+        closed: row.hours === 'Closed' || row.hours === 'Fermé' || row.hours === 'Geschlossen',
+      }))
+    : hours.map((item) => ({
+        days: item.days,
+        time: item.time,
+        closed: item.time === 'Closed',
+      }));
 
   return (
     <section
@@ -63,10 +81,12 @@ export const HoursSplit: React.FC<HoursSplitProps> & {
           <p style={{ fontSize: '18px', opacity: 0.7, marginBottom: '40px' }}>{tr('subtitle')}</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {hours.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: i < hours.length - 1 ? `1px solid ${mergedProps.textColor}20` : 'none' }}>
-                <span style={{ fontWeight: 600 }}>{trText(item.days)}</span>
-                <span style={{ color: item.time === 'Closed' ? mergedProps.accentColor : mergedProps.textColor }}>{trText(item.time)}</span>
+            {displayHours.map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: i < displayHours.length - 1 ? `1px solid ${mergedProps.textColor}20` : 'none' }}>
+                <span style={{ fontWeight: 600 }}>{liveRows.length ? item.days : trText(item.days)}</span>
+                <span style={{ color: item.closed ? mergedProps.accentColor : mergedProps.textColor }}>
+                  {liveRows.length ? item.time : trText(item.time)}
+                </span>
               </div>
             ))}
           </div>

@@ -104,6 +104,15 @@ const PHRASES: Record<string, LocaleMap> = {
   },
   'Mon-Fri: 11am-10pm': { fr: 'Lun-ven : 11h-22h', de: 'Mo-Fr: 11-22 Uhr', it: 'Lun-ven: 11-22' },
   'Sat-Sun: 10am-11pm': { fr: 'Sam-dim : 10h-23h', de: 'Sa-So: 10-23 Uhr', it: 'Sab-dom: 10-23' },
+  '11am - 10pm': { fr: '11h - 22h', de: '11 - 22 Uhr', it: '11 - 22' },
+  '11am - 11pm': { fr: '11h - 23h', de: '11 - 23 Uhr', it: '11 - 23' },
+  '11:00 AM - 10:00 PM': { fr: '11h00 - 22h00', de: '11:00 - 22:00 Uhr', it: '11:00 - 22:00' },
+  '11:00 AM - 11:00 PM': { fr: '11h00 - 23h00', de: '11:00 - 23:00 Uhr', it: '11:00 - 23:00' },
+  '10:00 AM - 11:00 PM': { fr: '10h00 - 23h00', de: '10:00 - 23:00 Uhr', it: '10:00 - 23:00' },
+  '10:00 AM - 2:00 PM': { fr: '10h00 - 14h00', de: '10:00 - 14:00 Uhr', it: '10:00 - 14:00' },
+  '11:00 AM - 3:00 PM': { fr: '11h00 - 15h00', de: '11:00 - 15:00 Uhr', it: '11:00 - 15:00' },
+  '5:00 PM - 10:00 PM': { fr: '17h00 - 22h00', de: '17:00 - 22:00 Uhr', it: '17:00 - 22:00' },
+  '5:00 PM - 11:00 PM': { fr: '17h00 - 23h00', de: '17:00 - 23:00 Uhr', it: '17:00 - 23:00' },
   'Follow Us': { fr: 'Suivez-nous', de: 'Folgen Sie uns', it: 'Seguici' },
   'Get in Touch': { fr: 'Contactez-nous', de: 'Kontakt aufnehmen', it: 'Contattaci' },
   'Subscribe': { fr: "S'abonner", de: 'Abonnieren', it: 'Iscriviti' },
@@ -212,6 +221,13 @@ export function translateSectionCopy(text: string, locale: string, defaultLangua
   if (!text) return text;
   const target = normalizeBuilderLocale(locale, 'en');
   const source = normalizeBuilderLocale(defaultLanguage, BUILDER_COPY_SOURCE_LOCALE);
+
+  // Chaslay block defaults are authored in English even when the shop default language is FR/DE/IT.
+  if (target !== 'en') {
+    const fromEnglishTemplate = PHRASE_MAPS.en?.[target]?.[text];
+    if (fromEnglishTemplate) return fromEnglishTemplate;
+  }
+
   if (target === source) return text;
 
   const map = PHRASE_MAPS[source]?.[target];

@@ -30,7 +30,8 @@ assert.equal(
 );
 assert.equal(translateSectionCopy('Home', 'fr'), 'Accueil');
 assert.equal(translateSectionCopy('Order Now', 'en'), 'Order Now');
-assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Order Now');
+assert.equal(translateSectionCopy('Order Now', 'fr', 'fr'), 'Commander');
+assert.equal(translateSectionCopy('11:00 AM - 10:00 PM', 'fr', 'fr'), '11h00 - 22h00');
 assert.equal(translateSectionCopy('Commander', 'en', 'fr'), 'Order Now');
 assert.equal(translateSectionCopy('Commander', 'de', 'fr'), 'Jetzt bestellen');
 assert.equal(translateSectionCopy('Customer Reviews', 'fr'), 'Avis clients');
