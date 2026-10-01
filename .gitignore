@@ -42,6 +42,10 @@ openpage/dist/
 # dashboard/public/openpage is committed so /openpage/ is always in the SPA dist
 # (Docker still rebuilds/overwrites it during image build).
 
+# Bridge release keystore (see print-agent-android/BRIDGE_APK_SIGNING.md)
+.secrets/
+print-agent-android/.secrets/
+
 # Print agent packaged binaries (rebuild via print-agent/build-installer.ps1)
 print-agent/dist/
 backend/public/downloads/*.exe

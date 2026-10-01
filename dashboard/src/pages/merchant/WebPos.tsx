@@ -10127,6 +10127,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !pendingProduct &&
     !pendingCombo &&
     !pendingOpenPrice &&
+    !pendingWeighed &&
     !checkoutOpen &&
     !giftCardOpsOpen &&
     !giftCardPayOpen &&

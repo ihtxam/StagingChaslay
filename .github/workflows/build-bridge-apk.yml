@@ -54,21 +54,56 @@ jobs:
             echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
           fi
 
+      - name: Restore shared Bridge signing keystore (cache)
+        uses: actions/cache@v4
+        id: bridge-keystore-cache
+        with:
+          path: |
+            ~/.android/debug.keystore
+            ~/.config/.android/debug.keystore
+          key: bridge-apk-signing-keystore-v1
+
+      - name: Configure Bridge release keystore
+        env:
+          BRIDGE_KEYSTORE_BASE64: ${{ secrets.BRIDGE_KEYSTORE_BASE64 }}
+          BRIDGE_KEYSTORE_PASSWORD: ${{ secrets.BRIDGE_KEYSTORE_PASSWORD }}
+          BRIDGE_KEY_ALIAS: ${{ secrets.BRIDGE_KEY_ALIAS }}
+          BRIDGE_KEY_PASSWORD: ${{ secrets.BRIDGE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android" "$HOME/.config/.android" print-agent-android/.secrets
+          if [[ -n "${BRIDGE_KEYSTORE_BASE64:-}" ]]; then
+            echo "$BRIDGE_KEYSTORE_BASE64" | base64 -d > print-agent-android/.secrets/bridge-release.keystore
+            {
+              echo "bridgeStoreFile=.secrets/bridge-release.keystore"
+              echo "bridgeStorePassword=${BRIDGE_KEYSTORE_PASSWORD:-android}"
+              echo "bridgeKeyAlias=${BRIDGE_KEY_ALIAS:-bridge}"
+              echo "bridgeKeyPassword=${BRIDGE_KEY_PASSWORD:-android}"
+            } >> print-agent-android/local.properties
+            echo "Using BRIDGE_KEYSTORE_BASE64 secret for release signing"
+          else
+            # Ephemeral runners need a stable debug keystore so in-place APK upgrades work across CI builds.
+            for ks in "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"; do
+              if [[ ! -f "$ks" ]]; then
+                keytool -genkeypair -v \
+                  -keystore "$ks" \
+                  -storepass android -alias androiddebugkey -keypass android \
+                  -keyalg RSA -keysize 2048 -validity 10000 \
+                  -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
+              fi
+            done
+            if [[ "${{ steps.bridge-keystore-cache.outputs.cache-hit }}" == "true" ]]; then
+              echo "Restored cached Bridge debug keystore for consistent APK signatures"
+            else
+              echo "Created new Bridge debug keystore (will be cached for future CI builds)"
+            fi
+          fi
+
       - name: Build APK
         working-directory: print-agent-android
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.android" "$HOME/.config/.android" ../backend/public/downloads
-          # AGP 9 on ubuntu-latest looks in ~/.config/.android, not ~/.android.
-          for ks in "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"; do
-            if [[ ! -f "$ks" ]]; then
-              keytool -genkeypair -v \
-                -keystore "$ks" \
-                -storepass android -alias androiddebugkey -keypass android \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
-            fi
-          done
+          mkdir -p ../backend/public/downloads
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon --no-build-cache
           APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"

@@ -43,10 +43,23 @@ export function isBarcodeWedgeInput(el: Element | null): boolean {
   return el instanceof HTMLInputElement && el.classList.contains(BARCODE_WEDGE_INPUT_CLASS);
 }
 
-/** Touch tablets open the OS keyboard when a hidden text input is focused — use global capture only. */
-export function prefersBarcodeWedgeAutofocus(): boolean {
+/** True on phones/tablets (Android WebPOS in Chrome). */
+export function isCoarsePointerDevice(): boolean {
   if (typeof window === 'undefined') return false;
-  return !window.matchMedia('(pointer: coarse)').matches;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+/**
+ * Desktop: aggressive refocus on the hidden capture input.
+ * Touch: still focus readonly capture (HID wedge needs a target); avoid soft keyboard via readOnly + inputMode none.
+ */
+export function prefersBarcodeWedgeAutofocus(): boolean {
+  return !isCoarsePointerDevice();
+}
+
+/** Whether the hidden wedge input should hold focus while wedge capture is active. */
+export function shouldMaintainBarcodeWedgeCaptureFocus(): boolean {
+  return true;
 }
 
 export function isBarcodeFieldInput(el: Element | null): boolean {
@@ -204,6 +217,7 @@ export function useBarcodeWedge({
         clearTimers();
         if (code.length >= minLength) {
           e.preventDefault();
+          e.stopPropagation();
           onScanRef.current(code);
         }
         return;
@@ -211,19 +225,23 @@ export function useBarcodeWedge({
 
       if (e.key === 'Backspace') {
         e.preventDefault();
+        e.stopPropagation();
         bufferRef.current = bufferRef.current.slice(0, -1);
         return;
       }
 
       if (e.key.length === 1) {
         e.preventDefault();
+        e.stopPropagation();
         appendChar(e.key);
       }
     };
 
-    window.addEventListener('keydown', onKeyDown);
+    // Capture phase helps Android Chrome deliver USB HID wedge keys before focus moves.
+    const useCapture = isCoarsePointerDevice();
+    window.addEventListener('keydown', onKeyDown, useCapture);
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onKeyDown, useCapture);
       bufferRef.current = '';
       clearTimers();
     };

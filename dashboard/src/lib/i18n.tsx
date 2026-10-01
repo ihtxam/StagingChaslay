@@ -1524,6 +1524,8 @@ const en: Dict = {
   webPosScaleSelectPort: 'Select COM port…',
   webPosScaleLive: 'Scale',
   webPosScaleWaiting: 'Waiting for scale reading…',
+  webPosScaleWedgeHint:
+    'USB/BT scale in keyboard (HID) mode: put weight on the platter — digits + Enter fill this dialog. Serial Aclas still uses Print Agent / Bridge when online.',
   webPosScaleAgentOffline: 'Start Print Agent on this PC to read the USB scale (manual entry still works).',
   webPosScaleBridgeOffline:
     'Start Bridge Reborn on this tablet to read the USB scale (manual entry still works).',
@@ -1972,7 +1974,7 @@ const en: Dict = {
   printBridgeApkNotPublished:
     'The server APK is still v{apkVersion}. A newer release (v{declaredVersion}) is not deployed yet — downloading again will not upgrade Bridge. Ask your administrator to rebuild and deploy the APK.',
   printBridgeUpdateUninstallSteps:
-    'Before updating: Android Settings → Apps → Bridge Reborn → Uninstall. Then return here and tap Install update. If the version does not change, the server still has an old APK file.',
+    'Before updating: Android Settings → Apps → Bridge Reborn (package com.rebornsense.printbridge) → Uninstall. Then return here and tap Install update. If install says “App not installed” or package conflict, delete old reborn-print-bridge*.apk files in Downloads and uninstall Bridge before trying again.',
   printCompanionUpToDate: 'Up to date (v{version}).',
   printerProfiles: 'Printer profiles',
   printerProfilesHint:
@@ -5846,6 +5848,8 @@ const fr: Dict = {
   webPosScaleSelectPort: 'Choisir le port COM…',
   webPosScaleLive: 'Balance',
   webPosScaleWaiting: 'En attente de la balance…',
+  webPosScaleWedgeHint:
+    'Balance USB/BT en mode clavier (HID) : posez le poids — chiffres + Entrée remplissent cette fenêtre. La balance série Aclas utilise toujours Print Agent / Bridge si disponible.',
   webPosScaleAgentOffline:
     'Démarrez Print Agent sur ce PC pour lire la balance USB (saisie manuelle toujours possible).',
   webPosScaleBridgeOffline:
@@ -6299,7 +6303,7 @@ const fr: Dict = {
   printBridgeApkNotPublished:
     'L’APK sur le serveur est encore en v{apkVersion}. Une version plus récente (v{declaredVersion}) n’est pas encore déployée — retélécharger ne mettra pas Bridge à jour.',
   printBridgeUpdateUninstallSteps:
-    'Avant la mise à jour : Paramètres Android → Applications → Bridge Reborn → Désinstaller. Revenez ici et appuyez sur Installer la mise à jour.',
+    'Avant la mise à jour : Paramètres Android → Applications → Bridge Reborn (com.rebornsense.printbridge) → Désinstaller. En cas de conflit de package, supprimez les anciens reborn-print-bridge*.apk dans Téléchargements puis réessayez.',
   printCompanionUpToDate: 'À jour (v{version}).',
   printerProfiles: 'Profils imprimantes',
   printerProfilesHint:
@@ -10123,6 +10127,8 @@ const de: Dict = {
   webPosScaleSelectPort: 'COM-Port wählen…',
   webPosScaleLive: 'Waage',
   webPosScaleWaiting: 'Warte auf Waagenwert…',
+  webPosScaleWedgeHint:
+    'USB/BT-Waage im Tastatur-(HID-)Modus: Ware auflegen — Ziffern + Eingabe füllen dieses Fenster. Serielle Aclas-Waage nutzt weiter Print Agent / Bridge, wenn online.',
   webPosScaleAgentOffline:
     'Print Agent auf diesem PC starten, um die USB-Waage zu lesen (manuelle Eingabe weiterhin möglich).',
   webPosScaleBridgeOffline:
@@ -10576,7 +10582,7 @@ const de: Dict = {
   printBridgeApkNotPublished:
     'Die Server-APK ist noch v{apkVersion}. Ein neueres Release (v{declaredVersion}) ist noch nicht bereitgestellt — erneutes Herunterladen aktualisiert Bridge nicht.',
   printBridgeUpdateUninstallSteps:
-    'Vor dem Update: Android-Einstellungen → Apps → Bridge Reborn → Deinstallieren. Dann hier „Update installieren“ tippen.',
+    'Vor dem Update: Android-Einstellungen → Apps → Bridge Reborn (com.rebornsense.printbridge) → Deinstallieren. Bei Paketkonflikt alte reborn-print-bridge*.apk in Downloads löschen und erneut installieren.',
   printCompanionUpToDate: 'Aktuell (v{version}).',
   printerProfiles: 'Druckerprofile',
   printerProfilesHint:

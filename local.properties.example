@@ -6,3 +6,9 @@ sdk.dir=C\:\\Users\\Hussain\\AppData\\Local\\Android\\Sdk
 # adyenSdkApiKey=your-test-pos-mobile-api-key
 # adyenSdkApiKeyLive=your-live-pos-mobile-api-key
 # adyenEnv=test
+
+# Bridge Reborn release signing (official APK builds — see print-agent-android/BRIDGE_APK_SIGNING.md)
+# bridgeStoreFile=.secrets/bridge-release.keystore
+# bridgeStorePassword=…
+# bridgeKeyAlias=bridge
+# bridgeKeyPassword=…

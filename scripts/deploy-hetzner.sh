@@ -527,18 +527,42 @@ BRIDGE_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/print-agent-android/app/b
 [[ -n "$BRIDGE_VERSION" ]] || BRIDGE_VERSION="0.0.0"
 if [[ "${SKIP_ANDROID_BRIDGE_BUILD:-0}" != "1" ]]; then
   BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  BRIDGE_KEYSTORE_HOST="$REPO_DIR/.secrets/bridge-release.keystore"
+  BRIDGE_KEYSTORE_MOUNT=()
+  BRIDGE_LOCAL_PROPS_EXTRA=()
+  if [[ -f "$BRIDGE_KEYSTORE_HOST" ]]; then
+    BRIDGE_KEYSTORE_MOUNT=(-v "$BRIDGE_KEYSTORE_HOST:/project/.secrets/bridge-release.keystore:ro")
+    LP="$REPO_DIR/print-agent-android/local.properties"
+    touch "$LP"
+    for line in \
+      "bridgeStoreFile=.secrets/bridge-release.keystore" \
+      "bridgeStorePassword=${BRIDGE_KEYSTORE_PASSWORD:-android}" \
+      "bridgeKeyAlias=${BRIDGE_KEY_ALIAS:-bridge}" \
+      "bridgeKeyPassword=${BRIDGE_KEY_PASSWORD:-android}"; do
+      key="${line%%=*}"
+      if grep -q "^${key}=" "$LP" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${line}|" "$LP"
+      else
+        echo "$line" >> "$LP"
+      fi
+    done
+    echo "Bridge APK: signing with host keystore $BRIDGE_KEYSTORE_HOST"
+  else
+    echo "WARNING: $BRIDGE_KEYSTORE_HOST missing — APK will use ephemeral container debug.keystore (in-place upgrades may fail). See print-agent-android/BRIDGE_APK_SIGNING.md"
+  fi
   if docker run --rm \
     -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
     -e "GRADLE_USER_HOME=/tmp/gradle-home" \
     -v "$REPO_DIR/print-agent-android:/project" \
     -v "$DOWNLOADS_DIR:/out" \
+    "${BRIDGE_KEYSTORE_MOUNT[@]}" \
     -w /project \
     mingc/android-build-box:latest \
     bash -c 'set -euo pipefail
       export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
       rm -rf /project/.gradle /project/app/build /tmp/gradle-home /tmp/gradle-project-cache
       mkdir -p /opt/android-sdk/.android /tmp/gradle-home /tmp/gradle-project-cache
-      if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
+      if [[ ! -f /project/.secrets/bridge-release.keystore ]] && [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
         keytool -genkeypair -v \
           -keystore /opt/android-sdk/.android/debug.keystore \
           -storepass android -alias androiddebugkey -keypass android \

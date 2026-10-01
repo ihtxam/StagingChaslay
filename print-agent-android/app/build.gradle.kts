@@ -41,11 +41,23 @@ android {
     }
 
     signingConfigs {
+        val bridgeStorePath = localProps.getProperty("bridgeStoreFile")?.trim().orEmpty()
+        val bridgeStore = when {
+            bridgeStorePath.isNotEmpty() -> rootProject.file(bridgeStorePath)
+            else -> null
+        }
         create("release") {
-            storeFile = signingConfigs.getByName("debug").storeFile
-            storePassword = signingConfigs.getByName("debug").storePassword
-            keyAlias = signingConfigs.getByName("debug").keyAlias
-            keyPassword = signingConfigs.getByName("debug").keyPassword
+            if (bridgeStore != null && bridgeStore.isFile) {
+                storeFile = bridgeStore
+                storePassword = localProps.getProperty("bridgeStorePassword") ?: "android"
+                keyAlias = localProps.getProperty("bridgeKeyAlias") ?: "androiddebugkey"
+                keyPassword = localProps.getProperty("bridgeKeyPassword") ?: "android"
+            } else {
+                storeFile = signingConfigs.getByName("debug").storeFile
+                storePassword = signingConfigs.getByName("debug").storePassword
+                keyAlias = signingConfigs.getByName("debug").keyAlias
+                keyPassword = signingConfigs.getByName("debug").keyPassword
+            }
         }
     }
 

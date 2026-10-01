@@ -66,6 +66,12 @@ Legacy `chaslayreborn-*` URLs redirect to the Reborn filenames.
 
 Served at `GET /downloads/reborn-print-bridge.apk`.
 
+### Signing (in-place upgrades)
+
+All official APKs must be signed with the **same** release keystore. Ephemeral debug keystores (default local/Docker builds) cause `INSTALL_FAILED_UPDATE_INCOMPATIBLE` on tablets that already have Bridge installed.
+
+See `print-agent-android/BRIDGE_APK_SIGNING.md`.
+
 ### Build locally
 
 ```bash

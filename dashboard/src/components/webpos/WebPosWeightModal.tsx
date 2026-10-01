@@ -12,6 +12,13 @@ import {
   type ScaleReading,
 } from '@/lib/print-agent';
 import WebPosNumericKeypad from './WebPosNumericKeypad';
+import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
+import {
+  SCALE_WEDGE_INPUT_CLASS,
+  shouldMaintainScaleWedgeCaptureFocus,
+  shouldYieldScaleFocus,
+  useScaleWedge,
+} from '@/lib/scale-wedge';
 
 type Props = {
   open: boolean;
@@ -92,6 +99,35 @@ export default function WebPosWeightModal({
       setBuffer(formatScaleBuffer(reading.weightKg, unit));
     }
   }, []);
+
+  const applyWedgeReading = useCallback(
+    (weightKg: number, displayUnit: 'kg' | 'g') => {
+      if (manualOverrideRef.current) return;
+      manualOverrideRef.current = false;
+      if (displayUnit !== entryUnitRef.current) {
+        setEntryUnit(displayUnit);
+        entryUnitRef.current = displayUnit;
+      }
+      setScaleReading({ weightKg, status: 'STABLE' });
+      setScaleMsg('');
+      setBuffer(formatScaleBuffer(weightKg, displayUnit));
+    },
+    []
+  );
+
+  const onConfirmRef = useRef(onConfirm);
+  onConfirmRef.current = onConfirm;
+
+  const { onCaptureInput: onScaleCaptureInput, onCaptureKeyDown: onScaleCaptureKeyDown } =
+    useScaleWedge({
+      enabled: open,
+      preferredDisplayUnit: entryUnit,
+      onWeight: (parsed) => applyWedgeReading(parsed.weightKg, parsed.displayUnit),
+      onConfirmWeight: (parsed) => {
+        if (parsed.weightKg <= 0) return;
+        onConfirmRef.current(parsed.weightKg);
+      },
+    });
 
   const switchEntryUnit = useCallback(
     (next: 'kg' | 'g') => {
@@ -245,6 +281,14 @@ export default function WebPosWeightModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-2 sm:p-3">
+      <BarcodeWedgeCapture
+        active={open}
+        inputClassName={SCALE_WEDGE_INPUT_CLASS}
+        shouldYieldFocus={shouldYieldScaleFocus}
+        shouldMaintainFocus={shouldMaintainScaleWedgeCaptureFocus}
+        onInput={onScaleCaptureInput}
+        onKeyDown={onScaleCaptureKeyDown}
+      />
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] text-[var(--webpos-text,var(--text))] shadow-xl">
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--webpos-border,var(--border))] px-4 py-2.5">
           <div className="min-w-0">
@@ -307,11 +351,17 @@ export default function WebPosWeightModal({
                 {t('webPosScale')}
               </div>
               {!scaleConfigured ? (
-                <p className="text-[11px] text-amber-800">{t('webPosScalePortMissing')}</p>
+                <div className="space-y-1 text-[11px]">
+                  <p className="text-amber-800">{t('webPosScalePortMissing')}</p>
+                  <p className="text-[var(--webpos-text-muted,var(--text-muted))]">
+                    {t('webPosScaleWedgeHint')}
+                  </p>
+                </div>
               ) : !agentOk ? (
-                <p className="text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
-                  {agentOfflineMessage}
-                </p>
+                <div className="space-y-1 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
+                  <p>{agentOfflineMessage}</p>
+                  <p>{t('webPosScaleWedgeHint')}</p>
+                </div>
               ) : (
                 <div className="space-y-0.5 text-[11px] text-[var(--webpos-text-muted,var(--text-muted))]">
                   <p>
@@ -329,6 +379,7 @@ export default function WebPosWeightModal({
                         : ''}
                     </p>
                   ) : null}
+                  <p className="pt-1">{t('webPosScaleWedgeHint')}</p>
                 </div>
               )}
             </div>

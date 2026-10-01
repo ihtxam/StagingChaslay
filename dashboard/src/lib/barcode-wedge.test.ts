@@ -7,7 +7,11 @@ import {
   sanitizeScanCode,
   stripScannerControlChars,
 } from './product-scan-codes';
-import { mergeRetailScanBuffer } from './barcode-wedge';
+import {
+  isCoarsePointerDevice,
+  mergeRetailScanBuffer,
+  shouldMaintainBarcodeWedgeCaptureFocus,
+} from './barcode-wedge';
 
 assert.equal(stripScannerControlChars('76\x1D0123456789012'), '760123456789012');
 assert.equal(sanitizeScanCode(' 76\x1D0123456789012\r'), '760123456789012');
@@ -18,5 +22,8 @@ assert.equal(mergeRetailScanBuffer('', '6420256002131'), '6420256002131');
 assert.equal(mergeRetailScanBuffer('64202560', '0'), '642025600');
 assert.equal(mergeRetailScanBuffer('6420256002', '131'), '6420256002131');
 assert.equal(mergeRetailScanBuffer('64202560', '642025600'), '642025600');
+
+assert.equal(typeof isCoarsePointerDevice(), 'boolean');
+assert.equal(shouldMaintainBarcodeWedgeCaptureFocus(), true);
 
 console.log('barcode-wedge.test.ts OK');

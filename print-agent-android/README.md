@@ -212,6 +212,8 @@ Tailored steps per profile:
 | API | `GET /downloads/reborn-print-bridge.apk` |
 | Deploy | `backend/public/downloads/` (build in CI) |
 
+**Package:** `com.rebornsense.printbridge` — always this ID; in-place upgrades need the same signing key (see `BRIDGE_APK_SIGNING.md`). **Code policy:** see `LOCKED.md`.
+
 One **universal APK** for all devices (Sunmi, Feitian, generic). Drivers load at runtime based on detection.
 
 ---
