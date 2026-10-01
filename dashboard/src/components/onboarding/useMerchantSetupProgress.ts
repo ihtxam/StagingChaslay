@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { isMerchantPaymentSetupComplete } from '@/components/onboarding/merchant-payment-setup';
@@ -62,6 +63,7 @@ function writeManualDone(map: Partial<Record<SetupStepId, boolean>>) {
 
 export function useMerchantSetupProgress(): SetupSnapshot {
   const { t } = useI18n();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(readDismissed);
   const [manualDone, setManualDone] = useState(readManualDone);
@@ -97,7 +99,7 @@ export function useMerchantSetupProgress(): SetupSnapshot {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, location.pathname]);
 
   const steps = useMemo<SetupStep[]>(() => {
     const defs: Array<Omit<SetupStep, 'completed'>> = [
