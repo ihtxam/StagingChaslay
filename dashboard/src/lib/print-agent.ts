@@ -782,12 +782,24 @@ export function isAndroidWebPosTill(): boolean {
   return false;
 }
 
+export type ProbePrintAgentHealthOptions = {
+  /** Shorter timeouts keep WebPOS launch-check responsive while Bridge cold-starts. */
+  perAttemptTimeoutMs?: number;
+};
+
 /** Probe Bridge / Print Agent with backoff (Android tablet boot / PWA cold start). */
-export async function probePrintAgentHealth(attempts = 5): Promise<PrintAgentHealth> {
+export async function probePrintAgentHealth(
+  attempts = 5,
+  options?: ProbePrintAgentHealthOptions
+): Promise<PrintAgentHealth> {
   let last: PrintAgentHealth = { ok: false };
   const tries = Math.max(1, attempts);
+  const timeoutMs = options?.perAttemptTimeoutMs;
   for (let i = 0; i < tries; i++) {
-    last = await getPrintAgentHealth(i === 0 && isAndroidWebPosTill() ? 2 : 0);
+    last = await getPrintAgentHealth(
+      i === 0 && isAndroidWebPosTill() ? 2 : 0,
+      timeoutMs
+    );
     if (last.ok) return last;
     if (i + 1 < tries) {
       await new Promise((r) => setTimeout(r, 400 * (i + 1)));
@@ -832,7 +844,10 @@ async function ensureDesktopHardwareReady(): Promise<void> {
   await installDesktopHardwareBridge();
 }
 
-export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth> {
+export async function getPrintAgentHealth(
+  retries = 0,
+  timeoutMs = 4000
+): Promise<PrintAgentHealth> {
   if (isDesktopApp()) {
     await ensureDesktopHardwareReady();
   }
@@ -849,7 +864,7 @@ export async function getPrintAgentHealth(retries = 0): Promise<PrintAgentHealth
     let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {
       try {
-        const data = (await agentFetchWithTimeout('/health')) as {
+        const data = (await agentFetchWithTimeout('/health', undefined, timeoutMs)) as {
           ok?: boolean;
           version?: unknown;
           platform?: unknown;

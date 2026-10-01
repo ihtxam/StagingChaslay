@@ -103,3 +103,15 @@ test('shouldRemoveInstallManifestSync removes manifest when browser preferred', 
 test('staging bundle marker is present for grep verification', () => {
   assert.equal(PWA_OPEN_IN_APP_MARK, 'pwa-open-in-app-v1');
 });
+
+test('shouldSuppressRebornInstallPromptSync does not suppress when only unrelated related apps exist', () => {
+  assert.equal(
+    shouldSuppressRebornInstallPromptSync({
+      pwaInstalled: false,
+      bridgeInstalled: true,
+      browserPreferred: false,
+      standalone: false,
+    }),
+    false
+  );
+});

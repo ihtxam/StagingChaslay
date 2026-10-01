@@ -43,6 +43,8 @@ object PrintBridgeLauncher {
             )
             return false
         }
+        // Boot receiver sets allowBootReceiverStart inside mayStartForegroundService().
+        // Do not also require canStartBackgroundService() here — that blocked BOOT_COMPLETED.
         if (!BridgeSafeStart.mayStartForegroundService(context)) {
             Log.w(TAG, "Skipping FGS start — no eligible foreground context")
             BridgeCrashLog.recordReason(
@@ -50,10 +52,6 @@ object PrintBridgeLauncher {
                 "startForegroundService",
                 "no eligible foreground context",
             )
-            return false
-        }
-        if (context !is android.app.Activity && !BridgeSafeStart.canStartBackgroundService(appContext)) {
-            Log.w(TAG, "Skipping FGS start — UI not ready for background start")
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)

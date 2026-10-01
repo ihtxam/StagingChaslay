@@ -9,6 +9,7 @@ const PRECACHE = [
   '/index.html',
   '/offline.html',
   '/manifest.webmanifest',
+  '/pos.webmanifest',
   '/kiosk.webmanifest',
   '/order-center.webmanifest',
   '/favicon.png',

@@ -163,7 +163,9 @@ export async function runWebPosConnectionChecks(opts: {
 }): Promise<WebPosConnectionReport> {
   let bridgeAutostartRequested = false;
   let health = opts.androidProbe
-    ? await probePrintAgentHealth(8).catch(() => ({ ok: false as const }))
+    ? await probePrintAgentHealth(12, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
+        ok: false as const,
+      }))
     : await getPrintAgentHealth().catch(() => ({ ok: false as const }));
 
   if (!health.ok && opts.androidProbe) {
@@ -171,16 +173,20 @@ export async function runWebPosConnectionChecks(opts: {
     if (launched) {
       bridgeAutostartRequested = true;
       opts.onBridgeAutostart?.();
-      await sleep(1_500);
+      await sleep(2_500);
     }
-    health = await probePrintAgentHealth(18).catch(() => ({ ok: false as const }));
-    if (!health.ok && !launched) {
-      const retry = requestBridgeRebornAutostart({ cooldownMs: 0 });
+    health = await probePrintAgentHealth(22, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
+      ok: false as const,
+    }));
+    if (!health.ok) {
+      const retry = requestBridgeRebornAutostart({ bypassCooldown: true });
       if (retry) {
         bridgeAutostartRequested = true;
         opts.onBridgeAutostart?.();
-        await sleep(1_800);
-        health = await probePrintAgentHealth(14).catch(() => ({ ok: false as const }));
+        await sleep(3_000);
+        health = await probePrintAgentHealth(16, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
+          ok: false as const,
+        }));
       }
     }
   }

@@ -148,12 +148,15 @@ function matchesInstalledRebornWebApp(app: RelatedWebApp, origin: string): boole
   const url = String(app.url || '');
   const id = String(app.id || '');
   if (id === PWA_MANIFEST_ID || id === `${origin}/` || id === origin) return true;
-  if (origin && url.startsWith(origin)) return true;
-  return (
-    url.includes('manifest.webmanifest') ||
-    id.includes('rebornsense.com') ||
-    id.includes('chaslay.com')
-  );
+  if (id === '/merchant/pos' || id === `${origin}/merchant/pos`) return true;
+  if (origin && url.startsWith(origin)) {
+    return (
+      url.includes('/merchant/pos') ||
+      url.includes('manifest.webmanifest') ||
+      url.includes('pos.webmanifest')
+    );
+  }
+  return url.includes('manifest.webmanifest') || url.includes('pos.webmanifest');
 }
 
 export function removeInstallManifestIfNeeded(): void {
