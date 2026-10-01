@@ -23,7 +23,7 @@ This host already serves other nginx sites (wearedispatcher). Reborn uses Docker
 1. Point DNS (and `*.rebornsense.com` wildcard) at the new server.
 2. Copy `/root/chaslay-secrets/.env.production` (or dump Postgres) from the old box so merchants, licenses, and passwords stay the same.
 3. On the new server: clone this repo, set `DOMAIN=rebornsense.com` and `PUBLIC_APP_URL=https://app.rebornsense.com` in secrets, then run `bash scripts/deploy-hetzner.sh`.
-4. Add `noreply@rebornsense.com` in Brevo (or keep the current sender until DNS mail is ready).
+4. Configure platform email DNS for Mailco/Postal and Brevo — see [docs/MAILCO-DNS.md](docs/MAILCO-DNS.md) (SPF on `psrp.{domain}` at Postal, SPF/DKIM/DMARC on apex at Cloudflare).
 5. After cutover, point old `*.chaslay.com` records at the new server so bookmarks redirect (Caddy already maps them).
 6. Sideload a new Android APK (API base is now `https://app.rebornsense.com/`). Installed Windows Print Agent keeps working; UI name is **Reborn Print Agent**.
 
