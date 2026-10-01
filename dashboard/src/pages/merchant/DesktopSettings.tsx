@@ -8,6 +8,9 @@ import { useTheme } from '@/lib/theme';
 import {
   WEBPOS_COLOR_THEMES,
   WEBPOS_TEXT_SIZES,
+  WEBPOS_TEXT_SIZE_KEY,
+  persistWebPosTextSize,
+  readWebPosTextSize,
   type WebPosAppearance,
   type WebPosColorTheme,
   type WebPosTextSize,
@@ -41,19 +44,8 @@ import { normalizePosCheckoutSettings, type RetailTileSize } from '@/lib/pos-che
 import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
-const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
-
-function readPosTextSize(): WebPosTextSize {
-  try {
-    const v = localStorage.getItem(WEBPOS_TEXT_SIZE_KEY);
-    if (v && WEBPOS_TEXT_SIZES.includes(v as WebPosTextSize)) return v as WebPosTextSize;
-  } catch {
-    /* ignore */
-  }
-  return 'md';
-}
 
 function readPosAppearance(): WebPosAppearance {
   try {
@@ -131,7 +123,7 @@ export default function DesktopSettings() {
   const [clearSearchAfterAdd, setClearSearchAfterAdd] = useState(true);
   const [panelLanguage, setPanelLanguage] = useState<Locale>('en');
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
-  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readPosTextSize());
+  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readWebPosTextSize());
   const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readPosAppearance());
   const [printers, setPrinters] = useState<AgentPrinter[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
@@ -235,7 +227,7 @@ export default function DesktopSettings() {
             ? (themeRaw as WebPosColorTheme)
             : 'teal'
         );
-        setPosTextSize(readPosTextSize());
+        setPosTextSize(readWebPosTextSize());
         setPosAppearance(readPosAppearance());
         const checkoutSettings = normalizePosCheckoutSettings(snapshot.posCheckoutSettings);
         setClearSearchAfterAdd(checkoutSettings.retailClearSearchAfterAdd);
@@ -537,7 +529,10 @@ export default function DesktopSettings() {
                             ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-200'
                             : 'border-stone-200 dark:border-stone-600 dark:text-stone-200'
                         }`}
-                        onClick={() => setPosTextSize(size)}
+                        onClick={() => {
+                          setPosTextSize(size);
+                          persistWebPosTextSize(size);
+                        }}
                       >
                         {size}
                       </button>

@@ -25,6 +25,7 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
 import type { PosTab, PosView } from './types';
+import { cycleWebPosTextSize } from '@/lib/webpos-appearance';
 export type {
   WebPosAppearance,
   WebPosColorTheme,
@@ -34,6 +35,7 @@ export {
   WEBPOS_COLOR_THEMES,
   WEBPOS_TEXT_SIZES,
 } from '@/lib/webpos-appearance';
+
 export const WEBPOS_FULLSCREEN_KEY = 'webpos_fullscreen';
 
 function persistFullscreenPreference(active: boolean) {
@@ -642,13 +644,14 @@ export function WebPosSettingsDropdown({
   const fullscreenActive = useFullscreenActive();
   const bumpTextSize = (dir: -1 | 1) => {
     if (!onTextSizeChange) return;
-    const idx = WEBPOS_TEXT_SIZES.indexOf(textSize);
-    const next = WEBPOS_TEXT_SIZES[Math.max(0, Math.min(WEBPOS_TEXT_SIZES.length - 1, idx + dir))];
-    if (next) onTextSizeChange(next);
+    onTextSizeChange(cycleWebPosTextSize(textSize, dir));
   };
 
   return (
-    <div className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-50 flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl">
+    <div
+      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
       <div className="space-y-1.5 border-b border-stone-100 pb-2">
         {canShowPanel && onShowPanel ? (
@@ -814,6 +817,7 @@ export function WebPosSettingsDropdown({
                   type="button"
                   className="btn-secondary flex-1 text-xs font-bold"
                   disabled={textSize === 'sm'}
+                  aria-label={t('webPosTextSizeDecrease')}
                   onClick={() => bumpTextSize(-1)}
                 >
                   A−
@@ -825,6 +829,7 @@ export function WebPosSettingsDropdown({
                   type="button"
                   className="btn-secondary flex-1 text-xs font-bold"
                   disabled={textSize === 'xl'}
+                  aria-label={t('webPosTextSizeIncrease')}
                   onClick={() => bumpTextSize(1)}
                 >
                   A+

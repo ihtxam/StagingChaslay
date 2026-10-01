@@ -234,8 +234,13 @@ import {
   logWebPosEvent,
   sendWebPosLogsToSupport,
 } from '@/lib/webpos-log';
+import {
+  WEBPOS_TEXT_SIZE_EVENT,
+  WEBPOS_TEXT_SIZE_KEY,
+  persistWebPosTextSize,
+  readWebPosTextSize,
+} from '@/lib/webpos-appearance';
 
-const WEBPOS_TEXT_SIZE_KEY = 'webpos_text_size';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
 const WEBPOS_GRID_SHOW_IMAGES_KEY = 'webpos.grid.showImages';
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
@@ -282,16 +287,6 @@ function resolveActiveTerminalId(
 }
 
 export type WebPosAppearance = 'light' | 'night';
-
-function readStoredTextSize(): WebPosTextSize {
-  try {
-    const v = localStorage.getItem(WEBPOS_TEXT_SIZE_KEY);
-    if (v && (WEBPOS_TEXT_SIZES as string[]).includes(v)) return v as WebPosTextSize;
-  } catch {
-    /* ignore */
-  }
-  return 'md';
-}
 
 function readStoredAppearance(): WebPosAppearance {
   try {
@@ -880,7 +875,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [retailCashPayOpen, setRetailCashPayOpen] = useState(false);
   const [shiftsEnabled, setShiftsEnabled] = useState(false);
   const [posColorTheme, setPosColorTheme] = useState<WebPosColorTheme>('teal');
-  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readStoredTextSize());
+  const [posTextSize, setPosTextSize] = useState<WebPosTextSize>(() => readWebPosTextSize());
   const [posAppearance, setPosAppearance] = useState<WebPosAppearance>(() => readStoredAppearance());
   const [gridShowImages, setGridShowImages] = useState(() => readStoredGridShowImages());
   const [gridTileSize, setGridTileSize] = useState<ProductGridTileSize>(() => readStoredGridTileSize());
@@ -1485,13 +1480,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     selectedCustomer,
   ]);
 
-  /** Narrow screens scale rem UI via html font-size (zoom is disabled on phones). */
+  /** Narrow screens / no-zoom browsers scale rem UI via html font-size (see index.css). */
   useEffect(() => {
     document.documentElement.setAttribute('data-webpos-text-size', posTextSize);
     return () => {
       document.documentElement.removeAttribute('data-webpos-text-size');
     };
   }, [posTextSize]);
+
+  useEffect(() => {
+    const onTextSizeEvent = (e: Event) => {
+      const detail = (e as CustomEvent<WebPosTextSize>).detail;
+      if (detail && (WEBPOS_TEXT_SIZES as string[]).includes(detail)) {
+        setPosTextSize(detail);
+      }
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== WEBPOS_TEXT_SIZE_KEY) return;
+      setPosTextSize(readWebPosTextSize());
+    };
+    window.addEventListener(WEBPOS_TEXT_SIZE_EVENT, onTextSizeEvent);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(WEBPOS_TEXT_SIZE_EVENT, onTextSizeEvent);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   /** Main till reports Print Agent status for mobile/waiter devices. */
   useEffect(() => {
@@ -1555,7 +1569,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     if (!settingsOpen) return;
     const close = () => setSettingsOpen(false);
-    const onDoc = (e: PointerEvent) => {
+    const onDoc = (e: MouseEvent) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
         close();
       }
@@ -1565,12 +1579,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (target instanceof Node && settingsRef.current?.contains(target)) return;
       close();
     };
-    document.addEventListener('pointerdown', onDoc, true);
+    document.addEventListener('click', onDoc, true);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
     window.addEventListener('orientationchange', close);
     return () => {
-      document.removeEventListener('pointerdown', onDoc, true);
+      document.removeEventListener('click', onDoc, true);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
       window.removeEventListener('orientationchange', close);
@@ -9819,11 +9833,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const changePosTextSize = (size: WebPosTextSize) => {
     setPosTextSize(size);
-    try {
-      localStorage.setItem(WEBPOS_TEXT_SIZE_KEY, size);
-    } catch {
-      /* ignore */
-    }
+    persistWebPosTextSize(size);
   };
 
   const changePosAppearance = (appearance: WebPosAppearance) => {

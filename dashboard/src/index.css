@@ -1734,6 +1734,26 @@ button {
     }
   }
 
+  /*
+   * Browsers without CSS zoom (e.g. Firefox): scale rem-based till UI via <html>
+   * when POS viewport lock is active. Avoid combining with .webpos-shell zoom above.
+   */
+  @supports not (zoom: 1) {
+    html.webpos-lock[data-webpos-text-size='sm'] {
+      font-size: 90%;
+    }
+    html.webpos-lock[data-webpos-text-size='md'],
+    html.webpos-lock:not([data-webpos-text-size]) {
+      font-size: 100%;
+    }
+    html.webpos-lock[data-webpos-text-size='lg'] {
+      font-size: 112%;
+    }
+    html.webpos-lock[data-webpos-text-size='xl'] {
+      font-size: 120%;
+    }
+  }
+
   /* Compact phone register — fits without pinch-zoom. */
   @media (max-width: 639px) {
     .webpos-shell[data-narrow='1'] .webpos-cat-scroll {
