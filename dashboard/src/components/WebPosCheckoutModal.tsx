@@ -303,8 +303,10 @@ export default function WebPosCheckoutModal({
                   tipAmount,
                   roundingAmount: calc.roundingAmount,
                   total: calc.total,
-                  amountTendered: method === 'cash' ? tender : null,
+                  amountTendered:
+                    method === 'cash' ? tender : calc.total > 0 ? calc.total : null,
                   changeDue: method === 'cash' ? changeDue : null,
+                  tenders: [{ method, amount: calc.total }],
                 })
               }
             >

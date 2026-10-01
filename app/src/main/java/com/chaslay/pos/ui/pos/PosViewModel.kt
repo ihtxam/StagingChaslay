@@ -4523,6 +4523,8 @@ class PosViewModel @Inject constructor(
 
             when (paymentResult) {
                 is PaymentResult.Success -> {
+                    val terminalTipFromDevice =
+                        paymentResult.terminalTipAmount?.takeIf { it > 0.001 } ?: 0.0
                     val resolvedMethod = when {
                         redeemedGiftCardAmount > 0 && roundedTotal <= 0.001 -> PaymentMethod.GIFT_CARD
                         method == PaymentMethod.CASH -> PaymentMethod.CASH
@@ -4539,10 +4541,11 @@ class PosViewModel @Inject constructor(
                         else -> PaymentMethod.CARD
                     }
                     val cardTender = when {
-                        checkout.cardTenderAmount > 0.001 -> checkout.cardTenderAmount
+                        checkout.cardTenderAmount > 0.001 -> checkout.cardTenderAmount + terminalTipFromDevice
                         isCardMethod && cashTender != null ->
-                            (roundedTotal - cashTender).coerceAtLeast(0.0).takeIf { it > 0.001 }
-                        isCardMethod -> roundedTotal
+                            (roundedTotal - cashTender + terminalTipFromDevice).coerceAtLeast(0.0)
+                                .takeIf { it > 0.001 }
+                        isCardMethod -> roundedTotal + terminalTipFromDevice
                         else -> null
                     }
                     val tender = when {
@@ -4567,9 +4570,8 @@ class PosViewModel @Inject constructor(
                     val membershipForLoyalty = _uiExtras.value.attachedMembership
                     val equalSplitCount = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart.splitCount else 1
                     val saleDiscount = checkoutSaleDiscount(saleCart, checkout, equalSplitCount)
-                    val terminalTip = paymentResult.terminalTipAmount?.takeIf { it > 0.001 } ?: 0.0
-                    val checkoutTip = checkout.tipAmount + terminalTip
-                    val transactionTotal = roundedTotal + redeemedGiftCardAmount + terminalTip
+                    val checkoutTip = checkout.tipAmount + terminalTipFromDevice
+                    val transactionTotal = roundedTotal + redeemedGiftCardAmount + terminalTipFromDevice
                     val transaction = transactionRepository.completeSale(
                         cart = saleCart,
                         paymentMethod = resolvedMethod,

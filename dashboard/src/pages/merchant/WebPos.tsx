@@ -9,6 +9,10 @@ import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
 import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
+import {
+  applyTerminalTipToCheckoutExtras,
+  normalizePosCheckoutExtras,
+} from '@/lib/terminal-checkout-extras';
 import { APP_NAME } from '@/lib/brand';
 import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
 import {
@@ -7292,7 +7296,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const tendered = roundMoney2(payments.reduce((s, p) => s + p.amount, 0));
         if (tendered > 0) receiptPayload.amountTendered = tendered;
         if (changeDue > 0) receiptPayload.changeDue = roundMoney2(changeDue);
-        if (tip > 0) receiptPayload.tipAmount = tip;
+        if (tip > 0) {
+          receiptPayload.tipAmount = tip;
+          receiptPayload.total = tendered > 0 ? tendered : roundMoney2(ctx.total + tip);
+        } else if (tendered > 0) {
+          receiptPayload.total = tendered;
+        }
         const gcRemaining = payments
           .filter((p) => p.method === 'gift_card' && p.giftCardRemainingBalance != null)
           .map((p) => roundMoney2(Number(p.giftCardRemainingBalance)))
@@ -7319,7 +7328,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           subtotal: receiptPayload.subtotal ?? ctx.total,
           discount: receiptPayload.discount ?? 0,
           tax: receiptPayload.taxAmount ?? 0,
-          total: ctx.total,
+          total: receiptPayload.total ?? ctx.total,
           receiptUrl: receiptPayload.receiptUrl,
         });
         setLastReceiptOrderId(orderId);
@@ -7525,28 +7534,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       payments.length ? payments.reduce((s, p) => s + p.amount, 0) : 0
     );
     const discExtras = checkoutBillDiscountExtras();
-    const extras: CheckoutResult = {
-      method: ((primary?.method === 'gift_card' ? 'card' : primary?.method) ||
-        'cash') as CheckoutResult['method'],
-      discountPercent: splitQueue.length > 0 ? 0 : discExtras.discountPercent,
-      discountAmount: splitQueue.length > 0 ? 0 : discExtras.discountAmount,
-      tipAmount: tip,
-      roundingAmount: totals.rounding,
-      total: partTotal,
-      amountTendered,
-      changeDue: changeDue > 0 ? changeDue : null,
-      tenders: payments.map((p) => ({
-        method: p.method,
-        amount: roundMoney2(p.amount),
-        ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
-          ? { giftCardNumber: p.giftCardNumber.trim() }
-          : {}),
-      })),
-      payLaterTender:
-        primary?.method === 'pay_later' ? primary.payLaterTender : undefined,
-      pointsRedeemed,
-      pointsDiscount,
-    };
+    const extras: CheckoutResult = normalizePosCheckoutExtras(
+      {
+        method: ((primary?.method === 'gift_card' ? 'card' : primary?.method) ||
+          'cash') as CheckoutResult['method'],
+        discountPercent: splitQueue.length > 0 ? 0 : discExtras.discountPercent,
+        discountAmount: splitQueue.length > 0 ? 0 : discExtras.discountAmount,
+        tipAmount: tip,
+        roundingAmount: totals.rounding,
+        total: partTotal,
+        amountTendered,
+        changeDue: changeDue > 0 ? changeDue : null,
+        tenders: payments.map((p) => ({
+          method: p.method,
+          amount: roundMoney2(p.amount),
+          ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
+            ? { giftCardNumber: p.giftCardNumber.trim() }
+            : {}),
+        })),
+        payLaterTender:
+          primary?.method === 'pay_later' ? primary.payLaterTender : undefined,
+        pointsRedeemed,
+        pointsDiscount,
+      },
+      (primary?.method === 'gift_card' ? 'card' : primary?.method) || 'cash'
+    );
     if (primary?.method === 'terminal') {
       if (payments.length > 1) {
         toast.error(t('webPosTerminalSinglePayment'));
@@ -8553,7 +8565,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clientId,
       orderNumber,
       paymentMethod: resolvedMethod,
-      paymentBreakdown: tenders.length ? tenders : undefined,
+      paymentBreakdown:
+        tenders.length > 0
+          ? tenders
+          : !payLater && saleTotal > 0.001
+            ? [
+                {
+                  method:
+                    method === 'gift_card'
+                      ? 'gift_card'
+                      : resolvedMethod === 'mixed'
+                        ? method
+                        : resolvedMethod,
+                  amount: saleTotal,
+                },
+              ]
+            : undefined,
       paymentStatus: payLater ? 'awaiting_payment' : 'completed',
       status: fulfillmentStatus,
       subtotal: saleTotals.subtotal,
@@ -8772,12 +8799,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             roundingAmount: saleTotals.rounding,
             total: payableFullTotals.total,
           };
+    const extrasForSale = extrasWithDisc
+      ? normalizePosCheckoutExtras(extrasWithDisc, method)
+      : extrasWithDisc;
     const sale = buildSalePayload(
       clientId,
       method,
       whenSnapshot,
       ticket.orderNumber,
-      extrasWithDisc,
+      extrasForSale,
       saleLines,
       saleTotals,
       splitMeta,
@@ -8926,17 +8956,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       channel: effectiveChannel,
       paymentMethod: method,
       payLaterTender: method === 'pay_later' ? extrasWithDisc?.payLaterTender || null : undefined,
-      paymentLines: extrasWithDisc?.tenders?.length
-        ? extrasWithDisc.tenders.map((p) => ({
+      paymentLines: extrasForSale?.tenders?.length
+        ? extrasForSale.tenders.map((p) => ({
             method: p.method,
             amount: roundMoney2(p.amount),
             ...(p.method === 'gift_card' && p.giftCardNumber?.trim()
               ? { giftCardNumber: p.giftCardNumber.trim() }
               : {}),
           }))
-        : undefined,
-      amountTendered: extrasWithDisc?.amountTendered ?? null,
-      changeDue: extrasWithDisc?.changeDue ?? null,
+        : method !== 'pay_later' && method !== 'invoice' && sale.total > 0.001
+          ? [{ method, amount: roundMoney2(sale.total) }]
+          : undefined,
+      amountTendered: extrasForSale?.amountTendered ?? null,
+      changeDue: extrasForSale?.changeDue ?? null,
       customerName: sale.customerName || undefined,
       memberName: attachedMembership
         ? attachedMembership.customerName?.trim() ||
@@ -9382,20 +9414,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const completeFromCheckout = async (result: CheckoutResult) => {
     const part = splitQueue[splitIndex];
-    const adjusted: CheckoutResult = part
-      ? {
-          ...result,
-          total: part.amount,
-          amountTendered:
-            result.method === 'cash'
-              ? result.amountTendered ?? part.amount
-              : result.amountTendered,
-          changeDue:
-            result.method === 'cash' && result.amountTendered != null
-              ? roundMoney2(result.amountTendered - part.amount)
-              : result.changeDue,
-        }
-      : result;
+    const tip = roundMoney2(result.tipAmount || 0);
+    const adjusted: CheckoutResult = normalizePosCheckoutExtras(
+      part
+        ? {
+            ...result,
+            total: roundMoney2(part.amount + tip + (result.roundingAmount || 0)),
+            amountTendered:
+              result.method === 'cash'
+                ? result.amountTendered ?? roundMoney2(part.amount + tip)
+                : result.amountTendered,
+            changeDue:
+              result.method === 'cash' && result.amountTendered != null
+                ? roundMoney2(result.amountTendered - (part.amount + tip))
+                : result.changeDue,
+          }
+        : result,
+      result.method
+    );
     if (!guardOfflineCheckout(adjusted.method)) return;
     setCheckoutExtras(adjusted);
     setCheckoutOpen(false);
@@ -9528,38 +9564,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           cashierReceipt: normalizeAdyenTerminalReceipt(result.cashierReceipt),
         };
         const terminalTip = roundMoney2(Math.max(0, Number(result.tipAmount) || 0));
-        const mergedExtras: CheckoutExtras | null = (() => {
-          if (terminalTip <= 0.001) return extras ?? null;
-          const baseTip = roundMoney2(extras?.tipAmount || 0);
-          const totalTip = roundMoney2(baseTip + terminalTip);
-          const baseTotal = roundMoney2(
-            extras?.total ??
-              terminalAmount
-          );
-          const paidTotal = roundMoney2(baseTotal + terminalTip);
-          if (extras) {
-            return {
-              ...extras,
-              tipAmount: totalTip,
-              total: paidTotal,
-              amountTendered: roundMoney2(extras.amountTendered ?? paidTotal),
-            };
-          }
-          return {
-            method: 'terminal',
-            discountPercent: 0,
-            discountAmount: 0,
-            tipAmount: totalTip,
-            roundingAmount: 0,
-            total: paidTotal,
-            amountTendered: paidTotal,
-            changeDue: null,
-          };
-        })();
+        const mergedExtras = applyTerminalTipToCheckoutExtras(extras, {
+          basePayable: terminalAmount,
+          capture: {
+            tipAmount: result.tipAmount,
+            authorizedAmount: result.authorizedAmount,
+          },
+        });
         closePaymentModal();
         if (collectOrderRef) {
           await finalizeCollectPayment(
-            [{ id: clientId, method: 'terminal', amount: mergedExtras?.total ?? terminalAmount }],
+            [
+              {
+                id: clientId,
+                method: 'terminal',
+                amount: mergedExtras?.total ?? terminalAmount,
+              },
+            ],
             0,
             mergedExtras?.tipAmount || extras?.tipAmount || 0
           );
