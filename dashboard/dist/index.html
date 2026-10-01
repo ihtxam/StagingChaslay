@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="reborn-build" content="7471968d" />
+    <meta name="reborn-build" content="8b0a726d" />
     <script>
       (function () {
         var stamp = document.querySelector('meta[name="reborn-build"]')?.getAttribute('content');
@@ -98,6 +98,8 @@
             );
           }
           document.documentElement.classList.add('webpos-lock');
+          var pm = document.querySelector('link[rel="manifest"]');
+          if (pm) pm.setAttribute('href', '/pos.webmanifest');
           if (/^\/kiosk(\/|$)/.test(p)) {
             document.documentElement.classList.add('kiosk-lock');
             var km = document.querySelector('link[rel="manifest"]');
@@ -128,7 +130,6 @@
           window.navigator.standalone === true;
         var KEYS = {
           pwa: 'reborn_pwa_installed',
-          bridge: 'reborn_bridge_installed',
           browser: 'reborn_pwa_browser_preferred',
           session: 'reborn_install_prompt_suppressed',
         };
@@ -142,7 +143,6 @@
           try {
             if (sessionStorage.getItem(KEYS.session) === '1') return true;
             if (localStorage.getItem(KEYS.pwa) === '1') return true;
-            if (localStorage.getItem(KEYS.bridge) === '1') return true;
             if (localStorage.getItem(KEYS.browser) === '1') return true;
           } catch (e) {}
           return false;
@@ -151,12 +151,6 @@
           if (standalone || isKiosk) return false;
           try {
             if (localStorage.getItem(KEYS.browser) === '1') return true;
-            if (
-              localStorage.getItem(KEYS.bridge) === '1' &&
-              localStorage.getItem(KEYS.pwa) !== '1'
-            ) {
-              return true;
-            }
           } catch (e) {}
           return false;
         }
@@ -197,8 +191,8 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Reborn</title>
-    <script type="module" crossorigin src="/assets/index-tKb3_sg5.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-QhgDcPGK.css">
+    <script type="module" crossorigin src="/assets/index-D4mrI_VV.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CFJxPKKG.css">
   </head>
   <body>
     <div id="root">
