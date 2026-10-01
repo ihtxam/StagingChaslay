@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { isMerchantPaymentSetupComplete } from '@/components/onboarding/merchant-payment-setup';
 
 export const MERCHANT_SETUP_STORAGE_KEY = 'reborn_merchant_setup_v1';
 
@@ -61,6 +63,7 @@ function writeManualDone(map: Partial<Record<SetupStepId, boolean>>) {
 
 export function useMerchantSetupProgress(): SetupSnapshot {
   const { t } = useI18n();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(readDismissed);
   const [manualDone, setManualDone] = useState(readManualDone);
@@ -80,14 +83,10 @@ export function useMerchantSetupProgress(): SetupSnapshot {
       const staff = staffRes?.data?.staff ?? [];
       const builders = buildersRes?.data?.data ?? [];
       const hasActiveBuilder = Array.isArray(builders) && builders.some((b: { is_active?: boolean }) => b.is_active);
-      const paymentReady =
-        !!(s.adyenMerchantAccount || s.stripeAccountId || s.paymentProvider) ||
-        s.acceptCardPayments === true ||
-        s.cashPaymentsEnabled === true;
       setDetected({
         business_info: Boolean(String(s.name || '').trim() && String(s.address || s.city || '').trim()),
         products: Array.isArray(products) ? products.length > 0 : Number(productsRes?.data?.total || 0) > 0,
-        payment_settings: paymentReady,
+        payment_settings: isMerchantPaymentSetupComplete(s),
         staff: Array.isArray(staff) ? staff.length > 0 : false,
         online_shop: Boolean(s.cmsHomepageEnabled || s.shopEnabled || hasActiveBuilder),
       });
@@ -100,7 +99,7 @@ export function useMerchantSetupProgress(): SetupSnapshot {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, location.pathname]);
 
   const steps = useMemo<SetupStep[]>(() => {
     const defs: Array<Omit<SetupStep, 'completed'>> = [
