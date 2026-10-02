@@ -298,14 +298,14 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   merchant_staff_phone_uidx:
     "CREATE UNIQUE INDEX IF NOT EXISTS merchant_staff_merchant_phone_idx ON merchant_staff (merchant_id, phone) WHERE phone IS NOT NULL",
   products_visibility:
-    "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb",
   products_similar_product_ids:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS similar_product_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
   products_brand: "ALTER TABLE products ADD COLUMN IF NOT EXISTS brand varchar(255)",
   products_extra_barcodes:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_barcodes jsonb NOT NULL DEFAULT '[]'::jsonb",
   categories_visibility:
-    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS delivery_pricing_enabled boolean NOT NULL DEFAULT false",
   categories_extra_delivery_price:
@@ -1726,10 +1726,10 @@ export async function backfillKioskCatalogVisibility(): Promise<void> {
   `;
   try {
     await execSql(
-      "ALTER TABLE products ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb"
+      "ALTER TABLE products ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb"
     );
     await execSql(
-      "ALTER TABLE categories ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb"
+      "ALTER TABLE categories ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb"
     );
     const products = await getDdlPool().query(appendKiosk);
     const categories = await getDdlPool().query(appendKioskCategories);
