@@ -50,7 +50,6 @@ import { APP_ORIGIN, resolveShopPublicHost } from "@/lib/brand";
 import { resolveMerchantProductFlags } from "@/lib/merchant-product-flags";
 import { isValidAdyenClientKey } from "@/lib/adyen-checkout-env";
 import { incomingTaxRateOrPreserve, shouldWriteCredential } from "@/lib/merchant-settings-preserve";
-import { normalizeTimeSlotPricingSettings } from "@/lib/time-slot-pricing";
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -310,9 +309,6 @@ export class MerchantSettingsService {
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
       posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
-      timeSlotPricingSettings: normalizeTimeSlotPricingSettings(
-        (merchant as { timeSlotPricingSettings?: unknown }).timeSlotPricingSettings
-      ),
       customerDisplaySettings: await (async () => {
         try {
           const { CdsService } = await import("@/services/cds.service");
@@ -433,7 +429,6 @@ export class MerchantSettingsService {
       posPrintSettings?: PosPrintSettings | null;
       tableQrSettings?: TableQrSettings | null;
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
-      timeSlotPricingSettings?: Record<string, unknown> | null;
       customerDisplaySettings?: CustomerDisplaySettings | Partial<CustomerDisplaySettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
       inventoryWasteFactor?: number;
@@ -780,9 +775,6 @@ export class MerchantSettingsService {
     }
     if (updates.tableQrSettings !== undefined) {
       patch.tableQrSettings = normalizeTableQrSettings(updates.tableQrSettings);
-    }
-    if (updates.timeSlotPricingSettings !== undefined) {
-      patch.timeSlotPricingSettings = normalizeTimeSlotPricingSettings(updates.timeSlotPricingSettings);
     }
     if (updates.posCheckoutSettings !== undefined) {
       const currentMerchant = await db.query.merchants.findFirst({

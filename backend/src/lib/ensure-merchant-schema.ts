@@ -321,6 +321,16 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
   hq_menus_category_ids:
     "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS category_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
+  hq_menus_schedule_type:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS schedule_type varchar(16) NOT NULL DEFAULT 'weekly'",
+  hq_menus_days_of_month:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS days_of_month jsonb NOT NULL DEFAULT '[]'::jsonb",
+  hq_menus_time_ranges:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS time_ranges jsonb NOT NULL DEFAULT '[]'::jsonb",
+  hq_menus_product_prices:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS product_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
+  hq_menus_is_default:
+    "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false",
   orders_order_source: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source varchar(50)",
   orders_fulfillment_channel:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_channel varchar(50) DEFAULT 'takeaway'",
@@ -1555,6 +1565,11 @@ export async function ensureLocationsSchema(): Promise<void> {
   await runPatch("orders_location_id");
   await runPatch("pos_sessions_location_id");
   await runPatch("hq_menus_category_ids");
+  await runPatch("hq_menus_schedule_type");
+  await runPatch("hq_menus_days_of_month");
+  await runPatch("hq_menus_time_ranges");
+  await runPatch("hq_menus_product_prices");
+  await runPatch("hq_menus_is_default");
   await runPatch("max_locations", "merchants");
   await runPatch("subscription_plans_max_locations");
   await ensurePosSessionsSchema();

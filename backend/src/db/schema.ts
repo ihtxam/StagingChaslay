@@ -721,6 +721,12 @@ export const hqMenus = pgTable(
     daysOfWeek: json("days_of_week").$type<number[]>().default([0, 1, 2, 3, 4, 5, 6]).notNull(),
     timeStart: varchar("time_start", { length: 5 }).default("00:00").notNull(),
     timeEnd: varchar("time_end", { length: 5 }).default("23:59").notNull(),
+    /** daily | weekly | monthly — weekly uses daysOfWeek, monthly uses daysOfMonth */
+    scheduleType: varchar("schedule_type", { length: 16 }).default("weekly").notNull(),
+    daysOfMonth: json("days_of_month").$type<number[]>().default([]).notNull(),
+    timeRanges: json("time_ranges").$type<Array<{ start: string; end: string }>>().default([]).notNull(),
+    productPrices: json("product_prices").$type<Record<string, number>>().default({}).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
     locationIds: json("location_ids").$type<string[]>().default([]).notNull(),
     hqVersionId: uuid("hq_version_id").references(() => hqCatalogVersions.id, {
       onDelete: "set null",

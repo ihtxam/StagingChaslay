@@ -37,11 +37,7 @@ import {
   filterCatalogForChannel,
   shopMenuCatalogChannel,
 } from "@/lib/catalog-visibility";
-import {
-  applyTimeSlotPricingToProducts,
-  normalizeTimeSlotPricingSettings,
-  resolveProductPrice,
-} from "@/lib/time-slot-pricing";
+import { normalizeProductPrices } from "@/lib/scheduled-menu";
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -1147,22 +1143,6 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     products
   );
   const filtered = filterCatalogForChannel(withOverrides, categories, catalogChannel);
-  const menuProductIds = await HqMenuService.resolveActiveProductIds(
-    merchant.id,
-    locationId,
-    catalogChannel
-  );
-  const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(
-    filtered.products,
-    menuProductIds
-  );
-  const categoryIdsWithProducts = new Set(
-    visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
-  );
-  const visibleCategories = filtered.categories.filter(
-    (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
-  );
-
   let menuTimezone = "Europe/Zurich";
   if (locationId) {
     const locRow = await db.query.locations.findFirst({
@@ -1171,9 +1151,28 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     });
     menuTimezone = locRow?.timezone || menuTimezone;
   }
-  const pricedProducts = applyTimeSlotPricingToProducts(merchant, visibleProducts, {
-    timezone: menuTimezone,
-  });
+  const activeMenu = await HqMenuService.resolveActiveMenu(
+    merchant.id,
+    locationId,
+    catalogChannel,
+    new Date(),
+    menuTimezone
+  );
+  const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(
+    filtered.products,
+    activeMenu.productIds
+  );
+  const categoryIdsWithProducts = new Set(
+    visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
+  );
+  const visibleCategories = filtered.categories.filter(
+    (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
+  );
+
+  const pricedProducts = HqMenuService.applyMenuPrices(
+    visibleProducts,
+    activeMenu.productPrices
+  );
 
   const groupsByProduct = await loadModifierGroupsByProduct(
     merchant.id,
@@ -2485,12 +2484,14 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     };
 
     let shopOrderTimezone = "Europe/Zurich";
+    let shopOrderLocationId = "";
     try {
       const resolvedLoc = await resolveShopLocationId(
         merchant.id,
         (req.body as { locationSlug?: string })?.locationSlug,
         typeof req.query.location === "string" ? req.query.location : null
       );
+      shopOrderLocationId = resolvedLoc.locationId;
       const locRow = await db.query.locations.findFirst({
         where: and(
           eq(schema.locations.merchantId, merchant.id),
@@ -2503,6 +2504,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       const { LocationsService } = await import("@/services/locations.service");
       try {
         const defaultId = await LocationsService.getDefaultId(merchant.id);
+        shopOrderLocationId = defaultId;
         const locRow = await db.query.locations.findFirst({
           where: eq(schema.locations.id, defaultId),
           columns: { timezone: true },
@@ -2512,6 +2514,26 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         /* keep Europe/Zurich */
       }
     }
+
+    const orderCatalogChannel = isKioskOrder
+      ? "kiosk"
+      : isQrTableOrder
+        ? "qr_table"
+        : channel === "delivery"
+          ? "delivery"
+          : "shop";
+    const orderMenuAt = isScheduled && scheduledFor ? new Date(scheduledFor as string) : new Date();
+    const { HqMenuService: HqMenuServiceOrder } = await import("@/services/hq-menu.service");
+    const activeOrderMenu = shopOrderLocationId
+      ? await HqMenuServiceOrder.resolveActiveMenu(
+          merchant.id,
+          shopOrderLocationId,
+          orderCatalogChannel,
+          orderMenuAt,
+          shopOrderTimezone
+        )
+      : { productPrices: {} as Record<string, number> };
+    const orderMenuPrices = normalizeProductPrices(activeOrderMenu.productPrices);
 
     let subtotal = 0;
     let taxAmount = 0;
@@ -2611,12 +2633,10 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         product.categoryId,
         categoryDeliveryMap
       );
-      const slotSettings = normalizeTimeSlotPricingSettings(
-        (merchant as { timeSlotPricingSettings?: unknown }).timeSlotPricingSettings
-      );
-      const catalogUnit = resolveProductPrice(product, slotSettings, {
-        timezone: shopOrderTimezone,
-      }).resolvedPrice;
+      const baseCatalogUnit = roundMoney2(Number(product.price) || 0);
+      const menuUnit = orderMenuPrices[product.id];
+      const catalogUnit =
+        menuUnit != null && Number.isFinite(menuUnit) ? menuUnit : baseCatalogUnit;
       const unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
       const totalPrice = roundMoney2(unitPrice * qty);
       const lineTax = product.isTaxable

@@ -77,6 +77,9 @@ import {
   canJwtReturnToPanel,
   backOfficeHomePath,
   deliveryDriverHomePath,
+  MERCHANT_HQ_MENUS_LEGACY_PATH,
+  MERCHANT_PIZZA_BUILDER_PATH,
+  MERCHANT_SCHEDULED_MENUS_PATH,
   MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH,
   MERCHANT_TIME_SLOT_PRICING_PATH,
   getEffectivePanelAccess,
@@ -139,9 +142,9 @@ import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-produ
 import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
-import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
-import TimeSlotPricingPage from './TimeSlotPricingPage';
+import ScheduledMenusPage from './ScheduledMenusPage';
+import PizzaBuilderPage from './PizzaBuilderPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -633,13 +636,6 @@ function MerchantShell() {
     [showHq, effective.permissions, effective.isOwner, businessModule]
   );
 
-  /** Time-based pricing is merchant-wide — not gated on multi-location / HQ license. */
-  const allowTimeSlotPricing = useCallback(
-    (path: string) =>
-      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [effective.permissions, effective.isOwner, businessModule]
-  );
-
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
     if (jwtOwnerBypass || isPosLikeRoute || isOrderCenterRoute) return;
@@ -856,11 +852,10 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        {
-          label: t('timeSlotPricingTitle'),
-          path: MERCHANT_TIME_SLOT_PRICING_PATH,
-          icon: '🌙',
-        },
+        { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
+        ...(isRestaurantModule(businessModule)
+          ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
+          : []),
       ].filter((item) => allow(item.path));
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
@@ -917,7 +912,6 @@ function MerchantShell() {
       children: showHq
         ? [
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
-            { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
           ].filter((item) => allowHq(item.path))
         : [],
@@ -1019,12 +1013,6 @@ function MerchantShell() {
                 if ('heading' in item && item.heading) return true;
                 const path = 'path' in item ? item.path : '';
                 if (!path) return false;
-                if (
-                  path === MERCHANT_TIME_SLOT_PRICING_PATH ||
-                  path === MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH
-                ) {
-                  return allowTimeSlotPricing(path);
-                }
                 return allow(path);
               }),
           },
@@ -1489,14 +1477,7 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
-            <Route
-              path="hq/menus"
-              element={
-                <PanelRouteGuard path="/merchant/hq/menus" allow={allowHq}>
-                  <HqMenusPage />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="hq/menus" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route
               path="hq/bulk-pricing"
               element={
@@ -1506,17 +1487,23 @@ function MerchantShell() {
               }
             />
             <Route
-              path="products/time-slot-pricing"
+              path="products/scheduled-menus"
               element={
-                <PanelRouteGuard path={MERCHANT_TIME_SLOT_PRICING_PATH} allow={allowTimeSlotPricing}>
-                  <TimeSlotPricingPage />
+                <PanelRouteGuard path={MERCHANT_SCHEDULED_MENUS_PATH} allow={allow}>
+                  <ScheduledMenusPage />
                 </PanelRouteGuard>
               }
             />
             <Route
-              path="hq/time-slot-pricing"
-              element={<Navigate to={MERCHANT_TIME_SLOT_PRICING_PATH} replace />}
+              path="products/pizza-builder"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderPage />
+                </PanelRouteGuard>
+              }
             />
+            <Route path="products/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
+            <Route path="hq/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route path="signage" element={<Navigate to="/merchant/settings?tab=signage" replace />} />
             <Route path="kiosk" element={<Navigate to={kioskHomePath()} replace />} />
             <Route

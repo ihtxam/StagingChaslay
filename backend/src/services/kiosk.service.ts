@@ -10,7 +10,6 @@ import {
 import { normalizeKioskSettings, type KioskSettings } from "@/lib/kiosk-settings";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
-import { applyTimeSlotPricingToProducts } from "@/lib/time-slot-pricing";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { GiftCardService } from "@/services/gift-card.service";
@@ -177,22 +176,6 @@ export class KioskService {
       products
     );
     const filtered = filterCatalogForKioskChannel(withOverrides, categories);
-    const menuProductIds = await HqMenuService.resolveActiveProductIds(
-      merchant.id,
-      locationId,
-      catalogChannel
-    );
-    const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(
-      filtered.products,
-      menuProductIds
-    );
-    const categoryIdsWithProducts = new Set(
-      visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
-    );
-    const visibleCategories = filtered.categories.filter(
-      (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
-    );
-
     let menuTimezone = "Europe/Zurich";
     if (locationId) {
       const locRow = await db.query.locations.findFirst({
@@ -201,9 +184,28 @@ export class KioskService {
       });
       menuTimezone = locRow?.timezone || menuTimezone;
     }
-    const pricedProducts = applyTimeSlotPricingToProducts(merchant, visibleProducts, {
-      timezone: menuTimezone,
-    });
+    const activeMenu = await HqMenuService.resolveActiveMenu(
+      merchant.id,
+      locationId,
+      catalogChannel,
+      new Date(),
+      menuTimezone
+    );
+    const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(
+      filtered.products,
+      activeMenu.productIds
+    );
+    const categoryIdsWithProducts = new Set(
+      visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
+    );
+    const visibleCategories = filtered.categories.filter(
+      (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
+    );
+
+    const pricedProducts = HqMenuService.applyMenuPrices(
+      visibleProducts,
+      activeMenu.productPrices
+    );
 
     const comboChildIds = new Set<string>();
     for (const p of pricedProducts) {

@@ -480,6 +480,8 @@ export class MerchantService {
 
       const { StaffService } = await import("./staff.service");
       await StaffService.ensureDefaultManagerStaff(created.id, _contactName || businessName);
+      const { HqMenuService } = await import("./hq-menu.service");
+      await HqMenuService.ensureDefaultMenu(created.id);
 
       const refreshed = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, created.id),

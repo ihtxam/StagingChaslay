@@ -7,10 +7,14 @@ import { isStandalonePwa } from './pwa';
 import { normalizeStaffLoginHome, type StaffLoginHome } from './staff-login-home';
 import { isPlatformNotificationsPath } from './platform-notifications';
 
-/** Merchant panel route for time-slot pricing settings (under Products → More options). */
+/** Scheduled menus (Products → More options). */
+export const MERCHANT_SCHEDULED_MENUS_PATH = '/merchant/products/scheduled-menus';
+/** Pizza builder templates (restaurant module). */
+export const MERCHANT_PIZZA_BUILDER_PATH = '/merchant/products/pizza-builder';
+/** Legacy URLs — redirect to scheduled menus. */
 export const MERCHANT_TIME_SLOT_PRICING_PATH = '/merchant/products/time-slot-pricing';
-/** Legacy HQ URL — kept for redirects and bookmarks. */
 export const MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH = '/merchant/hq/time-slot-pricing';
+export const MERCHANT_HQ_MENUS_LEGACY_PATH = '/merchant/hq/menus';
 
 export type Permission =
   | 'USE_POS'
@@ -149,8 +153,11 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/menus': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
-  [MERCHANT_TIME_SLOT_PRICING_PATH]: ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
-  [MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH]: ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
+  [MERCHANT_SCHEDULED_MENUS_PATH]: ['MANAGE_PRODUCTS'],
+  [MERCHANT_PIZZA_BUILDER_PATH]: ['MANAGE_PRODUCTS'],
+  [MERCHANT_TIME_SLOT_PRICING_PATH]: ['MANAGE_PRODUCTS'],
+  [MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH]: ['MANAGE_PRODUCTS'],
+  [MERCHANT_HQ_MENUS_LEGACY_PATH]: ['MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/notifications': [],

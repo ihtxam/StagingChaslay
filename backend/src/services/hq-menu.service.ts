@@ -1,41 +1,21 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { CatalogChannel } from "@/lib/catalog-visibility";
+import {
+  applyMenuProductPrices,
+  normalizeProductPrices,
+  normalizeTimeRanges,
+  pickActiveScheduledMenu,
+  type MenuScheduleType,
+} from "@/lib/scheduled-menu";
 
 export type HqMenuRow = typeof schema.hqMenus.$inferSelect;
 
-function parseHm(time: string): number {
-  const [h, m] = String(time || "00:00").split(":").map(Number);
-  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
-}
-
-function inTimeWindow(
-  now: Date,
-  daysOfWeek: number[],
-  timeStart: string,
-  timeEnd: string,
-  timezone = "Europe/Zurich"
-): boolean {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const weekday = parts.find((p) => p.type === "weekday")?.value || "";
-  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const dow = dayMap[weekday] ?? now.getDay();
-  if (!daysOfWeek.includes(dow)) return false;
-
-  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
-  const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
-  const cur = hour * 60 + minute;
-  const start = parseHm(timeStart);
-  const end = parseHm(timeEnd);
-  if (start <= end) return cur >= start && cur <= end;
-  return cur >= start || cur <= end;
-}
+export type ResolvedHqMenu = {
+  menu: HqMenuRow | null;
+  productIds: Set<string> | null;
+  productPrices: Record<string, number>;
+};
 
 function stringArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -95,99 +75,172 @@ async function resolveMenuProductIds(
   return null;
 }
 
+function menuWritePayload(input: Record<string, unknown>) {
+  const selection = readMenuSelection(input);
+  const scheduleType = String(input.scheduleType || input.schedule_type || "weekly").trim() as MenuScheduleType;
+  const timeRanges = normalizeTimeRanges(
+    input.timeRanges ?? input.time_ranges,
+    String(input.timeStart || input.time_start || "00:00"),
+    String(input.timeEnd || input.time_end || "23:59")
+  );
+  const firstRange = timeRanges[0];
+  return {
+    name: input.name != null ? String(input.name).trim() : undefined,
+    channels: input.channels,
+    daysOfWeek: input.daysOfWeek ?? input.days_of_week,
+    daysOfMonth: input.daysOfMonth ?? input.days_of_month,
+    scheduleType: ["daily", "weekly", "monthly"].includes(scheduleType) ? scheduleType : "weekly",
+    timeRanges,
+    timeStart: firstRange?.start || "00:00",
+    timeEnd: firstRange?.end || "23:59",
+    locationIds: input.locationIds ?? input.location_ids,
+    hqVersionId: input.hqVersionId ?? input.hq_version_id,
+    productIds: selection.productIds,
+    categoryIds: selection.categoryIds,
+    productPrices: normalizeProductPrices(input.productPrices ?? input.product_prices),
+    isDefault: input.isDefault === true || input.is_default === true,
+    isActive: input.isActive ?? input.is_active,
+    sortOrder: input.sortOrder ?? input.sort_order,
+  };
+}
+
 export class HqMenuService {
   static async list(merchantId: string) {
     const db = getDb();
+    await this.ensureDefaultMenu(merchantId);
     return db.query.hqMenus.findMany({
       where: eq(schema.hqMenus.merchantId, merchantId),
       orderBy: [asc(schema.hqMenus.sortOrder), asc(schema.hqMenus.name)],
     });
   }
 
-  static async create(
-    merchantId: string,
-    input: {
-      name: string;
-      channels?: string[];
-      daysOfWeek?: number[];
-      timeStart?: string;
-      timeEnd?: string;
-      locationIds?: string[];
-      hqVersionId?: string | null;
-      productIds?: string[];
-      categoryIds?: string[];
-      product_ids?: string[];
-      category_ids?: string[];
-      isActive?: boolean;
-      sortOrder?: number;
-    }
-  ) {
+  static async ensureDefaultMenu(merchantId: string) {
     const db = getDb();
-    const name = String(input.name || "").trim();
+    const existing = await db.query.hqMenus.findFirst({
+      where: and(eq(schema.hqMenus.merchantId, merchantId), eq(schema.hqMenus.isDefault, true)),
+    });
+    if (existing) return existing;
+
+    const [row] = await db
+      .insert(schema.hqMenus)
+      .values({
+        merchantId,
+        name: "Default menu",
+        isDefault: true,
+        scheduleType: "daily",
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        daysOfMonth: [],
+        timeRanges: [{ start: "00:00", end: "23:59" }],
+        timeStart: "00:00",
+        timeEnd: "23:59",
+        channels: ["pos", "shop", "qr_table", "delivery", "kiosk"],
+        locationIds: [],
+        productIds: [],
+        categoryIds: [],
+        productPrices: {},
+        isActive: true,
+        sortOrder: -1,
+      })
+      .returning();
+    return row;
+  }
+
+  static async create(merchantId: string, input: Record<string, unknown>) {
+    const db = getDb();
+    const parsed = menuWritePayload(input);
+    const name = parsed.name || "";
     if (!name) throw new Error("Menu name is required");
-    const selection = readMenuSelection(input);
+    if (parsed.isDefault) {
+      throw new Error("Cannot create another default menu — edit the existing default menu");
+    }
 
     const [row] = await db
       .insert(schema.hqMenus)
       .values({
         merchantId,
         name,
-        channels: input.channels?.length ? input.channels : ["pos", "shop", "qr_table", "delivery", "kiosk"],
-        daysOfWeek: input.daysOfWeek?.length ? input.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
-        timeStart: input.timeStart || "00:00",
-        timeEnd: input.timeEnd || "23:59",
-        locationIds: input.locationIds || [],
-        hqVersionId: input.hqVersionId || null,
-        productIds: selection.productIds,
-        categoryIds: selection.categoryIds,
-        isActive: input.isActive !== false,
-        sortOrder: Number(input.sortOrder) || 0,
+        channels: Array.isArray(parsed.channels) && parsed.channels.length
+          ? parsed.channels
+          : ["pos", "shop", "qr_table", "delivery", "kiosk"],
+        daysOfWeek: Array.isArray(parsed.daysOfWeek) && parsed.daysOfWeek.length
+          ? parsed.daysOfWeek
+          : [0, 1, 2, 3, 4, 5, 6],
+        daysOfMonth: Array.isArray(parsed.daysOfMonth) ? parsed.daysOfMonth : [],
+        scheduleType: parsed.scheduleType,
+        timeRanges: parsed.timeRanges,
+        timeStart: parsed.timeStart,
+        timeEnd: parsed.timeEnd,
+        locationIds: Array.isArray(parsed.locationIds) ? parsed.locationIds : [],
+        hqVersionId: (parsed.hqVersionId as string | null) || null,
+        productIds: parsed.productIds,
+        categoryIds: parsed.categoryIds,
+        productPrices: parsed.productPrices,
+        isDefault: false,
+        isActive: parsed.isActive !== false,
+        sortOrder: Number(parsed.sortOrder) || 0,
       })
       .returning();
     return row;
   }
 
-  static async update(
-    merchantId: string,
-    menuId: string,
-    input: Partial<{
-      name: string;
-      channels: string[];
-      daysOfWeek: number[];
-      timeStart: string;
-      timeEnd: string;
-      locationIds: string[];
-      hqVersionId: string | null;
-      productIds: string[];
-      categoryIds: string[];
-      product_ids?: string[];
-      category_ids?: string[];
-      isActive: boolean;
-      sortOrder: number;
-    }>
-  ) {
+  static async update(merchantId: string, menuId: string, input: Record<string, unknown>) {
     const db = getDb();
     const existing = await db.query.hqMenus.findFirst({
       where: and(eq(schema.hqMenus.id, menuId), eq(schema.hqMenus.merchantId, merchantId)),
     });
     if (!existing) throw new Error("HQ menu not found");
 
+    const parsed = menuWritePayload({ ...existing, ...input });
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    if (input.name !== undefined) patch.name = String(input.name).trim();
-    if (input.channels !== undefined) patch.channels = input.channels;
-    if (input.daysOfWeek !== undefined) patch.daysOfWeek = input.daysOfWeek;
-    if (input.timeStart !== undefined) patch.timeStart = input.timeStart;
-    if (input.timeEnd !== undefined) patch.timeEnd = input.timeEnd;
-    if (input.locationIds !== undefined) patch.locationIds = input.locationIds;
-    if (input.hqVersionId !== undefined) patch.hqVersionId = input.hqVersionId;
-    if (input.productIds !== undefined || input.product_ids !== undefined) {
-      patch.productIds = readMenuSelection(input).productIds;
+
+    if (input.name !== undefined) patch.name = parsed.name;
+    if (input.channels !== undefined) patch.channels = parsed.channels;
+    if (input.daysOfWeek !== undefined || input.days_of_week !== undefined) {
+      patch.daysOfWeek = parsed.daysOfWeek;
     }
-    if (input.categoryIds !== undefined || input.category_ids !== undefined) {
-      patch.categoryIds = readMenuSelection(input).categoryIds;
+    if (input.daysOfMonth !== undefined || input.days_of_month !== undefined) {
+      patch.daysOfMonth = parsed.daysOfMonth;
     }
-    if (input.isActive !== undefined) patch.isActive = input.isActive;
-    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
+    if (
+      input.scheduleType !== undefined ||
+      input.schedule_type !== undefined ||
+      input.timeRanges !== undefined ||
+      input.time_ranges !== undefined ||
+      input.timeStart !== undefined ||
+      input.timeEnd !== undefined
+    ) {
+      patch.scheduleType = parsed.scheduleType;
+      patch.timeRanges = parsed.timeRanges;
+      patch.timeStart = parsed.timeStart;
+      patch.timeEnd = parsed.timeEnd;
+    }
+    if (input.locationIds !== undefined || input.location_ids !== undefined) {
+      patch.locationIds = parsed.locationIds;
+    }
+    if (input.hqVersionId !== undefined || input.hq_version_id !== undefined) {
+      patch.hqVersionId = parsed.hqVersionId;
+    }
+    if (
+      input.productIds !== undefined ||
+      input.product_ids !== undefined ||
+      input.categoryIds !== undefined ||
+      input.category_ids !== undefined
+    ) {
+      patch.productIds = parsed.productIds;
+      patch.categoryIds = parsed.categoryIds;
+    }
+    if (input.productPrices !== undefined || input.product_prices !== undefined) {
+      patch.productPrices = parsed.productPrices;
+    }
+    if (input.isActive !== undefined || input.is_active !== undefined) {
+      patch.isActive = parsed.isActive;
+    }
+    if (input.sortOrder !== undefined || input.sort_order !== undefined) {
+      patch.sortOrder = parsed.sortOrder;
+    }
+    if (input.isDefault === true && !existing.isDefault) {
+      throw new Error("Cannot promote a menu to default — edit the default menu instead");
+    }
 
     const [row] = await db
       .update(schema.hqMenus)
@@ -199,41 +252,65 @@ export class HqMenuService {
 
   static async remove(merchantId: string, menuId: string) {
     const db = getDb();
+    const existing = await db.query.hqMenus.findFirst({
+      where: and(eq(schema.hqMenus.id, menuId), eq(schema.hqMenus.merchantId, merchantId)),
+    });
+    if (!existing) throw new Error("HQ menu not found");
+    if (existing.isDefault) throw new Error("The default menu cannot be deleted");
+
     await db
       .delete(schema.hqMenus)
       .where(and(eq(schema.hqMenus.id, menuId), eq(schema.hqMenus.merchantId, merchantId)));
     return { success: true };
   }
 
-  /**
-   * Resolve product IDs for the active HQ menu at a location/channel/time.
-   * Returns null when no menu applies (show full catalog).
-   */
-  static async resolveActiveProductIds(
+  static async resolveActiveMenu(
     merchantId: string,
     locationId: string,
     channel: CatalogChannel,
-    at: Date = new Date()
-  ): Promise<Set<string> | null> {
+    at: Date = new Date(),
+    timezone = "Europe/Zurich"
+  ): Promise<ResolvedHqMenu> {
     const db = getDb();
+    await this.ensureDefaultMenu(merchantId);
     const menus = await db.query.hqMenus.findMany({
       where: and(eq(schema.hqMenus.merchantId, merchantId), eq(schema.hqMenus.isActive, true)),
       orderBy: [asc(schema.hqMenus.sortOrder)],
     });
 
-    for (const menu of menus) {
-      const channels = Array.isArray(menu.channels) ? menu.channels : [];
-      if (channels.length && !channels.includes(channel)) continue;
-
-      const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
-      if (locIds.length && !locIds.includes(locationId)) continue;
-
-      const days = Array.isArray(menu.daysOfWeek) ? menu.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
-      if (!inTimeWindow(at, days, menu.timeStart, menu.timeEnd)) continue;
-
-      const resolved = await resolveMenuProductIds(merchantId, menu);
-      if (resolved) return resolved;
+    const picked = pickActiveScheduledMenu(menus, {
+      channel,
+      locationId,
+      at,
+      timezone,
+    });
+    if (!picked) {
+      return { menu: null, productIds: null, productPrices: {} };
     }
-    return null;
+
+    const productIds = await resolveMenuProductIds(merchantId, picked);
+    const productPrices = normalizeProductPrices(picked.productPrices);
+    return { menu: picked, productIds, productPrices };
+  }
+
+  /**
+   * Resolve product IDs for the active menu at a location/channel/time.
+   * Returns null when no menu applies or default menu shows full catalog.
+   */
+  static async resolveActiveProductIds(
+    merchantId: string,
+    locationId: string,
+    channel: CatalogChannel,
+    at: Date = new Date(),
+    timezone = "Europe/Zurich"
+  ): Promise<Set<string> | null> {
+    const resolved = await this.resolveActiveMenu(merchantId, locationId, channel, at, timezone);
+    return resolved.productIds;
+  }
+
+  static applyMenuPrices<
+    T extends { id: string; price: number | string; isOpenPrice?: boolean | null } & Record<string, unknown>,
+  >(products: T[], menuPrices: Record<string, number> | null | undefined): T[] {
+    return applyMenuProductPrices(products, menuPrices);
   }
 }

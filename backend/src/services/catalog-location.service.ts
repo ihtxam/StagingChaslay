@@ -5,7 +5,6 @@ import {
   isVisibleOnChannel,
   type CatalogChannel,
 } from "@/lib/catalog-visibility";
-import { applyTimeSlotPricingToProducts } from "@/lib/time-slot-pricing";
 
 type ProductRow = typeof schema.products.$inferSelect;
 type CategoryRow = typeof schema.categories.$inferSelect;
@@ -116,13 +115,24 @@ export class CatalogLocationService {
     const withOverrides = await this.applyLocationOverrides(merchantId, locId, productPool);
     const filtered = filterCatalogForChannel(withOverrides, categories, channel);
 
+    const location = await db.query.locations.findFirst({
+      where: and(eq(schema.locations.merchantId, merchantId), eq(schema.locations.id, locId)),
+      columns: { timezone: true },
+    });
+    const timezone = location?.timezone || "Europe/Zurich";
+
     const { HqMenuService } = await import("@/services/hq-menu.service");
-    const menuProductIds = await HqMenuService.resolveActiveProductIds(
+    const activeMenu = await HqMenuService.resolveActiveMenu(
       merchantId,
       locId,
-      channel
+      channel,
+      new Date(),
+      timezone
     );
-    const visibleProducts = this.filterByHqMenuProductIds(filtered.products, menuProductIds);
+    const visibleProducts = this.filterByHqMenuProductIds(
+      filtered.products,
+      activeMenu.productIds
+    );
 
     const categoryIdsWithProducts = new Set(
       visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
@@ -133,18 +143,10 @@ export class CatalogLocationService {
         !!(c as { isOffersCategory?: boolean }).isOffersCategory
     );
 
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { timeSlotPricingSettings: true },
-    });
-    const location = await db.query.locations.findFirst({
-      where: and(eq(schema.locations.merchantId, merchantId), eq(schema.locations.id, locId)),
-      columns: { timezone: true },
-    });
-    const timezone = location?.timezone || "Europe/Zurich";
-    const pricedProducts = applyTimeSlotPricingToProducts(merchant || {}, visibleProducts, {
-      timezone,
-    });
+    const pricedProducts = HqMenuService.applyMenuPrices(
+      visibleProducts,
+      activeMenu.productPrices
+    );
 
     return {
       categories: visibleCategories,
