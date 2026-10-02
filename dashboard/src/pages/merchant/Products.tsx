@@ -2126,40 +2126,6 @@ export default function Products() {
                 </div>
               )}
 
-              {timeSlotPricingEnabled && timeSlotDefs.length > 0 && !form.isOpenPrice && (
-                <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
-                  <div>
-                    <h3 className="text-sm font-semibold">{t('timeSlotPricingProductSection')}</h3>
-                    <p className="text-[11px] muted">{t('timeSlotPricingProductHint')}</p>
-                  </div>
-                  <div className="space-y-2">
-                    {timeSlotDefs.map((slot) => (
-                      <div
-                        key={slot.id}
-                        className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)] gap-2 items-center"
-                      >
-                        <span className="text-xs">
-                          {slot.label ||
-                            `${slot.start} – ${slot.end}`}
-                        </span>
-                        <input
-                          className="field-input money-input"
-                          type="text"
-                          inputMode="decimal"
-                          placeholder={t('timeSlotPricingPricePlaceholder')}
-                          value={timeSlotPrices[slot.id] || ''}
-                          onChange={(e) => {
-                            const normalized = normalizeMoneyInput(e.target.value);
-                            if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
-                            setTimeSlotPrices((prev) => ({ ...prev, [slot.id]: normalized }));
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {!form.isCombo && (
               <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
@@ -2310,6 +2276,39 @@ export default function Products() {
 
               {moreOpen && (
                 <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  {timeSlotPricingEnabled && timeSlotDefs.length > 0 && !form.isOpenPrice && (
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)] p-3 space-y-2.5">
+                      <div>
+                        <h3 className="text-sm font-semibold">{t('timeSlotPricingProductSection')}</h3>
+                        <p className="text-[11px] muted">{t('timeSlotPricingProductHint')}</p>
+                      </div>
+                      <div className="space-y-2">
+                        {timeSlotDefs.map((slot) => (
+                          <div
+                            key={slot.id}
+                            className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)] gap-2 items-center"
+                          >
+                            <span className="text-xs">
+                              {slot.label || `${slot.start} – ${slot.end}`}
+                            </span>
+                            <input
+                              className="field-input money-input"
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={t('timeSlotPricingPricePlaceholder')}
+                              value={timeSlotPrices[slot.id] || ''}
+                              onChange={(e) => {
+                                const normalized = normalizeMoneyInput(e.target.value);
+                                if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
+                                setTimeSlotPrices((prev) => ({ ...prev, [slot.id]: normalized }));
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Field label={t('productCode')}>
                       <input

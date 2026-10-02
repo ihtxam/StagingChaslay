@@ -853,15 +853,15 @@ function MerchantShell() {
       const catalogLinks = [
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
-        { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
+        { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
         {
           label: t('timeSlotPricingTitle'),
           path: MERCHANT_TIME_SLOT_PRICING_PATH,
           icon: '🌙',
         },
-      ].filter((item) => allowTimeSlotPricing(item.path));
+      ].filter((item) => allow(item.path));
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
             ...(allowInventory('/merchant/inventory')
