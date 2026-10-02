@@ -8,6 +8,20 @@ import {
 import { repairCatalogText } from "@/lib/text-encoding";
 import { eq, and, asc } from "drizzle-orm";
 import { ModifierService } from "@/services/modifier.service";
+import {
+  buildCatalogImportReadMeRows,
+  exportSlotPriceColumns,
+  parseProductTimeSlotPricesFromImportRow,
+  slotPriceColumnName,
+  workbookHasSlotPriceColumns,
+  getSlotPriceCell,
+} from "@/lib/catalog-import-time-slots";
+import {
+  normalizeProductTimeSlotPrices,
+  normalizeTimeSlotPricingSettings,
+  type ProductTimeSlotPrices,
+  type TimeSlotPricingSlot,
+} from "@/lib/time-slot-pricing";
 
 export interface ImportRowError {
   sheet: string;
@@ -53,7 +67,8 @@ export class CatalogImportService {
    * - Products: name, price, category (name), sku?, barcode?, stock?, cost?,
    *   taxable?, description?, productType?, isOpenPrice?, soldByWeight?, weightUnit?,
    *   bulkPricing? (10:2.5;20:2.0), specifications? (Small:8.9|Large:10.5*),
-   *   modifierGroups? (Milk|Toppings), extras? (Extra Cheese:1.5|Bacon:2), allowExtras?
+   *   modifierGroups? (Milk|Toppings), extras? (Extra Cheese:1.5|Bacon:2), allowExtras?,
+   *   price_slot_<slotId>? / price_<label>? — time-slot override prices (blank = base price)
    */
   static async importWorkbook(
     merchantId: string,
@@ -75,6 +90,15 @@ export class CatalogImportService {
     let modifierGroupsUpdated = 0;
 
     const db = getDb();
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { timeSlotPricingSettings: true },
+    });
+    const timeSlotSettings = normalizeTimeSlotPricingSettings(
+      merchantRow?.timeSlotPricingSettings
+    );
+    const configuredSlots = timeSlotSettings.slots;
+
     const categoryNameToId = new Map<string, string>();
     let nextColorIndex = 0;
 
@@ -169,6 +193,8 @@ export class CatalogImportService {
     const productRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(productsSheet, {
       defval: "",
     });
+    const importSlotPriceColumns =
+      configuredSlots.length > 0 && workbookHasSlotPriceColumns(productRows, configuredSlots);
 
     for (let i = 0; i < productRows.length; i++) {
       emit({
@@ -243,6 +269,18 @@ export class CatalogImportService {
         parsedExtras.length > 0 ||
         parseBool(row.allowExtras ?? row.AllowExtras);
 
+      let timeSlotPricesPatch: ProductTimeSlotPrices | undefined;
+      if (importSlotPriceColumns) {
+        const { prices: rowSlotPrices, errors: slotErrors } =
+          parseProductTimeSlotPricesFromImportRow(row, configuredSlots);
+        for (const msg of slotErrors) {
+          errors.push({ sheet: "Products", row: i + 2, message: msg });
+        }
+        if (slotErrors.length) continue;
+
+        timeSlotPricesPatch = rowSlotPrices;
+      }
+
       const values = {
         merchantId,
         name,
@@ -279,7 +317,26 @@ export class CatalogImportService {
 
         let productId: string;
         if (existing) {
-          await db.update(schema.products).set(values).where(eq(schema.products.id, existing.id));
+          const updatePayload: typeof values & { timeSlotPrices?: ProductTimeSlotPrices } = {
+            ...values,
+          };
+          if (importSlotPriceColumns && timeSlotPricesPatch !== undefined) {
+            const merged = { ...normalizeProductTimeSlotPrices(existing.timeSlotPrices) };
+            for (const slot of configuredSlots) {
+              const cell = getSlotPriceCell(row, slot);
+              if (!cell.present) continue;
+              if (timeSlotPricesPatch[slot.id]) {
+                merged[slot.id] = timeSlotPricesPatch[slot.id];
+              } else {
+                delete merged[slot.id];
+              }
+            }
+            updatePayload.timeSlotPrices = normalizeProductTimeSlotPrices(merged);
+          }
+          await db
+            .update(schema.products)
+            .set(updatePayload)
+            .where(eq(schema.products.id, existing.id));
           productId = existing.id;
           productsUpdated++;
         } else {
@@ -296,7 +353,16 @@ export class CatalogImportService {
             }
             throw error;
           }
-          const [created] = await db.insert(schema.products).values(values).returning({ id: schema.products.id });
+          const insertPayload: typeof values & { timeSlotPrices?: ProductTimeSlotPrices } = {
+            ...values,
+          };
+          if (importSlotPriceColumns && timeSlotPricesPatch !== undefined) {
+            insertPayload.timeSlotPrices = normalizeProductTimeSlotPrices(timeSlotPricesPatch);
+          }
+          const [created] = await db
+            .insert(schema.products)
+            .values(insertPayload)
+            .returning({ id: schema.products.id });
           productId = created.id;
           productsCreated++;
         }
@@ -424,7 +490,22 @@ export class CatalogImportService {
     return groupTitleToId;
   }
 
-  static buildTemplateBuffer(): Buffer {
+  static async buildTemplateBuffer(merchantId: string): Promise<Buffer> {
+    const db = getDb();
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { timeSlotPricingSettings: true },
+    });
+    const slotSettings = normalizeTimeSlotPricingSettings(merchantRow?.timeSlotPricingSettings);
+    const templateSlots: TimeSlotPricingSlot[] = slotSettings.slots.length
+      ? slotSettings.slots
+      : [
+          { id: "day", start: "06:00", end: "21:00", label: "Day" },
+          { id: "night", start: "21:00", end: "06:00", label: "Night" },
+        ];
+    const slotExampleCols = Object.fromEntries(
+      templateSlots.map((s, idx) => [slotPriceColumnName(s), idx === 0 ? 7.5 : ""])
+    );
     const categories = [
       { name: "Food", description: "Fresh food", color: "#F97316", sortOrder: 0 },
       { name: "Beverages", description: "Drinks", color: "#3B82F6", sortOrder: 1 },
@@ -466,6 +547,7 @@ export class CatalogImportService {
         extras: "",
         allowExtras: true,
         description: "Classic burger with size variations and topping add-ons",
+        ...slotExampleCols,
       },
       {
         name: "Latte",
@@ -530,6 +612,11 @@ export class CatalogImportService {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(categories), "Categories");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modifierGroups), "ModifierGroups");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), "Products");
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(buildCatalogImportReadMeRows(templateSlots)),
+      "ReadMe"
+    );
     return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   }
 
@@ -540,6 +627,12 @@ export class CatalogImportService {
       where: eq(schema.categories.merchantId, merchantId),
       orderBy: [asc(schema.categories.sortOrder), asc(schema.categories.name)],
     });
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { timeSlotPricingSettings: true },
+    });
+    const exportSlots = normalizeTimeSlotPricingSettings(merchantRow?.timeSlotPricingSettings).slots;
+
     const products = await db.query.products.findMany({
       where: eq(schema.products.merchantId, merchantId),
       with: { category: { columns: { name: true } } },
@@ -607,6 +700,9 @@ export class CatalogImportService {
         modifierGroups: modifierGroupsStr,
         extras: linkedGroups.length ? "" : extrasStr,
         allowExtras: !!p.allowExtras,
+        ...(exportSlots.length
+          ? exportSlotPriceColumns(p.timeSlotPrices, exportSlots)
+          : {}),
       };
     });
 
@@ -614,6 +710,13 @@ export class CatalogImportService {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), "Categories");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modifierRows), "ModifierGroups");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productRows), "Products");
+    if (exportSlots.length) {
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(buildCatalogImportReadMeRows(exportSlots)),
+        "ReadMe"
+      );
+    }
     return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   }
 }

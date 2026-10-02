@@ -1483,6 +1483,8 @@ const en: Dict = {
   importing: 'Importing…',
   importProgressTitle: 'Importing catalog',
   importProgressHint: 'Please keep this window open until the import finishes.',
+  catalogImportSlotPriceHint:
+    'Excel: optional columns price_slot_<slotId> or price_<label> (e.g. price_night). Blank = use the default catalog price for that window. See the ReadMe sheet in the template.',
   importProgressParsing: 'Reading Excel file…',
   importProgressCategories: 'Importing categories…',
   importProgressModifiers: 'Importing modifier groups…',
@@ -5831,6 +5833,8 @@ const fr: Dict = {
   importing: 'Import…',
   importProgressTitle: 'Import du catalogue',
   importProgressHint: 'Gardez cette fenêtre ouverte jusqu’à la fin de l’import.',
+  catalogImportSlotPriceHint:
+    'Excel : colonnes optionnelles price_slot_<id> ou price_<libellé> (ex. price_night). Vide = prix catalogue par défaut sur ce créneau. Voir la feuille ReadMe du modèle.',
   importProgressParsing: 'Lecture du fichier Excel…',
   importProgressCategories: 'Import des catégories…',
   importProgressModifiers: 'Import des groupes de modificateurs…',

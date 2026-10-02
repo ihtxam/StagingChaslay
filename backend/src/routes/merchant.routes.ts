@@ -181,9 +181,11 @@ router.use(restrictStaffMerchantWrites);
  * GET /api/merchant/products/import/template
  * Download Excel template for one-click import
  */
-router.get("/products/import/template", async (_req: Request, res: Response) => {
+router.get("/products/import/template", async (req: Request, res: Response) => {
   try {
-    const buffer = CatalogImportService.buildTemplateBuffer();
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const buffer = await CatalogImportService.buildTemplateBuffer(merchantId);
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
