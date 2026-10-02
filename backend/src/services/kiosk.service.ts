@@ -10,6 +10,7 @@ import {
 import { normalizeKioskSettings, type KioskSettings } from "@/lib/kiosk-settings";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
+import { applyTimeSlotPricingToProducts } from "@/lib/time-slot-pricing";
 import { AdyenTerminalPoiService } from "@/services/adyen-terminal-poi.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { GiftCardService } from "@/services/gift-card.service";
@@ -164,8 +165,20 @@ export class KioskService {
       (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
     );
 
+    let menuTimezone = "Europe/Zurich";
+    if (locationId) {
+      const locRow = await db.query.locations.findFirst({
+        where: and(eq(schema.locations.merchantId, merchant.id), eq(schema.locations.id, locationId)),
+        columns: { timezone: true },
+      });
+      menuTimezone = locRow?.timezone || menuTimezone;
+    }
+    const pricedProducts = applyTimeSlotPricingToProducts(merchant, visibleProducts, {
+      timezone: menuTimezone,
+    });
+
     const comboChildIds = new Set<string>();
-    for (const p of visibleProducts) {
+    for (const p of pricedProducts) {
       if (String((p as { productType?: string }).productType || "") !== "combo") continue;
       for (const slot of normalizeComboSlots((p as { comboItems?: unknown }).comboItems)) {
         for (const opt of slot.options) comboChildIds.add(opt.productId);
@@ -173,7 +186,7 @@ export class KioskService {
     }
     const { ModifierService } = await import("@/services/modifier.service");
     const groupsByProduct = await ModifierService.getGroupsForProducts(merchant.id, [
-      ...new Set([...visibleProducts.map((p) => p.id), ...comboChildIds]),
+      ...new Set([...pricedProducts.map((p) => p.id), ...comboChildIds]),
     ]);
 
     const serializeGroup = (g: {
@@ -209,8 +222,8 @@ export class KioskService {
         })),
     });
 
-    const catalogById = new Map(withOverrides.map((p) => [p.id, p]));
-    const serializeProduct = (p: (typeof visibleProducts)[number]) => {
+    const catalogById = new Map(pricedProducts.map((p) => [p.id, p]));
+    const serializeProduct = (p: (typeof pricedProducts)[number]) => {
       const extras = Array.isArray((p as { extras?: unknown[] }).extras)
         ? ((p as { extras: Array<{ id?: string; name?: string; price?: unknown }> }).extras)
         : [];
@@ -288,7 +301,7 @@ export class KioskService {
       name: cat.name,
       image: (cat as { imageUrl?: string | null }).imageUrl || undefined,
       color: (cat as { color?: string | null }).color || undefined,
-      items: visibleProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
+      items: pricedProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
     }));
 
     let bestsellerIds: string[] = [];

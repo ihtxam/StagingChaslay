@@ -96,6 +96,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_settings jsonb",
   pos_checkout_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
+  time_slot_pricing_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS time_slot_pricing_settings jsonb",
   pos_print_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
   table_qr_settings:
@@ -304,6 +306,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   products_brand: "ALTER TABLE products ADD COLUMN IF NOT EXISTS brand varchar(255)",
   products_extra_barcodes:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_barcodes jsonb NOT NULL DEFAULT '[]'::jsonb",
+  products_time_slot_prices:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
   categories_visibility:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:

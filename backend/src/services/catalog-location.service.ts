@@ -5,6 +5,7 @@ import {
   isVisibleOnChannel,
   type CatalogChannel,
 } from "@/lib/catalog-visibility";
+import { applyTimeSlotPricingToProducts } from "@/lib/time-slot-pricing";
 
 type ProductRow = typeof schema.products.$inferSelect;
 type CategoryRow = typeof schema.categories.$inferSelect;
@@ -132,9 +133,22 @@ export class CatalogLocationService {
         !!(c as { isOffersCategory?: boolean }).isOffersCategory
     );
 
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { timeSlotPricingSettings: true },
+    });
+    const location = await db.query.locations.findFirst({
+      where: and(eq(schema.locations.merchantId, merchantId), eq(schema.locations.id, locId)),
+      columns: { timezone: true },
+    });
+    const timezone = location?.timezone || "Europe/Zurich";
+    const pricedProducts = applyTimeSlotPricingToProducts(merchant || {}, visibleProducts, {
+      timezone,
+    });
+
     return {
       categories: visibleCategories,
-      products: visibleProducts,
+      products: pricedProducts,
       locationId: locId,
     };
   }

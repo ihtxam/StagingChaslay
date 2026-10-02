@@ -38,6 +38,11 @@ import {
   shopMenuCatalogChannel,
 } from "@/lib/catalog-visibility";
 import {
+  applyTimeSlotPricingToProducts,
+  normalizeTimeSlotPricingSettings,
+  resolveProductPrice,
+} from "@/lib/time-slot-pricing";
+import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from "@/lib/shop-delivery-pricing";
@@ -1159,13 +1164,25 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
   );
 
+  let menuTimezone = "Europe/Zurich";
+  if (locationId) {
+    const locRow = await db.query.locations.findFirst({
+      where: and(eq(schema.locations.merchantId, merchant.id), eq(schema.locations.id, locationId)),
+      columns: { timezone: true },
+    });
+    menuTimezone = locRow?.timezone || menuTimezone;
+  }
+  const pricedProducts = applyTimeSlotPricingToProducts(merchant, visibleProducts, {
+    timezone: menuTimezone,
+  });
+
   const groupsByProduct = await loadModifierGroupsByProduct(
     merchant.id,
-    visibleProducts.map((p) => p.id)
+    pricedProducts.map((p) => p.id)
   );
-  const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
+  const catalogById = new Map(pricedProducts.map((p) => [p.id, p]));
 
-  const toItem = (p: (typeof visibleProducts)[number]) =>
+  const toItem = (p: (typeof pricedProducts)[number]) =>
     withPublicShopImageUrls(
       req,
       mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct)
@@ -1178,10 +1195,10 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     isOffersCategory: !!(cat as { isOffersCategory?: boolean }).isOffersCategory,
     deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
     extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
-    items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
+    items: pricedProducts.filter((p) => p.categoryId === cat.id).map(toItem),
   }));
 
-  const uncategorized = visibleProducts.filter((p) => !p.categoryId);
+  const uncategorized = pricedProducts.filter((p) => !p.categoryId);
   if (uncategorized.length) {
     menu.push({
       id: "uncategorized",
@@ -2566,9 +2583,13 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         product.categoryId,
         categoryDeliveryMap
       );
-      const unitPrice = roundMoney2(
-        parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge
+      const slotSettings = normalizeTimeSlotPricingSettings(
+        (merchant as { timeSlotPricingSettings?: unknown }).timeSlotPricingSettings
       );
+      const catalogUnit = resolveProductPrice(product, slotSettings, {
+        timezone: "Europe/Zurich",
+      }).resolvedPrice;
+      const unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
       const totalPrice = roundMoney2(unitPrice * qty);
       const lineTax = product.isTaxable
         ? vatIncluded

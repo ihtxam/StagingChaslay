@@ -415,6 +415,11 @@ export const merchants = pgTable(
      */
     posCheckoutSettings: json("pos_checkout_settings").$type<Record<string, unknown> | null>(),
     /**
+     * Time-based product pricing windows:
+     * { enabled, slots: [{ id, start, end, label? }] }
+     */
+    timeSlotPricingSettings: json("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
+    /**
      * Just Eat / Uber Eats credentials + toggles:
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
@@ -1166,6 +1171,8 @@ export const products = pgTable(
     brand: varchar("brand", { length: 255 }),
     /** Additional EAN/UPC codes that scan to this product. */
     extraBarcodes: json("extra_barcodes").$type<string[]>().default([]),
+    /** Per-slot prices when merchant time-slot pricing is enabled: { [slotId]: { price?, multiplier? } } */
+    timeSlotPrices: json("time_slot_prices").$type<Record<string, { price?: number; multiplier?: number }>>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

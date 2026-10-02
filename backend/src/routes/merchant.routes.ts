@@ -20,6 +20,7 @@ import { DemoCatalogService } from "@/services/demo-catalog.service";
 import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
+import { normalizeProductTimeSlotPrices } from "@/lib/time-slot-pricing";
 import { geocodeQuery } from "@/lib/geocode";
 import { isAllowedImageMime, isAllowedFaviconMime, saveMerchantImage, saveMerchantFavicon } from "@/services/media-upload.service";
 import path from "path";
@@ -602,6 +603,7 @@ router.post("/products", async (req: Request, res: Response) => {
       similarProductIds,
       brand,
       extraBarcodes,
+      timeSlotPrices,
     } = req.body;
 
     if (!merchantId) {
@@ -711,7 +713,7 @@ router.post("/products", async (req: Request, res: Response) => {
       );
     }
 
-    if (visibility !== undefined || similarProductIds !== undefined) {
+    if (visibility !== undefined || similarProductIds !== undefined || timeSlotPrices !== undefined) {
       const patch: Partial<typeof schema.products.$inferInsert> = {};
       if (visibility !== undefined) {
         patch.visibility = normalizeCatalogVisibility(visibility);
@@ -723,6 +725,9 @@ router.post("/products", async (req: Request, res: Response) => {
               .map((id: string) => String(id).trim())
               .slice(0, 12)
           : [];
+      }
+      if (timeSlotPrices !== undefined) {
+        patch.timeSlotPrices = normalizeProductTimeSlotPrices(timeSlotPrices);
       }
       await ProductService.updateProduct(merchantId, product.id, patch);
     }
@@ -840,6 +845,10 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
         .map((s: unknown) => String(s || "").trim())
         .filter(Boolean)
         .slice(0, 20);
+    }
+
+    if (updates.timeSlotPrices !== undefined) {
+      updates.timeSlotPrices = normalizeProductTimeSlotPrices(updates.timeSlotPrices);
     }
 
     const product = await ProductService.updateProduct(merchantId, productId, updates);
