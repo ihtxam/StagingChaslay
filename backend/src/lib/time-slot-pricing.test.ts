@@ -6,7 +6,7 @@ import {
   normalizeTimeSlotPricingSettings,
   resolveProductPrice,
   slotsOverlap,
-} from "@/lib/time-slot-pricing";
+} from "./time-slot-pricing";
 
 describe("time-slot-pricing", () => {
   it("handles midnight wrap window", () => {
