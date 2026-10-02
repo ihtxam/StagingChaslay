@@ -1,6 +1,10 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { CatalogChannel } from "@/lib/catalog-visibility";
+import {
+  menuIncludesCatalogChannel,
+  normalizeMenuCatalogChannels,
+} from "@/lib/catalog-visibility";
 
 export type HqMenuRow = typeof schema.hqMenus.$inferSelect;
 
@@ -132,7 +136,9 @@ export class HqMenuService {
       .values({
         merchantId,
         name,
-        channels: input.channels?.length ? input.channels : ["pos", "shop", "qr_table", "delivery", "kiosk"],
+        channels: normalizeMenuCatalogChannels(
+          input.channels?.length ? input.channels : ["pos", "shop", "qr_table", "kiosk"]
+        ),
         daysOfWeek: input.daysOfWeek?.length ? input.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
         timeStart: input.timeStart || "00:00",
         timeEnd: input.timeEnd || "23:59",
@@ -174,7 +180,9 @@ export class HqMenuService {
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) patch.name = String(input.name).trim();
-    if (input.channels !== undefined) patch.channels = input.channels;
+    if (input.channels !== undefined) {
+      patch.channels = normalizeMenuCatalogChannels(input.channels);
+    }
     if (input.daysOfWeek !== undefined) patch.daysOfWeek = input.daysOfWeek;
     if (input.timeStart !== undefined) patch.timeStart = input.timeStart;
     if (input.timeEnd !== undefined) patch.timeEnd = input.timeEnd;
@@ -222,8 +230,7 @@ export class HqMenuService {
     });
 
     for (const menu of menus) {
-      const channels = Array.isArray(menu.channels) ? menu.channels : [];
-      if (channels.length && !channels.includes(channel)) continue;
+      if (!menuIncludesCatalogChannel(menu.channels, channel)) continue;
 
       const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
       if (locIds.length && !locIds.includes(locationId)) continue;

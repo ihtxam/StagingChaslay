@@ -3,6 +3,10 @@ import toast from 'react-hot-toast';
 import { Clock, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import {
+  CATALOG_VISIBILITY_UI_CHANNELS,
+  normalizeMenuCatalogChannels,
+} from '@/lib/catalog-visibility';
 import { useLocationStore } from '@/store/location';
 import SearchableMultiSelect from '@/components/SearchableMultiSelect';
 
@@ -30,7 +34,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const emptyForm = (): Omit<HqMenu, 'id'> => ({
   name: '',
-  channels: ['shop', 'qr_table', 'pos', 'delivery', 'kiosk'],
+  channels: ['shop', 'qr_table', 'pos', 'kiosk'],
   daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
   timeStart: '06:00',
   timeEnd: '11:00',
@@ -46,7 +50,7 @@ function normalizeMenu(row: Record<string, unknown>): HqMenu {
   return {
     id: String(row.id),
     name: String(row.name || ''),
-    channels: Array.isArray(row.channels) ? (row.channels as string[]) : ['shop'],
+    channels: normalizeMenuCatalogChannels(row.channels),
     daysOfWeek: Array.isArray(row.daysOfWeek)
       ? (row.daysOfWeek as number[])
       : Array.isArray(row.days_of_week)
@@ -139,7 +143,7 @@ export default function HqMenusPage() {
     setEditingId(menu.id);
     setForm({
       name: menu.name,
-      channels: menu.channels || ['shop'],
+      channels: normalizeMenuCatalogChannels(menu.channels || ['shop']),
       daysOfWeek: menu.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
       timeStart: menu.timeStart || '00:00',
       timeEnd: menu.timeEnd || '23:59',
@@ -154,7 +158,7 @@ export default function HqMenusPage() {
 
   const buildPayload = () => ({
     name: form.name.trim(),
-    channels: form.channels,
+    channels: normalizeMenuCatalogChannels(form.channels),
     daysOfWeek: form.daysOfWeek,
     timeStart: form.timeStart,
     timeEnd: form.timeEnd,
@@ -288,7 +292,7 @@ export default function HqMenusPage() {
         <fieldset>
           <legend className="text-sm font-medium">{t('hqMenuChannels')}</legend>
           <div className="flex flex-wrap gap-3 mt-1 text-sm">
-            {(['pos', 'shop', 'qr_table', 'delivery'] as const).map((ch) => (
+            {CATALOG_VISIBILITY_UI_CHANNELS.map((ch) => (
               <label key={ch} className="inline-flex items-center gap-1.5">
                 <input
                   type="checkbox"
@@ -299,6 +303,7 @@ export default function HqMenusPage() {
               </label>
             ))}
           </div>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{t('catalogVisibilityShopFulfillmentHint')}</p>
         </fieldset>
         {locations.length > 1 ? (
           <fieldset>

@@ -5,13 +5,25 @@ export type CatalogVisibility = {
   channels: CatalogChannel[];
 };
 
+/** All channels stored in DB (legacy rows may still list delivery). */
 export const ALL_CATALOG_CHANNELS: CatalogChannel[] = ["pos", "shop", "qr_table", "delivery", "kiosk"];
+
+/** Channels shown in merchant UI — delivery is controlled via shop pickup/delivery settings. */
+export const CATALOG_VISIBILITY_UI_CHANNELS: CatalogChannel[] = ["pos", "shop", "qr_table", "kiosk"];
 
 const CHANNEL_SET = new Set<string>(ALL_CATALOG_CHANNELS);
 
 export const DEFAULT_CATALOG_VISIBILITY: CatalogVisibility = {
-  channels: [...ALL_CATALOG_CHANNELS],
+  channels: [...CATALOG_VISIBILITY_UI_CHANNELS],
 };
+
+function collapseDeliveryIntoShop(channels: CatalogChannel[]): CatalogChannel[] {
+  const set = new Set<CatalogChannel>(channels);
+  if (set.delete("delivery")) {
+    set.add("shop");
+  }
+  return [...set];
+}
 
 export function normalizeCatalogVisibility(raw: unknown): CatalogVisibility {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_CATALOG_VISIBILITY };
@@ -22,16 +34,38 @@ export function normalizeCatalogVisibility(raw: unknown): CatalogVisibility {
     .map((c) => String(c).trim().toLowerCase())
     .filter((c): c is CatalogChannel => CHANNEL_SET.has(c));
   if (!channels.length) return { ...DEFAULT_CATALOG_VISIBILITY };
-  return { channels: [...new Set(channels)] };
+  return { channels: collapseDeliveryIntoShop([...new Set(channels)]) };
+}
+
+/** Normalize schedule-menu / HQ menu channel list (delivery → shop). */
+export function normalizeMenuCatalogChannels(channels: unknown): string[] {
+  if (!Array.isArray(channels)) return [];
+  const out = new Set<string>();
+  for (const c of channels) {
+    const k = String(c || "").trim().toLowerCase();
+    if (k === "delivery") {
+      out.add("shop");
+      continue;
+    }
+    if (CHANNEL_SET.has(k)) out.add(k);
+  }
+  return [...out];
+}
+
+export function menuIncludesCatalogChannel(menuChannels: unknown, channel: CatalogChannel): boolean {
+  const normalized = normalizeMenuCatalogChannels(menuChannels);
+  if (!normalized.length) return true;
+  return normalized.includes(channel);
 }
 
 export function isVisibleOnChannel(
   visibility: unknown,
   channel: CatalogChannel
 ): boolean {
+  const effective: CatalogChannel = channel === "delivery" ? "shop" : channel;
   const normalized = normalizeCatalogVisibility(visibility);
   if (!normalized.channels.length) return false;
-  return normalized.channels.includes(channel);
+  return normalized.channels.includes(effective);
 }
 
 export function productVisibleOnChannel(
@@ -123,8 +157,8 @@ export function shopMenuCatalogChannel(
 ): CatalogChannel {
   if (tableId) return "qr_table";
   const c = String(channelParam || "").toLowerCase();
-  if (c === "delivery") return "delivery";
   if (c === "kiosk") return "kiosk";
   if (c === "dine_in") return "qr_table";
+  // takeaway, delivery, and default shop checkout → same catalog visibility as online shop
   return "shop";
 }

@@ -763,9 +763,12 @@ const en: Dict = {
   tableQrPayAtTable: 'Pay at table (customer phone)',
   tableQrPayAtTableHint: 'Let guests pay from their phone when this is enabled (coming soon on the table menu).',
   catalogVisibilityTitle: 'Channel visibility',
-  catalogVisibilityHint: 'Choose where this item appears. Hidden channels will not show the product or category.',
+  catalogVisibilityHint:
+    'Choose where this item appears in the catalog. Online shop covers both pickup and delivery — turn those off under Settings → Online shop. POS takeaway/delivery tabs follow the same shop toggles.',
+  catalogVisibilityShopFulfillmentHint:
+    'Pickup and delivery share the online shop catalog. Disable takeaway or delivery under Settings → Online shop (not here).',
   catalogChannel_pos: 'POS',
-  catalogChannel_shop: 'Online shop',
+  catalogChannel_shop: 'Online shop (pickup & delivery)',
   catalogChannel_qr_table: 'QR table ordering',
   catalogChannel_delivery: 'Delivery',
   catalogChannel_kiosk: 'Self-order kiosk',
@@ -5198,9 +5201,12 @@ const fr: Dict = {
   tableQrPayAtTable: 'Payer à table (téléphone client)',
   tableQrPayAtTableHint: 'Permettre aux clients de payer depuis leur téléphone (bientôt sur le menu table).',
   catalogVisibilityTitle: 'Visibilité par canal',
-  catalogVisibilityHint: 'Choisissez où cet élément apparaît. Les canaux masqués n’affichent pas le produit ou la catégorie.',
+  catalogVisibilityHint:
+    'Choisissez où cet élément apparaît. La boutique en ligne couvre retrait et livraison — désactivez-les dans Paramètres → Boutique en ligne.',
+  catalogVisibilityShopFulfillmentHint:
+    'Retrait et livraison partagent le catalogue boutique. Désactivez-les dans Paramètres → Boutique en ligne.',
   catalogChannel_pos: 'POS',
-  catalogChannel_shop: 'Boutique en ligne',
+  catalogChannel_shop: 'Boutique en ligne (retrait & livraison)',
   catalogChannel_qr_table: 'Commande QR à table',
   catalogChannel_delivery: 'Livraison',
   catalogChannel_kiosk: 'Borne de commande',
@@ -9479,9 +9485,12 @@ const de: Dict = {
   tableQrPayAtTable: 'Am Tisch bezahlen (Kundenhandy)',
   tableQrPayAtTableHint: 'Gästen erlauben, per Handy zu bezahlen (demnächst im Tischmenü).',
   catalogVisibilityTitle: 'Kanalsichtbarkeit',
-  catalogVisibilityHint: 'Wählen Sie, wo dieser Eintrag erscheint. Ausgeblendete Kanäle zeigen Produkt oder Kategorie nicht.',
+  catalogVisibilityHint:
+    'Wählen Sie, wo dieser Eintrag erscheint. Onlineshop umfasst Abholung und Lieferung — unter Einstellungen → Onlineshop deaktivieren.',
+  catalogVisibilityShopFulfillmentHint:
+    'Abholung und Lieferung teilen denselben Onlineshop-Katalog. Unter Einstellungen → Onlineshop deaktivieren.',
   catalogChannel_pos: 'POS',
-  catalogChannel_shop: 'Onlineshop',
+  catalogChannel_shop: 'Onlineshop (Abholung & Lieferung)',
   catalogChannel_qr_table: 'QR-Tischbestellung',
   catalogChannel_delivery: 'Lieferung',
   catalogChannel_kiosk: 'Selbstbestell-Kiosk',
