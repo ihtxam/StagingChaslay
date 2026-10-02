@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { CatalogChannel } from "@/lib/catalog-visibility";
+import { normalizeMenuCatalogChannels } from "@/lib/catalog-visibility";
 import {
   applyMenuProductPrices,
   normalizeProductPrices,
@@ -16,6 +17,8 @@ export type ResolvedHqMenu = {
   productIds: Set<string> | null;
   productPrices: Record<string, number>;
 };
+
+const DEFAULT_MENU_CHANNELS = ["pos", "shop", "qr_table", "kiosk"];
 
 function stringArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -84,9 +87,13 @@ function menuWritePayload(input: Record<string, unknown>) {
     String(input.timeEnd || input.time_end || "23:59")
   );
   const firstRange = timeRanges[0];
+  const channelsRaw = input.channels;
+  const channels = normalizeMenuCatalogChannels(
+    Array.isArray(channelsRaw) && channelsRaw.length ? channelsRaw : DEFAULT_MENU_CHANNELS
+  );
   return {
     name: input.name != null ? String(input.name).trim() : undefined,
-    channels: input.channels,
+    channels,
     daysOfWeek: input.daysOfWeek ?? input.days_of_week,
     daysOfMonth: input.daysOfMonth ?? input.days_of_month,
     scheduleType: ["daily", "weekly", "monthly"].includes(scheduleType) ? scheduleType : "weekly",
@@ -133,7 +140,7 @@ export class HqMenuService {
         timeRanges: [{ start: "00:00", end: "23:59" }],
         timeStart: "00:00",
         timeEnd: "23:59",
-        channels: ["pos", "shop", "qr_table", "delivery", "kiosk"],
+        channels: [...DEFAULT_MENU_CHANNELS],
         locationIds: [],
         productIds: [],
         categoryIds: [],
@@ -159,9 +166,7 @@ export class HqMenuService {
       .values({
         merchantId,
         name,
-        channels: Array.isArray(parsed.channels) && parsed.channels.length
-          ? parsed.channels
-          : ["pos", "shop", "qr_table", "delivery", "kiosk"],
+        channels: parsed.channels,
         daysOfWeek: Array.isArray(parsed.daysOfWeek) && parsed.daysOfWeek.length
           ? parsed.daysOfWeek
           : [0, 1, 2, 3, 4, 5, 6],
@@ -293,10 +298,6 @@ export class HqMenuService {
     return { menu: picked, productIds, productPrices };
   }
 
-  /**
-   * Resolve product IDs for the active menu at a location/channel/time.
-   * Returns null when no menu applies or default menu shows full catalog.
-   */
   static async resolveActiveProductIds(
     merchantId: string,
     locationId: string,

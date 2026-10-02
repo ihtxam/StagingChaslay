@@ -1,4 +1,5 @@
 import { roundMoney2 } from "@/lib/money";
+import { menuIncludesCatalogChannel, type CatalogChannel } from "@/lib/catalog-visibility";
 
 export type MenuScheduleType = "daily" | "weekly" | "monthly";
 
@@ -142,7 +143,7 @@ export function isMenuScheduleActive(
 export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
   menus: T[],
   opts: {
-    channel: string;
+    channel: CatalogChannel | string;
     locationId: string;
     at?: Date;
     timezone?: string;
@@ -156,8 +157,7 @@ export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
 
   const nonDefault = active.filter((m) => !m.isDefault);
   for (const menu of nonDefault) {
-    const channels = Array.isArray(menu.channels) ? menu.channels : [];
-    if (channels.length && !channels.includes(opts.channel)) continue;
+    if (!menuIncludesCatalogChannel(menu.channels, opts.channel as CatalogChannel)) continue;
     const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
     if (locIds.length && !locIds.includes(opts.locationId)) continue;
     if (isMenuScheduleActive(menu, at, timezone)) return menu;
@@ -165,8 +165,7 @@ export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
 
   const defaultMenu = active.find((m) => m.isDefault);
   if (defaultMenu) {
-    const channels = Array.isArray(defaultMenu.channels) ? defaultMenu.channels : [];
-    if (channels.length && !channels.includes(opts.channel)) return null;
+    if (!menuIncludesCatalogChannel(defaultMenu.channels, opts.channel as CatalogChannel)) return null;
     const locIds = Array.isArray(defaultMenu.locationIds) ? defaultMenu.locationIds : [];
     if (locIds.length && !locIds.includes(opts.locationId)) return null;
     return defaultMenu;

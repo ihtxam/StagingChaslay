@@ -48,6 +48,7 @@ import {
 import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
 import {
   ALL_CATALOG_CHANNELS,
+  CATALOG_VISIBILITY_UI_CHANNELS,
   CATALOG_CHANNEL_LABELS,
   DEFAULT_CATALOG_VISIBILITY,
   normalizeCatalogVisibility,
@@ -1411,7 +1412,7 @@ export default function Products() {
           aria-label={t('catalogFilterChannel')}
         >
           <option value="">{t('all')}</option>
-          {ALL_CATALOG_CHANNELS.map((ch) => (
+          {CATALOG_VISIBILITY_UI_CHANNELS.map((ch) => (
             <option key={ch} value={ch}>
               {CATALOG_CHANNEL_LABELS[ch]}
             </option>

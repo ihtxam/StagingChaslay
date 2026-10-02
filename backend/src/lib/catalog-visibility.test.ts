@@ -15,4 +15,13 @@ assert.equal(
   false
 );
 
+assert.equal(
+  productVisibleOnChannel(
+    { visibility: { channels: ["shop"] }, isActive: true },
+    shopOnlyCategory,
+    "delivery"
+  ),
+  true
+);
+
 console.log("catalog-visibility.test.ts ok");

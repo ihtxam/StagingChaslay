@@ -5,6 +5,10 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useLocationStore } from '@/store/location';
 import SearchableMultiSelect from '@/components/SearchableMultiSelect';
+import {
+  CATALOG_VISIBILITY_UI_CHANNELS,
+  normalizeMenuCatalogChannels,
+} from '@/lib/catalog-visibility';
 
 type MenuScheduleType = 'daily' | 'weekly' | 'monthly';
 
@@ -38,7 +42,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const emptyForm = (): Omit<ScheduledMenu, 'id'> => ({
   name: '',
-  channels: ['shop', 'qr_table', 'pos', 'delivery', 'kiosk'],
+  channels: ['shop', 'qr_table', 'pos', 'kiosk'],
   scheduleType: 'weekly',
   daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
   daysOfMonth: [],
@@ -63,7 +67,7 @@ function normalizeMenu(row: Record<string, unknown>): ScheduledMenu {
   return {
     id: String(row.id),
     name: String(row.name || ''),
-    channels: Array.isArray(row.channels) ? (row.channels as string[]) : ['shop'],
+    channels: normalizeMenuCatalogChannels(row.channels),
     scheduleType: (String(row.scheduleType || row.schedule_type || 'weekly') as MenuScheduleType) || 'weekly',
     daysOfWeek: Array.isArray(row.daysOfWeek)
       ? (row.daysOfWeek as number[])
@@ -191,7 +195,7 @@ export default function ScheduledMenusPage() {
     setEditingId(menu.id);
     setForm({
       name: menu.name,
-      channels: menu.channels || ['shop'],
+      channels: normalizeMenuCatalogChannels(menu.channels || ['shop']),
       scheduleType: menu.scheduleType || 'weekly',
       daysOfWeek: menu.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
       daysOfMonth: menu.daysOfMonth || [],
@@ -211,7 +215,7 @@ export default function ScheduledMenusPage() {
 
   const buildPayload = () => ({
     name: form.name.trim(),
-    channels: form.channels,
+    channels: normalizeMenuCatalogChannels(form.channels),
     scheduleType: form.scheduleType,
     daysOfWeek: form.daysOfWeek,
     daysOfMonth: form.daysOfMonth,
@@ -468,7 +472,7 @@ export default function ScheduledMenusPage() {
         <fieldset>
           <legend className="text-sm font-medium">{t('scheduledMenuChannels')}</legend>
           <div className="flex flex-wrap gap-3 mt-1 text-sm">
-            {(['pos', 'shop', 'qr_table', 'delivery', 'kiosk'] as const).map((ch) => (
+            {CATALOG_VISIBILITY_UI_CHANNELS.map((ch) => (
               <label key={ch} className="inline-flex items-center gap-1.5">
                 <input
                   type="checkbox"
@@ -479,6 +483,7 @@ export default function ScheduledMenusPage() {
               </label>
             ))}
           </div>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{t('catalogVisibilityShopFulfillmentHint')}</p>
         </fieldset>
 
         {locations.length > 1 ? (

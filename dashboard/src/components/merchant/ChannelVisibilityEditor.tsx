@@ -1,6 +1,6 @@
 import { useI18n } from '@/lib/i18n';
 import {
-  ALL_CATALOG_CHANNELS,
+  CATALOG_VISIBILITY_UI_CHANNELS,
   type CatalogChannel,
   type CatalogVisibility,
   normalizeCatalogVisibility,
@@ -21,7 +21,7 @@ export default function ChannelVisibilityEditor({ value, onChange, className = '
     const next = has
       ? normalized.channels.filter((c) => c !== channel)
       : [...normalized.channels, channel];
-    onChange({ channels: next });
+    onChange(normalizeCatalogVisibility({ channels: next }));
   };
 
   return (
@@ -30,7 +30,7 @@ export default function ChannelVisibilityEditor({ value, onChange, className = '
         {t('catalogVisibilityTitle')}
       </p>
       <div className="flex flex-wrap gap-2">
-        {ALL_CATALOG_CHANNELS.map((channel) => {
+        {CATALOG_VISIBILITY_UI_CHANNELS.map((channel) => {
           const active = normalized.channels.includes(channel);
           return (
             <button
@@ -49,6 +49,7 @@ export default function ChannelVisibilityEditor({ value, onChange, className = '
         })}
       </div>
       <p className="mt-1.5 text-[11px] muted">{t('catalogVisibilityHint')}</p>
+      <p className="mt-1 text-[11px] muted">{t('catalogVisibilityShopFulfillmentHint')}</p>
     </div>
   );
 }
