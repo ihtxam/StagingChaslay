@@ -2485,6 +2485,35 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       deliveryMenuMarkup: merchant.deliveryMenuMarkup,
     };
 
+    let shopOrderTimezone = "Europe/Zurich";
+    try {
+      const resolvedLoc = await resolveShopLocationId(
+        merchant.id,
+        (req.body as { locationSlug?: string })?.locationSlug,
+        typeof req.query.location === "string" ? req.query.location : null
+      );
+      const locRow = await db.query.locations.findFirst({
+        where: and(
+          eq(schema.locations.merchantId, merchant.id),
+          eq(schema.locations.id, resolvedLoc.locationId)
+        ),
+        columns: { timezone: true },
+      });
+      shopOrderTimezone = locRow?.timezone || shopOrderTimezone;
+    } catch {
+      const { LocationsService } = await import("@/services/locations.service");
+      try {
+        const defaultId = await LocationsService.getDefaultId(merchant.id);
+        const locRow = await db.query.locations.findFirst({
+          where: eq(schema.locations.id, defaultId),
+          columns: { timezone: true },
+        });
+        shopOrderTimezone = locRow?.timezone || shopOrderTimezone;
+      } catch {
+        /* keep Europe/Zurich */
+      }
+    }
+
     let subtotal = 0;
     let taxAmount = 0;
     let rewardPointsNeeded = 0;
@@ -2587,7 +2616,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         (merchant as { timeSlotPricingSettings?: unknown }).timeSlotPricingSettings
       );
       const catalogUnit = resolveProductPrice(product, slotSettings, {
-        timezone: "Europe/Zurich",
+        timezone: shopOrderTimezone,
       }).resolvedPrice;
       const unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
       const totalPrice = roundMoney2(unitPrice * qty);

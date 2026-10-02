@@ -631,6 +631,13 @@ function MerchantShell() {
     [showHq, effective.permissions, effective.isOwner, businessModule]
   );
 
+  /** Time-based pricing is merchant-wide — not gated on multi-location / HQ license. */
+  const allowTimeSlotPricing = useCallback(
+    (path: string) =>
+      canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
+    [effective.permissions, effective.isOwner, businessModule]
+  );
+
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
     if (jwtOwnerBypass || isPosLikeRoute || isOrderCenterRoute) return;
@@ -845,7 +852,16 @@ function MerchantShell() {
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-      ].filter((item) => allow(item.path));
+        {
+          label: t('timeSlotPricingTitle'),
+          path: '/merchant/hq/time-slot-pricing',
+          icon: '🌙',
+        },
+      ].filter((item) =>
+        item.path === '/merchant/hq/time-slot-pricing'
+          ? allowTimeSlotPricing(item.path)
+          : allow(item.path)
+      );
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
             ...(allowInventory('/merchant/inventory')
@@ -900,7 +916,6 @@ function MerchantShell() {
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
             { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
-            { label: t('timeSlotPricingTitle'), path: '/merchant/hq/time-slot-pricing', icon: '🌙' },
           ].filter((item) => allowHq(item.path))
         : [],
     },
@@ -1482,7 +1497,7 @@ function MerchantShell() {
             <Route
               path="hq/time-slot-pricing"
               element={
-                <PanelRouteGuard path="/merchant/hq/time-slot-pricing" allow={allowHq}>
+                <PanelRouteGuard path="/merchant/hq/time-slot-pricing" allow={allowTimeSlotPricing}>
                   <TimeSlotPricingPage />
                 </PanelRouteGuard>
               }
