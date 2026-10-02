@@ -124,6 +124,7 @@ interface Product {
   isTaxable?: boolean;
   visibility?: CatalogVisibility;
   similarProductIds?: string[];
+  timeSlotPrices?: Record<string, { price?: number | null; multiplier?: number | null }>;
   modifierGroups?: ModifierGroupSummary[];
   comboItems?: Array<{
     id?: string;
@@ -313,6 +314,11 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [timeSlotPricingEnabled, setTimeSlotPricingEnabled] = useState(false);
+  const [timeSlotDefs, setTimeSlotDefs] = useState<
+    Array<{ id: string; start: string; end: string; label?: string | null }>
+  >([]);
+  const [timeSlotPrices, setTimeSlotPrices] = useState<Record<string, string>>({});
   const [allModifierGroups, setAllModifierGroups] = useState<ModifierGroupSummary[]>([]);
   const [modifierPickerOpen, setModifierPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -461,6 +467,9 @@ export default function Products() {
           showPrice: ps.labelShowPrice === true,
           showSku: ps.labelShowSku === true,
         }));
+        const tsp = s?.timeSlotPricingSettings;
+        setTimeSlotPricingEnabled(tsp?.enabled === true);
+        setTimeSlotDefs(Array.isArray(tsp?.slots) ? tsp.slots : []);
       } catch {
         /* optional */
       }
@@ -629,6 +638,7 @@ export default function Products() {
     });
     setRecipeLines([]);
     setRecipeYield('1');
+    setTimeSlotPrices({});
     setModalOpen(true);
   };
 
@@ -677,6 +687,15 @@ export default function Products() {
         setRecipeLines([]);
         setRecipeYield('1');
       }
+      const slotPriceMap = full.timeSlotPrices || {};
+      const slotInputs: Record<string, string> = {};
+      for (const [slotId, entry] of Object.entries(slotPriceMap)) {
+        if (entry?.price != null && Number.isFinite(Number(entry.price))) {
+          slotInputs[slotId] = String(entry.price);
+        }
+      }
+      setTimeSlotPrices(slotInputs);
+
       setForm({
         name: full.name,
         description: full.description || '',
@@ -824,6 +843,19 @@ export default function Products() {
       isTaxable: form.isTaxable,
       visibility: form.visibility,
       similarProductIds: form.similarProductIds,
+      ...(timeSlotPricingEnabled && timeSlotDefs.length
+        ? {
+            timeSlotPrices: Object.fromEntries(
+              timeSlotDefs
+                .map((slot) => {
+                  const raw = (timeSlotPrices[slot.id] || '').trim();
+                  if (!raw) return null;
+                  return [slot.id, { price: parseMoney(raw) }];
+                })
+                .filter((row): row is [string, { price: number }] => !!row)
+            ),
+          }
+        : {}),
     };
   };
 
@@ -2088,6 +2120,40 @@ export default function Products() {
                               </option>
                             ))}
                         </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {timeSlotPricingEnabled && timeSlotDefs.length > 0 && !form.isOpenPrice && (
+                <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t('timeSlotPricingProductSection')}</h3>
+                    <p className="text-[11px] muted">{t('timeSlotPricingProductHint')}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {timeSlotDefs.map((slot) => (
+                      <div
+                        key={slot.id}
+                        className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)] gap-2 items-center"
+                      >
+                        <span className="text-xs">
+                          {slot.label ||
+                            `${slot.start} – ${slot.end}`}
+                        </span>
+                        <input
+                          className="field-input money-input"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={t('timeSlotPricingPricePlaceholder')}
+                          value={timeSlotPrices[slot.id] || ''}
+                          onChange={(e) => {
+                            const normalized = normalizeMoneyInput(e.target.value);
+                            if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
+                            setTimeSlotPrices((prev) => ({ ...prev, [slot.id]: normalized }));
+                          }}
+                        />
                       </div>
                     ))}
                   </div>

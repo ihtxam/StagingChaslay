@@ -139,6 +139,7 @@ import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
 import HqMenusPage from './HqMenusPage';
 import BulkPricingPage from './BulkPricingPage';
+import TimeSlotPricingPage from './TimeSlotPricingPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -899,6 +900,7 @@ function MerchantShell() {
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
             { label: t('hqMenusTitle'), path: '/merchant/hq/menus', icon: '🕐' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
+            { label: t('timeSlotPricingTitle'), path: '/merchant/hq/time-slot-pricing', icon: '🌙' },
           ].filter((item) => allowHq(item.path))
         : [],
     },
@@ -1474,6 +1476,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/hq/bulk-pricing" allow={allowHq}>
                   <BulkPricingPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq/time-slot-pricing"
+              element={
+                <PanelRouteGuard path="/merchant/hq/time-slot-pricing" allow={allowHq}>
+                  <TimeSlotPricingPage />
                 </PanelRouteGuard>
               }
             />

@@ -144,6 +144,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/menus': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
+  '/merchant/hq/time-slot-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/notifications': [],
