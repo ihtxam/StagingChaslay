@@ -4,6 +4,7 @@ import {
   ensureLocationsSchema,
   withMerchantSchemaRetry,
 } from "@/lib/ensure-merchant-schema";
+import { normalizeBusinessModule } from "@/lib/business-module";
 
 export type LocationRow = typeof schema.locations.$inferSelect;
 
@@ -41,13 +42,14 @@ export class LocationsService {
       });
       if (!merchant) throw new Error("Merchant not found");
 
+      const lockedModule = normalizeBusinessModule(merchant.businessCategory);
       const [row] = await db
         .insert(schema.locations)
         .values({
           merchantId,
           name: merchant.name?.trim() || "Main location",
           slug: "main",
-          businessCategory: merchant.businessCategory || "restaurant",
+          businessCategory: lockedModule || "restaurant",
           address: merchant.address,
           city: merchant.city,
           country: merchant.country,

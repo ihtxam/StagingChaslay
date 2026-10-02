@@ -139,8 +139,12 @@ export default function SettingsLocationsTab() {
                       <span className="ml-2 text-xs text-[var(--text-muted)]">({t('default')})</span>
                     ) : null}
                   </div>
-                  <div className="text-xs text-[var(--text-muted)] capitalize">
-                    {loc.businessCategory}
+                  <div className="text-xs text-[var(--text-muted)]">
+                    {loc.businessCategory === 'retail'
+                      ? t('retail')
+                      : loc.businessCategory === 'restaurant'
+                        ? t('restaurant')
+                        : loc.businessCategory}
                     {loc.city ? ` · ${loc.city}` : ''}
                   </div>
                   {loc.slug && merchantSlug ? (

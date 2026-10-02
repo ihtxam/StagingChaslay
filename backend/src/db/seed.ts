@@ -259,9 +259,34 @@ async function seedDemoShop() {
     console.log("Seeded demo categories + products");
   }
 
+  await healDemoDefaultLocationCategory(merchant.id, slug);
   await seedDemoInventoryBundle(merchant.id);
   await seedDemoDeliveryStaff(merchant.id);
   await seedDemoPosLicense(merchant.id);
+}
+
+/** Default demo location (Demo Food Truck / main) should be retail, not restaurant bootstrap default. */
+async function healDemoDefaultLocationCategory(merchantId: string, slug: string) {
+  const demoSlug = process.env.SEED_DEMO_SLUG || "demo";
+  if (slug !== demoSlug) return;
+  const raw = (process.env.SEED_DEMO_DEFAULT_LOCATION_CATEGORY || "retail").trim().toLowerCase();
+  const businessCategory = raw === "restaurant" ? "restaurant" : "retail";
+  const db = getDb();
+  const updated = await db
+    .update(schema.locations)
+    .set({ businessCategory, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.locations.merchantId, merchantId),
+        eq(schema.locations.isDefault, true)
+      )
+    )
+    .returning({ id: schema.locations.id, name: schema.locations.name });
+  if (updated.length) {
+    console.log(
+      `Demo default location business category set to ${businessCategory}: ${updated.map((r) => r.name).join(", ")}`
+    );
+  }
 }
 
 /** Known Reborn-style seat used on staging tablets (hyphens optional at activate). */
