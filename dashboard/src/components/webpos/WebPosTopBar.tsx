@@ -592,9 +592,15 @@ export function WebPosSettingsDropdown({
   canManageChannels = false,
   shopEnabled = false,
   reservationsEnabled = false,
+  pickupEnabled = true,
+  deliveryEnabled = true,
+  dineInEnabled = true,
   channelsSaving = false,
   onShopEnabledChange,
   onReservationsEnabledChange,
+  onPickupEnabledChange,
+  onDeliveryEnabledChange,
+  onDineInEnabledChange,
   onSendLogs,
   onOpenCustomerDisplay,
   terminalEnabled = false,
@@ -630,9 +636,15 @@ export function WebPosSettingsDropdown({
   canManageChannels?: boolean;
   shopEnabled?: boolean;
   reservationsEnabled?: boolean;
+  pickupEnabled?: boolean;
+  deliveryEnabled?: boolean;
+  dineInEnabled?: boolean;
   channelsSaving?: boolean;
   onShopEnabledChange?: (enabled: boolean) => void;
   onReservationsEnabledChange?: (enabled: boolean) => void;
+  onPickupEnabledChange?: (enabled: boolean) => void;
+  onDeliveryEnabledChange?: (enabled: boolean) => void;
+  onDineInEnabledChange?: (enabled: boolean) => void;
   onSendLogs?: () => void;
   onOpenCustomerDisplay?: () => void;
   terminalEnabled?: boolean;
@@ -766,6 +778,70 @@ export function WebPosSettingsDropdown({
                 }`}
               >
                 {reservationsEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canManageChannels &&
+      (onPickupEnabledChange || onDeliveryEnabledChange || onDineInEnabledChange) ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('shopOrderChannelsTitle')}
+          </p>
+          <p className="text-[10px] leading-snug text-stone-500">{t('shopOrderChannelsHint')}</p>
+          {onPickupEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('shopChannelPickupEnabled')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={pickupEnabled}
+                onClick={() => onPickupEnabledChange(!pickupEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  pickupEnabled ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {pickupEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+          {onDeliveryEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('shopChannelDeliveryEnabled')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={deliveryEnabled}
+                onClick={() => onDeliveryEnabledChange(!deliveryEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  deliveryEnabled ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {deliveryEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
+              </button>
+            </div>
+          ) : null}
+          {onDineInEnabledChange ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 px-2.5 py-2">
+              <span className="min-w-0 text-xs font-semibold text-stone-700">
+                {t('shopChannelDineInEnabled')}
+              </span>
+              <button
+                type="button"
+                disabled={channelsSaving}
+                aria-pressed={dineInEnabled}
+                onClick={() => onDineInEnabledChange(!dineInEnabled)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                  dineInEnabled ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {dineInEnabled ? t('webPosToggleOn') : t('webPosToggleOff')}
               </button>
             </div>
           ) : null}

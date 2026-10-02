@@ -1804,27 +1804,30 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     merchant?.pickupEnabled !== false && editionAllows('channel_takeaway');
   const merchantDeliveryEnabled =
     merchant?.deliveryEnabled !== false && editionAllows('channel_delivery');
+  const merchantDineInEnabled = merchant?.dineInEnabled !== false;
   const requireTableForDineIn = checkoutSettings.requireTableForDineIn !== false;
   const requireCustomerForDelivery = checkoutSettings.requireCustomerForDelivery !== false;
   const counterDineInEnabled = !requireTableForDineIn;
-  const showChannelTabs = isRetail
-    ? retailDineInEnabled || retailDeliveryEnabled
-    : merchantTakeawayEnabled ||
-      merchantDeliveryEnabled ||
-      counterDineInEnabled;
   const tablesEditionOk = editionAllows('pos_tables');
   /** Fast-food can keep kitchen but hide Tables / Set table. */
   const tablesUiEnabled =
     !isRetail && tablesEditionOk && checkoutSettings.tablesEnabled !== false;
+  const restaurantDineInTabEnabled =
+    merchantDineInEnabled && tablesUiEnabled && counterDineInEnabled;
+  const showChannelTabs = isRetail
+    ? retailDineInEnabled || retailDeliveryEnabled
+    : merchantTakeawayEnabled ||
+      merchantDeliveryEnabled ||
+      restaurantDineInTabEnabled;
   const canPickDineInChannel =
-    retailDineInEnabled || (tablesUiEnabled && counterDineInEnabled);
+    retailDineInEnabled || restaurantDineInTabEnabled;
   const channelTabOptions: Array<'takeaway' | 'delivery' | 'dine_in'> = isRetail
     ? [
         ...(retailDineInEnabled ? (['dine_in'] as const) : []),
         ...(retailDeliveryEnabled ? (['delivery'] as const) : []),
       ]
     : [
-        ...(tablesUiEnabled && counterDineInEnabled ? (['dine_in'] as const) : []),
+        ...(restaurantDineInTabEnabled ? (['dine_in'] as const) : []),
         ...(merchantTakeawayEnabled ? (['takeaway'] as const) : []),
         ...(merchantDeliveryEnabled ? (['delivery'] as const) : []),
       ];
@@ -9896,6 +9899,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
+  const toggleMerchantOrderChannel = async (
+    key: 'pickupEnabled' | 'deliveryEnabled' | 'dineInEnabled',
+    next: boolean
+  ) => {
+    const prev = merchant?.[key] !== false;
+    setMerchant((m: any) => (m ? { ...m, [key]: next } : m));
+    setChannelsSaving(true);
+    try {
+      await api.put('/merchant/settings', { [key]: next });
+      toast.success(t('saved'));
+    } catch (e: any) {
+      setMerchant((m: any) => (m ? { ...m, [key]: prev } : m));
+      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setChannelsSaving(false);
+    }
+  };
+
   const changePosTerminal = async (terminalId: string) => {
     setSelectedTerminalId(terminalId);
     persistTerminalId(terminalId, webposStaff?.id);
@@ -10801,6 +10822,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             canManageChannels={canManageOnlineShop}
             shopEnabled={!!merchant?.shopEnabled}
             reservationsEnabled={!!merchant?.reservationsEnabled}
+            pickupEnabled={merchant?.pickupEnabled !== false}
+            deliveryEnabled={merchant?.deliveryEnabled !== false}
+            dineInEnabled={merchant?.dineInEnabled !== false}
             channelsSaving={channelsSaving}
             onShopEnabledChange={
               canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
@@ -10808,6 +10832,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onReservationsEnabledChange={
               canManageOnlineShop && !isRetail
                 ? (enabled) => void toggleReservationsEnabled(enabled)
+                : undefined
+            }
+            onPickupEnabledChange={
+              canManageOnlineShop
+                ? (enabled) => void toggleMerchantOrderChannel('pickupEnabled', enabled)
+                : undefined
+            }
+            onDeliveryEnabledChange={
+              canManageOnlineShop
+                ? (enabled) => void toggleMerchantOrderChannel('deliveryEnabled', enabled)
+                : undefined
+            }
+            onDineInEnabledChange={
+              canManageOnlineShop
+                ? (enabled) => void toggleMerchantOrderChannel('dineInEnabled', enabled)
                 : undefined
             }
             onOpenCustomerDisplay={
