@@ -314,6 +314,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS delivery_pricing_enabled boolean NOT NULL DEFAULT false",
   categories_extra_delivery_price:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
+  categories_shop_schedule:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS shop_schedule jsonb NOT NULL DEFAULT '{}'::jsonb",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",

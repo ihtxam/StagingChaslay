@@ -1088,6 +1088,8 @@ export const categories = pgTable(
       .$type<{ channels: string[] }>()
       .default({ channels: ["pos", "shop", "qr_table", "delivery", "kiosk"] })
       .notNull(),
+    /** Optional shop schedule: show category on online shop only during configured days/times. */
+    shopSchedule: json("shop_schedule").$type<Record<string, unknown>>().default({}).notNull(),
     /** When category_pricing_enabled on merchant, apply extra_delivery_price on delivery orders */
     deliveryPricingEnabled: boolean("delivery_pricing_enabled").default(false).notNull(),
     extraDeliveryPrice: decimal("extra_delivery_price", { precision: 10, scale: 2 }).default("0"),

@@ -15,6 +15,11 @@ import {
   paletteColorAt,
 } from '@/components/webpos/categoryColors';
 import ChannelVisibilityEditor from '@/components/merchant/ChannelVisibilityEditor';
+import ShopCategoryScheduleEditor, {
+  DEFAULT_SHOP_CATEGORY_SCHEDULE,
+  normalizeShopCategoryScheduleForm,
+  type ShopCategoryScheduleForm,
+} from '@/components/merchant/ShopCategoryScheduleEditor';
 import {
   DEFAULT_CATALOG_VISIBILITY,
   normalizeCatalogVisibility,
@@ -31,6 +36,7 @@ interface Category {
   visibility?: CatalogVisibility;
   deliveryPricingEnabled?: boolean;
   extraDeliveryPrice?: number | string | null;
+  shopSchedule?: ShopCategoryScheduleForm | Record<string, unknown>;
 }
 
 const MAX_CATEGORY_NAME = 56;
@@ -55,6 +61,9 @@ export default function Categories() {
   const [categoryPricingEnabled, setCategoryPricingEnabled] = useState(false);
   const [deliveryPricingEnabled, setDeliveryPricingEnabled] = useState(false);
   const [extraDeliveryPrice, setExtraDeliveryPrice] = useState('0');
+  const [shopSchedule, setShopSchedule] = useState<ShopCategoryScheduleForm>({
+    ...DEFAULT_SHOP_CATEGORY_SCHEDULE,
+  });
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -130,6 +139,7 @@ export default function Categories() {
     setVisibility({ ...DEFAULT_CATALOG_VISIBILITY });
     setDeliveryPricingEnabled(false);
     setExtraDeliveryPrice('0');
+    setShopSchedule({ ...DEFAULT_SHOP_CATEGORY_SCHEDULE });
     setEditingId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -144,6 +154,7 @@ export default function Categories() {
     setVisibility(normalizeCatalogVisibility(category.visibility));
     setDeliveryPricingEnabled(category.deliveryPricingEnabled === true);
     setExtraDeliveryPrice(String(category.extraDeliveryPrice ?? '0'));
+    setShopSchedule(normalizeShopCategoryScheduleForm(category.shopSchedule));
   };
 
   const onUploadImage = async (file: File | null) => {
@@ -218,6 +229,7 @@ export default function Categories() {
           imageUrl: imageUrl || null,
           color: payload.color,
           visibility,
+          shopSchedule,
           ...deliveryPayload,
         });
         toast.success(t('categoryToastUpdated'));
@@ -227,6 +239,7 @@ export default function Categories() {
           description: payload.description,
           color: payload.color,
           visibility,
+          shopSchedule,
         });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
@@ -359,6 +372,9 @@ export default function Categories() {
           </div>
           <div className="md:col-span-3">
             <ChannelVisibilityEditor value={visibility} onChange={setVisibility} />
+          </div>
+          <div className="md:col-span-3">
+            <ShopCategoryScheduleEditor value={shopSchedule} onChange={setShopSchedule} t={t} />
           </div>
           {categoryPricingEnabled ? (
             <div className="md:col-span-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 space-y-3">
@@ -519,6 +535,11 @@ export default function Categories() {
                         />
                         {category.name}
                         <HqCatalogBadge fromHq={hqCategoryIds.has(category.id)} />
+                        {normalizeShopCategoryScheduleForm(category.shopSchedule).enabled ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                            {t('categoryShopScheduleBadge')}
+                          </span>
+                        ) : null}
                       </span>
                     </td>
                     <td className="py-2.5 px-2 muted">{category.description || '-'}</td>

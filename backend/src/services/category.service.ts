@@ -6,6 +6,7 @@ import {
 } from "@/lib/category-colors";
 import { repairCatalogText } from "@/lib/text-encoding";
 import { normalizeCatalogVisibility, type CatalogChannel } from "@/lib/catalog-visibility";
+import { normalizeCategoryShopSchedule } from "@/lib/category-shop-schedule";
 import { eq, and, asc, desc, max, sql, count } from "drizzle-orm";
 
 export class CategoryService {
@@ -173,6 +174,11 @@ export class CategoryService {
           throw new Error("extraDeliveryPrice must be >= 0");
         }
         patched.extraDeliveryPrice = n.toFixed(2);
+      }
+      if (patched.shopSchedule !== undefined) {
+        patched.shopSchedule = normalizeCategoryShopSchedule(
+          patched.shopSchedule
+        ) as typeof patched.shopSchedule;
       }
       const category = await db
         .update(schema.categories)

@@ -38,6 +38,7 @@ import {
   shopMenuCatalogChannel,
 } from "@/lib/catalog-visibility";
 import { normalizeProductPrices } from "@/lib/scheduled-menu";
+import { isCategoryShopScheduleVisible } from "@/lib/category-shop-schedule";
 import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
@@ -1166,7 +1167,13 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
   );
   const visibleCategories = filtered.categories.filter(
-    (c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory
+    (c) =>
+      (categoryIdsWithProducts.has(c.id) || c.isOffersCategory) &&
+      isCategoryShopScheduleVisible(
+        (c as { shopSchedule?: unknown }).shopSchedule,
+        new Date(),
+        menuTimezone
+      )
   );
 
   const pricedProducts = HqMenuService.applyMenuPrices(

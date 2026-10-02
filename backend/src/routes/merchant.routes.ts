@@ -1188,8 +1188,15 @@ router.post("/categories", async (req: Request, res: Response) => {
         visibility: normalizeCatalogVisibility(visibility),
       });
     }
+    const shopScheduleRaw = req.body.shopSchedule;
+    if (shopScheduleRaw !== undefined) {
+      const { normalizeCategoryShopSchedule } = await import("@/lib/category-shop-schedule");
+      await CategoryService.updateCategory(merchantId, category.id, {
+        shopSchedule: normalizeCategoryShopSchedule(shopScheduleRaw),
+      });
+    }
     const saved =
-      visibility !== undefined
+      visibility !== undefined || shopScheduleRaw !== undefined
         ? (await CategoryService.getCategories(merchantId)).find((c) => c.id === category.id) ||
           category
         : category;
@@ -1261,6 +1268,10 @@ router.put("/categories/:categoryId", async (req: Request, res: Response) => {
         return res.status(400).json({ error: "extraDeliveryPrice must be >= 0" });
       }
       updates.extraDeliveryPrice = n.toFixed(2);
+    }
+    if (updates.shopSchedule !== undefined) {
+      const { normalizeCategoryShopSchedule } = await import("@/lib/category-shop-schedule");
+      updates.shopSchedule = normalizeCategoryShopSchedule(updates.shopSchedule);
     }
 
     const category = await CategoryService.updateCategory(merchantId, categoryId, updates);
