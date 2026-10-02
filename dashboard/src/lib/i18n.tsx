@@ -265,6 +265,8 @@ const en: Dict = {
   reservationsMaxCovers: 'Max covers per slot (optional)',
   reservationsMaxCoversAuto: 'Auto (table capacity)',
   reservationsAutoAccept: 'Automatically accept reservations',
+  reservationsAutoAcceptHint:
+    'When on, online guests get a confirmed reservation email. When off, they are told to wait for the restaurant to confirm.',
   reservationsSendConfirmEmail: 'Send confirmation / request emails',
   reservationsSendStatusEmails: 'Email guests on accept / reject / cancel',
   reservationsPolicies: 'Policies shown to guests',
@@ -4713,6 +4715,8 @@ const fr: Dict = {
   reservationsMaxCovers: 'Couverts max. par créneau (optionnel)',
   reservationsMaxCoversAuto: 'Auto (capacité des tables)',
   reservationsAutoAccept: 'Accepter automatiquement',
+  reservationsAutoAcceptHint:
+    'Activé : e-mail de réservation confirmée. Désactivé : le client attend la confirmation du restaurant.',
   reservationsSendConfirmEmail: 'Envoyer les e-mails de confirmation / demande',
   reservationsSendStatusEmails: 'E-mail à l’acceptation / refus / annulation',
   reservationsPolicies: 'Conditions affichées aux clients',
@@ -8992,6 +8996,8 @@ const de: Dict = {
   reservationsMaxCovers: 'Max. Couverts pro Slot (optional)',
   reservationsMaxCoversAuto: 'Auto (Tischkapazität)',
   reservationsAutoAccept: 'Reservationen automatisch akzeptieren',
+  reservationsAutoAcceptHint:
+    'Ein: Bestätigungs-E-Mail. Aus: Gast wartet auf Bestätigung durch das Restaurant.',
   reservationsSendConfirmEmail: 'Bestätigungs-/Anfrage-E-Mails senden',
   reservationsSendStatusEmails: 'E-Mail bei Annehmen / Ablehnen / Storno',
   reservationsPolicies: 'Bedingungen für Gäste',

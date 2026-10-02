@@ -40,7 +40,8 @@ export default function WebPosBookingsView() {
   const [tables, setTables] = useState<Table[]>([]);
   const [scope, setScope] = useState<'today' | 'future'>('today');
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
-  const [autoAccept, setAutoAccept] = useState(true);
+  const [autoAccept, setAutoAccept] = useState(false);
+  const [autoAcceptSaving, setAutoAcceptSaving] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -96,6 +97,22 @@ export default function WebPosBookingsView() {
     () => reservations.filter((r) => r.status === 'pending').length,
     [reservations]
   );
+
+  const toggleAutoAccept = async () => {
+    if (autoAcceptSaving) return;
+    const next = !autoAccept;
+    setAutoAcceptSaving(true);
+    try {
+      await api.put('/merchant/reservations/config', { settings: { autoAccept: next } });
+      setAutoAccept(next);
+      toast.success(t('saved'));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('actionFailed'));
+    } finally {
+      setAutoAcceptSaving(false);
+    }
+  };
 
   const editing = useMemo(
     () => reservations.find((r) => r.id === editId) || null,
@@ -253,6 +270,19 @@ export default function WebPosBookingsView() {
             {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
           </span>
         ) : null}
+        <button
+          type="button"
+          title={t('reservationsAutoAcceptHint')}
+          disabled={autoAcceptSaving}
+          className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+            autoAccept
+              ? 'border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-100'
+              : 'border-[var(--webpos-border)] bg-[var(--webpos-surface-2)] text-[var(--webpos-text-muted)]'
+          }`}
+          onClick={() => void toggleAutoAccept()}
+        >
+          {t('reservationsAutoAccept')}: {autoAccept ? t('webPosToggleOn') : t('webPosToggleOff')}
+        </button>
         <button
           type="button"
           className="webpos-accent-btn ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
