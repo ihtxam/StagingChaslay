@@ -515,6 +515,23 @@ export function buildSettingsSearchIndex(
       keywords: ['tax', 'vat', 'tva', 'mwst', t('taxRates')],
     },
     {
+      id: 'shop-order-channels',
+      tab: 'shop',
+      keywords: [
+        'pickup',
+        'takeaway',
+        'emporter',
+        'delivery',
+        'livraison',
+        'dine in',
+        'sur place',
+        'channel',
+        t('shopOrderChannelsTitle'),
+        t('shopChannelPickupEnabled'),
+        t('shopChannelDeliveryEnabled'),
+      ],
+    },
+    {
       id: 'shop-online',
       tab: 'shop',
       keywords: [

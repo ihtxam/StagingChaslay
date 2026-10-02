@@ -28,9 +28,36 @@ type MerchantRow = {
   slug: string;
   shop_enabled?: boolean;
   shopEnabled?: boolean;
+  pickup_enabled?: boolean;
+  pickupEnabled?: boolean;
+  delivery_enabled?: boolean;
+  deliveryEnabled?: boolean;
+  dine_in_enabled?: boolean;
+  dineInEnabled?: boolean;
   kiosk_settings?: unknown;
   kioskSettings?: unknown;
 };
+
+function merchantChannelFlags(row: MerchantRow) {
+  return {
+    pickupEnabled: row.pickup_enabled ?? row.pickupEnabled,
+    deliveryEnabled: row.delivery_enabled ?? row.deliveryEnabled,
+    dineInEnabled: row.dine_in_enabled ?? row.dineInEnabled,
+  };
+}
+
+function effectiveKioskChannelSettings(settings: KioskSettings, row: MerchantRow) {
+  const merchantFlags = merchantChannelFlags(row);
+  return {
+    ...settings,
+    takeawayEnabled:
+      settings.takeawayEnabled !== false && merchantFlags.pickupEnabled !== false,
+    deliveryEnabled:
+      settings.deliveryEnabled === true && merchantFlags.deliveryEnabled !== false,
+    dineInEnabled:
+      settings.dineInEnabled !== false && merchantFlags.dineInEnabled !== false,
+  };
+}
 
 async function loadMerchantByToken(token: string): Promise<{
   merchant: MerchantRow;
@@ -39,7 +66,7 @@ async function loadMerchantByToken(token: string): Promise<{
   await ensureKioskAddonColumn();
   await ensureKioskSettingsColumn();
   const rows = await queryRaw<MerchantRow>(
-    `SELECT id, name, slug, shop_enabled, kiosk_settings
+    `SELECT id, name, slug, shop_enabled, pickup_enabled, delivery_enabled, dine_in_enabled, kiosk_settings
      FROM merchants
      WHERE kiosk_settings IS NOT NULL
        AND kiosk_settings->>'accessToken' = $1
@@ -58,6 +85,7 @@ async function loadMerchantByToken(token: string): Promise<{
 export class KioskService {
   static async getPublicConfig(token: string) {
     const { merchant, settings } = await loadMerchantByToken(token);
+    const channelSettings = effectiveKioskChannelSettings(settings, merchant);
     const shopEnabled = merchant.shop_enabled ?? merchant.shopEnabled;
     if (!shopEnabled) throw new Error("Shop is not enabled for this merchant");
 
@@ -85,11 +113,11 @@ export class KioskService {
         membershipScanEnabled: settings.membershipScanEnabled !== false,
         idleTimeoutSeconds: settings.idleTimeoutSeconds ?? 120,
         locationSlug: settings.locationSlug,
-        cashPaymentEnabled: settings.cashPaymentEnabled !== false,
-        cardPaymentEnabled: settings.cardPaymentEnabled !== false,
-        takeawayEnabled: settings.takeawayEnabled !== false,
-        deliveryEnabled: settings.deliveryEnabled === true,
-        dineInEnabled: settings.dineInEnabled !== false,
+        cashPaymentEnabled: channelSettings.cashPaymentEnabled !== false,
+        cardPaymentEnabled: channelSettings.cardPaymentEnabled !== false,
+        takeawayEnabled: channelSettings.takeawayEnabled !== false,
+        deliveryEnabled: channelSettings.deliveryEnabled === true,
+        dineInEnabled: channelSettings.dineInEnabled !== false,
         attractHeadline: settings.attractHeadline,
         attractSubheadline: settings.attractSubheadline,
         brandPrimaryColor: settings.brandPrimaryColor,

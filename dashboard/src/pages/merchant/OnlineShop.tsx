@@ -623,7 +623,7 @@ export default function OnlineShop() {
                 checked={!!settings.pickupEnabled}
                 onChange={(e) => setSettings({ ...settings, pickupEnabled: e.target.checked })}
               />
-              Pickup
+              {t('shopChannelPickupEnabled')}
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -631,7 +631,7 @@ export default function OnlineShop() {
                 checked={!!settings.dineInEnabled}
                 onChange={(e) => setSettings({ ...settings, dineInEnabled: e.target.checked })}
               />
-              Dine in
+              {t('shopChannelDineInEnabled')}
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -639,7 +639,7 @@ export default function OnlineShop() {
                 checked={!!settings.deliveryEnabled}
                 onChange={(e) => setSettings({ ...settings, deliveryEnabled: e.target.checked })}
               />
-              Delivery
+              {t('shopChannelDeliveryEnabled')}
             </label>
           </div>
 

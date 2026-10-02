@@ -852,6 +852,8 @@ function MerchantShell() {
         { label: t('products'), path: '/merchant/products', icon: '🛍️' },
         { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
+      ].filter((item) => allow(item.path));
+      const moreOptionsLinks = [
         {
           label: t('timeSlotPricingTitle'),
           path: '/merchant/hq/time-slot-pricing',
@@ -881,6 +883,9 @@ function MerchantShell() {
       const children = [
         ...(catalogLinks.length
           ? [{ heading: true as const, label: t('navGroupCatalog') }, ...catalogLinks]
+          : []),
+        ...(moreOptionsLinks.length
+          ? [{ heading: true as const, label: t('navGroupMoreOptions') }, ...moreOptionsLinks]
           : []),
         ...(retailOpsLinks.length
           ? [{ heading: true as const, label: t('navGroupRetailOps') }, ...retailOpsLinks]

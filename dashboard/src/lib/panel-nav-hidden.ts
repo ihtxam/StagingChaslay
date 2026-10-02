@@ -22,8 +22,8 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     '/merchant/sales/reservations',
     '/merchant/reports',
   ],
-  catalog: ['/merchant/products', '/merchant/categories', '/merchant/modifiers'],
-  hq: ['/merchant/hq', '/merchant/hq/menus', '/merchant/hq/bulk-pricing', '/merchant/hq/time-slot-pricing'],
+  catalog: ['/merchant/products', '/merchant/categories', '/merchant/modifiers', '/merchant/hq/time-slot-pricing'],
+  hq: ['/merchant/hq', '/merchant/hq/menus', '/merchant/hq/bulk-pricing'],
   inventory: [
     '/merchant/inventory',
     '/merchant/inventory/list',

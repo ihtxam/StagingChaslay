@@ -2364,6 +2364,54 @@ export default function Settings() {
                     </span>
                   </label>
                 </div>
+
+                <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
+                  <p className="text-sm font-medium">{t('shopOrderChannelsTitle')}</p>
+                  <p className="text-xs muted">{t('shopOrderChannelsHint')}</p>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.pickupEnabled !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, pickupEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('shopChannelPickupEnabled')}</span>
+                      <span className="text-[11px] muted">{t('shopChannelPickupHint')}</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.deliveryEnabled !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, deliveryEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('shopChannelDeliveryEnabled')}</span>
+                      <span className="text-[11px] muted">{t('shopChannelDeliveryHint')}</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.dineInEnabled !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, dineInEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('shopChannelDineInEnabled')}</span>
+                      <span className="text-[11px] muted">{t('shopChannelDineInHint')}</span>
+                    </span>
+                  </label>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field
                     label={t('shopSlug')}

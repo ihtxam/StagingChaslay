@@ -1800,13 +1800,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const retailDeliveryEnabled =
     !!checkoutSettings.retailDeliveryEnabled && editionAllows('channel_delivery');
   const retailDineInEnabled = !!checkoutSettings.retailDineInEnabled;
+  const merchantTakeawayEnabled =
+    merchant?.pickupEnabled !== false && editionAllows('channel_takeaway');
+  const merchantDeliveryEnabled =
+    merchant?.deliveryEnabled !== false && editionAllows('channel_delivery');
   const requireTableForDineIn = checkoutSettings.requireTableForDineIn !== false;
   const requireCustomerForDelivery = checkoutSettings.requireCustomerForDelivery !== false;
   const counterDineInEnabled = !requireTableForDineIn;
   const showChannelTabs = isRetail
     ? retailDineInEnabled || retailDeliveryEnabled
-    : editionAllows('channel_takeaway') ||
-      editionAllows('channel_delivery') ||
+    : merchantTakeawayEnabled ||
+      merchantDeliveryEnabled ||
       counterDineInEnabled;
   const tablesEditionOk = editionAllows('pos_tables');
   /** Fast-food can keep kitchen but hide Tables / Set table. */
@@ -1821,8 +1825,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ]
     : [
         ...(tablesUiEnabled && counterDineInEnabled ? (['dine_in'] as const) : []),
-        ...(editionAllows('channel_takeaway') ? (['takeaway'] as const) : []),
-        ...(editionAllows('channel_delivery') ? (['delivery'] as const) : []),
+        ...(merchantTakeawayEnabled ? (['takeaway'] as const) : []),
+        ...(merchantDeliveryEnabled ? (['delivery'] as const) : []),
       ];
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
@@ -1879,6 +1883,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setPosView('register');
     }
   }, [reservationsPosUiEnabled, posTab]);
+
+  useEffect(() => {
+    if (isRetail || tableId) return;
+    if (!channel || channelTabOptions.length === 0) return;
+    if (channelTabOptions.includes(channel as 'takeaway' | 'delivery' | 'dine_in')) return;
+    setChannel(channelTabOptions[0] ?? null);
+  }, [isRetail, tableId, channel, channelTabOptions]);
 
   const showFireCourseButton =
     coursesEnabled &&
