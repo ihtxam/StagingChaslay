@@ -19,11 +19,21 @@ function isPathActive(pathname: string, itemPath?: string, search = ''): boolean
 }
 
 function activeGroup(menuItems: SidebarNavEntry[], pathname: string, search: string) {
+  let best: SidebarNavEntry | null = null;
+  let bestScore = -1;
   for (const entry of menuItems) {
     if (!entry.id || !entry.children?.length) continue;
-    if (entry.children.some((c) => isPathActive(pathname, c.path, search))) return entry;
+    for (const child of entry.children) {
+      if (child.heading || !child.path) continue;
+      if (!isPathActive(pathname, child.path, search)) continue;
+      const score = child.path.split('?')[0].length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = entry;
+      }
+    }
   }
-  return null;
+  return best;
 }
 
 export default function MerchantSubNav({ menuItems }: { menuItems: SidebarNavEntry[] }) {

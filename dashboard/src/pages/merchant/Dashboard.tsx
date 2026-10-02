@@ -77,6 +77,8 @@ import {
   canJwtReturnToPanel,
   backOfficeHomePath,
   deliveryDriverHomePath,
+  MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH,
+  MERCHANT_TIME_SLOT_PRICING_PATH,
   getEffectivePanelAccess,
   jwtHasPanelAccess,
   getEffectiveRegisterDisplay,
@@ -856,14 +858,10 @@ function MerchantShell() {
       const moreOptionsLinks = [
         {
           label: t('timeSlotPricingTitle'),
-          path: '/merchant/hq/time-slot-pricing',
+          path: MERCHANT_TIME_SLOT_PRICING_PATH,
           icon: '🌙',
         },
-      ].filter((item) =>
-        item.path === '/merchant/hq/time-slot-pricing'
-          ? allowTimeSlotPricing(item.path)
-          : allow(item.path)
-      );
+      ].filter((item) => allowTimeSlotPricing(item.path));
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
             ...(allowInventory('/merchant/inventory')
@@ -1018,8 +1016,16 @@ function MerchantShell() {
             children: fullMenuItems
               .find((entry) => 'id' in entry && entry.id === 'products')
               ?.children?.filter((item) => {
+                if ('heading' in item && item.heading) return true;
                 const path = 'path' in item ? item.path : '';
-                return path && allow(path);
+                if (!path) return false;
+                if (
+                  path === MERCHANT_TIME_SLOT_PRICING_PATH ||
+                  path === MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH
+                ) {
+                  return allowTimeSlotPricing(path);
+                }
+                return allow(path);
               }),
           },
         ].filter((entry) => (entry.children?.length ?? 0) > 0)
@@ -1500,12 +1506,16 @@ function MerchantShell() {
               }
             />
             <Route
-              path="hq/time-slot-pricing"
+              path="products/time-slot-pricing"
               element={
-                <PanelRouteGuard path="/merchant/hq/time-slot-pricing" allow={allowTimeSlotPricing}>
+                <PanelRouteGuard path={MERCHANT_TIME_SLOT_PRICING_PATH} allow={allowTimeSlotPricing}>
                   <TimeSlotPricingPage />
                 </PanelRouteGuard>
               }
+            />
+            <Route
+              path="hq/time-slot-pricing"
+              element={<Navigate to={MERCHANT_TIME_SLOT_PRICING_PATH} replace />}
             />
             <Route path="signage" element={<Navigate to="/merchant/settings?tab=signage" replace />} />
             <Route path="kiosk" element={<Navigate to={kioskHomePath()} replace />} />

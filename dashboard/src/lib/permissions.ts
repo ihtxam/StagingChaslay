@@ -7,6 +7,11 @@ import { isStandalonePwa } from './pwa';
 import { normalizeStaffLoginHome, type StaffLoginHome } from './staff-login-home';
 import { isPlatformNotificationsPath } from './platform-notifications';
 
+/** Merchant panel route for time-slot pricing settings (under Products → More options). */
+export const MERCHANT_TIME_SLOT_PRICING_PATH = '/merchant/products/time-slot-pricing';
+/** Legacy HQ URL — kept for redirects and bookmarks. */
+export const MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH = '/merchant/hq/time-slot-pricing';
+
 export type Permission =
   | 'USE_POS'
   | 'USE_WEBPOS'
@@ -144,7 +149,8 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/hq': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/menus': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
-  '/merchant/hq/time-slot-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
+  [MERCHANT_TIME_SLOT_PRICING_PATH]: ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
+  [MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH]: ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/notifications': [],

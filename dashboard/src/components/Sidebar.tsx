@@ -127,15 +127,22 @@ export default function Sidebar({
   const accountName = displaySidebarAccountName(registerDisplay?.name || user?.name);
 
   const activeGroupIds = useMemo(() => {
-    const ids = new Set<string>();
+    let bestId: string | null = null;
+    let bestScore = -1;
     for (const entry of menuItems) {
       if (!entry.id || !entry.children?.length) continue;
-      if (entry.children.some((c) => isPathActive(location.pathname, c.path, location.search))) {
-        ids.add(entry.id);
+      for (const child of entry.children) {
+        if (child.heading || !child.path) continue;
+        if (!isPathActive(location.pathname, child.path, location.search)) continue;
+        const score = child.path.split('?')[0].length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = entry.id;
+        }
       }
     }
-    return ids;
-  }, [menuItems, location.pathname]);
+    return bestId ? new Set([bestId]) : new Set<string>();
+  }, [menuItems, location.pathname, location.search]);
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const stored = loadOpenGroups(panelKey);

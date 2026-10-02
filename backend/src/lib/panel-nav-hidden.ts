@@ -7,7 +7,12 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     "/merchant/sales/reservations",
     "/merchant/reports",
   ],
-  catalog: ["/merchant/products", "/merchant/categories", "/merchant/modifiers", "/merchant/hq/time-slot-pricing"],
+  catalog: [
+    "/merchant/products",
+    "/merchant/categories",
+    "/merchant/modifiers",
+    "/merchant/products/time-slot-pricing",
+  ],
   hq: ["/merchant/hq", "/merchant/hq/menus", "/merchant/hq/bulk-pricing"],
   inventory: [
     "/merchant/inventory",
