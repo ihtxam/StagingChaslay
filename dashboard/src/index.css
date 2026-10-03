@@ -1894,6 +1894,56 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
+  /* Small tablets / phones in landscape (e.g. 6" POS) — keep PIN copy and logo visible */
+  @media (orientation: landscape) and (max-height: 520px) {
+    .webpos-pin-gate-time {
+      font-size: clamp(2rem, 14vh, 3rem) !important;
+    }
+
+    .webpos-pin-gate-ampm {
+      font-size: 0.75rem !important;
+    }
+
+    .webpos-pin-gate-date {
+      margin-top: 0.25rem;
+      font-size: 0.7rem !important;
+    }
+
+    .webpos-pin-gate-clock {
+      padding-top: max(0.25rem, env(safe-area-inset-top));
+      padding-bottom: 0.25rem;
+    }
+
+    .webpos-pin-gate-entry h1 {
+      font-size: 1rem;
+    }
+
+    .webpos-pin-gate-entry p {
+      font-size: 0.65rem;
+      line-height: 1.25;
+    }
+
+    .webpos-pin-gate-key {
+      height: 2.35rem;
+      font-size: 1.05rem;
+      border-radius: 0.65rem;
+    }
+
+    .webpos-pin-gate-keypad {
+      gap: 0.35rem;
+      max-width: min(14rem, 72vw);
+    }
+
+    .webpos-pin-gate-footer img {
+      height: 1.35rem;
+      max-width: min(28vw, 7rem);
+    }
+
+    .webpos-pin-gate-footer p {
+      font-size: 0.65rem;
+    }
+  }
+
 }
 
 @keyframes shop-cart-bump {
