@@ -7,6 +7,9 @@ const viteEnv =
 /** White Reborn logo (icon + wordmark) for dark backgrounds — login, merchant sidebar. */
 export const REBORN_LOGO_WHITE = '/brand/reborn-logo-white.png';
 
+/** R-only mark (white PNG) — tint via CSS for powered-by footers. */
+export const REBORN_MARK_R_WHITE = '/brand/reborn-mark-r-white.png';
+
 export const APP_PANEL_TITLE = `${APP_NAME} Admin`;
 
 /** Superadmin sidebar footer label above Sign out (not a personal name). */

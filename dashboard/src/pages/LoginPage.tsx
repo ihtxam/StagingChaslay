@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { homePathForUser } from '@/lib/auth-home';
 import { posEmbedReturnPath } from '@/pages/PosEmbedPage';
 import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE, REBORN_LOGO_WHITE } from '@/lib/brand';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
@@ -427,6 +428,7 @@ export default function LoginPage() {
         </div>
         <p className="mt-4 text-center text-[11px] opacity-50" style={{ color: BRAND_WARM_WHITE }}>{APP_TAGLINE}</p>
       </div>
+      <RebornPoweredByFooter variant="login" className="relative mt-8 w-full max-w-[420px]" />
     </div>
   );
 }
