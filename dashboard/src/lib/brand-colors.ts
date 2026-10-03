@@ -1,5 +1,7 @@
 /** Official Reborn brand palette — keep in sync with dashboard/src/index.css */
 export const BRAND_BURGUNDY = '#800020';
+/** Dark maroon for the R mark in powered-by footers */
+export const BRAND_MAROON_MARK = '#6B0F1A';
 export const BRAND_BLUE_CHARCOAL = '#17252B';
 export const BRAND_WARM_WHITE = '#FAF8F3';
 

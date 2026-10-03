@@ -14,6 +14,7 @@ import {
   Store,
 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import Header from '@/components/Header';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -2072,6 +2073,7 @@ function ResellerShell() {
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>
         </main>
+        <RebornPoweredByFooter variant="panel" className="shrink-0" />
       </div>
     </div>
   );

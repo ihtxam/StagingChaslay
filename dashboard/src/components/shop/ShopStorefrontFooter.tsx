@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { resolveShopKey } from '@/lib/shop-cart';
 import ShopFooter from '@/components/shop/ShopFooter';
 import { Link } from 'react-router-dom';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { useI18n } from '@/lib/i18n';
 
 /** Shop footer when the shop key is known; compact fallback otherwise. */
@@ -43,7 +44,7 @@ export default function ShopStorefrontFooter({
             {t('shopOrder')}
           </Link>
         </nav>
-        <p className="mt-5 text-xs text-stone-400">{t('shopPoweredByRebornPOS')}</p>
+        <RebornPoweredByFooter variant="shop" className="mt-4 border-t-0 bg-transparent" />
       </div>
     </footer>
   );

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { resolveShopKey, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
 import { formatShopPhoneDisplay } from '@/lib/shop-phone-format';
 import { useI18n } from '@/lib/i18n';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 
 type ShopFooterInfo = {
   name: string;
@@ -132,6 +133,7 @@ export default function ShopFooter({ shopKey }: Props) {
             </Link>
           </p>
         </div>
+        <RebornPoweredByFooter variant="shop" className="-mx-[var(--shop-page-gutter,1rem)] border-t-0 bg-transparent" />
       </div>
     </footer>
   );

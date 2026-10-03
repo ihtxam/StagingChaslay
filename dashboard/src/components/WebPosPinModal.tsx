@@ -228,14 +228,14 @@ export default function WebPosPinModal({
   const footerLogoUrl = logoUrl?.trim() || REBORN_LOGO_WHITE;
 
   const gateKeypad = (
-    <div className="mx-auto grid w-full max-w-[min(17rem,82vw)] grid-cols-3 gap-2 sm:max-w-[18rem] sm:gap-2.5">
+    <div className="webpos-pin-gate-keypad mx-auto grid w-full max-w-[min(17rem,82vw)] grid-cols-3 gap-1.5 sm:max-w-[18rem] sm:gap-2">
       {GATE_KEYS.map((key) => (
         <button
           key={key}
           type="button"
           disabled={busy}
           onClick={() => handleGateKey(key)}
-          className="flex h-[3.25rem] w-full items-center justify-center rounded-xl bg-[#B8324A] text-2xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-14 sm:text-[1.65rem]"
+          className="webpos-pin-gate-key flex h-[2.75rem] w-full items-center justify-center rounded-xl bg-[#B8324A] text-xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-[3.25rem] sm:text-2xl md:h-12 lg:h-14 lg:text-[1.65rem]"
           aria-label={
             key === 'clear'
               ? t('webPosPinClear')
@@ -376,38 +376,40 @@ export default function WebPosPinModal({
         ) : null}
 
         <div
-          className={`flex min-h-0 flex-1 flex-col lg:flex-row ${
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden min-[640px]:flex-row ${
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <section className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-16 text-center lg:pb-12 lg:pt-12">
+          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-start min-[640px]:px-5 min-[640px]:pt-[max(0.75rem,env(safe-area-inset-top))] lg:px-6 lg:pb-4 lg:pt-8">
             <div className="flex items-baseline justify-center gap-1 sm:gap-2">
-              <span className="text-[clamp(3.5rem,12vw,7rem)] font-extralight leading-none tracking-tight">
+              <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
                 {clock.hour}:{clock.minute}
               </span>
               {clock.dayPeriod ? (
-                <span className="text-[clamp(1rem,3vw,1.75rem)] font-light uppercase tracking-wide text-white/80">
+                <span className="webpos-pin-gate-ampm text-[clamp(0.85rem,2.5vw,1.35rem)] font-light uppercase tracking-wide text-white/80 lg:text-[clamp(1rem,3vw,1.75rem)]">
                   {clock.dayPeriod}
                 </span>
               ) : null}
             </div>
-            <p className="mt-4 max-w-md text-[clamp(0.95rem,2.2vw,1.35rem)] font-light text-white/85">
+            <p className="webpos-pin-gate-date mt-2 max-w-md text-[clamp(0.8rem,2vw,1.1rem)] font-light leading-snug text-white/85 lg:mt-4 lg:text-[clamp(0.95rem,2.2vw,1.35rem)]">
               {clock.dateLabel}
             </p>
           </section>
 
-          <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-32 pt-4 sm:pb-36 lg:pb-16 lg:pt-12">
-            <div className="mb-6 flex max-w-md flex-col items-center gap-3 text-center">
+          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:px-5 min-[640px]:pb-3 lg:px-6 lg:pb-4 lg:pt-4">
+            <div className="mb-3 flex w-full max-w-md flex-col items-center gap-1.5 text-center sm:mb-4 sm:gap-2">
               {busy ? (
-                <Loader2 className="h-7 w-7 animate-spin text-white/80" aria-hidden />
+                <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
               ) : null}
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              <h1 className="text-lg font-semibold leading-tight tracking-tight sm:text-xl lg:text-2xl">
                 {t('webPosPinGateTitle')}
               </h1>
-              <p className="max-w-sm text-sm text-white/65">{t('webPosPinGateHint')}</p>
+              <p className="max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
+                {t('webPosPinGateHint')}
+              </p>
             </div>
 
-            <div className="mb-6">{pinDots}</div>
+            <div className="mb-3 sm:mb-4">{pinDots}</div>
 
             {error ? (
               <div className="mb-4 w-full max-w-md rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
@@ -419,14 +421,14 @@ export default function WebPosPinModal({
           </section>
         </div>
 
-        <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-4 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8">
-          <p className="pointer-events-auto text-xs font-medium tracking-wide text-white/70 sm:text-sm">
+        <footer className="webpos-pin-gate-footer z-10 flex shrink-0 items-end justify-between gap-3 border-t border-white/5 px-4 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-2.5 lg:px-8">
+          <p className="min-w-0 truncate text-[11px] font-medium tracking-wide text-white/70 sm:text-xs lg:text-sm">
             {footerProductName}
           </p>
           <img
             src={footerLogoUrl}
             alt={APP_NAME}
-            className="pointer-events-auto h-8 w-auto max-w-[min(40vw,12rem)] object-contain object-right sm:h-10"
+            className="h-6 w-auto max-w-[min(36vw,9rem)] shrink-0 object-contain object-right sm:h-7 lg:h-9"
           />
         </footer>
       </div>
