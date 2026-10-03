@@ -125,6 +125,8 @@ function MerchantsPage() {
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
     deliveryPlatformsAddonEnabled: false,
+    bexioAddonEnabled: false,
+    odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
@@ -139,6 +141,8 @@ function MerchantsPage() {
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
     deliveryPlatformsAddonEnabled: boolean;
+    bexioAddonEnabled: boolean;
+    odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
@@ -318,6 +322,8 @@ function MerchantsPage() {
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: !!limitsFor.deliveryPlatformsAddonEnabled,
+        bexioAddonEnabled: !!limitsFor.bexioAddonEnabled,
+        odooAddonEnabled: !!limitsFor.odooAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
@@ -706,6 +712,30 @@ function MerchantsPage() {
                 <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
               </span>
             </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.bexioAddonEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, bexioAddonEnabled: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium block">{t('accountingBexioTitle')}</span>
+                <span className="text-xs text-stone-500">{t('accountingAddonSuperadminHint')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!form.odooAddonEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, odooAddonEnabled: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium block">{t('accountingOdooTitle')}</span>
+                <span className="text-xs text-stone-500">{t('accountingAddonSuperadminHint')}</span>
+              </span>
+            </label>
             <label className="text-sm">
               {t('signageScreenLimit')}
               <input
@@ -833,6 +863,8 @@ function MerchantsPage() {
                           m.deliveryPlatformsAddonEnabled === true ||
                           m.justEatAddonEnabled === true ||
                           m.uberEatsAddonEnabled === true,
+                        bexioAddonEnabled: m.bexioAddonEnabled === true,
+                        odooAddonEnabled: m.odooAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                       })
                     }
@@ -1053,6 +1085,34 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('settingsDeliveryPlatforms')}</span>
                 <span className="text-xs text-stone-500">{t('deliveryPlatformAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.bexioAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, bexioAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('accountingBexioTitle')}</span>
+                <span className="text-xs text-stone-500">{t('accountingAddonSuperadminHint')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.odooAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, odooAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('accountingOdooTitle')}</span>
+                <span className="text-xs text-stone-500">{t('accountingAddonSuperadminHint')}</span>
               </span>
             </label>
             <label className="text-sm">

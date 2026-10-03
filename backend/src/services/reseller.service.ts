@@ -422,6 +422,8 @@ export class ResellerService {
       odsAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      bexioAddonEnabled?: boolean;
+      odooAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -468,6 +470,8 @@ export class ResellerService {
         odsAddonEnabled: input.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
+        bexioAddonEnabled: input.bexioAddonEnabled,
+        odooAddonEnabled: input.odooAddonEnabled,
       }
     );
     return created;
@@ -488,6 +492,8 @@ export class ResellerService {
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      bexioAddonEnabled?: boolean;
+      odooAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -504,6 +510,8 @@ export class ResellerService {
       deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
       kioskAddonEnabled: limits.kioskAddonEnabled,
+      bexioAddonEnabled: limits.bexioAddonEnabled,
+      odooAddonEnabled: limits.odooAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

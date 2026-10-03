@@ -14,6 +14,11 @@ export type BexioIntegrationConfig = {
   /** export_only | api */
   syncMode?: "export_only" | "api";
   personalAccessToken?: string | null;
+  oauthAccessToken?: string | null;
+  oauthRefreshToken?: string | null;
+  oauthExpiresAt?: string | null;
+  oauthScope?: string | null;
+  oauthConnectedAt?: string | null;
   referencePrefix?: string | null;
   accounts?: AccountingAccountMap;
   /** Bexio tax_id or code per VAT label, e.g. "8.1%": "17" */
@@ -86,6 +91,13 @@ function normalizeBexio(raw: unknown): BexioIntegrationConfig {
     syncMode: o.syncMode === "api" ? "api" : "export_only",
     personalAccessToken:
       o.personalAccessToken != null ? String(o.personalAccessToken).trim() || null : null,
+    oauthAccessToken:
+      o.oauthAccessToken != null ? String(o.oauthAccessToken).trim() || null : null,
+    oauthRefreshToken:
+      o.oauthRefreshToken != null ? String(o.oauthRefreshToken).trim() || null : null,
+    oauthExpiresAt: o.oauthExpiresAt != null ? String(o.oauthExpiresAt) : null,
+    oauthScope: o.oauthScope != null ? String(o.oauthScope).trim() || null : null,
+    oauthConnectedAt: o.oauthConnectedAt != null ? String(o.oauthConnectedAt) : null,
     referencePrefix:
       o.referencePrefix != null ? String(o.referencePrefix).trim().slice(0, 40) || null : null,
     accounts: normalizeAccountMap(o.accounts),
@@ -134,8 +146,12 @@ export function getAccountingIntegrationPublic(raw: unknown) {
     bexio: {
       ...bexio,
       personalAccessToken: undefined,
+      oauthAccessToken: undefined,
+      oauthRefreshToken: undefined,
       personalAccessTokenSet: !!bexio.personalAccessToken,
       personalAccessTokenMasked: maskSecret(bexio.personalAccessToken),
+      oauthConnected: !!(bexio.oauthRefreshToken || bexio.oauthAccessToken),
+      oauthConnectedAt: bexio.oauthConnectedAt || null,
     },
     odoo: {
       ...odoo,

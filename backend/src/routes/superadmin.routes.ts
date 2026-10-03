@@ -470,6 +470,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
       kioskAddonEnabled,
+      bexioAddonEnabled,
+      odooAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -508,6 +510,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
         deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
         kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
+        bexioAddonEnabled: bexioAddonEnabled === true,
+        odooAddonEnabled: odooAddonEnabled === true,
       }
     );
 
@@ -574,6 +578,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.odsAddonEnabled != null ||
       updates.odsEnabled != null ||
       updates.deliveryPlatformsAddonEnabled != null ||
+      updates.bexioAddonEnabled != null ||
+      updates.odooAddonEnabled != null ||
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null
@@ -614,6 +620,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.deliveryPlatformsAddonEnabled != null
             ? updates.deliveryPlatformsAddonEnabled === true
             : undefined,
+        bexioAddonEnabled:
+          updates.bexioAddonEnabled != null ? updates.bexioAddonEnabled === true : undefined,
+        odooAddonEnabled:
+          updates.odooAddonEnabled != null ? updates.odooAddonEnabled === true : undefined,
         storekeeperAddonEnabled:
           updates.storekeeperAddonEnabled != null
             ? isStorekeeperAddonEnabled(updates.storekeeperAddonEnabled)
@@ -638,6 +648,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.odsAddonEnabled;
       delete updates.odsEnabled;
       delete updates.deliveryPlatformsAddonEnabled;
+      delete updates.bexioAddonEnabled;
+      delete updates.odooAddonEnabled;
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;

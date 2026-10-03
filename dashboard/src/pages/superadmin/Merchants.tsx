@@ -122,6 +122,8 @@ const emptyForm = {
   kdsAddonEnabled: false,
   odsAddonEnabled: false,
   deliveryPlatformsAddonEnabled: false,
+  bexioAddonEnabled: false,
+  odooAddonEnabled: false,
   storekeeperAddonEnabled: false,
   kioskAddonEnabled: false,
   productSurface: 'full_pos' as MerchantProductSurface,
@@ -157,6 +159,8 @@ export default function Merchants() {
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
     deliveryPlatformsAddonEnabled: boolean;
+    bexioAddonEnabled: boolean;
+    odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     kioskAddonEnabled: boolean;
   }>({
@@ -169,6 +173,8 @@ export default function Merchants() {
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
     deliveryPlatformsAddonEnabled: false,
+    bexioAddonEnabled: false,
+    odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
     kioskAddonEnabled: false,
   });
@@ -269,6 +275,8 @@ export default function Merchants() {
           res.data.merchant?.deliveryPlatformsAddonEnabled === true ||
           res.data.merchant?.justEatAddonEnabled === true ||
           res.data.merchant?.uberEatsAddonEnabled === true,
+        bexioAddonEnabled: res.data.merchant?.bexioAddonEnabled === true,
+        odooAddonEnabled: res.data.merchant?.odooAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
       });
@@ -296,6 +304,8 @@ export default function Merchants() {
         kdsAddonEnabled: !!posLimits.kdsAddonEnabled,
         odsAddonEnabled: !!posLimits.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: !!posLimits.deliveryPlatformsAddonEnabled,
+        bexioAddonEnabled: !!posLimits.bexioAddonEnabled,
+        odooAddonEnabled: !!posLimits.odooAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
         kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
       });
@@ -321,6 +331,8 @@ export default function Merchants() {
           saved?.deliveryPlatformsAddonEnabled === true ||
           saved?.justEatAddonEnabled === true ||
           saved?.uberEatsAddonEnabled === true,
+        bexioAddonEnabled: saved?.bexioAddonEnabled === true,
+        odooAddonEnabled: saved?.odooAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
         kioskAddonEnabled: kioskOn,
       });
@@ -520,6 +532,8 @@ export default function Merchants() {
         kdsAddonEnabled: !!form.kdsAddonEnabled,
         odsAddonEnabled: !!form.odsAddonEnabled,
         deliveryPlatformsAddonEnabled: !!form.deliveryPlatformsAddonEnabled,
+        bexioAddonEnabled: !!form.bexioAddonEnabled,
+        odooAddonEnabled: !!form.odooAddonEnabled,
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
         kioskAddonEnabled: !!form.kioskAddonEnabled,
       });
@@ -1225,6 +1239,30 @@ export default function Merchants() {
                     <span className="text-xs text-gray-500">{t('deliveryPlatformAddonReadOnly')}</span>
                   </span>
                 </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.bexioAddonEnabled}
+                    onChange={(e) => setForm({ ...form, bexioAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">{t('accountingBexioTitle')}</span>
+                    <span className="text-xs text-gray-500">{t('accountingAddonSuperadminHint')}</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!form.odooAddonEnabled}
+                    onChange={(e) => setForm({ ...form, odooAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">{t('accountingOdooTitle')}</span>
+                    <span className="text-xs text-gray-500">{t('accountingAddonSuperadminHint')}</span>
+                  </span>
+                </label>
                 <label className="block text-sm pt-1">
                   <span className="font-medium">Screen limit</span>
                   <input
@@ -1680,6 +1718,52 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.deliveryPlatformsAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.bexioAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, bexioAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('accountingBexioTitle')}</span>
+                      <span className="text-xs text-gray-500">{t('accountingAddonSuperadminHint')}</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.bexioAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.bexioAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.odooAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, odooAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('accountingOdooTitle')}</span>
+                      <span className="text-xs text-gray-500">{t('accountingAddonSuperadminHint')}</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.odooAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.odooAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

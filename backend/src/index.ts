@@ -30,6 +30,7 @@ import signageRoutes, { signageMerchantRoutes } from "@/routes/signage.routes";
 import chaslayRoutes from "@/routes/chaslay";
 import webhooksRoutes from "@/routes/webhooks.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
+import bexioOauthRoutes from "@/routes/bexio-oauth.routes";
 import offersRoutes from "@/routes/offers.routes";
 import vouchersRoutes from "@/routes/vouchers.routes";
 import marketingRoutes from "@/routes/marketing.routes";
@@ -241,6 +242,7 @@ app.get("/api/public/status", async (_req: Request, res: Response) => {
 app.use(shopHostMiddleware);
 
 app.use("/api/auth", authRoutes);
+app.use("/api/oauth/bexio", bexioOauthRoutes);
 app.use("/api/licensing", licensingRoutes);
 app.use("/api/superadmin", superadminRoutes);
 app.use("/api/panel", panelRoutes);

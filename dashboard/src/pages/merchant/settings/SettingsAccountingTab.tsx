@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
-import { Download, Save, Calculator, type LucideIcon } from 'lucide-react';
+import { Download, Save, Calculator, Link2, Unlink, Upload, type LucideIcon } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -33,6 +34,8 @@ type BexioForm = {
   syncMode: 'export_only' | 'api';
   personalAccessToken: string;
   personalAccessTokenSet?: boolean;
+  oauthConnected?: boolean;
+  oauthConnectedAt?: string | null;
   referencePrefix: string;
   accounts: AccountForm;
   lastPushedAt?: string | null;
@@ -111,6 +114,8 @@ export default function SettingsAccountingTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<'bexio' | 'odoo' | null>(null);
+  const [pushing, setPushing] = useState<'bexio' | 'odoo' | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [licensed, setLicensed] = useState(false);
   const [bexioLicensed, setBexioLicensed] = useState(false);
   const [odooLicensed, setOdooLicensed] = useState(false);
@@ -135,6 +140,8 @@ export default function SettingsAccountingTab() {
         syncMode: ai.bexio?.syncMode === 'api' ? 'api' : 'export_only',
         personalAccessToken: '',
         personalAccessTokenSet: !!ai.bexio?.personalAccessTokenSet,
+        oauthConnected: !!ai.bexio?.oauthConnected,
+        oauthConnectedAt: ai.bexio?.oauthConnectedAt,
         referencePrefix: ai.bexio?.referencePrefix || 'CHASLAY',
         accounts: readAccounts(ai.bexio?.accounts),
         lastPushedAt: ai.bexio?.lastPushedAt,
@@ -165,6 +172,20 @@ export default function SettingsAccountingTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const status = searchParams.get('bexio');
+    if (!status) return;
+    if (status === 'connected') toast.success(t('accountingBexioOAuthOk'));
+    else if (status === 'error') {
+      const reason = searchParams.get('reason') || '';
+      toast.error(reason ? `${t('accountingBexioOAuthFailed')}: ${reason}` : t('accountingBexioOAuthFailed'));
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('bexio');
+    next.delete('reason');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, t]);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -215,6 +236,44 @@ export default function SettingsAccountingTab() {
       toast.error(e2.response?.data?.error || t('accountingTestFailed'));
     } finally {
       setTesting(null);
+    }
+  };
+
+  const connectBexioOAuth = async () => {
+    try {
+      const res = await api.get('/merchant/accounting/bexio/oauth/start');
+      const url = res.data?.url;
+      if (!url) throw new Error('Missing authorize URL');
+      window.location.href = url;
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('accountingBexioOAuthFailed'));
+    }
+  };
+
+  const disconnectBexioOAuth = async () => {
+    try {
+      await api.post('/merchant/accounting/bexio/oauth/disconnect');
+      toast.success(t('accountingBexioOAuthDisconnected'));
+      await load();
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('accountingBexioOAuthFailed'));
+    }
+  };
+
+  const pushPeriod = async (platform: 'bexio' | 'odoo', preset: 'today' | 'this_month' = 'today') => {
+    setPushing(platform);
+    try {
+      const res = await api.post(`/merchant/accounting/${platform}/push`, { preset });
+      if (res.data?.skipped) toast.success(t('accountingPushSkipped'));
+      else toast.success(t('accountingPushOk'));
+      await load();
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } } };
+      toast.error(e2.response?.data?.error || t('accountingPushFailed'));
+    } finally {
+      setPushing(null);
     }
   };
 
@@ -342,6 +401,30 @@ export default function SettingsAccountingTab() {
               onChange={(ev) => setBexio({ ...bexio, personalAccessToken: ev.target.value })}
             />
           </SettingsField>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {bexio.oauthConnected ? (
+              <>
+                <span className="text-sm text-muted-foreground">{t('accountingBexioOAuthConnected')}</span>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  onClick={() => void disconnectBexioOAuth()}
+                >
+                  <Unlink className="w-3.5 h-3.5" />
+                  {t('accountingBexioOAuthDisconnect')}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary text-sm inline-flex items-center gap-1"
+                onClick={() => void connectBexioOAuth()}
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                {t('accountingBexioOAuthConnect')}
+              </button>
+            )}
+          </div>
           <SettingsField label={t('accountingReferencePrefix')}>
             <input
               className="input w-full max-w-xs"
@@ -368,6 +451,28 @@ export default function SettingsAccountingTab() {
             >
               {testing === 'bexio' ? t('testing') : t('accountingTestConnection')}
             </button>
+            {bexio.syncMode === 'api' && bexio.enabled ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  disabled={pushing === 'bexio'}
+                  onClick={() => void pushPeriod('bexio', 'today')}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {pushing === 'bexio' ? t('saving') : t('accountingPushToday')}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  disabled={pushing === 'bexio'}
+                  onClick={() => void pushPeriod('bexio', 'this_month')}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {pushing === 'bexio' ? t('saving') : t('accountingPushMonth')}
+                </button>
+              </>
+            ) : null}
           </div>
         </Section>
       )}
@@ -446,6 +551,28 @@ export default function SettingsAccountingTab() {
             >
               {testing === 'odoo' ? t('testing') : t('accountingTestConnection')}
             </button>
+            {odoo.syncMode === 'api' && odoo.enabled ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  disabled={pushing === 'odoo'}
+                  onClick={() => void pushPeriod('odoo', 'today')}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {pushing === 'odoo' ? t('saving') : t('accountingPushToday')}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1"
+                  disabled={pushing === 'odoo'}
+                  onClick={() => void pushPeriod('odoo', 'this_month')}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {pushing === 'odoo' ? t('saving') : t('accountingPushMonth')}
+                </button>
+              </>
+            ) : null}
           </div>
         </Section>
       )}

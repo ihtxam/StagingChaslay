@@ -2622,9 +2622,11 @@ router.post(
         unknown
       >;
       const preset = String(body.preset || req.query.preset || "today");
-      const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+      const { AccountingSyncService, parseAccountingReportPreset } = await import(
+        "@/services/accounting-sync.service"
+      );
       const result = await AccountingSyncService.pushPeriodToBexio(merchantId, {
-        preset: preset as "today",
+        preset: parseAccountingReportPreset(preset),
         from: body.from ? String(body.from) : undefined,
         to: body.to ? String(body.to) : undefined,
         staffId: scope.staffId,
@@ -2637,6 +2639,88 @@ router.post(
       if (merchantId) {
         const { AccountingSyncService } = await import("@/services/accounting-sync.service");
         await AccountingSyncService.recordPushError(merchantId, "bexio", msg).catch(() => {});
+      }
+      res.status(400).json({ error: msg });
+    }
+  }
+);
+
+router.get(
+  "/accounting/bexio/oauth/start",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { readBexioAddonEnabled } = await import("@/lib/accounting-integration-addon");
+      if (!(await readBexioAddonEnabled(merchantId))) {
+        return res.status(403).json({ error: "Bexio add-on is not enabled" });
+      }
+      const { buildBexioAuthorizeUrl, bexioOAuthConfigured } = await import("@/lib/bexio-oauth");
+      if (!bexioOAuthConfigured()) {
+        return res.status(503).json({ error: "Bexio OAuth is not configured on this server" });
+      }
+      const url = buildBexioAuthorizeUrl(merchantId);
+      res.json({ success: true, url });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to start Bexio OAuth",
+      });
+    }
+  }
+);
+
+router.post(
+  "/accounting/bexio/oauth/disconnect",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { clearBexioOAuthTokens } = await import("@/lib/bexio-oauth");
+      await clearBexioOAuthTokens(merchantId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to disconnect Bexio",
+      });
+    }
+  }
+);
+
+router.post(
+  "/accounting/odoo/push",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const scope = salesScopeForActor(resolveReportActor(req));
+      const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<
+        string,
+        unknown
+      >;
+      const preset = String(body.preset || req.query.preset || "today");
+      const { AccountingSyncService, parseAccountingReportPreset } = await import(
+        "@/services/accounting-sync.service"
+      );
+      const result = await AccountingSyncService.pushPeriodToOdoo(merchantId, {
+        preset: parseAccountingReportPreset(preset),
+        from: body.from ? String(body.from) : undefined,
+        to: body.to ? String(body.to) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
+      });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      const merchantId = req.merchantId;
+      const msg = error instanceof Error ? error.message : "Odoo push failed";
+      if (merchantId) {
+        const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+        await AccountingSyncService.recordPushError(merchantId, "odoo", msg).catch(() => {});
       }
       res.status(400).json({ error: msg });
     }

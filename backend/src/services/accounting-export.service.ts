@@ -40,6 +40,8 @@ type JournalLine = {
   taxCode?: string;
 };
 
+export type AccountingJournalLine = JournalLine;
+
 function resolveAccounts(
   map: AccountingAccountMap | undefined,
   fallback: AccountingAccountMap
@@ -229,7 +231,7 @@ function journalToOdooCsv(lines: JournalLine[], journalCode: string): string {
 }
 
 export class AccountingExportService {
-  static async buildExport(merchantId: string, opts: AccountingExportOpts) {
+  static async buildJournal(merchantId: string, opts: AccountingExportOpts) {
     const overview = await PosReportsService.getOverviewDashboard(merchantId, opts);
     const { getDb, schema } = await import("@/db");
     const { eq } = await import("drizzle-orm");
@@ -250,13 +252,21 @@ export class AccountingExportService {
     const odooAccounts = resolveAccounts(settings.odoo?.accounts, fallback);
     const accounts = target === "odoo" ? odooAccounts : bexioAccounts;
     const vatCodes = settings.bexio?.vatCodeByLabel || {};
-    const lines = buildJournalLines(
-      merchantId,
-      merchant?.name || overview.businessName || "Store",
+    const businessName = merchant?.name || overview.businessName || "Store";
+    const lines = buildJournalLines(merchantId, businessName, overview, accounts, vatCodes);
+    return {
       overview,
-      accounts,
-      vatCodes
-    );
+      lines,
+      reference: lines[0]?.reference,
+      businessName,
+      settings,
+      target,
+    };
+  }
+
+  static async buildExport(merchantId: string, opts: AccountingExportOpts) {
+    const journal = await this.buildJournal(merchantId, opts);
+    const { overview, lines, reference, businessName, settings, target } = journal;
     const safeName = (overview.businessName || "Report")
       .replace(/[^\w\- ]+/g, "")
       .trim()
@@ -273,20 +283,20 @@ export class AccountingExportService {
         filename: `Bexio_journal_${safeName}_${period}.csv`,
         mime: "text/csv; charset=utf-8",
         overview,
-        reference: lines[0]?.reference,
+        reference,
         lineCount: lines.length,
       };
     }
 
     if (target === "odoo") {
-      const journal = settings.odoo?.journalCode || "MISC";
-      const buffer = Buffer.from(journalToOdooCsv(lines, journal), "utf8");
+      const journalCode = settings.odoo?.journalCode || "MISC";
+      const buffer = Buffer.from(journalToOdooCsv(lines, journalCode), "utf8");
       return {
         buffer,
         filename: `Odoo_journal_${safeName}_${period}.csv`,
         mime: "text/csv; charset=utf-8",
         overview,
-        reference: lines[0]?.reference,
+        reference,
         lineCount: lines.length,
       };
     }

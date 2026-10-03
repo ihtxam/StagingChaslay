@@ -364,6 +364,8 @@ export class MerchantService {
       kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
+      bexioAddonEnabled?: boolean;
+      odooAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -525,6 +527,14 @@ export class MerchantService {
       if (options?.deliveryPlatformsAddonEnabled === true) {
         await writeJustEatAddonEnabled(created.id, true);
         await writeUberEatsAddonEnabled(created.id, true);
+      }
+      if (options?.bexioAddonEnabled === true) {
+        const { writeBexioAddonEnabled } = await import("@/lib/accounting-integration-addon");
+        await writeBexioAddonEnabled(created.id, true);
+      }
+      if (options?.odooAddonEnabled === true) {
+        const { writeOdooAddonEnabled } = await import("@/lib/accounting-integration-addon");
+        await writeOdooAddonEnabled(created.id, true);
       }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
