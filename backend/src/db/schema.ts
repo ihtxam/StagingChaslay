@@ -334,6 +334,10 @@ export const merchants = pgTable(
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
     uberEatsAddonEnabled: boolean("uber_eats_addon_enabled").default(false).notNull(),
+    /** Paid Bexio accounting export / API addon. */
+    bexioAddonEnabled: boolean("bexio_addon_enabled").default(false).notNull(),
+    /** Paid Odoo accounting export / API addon. */
+    odooAddonEnabled: boolean("odoo_addon_enabled").default(false).notNull(),
     /** Paid mobile storekeeper intake app (barcode scan, receive stock). */
     storekeeperAddonEnabled: boolean("storekeeper_addon_enabled").default(false).notNull(),
     /**
@@ -424,6 +428,13 @@ export const merchants = pgTable(
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
     deliveryPlatformSettings: json("delivery_platform_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Bexio / Odoo credentials, account mapping, last sync metadata:
+     * { bexio: { ... }, odoo: { ... } }
+     */
+    accountingIntegrationSettings: json("accounting_integration_settings").$type<
+      Record<string, unknown> | null
+    >(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
     /** Incremented to invalidate all merchant/staff JWTs and force re-login. */
     authEpoch: integer("auth_epoch").default(0).notNull(),

@@ -32,6 +32,13 @@ import {
   normalizeDeliveryPlatformSettings,
   type DeliveryPlatformSettings,
 } from "@/lib/delivery-platform-settings";
+import {
+  getAccountingIntegrationPublic,
+  mergeAccountingIntegrationSettings,
+  normalizeAccountingIntegrationSettings,
+  type AccountingIntegrationSettings,
+} from "@/lib/accounting-integration-settings";
+import { isBexioAddonEnabled, isOdooAddonEnabled } from "@/lib/accounting-integration-addon";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { getFiskalyPublic, mergeFiskalySettings, type FiskalySettings } from "@/lib/fiskaly-settings";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
@@ -130,6 +137,12 @@ export class MerchantSettingsService {
     const odsOn = isOdsAddonEnabled(merchant.odsAddonEnabled);
     const justEatOn = merchant.justEatAddonEnabled === true;
     const uberEatsOn = merchant.uberEatsAddonEnabled === true;
+    const bexioOn = isBexioAddonEnabled(
+      (merchant as { bexioAddonEnabled?: boolean }).bexioAddonEnabled
+    );
+    const odooOn = isOdooAddonEnabled(
+      (merchant as { odooAddonEnabled?: boolean }).odooAddonEnabled
+    );
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
 
@@ -235,6 +248,9 @@ export class MerchantSettingsService {
       justEatAddonEnabled: justEatOn,
       uberEatsAddonEnabled: uberEatsOn,
       deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
+      bexioAddonEnabled: bexioOn,
+      odooAddonEnabled: odooOn,
+      accountingAddonEnabled: bexioOn || odooOn,
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
@@ -320,6 +336,9 @@ export class MerchantSettingsService {
         }
       })(),
       deliveryPlatformSettings: getDeliveryPlatformPublic(merchant.deliveryPlatformSettings),
+      accountingIntegrationSettings: getAccountingIntegrationPublic(
+        (merchant as { accountingIntegrationSettings?: unknown }).accountingIntegrationSettings
+      ),
       status: merchant.status,
       subscriptionPlan: merchant.subscriptionPlan,
       editionId: (merchant as { editionId?: string | null }).editionId || null,
@@ -431,6 +450,10 @@ export class MerchantSettingsService {
       posCheckoutSettings?: PosCheckoutSettings | Partial<PosCheckoutSettings> | null;
       customerDisplaySettings?: CustomerDisplaySettings | Partial<CustomerDisplaySettings> | null;
       deliveryPlatformSettings?: DeliveryPlatformSettings | Record<string, unknown> | null;
+      accountingIntegrationSettings?:
+        | AccountingIntegrationSettings
+        | Record<string, unknown>
+        | null;
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
       inventoryExpiryAlertDays?: number;
@@ -830,6 +853,36 @@ export class MerchantSettingsService {
         }
       }
       patch.deliveryPlatformSettings = applyProductionCredentialDefaults(merged);
+    }
+
+    if (updates.accountingIntegrationSettings !== undefined) {
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: {
+          accountingIntegrationSettings: true,
+          bexioAddonEnabled: true,
+          odooAddonEnabled: true,
+        },
+      });
+      const merged = mergeAccountingIntegrationSettings(
+        current?.accountingIntegrationSettings,
+        updates.accountingIntegrationSettings
+      );
+      const before = normalizeAccountingIntegrationSettings(
+        current?.accountingIntegrationSettings
+      );
+      const after = normalizeAccountingIntegrationSettings(merged);
+      if (after.bexio?.enabled && !before.bexio?.enabled) {
+        if (!isBexioAddonEnabled(current?.bexioAddonEnabled)) {
+          throw new Error("Bexio integration requires the Bexio add-on");
+        }
+      }
+      if (after.odoo?.enabled && !before.odoo?.enabled) {
+        if (!isOdooAddonEnabled(current?.odooAddonEnabled)) {
+          throw new Error("Odoo integration requires the Odoo add-on");
+        }
+      }
+      patch.accountingIntegrationSettings = merged;
     }
 
     // Auto-create slug when enabling shop without one

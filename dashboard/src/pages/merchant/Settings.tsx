@@ -30,6 +30,7 @@ import {
   Copy,
   Wallet,
   Store,
+  Calculator,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -57,6 +58,7 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
+import { isAccountingLicensed } from '@/lib/accounting-addon';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
@@ -108,6 +110,7 @@ import SettingsTablesTab from './settings/SettingsTablesTab';
 import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
+import SettingsAccountingTab from './settings/SettingsAccountingTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
@@ -392,6 +395,7 @@ type TabId =
   | 'ods'
   | 'customerDisplay'
   | 'fiscal'
+  | 'accounting'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -414,6 +418,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'ods',
   'customerDisplay',
   'fiscal',
+  'accounting',
   'signage',
   'kiosk',
   'email',
@@ -786,6 +791,12 @@ export default function Settings() {
           icon: Tv,
         },
         { id: 'fiscal' as const, label: t('settingsFiscal'), navLabel: t('settingsNavFiscal'), icon: FileCheck },
+        {
+          id: 'accounting' as const,
+          label: t('settingsAccounting'),
+          navLabel: t('settingsNavAccounting'),
+          icon: Calculator,
+        },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -854,6 +865,7 @@ export default function Settings() {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && isRetailMerchant) return false;
+        if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
         return true;
       }),
     [canOpenSettingsTab, isRetailMerchant, showTablesSettings, tabs]
@@ -5392,6 +5404,8 @@ export default function Settings() {
               onSettingsChange={(next) => setSettings((prev) => (prev ? { ...prev, ...next } : prev))}
             />
           )}
+
+          {tab === 'accounting' && <SettingsAccountingTab />}
 
           {tab === 'signage' && (
             <div className="space-y-5">

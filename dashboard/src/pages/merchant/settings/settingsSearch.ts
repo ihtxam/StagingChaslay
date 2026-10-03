@@ -15,6 +15,7 @@ export type SettingsTabId =
   | 'ods'
   | 'customerDisplay'
   | 'fiscal'
+  | 'accounting'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -614,6 +615,19 @@ export function buildSettingsSearchIndex(
         'nf525',
         'kassensichv',
         t('settingsFiscal'),
+      ],
+    },
+    {
+      id: 'accounting-bexio-odoo',
+      tab: 'accounting',
+      keywords: [
+        'accounting',
+        'bexio',
+        'odoo',
+        'vat',
+        'export',
+        'journal',
+        t('settingsAccounting'),
       ],
     },
     {

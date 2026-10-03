@@ -206,6 +206,12 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
   uber_eats_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
+  bexio_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS bexio_addon_enabled boolean NOT NULL DEFAULT false",
+  odoo_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS odoo_addon_enabled boolean NOT NULL DEFAULT false",
+  accounting_integration_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS accounting_integration_settings jsonb",
   storekeeper_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
   panel_nav_hidden:
@@ -1461,6 +1467,21 @@ export async function ensureJustEatAddonColumn(): Promise<void> {
 
 export async function ensureUberEatsAddonColumn(): Promise<void> {
   await runPatch("uber_eats_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureBexioAddonColumn(): Promise<void> {
+  await runPatch("bexio_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureOdooAddonColumn(): Promise<void> {
+  await runPatch("odoo_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureAccountingIntegrationSettingsColumn(): Promise<void> {
+  await runPatch("accounting_integration_settings");
   await ensureMerchantTables();
 }
 

@@ -2505,6 +2505,144 @@ router.get(
   }
 );
 
+/**
+ * GET /api/merchant/reports/accounting-export?target=bexio|odoo|standard&preset=...
+ */
+router.get(
+  "/reports/accounting-export",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const actor = resolveReportActor(req);
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({
+          error: "Own-sales reports require a staff PIN session",
+        });
+      }
+      const target = String(req.query.target || "standard").toLowerCase();
+      if (target === "bexio") {
+        const { readBexioAddonEnabled } = await import("@/lib/accounting-integration-addon");
+        if (!(await readBexioAddonEnabled(merchantId))) {
+          return res.status(403).json({ error: "Bexio add-on is not enabled" });
+        }
+      }
+      if (target === "odoo") {
+        const { readOdooAddonEnabled } = await import("@/lib/accounting-integration-addon");
+        if (!(await readOdooAddonEnabled(merchantId))) {
+          return res.status(403).json({ error: "Odoo add-on is not enabled" });
+        }
+      }
+      const preset = String(req.query.preset || "today") as
+        | "today"
+        | "yesterday"
+        | "last_week"
+        | "this_month"
+        | "last_month"
+        | "last_3_months"
+        | "custom";
+      const { AccountingExportService } = await import("@/services/accounting-export.service");
+      const file = await AccountingExportService.buildExport(merchantId, {
+        preset,
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
+        target: target === "bexio" || target === "odoo" ? target : "standard",
+      });
+      res.setHeader("Content-Type", file.mime);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${file.filename.replace(/"/g, "")}"`
+      );
+      res.send(file.buffer);
+    } catch (error) {
+      console.error("Accounting export failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to export accounting data",
+      });
+    }
+  }
+);
+
+router.post(
+  "/accounting/bexio/test",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+      const result = await AccountingSyncService.testBexioConnection(merchantId);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Bexio connection failed",
+      });
+    }
+  }
+);
+
+router.post(
+  "/accounting/odoo/test",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+      const result = await AccountingSyncService.testOdooConnection(merchantId);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Odoo connection failed",
+      });
+    }
+  }
+);
+
+router.post(
+  "/accounting/bexio/push",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import(
+        "@/lib/report-sales-scope"
+      );
+      const scope = salesScopeForActor(resolveReportActor(req));
+      const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<
+        string,
+        unknown
+      >;
+      const preset = String(body.preset || req.query.preset || "today");
+      const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+      const result = await AccountingSyncService.pushPeriodToBexio(merchantId, {
+        preset: preset as "today",
+        from: body.from ? String(body.from) : undefined,
+        to: body.to ? String(body.to) : undefined,
+        staffId: scope.staffId,
+        staffName: scope.staffName,
+      });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      const merchantId = req.merchantId;
+      const msg = error instanceof Error ? error.message : "Bexio push failed";
+      if (merchantId) {
+        const { AccountingSyncService } = await import("@/services/accounting-sync.service");
+        await AccountingSyncService.recordPushError(merchantId, "bexio", msg).catch(() => {});
+      }
+      res.status(400).json({ error: msg });
+    }
+  }
+);
+
 /** GET/PUT report email settings + POST send */
 router.get(
   "/reports/email-settings",

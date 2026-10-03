@@ -47,6 +47,14 @@ import {
   writeUberEatsAddonEnabled,
 } from "@/lib/delivery-platform-addon";
 import {
+  isBexioAddonEnabled,
+  isOdooAddonEnabled,
+  readBexioAddonEnabled,
+  readOdooAddonEnabled,
+  writeBexioAddonEnabled,
+  writeOdooAddonEnabled,
+} from "@/lib/accounting-integration-addon";
+import {
   isKioskAddonEnabled,
   readKioskAddonEnabled,
   readKioskAddonEnabledMap,
@@ -279,6 +287,12 @@ export class MerchantService {
       const uberEatsOn = await readUberEatsAddonEnabled(merchantId).catch(() =>
         isUberEatsAddonEnabled(merchant.uberEatsAddonEnabled)
       );
+      const bexioOn = await readBexioAddonEnabled(merchantId).catch(() =>
+        isBexioAddonEnabled((merchant as { bexioAddonEnabled?: boolean }).bexioAddonEnabled)
+      );
+      const odooOn = await readOdooAddonEnabled(merchantId).catch(() =>
+        isOdooAddonEnabled((merchant as { odooAddonEnabled?: boolean }).odooAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -295,6 +309,9 @@ export class MerchantService {
         justEatAddonEnabled: justEatOn,
         uberEatsAddonEnabled: uberEatsOn,
         deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
+        bexioAddonEnabled: bexioOn,
+        odooAddonEnabled: odooOn,
+        accountingAddonEnabled: bexioOn || odooOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -627,6 +644,8 @@ export class MerchantService {
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
+      bexioAddonEnabled?: boolean;
+      odooAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
     }
   ) {
@@ -670,6 +689,14 @@ export class MerchantService {
       await writeUberEatsAddonEnabled(merchantId, limits.deliveryPlatformsAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.bexioAddonEnabled !== undefined) {
+      await writeBexioAddonEnabled(merchantId, limits.bexioAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.odooAddonEnabled !== undefined) {
+      await writeOdooAddonEnabled(merchantId, limits.odooAddonEnabled);
+      wroteAddon = true;
+    }
     if (limits.kioskAddonEnabled !== undefined) {
       await writeKioskAddonEnabled(merchantId, limits.kioskAddonEnabled);
       wroteAddon = true;
@@ -680,7 +707,7 @@ export class MerchantService {
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, or deliveryPlatformsAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

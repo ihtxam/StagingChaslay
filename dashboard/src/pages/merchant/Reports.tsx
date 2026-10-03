@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Download, Mail, Plus, Printer, Settings2, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { isBexioLicensed, isOdooLicensed } from '@/lib/accounting-addon';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
   generateEodReportText,
@@ -115,6 +116,8 @@ export default function ReportsPage() {
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [bexioLicensed, setBexioLicensed] = useState(false);
+  const [odooLicensed, setOdooLicensed] = useState(false);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ preset });
@@ -142,6 +145,8 @@ export default function ReportsPage() {
       setPrintSettings(s?.posPrintSettings || null);
       setBusinessName(s?.name || '');
       setShopLogoUrl(s?.shopLogoUrl || s?.posPrintSettings?.receiptLogoUrl || null);
+      setBexioLicensed(isBexioLicensed(s));
+      setOdooLicensed(isOdooLicensed(s));
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('reportsLoadFailed'));
     } finally {
@@ -214,6 +219,30 @@ export default function ReportsPage() {
       const filename =
         match?.[1] ||
         `Report_${report?.range?.from || 'export'}.${format === 'csv' ? 'csv' : 'xlsx'}`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t('ovExportDone'));
+      setExportOpen(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || t('ovExportFailed'));
+    }
+  };
+
+  const downloadAccountingExport = async (target: 'bexio' | 'odoo' | 'standard') => {
+    try {
+      const params = new URLSearchParams(queryParams);
+      params.set('target', target);
+      const res = await api.get(`/merchant/reports/accounting-export?${params.toString()}`, {
+        responseType: 'blob',
+      });
+      const cd = String(res.headers['content-disposition'] || '');
+      const match = cd.match(/filename="?([^"]+)"?/i);
+      const ext = target === 'standard' ? 'xlsx' : 'csv';
+      const filename = match?.[1] || `Accounting_${report?.range?.from || 'export'}.${ext}`;
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
@@ -417,6 +446,36 @@ export default function ReportsPage() {
                 >
                   CSV
                 </button>
+                {(bexioLicensed || odooLicensed) && (
+                  <>
+                    <div className="my-1 border-t border-[var(--border)]" />
+                    {bexioLicensed && (
+                      <button
+                        type="button"
+                        className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
+                        onClick={() => void downloadAccountingExport('bexio')}
+                      >
+                        {t('accountingExportBexio')}
+                      </button>
+                    )}
+                    {odooLicensed && (
+                      <button
+                        type="button"
+                        className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
+                        onClick={() => void downloadAccountingExport('odoo')}
+                      >
+                        {t('accountingExportOdoo')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)]"
+                      onClick={() => void downloadAccountingExport('standard')}
+                    >
+                      {t('accountingExportWorkbook')}
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   className="w-full text-left text-sm px-2.5 py-1.5 rounded hover:bg-[var(--bg-muted)] inline-flex items-center gap-1.5"
