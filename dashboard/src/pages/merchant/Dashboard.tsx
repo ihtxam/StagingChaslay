@@ -7,6 +7,7 @@ import Header from '@/components/Header';
 import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
+import CateringGuidePage from './CateringGuidePage';
 import Inventory from './Inventory';
 import InventoryLayout from './inventory/InventoryLayout';
 import {
@@ -1332,6 +1333,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/reports" allow={allow}>
                   <Reports />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/catering-guide"
+              element={
+                <PanelRouteGuard path="/merchant/products" allow={allow}>
+                  <CateringGuidePage />
                 </PanelRouteGuard>
               }
             />

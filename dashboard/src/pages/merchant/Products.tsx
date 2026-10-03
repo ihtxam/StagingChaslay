@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronLeft,
@@ -174,6 +175,9 @@ type FormState = {
   cateringMaxGuests: string;
   cateringDefaultGuests: string;
   cateringTierSlotId: string;
+  cateringServesCount: string;
+  cateringMinOrderQty: string;
+  cateringLeadTimeHours: string;
   specifications: SpecRow[];
   modifierGroupIds: string[];
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
@@ -216,6 +220,9 @@ const emptyForm = (): FormState => ({
   cateringMaxGuests: '',
   cateringDefaultGuests: '',
   cateringTierSlotId: '',
+  cateringServesCount: '',
+  cateringMinOrderQty: '',
+  cateringLeadTimeHours: '',
   specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
@@ -236,6 +243,9 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
   | 'cateringMaxGuests'
   | 'cateringDefaultGuests'
   | 'cateringTierSlotId'
+  | 'cateringServesCount'
+  | 'cateringMinOrderQty'
+  | 'cateringLeadTimeHours'
 > {
   const c = normalizeCateringConfig(raw);
   return {
@@ -253,6 +263,9 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
     cateringMaxGuests: c.maxGuests != null ? String(c.maxGuests) : '',
     cateringDefaultGuests: c.defaultGuests != null ? String(c.defaultGuests) : '',
     cateringTierSlotId: c.tierSlotId ?? '',
+    cateringServesCount: c.servesCount != null ? String(c.servesCount) : '',
+    cateringMinOrderQty: c.minOrderQty != null ? String(c.minOrderQty) : '',
+    cateringLeadTimeHours: c.leadTimeHours != null ? String(c.leadTimeHours) : '',
   };
 }
 
@@ -899,6 +912,15 @@ export default function Products() {
                 ? Math.max(1, Math.floor(Number(form.cateringDefaultGuests) || 1))
                 : undefined,
               tierSlotId: form.cateringTierSlotId.trim() || null,
+              servesCount: form.cateringServesCount.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringServesCount) || 1))
+                : undefined,
+              minOrderQty: form.cateringMinOrderQty.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringMinOrderQty) || 1))
+                : undefined,
+              leadTimeHours: form.cateringLeadTimeHours.trim()
+                ? Math.max(0, Math.floor(Number(form.cateringLeadTimeHours) || 0))
+                : undefined,
             }),
           }
         : { cateringConfig: { enabled: false } }),
@@ -2035,6 +2057,12 @@ export default function Products() {
                       <div>
                         <h3 className="text-sm font-semibold">{t('cateringPackageTitle')}</h3>
                         <p className="text-[11px] muted mt-0.5">{t('cateringPackageHint')}</p>
+                        <Link
+                          to="/merchant/products/catering-guide"
+                          className="text-[11px] font-semibold text-teal-700 hover:underline mt-1 inline-block"
+                        >
+                          {t('cateringGuideNav')} →
+                        </Link>
                       </div>
                       <label className="flex items-center gap-2 text-sm shrink-0 cursor-pointer">
                         <input
@@ -2130,6 +2158,41 @@ export default function Products() {
                               setForm({ ...form, cateringDefaultGuests: e.target.value })
                             }
                           />
+                        </Field>
+                        <Field label={t('cateringServesCount')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringServesCount}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringServesCount: e.target.value })
+                            }
+                          />
+                          <p className="text-[11px] muted mt-1">{t('cateringServesCountHint')}</p>
+                        </Field>
+                        <Field label={t('cateringMinOrderQty')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringMinOrderQty}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringMinOrderQty: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label={t('cateringLeadTimeHours')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={0}
+                            value={form.cateringLeadTimeHours}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringLeadTimeHours: e.target.value })
+                            }
+                          />
+                          <p className="text-[11px] muted mt-1">{t('cateringLeadTimeHint')}</p>
                         </Field>
                         {(form.cateringPricingMode === 'per_person' ||
                           form.cateringPricingMode === 'mixed') &&
