@@ -48,6 +48,7 @@ import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/p
 import { activateWaitingServiceWorker } from '@/lib/pwa-recover';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
+const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 
 function LegacyReceiptRedirect() {
@@ -387,6 +388,14 @@ function App() {
               <I18nProvider storageKey={PANEL_LANG_KEY}>
                 <SignageDisplayPage />
               </I18nProvider>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/locations"
+            element={
+              <ShopRoutes>
+                <ShopLocationsPage />
+              </ShopRoutes>
             }
           />
           <Route

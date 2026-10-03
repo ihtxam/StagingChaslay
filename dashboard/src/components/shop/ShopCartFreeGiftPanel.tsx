@@ -30,12 +30,25 @@ export default function ShopCartFreeGiftPanel({
   const nextLocked = tiers.find((x) => !x.unlocked);
   const hasUnlockedUnclaimed = tiers.some((x) => x.unlocked && !x.claimedProductId);
 
+  const freeGiftBubbleCount = tiers.reduce((sum, tier) => {
+    if (!tier.unlocked || tier.claimedProductId) return sum;
+    return sum + Math.max(1, tier.productIds.length);
+  }, 0);
+
   return (
     <div
-      className={`rounded-xl border border-stone-700 bg-stone-800 text-white ${
+      className={`relative rounded-xl border border-stone-700 bg-stone-800 text-white ${
         compact ? 'p-3' : 'p-4'
       }`}
     >
+      {freeGiftBubbleCount > 1 ? (
+        <span
+          className="absolute -left-2 top-3 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-amber-400 px-1.5 text-xs font-bold text-stone-900 shadow"
+          aria-label={String(freeGiftBubbleCount)}
+        >
+          {freeGiftBubbleCount}
+        </span>
+      ) : null}
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
           <Gift size={20} className="text-amber-300" />

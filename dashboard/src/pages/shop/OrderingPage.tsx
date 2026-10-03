@@ -74,6 +74,11 @@ import {
   type LiveCartFreeGiftOffer,
 } from '@/lib/cart-free-gift';
 import { formatShopMoney, inferShopCurrency } from '@/lib/shop-currency';
+import { isCateringProduct } from '@/lib/catering';
+import {
+  applyShopLocationSessionToDraft,
+  loadShopLocationSession,
+} from '@/lib/shop-location-session';
 import ShopCartFreeGiftPanel from '@/components/shop/ShopCartFreeGiftPanel';
 import ShopFreeGiftPickerModal from '@/components/shop/ShopFreeGiftPickerModal';
 import {
@@ -240,9 +245,18 @@ export default function OrderingPage() {
     }
 
     const stored = loadCart(shopKey);
+    const locSession = loadShopLocationSession(shopKey);
     if (stored) {
-      setDraft(stored);
-      if (stored.deliveryInfo) setDeliveryInfo(stored.deliveryInfo);
+      let next = stored;
+      if (locSession && (!locSlug || locSession.locationSlug === locSlug)) {
+        next = applyShopLocationSessionToDraft(stored, locSession);
+      }
+      setDraft(next);
+      if (next.deliveryInfo) setDeliveryInfo(next.deliveryInfo);
+    } else if (locSession && (!locSlug || locSession.locationSlug === locSlug)) {
+      const next = applyShopLocationSessionToDraft(emptyDraft(), locSession);
+      setDraft(next);
+      if (next.deliveryInfo) setDeliveryInfo(next.deliveryInfo);
     }
 
     const load = async () => {
@@ -606,11 +620,26 @@ export default function OrderingPage() {
     return list;
   }, [menu]);
 
-  /** Hide backend "Offers" catalog bucket — promos live in the shopOffers shelf. */
-  const visibleMenuCategories = useMemo(
-    () => menu.filter((cat) => !cat.isOffersCategory && (cat.items?.length ?? 0) > 0),
-    [menu]
+  const shopOrderMode = useMemo(
+    () => loadShopLocationSession(shopKey)?.orderMode || 'menu',
+    [shopKey, locSlug]
   );
+
+  /** Hide backend "Offers" catalog bucket — promos live in the shopOffers shelf. */
+  const visibleMenuCategories = useMemo(() => {
+    let cats = menu.filter((cat) => !cat.isOffersCategory && (cat.items?.length ?? 0) > 0);
+    if (shopOrderMode === 'catering') {
+      cats = cats
+        .map((cat) => ({
+          ...cat,
+          items: (cat.items || []).filter((p) =>
+            isCateringProduct(p.productType, p.cateringConfig)
+          ),
+        }))
+        .filter((cat) => (cat.items?.length ?? 0) > 0);
+    }
+    return cats;
+  }, [menu, shopOrderMode]);
 
   const menuSearchResults = useMemo(() => {
     const q = menuSearchQuery.trim().toLowerCase();

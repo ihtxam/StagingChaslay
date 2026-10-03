@@ -1145,7 +1145,25 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
     }
     const { LocationsService } = await import("@/services/locations.service");
     const locations = await LocationsService.listPublicForShop(merchant.id);
-    res.json({ success: true, locations });
+    const db = getDb();
+    const cateringProducts = await db.query.products.findMany({
+      where: and(
+        eq(schema.products.merchantId, merchant.id),
+        eq(schema.products.productType, "combo"),
+        eq(schema.products.isActive, true)
+      ),
+      columns: { cateringConfig: true },
+      limit: 100,
+    });
+    const hasCatering = cateringProducts.some((p) => {
+      const c = p.cateringConfig as { enabled?: boolean } | null;
+      return c?.enabled === true;
+    });
+    res.json({
+      success: true,
+      hasCatering,
+      locations: locations.map((loc) => ({ ...loc, hasCatering })),
+    });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load locations" });
   }
