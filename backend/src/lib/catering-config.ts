@@ -14,6 +14,8 @@ export type CateringConfig = {
   minGuests?: number;
   maxGuests?: number;
   defaultGuests?: number;
+  /** Combo slot id whose selected option extraPrice is the per-guest rate (× guest count). */
+  tierSlotId?: string | null;
 };
 
 export type ModifierPriceScope = "fixed" | "per_guest";
@@ -38,6 +40,8 @@ export function normalizeCateringConfig(raw: unknown): CateringConfig {
     maxGuests: num("maxGuests") != null ? Math.max(1, Math.floor(num("maxGuests")!)) : undefined,
     defaultGuests:
       num("defaultGuests") != null ? Math.max(1, Math.floor(num("defaultGuests")!)) : undefined,
+    tierSlotId:
+      typeof o.tierSlotId === "string" && o.tierSlotId.trim() ? o.tierSlotId.trim() : null,
   };
 }
 

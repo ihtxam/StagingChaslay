@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   computeCateringBaseUnit,
   computeCateringLineUnitPrice,
+  resolveCateringComboPricing,
   scaleModifierPrice,
 } from "./catering-pricing.ts";
 
@@ -38,5 +39,33 @@ const line = computeCateringLineUnitPrice({
 });
 assert.equal(line.unitPrice, 74);
 assert.equal(line.guestCount, 2);
+
+const tierCfg = {
+  enabled: true,
+  pricingMode: "per_person",
+  perPersonPrice: 0,
+  minGuests: 15,
+  tierSlotId: "protein",
+};
+const tierSplit = resolveCateringComboPricing({
+  cateringConfig: tierCfg,
+  guestCount: 15,
+  comboPicks: [
+    { slotId: "protein", extraPrice: 12 },
+    { slotId: "beans", extraPrice: 0 },
+  ],
+});
+assert.equal(tierSplit.tierPerPersonRate, 12);
+assert.equal(tierSplit.comboSurchargeFlat, 0);
+const tacoBar = computeCateringLineUnitPrice({
+  listPrice: 0,
+  cateringConfig: tierCfg,
+  guestCount: 15,
+  comboSurcharge: tierSplit.comboSurchargeFlat,
+  extrasTotal: 0,
+  deliveryMarkup: 0,
+  tierPerPersonRate: tierSplit.tierPerPersonRate,
+});
+assert.equal(tacoBar.unitPrice, 180);
 
 console.log("catering-pricing.test.ts OK");

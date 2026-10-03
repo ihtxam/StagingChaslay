@@ -8,6 +8,7 @@ import {
   computeCateringUnitPrice,
   isCateringProduct,
   normalizeCateringConfig,
+  resolveCateringComboPricing,
   scaleModifierPrice,
   type CateringConfig,
 } from '@/lib/catering';
@@ -212,7 +213,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
     };
   });
 
-  const comboSurcharge = slots.reduce((sum, slot) => {
+  const comboSurchargeRaw = slots.reduce((sum, slot) => {
     const picks = picksBySlot[slot.id] || [];
     return (
       sum +
@@ -223,6 +224,42 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
       )
     );
   }, 0);
+
+  const comboPicks = useMemo(
+    () =>
+      slots.flatMap((slot) =>
+        (picksBySlot[slot.id] || []).map((p) => ({
+          slotId: slot.id,
+          extraPrice: p.extraPrice,
+          qty: p.qty,
+          selectedExtras: p.selectedExtras,
+        }))
+      ),
+    [slots, picksBySlot]
+  );
+
+  const cateringPricing = useMemo(() => {
+    if (!cateringOn) {
+      return { tierPerPersonRate: null as number | null, comboSurchargeFlat: comboSurchargeRaw };
+    }
+    const split = resolveCateringComboPricing({
+      cateringConfig: cateringCfg,
+      guestCount,
+      comboPicks,
+    });
+    return {
+      tierPerPersonRate: split.tierPerPersonRate,
+      comboSurchargeFlat: split.comboSurchargeFlat,
+    };
+  }, [cateringOn, cateringCfg, guestCount, comboPicks, comboSurchargeRaw]);
+
+  const tierSlotId = cateringCfg.tierSlotId?.trim() || null;
+  const usesTierPerPerson =
+    cateringOn &&
+    tierSlotId &&
+    (cateringCfg.pricingMode === 'per_person' || cateringCfg.pricingMode === 'mixed');
+
+  const comboSurcharge = cateringOn ? cateringPricing.comboSurchargeFlat : comboSurchargeRaw;
   const extrasTotal = comboExtras.reduce((s, e) => s + e.price, 0);
 
   const unitPrice = cateringOn
@@ -232,8 +269,12 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
         guestCount,
         comboSurcharge,
         extrasTotal,
+        tierPerPersonRate: cateringPricing.tierPerPersonRate,
       })
     : roundMoney2(product.price + comboSurcharge + extrasTotal);
+
+  const perPersonPreview =
+    cateringOn && guestCount > 0 ? roundMoney2(unitPrice / guestCount) : null;
 
   const openNested = (slot: ComboSlot, option: ComboOptionProduct, replacePickId?: string) => {
     const groups = effectiveGroups(option);
@@ -536,6 +577,14 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
                     <span className="min-w-[2.5rem] text-center text-lg font-bold tabular-nums text-stone-900">
                       {guestCount}
                     </span>
+                    {(cateringCfg.minGuests ?? 0) > 1 ? (
+                      <span className="text-xs font-medium text-stone-500">
+                        {t('shopCateringMinGuests').replace(
+                          '{n}',
+                          String(cateringCfg.minGuests ?? 1)
+                        )}
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 disabled:opacity-40"
@@ -550,8 +599,17 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
                   </div>
                 </div>
                 <p className="mt-1.5 text-xs leading-snug text-stone-500">
-                  {t('shopCateringGuestsHint')}
+                  {usesTierPerPerson
+                    ? t('shopCateringTierGuestsHint')
+                    : t('shopCateringGuestsHint')}
                 </p>
+                {perPersonPreview != null && guestCount > 0 ? (
+                  <p className="mt-1 text-xs font-medium text-stone-700">
+                    {t('shopCateringPerPersonTotal')
+                      .replace('{amount}', perPersonPreview.toFixed(2))
+                      .replace('{guests}', String(guestCount))}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             </div>
@@ -578,6 +636,8 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
                       const selected = isOptionSelected(slot, opt);
                       const qty = pickQtyForOption(slot, opt);
                       const showQty = max > 1 && selected && qty > 0 && !optionHasExtras(opt);
+                      const isTierOption =
+                        usesTierPerPerson && slot.id === tierSlotId && opt.extraPrice > 0;
                       return (
                         <div key={opt.productId} className="relative">
                           <button
@@ -603,7 +663,12 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
                               )}
                               {opt.extraPrice > 0 ? (
                                 <span className="absolute right-1.5 top-1.5 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                                  +{opt.extraPrice.toFixed(2)}
+                                  {isTierOption
+                                    ? t('shopCateringPerPersonBadge').replace(
+                                        '{amount}',
+                                        opt.extraPrice.toFixed(2)
+                                      )
+                                    : `+${opt.extraPrice.toFixed(2)}`}
                                 </span>
                               ) : null}
                             </div>

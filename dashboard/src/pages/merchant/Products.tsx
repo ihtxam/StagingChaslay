@@ -173,6 +173,7 @@ type FormState = {
   cateringMinGuests: string;
   cateringMaxGuests: string;
   cateringDefaultGuests: string;
+  cateringTierSlotId: string;
   specifications: SpecRow[];
   modifierGroupIds: string[];
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
@@ -214,6 +215,7 @@ const emptyForm = (): FormState => ({
   cateringMinGuests: '',
   cateringMaxGuests: '',
   cateringDefaultGuests: '',
+  cateringTierSlotId: '',
   specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
@@ -233,6 +235,7 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
   | 'cateringMinGuests'
   | 'cateringMaxGuests'
   | 'cateringDefaultGuests'
+  | 'cateringTierSlotId'
 > {
   const c = normalizeCateringConfig(raw);
   return {
@@ -249,6 +252,7 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
     cateringMinGuests: c.minGuests != null ? String(c.minGuests) : '',
     cateringMaxGuests: c.maxGuests != null ? String(c.maxGuests) : '',
     cateringDefaultGuests: c.defaultGuests != null ? String(c.defaultGuests) : '',
+    cateringTierSlotId: c.tierSlotId ?? '',
   };
 }
 
@@ -894,6 +898,7 @@ export default function Products() {
               defaultGuests: form.cateringDefaultGuests.trim()
                 ? Math.max(1, Math.floor(Number(form.cateringDefaultGuests) || 1))
                 : undefined,
+              tierSlotId: form.cateringTierSlotId.trim() || null,
             }),
           }
         : { cateringConfig: { enabled: false } }),
@@ -2126,6 +2131,27 @@ export default function Products() {
                             }
                           />
                         </Field>
+                        {(form.cateringPricingMode === 'per_person' ||
+                          form.cateringPricingMode === 'mixed') &&
+                        form.comboSlots.length > 0 ? (
+                          <Field label={t('cateringTierSlot')}>
+                            <select
+                              className="field-input text-sm"
+                              value={form.cateringTierSlotId}
+                              onChange={(e) =>
+                                setForm({ ...form, cateringTierSlotId: e.target.value })
+                              }
+                            >
+                              <option value="">{t('cateringTierSlotNone')}</option>
+                              {form.comboSlots.map((slot) => (
+                                <option key={slot.id} value={slot.id}>
+                                  {slot.name.trim() || slot.id}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[11px] muted mt-1">{t('cateringTierSlotHint')}</p>
+                          </Field>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

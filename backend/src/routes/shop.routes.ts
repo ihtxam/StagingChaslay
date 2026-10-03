@@ -24,7 +24,7 @@ import {
   isCateringProduct,
   normalizeCateringConfig,
 } from "@/lib/catering-config";
-import { computeCateringLineUnitPrice, scaleModifierPrice } from "@/lib/catering-pricing";
+import { computeCateringLineUnitPrice, scaleModifierPrice, resolveCateringComboPricing } from "@/lib/catering-pricing";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
@@ -2725,6 +2725,22 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         comboSurcharge = comboResolved.surcharge;
       }
 
+      let tierPerPersonRate: number | null = null;
+      if (cateringOn && cateringGuests != null && product.productType === "combo") {
+        const split = resolveCateringComboPricing({
+          cateringConfig: cateringCfg,
+          guestCount: cateringGuests,
+          comboPicks: comboSelections.map((sel) => ({
+            slotId: sel.slotId,
+            extraPrice: sel.extraPrice,
+            qty: 1,
+            selectedExtras: sel.selectedExtras,
+          })),
+        });
+        tierPerPersonRate = split.tierPerPersonRate;
+        comboSurcharge = split.comboSurchargeFlat;
+      }
+
       const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras, {
         fillDefaultsIfMissing: true,
         cateringEnabled: cateringOn,
@@ -2754,6 +2770,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           comboSurcharge,
           extrasTotal,
           deliveryMarkup,
+          tierPerPersonRate,
         }).unitPrice;
       } else {
         unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);

@@ -1519,10 +1519,19 @@ const en: Dict = {
   cateringMinGuests: 'Minimum guests',
   cateringMaxGuests: 'Maximum guests',
   cateringDefaultGuests: 'Default guest count',
+  cateringTierSlot: 'Per-person tier step',
+  cateringTierSlotNone: 'Use product per-person price only',
+  cateringTierSlotHint:
+    'Pick one combo step (e.g. protein). Each option’s extra price is the rate per guest (Salsarita-style). Leave other steps at 0 if included.',
   comboSlotMinPick: 'Min picks',
   comboSlotMaxPick: 'Max picks',
   shopCateringGuests: 'Number of guests',
   shopCateringGuestsHint: 'Add-ons marked per guest multiply by this count.',
+  shopCateringMinGuests: 'Min: {n}',
+  shopCateringTierGuestsHint:
+    'Quantity is headcount. Prices on the tier step are per person × guests.',
+  shopCateringPerPersonBadge: '{amount} / person',
+  shopCateringPerPersonTotal: '≈ {amount} / person · {guests} guests',
   modifierPriceScope: 'Catering price scope',
   modifierPriceScopeHint:
     'Per guest multiplies each selected option price by the catering guest count. Fixed stays a one-time amount.',
@@ -6027,10 +6036,19 @@ const fr: Dict = {
   cateringMinGuests: 'Convives minimum',
   cateringMaxGuests: 'Convives maximum',
   cateringDefaultGuests: 'Convives par défaut',
+  cateringTierSlot: 'Étape tarif par convive',
+  cateringTierSlotNone: 'Prix par convive du produit uniquement',
+  cateringTierSlotHint:
+    'Une étape combo (ex. protéine). Le supplément de chaque option = tarif × convives.',
   comboSlotMinPick: 'Choix min.',
   comboSlotMaxPick: 'Choix max.',
   shopCateringGuests: 'Nombre de convives',
   shopCateringGuestsHint: 'Les extras « par convive » sont multipliés par ce nombre.',
+  shopCateringMinGuests: 'Min. : {n}',
+  shopCateringTierGuestsHint:
+    'La quantité = nombre de convives. Les prix de l’étape tier sont par convive.',
+  shopCateringPerPersonBadge: '{amount} / convive',
+  shopCateringPerPersonTotal: '≈ {amount} / convive · {guests} convives',
   modifierPriceScope: 'Portée prix traiteur',
   modifierPriceScopeHint:
     'Par convive multiplie le prix de chaque option par le nombre de convives. Fixe reste un montant unique.',
@@ -10418,10 +10436,19 @@ const de: Dict = {
   cateringMinGuests: 'Mindestgäste',
   cateringMaxGuests: 'Maximalgäste',
   cateringDefaultGuests: 'Standard-Gästeanzahl',
+  cateringTierSlot: 'Preisstufe (pro Gast)',
+  cateringTierSlotNone: 'Nur Produkt-Preis pro Gast',
+  cateringTierSlotHint:
+    'Ein Combo-Schritt (z. B. Protein). Option-Aufpreis = Preis pro Gast × Gäste.',
   comboSlotMinPick: 'Min. Auswahl',
   comboSlotMaxPick: 'Max. Auswahl',
   shopCateringGuests: 'Anzahl Gäste',
   shopCateringGuestsHint: 'Als « pro Gast » markierte Add-ons werden mit dieser Zahl multipliziert.',
+  shopCateringMinGuests: 'Min. {n}',
+  shopCateringTierGuestsHint:
+    'Anzahl = Gäste. Preise auf der Stufen-Auswahl gelten pro Gast × Gäste.',
+  shopCateringPerPersonBadge: '{amount} / Gast',
+  shopCateringPerPersonTotal: '≈ {amount} / Gast · {guests} Gäste',
   modifierPriceScope: 'Catering-Preisbereich',
   modifierPriceScopeHint:
     'Pro Gast multipliziert den Optionspreis mit der Gästezahl. Fix bleibt ein Einmalbetrag.',

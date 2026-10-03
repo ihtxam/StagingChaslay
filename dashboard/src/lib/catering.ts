@@ -8,9 +8,17 @@ export type CateringConfig = {
   minGuests?: number;
   maxGuests?: number;
   defaultGuests?: number;
+  tierSlotId?: string | null;
 };
 
 export type ModifierPriceScope = 'fixed' | 'per_guest';
+
+export type ComboPickForCateringPricing = {
+  slotId: string;
+  extraPrice: number;
+  qty?: number;
+  selectedExtras?: Array<{ price: number }>;
+};
 
 export function normalizeCateringConfig(raw: unknown): CateringConfig {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -32,6 +40,8 @@ export function normalizeCateringConfig(raw: unknown): CateringConfig {
     maxGuests: num('maxGuests') != null ? Math.max(1, Math.floor(num('maxGuests')!)) : undefined,
     defaultGuests:
       num('defaultGuests') != null ? Math.max(1, Math.floor(num('defaultGuests')!)) : undefined,
+    tierSlotId:
+      typeof o.tierSlotId === 'string' && o.tierSlotId.trim() ? o.tierSlotId.trim() : null,
   };
 }
 
@@ -64,10 +74,44 @@ export function scaleModifierPrice(
   return Math.round(unitPrice * guests * 100) / 100;
 }
 
+export function resolveCateringComboPricing(input: {
+  cateringConfig: unknown;
+  guestCount: number;
+  comboPicks: ComboPickForCateringPricing[];
+}): {
+  guestCount: number;
+  tierPerPersonRate: number | null;
+  comboSurchargeFlat: number;
+} {
+  const config = normalizeCateringConfig(input.cateringConfig);
+  const guests = clampGuestCount(config, input.guestCount);
+  const tierSlotId = config.tierSlotId?.trim() || null;
+  let tierPerPersonRate: number | null = null;
+  let comboSurchargeFlat = 0;
+
+  for (const pick of input.comboPicks) {
+    const nested = Math.round(
+      (pick.selectedExtras || []).reduce((s, e) => s + (Number(e.price) || 0), 0) * 100
+    ) / 100;
+    const pickUnit =
+      Math.round(((Number(pick.extraPrice) || 0) + nested) * 100) / 100;
+    const mult = Math.max(1, Math.floor(pick.qty ?? 1) || 1);
+    if (tierSlotId && pick.slotId === tierSlotId) {
+      tierPerPersonRate = Math.round((Number(pick.extraPrice) || 0) * 100) / 100;
+      comboSurchargeFlat += Math.round(nested * mult * 100) / 100;
+    } else {
+      comboSurchargeFlat += Math.round(pickUnit * mult * 100) / 100;
+    }
+  }
+
+  return { guestCount: guests, tierPerPersonRate, comboSurchargeFlat };
+}
+
 export function computeCateringBaseUnit(
   listPrice: number,
   configRaw: unknown,
-  guestCount: number
+  guestCount: number,
+  tierPerPersonRate?: number | null
 ): { guestCount: number; baseUnit: number } {
   const config = normalizeCateringConfig(configRaw);
   const guests = clampGuestCount(config, guestCount);
@@ -76,7 +120,10 @@ export function computeCateringBaseUnit(
     config.packagePrice != null && Number.isFinite(Number(config.packagePrice))
       ? Number(config.packagePrice)
       : Math.round(listPrice * 100) / 100;
-  const perPerson = Math.max(0, Number(config.perPersonPrice) || 0);
+  let perPerson = Math.max(0, Number(config.perPersonPrice) || 0);
+  if (tierPerPersonRate != null && Number.isFinite(Number(tierPerPersonRate))) {
+    perPerson = Math.max(0, Number(tierPerPersonRate));
+  }
   let baseUnit = packagePart;
   if (mode === 'per_person') {
     baseUnit = Math.round(perPerson * guests * 100) / 100;
@@ -94,14 +141,13 @@ export function computeCateringUnitPrice(input: {
   guestCount: number;
   comboSurcharge: number;
   extrasTotal: number;
+  tierPerPersonRate?: number | null;
 }): number {
-  const { baseUnit, guestCount } = computeCateringBaseUnit(
+  const { baseUnit } = computeCateringBaseUnit(
     input.listPrice,
     input.cateringConfig,
-    input.guestCount
+    input.guestCount,
+    input.tierPerPersonRate
   );
-  void guestCount;
-  return (
-    Math.round((baseUnit + input.comboSurcharge + input.extrasTotal) * 100) / 100
-  );
+  return Math.round((baseUnit + input.comboSurcharge + input.extrasTotal) * 100) / 100;
 }
