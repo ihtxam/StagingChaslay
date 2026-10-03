@@ -1,9 +1,7 @@
-import { ArrowRight, Banknote, CreditCard, MonitorSmartphone } from 'lucide-react';
+import { Banknote, CreditCard, MonitorSmartphone } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import {
   actionButtonIconSize,
-  expressCheckoutArrowClass,
-  expressCheckoutArrowIconSize,
   expressCheckoutButtonClass,
   type WebPosActionButtonSize,
 } from '@/lib/webpos-action-button-size';
@@ -36,8 +34,7 @@ export default function WebPosExpressCheckoutBar({
   const showTerminal = expressMethods?.terminal === true;
   const hasQuickPay =
     expressCheckout && (showCash || showCard || showTerminal) && !!onExpressPay;
-  const showPayRow = hasQuickPay || !!onOpenCheckout;
-  if (!showPayRow) return null;
+  if (!hasQuickPay) return null;
 
   return (
     <div className="shrink-0 border-t border-stone-200 bg-white p-3">
@@ -77,17 +74,6 @@ export default function WebPosExpressCheckoutBar({
             </button>
           ) : null}
         </div>
-        {onOpenCheckout && !hasQuickPay ? (
-          <button
-            type="button"
-            disabled={checkoutDisabled}
-            onClick={onOpenCheckout}
-            className={expressCheckoutArrowClass(actionButtonSize)}
-            title={t('webPosOpenCheckout')}
-          >
-            <ArrowRight size={expressCheckoutArrowIconSize(actionButtonSize)} strokeWidth={2.5} />
-          </button>
-        ) : null}
       </div>
     </div>
   );
