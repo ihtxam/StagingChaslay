@@ -8846,8 +8846,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     const offlineEligible =
       isWebPosOfflineEnabled() && canCompleteSaleOffline(method, saleLines);
-    let pushRes: { data?: { results?: Array<{ clientId?: string; orderId?: string }> } } | null =
-      null;
+    let pushRes: {
+      data?: {
+        results?: Array<{
+          clientId?: string;
+          orderId?: string;
+          skipped?: boolean;
+          fiskaly?: { qrCodeData?: string | null };
+        }>;
+      };
+    } | null = null;
     let queuedOffline = false;
 
     if (!isBrowserOnline() && offlineEligible) {
@@ -8954,6 +8962,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         })) ||
         clientId;
     const receiptUrl = buildReceiptUrl(receiptRef);
+    const fiskalyQr =
+      !queuedOffline
+        ? (
+            pushRes?.data?.results?.find(
+              (r) => r.clientId === clientId && r.fiskaly?.qrCodeData
+            )?.fiskaly?.qrCodeData ||
+            pushRes?.data?.results?.find((r) => r.fiskaly?.qrCodeData)?.fiskaly?.qrCodeData ||
+            ''
+          ).trim()
+        : '';
+    const receiptQrForPrint = fiskalyQr || receiptUrl;
     const lang = resolveReceiptLanguage(
       printSettings,
       paymentConfig?.panelLanguage || locale
@@ -9038,7 +9057,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       vatIncludedInPrice,
       vatAfterDiscount,
       splitLabel: activeSale.label,
-      receiptUrl,
+      receiptUrl: receiptQrForPrint,
       includeQr: printSettings?.receiptShowQrCode !== false,
       includeGoogleReviewQr: printSettings?.receiptShowGoogleReviewQr === true,
       googleReviewUrl: normalizeGoogleReviewUrl(printSettings?.receiptGoogleReviewsUrl),
@@ -9065,7 +9084,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setLastReceipt(receiptText);
       void prefetchLastReceiptEscPos(
         receiptText,
-        receiptUrl,
+        receiptQrForPrint,
         deliveryQrUrl,
         soldGiftCards.length ? soldGiftCards : undefined
       ).catch(() => undefined);
@@ -9278,7 +9297,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (shouldPrintKitchen || shouldPrintReceipt) {
       const receiptBuildPromise = shouldPrintReceipt
         ? resolveLastReceiptEscPosBase64(receiptText, {
-            qrUrl: receiptUrl,
+            qrUrl: receiptQrForPrint,
             deliveryQrUrl,
             fastQr: true,
             soldGiftCards: soldGiftCards.length ? soldGiftCards : undefined,
@@ -9296,7 +9315,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               dedicatedKitchenOnly: method === 'pay_later',
             });
             const dataBase64 = receiptBuildPromise ? await receiptBuildPromise : undefined;
-            await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+            await printReceipt(receiptText, receiptQrForPrint, deliveryQrUrl, {
               singleTarget: method === 'pay_later',
               dataBase64,
               fastQr: true,
@@ -9319,7 +9338,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             shouldPrintReceipt
               ? (async () => {
                   const dataBase64 = receiptBuildPromise ? await receiptBuildPromise : undefined;
-                  await printReceipt(receiptText, receiptUrl, deliveryQrUrl, {
+                  await printReceipt(receiptText, receiptQrForPrint, deliveryQrUrl, {
                     singleTarget: method === 'pay_later',
                     dataBase64,
                     fastQr: true,

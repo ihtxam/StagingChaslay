@@ -1,5 +1,5 @@
 import axios from "axios";
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import type { FiskalyDeSettings, FiskalyEnvironment } from "@/lib/fiskaly-settings";
 import { roundMoney2 } from "@/lib/money";
 
@@ -37,6 +37,24 @@ export type FiskalyDeSignResult = {
   tssSerial: string | null;
   raw: Record<string, unknown>;
 };
+
+export type FiskalyDeProvisionResult = {
+  tssId: string;
+  clientId: string;
+  clientSerial: string;
+  adminPin: string;
+  tssSerial: string | null;
+};
+
+function fiskalyErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const row = data as { message?: string; code?: string };
+  return String(row.message || row.code || fallback);
+}
+
+function generateDeAdminPin(): string {
+  return String(randomInt(100_000, 1_000_000));
+}
 
 /** Map tax rate % to Fiskaly SIGN DE vat_rate enum. */
 export function mapVatRateToFiskalyDe(ratePercent: number): FiskalyDeVatRate {
@@ -171,9 +189,101 @@ export class FiskalyDeService {
         validateStatus: () => true,
       });
       if (data?.status_code && data.status_code >= 400) {
-        throw new Error(data?.message || data?.code || "TSS not reachable");
+        throw new Error(fiskalyErrorMessage(data, "TSS not reachable"));
+      }
+      const state = String(data?.state || "").toUpperCase();
+      if (state && state !== "INITIALIZED") {
+        throw new Error(`TSS must be INITIALIZED (current: ${state || "unknown"})`);
       }
     }
+    if (de.tssId && de.clientId) {
+      const { data } = await axios.get(`${DE_BASE_URL}/tss/${de.tssId}/client/${de.clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 20_000,
+        validateStatus: () => true,
+      });
+      if (data?.status_code && data.status_code >= 400) {
+        throw new Error(fiskalyErrorMessage(data, "Client not reachable"));
+      }
+    }
+  }
+
+  /** Create + initialize a cloud TSS and register one POS client (SIGN DE quick start). */
+  static async provisionCloudTssAndClient(
+    de: Pick<FiskalyDeSettings, "apiKey" | "apiSecret">,
+    environment: FiskalyEnvironment,
+    opts?: { clientSerial?: string; description?: string }
+  ): Promise<FiskalyDeProvisionResult> {
+    if (!de.apiKey || !de.apiSecret) throw new Error("API key and secret are required");
+
+    const token = await this.authenticate(de.apiKey, de.apiSecret, environment);
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const tssId = randomUUID();
+    const clientId = randomUUID();
+    const clientSerial = (opts?.clientSerial || `reborn-pos-${Date.now()}`).slice(0, 70);
+    const description = (opts?.description || "Reborn POS cloud TSS").slice(0, 255);
+    const adminPin = generateDeAdminPin();
+
+    const createRes = await axios.put(
+      `${DE_BASE_URL}/tss/${tssId}`,
+      { metadata: { description } },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (createRes.data?.status_code && createRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(createRes.data, "Failed to create TSS"));
+    }
+    const adminPuk = String(createRes.data?.admin_puk || "").trim();
+    if (!adminPuk) throw new Error("Fiskaly did not return admin PUK for new TSS");
+
+    const uninitRes = await axios.patch(
+      `${DE_BASE_URL}/tss/${tssId}`,
+      { state: "UNINITIALIZED" },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (uninitRes.data?.status_code && uninitRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(uninitRes.data, "Failed to set TSS UNINITIALIZED"));
+    }
+
+    const pinRes = await axios.patch(
+      `${DE_BASE_URL}/tss/${tssId}/admin`,
+      { admin_puk: adminPuk, new_admin_pin: adminPin },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (pinRes.data?.status_code && pinRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(pinRes.data, "Failed to set TSS admin PIN"));
+    }
+
+    const authAdminRes = await axios.post(
+      `${DE_BASE_URL}/tss/${tssId}/admin/auth`,
+      { admin_pin: adminPin },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (authAdminRes.data?.status_code && authAdminRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(authAdminRes.data, "TSS admin authentication failed"));
+    }
+
+    const initRes = await axios.patch(
+      `${DE_BASE_URL}/tss/${tssId}`,
+      { state: "INITIALIZED" },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (initRes.data?.status_code && initRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(initRes.data, "Failed to initialize TSS"));
+    }
+
+    const clientRes = await axios.put(
+      `${DE_BASE_URL}/tss/${tssId}/client/${clientId}`,
+      { serial_number: clientSerial },
+      { headers, timeout: 30_000, validateStatus: () => true }
+    );
+    if (clientRes.data?.status_code && clientRes.data.status_code >= 400) {
+      throw new Error(fiskalyErrorMessage(clientRes.data, "Failed to register TSS client"));
+    }
+
+    const tssSerial =
+      initRes.data?.serial_number != null ? String(initRes.data.serial_number) : null;
+
+    return { tssId, clientId, clientSerial, adminPin, tssSerial };
   }
 
   static async signTransaction(opts: {

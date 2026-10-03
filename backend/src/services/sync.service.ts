@@ -500,6 +500,12 @@ export class SyncService {
       created: boolean;
       skipped?: boolean;
       invoiceNumber?: string | null;
+      fiskaly?: {
+        qrCodeData?: string | null;
+        signature?: string | null;
+        txNumber?: string | number | null;
+        txId?: string | null;
+      };
     }> = [];
 
     const merchantRow = await db.query.merchants.findFirst({
@@ -512,7 +518,12 @@ export class SyncService {
         where: and(eq(schema.orders.merchantId, merchantId), eq(schema.orders.clientId, sale.clientId)),
       });
       if (existing) {
-        results.push({ clientId: sale.clientId, orderId: existing.id, created: false });
+        const { FiskalyService } = await import("@/services/fiskaly.service");
+        const fiskaly = FiskalyService.toPushResponse(
+          (existing.fiskalySignature as import("@/lib/fiskaly-settings").FiskalySignature | null) ||
+            null
+        );
+        results.push({ clientId: sale.clientId, orderId: existing.id, created: false, fiskaly });
         continue;
       }
 
@@ -920,7 +931,47 @@ export class SyncService {
           .catch(() => {});
       }
 
-      results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
+      let fiskaly:
+        | {
+            qrCodeData?: string | null;
+            signature?: string | null;
+            txNumber?: string | number | null;
+            txId?: string | null;
+          }
+        | undefined;
+      if (
+        paid &&
+        String(status).toLowerCase() === "completed" &&
+        !isInvoice
+      ) {
+        try {
+          const { FiskalyService } = await import("@/services/fiskaly.service");
+          fiskaly = await FiskalyService.maybeSignSyncedPosSale(merchantId, order.id, {
+            total,
+            subtotal,
+            taxAmount,
+            paymentMethod: orderValuesBase.paymentMethod,
+            paymentBreakdown: sale.paymentBreakdown,
+            orderNumber,
+            items: (sale.items || []).map((item) => ({
+              productName: item.productName,
+              quantity: Number(item.quantity) || 1,
+              unitPrice: Number(item.unitPrice) || 0,
+              totalPrice: Number(item.totalPrice) || 0,
+              taxAmount: Number(item.taxAmount) || 0,
+              taxRate:
+                item.taxRate != null && Number.isFinite(Number(item.taxRate))
+                  ? Number(item.taxRate)
+                  : undefined,
+            })),
+          });
+        } catch (fiskalyErr) {
+          console.error("[sync] Fiskaly signing failed:", fiskalyErr);
+          throw fiskalyErr instanceof Error ? fiskalyErr : new Error("Fiskaly signing failed");
+        }
+      }
+
+      results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber, fiskaly });
     }
 
     return { results };
