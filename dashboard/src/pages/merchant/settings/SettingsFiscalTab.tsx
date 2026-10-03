@@ -74,6 +74,7 @@ export default function SettingsFiscalTab({
   const [saving, setSaving] = useState(false);
   const [testingDe, setTestingDe] = useState(false);
   const [testingFr, setTestingFr] = useState(false);
+  const [provisioningDe, setProvisioningDe] = useState(false);
 
   useEffect(() => {
     setEnabled(fs?.enabled === true);
@@ -131,38 +132,55 @@ export default function SettingsFiscalTab({
     }
   };
 
+  const saveFiskalyDraft = useCallback(async () => {
+    await api.put('/merchant/settings', {
+      fiskalySettings: {
+        enabled,
+        environment,
+        de: showDe
+          ? {
+              tssId: deTssId.trim() || undefined,
+              clientId: deClientId.trim() || undefined,
+              clientSerial: deClientSerial.trim() || undefined,
+              ...(deApiKey ? { apiKey: deApiKey } : {}),
+              ...(deApiSecret ? { apiSecret: deApiSecret } : {}),
+            }
+          : undefined,
+        fr: showFr
+          ? {
+              unitId: frUnitId.trim() || undefined,
+              systemId: frSystemId.trim() || undefined,
+              siren: frSiren.trim() || undefined,
+              ...(frApiKey ? { apiKey: frApiKey } : {}),
+              ...(frApiSecret ? { apiSecret: frApiSecret } : {}),
+            }
+          : undefined,
+      },
+    });
+  }, [
+    deApiKey,
+    deApiSecret,
+    deClientId,
+    deClientSerial,
+    deTssId,
+    enabled,
+    environment,
+    frApiKey,
+    frApiSecret,
+    frSiren,
+    frSystemId,
+    frUnitId,
+    showDe,
+    showFr,
+  ]);
+
   const testConnection = useCallback(
     async (country: 'DE' | 'FR') => {
       if (country === 'DE') setTestingDe(true);
       else setTestingFr(true);
       try {
         if (saving) return;
-        if (enabled) {
-          await api.put('/merchant/settings', {
-            fiskalySettings: {
-              enabled,
-              environment,
-              de: showDe
-                ? {
-                    tssId: deTssId.trim() || undefined,
-                    clientId: deClientId.trim() || undefined,
-                    clientSerial: deClientSerial.trim() || undefined,
-                    ...(deApiKey ? { apiKey: deApiKey } : {}),
-                    ...(deApiSecret ? { apiSecret: deApiSecret } : {}),
-                  }
-                : undefined,
-              fr: showFr
-                ? {
-                    unitId: frUnitId.trim() || undefined,
-                    systemId: frSystemId.trim() || undefined,
-                    siren: frSiren.trim() || undefined,
-                    ...(frApiKey ? { apiKey: frApiKey } : {}),
-                    ...(frApiSecret ? { apiSecret: frApiSecret } : {}),
-                  }
-                : undefined,
-            },
-          });
-        }
+        await saveFiskalyDraft();
         await api.post('/merchant/fiskaly/test-connection', { country });
         toast.success(t('fiskalyTestOk'));
       } catch (err: any) {
@@ -172,29 +190,33 @@ export default function SettingsFiscalTab({
         else setTestingFr(false);
       }
     },
-    [
-      deApiKey,
-      deApiSecret,
-      deClientId,
-      deClientSerial,
-      deTssId,
-      enabled,
-      environment,
-      frApiKey,
-      frApiSecret,
-      frSiren,
-      frSystemId,
-      frUnitId,
-      saving,
-      showDe,
-      showFr,
-      t,
-    ]
+    [saveFiskalyDraft, saving, t]
   );
+
+  const provisionDe = useCallback(async () => {
+    setProvisioningDe(true);
+    try {
+      await saveFiskalyDraft();
+      const res = await api.post('/merchant/fiskaly/provision-de', {
+        clientSerial: deClientSerial.trim() || undefined,
+      });
+      if (res.data?.fiskalySettings) {
+        onSettingsChange({
+          ...settings,
+          fiskalySettings: res.data.fiskalySettings,
+        });
+      }
+      toast.success(t('fiskalyProvisionOk'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('fiskalyProvisionFailed'));
+    } finally {
+      setProvisioningDe(false);
+    }
+  }, [deClientSerial, onSettingsChange, saveFiskalyDraft, settings, t]);
 
   const docsLinks = useMemo(
     () => ({
-      de: 'https://workspace.fiskaly.com/countries/germany/quickstart',
+      de: 'https://workspace.fiskaly.com/api/sign-de/#section/Quick-Start',
       fr: 'https://workspace.fiskaly.com/unified/france/quickstart',
     }),
     []
@@ -298,6 +320,16 @@ export default function SettingsFiscalTab({
             <RefreshCw className={`h-4 w-4 ${testingDe ? 'animate-spin' : ''}`} />
             {t('fiskalyTestConnection')}
           </button>
+          <button
+            type="button"
+            className="btn-secondary mt-3 inline-flex items-center gap-2"
+            disabled={provisioningDe}
+            onClick={() => void provisionDe()}
+          >
+            <RefreshCw className={`h-4 w-4 ${provisioningDe ? 'animate-spin' : ''}`} />
+            {t('fiskalyProvisionDe')}
+          </button>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">{t('fiskalyProvisionDeHint')}</p>
         </SettingsReportCard>
       )}
 

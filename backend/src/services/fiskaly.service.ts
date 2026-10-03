@@ -1,6 +1,8 @@
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import {
+  getFiskalyPublic,
+  mergeFiskalySettings,
   normalizeCountry,
   normalizeFiskalySettings,
   type FiskalySettings,
@@ -96,7 +98,11 @@ export class FiskalyService {
         raw: result.raw,
       };
     } else {
-      return null;
+      throw new Error(
+        country === "DE"
+          ? "Fiskaly DE is enabled but credentials or TSS/client IDs are incomplete"
+          : "Fiskaly FR is enabled but credentials are incomplete"
+      );
     }
 
     const db = getDb();
@@ -133,6 +139,50 @@ export class FiskalyService {
     throw new Error("Unsupported country");
   }
 
+  static async provisionDe(
+    merchantId: string,
+    opts?: { clientSerial?: string; description?: string }
+  ): Promise<ReturnType<typeof getFiskalyPublic>> {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { country: true, fiskalySettings: true, name: true },
+    });
+    if (!merchant) throw new Error("Merchant not found");
+    if (normalizeCountry(merchant.country) !== "DE") {
+      throw new Error("Fiskaly SIGN DE provisioning is only for Germany merchants");
+    }
+    const settings = normalizeFiskalySettings(
+      (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
+    );
+    if (!settings.de?.apiKey || !settings.de?.apiSecret) {
+      throw new Error("Save API key and secret before provisioning TSS");
+    }
+    const env = settings.environment || "test";
+    const provisioned = await FiskalyDeService.provisionCloudTssAndClient(
+      settings.de,
+      env,
+      {
+        clientSerial: opts?.clientSerial,
+        description: opts?.description || `${merchant.name || "Reborn POS"} TSS`,
+      }
+    );
+    const merged = mergeFiskalySettings(settings, {
+      enabled: true,
+      de: {
+        tssId: provisioned.tssId,
+        clientId: provisioned.clientId,
+        clientSerial: provisioned.clientSerial,
+        adminPin: provisioned.adminPin,
+      },
+    });
+    await db
+      .update(schema.merchants)
+      .set({ fiskalySettings: merged, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
+    return getFiskalyPublic(merged);
+  }
+
   static toPushResponse(sig: FiskalySignature | null): FiskalySignResponse | undefined {
     if (!sig) return undefined;
     return {
@@ -141,5 +191,15 @@ export class FiskalyService {
       txNumber: sig.txNumber,
       txId: sig.txId,
     };
+  }
+
+  /** Sign a completed POS sale pushed via /sync/push-sales when Fiskaly is enabled. */
+  static async maybeSignSyncedPosSale(
+    merchantId: string,
+    orderId: string,
+    sale: FiskalyPosSalePayload
+  ): Promise<FiskalySignResponse | undefined> {
+    const sig = await this.signPosSale(merchantId, orderId, sale);
+    return this.toPushResponse(sig);
   }
 }
