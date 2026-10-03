@@ -9,6 +9,9 @@ export type CateringConfig = {
   maxGuests?: number;
   defaultGuests?: number;
   tierSlotId?: string | null;
+  servesCount?: number;
+  minOrderQty?: number;
+  leadTimeHours?: number;
 };
 
 export type ModifierPriceScope = 'fixed' | 'per_guest';
@@ -42,6 +45,12 @@ export function normalizeCateringConfig(raw: unknown): CateringConfig {
       num('defaultGuests') != null ? Math.max(1, Math.floor(num('defaultGuests')!)) : undefined,
     tierSlotId:
       typeof o.tierSlotId === 'string' && o.tierSlotId.trim() ? o.tierSlotId.trim() : null,
+    servesCount:
+      num('servesCount') != null ? Math.max(1, Math.floor(num('servesCount')!)) : undefined,
+    minOrderQty:
+      num('minOrderQty') != null ? Math.max(1, Math.floor(num('minOrderQty')!)) : undefined,
+    leadTimeHours:
+      num('leadTimeHours') != null ? Math.max(0, Math.floor(num('leadTimeHours')!)) : undefined,
   };
 }
 

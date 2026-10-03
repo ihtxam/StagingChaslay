@@ -2,6 +2,9 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import CartGiftTierEditorModal, {
+  type CartGiftTierForm,
+} from '@/components/merchant/CartGiftTierEditorModal';
 
 type OfferType =
   | 'percent_category'
@@ -104,6 +107,72 @@ const QUICK_PRESETS: OfferPreset[] = [
     offerType: 'bogo',
     rules: { buyQty: 4, getQty: 1, getDiscountPercent: 100, sameProductOnly: true },
     badgeLabel: '4+1',
+  },
+];
+
+/** Full-offer playbooks restaurants can start from (edit products in tier modal). */
+const RESTAURANT_TEMPLATES: Array<
+  OfferPreset & {
+    cartGiftTiers?: Array<{ minCartTotal: string; label: string }>;
+    minOrderAmount?: string;
+    channels?: string[];
+  }
+> = [
+  {
+    label: 'Cart gift tiers (40 / 80)',
+    name: 'Free gift when cart reaches minimum',
+    description: 'Unlock a free item at each spend tier — pick gift products per tier.',
+    offerType: 'cart_free_gift',
+    rules: {},
+    badgeLabel: 'Free gift',
+    cartGiftTiers: [
+      { minCartTotal: '40', label: 'Free drink' },
+      { minCartTotal: '80', label: 'Free side' },
+    ],
+  },
+  {
+    label: 'Lunch rush 15% off',
+    name: 'Weekday lunch 15% off',
+    description: '15% off orders over CHF 25, Mon–Fri 11:00–14:00.',
+    offerType: 'percent_order',
+    rules: { percentOff: 15, minOrderAmount: 25 },
+    badgeLabel: '15% lunch',
+    minOrderAmount: '25',
+    channels: [],
+  },
+  {
+    label: 'Happy hour category',
+    name: 'Happy hour 20% — Food',
+    description: '20% off food category, weekdays 13:00–17:00.',
+    offerType: 'percent_category',
+    rules: { percentOff: 20 },
+    badgeLabel: '20% off',
+  },
+  {
+    label: 'Family BOGO pizza',
+    name: 'Buy 1 get 1 pizza',
+    description: 'Buy one eligible pizza, second free (configure products below).',
+    offerType: 'bogo',
+    rules: { buyQty: 1, getQty: 1, getDiscountPercent: 100 },
+    badgeLabel: '1+1',
+  },
+  {
+    label: 'Catering spend gift',
+    name: 'Catering order bonus',
+    description: 'Free dessert when catering cart exceeds CHF 200.',
+    offerType: 'cart_free_gift',
+    rules: {},
+    badgeLabel: 'Catering bonus',
+    cartGiftTiers: [{ minCartTotal: '200', label: 'Free dessert tray' }],
+  },
+  {
+    label: 'Dine-in 3+1',
+    name: 'Dine-in pay 3 get 4',
+    description: 'Pay for 3 items, get the 4th free — dine-in only.',
+    offerType: 'pay_n_get_m',
+    rules: { payQty: 3, receiveQty: 4 },
+    badgeLabel: '3+1',
+    channels: ['dine_in'],
   },
 ];
 
@@ -224,6 +293,8 @@ export default function Offers() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const [tierModalOpen, setTierModalOpen] = useState(false);
+  const [tierEditing, setTierEditing] = useState<CartGiftTierForm | null>(null);
 
   const load = async () => {
     try {
@@ -513,20 +584,69 @@ export default function Offers() {
     });
   };
 
-  const toggleTierProduct = (tierId: string, productId: string) => {
-    setForm((f) => ({
-      ...f,
-      cartGiftTiers: f.cartGiftTiers.map((tier) =>
-        tier.id !== tierId
-          ? tier
-          : {
-              ...tier,
-              productIds: tier.productIds.includes(productId)
-                ? tier.productIds.filter((x) => x !== productId)
-                : [...tier.productIds, productId],
-            }
-      ),
-    }));
+
+  const productNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of products) m.set(p.id, p.name);
+    return m;
+  }, [products]);
+
+  const openNewCartGiftTier = () => {
+    setTierEditing({
+      id: `tier-${Date.now()}`,
+      minCartTotal: '',
+      label: '',
+      productIds: [],
+    });
+    setTierModalOpen(true);
+  };
+
+  const openEditCartGiftTier = (tier: CartGiftTierForm) => {
+    setTierEditing({ ...tier });
+    setTierModalOpen(true);
+  };
+
+  const saveCartGiftTier = (tier: CartGiftTierForm) => {
+    setForm((f) => {
+      const exists = f.cartGiftTiers.some((t) => t.id === tier.id);
+      return {
+        ...f,
+        cartGiftTiers: exists
+          ? f.cartGiftTiers.map((t) => (t.id === tier.id ? tier : t))
+          : [...f.cartGiftTiers, tier],
+      };
+    });
+  };
+
+  const applyRestaurantTemplate = (
+    preset: (typeof RESTAURANT_TEMPLATES)[number]
+  ) => {
+    const r = preset.rules;
+    setEditingId(null);
+    setForm({
+      ...emptyForm(),
+      name: preset.name,
+      description: preset.description,
+      offerType: preset.offerType,
+      percentOff: String(r.percentOff ?? '20'),
+      buyQty: String(r.buyQty ?? '2'),
+      getQty: String(r.getQty ?? '1'),
+      getDiscountPercent: String(r.getDiscountPercent ?? '100'),
+      payQty: String(r.payQty ?? '3'),
+      receiveQty: String(r.receiveQty ?? '4'),
+      nthItem: String(r.nthItem ?? '2'),
+      sameProductOnly: !!r.sameProductOnly,
+      minOrderAmount: preset.minOrderAmount ?? String(r.minOrderAmount ?? ''),
+      channels: preset.channels ?? [],
+      badgeLabel: preset.badgeLabel,
+      priority: '10',
+      cartGiftTiers: (preset.cartGiftTiers || []).map((tier, i) => ({
+        id: `tier-${Date.now()}-${i}`,
+        minCartTotal: tier.minCartTotal,
+        label: tier.label,
+        productIds: [],
+      })),
+    });
   };
 
   const applyPreset = (preset: OfferPreset) => {
@@ -596,6 +716,21 @@ export default function Offers() {
             >
               Load demo scenarios
             </button>
+            <button
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={async () => {
+                try {
+                  const res = await api.post('/merchant/offers/seed-restaurant-templates');
+                  toast.success(`Loaded ${res.data.offers?.length || 0} restaurant templates`);
+                  await load();
+                } catch (e: any) {
+                  toast.error(e.response?.data?.error || 'Failed');
+                }
+              }}
+            >
+              {t('offerRestaurantTemplatesSeed')}
+            </button>
           </div>
         </div>
 
@@ -611,6 +746,23 @@ export default function Offers() {
                 type="button"
                 className="rounded-full px-3 py-1.5 text-xs border bg-white border-amber-300 hover:bg-amber-100"
                 onClick={() => applyPreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 space-y-2">
+          <p className="text-sm font-medium text-teal-950">{t('offerRestaurantTemplatesTitle')}</p>
+          <p className="text-xs text-stone-600">{t('offerRestaurantTemplatesHint')}</p>
+          <div className="flex flex-wrap gap-2">
+            {RESTAURANT_TEMPLATES.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="rounded-full px-3 py-1.5 text-xs border bg-white border-teal-300 hover:bg-teal-100"
+                onClick={() => applyRestaurantTemplate(preset)}
               >
                 {preset.label}
               </button>
@@ -973,92 +1125,64 @@ export default function Offers() {
             <div className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">{t('offerCartGiftTiers')}</p>
-                <button
-                  type="button"
-                  className="btn-primary !py-1 !text-xs"
-                  onClick={() =>
-                    setForm({
-                      ...form,
-                      cartGiftTiers: [
-                        ...form.cartGiftTiers,
-                        {
-                          id: `tier-${Date.now()}`,
-                          minCartTotal: '',
-                          label: '',
-                          productIds: [],
-                        },
-                      ],
-                    })
-                  }
-                >
+                <button type="button" className="btn-primary !py-1 !text-xs" onClick={openNewCartGiftTier}>
                   {t('offerCartGiftAddTier')}
                 </button>
               </div>
               <p className="text-xs muted">{t('offerCartGiftTiersHint')}</p>
-              {form.cartGiftTiers.map((tier, idx) => (
-                <div key={tier.id} className="rounded-md border border-[var(--border)] bg-white p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold muted">#{idx + 1}</span>
-                    <input
-                      className="input flex-1"
-                      type="number"
-                      min="0"
-                      step="0.05"
-                      placeholder={t('offerCartGiftMinTotal')}
-                      value={tier.minCartTotal}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          cartGiftTiers: form.cartGiftTiers.map((t) =>
-                            t.id === tier.id ? { ...t, minCartTotal: e.target.value } : t
-                          ),
-                        })
-                      }
-                    />
-                    <input
-                      className="input flex-1"
-                      placeholder={t('offerCartGiftTierLabel')}
-                      value={tier.label}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          cartGiftTiers: form.cartGiftTiers.map((t) =>
-                            t.id === tier.id ? { ...t, label: e.target.value } : t
-                          ),
-                        })
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="text-xs text-red-600"
-                      onClick={() =>
-                        setForm({
-                          ...form,
-                          cartGiftTiers: form.cartGiftTiers.filter((t) => t.id !== tier.id),
-                        })
-                      }
-                    >
-                      {t('remove')}
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                    {products.map((p) => (
-                      <button
-                        key={`${tier.id}-${p.id}`}
-                        type="button"
-                        className={`rounded-full px-2.5 py-1 text-[11px] border ${
-                          tier.productIds.includes(p.id)
-                            ? 'bg-stone-900 text-white border-stone-900'
-                            : 'bg-white border-[var(--border)]'
-                        }`}
-                        onClick={() => toggleTierProduct(tier.id, p.id)}
+              {form.cartGiftTiers.length === 0 ? (
+                <p className="text-xs text-stone-500 rounded-md border border-dashed border-stone-300 p-3">
+                  {t('offerCartGiftTiersEmpty')}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {form.cartGiftTiers.map((tier, idx) => {
+                    const giftNames = tier.productIds
+                      .map((id) => productNameById.get(id))
+                      .filter(Boolean)
+                      .slice(0, 3);
+                    const extra = tier.productIds.length - giftNames.length;
+                    return (
+                      <li
+                        key={tier.id}
+                        className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-white p-3"
                       >
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                        <span className="text-xs font-semibold muted">#{idx + 1}</span>
+                        <span className="text-sm font-medium tabular-nums">
+                          ≥ {tier.minCartTotal || '—'} CHF
+                        </span>
+                        {tier.label ? (
+                          <span className="text-xs text-stone-600">· {tier.label}</span>
+                        ) : null}
+                        <span className="text-xs muted flex-1 min-w-[8rem]">
+                          {giftNames.length
+                            ? `${giftNames.join(', ')}${extra > 0 ? ` +${extra}` : ''}`
+                            : t('offerCartGiftNoProductsYet')}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-teal-700"
+                          onClick={() => openEditCartGiftTier(tier)}
+                        >
+                          {t('edit')}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-red-600"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              cartGiftTiers: form.cartGiftTiers.filter((t) => t.id !== tier.id),
+                            })
+                          }
+                        >
+                          {t('remove')}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
 
@@ -1313,6 +1437,13 @@ export default function Offers() {
           </ul>
         )}
       </div>
+      <CartGiftTierEditorModal
+        open={tierModalOpen}
+        tier={tierEditing}
+        products={products}
+        onClose={() => setTierModalOpen(false)}
+        onSave={saveCartGiftTier}
+      />
     </div>
   );
 }

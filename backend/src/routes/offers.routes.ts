@@ -141,6 +141,25 @@ router.post("/seed-demos", requirePermission("MANAGE_OFFERS"), async (req: Reque
   }
 });
 
+router.post(
+  "/seed-restaurant-templates",
+  requirePermission("MANAGE_OFFERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId!;
+      const db = getDb();
+      const cats = await db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchantId),
+      });
+      const foodish = cats.filter((c) => !c.isOffersCategory).map((c) => c.id);
+      const offers = await OffersService.seedRestaurantTemplates(merchantId, foodish);
+      res.json({ success: true, offers });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to seed" });
+    }
+  }
+);
+
 router.put("/:offerId", requirePermission("MANAGE_OFFERS"), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;

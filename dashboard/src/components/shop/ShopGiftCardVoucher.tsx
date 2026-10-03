@@ -5,6 +5,7 @@ import {
   buildGiftCardRedeemQrPayload,
   qrImageUrl,
 } from '@/lib/qr';
+import { SHOP_GIFT_CARD_THEMES } from '@/lib/gift-card-shop';
 import { useI18n } from '@/lib/i18n';
 
 type Props = {
@@ -12,11 +13,23 @@ type Props = {
   qrPayload?: string | null;
   barcodePayload?: string | null;
   compact?: boolean;
+  theme?: string | null;
+  amountLabel?: string | null;
+  message?: string | null;
 };
 
-export default function ShopGiftCardVoucher({ code, qrPayload, barcodePayload, compact }: Props) {
+export default function ShopGiftCardVoucher({
+  code,
+  qrPayload,
+  barcodePayload,
+  compact,
+  theme,
+  amountLabel,
+  message,
+}: Props) {
   const { t } = useI18n();
   const barcodeRef = useRef<SVGSVGElement>(null);
+  const themeDef = SHOP_GIFT_CARD_THEMES.find((x) => x.id === theme) || SHOP_GIFT_CARD_THEMES[0];
 
   const qrData = qrPayload || buildGiftCardRedeemQrPayload(code);
   const barData = barcodePayload || buildGiftCardBarcodePayload(code);
@@ -38,9 +51,25 @@ export default function ShopGiftCardVoucher({ code, qrPayload, barcodePayload, c
   }, [barData, compact]);
 
   return (
-    <div className="space-y-4">
+    <div
+      id="gift-card-voucher-print"
+      className="space-y-4 rounded-2xl border-2 p-4"
+      style={{ borderColor: themeDef.accent }}
+    >
       <div className="text-center">
-        <p className="text-xs uppercase tracking-wide text-stone-500 mb-2">
+        <p className="text-2xl" aria-hidden>
+          {themeDef.emoji}
+        </p>
+        <p className="text-xs uppercase tracking-wide text-stone-500 mb-1">{t(themeDef.labelKey)}</p>
+        {amountLabel ? (
+          <p className="text-xl font-bold tabular-nums" style={{ color: themeDef.accent }}>
+            {amountLabel}
+          </p>
+        ) : null}
+        {message ? (
+          <p className="mt-2 text-sm italic text-stone-600 px-2">“{message}”</p>
+        ) : null}
+        <p className="text-xs uppercase tracking-wide text-stone-500 mb-2 mt-3">
           {t('shopGiftCardScanAtPos')}
         </p>
         <img

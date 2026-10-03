@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronLeft,
@@ -60,6 +61,7 @@ import {
   type CatalogChannel,
   type CatalogVisibility,
 } from '@/lib/catalog-visibility';
+import { DIETARY_TAGS, normalizeDietaryTags, type DietaryTagId } from '@/lib/product-dietary';
 
 interface Extra {
   id: string;
@@ -140,6 +142,7 @@ interface Product {
     quantity?: number;
   }>;
   cateringConfig?: Record<string, unknown>;
+  dietaryTags?: string[];
 }
 
 interface Category {
@@ -174,6 +177,9 @@ type FormState = {
   cateringMaxGuests: string;
   cateringDefaultGuests: string;
   cateringTierSlotId: string;
+  cateringServesCount: string;
+  cateringMinOrderQty: string;
+  cateringLeadTimeHours: string;
   specifications: SpecRow[];
   modifierGroupIds: string[];
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
@@ -181,6 +187,7 @@ type FormState = {
   isTaxable: boolean;
   visibility: CatalogVisibility;
   similarProductIds: string[];
+  dietaryTags: DietaryTagId[];
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -216,12 +223,16 @@ const emptyForm = (): FormState => ({
   cateringMaxGuests: '',
   cateringDefaultGuests: '',
   cateringTierSlotId: '',
+  cateringServesCount: '',
+  cateringMinOrderQty: '',
+  cateringLeadTimeHours: '',
   specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
   isTaxable: true,
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
   similarProductIds: [],
+  dietaryTags: [],
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
@@ -236,6 +247,9 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
   | 'cateringMaxGuests'
   | 'cateringDefaultGuests'
   | 'cateringTierSlotId'
+  | 'cateringServesCount'
+  | 'cateringMinOrderQty'
+  | 'cateringLeadTimeHours'
 > {
   const c = normalizeCateringConfig(raw);
   return {
@@ -253,6 +267,9 @@ function cateringFieldsFromConfig(raw: unknown): Pick<
     cateringMaxGuests: c.maxGuests != null ? String(c.maxGuests) : '',
     cateringDefaultGuests: c.defaultGuests != null ? String(c.defaultGuests) : '',
     cateringTierSlotId: c.tierSlotId ?? '',
+    cateringServesCount: c.servesCount != null ? String(c.servesCount) : '',
+    cateringMinOrderQty: c.minOrderQty != null ? String(c.minOrderQty) : '',
+    cateringLeadTimeHours: c.leadTimeHours != null ? String(c.leadTimeHours) : '',
   };
 }
 
@@ -757,6 +774,7 @@ export default function Products() {
         isTaxable: full.isTaxable !== false,
         visibility: normalizeCatalogVisibility(full.visibility),
         similarProductIds: Array.isArray(full.similarProductIds) ? full.similarProductIds : [],
+        dietaryTags: normalizeDietaryTags(full.dietaryTags),
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -798,6 +816,7 @@ export default function Products() {
         isTaxable: product.isTaxable !== false,
         visibility: normalizeCatalogVisibility(product.visibility),
         similarProductIds: Array.isArray(product.similarProductIds) ? product.similarProductIds : [],
+        dietaryTags: normalizeDietaryTags(product.dietaryTags),
       });
     }
   };
@@ -878,6 +897,7 @@ export default function Products() {
       isTaxable: form.isTaxable,
       visibility: form.visibility,
       similarProductIds: form.similarProductIds,
+      dietaryTags: form.dietaryTags,
       ...(form.isCombo
         ? {
             cateringConfig: normalizeCateringConfig({
@@ -899,6 +919,15 @@ export default function Products() {
                 ? Math.max(1, Math.floor(Number(form.cateringDefaultGuests) || 1))
                 : undefined,
               tierSlotId: form.cateringTierSlotId.trim() || null,
+              servesCount: form.cateringServesCount.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringServesCount) || 1))
+                : undefined,
+              minOrderQty: form.cateringMinOrderQty.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringMinOrderQty) || 1))
+                : undefined,
+              leadTimeHours: form.cateringLeadTimeHours.trim()
+                ? Math.max(0, Math.floor(Number(form.cateringLeadTimeHours) || 0))
+                : undefined,
             }),
           }
         : { cateringConfig: { enabled: false } }),
@@ -2035,6 +2064,12 @@ export default function Products() {
                       <div>
                         <h3 className="text-sm font-semibold">{t('cateringPackageTitle')}</h3>
                         <p className="text-[11px] muted mt-0.5">{t('cateringPackageHint')}</p>
+                        <Link
+                          to="/merchant/products/catering-guide"
+                          className="text-[11px] font-semibold text-teal-700 hover:underline mt-1 inline-block"
+                        >
+                          {t('cateringGuideNav')} →
+                        </Link>
                       </div>
                       <label className="flex items-center gap-2 text-sm shrink-0 cursor-pointer">
                         <input
@@ -2130,6 +2165,41 @@ export default function Products() {
                               setForm({ ...form, cateringDefaultGuests: e.target.value })
                             }
                           />
+                        </Field>
+                        <Field label={t('cateringServesCount')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringServesCount}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringServesCount: e.target.value })
+                            }
+                          />
+                          <p className="text-[11px] muted mt-1">{t('cateringServesCountHint')}</p>
+                        </Field>
+                        <Field label={t('cateringMinOrderQty')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringMinOrderQty}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringMinOrderQty: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label={t('cateringLeadTimeHours')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={0}
+                            value={form.cateringLeadTimeHours}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringLeadTimeHours: e.target.value })
+                            }
+                          />
+                          <p className="text-[11px] muted mt-1">{t('cateringLeadTimeHint')}</p>
                         </Field>
                         {(form.cateringPricingMode === 'per_person' ||
                           form.cateringPricingMode === 'mixed') &&
@@ -2688,6 +2758,44 @@ export default function Products() {
                       />
                     </label>
                     <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('productDietaryLabels')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('productDietaryLabelsHint')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {DIETARY_TAGS.map((tag) => {
+                        const checked = form.dietaryTags.includes(tag.id);
+                        return (
+                          <label
+                            key={tag.id}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  dietaryTags: e.target.checked
+                                    ? [...prev.dietaryTags, tag.id]
+                                    : prev.dietaryTags.filter((id) => id !== tag.id),
+                                }));
+                              }}
+                            />
+                            <span
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold"
+                              style={{ borderColor: tag.color, color: tag.color }}
+                            >
+                              {tag.badge}
+                            </span>
+                            {t(tag.labelKey)}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <ChannelVisibilityEditor

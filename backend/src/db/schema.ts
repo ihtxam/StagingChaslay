@@ -1188,6 +1188,8 @@ export const products = pgTable(
       .notNull(),
     /** Product IDs suggested in online shop cart upsell slider */
     similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
+    /** Shop dietary filters: individual_packaging | gluten_free | vegan | vegetarian */
+    dietaryTags: json("dietary_tags").$type<string[]>().default([]),
     /** Retail catalog brand (optional). */
     brand: varchar("brand", { length: 255 }),
     /** Additional EAN/UPC codes that scan to this product. */
@@ -2669,6 +2671,13 @@ export const giftCardPurchases = pgTable(
     shippingZip: varchar("shipping_zip", { length: 20 }),
     shippingCity: varchar("shipping_city", { length: 120 }),
     shippingCountry: varchar("shipping_country", { length: 2 }).default("CH"),
+    /** classic | birthday | anniversary | wedding | promotion | thank_you */
+    cardTheme: varchar("card_theme", { length: 32 }).default("classic"),
+    shippingFee: decimal("shipping_fee", { precision: 10, scale: 2 }).default("0"),
+    serviceFee: decimal("service_fee", { precision: 10, scale: 2 }).default("0"),
+    paymentFee: decimal("payment_fee", { precision: 10, scale: 2 }).default("0"),
+    /** Amount charged to customer (face value + fees); gift card balance = amount */
+    totalCharged: decimal("total_charged", { precision: 10, scale: 2 }),
     /** pending_shipment | shipped | digital_sent */
     fulfillmentStatus: varchar("fulfillment_status", { length: 30 }),
     shippedAt: timestamp("shipped_at"),
