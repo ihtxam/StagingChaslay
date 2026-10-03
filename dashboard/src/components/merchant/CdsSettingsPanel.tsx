@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import KioskSlideEditor from '@/components/kiosk/KioskSlideEditor';
+import KioskPromoSlidesPanel from '@/components/merchant/KioskPromoSlidesPanel';
 import { cdsPublicUrl } from '@/lib/customer-display-sync';
 import type { KioskPromoSlide } from '@/lib/kiosk-api';
 import { useI18n } from '@/lib/i18n';
@@ -107,7 +107,7 @@ export default function CdsSettingsPanel() {
     );
   }
 
-  const slides = settings.promoSlides?.length ? settings.promoSlides : [{ title: '', subtitle: '' }];
+  const slides = settings.promoSlides ?? [];
 
   return (
     <div className="space-y-4">
@@ -197,22 +197,12 @@ export default function CdsSettingsPanel() {
       <div className={`${PANEL_CARD} p-4 space-y-3`}>
         <p className="text-sm font-medium">{t('cdsPromoSlides')}</p>
         <p className="text-xs text-[var(--text-muted)]">{t('cdsPromoSlidesHint')}</p>
-        <KioskSlideEditor
+        <KioskPromoSlidesPanel
           slides={slides}
-          editable
-          mode="merchant"
-          onChange={(promoSlides) => {
-            setSettings({ ...settings, promoSlides });
-          }}
+          saving={saving}
+          onChange={(promoSlides) => setSettings({ ...settings, promoSlides })}
+          onPersist={(promoSlides) => void save({ promoSlides })}
         />
-        <button
-          type="button"
-          disabled={saving}
-          className="btn btn-primary"
-          onClick={() => void save({ promoSlides: settings.promoSlides })}
-        >
-          {t('save')}
-        </button>
       </div>
     </div>
   );

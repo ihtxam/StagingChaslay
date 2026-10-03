@@ -40,9 +40,18 @@ type Props = {
   mode: 'merchant' | 'token';
   accessToken?: string;
   onChange: (slides: KioskPromoSlide[]) => void;
+  /** When true, hide per-slide remove and bottom "Add slide" (used inside a modal). */
+  singleSlide?: boolean;
 };
 
-export default function KioskSlideEditor({ slides, editable, mode, accessToken, onChange }: Props) {
+export default function KioskSlideEditor({
+  slides,
+  editable,
+  mode,
+  accessToken,
+  onChange,
+  singleSlide = false,
+}: Props) {
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -117,7 +126,7 @@ export default function KioskSlideEditor({ slides, editable, mode, accessToken, 
                 onChange={(e) => updateSlide(idx, { imageUrl: e.target.value })}
               />
             </div>
-            {editable && slides.length > 1 ? (
+            {editable && !singleSlide && slides.length > 1 ? (
               <button
                 type="button"
                 className="btn-secondary text-red-600"
@@ -153,7 +162,7 @@ export default function KioskSlideEditor({ slides, editable, mode, accessToken, 
           </div>
         </div>
       ))}
-      {editable ? (
+      {editable && !singleSlide ? (
         <button
           type="button"
           className="btn-secondary"

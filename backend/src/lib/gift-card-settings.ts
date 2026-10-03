@@ -16,6 +16,16 @@ export type GiftCardSettings = {
   digitalVoucherEnabled?: boolean;
   /** Physical gift card shipped by post */
   physicalPostEnabled?: boolean;
+  /** Flat CHF added when deliveryType is physical */
+  physicalPostFee?: number;
+  /** Optional flat service / handling fee on online gift purchases */
+  serviceFeeFlat?: number;
+  /** Optional % of (face + shipping) added as service fee */
+  serviceFeePercent?: number;
+  /** When true, add card processing fee % to customer total */
+  passCardFeeToCustomer?: boolean;
+  /** Card fee % of subtotal (face + shipping + service) when pass-through enabled */
+  cardFeePercent?: number;
   /** Enable membership card sell / tier benefits */
   membershipEnabled?: boolean;
   /** Configurable membership tiers (discount %, stamp cards, etc.) */
@@ -32,6 +42,11 @@ export const DEFAULT_GIFT_CARD_SETTINGS: GiftCardSettings = {
   onlinePurchaseEnabled: true,
   digitalVoucherEnabled: true,
   physicalPostEnabled: false,
+  physicalPostFee: 0,
+  serviceFeeFlat: 0,
+  serviceFeePercent: 0,
+  passCardFeeToCustomer: false,
+  cardFeePercent: 0,
   membershipEnabled: false,
   membershipPlans: [],
 };
@@ -83,6 +98,11 @@ export function normalizeGiftCardSettings(raw: unknown): GiftCardSettings {
     onlinePurchaseEnabled: src.onlinePurchaseEnabled !== false,
     digitalVoucherEnabled: src.digitalVoucherEnabled !== false,
     physicalPostEnabled: src.physicalPostEnabled === true,
+    physicalPostFee: roundMoney2(Math.max(0, Number(src.physicalPostFee) || 0)),
+    serviceFeeFlat: roundMoney2(Math.max(0, Number(src.serviceFeeFlat) || 0)),
+    serviceFeePercent: Math.max(0, Math.min(100, Number(src.serviceFeePercent) || 0)),
+    passCardFeeToCustomer: src.passCardFeeToCustomer === true,
+    cardFeePercent: Math.max(0, Math.min(100, Number(src.cardFeePercent) || 0)),
     membershipEnabled: src.membershipEnabled === true,
     membershipPlans,
   };

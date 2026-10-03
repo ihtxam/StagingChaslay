@@ -11,6 +11,11 @@ import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopInfoSheet from '@/components/shop/ShopInfoSheet';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import {
+  computeShopGiftCheckout,
+  SHOP_GIFT_CARD_THEMES,
+  type GiftCardThemeId,
+} from '@/lib/gift-card-shop';
+import {
   adyenLocaleFor,
   formatAdyenError,
   isAdyenPaymentSuccess,
@@ -27,6 +32,11 @@ type GiftSettings = {
   minAmount: number;
   maxAmount: number;
   customAmountEnabled: boolean;
+  physicalPostFee?: number;
+  serviceFeeFlat?: number;
+  serviceFeePercent?: number;
+  passCardFeeToCustomer?: boolean;
+  cardFeePercent?: number;
 };
 
 type DeliveryType = 'digital' | 'physical';
@@ -52,6 +62,7 @@ export default function GiftCardsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('digital');
+  const [cardTheme, setCardTheme] = useState<GiftCardThemeId>('classic');
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -64,6 +75,7 @@ export default function GiftCardsPage() {
   const [shippingCity, setShippingCity] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
+  const [checkoutTotal, setCheckoutTotal] = useState<number | null>(null);
   const [session, setSession] = useState<PaymentSession | null>(null);
   const [payMsg, setPayMsg] = useState('');
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
@@ -118,6 +130,13 @@ export default function GiftCardsPage() {
   const showDigital = settings?.digitalVoucherEnabled !== false;
   const showPhysical = settings?.physicalPostEnabled === true;
 
+  const checkoutBreakdown = useMemo(() => {
+    if (!settings || resolvedAmount <= 0) return null;
+    return computeShopGiftCheckout(resolvedAmount, deliveryType, settings);
+  }, [settings, resolvedAmount, deliveryType]);
+
+  const payTotal = checkoutBreakdown?.totalCharged ?? resolvedAmount;
+
   const checkBalance = async (e: FormEvent) => {
     e.preventDefault();
     const code = balanceCode.trim();
@@ -153,6 +172,7 @@ export default function GiftCardsPage() {
         {
           amount: resolvedAmount,
           deliveryType,
+          cardTheme,
           recipientEmail,
           recipientName: recipientName || undefined,
           senderName: senderName || undefined,
@@ -168,6 +188,7 @@ export default function GiftCardsPage() {
       );
       const pid = res.data?.purchase?.id;
       setPurchaseId(pid);
+      setCheckoutTotal(Number(res.data?.breakdown?.totalCharged) || payTotal);
       setSession(res.data?.paymentSession || null);
       if (res.data?.paymentSession?.demoConfirmAvailable && !res.data?.paymentSession?.id) {
         setPayMsg(t('shopGiftCardDemoPayHint'));
@@ -376,6 +397,29 @@ export default function GiftCardsPage() {
             onSubmit={startPurchase}
             className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6"
           >
+            <div>
+              <p className="text-sm font-medium mb-3">{t('shopGiftCardThemeTitle')}</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {SHOP_GIFT_CARD_THEMES.map((th) => (
+                  <button
+                    key={th.id}
+                    type="button"
+                    onClick={() => setCardTheme(th.id)}
+                    className={`shrink-0 rounded-xl border px-3 py-2.5 text-left min-w-[7.5rem] transition-colors ${
+                      cardTheme === th.id
+                        ? 'border-stone-900 ring-2 ring-stone-900/20 bg-stone-50'
+                        : 'border-stone-200 hover:border-stone-400 bg-white'
+                    }`}
+                  >
+                    <span className="text-lg" aria-hidden>
+                      {th.emoji}
+                    </span>
+                    <p className="text-xs font-semibold mt-1 leading-tight">{t(th.labelKey)}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {showDigital && showPhysical ? (
               <div>
                 <p className="text-sm font-medium mb-3">{t('shopGiftCardDeliveryType')}</p>
@@ -416,6 +460,17 @@ export default function GiftCardsPage() {
                   </button>
                 </div>
               </div>
+            ) : null}
+
+            {!showDigital && showPhysical ? (
+              <p className="text-sm text-stone-600 rounded-xl bg-stone-50 border border-stone-200 px-4 py-3">
+                {t('shopGiftCardPhysical')} — {t('shopGiftCardPhysicalHint')}
+              </p>
+            ) : null}
+            {showDigital && !showPhysical ? (
+              <p className="text-sm text-stone-600 rounded-xl bg-stone-50 border border-stone-200 px-4 py-3">
+                {t('shopGiftCardDigital')} — {t('shopGiftCardDigitalHint')}
+              </p>
             ) : null}
 
             <div>
@@ -544,6 +599,41 @@ export default function GiftCardsPage() {
               />
             </label>
 
+            {checkoutBreakdown &&
+            (checkoutBreakdown.shippingFee > 0 ||
+              checkoutBreakdown.serviceFee > 0 ||
+              checkoutBreakdown.paymentFee > 0) ? (
+              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 space-y-2 text-sm">
+                <p className="font-semibold text-stone-900">{t('shopGiftCardOrderSummary')}</p>
+                <div className="flex justify-between gap-2">
+                  <span className="text-stone-600">{t('shopGiftCardFaceValue')}</span>
+                  <span>CHF {checkoutBreakdown.faceAmount.toFixed(2)}</span>
+                </div>
+                {checkoutBreakdown.shippingFee > 0 ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-stone-600">{t('shopGiftCardShippingFee')}</span>
+                    <span>CHF {checkoutBreakdown.shippingFee.toFixed(2)}</span>
+                  </div>
+                ) : null}
+                {checkoutBreakdown.serviceFee > 0 ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-stone-600">{t('shopGiftCardServiceFee')}</span>
+                    <span>CHF {checkoutBreakdown.serviceFee.toFixed(2)}</span>
+                  </div>
+                ) : null}
+                {checkoutBreakdown.paymentFee > 0 ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-stone-600">{t('shopGiftCardPaymentFee')}</span>
+                    <span>CHF {checkoutBreakdown.paymentFee.toFixed(2)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between gap-2 border-t border-stone-200 pt-2 font-semibold">
+                  <span>{t('shopGiftCardTotalDue')}</span>
+                  <span>CHF {checkoutBreakdown.totalCharged.toFixed(2)}</span>
+                </div>
+              </div>
+            ) : null}
+
             {error && <p className="text-red-600 text-sm">{error}</p>}
 
             <button
@@ -553,7 +643,7 @@ export default function GiftCardsPage() {
             >
               {submitting
                 ? '…'
-                : t('shopGiftCardPay').replace('{amount}', resolvedAmount.toFixed(2))}
+                : t('shopGiftCardPay').replace('{amount}', payTotal.toFixed(2))}
             </button>
           </form>
           </>
@@ -561,7 +651,7 @@ export default function GiftCardsPage() {
           <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-2">{t('shopGiftCardPayment')}</h2>
             <p className="text-stone-600 text-sm mb-4">
-              CHF {resolvedAmount.toFixed(2)} ·{' '}
+              CHF {(checkoutTotal ?? payTotal).toFixed(2)} ·{' '}
               {deliveryType === 'physical' ? t('shopGiftCardPhysical') : t('shopGiftCardDigital')}
             </p>
             {payMsg && <p className="text-amber-700 text-sm mb-3">{payMsg}</p>}
