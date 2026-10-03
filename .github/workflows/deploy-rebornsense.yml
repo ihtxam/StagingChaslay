@@ -32,11 +32,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch latest RebornPOS Windows installer
+        id: fetch_installer
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/fetch-reborn-pos-installer.sh
 
       - name: Publish RebornPOS installer to production downloads
+        if: steps.fetch_installer.outcome == 'success'
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.REBORN_HETZNER_HOST }}
