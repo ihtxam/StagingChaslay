@@ -61,6 +61,7 @@ import {
   type CatalogChannel,
   type CatalogVisibility,
 } from '@/lib/catalog-visibility';
+import { DIETARY_TAGS, normalizeDietaryTags, type DietaryTagId } from '@/lib/product-dietary';
 
 interface Extra {
   id: string;
@@ -141,6 +142,7 @@ interface Product {
     quantity?: number;
   }>;
   cateringConfig?: Record<string, unknown>;
+  dietaryTags?: string[];
 }
 
 interface Category {
@@ -185,6 +187,7 @@ type FormState = {
   isTaxable: boolean;
   visibility: CatalogVisibility;
   similarProductIds: string[];
+  dietaryTags: DietaryTagId[];
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -229,6 +232,7 @@ const emptyForm = (): FormState => ({
   isTaxable: true,
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
   similarProductIds: [],
+  dietaryTags: [],
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
@@ -770,6 +774,7 @@ export default function Products() {
         isTaxable: full.isTaxable !== false,
         visibility: normalizeCatalogVisibility(full.visibility),
         similarProductIds: Array.isArray(full.similarProductIds) ? full.similarProductIds : [],
+        dietaryTags: normalizeDietaryTags(full.dietaryTags),
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -811,6 +816,7 @@ export default function Products() {
         isTaxable: product.isTaxable !== false,
         visibility: normalizeCatalogVisibility(product.visibility),
         similarProductIds: Array.isArray(product.similarProductIds) ? product.similarProductIds : [],
+        dietaryTags: normalizeDietaryTags(product.dietaryTags),
       });
     }
   };
@@ -891,6 +897,7 @@ export default function Products() {
       isTaxable: form.isTaxable,
       visibility: form.visibility,
       similarProductIds: form.similarProductIds,
+      dietaryTags: form.dietaryTags,
       ...(form.isCombo
         ? {
             cateringConfig: normalizeCateringConfig({
@@ -2751,6 +2758,44 @@ export default function Products() {
                       />
                     </label>
                     <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('productDietaryLabels')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('productDietaryLabelsHint')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {DIETARY_TAGS.map((tag) => {
+                        const checked = form.dietaryTags.includes(tag.id);
+                        return (
+                          <label
+                            key={tag.id}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  dietaryTags: e.target.checked
+                                    ? [...prev.dietaryTags, tag.id]
+                                    : prev.dietaryTags.filter((id) => id !== tag.id),
+                                }));
+                              }}
+                            />
+                            <span
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold"
+                              style={{ borderColor: tag.color, color: tag.color }}
+                            >
+                              {tag.badge}
+                            </span>
+                            {t(tag.labelKey)}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <ChannelVisibilityEditor

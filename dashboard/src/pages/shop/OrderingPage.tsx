@@ -51,6 +51,12 @@ import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopCartThresholdSlot from '@/components/shop/ShopCartThresholdSlot';
 import ShopCartSimilarProducts from '@/components/shop/ShopCartSimilarProducts';
 import ShopProductDetailModal from '@/components/shop/ShopProductDetailModal';
+import ShopMenuDietaryFilter from '@/components/shop/ShopMenuDietaryFilter';
+import ShopDietaryBadges from '@/components/shop/ShopDietaryBadges';
+import {
+  productMatchesDietaryFilters,
+  type DietaryTagId,
+} from '@/lib/product-dietary';
 import ShopHorizontalScroll from '@/components/shop/ShopHorizontalScroll';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavbar';
@@ -114,6 +120,7 @@ interface Product {
   loyaltyRewardPoints?: number | null;
   similarProductIds?: string[];
   cateringConfig?: Record<string, unknown>;
+  dietaryTags?: DietaryTagId[];
 }
 
 type LoyaltyReward = {
@@ -211,6 +218,7 @@ export default function OrderingPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   const [productView, setProductView] = useState<ShopProductView>('list');
+  const [dietaryFilters, setDietaryFilters] = useState<DietaryTagId[]>([]);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
@@ -638,8 +646,18 @@ export default function OrderingPage() {
         }))
         .filter((cat) => (cat.items?.length ?? 0) > 0);
     }
+    if (dietaryFilters.length) {
+      cats = cats
+        .map((cat) => ({
+          ...cat,
+          items: (cat.items || []).filter((p) =>
+            productMatchesDietaryFilters(p.dietaryTags, dietaryFilters)
+          ),
+        }))
+        .filter((cat) => (cat.items?.length ?? 0) > 0);
+    }
     return cats;
-  }, [menu, shopOrderMode]);
+  }, [menu, shopOrderMode, dietaryFilters]);
 
   const menuSearchResults = useMemo(() => {
     const q = menuSearchQuery.trim().toLowerCase();
@@ -649,12 +667,14 @@ export default function OrderingPage() {
       for (const product of cat.items || []) {
         const haystack = `${product.name} ${product.description || ''}`.toLowerCase();
         if (haystack.includes(q)) {
-          results.push({ product, categoryId: cat.id });
+          if (productMatchesDietaryFilters(product.dietaryTags, dietaryFilters)) {
+            results.push({ product, categoryId: cat.id });
+          }
         }
       }
     }
     return results;
-  }, [menuSearchQuery, visibleMenuCategories]);
+  }, [menuSearchQuery, visibleMenuCategories, dietaryFilters]);
 
   const openMenuSearch = () => {
     setMenuSearchOpen(true);
@@ -1980,6 +2000,14 @@ export default function OrderingPage() {
             )}
           </div>
           {visibleMenuCategories.length > 0 ? (
+            <>
+              {!menuSearchOpen ? (
+                <ShopMenuDietaryFilter
+                  active={dietaryFilters}
+                  onChange={setDietaryFilters}
+                  t={t}
+                />
+              ) : null}
             <div className="shop-product-view-toggle shrink-0" role="group" aria-label={t('shopProductViewLabel')}>
               <button
                 type="button"
@@ -2005,6 +2033,7 @@ export default function OrderingPage() {
                 ) : null}
               </button>
             </div>
+            </>
           ) : null}
         </div>
       </div>
@@ -2168,7 +2197,9 @@ export default function OrderingPage() {
             );
           })}
           {visibleMenuCategories.length === 0 ? (
-            <p className="text-stone-500 py-12 text-center">{t('shopNoProducts')}</p>
+            <p className="text-stone-500 py-12 text-center">
+              {dietaryFilters.length ? t('shopDietaryNoResults') : t('shopNoProducts')}
+            </p>
           ) : null}
             </>
           )}
@@ -2519,6 +2550,7 @@ function ProductCard({
           </span>
         ) : null}
         <p className="text-sm font-semibold leading-tight text-stone-900 line-clamp-2">{product.name}</p>
+        <ShopDietaryBadges tags={product.dietaryTags} mode="icons" t={t} className="mt-0.5" />
         {product.description ? (
           <p className="mt-0.5 text-xs text-stone-500 line-clamp-2">{product.description}</p>
         ) : null}

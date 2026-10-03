@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, Minus, Plus } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import ShopDietaryBadges from '@/components/shop/ShopDietaryBadges';
+import type { DietaryTagId } from '@/lib/product-dietary';
 
 type Product = {
   id: string;
@@ -8,6 +10,7 @@ type Product = {
   price: number;
   description?: string;
   image?: string;
+  dietaryTags?: DietaryTagId[];
 };
 
 type Props = {
@@ -62,6 +65,12 @@ export default function ShopProductDetailModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           <h2 className="text-xl font-bold text-stone-900">{product.name}</h2>
+          <ShopDietaryBadges
+            tags={product.dietaryTags}
+            mode="labels"
+            t={t}
+            className="flex flex-col items-start gap-1"
+          />
           {product.description ? (
             <p className="text-sm text-stone-500 leading-relaxed">{product.description}</p>
           ) : null}

@@ -38,6 +38,7 @@ import { formatShopMoney, inferShopCurrency } from "@/lib/shop-currency";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
+import { normalizeDietaryTags } from "@/lib/product-dietary";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   inStockProductSpecifications,
@@ -223,6 +224,7 @@ function mapShopProduct(
           (id) => typeof id === "string" && id.trim()
         )
       : [],
+    dietaryTags: normalizeDietaryTags((p as { dietaryTags?: unknown }).dietaryTags),
   };
 }
 
