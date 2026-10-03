@@ -1,8 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Minus, Plus, Trash2, X } from 'lucide-react';
+import { Minus, Plus, Trash2, X, Users } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
 import { roundMoney2 } from '@/lib/money';
+import {
+  clampGuestCount,
+  computeCateringUnitPrice,
+  isCateringProduct,
+  normalizeCateringConfig,
+  scaleModifierPrice,
+  type CateringConfig,
+} from '@/lib/catering';
 import ShopModifierTabGrid from '@/components/shop/ShopModifierTabGrid';
 import {
   buildExtrasFromSelection,
@@ -41,6 +49,7 @@ export type ShopComboProduct = {
   description?: string;
   image?: string;
   comboSlots: ComboSlot[];
+  cateringConfig?: CateringConfig | Record<string, unknown>;
   allowExtras?: boolean;
   extras?: Array<{ id: string; name: string; price: number }>;
   modifierGroups?: ShopModifierGroup[];
@@ -63,6 +72,7 @@ type Props = {
     comboSelections: ComboSelection[];
     selectedExtras: ShopSelectedExtra[];
     unitPrice: number;
+    cateringGuestCount?: number;
   }) => void;
   showImage?: boolean;
 };
@@ -140,6 +150,11 @@ export { productHasComboSlots };
 export default function ShopComboWizard({ product, onClose, onConfirm, showImage = true }: Props) {
   const { t } = useI18n();
   const slots = product.comboSlots || [];
+  const cateringCfg = normalizeCateringConfig(product.cateringConfig);
+  const cateringOn = isCateringProduct('combo', cateringCfg);
+  const [guestCount, setGuestCount] = useState(() =>
+    clampGuestCount(cateringCfg, cateringCfg.defaultGuests ?? cateringCfg.minGuests ?? 1)
+  );
   const [picksBySlot, setPicksBySlot] = useState<Record<string, SlotPick[]>>({});
   const [comboExtraSelection, setComboExtraSelection] = useState<Record<string, string[]>>(() =>
     initialSelection(comboGroupsSeed(product))
@@ -188,23 +203,37 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
     comboGroups.length === 0 || !validateGroups(comboGroups, comboExtraSelection);
   const canConfirm = allSlotsValid && comboExtrasValid;
 
-  const comboExtras = buildExtrasFromSelection(comboGroups, comboExtraSelection);
+  const comboExtrasRaw = buildExtrasFromSelection(comboGroups, comboExtraSelection);
+  const comboExtras = comboExtrasRaw.map((e) => {
+    const g = comboGroups.find((gr) => gr.id === e.groupId);
+    return {
+      ...e,
+      price: scaleModifierPrice(e.price, g?.priceScope, guestCount, cateringOn),
+    };
+  });
 
-  const unitPrice = roundMoney2(
-    product.price +
-      slots.reduce((sum, slot) => {
-        const picks = picksBySlot[slot.id] || [];
-        return (
-          sum +
-          picks.reduce(
-            (s, p) =>
-              s + (p.extraPrice + p.selectedExtras.reduce((x, e) => x + e.price, 0)) * p.qty,
-            0
-          )
-        );
-      }, 0) +
-      comboExtras.reduce((s, e) => s + e.price, 0)
-  );
+  const comboSurcharge = slots.reduce((sum, slot) => {
+    const picks = picksBySlot[slot.id] || [];
+    return (
+      sum +
+      picks.reduce(
+        (s, p) =>
+          s + (p.extraPrice + p.selectedExtras.reduce((x, e) => x + e.price, 0)) * p.qty,
+        0
+      )
+    );
+  }, 0);
+  const extrasTotal = comboExtras.reduce((s, e) => s + e.price, 0);
+
+  const unitPrice = cateringOn
+    ? computeCateringUnitPrice({
+        listPrice: product.price,
+        cateringConfig: cateringCfg,
+        guestCount,
+        comboSurcharge,
+        extrasTotal,
+      })
+    : roundMoney2(product.price + comboSurcharge + extrasTotal);
 
   const openNested = (slot: ComboSlot, option: ComboOptionProduct, replacePickId?: string) => {
     const groups = effectiveGroups(option);
@@ -432,7 +461,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
         }
       }
     }
-    onConfirm({ comboSelections, selectedExtras: comboExtras, unitPrice });
+    onConfirm({ comboSelections, selectedExtras: comboExtras, unitPrice, cateringGuestCount: cateringOn ? guestCount : undefined });
   };
 
   return (
@@ -482,6 +511,48 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
             </div>
             {product.description ? (
               <p className="mt-2 text-sm leading-relaxed text-stone-500">{product.description}</p>
+            ) : null}
+            {cateringOn ? (
+              <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Users size={18} className="shrink-0 text-stone-600" />
+                    <span className="text-sm font-semibold text-stone-900">
+                      {t('shopCateringGuests')}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 disabled:opacity-40"
+                      disabled={guestCount <= (cateringCfg.minGuests ?? 1)}
+                      onClick={() =>
+                        setGuestCount((c) => clampGuestCount(cateringCfg, c - 1))
+                      }
+                      aria-label={t('decrease')}
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="min-w-[2.5rem] text-center text-lg font-bold tabular-nums text-stone-900">
+                      {guestCount}
+                    </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 disabled:opacity-40"
+                      disabled={guestCount >= (cateringCfg.maxGuests ?? 999)}
+                      onClick={() =>
+                        setGuestCount((c) => clampGuestCount(cateringCfg, c + 1))
+                      }
+                      aria-label={t('increase')}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs leading-snug text-stone-500">
+                  {t('shopCateringGuestsHint')}
+                </p>
+              </div>
             ) : null}
             </div>
           </div>

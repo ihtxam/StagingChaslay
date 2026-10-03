@@ -62,6 +62,7 @@ interface ModifierGroup {
   maxSelectable: number;
   defaultCollapsed: boolean;
   allowMultipleSameItem: boolean;
+  priceScope?: 'fixed' | 'per_guest';
   options: ModifierOption[];
   products: LinkedProduct[];
   productIds: string[];
@@ -82,6 +83,7 @@ type FormState = {
   maxSelectable: number;
   defaultCollapsed: boolean;
   allowMultipleSameItem: boolean;
+  priceScope: 'fixed' | 'per_guest';
   options: ModifierOptionForm[];
   productIds: string[];
 };
@@ -107,6 +109,7 @@ const emptyForm = (): FormState => ({
   maxSelectable: 1,
   defaultCollapsed: false,
   allowMultipleSameItem: false,
+  priceScope: 'fixed',
   options: [emptyOption()],
   productIds: [],
 });
@@ -255,6 +258,7 @@ export default function Modifiers() {
       maxSelectable: group.maxSelectable,
       defaultCollapsed: group.defaultCollapsed,
       allowMultipleSameItem: group.allowMultipleSameItem,
+      priceScope: group.priceScope === 'per_guest' ? 'per_guest' : 'fixed',
       options: group.options.length
         ? group.options.map((o, i) => ({
             ...o,
@@ -323,6 +327,7 @@ export default function Modifiers() {
         maxSelectable: form.maxSelectable,
         defaultCollapsed: form.defaultCollapsed,
         allowMultipleSameItem: form.allowMultipleSameItem,
+        priceScope: form.priceScope,
         options,
         productIds: form.productIds,
       };
@@ -491,6 +496,9 @@ export default function Modifiers() {
                   </Badge>
                   <Badge>{t('optionsCount').replace('{n}', String(group.options.length))}</Badge>
                   <Badge>{t('productsCount').replace('{n}', String(group.products.length))}</Badge>
+                  {group.priceScope === 'per_guest' ? (
+                    <Badge>{t('modifierPriceScopePerGuest')}</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-sm text-slate-500 line-clamp-1">
                   {group.options.map((o) => o.name).join(' · ') || t('noOptions')}
@@ -627,6 +635,34 @@ export default function Modifiers() {
                         onChange={(v) => setForm({ ...form, allowMultipleSameItem: v })}
                       />
                     )}
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend className="mb-2 text-sm font-medium text-slate-700">
+                    {t('modifierPriceScope')}
+                  </legend>
+                  <p className="mb-2 text-xs text-slate-500">{t('modifierPriceScopeHint')}</p>
+                  <div className="flex flex-wrap gap-5 text-sm">
+                    {(
+                      [
+                        ['fixed', 'modifierPriceScopeFixed'],
+                        ['per_guest', 'modifierPriceScopePerGuest'],
+                      ] as const
+                    ).map(([value, labelKey]) => (
+                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="priceScope"
+                          checked={form.priceScope === value}
+                          onChange={() =>
+                            setForm({ ...form, priceScope: value })
+                          }
+                          className="accent-teal-600"
+                        />
+                        {t(labelKey)}
+                      </label>
+                    ))}
                   </div>
                 </fieldset>
 

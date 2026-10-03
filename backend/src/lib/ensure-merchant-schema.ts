@@ -314,6 +314,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_barcodes jsonb NOT NULL DEFAULT '[]'::jsonb",
   products_time_slot_prices:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
+  products_catering_config:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS catering_config jsonb NOT NULL DEFAULT '{}'::jsonb",
+  modifier_groups_price_scope:
+    "ALTER TABLE modifier_groups ADD COLUMN IF NOT EXISTS price_scope varchar(20) NOT NULL DEFAULT 'fixed'",
   categories_visibility:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb",
   categories_delivery_pricing_enabled:
@@ -397,6 +401,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   order_items_seat_number: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seat_number integer",
   order_items_refunded_quantity:
     "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS refunded_quantity numeric(12,3) DEFAULT 0",
+  order_items_catering_guest_count:
+    "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS catering_guest_count integer",
   merchants_reservations_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservations_enabled boolean NOT NULL DEFAULT false",
   merchants_subscription_billing_cycle:

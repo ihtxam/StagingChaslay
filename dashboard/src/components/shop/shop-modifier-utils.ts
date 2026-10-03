@@ -31,6 +31,7 @@ export interface ShopModifierGroup {
   selectionType?: 'optional' | 'required' | string;
   minSelectable?: number;
   maxSelectable?: number;
+  priceScope?: 'fixed' | 'per_guest' | string;
   options: ShopModifierOption[];
 }
 

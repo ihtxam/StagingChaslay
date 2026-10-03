@@ -98,6 +98,7 @@ interface Product {
   comboSlots?: ComboSlot[];
   loyaltyRewardPoints?: number | null;
   similarProductIds?: string[];
+  cateringConfig?: Record<string, unknown>;
 }
 
 type LoyaltyReward = {
@@ -567,7 +568,8 @@ export default function OrderingPage() {
       catalogPrice?: number;
       offerInstanceId?: string;
       offerName?: string;
-    }
+    },
+    cateringGuestCount?: number
   ) => {
     const rewardCost =
       'loyaltyRewardPoints' in product && product.loyaltyRewardPoints != null
@@ -655,11 +657,13 @@ export default function OrderingPage() {
       catalogPrice = catalogUnit;
       offerId = pctMatch.offer.id;
       offerBadge = pctMatch.offer.badgeLabel || `${pctMatch.percent}% off`;
+    } else if (typeof unitPrice === 'number' && Number.isFinite(unitPrice)) {
+      price = roundMoney2(unitPrice);
     } else {
       price = catalogUnit;
     }
 
-    const sig = lineSignature(extras, comboSelections);
+    const sig = lineSignature(extras, comboSelections, false, cateringGuestCount);
     setDraft((prev) => {
       const existing =
         offerMeta
@@ -669,7 +673,7 @@ export default function OrderingPage() {
                 item.id === product.id &&
                 !item.loyaltyReward &&
                 !item.offerId &&
-                lineSignature(item.selectedExtras, item.comboSelections) === sig
+                lineSignature(item.selectedExtras, item.comboSelections, false, item.cateringGuestCount) === sig
             );
       const items: ShopCartItem[] = existing
         ? prev.items.map((item) =>
@@ -689,6 +693,9 @@ export default function OrderingPage() {
               image: product.image,
               selectedExtras: extras,
               comboSelections,
+              ...(typeof cateringGuestCount === 'number' && cateringGuestCount >= 1
+                ? { cateringGuestCount }
+                : {}),
               ...(offerId
                 ? {
                     offerId,
@@ -2117,12 +2124,12 @@ export default function OrderingPage() {
               );
             }
           }}
-          onConfirm={({ comboSelections, selectedExtras }) => {
+          onConfirm={({ comboSelections, selectedExtras, unitPrice, cateringGuestCount }) => {
             const meta = offerConfigMeta;
             addConfiguredItem(
               pendingCombo,
               selectedExtras,
-              undefined,
+              unitPrice,
               comboSelections,
               false,
               meta
@@ -2134,7 +2141,8 @@ export default function OrderingPage() {
                     offerInstanceId: meta.offerInstanceId,
                     offerName: meta.offerName,
                   }
-                : undefined
+                : undefined,
+              cateringGuestCount
             );
             setPendingCombo(null);
             setOfferConfigMeta(null);

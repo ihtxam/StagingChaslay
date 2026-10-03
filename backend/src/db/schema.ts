@@ -1157,6 +1157,8 @@ export const products = pgTable(
         }>
       >()
       .default([]),
+    /** Catering / prepackaged menu: guest count, package vs per-person pricing */
+    cateringConfig: json("catering_config").$type<Record<string, unknown>>().default({}),
     // [{ id, name, price, saleStatus, isDefault, sortOrder }] size/spec variants
     specifications: json("specifications")
       .$type<
@@ -1227,6 +1229,8 @@ export const modifierGroups = pgTable(
     maxSelectable: integer("max_selectable").default(1).notNull(),
     defaultCollapsed: boolean("default_collapsed").default(false).notNull(),
     allowMultipleSameItem: boolean("allow_multiple_same_item").default(false).notNull(),
+    /** fixed | per_guest — per_guest multiplies option price by catering guest count on combo lines */
+    priceScope: varchar("price_scope", { length: 20 }).default("fixed").notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1914,6 +1918,8 @@ export const orderItems = pgTable(
         }>
       >()
       .default([]),
+    /** Catering packages: guests this line was priced for (shop combo). */
+    cateringGuestCount: integer("catering_guest_count"),
     isOpenPrice: boolean("is_open_price").default(false).notNull(),
     // 1-based seat / person index when pax ordering is on (kitchen: "Person 1")
     seatNumber: integer("seat_number"),

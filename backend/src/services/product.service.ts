@@ -35,6 +35,7 @@ export class ProductService {
         productId?: string;
         quantity?: number;
       }>;
+      cateringConfig?: Record<string, unknown>;
       allowExtras?: boolean;
       clientId?: string;
       specifications?: Array<{
@@ -83,6 +84,7 @@ export class ProductService {
           bulkPricing: extras?.bulkPricing || [],
           extras: extras?.extras || [],
           comboItems: extras?.comboItems || [],
+          cateringConfig: extras?.cateringConfig || {},
           specifications: extras?.specifications || [],
           buttonColor: extras?.buttonColor || null,
           allowExtras: !!extras?.allowExtras,

@@ -1,6 +1,11 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
+import {
+  normalizeModifierPriceScope,
+  type ModifierPriceScope,
+} from "@/lib/catering-config";
+
 export type PricingType = "free" | "fixed" | "toppings_by_size";
 export type SelectionType = "optional" | "required";
 export type SaleStatus = "in_stock" | "out_of_stock";
@@ -25,10 +30,15 @@ export type ModifierGroupInput = {
   maxSelectable?: number;
   defaultCollapsed?: boolean;
   allowMultipleSameItem?: boolean;
+  priceScope?: ModifierPriceScope | string;
   sortOrder?: number;
   options?: ModifierOptionInput[];
   productIds?: string[];
 };
+
+function normalizePriceScope(raw?: string | null): ModifierPriceScope {
+  return normalizeModifierPriceScope(raw);
+}
 
 function normalizePricing(type?: string): PricingType {
   if (type === "free" || type === "toppings_by_size") return type;
@@ -121,6 +131,7 @@ export class ModifierService {
         maxSelectable,
         defaultCollapsed: !!input.defaultCollapsed,
         allowMultipleSameItem: !!input.allowMultipleSameItem,
+        priceScope: normalizePriceScope(input.priceScope),
         sortOrder: Number(input.sortOrder) || 0,
       })
       .returning();
@@ -166,6 +177,10 @@ export class ModifierService {
           input.allowMultipleSameItem !== undefined
             ? !!input.allowMultipleSameItem
             : existing.allowMultipleSameItem,
+        priceScope:
+          input.priceScope !== undefined
+            ? normalizePriceScope(String(input.priceScope))
+            : normalizePriceScope(existing.priceScope),
         sortOrder: input.sortOrder !== undefined ? Number(input.sortOrder) || 0 : existing.sortOrder,
         updatedAt: new Date(),
       })
@@ -410,6 +425,7 @@ export class ModifierService {
       maxSelectable: g.maxSelectable,
       defaultCollapsed: !!g.defaultCollapsed,
       allowMultipleSameItem: !!g.allowMultipleSameItem,
+      priceScope: normalizePriceScope(g.priceScope),
       sortOrder: g.sortOrder ?? 0,
       isActive: g.isActive !== false,
       options,

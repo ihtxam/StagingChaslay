@@ -26,6 +26,10 @@ import api from '@/lib/api';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { useI18n } from '@/lib/i18n';
+import {
+  normalizeCateringConfig,
+  type CateringPricingMode,
+} from '@/lib/catering';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
@@ -135,6 +139,7 @@ interface Product {
     productId?: string;
     quantity?: number;
   }>;
+  cateringConfig?: Record<string, unknown>;
 }
 
 interface Category {
@@ -161,6 +166,13 @@ type FormState = {
   weightUnit: 'kg' | 'g' | 'lb';
   isCombo: boolean;
   comboSlots: ComboSlotForm[];
+  cateringEnabled: boolean;
+  cateringPricingMode: CateringPricingMode;
+  cateringPackagePrice: string;
+  cateringPerPersonPrice: string;
+  cateringMinGuests: string;
+  cateringMaxGuests: string;
+  cateringDefaultGuests: string;
   specifications: SpecRow[];
   modifierGroupIds: string[];
   /** Empty = not a free reward; otherwise points cost ≥ 1 */
@@ -195,6 +207,13 @@ const emptyForm = (): FormState => ({
   weightUnit: 'kg',
   isCombo: false,
   comboSlots: [],
+  cateringEnabled: false,
+  cateringPricingMode: 'package',
+  cateringPackagePrice: '',
+  cateringPerPersonPrice: '',
+  cateringMinGuests: '',
+  cateringMaxGuests: '',
+  cateringDefaultGuests: '',
   specifications: [{ id: 'default', name: '', price: '', saleStatus: 'in_stock', isDefault: true }],
   modifierGroupIds: [],
   loyaltyRewardPoints: '',
@@ -204,6 +223,34 @@ const emptyForm = (): FormState => ({
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
+
+function cateringFieldsFromConfig(raw: unknown): Pick<
+  FormState,
+  | 'cateringEnabled'
+  | 'cateringPricingMode'
+  | 'cateringPackagePrice'
+  | 'cateringPerPersonPrice'
+  | 'cateringMinGuests'
+  | 'cateringMaxGuests'
+  | 'cateringDefaultGuests'
+> {
+  const c = normalizeCateringConfig(raw);
+  return {
+    cateringEnabled: c.enabled === true,
+    cateringPricingMode: c.pricingMode || 'package',
+    cateringPackagePrice:
+      c.packagePrice != null && Number.isFinite(Number(c.packagePrice))
+        ? String(c.packagePrice)
+        : '',
+    cateringPerPersonPrice:
+      c.perPersonPrice != null && Number.isFinite(Number(c.perPersonPrice))
+        ? String(c.perPersonPrice)
+        : '',
+    cateringMinGuests: c.minGuests != null ? String(c.minGuests) : '',
+    cateringMaxGuests: c.maxGuests != null ? String(c.maxGuests) : '',
+    cateringDefaultGuests: c.defaultGuests != null ? String(c.defaultGuests) : '',
+  };
+}
 
 function normalizeComboSlotsFromProduct(raw: Product['comboItems']): ComboSlotForm[] {
   if (!Array.isArray(raw) || !raw.length) return [];
@@ -696,6 +743,7 @@ export default function Products() {
         full.weightUnit === 'g' || full.weightUnit === 'lb' ? full.weightUnit : 'kg',
       isCombo: full.productType === 'combo' || comboSlots.length > 0,
         comboSlots,
+        ...cateringFieldsFromConfig(full.cateringConfig),
         specifications: specs as SpecRow[],
         modifierGroupIds: (full.modifierGroups || []).map((g) => g.id),
         loyaltyRewardPoints:
@@ -728,6 +776,7 @@ export default function Products() {
             : 'kg',
         isCombo: product.productType === 'combo' || comboSlots.length > 0,
         comboSlots,
+        ...cateringFieldsFromConfig(product.cateringConfig),
         specifications: [
           {
             id: 'default',
@@ -825,6 +874,29 @@ export default function Products() {
       isTaxable: form.isTaxable,
       visibility: form.visibility,
       similarProductIds: form.similarProductIds,
+      ...(form.isCombo
+        ? {
+            cateringConfig: normalizeCateringConfig({
+              enabled: form.cateringEnabled,
+              pricingMode: form.cateringPricingMode,
+              packagePrice: form.cateringPackagePrice.trim()
+                ? parseMoney(form.cateringPackagePrice)
+                : null,
+              perPersonPrice: form.cateringPerPersonPrice.trim()
+                ? parseMoney(form.cateringPerPersonPrice)
+                : null,
+              minGuests: form.cateringMinGuests.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringMinGuests) || 1))
+                : undefined,
+              maxGuests: form.cateringMaxGuests.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringMaxGuests) || 1))
+                : undefined,
+              defaultGuests: form.cateringDefaultGuests.trim()
+                ? Math.max(1, Math.floor(Number(form.cateringDefaultGuests) || 1))
+                : undefined,
+            }),
+          }
+        : { cateringConfig: { enabled: false } }),
     };
   };
 
@@ -1953,6 +2025,110 @@ export default function Products() {
                       </span>
                     </div>
                   </Field>
+                  <div className="rounded-md border border-dashed border-[var(--border)] p-3 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">{t('cateringPackageTitle')}</h3>
+                        <p className="text-[11px] muted mt-0.5">{t('cateringPackageHint')}</p>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm shrink-0 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.cateringEnabled}
+                          onChange={(e) =>
+                            setForm({ ...form, cateringEnabled: e.target.checked })
+                          }
+                        />
+                        {t('cateringEnabledLabel')}
+                      </label>
+                    </div>
+                    {form.cateringEnabled ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label={t('cateringPricingMode')}>
+                          <select
+                            className="field-input text-sm"
+                            value={form.cateringPricingMode}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                cateringPricingMode: e.target.value as CateringPricingMode,
+                              })
+                            }
+                          >
+                            <option value="package">{t('cateringModePackage')}</option>
+                            <option value="per_person">{t('cateringModePerPerson')}</option>
+                            <option value="mixed">{t('cateringModeMixed')}</option>
+                          </select>
+                        </Field>
+                        {(form.cateringPricingMode === 'package' ||
+                          form.cateringPricingMode === 'mixed') && (
+                          <Field label={t('cateringPackagePriceOptional')}>
+                            <input
+                              className="field-input money-input text-sm"
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={t('cateringUsesListPrice')}
+                              value={form.cateringPackagePrice}
+                              onChange={(e) => {
+                                const v = normalizeMoneyInput(e.target.value);
+                                if (moneyDigitCount(v) > MAX_MONEY_DIGITS) return;
+                                setForm({ ...form, cateringPackagePrice: v });
+                              }}
+                            />
+                          </Field>
+                        )}
+                        {(form.cateringPricingMode === 'per_person' ||
+                          form.cateringPricingMode === 'mixed') && (
+                          <Field label={t('cateringPerPersonPrice')}>
+                            <input
+                              className="field-input money-input text-sm"
+                              type="text"
+                              inputMode="decimal"
+                              value={form.cateringPerPersonPrice}
+                              onChange={(e) => {
+                                const v = normalizeMoneyInput(e.target.value);
+                                if (moneyDigitCount(v) > MAX_MONEY_DIGITS) return;
+                                setForm({ ...form, cateringPerPersonPrice: v });
+                              }}
+                            />
+                          </Field>
+                        )}
+                        <Field label={t('cateringMinGuests')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringMinGuests}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringMinGuests: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label={t('cateringMaxGuests')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringMaxGuests}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringMaxGuests: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label={t('cateringDefaultGuests')}>
+                          <input
+                            className="field-input text-sm"
+                            type="number"
+                            min={1}
+                            value={form.cateringDefaultGuests}
+                            onChange={(e) =>
+                              setForm({ ...form, cateringDefaultGuests: e.target.value })
+                            }
+                          />
+                        </Field>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <h3 className="text-sm font-semibold">{t('comboSteps')}</h3>
@@ -2004,6 +2180,45 @@ export default function Products() {
                           >
                             <Trash2 size={14} />
                           </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                          <label className="flex items-center gap-1.5">
+                            <span className="muted">{t('comboSlotMinPick')}</span>
+                            <input
+                              className="field-input w-14 !py-1 text-center text-sm"
+                              type="number"
+                              min={1}
+                              value={slot.minPick}
+                              onChange={(e) => {
+                                const minPick = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                                const next = [...form.comboSlots];
+                                next[slotIdx] = {
+                                  ...next[slotIdx],
+                                  minPick,
+                                  maxPick: Math.max(minPick, next[slotIdx].maxPick),
+                                };
+                                setForm({ ...form, comboSlots: next });
+                              }}
+                            />
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <span className="muted">{t('comboSlotMaxPick')}</span>
+                            <input
+                              className="field-input w-14 !py-1 text-center text-sm"
+                              type="number"
+                              min={1}
+                              value={slot.maxPick}
+                              onChange={(e) => {
+                                const maxPick = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                                const next = [...form.comboSlots];
+                                next[slotIdx] = {
+                                  ...next[slotIdx],
+                                  maxPick: Math.max(maxPick, next[slotIdx].minPick),
+                                };
+                                setForm({ ...form, comboSlots: next });
+                              }}
+                            />
+                          </label>
                         </div>
 
                         <div className="space-y-1.5">

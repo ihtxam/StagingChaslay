@@ -35,6 +35,8 @@ export interface ShopCartItem {
   image?: string;
   selectedExtras?: ShopSelectedExtra[];
   comboSelections?: ShopComboSelection[];
+  /** Catering package: guests used for per-person base and add-ons */
+  cateringGuestCount?: number;
   /** Free loyalty reward line (price should be 0) */
   loyaltyReward?: boolean;
   /** Points cost per unit when loyaltyReward */
@@ -122,10 +124,14 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     typeof item.rewardPointsCost === 'number' && item.rewardPointsCost >= 1
       ? Math.floor(item.rewardPointsCost)
       : undefined;
+  const cateringGuestCount =
+    typeof item.cateringGuestCount === 'number' && item.cateringGuestCount >= 1
+      ? Math.floor(item.cateringGuestCount)
+      : undefined;
   return {
     lineId:
       item.lineId ||
-      `${item.id}-${loyaltyReward ? 'reward' : lineSignature(selectedExtras, comboSelections)}`,
+      `${item.id}-${loyaltyReward ? 'reward' : lineSignature(selectedExtras, comboSelections, false, cateringGuestCount)}`,
     id: item.id,
     name: item.name,
     categoryId: item.categoryId ?? null,
@@ -136,6 +142,7 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     image: item.image,
     selectedExtras: loyaltyReward ? [] : selectedExtras,
     comboSelections: loyaltyReward ? [] : comboSelections,
+    cateringGuestCount: loyaltyReward ? undefined : cateringGuestCount,
     loyaltyReward: loyaltyReward || undefined,
     rewardPointsCost,
     offerId: typeof item.offerId === 'string' && item.offerId ? item.offerId : undefined,
@@ -233,12 +240,17 @@ export function comboSignature(combo?: ShopComboSelection[]) {
 export function lineSignature(
   extras?: ShopSelectedExtra[],
   combo?: ShopComboSelection[],
-  loyaltyReward?: boolean
+  loyaltyReward?: boolean,
+  cateringGuestCount?: number
 ) {
   if (loyaltyReward) return 'loyalty-reward';
   const e = extrasSignature(extras);
   const c = comboSignature(combo);
-  return [e || 'plain', c || ''].filter(Boolean).join('~') || 'plain';
+  const g =
+    typeof cateringGuestCount === 'number' && cateringGuestCount >= 1
+      ? `g${Math.floor(cateringGuestCount)}`
+      : '';
+  return [e || 'plain', c || '', g].filter(Boolean).join('~') || 'plain';
 }
 
 export function newCartLineId() {

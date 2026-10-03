@@ -1179,6 +1179,9 @@ export default function CheckoutPage() {
               productId: c.productId,
               selectedExtras: (c.selectedExtras || []).map((e) => ({ id: e.id })),
             })),
+            ...(typeof i.cateringGuestCount === 'number' && i.cateringGuestCount >= 1
+              ? { cateringGuestCount: i.cateringGuestCount }
+              : {}),
             loyaltyReward: !!i.loyaltyReward,
           })),
           fulfillmentChannel: draft.channel,

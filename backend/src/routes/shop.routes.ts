@@ -19,6 +19,12 @@ import { ModifierService } from "@/services/modifier.service";
 import { CmsService } from "@/services/cms.service";
 import { ChaslayPagebuilderService } from "@/services/chaslay-pagebuilder.service";
 import { normalizeComboSlots } from "@/lib/combo";
+import {
+  clampGuestCount,
+  isCateringProduct,
+  normalizeCateringConfig,
+} from "@/lib/catering-config";
+import { computeCateringLineUnitPrice, scaleModifierPrice } from "@/lib/catering-pricing";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
@@ -120,6 +126,7 @@ function serializeShopModifierGroup(g: any) {
     selectionType: g.selectionType || "optional",
     minSelectable: Number(g.minSelectable) || 0,
     maxSelectable: Number(g.maxSelectable) || 1,
+    priceScope: String(g.priceScope || "fixed").toLowerCase() === "per_guest" ? "per_guest" : "fixed",
     allowMultipleSameItem: !!g.allowMultipleSameItem,
     options: (g.options || [])
       .filter((o: any) => (o.saleStatus || "in_stock") !== "out_of_stock")
@@ -202,6 +209,7 @@ function mapShopProduct(
     specifications,
     modifierGroups,
     comboSlots: isCombo ? comboSlots : [],
+    cateringConfig: normalizeCateringConfig((p as { cateringConfig?: unknown }).cateringConfig),
     loyaltyRewardPoints:
       rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
     similarProductIds: Array.isArray((p as { similarProductIds?: string[] }).similarProductIds)
@@ -444,9 +452,21 @@ async function resolveShopLineExtras(
   merchantId: string,
   product: typeof schema.products.$inferSelect,
   requested: ShopExtraSelection[] | undefined,
-  opts?: { fillDefaultsIfMissing?: boolean }
+  opts?: {
+    fillDefaultsIfMissing?: boolean;
+    cateringGuestCount?: number;
+    cateringEnabled?: boolean;
+  }
 ): Promise<{ extras: Array<{ id: string; name: string; price: number }>; error?: string }> {
   const groups = await ModifierService.getGroupsForProduct(merchantId, product.id);
+  const groupScopeById = new Map(
+    groups.map((g) => [
+      g.id,
+      String((g as { priceScope?: string }).priceScope || "fixed").toLowerCase() === "per_guest"
+        ? "per_guest"
+        : "fixed",
+    ])
+  );
   const optionById = new Map<
     string,
     { id: string; name: string; price: number; groupId: string; groupTitle: string }
@@ -525,10 +545,16 @@ async function resolveShopLineExtras(
     }
     if (seen.has(opt.id)) continue;
     seen.add(opt.id);
+    const scope = groupScopeById.get(opt.groupId) || "fixed";
     extras.push({
       id: opt.id,
       name: modifierOptionTicketName(opt.name, opt.groupTitle),
-      price: roundMoney2(opt.price),
+      price: scaleModifierPrice(
+        opt.price,
+        scope,
+        opts?.cateringGuestCount ?? 1,
+        !!opts?.cateringEnabled
+      ),
     });
     countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
   }
@@ -548,7 +574,12 @@ async function resolveShopLineExtras(
         extras.push({
           id: opt.id,
           name: modifierOptionTicketName(opt.name, opt.groupTitle),
-          price: roundMoney2(opt.price),
+          price: scaleModifierPrice(
+            opt.price,
+            groupScopeById.get(opt.groupId) || "fixed",
+            opts?.cateringGuestCount ?? 1,
+            !!opts?.cateringEnabled
+          ),
         });
         countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
         pickedSpecs += 1;
@@ -586,7 +617,12 @@ async function resolveShopLineExtras(
         extras.push({
           id: o.id,
           name: modifierOptionTicketName(o.name, g.title),
-          price: roundMoney2(o.price),
+          price: scaleModifierPrice(
+            o.price,
+            groupScopeById.get(g.id) || "fixed",
+            opts?.cateringGuestCount ?? 1,
+            !!opts?.cateringEnabled
+          ),
         });
         count += 1;
       }
@@ -2294,6 +2330,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         selectedExtras?: ShopExtraSelection[];
         comboSelections?: ShopComboSelectionInput[];
         loyaltyReward?: boolean;
+        cateringGuestCount?: number;
       }>;
       customerEmail?: string;
       customerPhone?: string;
@@ -2565,6 +2602,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         extraPrice: number;
         selectedExtras?: Array<{ id: string; name: string; price: number }>;
       }>;
+      cateringGuestCount?: number | null;
     }> = [];
 
     for (const item of items) {
@@ -2613,6 +2651,12 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
       let comboSelections: (typeof lineItems)[number]["comboSelections"] = [];
       let comboSurcharge = 0;
+      const cateringOn = isCateringProduct(product.productType, product.cateringConfig);
+      const cateringCfg = normalizeCateringConfig(product.cateringConfig);
+      let cateringGuests: number | null = null;
+      if (cateringOn) {
+        cateringGuests = clampGuestCount(cateringCfg, Number(item.cateringGuestCount) || 0);
+      }
       if (product.productType === "combo") {
         const comboResolved = await resolveShopComboSelections(
           merchant.id,
@@ -2628,6 +2672,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
       const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras, {
         fillDefaultsIfMissing: true,
+        cateringEnabled: cateringOn,
+        cateringGuestCount: cateringGuests ?? 1,
       });
       if (resolved.error) {
         return res.status(400).json({ error: resolved.error });
@@ -2644,7 +2690,19 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       const menuUnit = orderMenuPrices[product.id];
       const catalogUnit =
         menuUnit != null && Number.isFinite(menuUnit) ? menuUnit : baseCatalogUnit;
-      const unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
+      let unitPrice: number;
+      if (cateringOn && cateringGuests != null) {
+        unitPrice = computeCateringLineUnitPrice({
+          listPrice: catalogUnit,
+          cateringConfig: cateringCfg,
+          guestCount: cateringGuests,
+          comboSurcharge,
+          extrasTotal,
+          deliveryMarkup,
+        }).unitPrice;
+      } else {
+        unitPrice = roundMoney2(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
+      }
       const totalPrice = roundMoney2(unitPrice * qty);
       const lineTax = product.isTaxable
         ? vatIncluded
@@ -2683,6 +2741,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         rewardPointsCost: 0,
         selectedExtras: flatExtras,
         comboSelections,
+        cateringGuestCount: cateringGuests,
       });
     }
 
@@ -3109,6 +3168,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         taxAmount: line.taxAmount.toFixed(2),
         selectedExtras: line.selectedExtras,
         comboSelections: line.comboSelections,
+        cateringGuestCount: line.cateringGuestCount ?? null,
       });
     }
 

@@ -604,6 +604,7 @@ router.post("/products", async (req: Request, res: Response) => {
       similarProductIds,
       brand,
       extraBarcodes,
+      cateringConfig,
     } = req.body;
 
     if (!merchantId) {
@@ -662,6 +663,7 @@ router.post("/products", async (req: Request, res: Response) => {
     }
 
     const { sanitizeComboSlotsInput } = await import("@/lib/combo");
+    const { normalizeCateringConfig } = await import("@/lib/catering-config");
     const normalizedComboItems =
       productType === "combo" || (Array.isArray(comboItems) && comboItems.length)
         ? sanitizeComboSlotsInput(comboItems)
@@ -690,6 +692,7 @@ router.post("/products", async (req: Request, res: Response) => {
         bulkPricing,
         extras,
         comboItems: normalizedComboItems,
+        cateringConfig: normalizeCateringConfig(cateringConfig),
         allowExtras,
         clientId,
         specifications,
@@ -814,6 +817,11 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
       if (updates.productType === "combo" || (updates.comboItems as unknown[]).length) {
         updates.productType = "combo";
       }
+    }
+
+    if (updates.cateringConfig !== undefined) {
+      const { normalizeCateringConfig } = await import("@/lib/catering-config");
+      updates.cateringConfig = normalizeCateringConfig(updates.cateringConfig);
     }
 
     if (updates.visibility !== undefined) {
