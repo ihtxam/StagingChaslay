@@ -985,11 +985,57 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-pos-sessions-print-agent.sql" ]]; then
 fi
 
 echo "=== Health checks ==="
+# API listens inside the api container only (compose does not publish :3000 on the host).
+api_container_http_code() {
+  local method="$1"
+  local path="$2"
+  local json_body="${3:-}"
+  if [[ -n "$json_body" ]]; then
+    dc exec -T -e PROBE_BODY="$json_body" api node -e "
+      fetch('http://127.0.0.1:3000${path}', {
+        method: '${method}',
+        headers: { 'Content-Type': 'application/json' },
+        body: process.env.PROBE_BODY,
+      }).then((r) => console.log(r.status)).catch(() => console.log('000'));
+    " 2>/dev/null | tail -1 | tr -d '[:space:]'
+  else
+    dc exec -T api node -e "
+      fetch('http://127.0.0.1:3000${path}', { method: '${method}' })
+        .then((r) => console.log(r.status)).catch(() => console.log('000'));
+    " 2>/dev/null | tail -1 | tr -d '[:space:]'
+  fi
+}
+
+api_public_http_code() {
+  local method="$1"
+  local path="$2"
+  local json_body="${3:-}"
+  if [[ -n "$json_body" ]]; then
+    curl -s -o /dev/null -w "%{http_code}" -X "$method" "${API_URL}${path}" \
+      -H "Content-Type: application/json" \
+      -d "$json_body" 2>/dev/null || echo "000"
+  else
+    curl -s -o /dev/null -w "%{http_code}" -X "$method" "${API_URL}${path}" 2>/dev/null || echo "000"
+  fi
+}
+
+probe_api_http_code() {
+  local method="$1"
+  local path="$2"
+  local json_body="${3:-}"
+  local code
+  code="$(api_container_http_code "$method" "$path" "$json_body")"
+  if [[ -z "$code" || "$code" == "000" ]]; then
+    code="$(api_public_http_code "$method" "$path" "$json_body")"
+  fi
+  echo "$code"
+}
+
 ensure_stack_healthy() {
   echo "=== Ensure API / dashboard / Caddy are up ==="
   local attempt api_ok ext_code
   for attempt in 1 2 3; do
-    if dc exec -T api wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1; then
+    if dc exec -T api node -e "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
       api_ok=1
       break
     fi
@@ -1022,17 +1068,16 @@ ensure_stack_healthy() {
 }
 
 ensure_stack_healthy || true
-API_HEALTH="$(curl -sf http://127.0.0.1:3000/health || dc exec -T api wget -qO- http://127.0.0.1:3000/health || true)"
+API_HEALTH="$(dc exec -T api node -e "fetch('http://127.0.0.1:3000/health').then((r)=>r.text()).then((t)=>console.log(t)).catch(()=>console.log('unreachable'))" 2>/dev/null | tail -1 || true)"
 echo "local api: ${API_HEALTH:-unreachable}"
 curl -sf "${API_URL}/health" || true
 echo
 echo "=== Schema repair (idempotent column patches) ==="
-curl -sf -X POST http://127.0.0.1:3000/health/schema-repair || \
-  dc exec -T api wget -qO- --post-data='' http://127.0.0.1:3000/health/schema-repair || true
+dc exec -T api node -e "fetch('http://127.0.0.1:3000/health/schema-repair',{method:'POST'}).then((r)=>r.text()).then((t)=>console.log(t)).catch(()=>console.log(''))" 2>/dev/null | tail -1 || true
 curl -sf -X POST "${API_URL}/health/schema-repair" || true
 echo
 echo "=== Chaslay homepage builder repair (idempotent) ==="
-bash scripts/heal-chaslay-homepages.sh || echo "WARNING: chaslay homepage heal step failed"
+CHASLAY_HEAL_API_URL="${APP_URL}/api" bash scripts/heal-chaslay-homepages.sh || echo "WARNING: chaslay homepage heal step failed"
 echo
 
 # Print-agent download must be a real PE, not SPA HTML / JSON 404
@@ -1076,19 +1121,24 @@ else
 fi
 echo
 
-POS_AUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3000/v1/pos/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"healthcheck@chaslay.local","password":"wrong"}' || true)
+POS_AUTH_BODY='{"email":"healthcheck@chaslay.local","password":"wrong"}'
+POS_AUTH_CODE="$(probe_api_http_code POST /v1/pos/auth/login "$POS_AUTH_BODY")"
 if [[ "$POS_AUTH_CODE" == "400" || "$POS_AUTH_CODE" == "401" || "$POS_AUTH_CODE" == "403" ]]; then
-  echo "pos-auth OK (route live, HTTP $POS_AUTH_CODE)"
+  echo "pos-auth OK (route live, HTTP $POS_AUTH_CODE via container or ${API_URL})"
 elif [[ "$POS_AUTH_CODE" == "404" ]]; then
-  echo "ERROR: /v1/pos/auth/login not found (404)"
+  echo "ERROR: /v1/pos/auth/login not found (404) on API container and ${API_URL}"
   exit 1
 else
   echo "pos-auth HTTP ${POS_AUTH_CODE:-unreachable}"
 fi
 
-FLOOR_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H 'X-Api-Key: invalid' http://127.0.0.1:3000/v1/floor/main-pos || true)
+FLOOR_CODE="$(curl -s -o /dev/null -w "%{http_code}" -H 'X-Api-Key: invalid' "${API_URL}/v1/floor/main-pos" 2>/dev/null || echo "000")"
+if [[ "$FLOOR_CODE" == "000" ]]; then
+  FLOOR_CODE="$(dc exec -T api node -e "
+    fetch('http://127.0.0.1:3000/v1/floor/main-pos', { headers: { 'X-Api-Key': 'invalid' } })
+      .then((r) => console.log(r.status)).catch(() => console.log('000'));
+  " 2>/dev/null | tail -1 | tr -d '[:space:]')"
+fi
 echo "floor/main-pos HTTP ${FLOOR_CODE:-unreachable} (401 expected without valid API key)"
 
 

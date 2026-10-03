@@ -13,9 +13,17 @@ echo "=== Chaslay homepage repair (all CMS-enabled merchants) ==="
 curl -fsS -X POST "${API_URL}/health/schema-repair" | head -c 4000 || true
 echo
 
-if command -v docker >/dev/null 2>&1 && docker compose ps api >/dev/null 2>&1; then
+compose_cmd() {
+  if [[ -f .env.production ]]; then
+    docker compose --env-file .env.production "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
+if command -v docker >/dev/null 2>&1 && compose_cmd ps api >/dev/null 2>&1; then
   echo "=== Targeted slug repair: ${SLUGS} ==="
-  SLUGS="$SLUGS" docker compose exec -T api npx tsx -e "
+  compose_cmd exec -T -e SLUGS="$SLUGS" api npx tsx -e "
     (async () => {
       const { repairChaslayHomepagesBySlug } = await import('./src/lib/chaslay-homepage-heal.ts');
       const slugs = process.env.SLUGS.split(',').map((s) => s.trim()).filter(Boolean);
