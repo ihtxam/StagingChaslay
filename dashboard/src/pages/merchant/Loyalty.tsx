@@ -17,6 +17,11 @@ interface GiftCardSettings {
   onlinePurchaseEnabled?: boolean;
   digitalVoucherEnabled?: boolean;
   physicalPostEnabled?: boolean;
+  physicalPostFee?: number;
+  serviceFeeFlat?: number;
+  serviceFeePercent?: number;
+  passCardFeeToCustomer?: boolean;
+  cardFeePercent?: number;
   membershipEnabled?: boolean;
   membershipPlans?: MembershipPlan[];
 }
@@ -80,6 +85,11 @@ const DEFAULT_GC: GiftCardSettings = {
   onlinePurchaseEnabled: true,
   digitalVoucherEnabled: true,
   physicalPostEnabled: false,
+  physicalPostFee: 0,
+  serviceFeeFlat: 0,
+  serviceFeePercent: 0,
+  passCardFeeToCustomer: false,
+  cardFeePercent: 0,
   membershipEnabled: false,
   membershipPlans: [],
 };
@@ -647,6 +657,86 @@ export default function Loyalty() {
                 label={t('giftCardPhysicalPost')}
                 hint={t('giftCardPhysicalPostHint')}
               />
+
+              <div className="rounded-xl border border-slate-200 p-4 space-y-3 mt-2">
+                <p className="text-sm font-semibold text-slate-900">{t('giftCardOnlineFeesTitle')}</p>
+                <p className="text-xs text-slate-500">{t('giftCardOnlineFeesHint')}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs text-slate-600">
+                    {t('giftCardPostFee')}
+                    <input
+                      className="input mt-1"
+                      type="number"
+                      min={0}
+                      step="0.05"
+                      value={gcSettings.physicalPostFee ?? 0}
+                      onChange={(e) =>
+                        setGcSettings({
+                          ...gcSettings,
+                          physicalPostFee: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    {t('giftCardServiceFeeFlat')}
+                    <input
+                      className="input mt-1"
+                      type="number"
+                      min={0}
+                      step="0.05"
+                      value={gcSettings.serviceFeeFlat ?? 0}
+                      onChange={(e) =>
+                        setGcSettings({
+                          ...gcSettings,
+                          serviceFeeFlat: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    {t('giftCardServiceFeePercent')}
+                    <input
+                      className="input mt-1"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      value={gcSettings.serviceFeePercent ?? 0}
+                      onChange={(e) =>
+                        setGcSettings({
+                          ...gcSettings,
+                          serviceFeePercent: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    {t('giftCardCardFeePercent')}
+                    <input
+                      className="input mt-1"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      disabled={!gcSettings.passCardFeeToCustomer}
+                      value={gcSettings.cardFeePercent ?? 0}
+                      onChange={(e) =>
+                        setGcSettings({
+                          ...gcSettings,
+                          cardFeePercent: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <Toggle
+                  checked={gcSettings.passCardFeeToCustomer === true}
+                  onChange={(v) => setGcSettings({ ...gcSettings, passCardFeeToCustomer: v })}
+                  label={t('giftCardPassCardFee')}
+                  hint={t('giftCardPassCardFeeHint')}
+                />
+              </div>
 
               <div className="pt-4">
                 <button

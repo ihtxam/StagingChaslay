@@ -15,10 +15,11 @@ import { GiftCardService } from "@/services/gift-card.service";
 import { AdyenService } from "@/services/adyen.service";
 import { EmailService } from "@/services/email.service";
 import { shopAdyenCardReady } from "@/lib/adyen-checkout-env";
-import {
-  shopGiftCardPaymentReturnUrl,
+import { shopGiftCardPaymentReturnUrl,
   resolveShopCheckoutOrigin,
 } from "@/lib/shop-public-url";
+import { computeGiftCardCheckout } from "@/lib/gift-card-checkout";
+import { normalizeGiftCardTheme } from "@/lib/gift-card-themes";
 
 export type GiftDeliveryType = "digital" | "physical";
 
@@ -65,6 +66,12 @@ export class ShopGiftCardService {
       minAmount: settings.minAmount,
       maxAmount: settings.maxAmount,
       customAmountEnabled: settings.customAmountEnabled,
+      physicalPostFee: settings.physicalPostFee ?? 0,
+      serviceFeeFlat: settings.serviceFeeFlat ?? 0,
+      serviceFeePercent: settings.serviceFeePercent ?? 0,
+      passCardFeeToCustomer: settings.passCardFeeToCustomer === true,
+      cardFeePercent: settings.cardFeePercent ?? 0,
+      themes: ["classic", "birthday", "anniversary", "wedding", "promotion", "thank_you"],
     };
   }
 
@@ -130,6 +137,7 @@ export class ShopGiftCardService {
       origin?: string;
       shopPath?: string;
       customerId?: string | null;
+      cardTheme?: string;
     }
   ) {
     const settings = this.settingsFromMerchant(merchant);
@@ -143,6 +151,9 @@ export class ShopGiftCardService {
 
     const check = validateGiftAmount(input.amount, settings);
     if (!check.ok) throw new Error(check.error);
+
+    const cardTheme = normalizeGiftCardTheme(input.cardTheme);
+    const breakdown = computeGiftCardCheckout(check.amount, deliveryType, settings);
 
     const recipientEmail = String(input.recipientEmail || "").trim().toLowerCase();
     if (!recipientEmail.includes("@")) {
@@ -163,7 +174,12 @@ export class ShopGiftCardService {
       .insert(schema.giftCardPurchases)
       .values({
         merchantId: merchant.id,
-        amount: check.amount.toFixed(2),
+        amount: breakdown.faceAmount.toFixed(2),
+        cardTheme,
+        shippingFee: breakdown.shippingFee.toFixed(2),
+        serviceFee: breakdown.serviceFee.toFixed(2),
+        paymentFee: breakdown.paymentFee.toFixed(2),
+        totalCharged: breakdown.totalCharged.toFixed(2),
         deliveryType,
         recipientEmail,
         recipientName: input.recipientName?.trim() || null,
@@ -204,7 +220,7 @@ export class ShopGiftCardService {
         const session = await AdyenService.initializePaymentSession(
           merchant.id,
           purchase.id,
-          check.amount,
+          breakdown.totalCharged,
           "CHF",
           returnUrl,
           checkoutOrigin,
@@ -232,7 +248,7 @@ export class ShopGiftCardService {
       };
     }
 
-    return { purchase, paymentSession, amount: check.amount };
+    return { purchase, paymentSession, amount: breakdown.faceAmount, breakdown };
   }
 
   static async getPurchase(merchantId: string, purchaseId: string) {
@@ -256,6 +272,14 @@ export class ShopGiftCardService {
     return {
       id: purchase.id,
       amount: purchase.amount,
+      totalCharged:
+        purchase.totalCharged != null
+          ? purchase.totalCharged
+          : purchase.amount,
+      shippingFee: purchase.shippingFee,
+      serviceFee: purchase.serviceFee,
+      paymentFee: purchase.paymentFee,
+      cardTheme: purchase.cardTheme || "classic",
       deliveryType: purchase.deliveryType || "digital",
       recipientEmail: purchase.recipientEmail,
       recipientName: purchase.recipientName,
@@ -318,6 +342,9 @@ export class ShopGiftCardService {
           code: card.ecardCode || card.cardNumber,
           balance: roundMoney2(Number(card.balance)),
           holderName: purchase.recipientName || undefined,
+          senderName: purchase.senderName || undefined,
+          message: purchase.message || undefined,
+          cardTheme: normalizeGiftCardTheme(purchase.cardTheme),
         });
       } catch (err) {
         console.warn("Gift card purchase email failed:", err);
