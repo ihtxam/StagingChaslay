@@ -949,6 +949,9 @@ export class GiftCardService {
       code: string;
       balance: number;
       holderName?: string;
+      senderName?: string;
+      message?: string;
+      cardTheme?: import("@/lib/gift-card-themes").GiftCardThemeId;
       orderId?: string;
     }
   ) {
@@ -971,12 +974,22 @@ export class GiftCardService {
         ? `https://${resolveShopPublicHost()}/${shopSlug}/gift/${encodeURIComponent(code)}`
         : redeemUrl;
     const holder = opts.holderName?.trim();
+    const { giftCardEmailIntro } = await import("@/lib/gift-card-themes");
+    const theme = opts.cardTheme || "classic";
+    const intro = giftCardEmailIntro({
+      theme,
+      senderName: opts.senderName,
+      recipientName: holder,
+      shopName,
+    });
+    const personalMsg = opts.message?.trim();
 
-    const subject = `${shopName} · Gift card CHF ${balance.toFixed(2)}`;
+    const subject = `${intro.subjectLine} · CHF ${balance.toFixed(2)}`;
     const html = `
       <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1c1917;">
         <h2 style="margin:0 0 8px;">${shopName}</h2>
-        <p style="margin:0 0 16px;color:#57534e;">You received a digital gift card${holder ? ` for ${holder.replace(/</g, "&lt;")}` : ""}.</p>
+        <p style="margin:0 0 16px;color:#57534e;">${intro.htmlLead}</p>
+        ${personalMsg ? `<p style="margin:0 0 16px;padding:12px 16px;background:#fafaf9;border-radius:8px;font-style:italic;">“${personalMsg.replace(/</g, "&lt;").replace(/"/g, "&quot;")}”</p>` : ""}
         <p style="font-size:28px;font-weight:700;margin:8px 0;color:#0f766e;">CHF ${balance.toFixed(2)}</p>
         <p style="margin:16px 0 8px;font-weight:600;">Your gift card code</p>
         <p style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:1px;background:#f5f5f4;padding:12px 16px;border-radius:8px;">${code.replace(/</g, "&lt;")}</p>
@@ -986,8 +999,9 @@ export class GiftCardService {
       </div>
     `;
     const text =
-      `${shopName}\nDigital gift card: CHF ${balance.toFixed(2)}\n` +
-      (holder ? `For: ${holder}\n` : "") +
+      `${shopName}\n${intro.textLead}\n` +
+      (personalMsg ? `Message: ${personalMsg}\n` : "") +
+      `Gift card value: CHF ${balance.toFixed(2)}\n` +
       `Code: ${code}\n` +
       `Redeem at checkout by scanning or entering the code.\n` +
       `${shopGiftUrl}\n`;

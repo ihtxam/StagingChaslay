@@ -2219,6 +2219,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         shippingZip: body.shippingZip,
         shippingCity: body.shippingCity,
         shippingCountry: body.shippingCountry,
+        cardTheme: body.cardTheme,
         origin: body.origin,
         shopPath: body.shopPath,
         customerId,
@@ -2247,6 +2248,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         paymentStatus: result.purchase.paymentStatus,
       },
       paymentSession: result.paymentSession,
+      breakdown: result.breakdown,
     });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Purchase failed" });
