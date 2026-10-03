@@ -716,4 +716,68 @@ export class OffersService {
     }
     return created;
   }
+
+  /** Restaurant playbooks including cart free gifts (skips if any offer exists). */
+  static async seedRestaurantTemplates(merchantId: string, categoryIds: string[] = []) {
+    const existing = await this.list(merchantId);
+    if (existing.length) return existing;
+
+    const demos = [
+      {
+        name: "Free gift — spend CHF 40 / 80",
+        description: "Unlock tiered free gifts as cart subtotal grows. Configure gift products per tier.",
+        offerType: "cart_free_gift" as const,
+        rules: {
+          cartGiftTiers: [
+            { minCartTotal: 40, label: "Free drink", productIds: [] as string[] },
+            { minCartTotal: 80, label: "Free side", productIds: [] as string[] },
+          ],
+        },
+        badgeLabel: "Free gift",
+        priority: 8,
+      },
+      {
+        name: "Weekday lunch 15% off",
+        description: "15% off orders over CHF 25, Mon–Fri 11:00–14:00.",
+        offerType: "percent_order" as const,
+        rules: { percentOff: 15, minOrderAmount: 25 },
+        scheduleMode: "days",
+        daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+        timeStart: "11:00",
+        timeEnd: "14:00",
+        badgeLabel: "15% lunch",
+        priority: 9,
+      },
+      {
+        name: "Catering bonus dessert",
+        description: "Free dessert tray when catering cart exceeds CHF 200.",
+        offerType: "cart_free_gift" as const,
+        rules: {
+          cartGiftTiers: [{ minCartTotal: 200, label: "Dessert tray", productIds: [] as string[] }],
+        },
+        channels: ["catering"],
+        badgeLabel: "Catering bonus",
+        priority: 7,
+      },
+      {
+        name: "Happy hour 20% — Food",
+        description: "20% off food category, weekdays 13:00–17:00.",
+        offerType: "percent_category" as const,
+        rules: { percentOff: 20 },
+        categoryIds: categoryIds.slice(0, 1),
+        scheduleMode: "days",
+        daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+        timeStart: "13:00",
+        timeEnd: "17:00",
+        badgeLabel: "20% off",
+        priority: 10,
+      },
+    ];
+
+    const created = [];
+    for (const d of demos) {
+      created.push(await this.create(merchantId, d));
+    }
+    return created;
+  }
 }

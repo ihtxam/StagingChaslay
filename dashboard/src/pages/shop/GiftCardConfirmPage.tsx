@@ -21,7 +21,9 @@ type PurchaseView = {
   cardCode?: string | null;
   cardBalance?: string | null;
   qrPayload?: string | null;
-  barcodePayload?: string | null;
+  cardTheme?: string | null;
+  senderName?: string | null;
+  totalCharged?: string | null;
 };
 
 export default function GiftCardConfirmPage() {
@@ -64,14 +66,26 @@ export default function GiftCardConfirmPage() {
   const isFailed = data?.paymentStatus === 'failed' || data?.paymentStatus === 'cancelled';
   const isPending = !!data && !isPaid && !isFailed;
 
+  const downloadPdf = () => {
+    window.print();
+  };
+
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-stone-900">
+    <div className="min-h-screen bg-[#faf8f5] text-stone-900 print:bg-white">
+      <style>{`
+        @media print {
+          header, .no-print, a[href]:after { display: none !important; }
+          main { max-width: 100% !important; padding: 0 !important; }
+        }
+      `}</style>
+      <div className="no-print">
       <ShopMinimalHeader
         basePath={base}
         merchantName={undefined}
         shopKey={shopKey}
         loggedIn={loggedIn}
       />
+      </div>
       <main className="shop-page-content max-w-lg py-12">
         {error && <p className="text-center text-red-600">{error}</p>}
 
@@ -134,15 +148,25 @@ export default function GiftCardConfirmPage() {
 
             {data.cardCode && !isPhysical ? (
               <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6">
-                <p className="text-center text-lg font-semibold mb-1">
-                  CHF {Number(data.cardBalance || data.amount).toFixed(2)}
-                </p>
                 <ShopGiftCardVoucher
                   code={data.cardCode}
                   qrPayload={data.qrPayload}
                   barcodePayload={data.barcodePayload}
+                  theme={data.cardTheme}
+                  amountLabel={`CHF ${Number(data.cardBalance || data.amount).toFixed(2)}`}
+                  message={data.message}
                 />
                 <p className="mt-4 text-center text-xs text-stone-500">{t('shopGiftCardPosHint')}</p>
+                <div className="no-print mt-4 flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadPdf}
+                    className="inline-flex px-6 py-3 rounded-full border border-stone-300 bg-white font-semibold text-stone-900"
+                  >
+                    {t('shopGiftCardDownloadPdf')}
+                  </button>
+                  <p className="text-xs text-stone-500">{t('shopGiftCardPrintPdfHint')}</p>
+                </div>
               </div>
             ) : null}
 
@@ -154,7 +178,7 @@ export default function GiftCardConfirmPage() {
               </div>
             ) : null}
 
-            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center no-print">
               <Link
                 to={`${base}/menu`}
                 className="inline-flex px-6 py-3 rounded-full bg-stone-900 text-white font-medium"

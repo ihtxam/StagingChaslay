@@ -9,7 +9,12 @@ import {
 } from "@/middleware/auth.middleware";
 import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { normalizeCatalogVisibility } from "@/lib/catalog-visibility";
+import { normalizeDietaryTags } from "@/lib/product-dietary";
 import { ProductService } from "@/services/product.service";
+import {
+  CateringTemplatesService,
+  type CateringTemplateId,
+} from "@/services/catering-templates.service";
 import { CategoryService } from "@/services/category.service";
 import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
 import { OrderService } from "@/services/order.service";
@@ -605,6 +610,7 @@ router.post("/products", async (req: Request, res: Response) => {
       brand,
       extraBarcodes,
       cateringConfig,
+      dietaryTags,
     } = req.body;
 
     if (!merchantId) {
@@ -716,7 +722,7 @@ router.post("/products", async (req: Request, res: Response) => {
       );
     }
 
-    if (visibility !== undefined || similarProductIds !== undefined) {
+    if (visibility !== undefined || similarProductIds !== undefined || dietaryTags !== undefined) {
       const patch: Partial<typeof schema.products.$inferInsert> = {};
       if (visibility !== undefined) {
         patch.visibility = normalizeCatalogVisibility(visibility);
@@ -728,6 +734,9 @@ router.post("/products", async (req: Request, res: Response) => {
               .map((id: string) => String(id).trim())
               .slice(0, 12)
           : [];
+      }
+      if (dietaryTags !== undefined) {
+        patch.dietaryTags = normalizeDietaryTags(dietaryTags);
       }
       await ProductService.updateProduct(merchantId, product.id, patch);
     }
@@ -748,6 +757,24 @@ router.post("/products", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error creating product:", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create product" });
+  }
+});
+
+/**
+ * POST /api/merchant/catering-templates/:templateId
+ */
+router.post("/catering-templates/:templateId", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const templateId = String(req.params.templateId || "").trim() as CateringTemplateId;
+    const allowed: CateringTemplateId[] = ["taco_bar", "boxed_lunch", "buffet_per_person"];
+    if (!allowed.includes(templateId)) {
+      return res.status(400).json({ error: "Unknown catering template" });
+    }
+    const result = await CateringTemplatesService.apply(merchantId, templateId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to apply template" });
   }
 });
 
@@ -835,6 +862,10 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
             .map((id: string) => String(id).trim())
             .slice(0, 12)
         : [];
+    }
+
+    if (updates.dietaryTags !== undefined) {
+      updates.dietaryTags = normalizeDietaryTags(updates.dietaryTags);
     }
 
     if (updates.brand !== undefined) {

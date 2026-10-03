@@ -16,6 +16,12 @@ export type CateringConfig = {
   defaultGuests?: number;
   /** Combo slot id whose selected option extraPrice is the per-guest rate (× guest count). */
   tierSlotId?: string | null;
+  /** Marketing copy: “Serves N people” (independent of min guests). */
+  servesCount?: number;
+  /** Minimum line quantity when ordering this catering package (ezCater-style). */
+  minOrderQty?: number;
+  /** Hours before event / pickup; shown as order-by guidance on shop. */
+  leadTimeHours?: number;
 };
 
 export type ModifierPriceScope = "fixed" | "per_guest";
@@ -42,6 +48,12 @@ export function normalizeCateringConfig(raw: unknown): CateringConfig {
       num("defaultGuests") != null ? Math.max(1, Math.floor(num("defaultGuests")!)) : undefined,
     tierSlotId:
       typeof o.tierSlotId === "string" && o.tierSlotId.trim() ? o.tierSlotId.trim() : null,
+    servesCount:
+      num("servesCount") != null ? Math.max(1, Math.floor(num("servesCount")!)) : undefined,
+    minOrderQty:
+      num("minOrderQty") != null ? Math.max(1, Math.floor(num("minOrderQty")!)) : undefined,
+    leadTimeHours:
+      num("leadTimeHours") != null ? Math.max(0, Math.floor(num("leadTimeHours")!)) : undefined,
   };
 }
 

@@ -610,6 +610,21 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
                       .replace('{guests}', String(guestCount))}
                   </p>
                 ) : null}
+                {cateringCfg.servesCount != null && cateringCfg.servesCount > 0 ? (
+                  <p className="mt-1 text-xs font-medium text-teal-800">
+                    {t('shopCateringServes').replace('{n}', String(cateringCfg.servesCount))}
+                  </p>
+                ) : null}
+                {cateringCfg.leadTimeHours != null && cateringCfg.leadTimeHours > 0 ? (
+                  <p className="mt-0.5 text-xs text-stone-600">
+                    {t('shopCateringLeadTime').replace('{hours}', String(cateringCfg.leadTimeHours))}
+                  </p>
+                ) : null}
+                {cateringCfg.minOrderQty != null && cateringCfg.minOrderQty > 1 ? (
+                  <p className="mt-0.5 text-xs text-stone-600">
+                    {t('shopCateringMinQty').replace('{n}', String(cateringCfg.minOrderQty))}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             </div>

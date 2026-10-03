@@ -38,6 +38,7 @@ import { formatShopMoney, inferShopCurrency } from "@/lib/shop-currency";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
+import { normalizeDietaryTags } from "@/lib/product-dietary";
 import { generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   inStockProductSpecifications,
@@ -223,6 +224,7 @@ function mapShopProduct(
           (id) => typeof id === "string" && id.trim()
         )
       : [],
+    dietaryTags: normalizeDietaryTags((p as { dietaryTags?: unknown }).dietaryTags),
   };
 }
 
@@ -2219,6 +2221,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         shippingZip: body.shippingZip,
         shippingCity: body.shippingCity,
         shippingCountry: body.shippingCountry,
+        cardTheme: body.cardTheme,
         origin: body.origin,
         shopPath: body.shopPath,
         customerId,
@@ -2247,6 +2250,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
         paymentStatus: result.purchase.paymentStatus,
       },
       paymentSession: result.paymentSession,
+      breakdown: result.breakdown,
     });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Purchase failed" });
