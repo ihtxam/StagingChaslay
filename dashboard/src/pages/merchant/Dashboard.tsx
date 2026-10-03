@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import MerchantSubNav from '@/components/MerchantSubNav';
 import Header from '@/components/Header';
 import Overview from './Overview';
@@ -1607,6 +1608,7 @@ function MerchantShell() {
             />
           </Routes>
         </main>
+        {!hideChrome ? <RebornPoweredByFooter variant="panel" className="shrink-0" /> : null}
         <MerchantOrderAlerts enabled={orderAlertsEnabled} />
       </div>
     </div>

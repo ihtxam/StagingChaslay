@@ -192,6 +192,20 @@ button {
     font-family: inherit;
   }
 
+  .reborn-powered-by__mark {
+    filter: brightness(0) saturate(100%) invert(11%) sepia(72%) saturate(4500%)
+      hue-rotate(328deg) brightness(0.72) contrast(1.05);
+  }
+
+  .reborn-powered-by__link {
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .reborn-powered-by__link:hover {
+    opacity: 0.85;
+  }
+
   .panel-main {
     flex: 1 1 0%;
     -webkit-overflow-scrolling: touch;
