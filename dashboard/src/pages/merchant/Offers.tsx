@@ -11,7 +11,8 @@ type OfferType =
   | 'pay_n_get_m'
   | 'nth_item_percent'
   | 'package_deal'
-  | 'combo_deal';
+  | 'combo_deal'
+  | 'cart_free_gift';
 
 type Offer = {
   id: string;
@@ -59,6 +60,7 @@ const TYPE_LABEL_KEYS: Record<string, string> = {
   pay_n_get_m: 'offerTypePayNGetM',
   nth_item_percent: 'offerTypeNthItemPercent',
   combo_deal: 'offerTypeComboDeal',
+  cart_free_gift: 'offerTypeCartFreeGift',
 };
 
 type OfferPreset = {
@@ -197,6 +199,12 @@ const emptyForm = () => ({
   badgeLabel: '',
   priority: '10',
   stackable: false,
+  cartGiftTiers: [] as Array<{
+    id: string;
+    minCartTotal: string;
+    label: string;
+    productIds: string[];
+  }>,
 });
 
 export default function Offers() {
@@ -281,6 +289,16 @@ export default function Offers() {
       badgeLabel: offer.badgeLabel || '',
       priority: String(offer.priority ?? 10),
       stackable: !!offer.stackable,
+      cartGiftTiers: Array.isArray(r.cartGiftTiers)
+        ? (r.cartGiftTiers as Array<{ minCartTotal?: number; label?: string; productIds?: string[] }>).map(
+            (tier, i) => ({
+              id: `tier-${i}-${Date.now()}`,
+              minCartTotal: tier.minCartTotal != null ? String(tier.minCartTotal) : '',
+              label: tier.label ? String(tier.label) : '',
+              productIds: Array.isArray(tier.productIds) ? tier.productIds.map(String) : [],
+            })
+          )
+        : [],
     });
   };
 
@@ -313,6 +331,15 @@ export default function Offers() {
       rules.packagePrice = Number(form.packagePrice) || 0;
       rules.buyProductIds = form.buyProductIds;
       rules.getProductIds = form.getProductIds;
+    }
+    if (form.offerType === 'cart_free_gift') {
+      rules.cartGiftTiers = form.cartGiftTiers
+        .map((tier) => ({
+          minCartTotal: Number(tier.minCartTotal) || 0,
+          label: tier.label.trim() || undefined,
+          productIds: tier.productIds,
+        }))
+        .filter((t) => t.minCartTotal > 0 && t.productIds.length > 0);
     }
     return {
       name: form.name.trim(),
@@ -374,6 +401,15 @@ export default function Offers() {
       }
       if (!(Number(form.packagePrice) > 0)) {
         toast.error('Set a package price greater than 0');
+        return;
+      }
+    }
+    if (form.offerType === 'cart_free_gift') {
+      const validTiers = form.cartGiftTiers.filter(
+        (t) => Number(t.minCartTotal) > 0 && t.productIds.length > 0
+      );
+      if (!validTiers.length) {
+        toast.error(t('offerCartGiftNeedTier'));
         return;
       }
     }
@@ -475,6 +511,22 @@ export default function Offers() {
         [field]: list.includes(id) ? list.filter((x) => x !== id) : [...list, id],
       };
     });
+  };
+
+  const toggleTierProduct = (tierId: string, productId: string) => {
+    setForm((f) => ({
+      ...f,
+      cartGiftTiers: f.cartGiftTiers.map((tier) =>
+        tier.id !== tierId
+          ? tier
+          : {
+              ...tier,
+              productIds: tier.productIds.includes(productId)
+                ? tier.productIds.filter((x) => x !== productId)
+                : [...tier.productIds, productId],
+            }
+      ),
+    }));
   };
 
   const applyPreset = (preset: OfferPreset) => {
@@ -756,6 +808,7 @@ export default function Offers() {
                 </label>
               </>
             )}
+            {form.offerType !== 'cart_free_gift' ? (
             <label className="text-sm block">
               <span className="muted block mb-1">{t('offerMinOrder')}</span>
               <input
@@ -771,6 +824,7 @@ export default function Offers() {
                 }
               />
             </label>
+            ) : null}
             <label className="text-sm block">
               <span className="muted block mb-1">{t('offerBadge')}</span>
               <input
@@ -912,6 +966,99 @@ export default function Offers() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {form.offerType === 'cart_free_gift' && (
+            <div className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">{t('offerCartGiftTiers')}</p>
+                <button
+                  type="button"
+                  className="btn-primary !py-1 !text-xs"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      cartGiftTiers: [
+                        ...form.cartGiftTiers,
+                        {
+                          id: `tier-${Date.now()}`,
+                          minCartTotal: '',
+                          label: '',
+                          productIds: [],
+                        },
+                      ],
+                    })
+                  }
+                >
+                  {t('offerCartGiftAddTier')}
+                </button>
+              </div>
+              <p className="text-xs muted">{t('offerCartGiftTiersHint')}</p>
+              {form.cartGiftTiers.map((tier, idx) => (
+                <div key={tier.id} className="rounded-md border border-[var(--border)] bg-white p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold muted">#{idx + 1}</span>
+                    <input
+                      className="input flex-1"
+                      type="number"
+                      min="0"
+                      step="0.05"
+                      placeholder={t('offerCartGiftMinTotal')}
+                      value={tier.minCartTotal}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cartGiftTiers: form.cartGiftTiers.map((t) =>
+                            t.id === tier.id ? { ...t, minCartTotal: e.target.value } : t
+                          ),
+                        })
+                      }
+                    />
+                    <input
+                      className="input flex-1"
+                      placeholder={t('offerCartGiftTierLabel')}
+                      value={tier.label}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cartGiftTiers: form.cartGiftTiers.map((t) =>
+                            t.id === tier.id ? { ...t, label: e.target.value } : t
+                          ),
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="text-xs text-red-600"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          cartGiftTiers: form.cartGiftTiers.filter((t) => t.id !== tier.id),
+                        })
+                      }
+                    >
+                      {t('remove')}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                    {products.map((p) => (
+                      <button
+                        key={`${tier.id}-${p.id}`}
+                        type="button"
+                        className={`rounded-full px-2.5 py-1 text-[11px] border ${
+                          tier.productIds.includes(p.id)
+                            ? 'bg-stone-900 text-white border-stone-900'
+                            : 'bg-white border-[var(--border)]'
+                        }`}
+                        onClick={() => toggleTierProduct(tier.id, p.id)}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

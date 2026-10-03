@@ -2775,7 +2775,8 @@ export type OfferType =
   | "pay_n_get_m"
   | "nth_item_percent"
   | "combo_deal"
-  | "package_deal";
+  | "package_deal"
+  | "cart_free_gift";
 
 export type OfferRules = {
   percentOff?: number;
@@ -2801,6 +2802,12 @@ export type OfferRules = {
   buyProductIds?: string[];
   getProductIds?: string[];
   packagePrice?: number;
+  /** Spend thresholds → pick one free product from each tier's list. */
+  cartGiftTiers?: Array<{
+    minCartTotal: number;
+    productIds: string[];
+    label?: string;
+  }>;
 };
 
 export const offers = pgTable(

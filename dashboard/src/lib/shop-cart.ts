@@ -37,6 +37,9 @@ export interface ShopCartItem {
   comboSelections?: ShopComboSelection[];
   /** Catering package: guests used for per-person base and add-ons */
   cateringGuestCount?: number;
+  /** Cart threshold free gift (price must be 0) */
+  cartFreeGiftOfferId?: string;
+  cartFreeGiftTierIndex?: number;
   /** Free loyalty reward line (price should be 0) */
   loyaltyReward?: boolean;
   /** Points cost per unit when loyaltyReward */
@@ -128,10 +131,20 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     typeof item.cateringGuestCount === 'number' && item.cateringGuestCount >= 1
       ? Math.floor(item.cateringGuestCount)
       : undefined;
+  const cartFreeGiftOfferId =
+    typeof item.cartFreeGiftOfferId === 'string' && item.cartFreeGiftOfferId
+      ? item.cartFreeGiftOfferId
+      : undefined;
+  const cartFreeGiftTierIndex =
+    cartFreeGiftOfferId != null &&
+    typeof item.cartFreeGiftTierIndex === 'number' &&
+    item.cartFreeGiftTierIndex >= 0
+      ? Math.floor(item.cartFreeGiftTierIndex)
+      : undefined;
   return {
     lineId:
       item.lineId ||
-      `${item.id}-${loyaltyReward ? 'reward' : lineSignature(selectedExtras, comboSelections, false, cateringGuestCount)}`,
+      `${item.id}-${loyaltyReward ? 'reward' : lineSignature(selectedExtras, comboSelections, false, cateringGuestCount, cartFreeGiftOfferId, cartFreeGiftTierIndex)}`,
     id: item.id,
     name: item.name,
     categoryId: item.categoryId ?? null,
@@ -143,6 +156,8 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     selectedExtras: loyaltyReward ? [] : selectedExtras,
     comboSelections: loyaltyReward ? [] : comboSelections,
     cateringGuestCount: loyaltyReward ? undefined : cateringGuestCount,
+    cartFreeGiftOfferId: loyaltyReward ? undefined : cartFreeGiftOfferId,
+    cartFreeGiftTierIndex: loyaltyReward ? undefined : cartFreeGiftTierIndex,
     loyaltyReward: loyaltyReward || undefined,
     rewardPointsCost,
     offerId: typeof item.offerId === 'string' && item.offerId ? item.offerId : undefined,
@@ -241,9 +256,14 @@ export function lineSignature(
   extras?: ShopSelectedExtra[],
   combo?: ShopComboSelection[],
   loyaltyReward?: boolean,
-  cateringGuestCount?: number
+  cateringGuestCount?: number,
+  cartFreeGiftOfferId?: string,
+  cartFreeGiftTierIndex?: number
 ) {
   if (loyaltyReward) return 'loyalty-reward';
+  if (cartFreeGiftOfferId && cartFreeGiftTierIndex != null) {
+    return `freegift~${cartFreeGiftOfferId}~${cartFreeGiftTierIndex}`;
+  }
   const e = extrasSignature(extras);
   const c = comboSignature(combo);
   const g =

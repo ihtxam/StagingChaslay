@@ -29,6 +29,11 @@ import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACAT
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
+import {
+  cartPaidSubtotal,
+  normalizeCartGiftTiers,
+  validateCartFreeGiftLine,
+} from "@/lib/cart-free-gift";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
@@ -1252,7 +1257,30 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
 
   const activeOffers = await OffersService.listActivePublic(merchant.id);
   const featured = activeOffers
-    .filter((o) => o.featured)
+    .filter((o) => o.featured && o.offerType !== "cart_free_gift")
+    .map((o) => ({
+      id: o.id,
+      name: o.name,
+      description: o.description,
+      badgeLabel: o.badgeLabel,
+      offerType: o.offerType,
+      rules: o.rules,
+      productIds: o.productIds || [],
+      categoryIds: o.categoryIds || [],
+      channels: o.channels,
+      daysOfWeek: o.daysOfWeek,
+      timeStart: o.timeStart,
+      timeEnd: o.timeEnd,
+      scheduleMode: o.scheduleMode,
+      validFrom: o.validFrom,
+      validTo: o.validTo,
+    }));
+
+  const cartFreeGiftOffers = activeOffers
+    .filter(
+      (o) =>
+        o.offerType === "cart_free_gift" && normalizeCartGiftTiers(o.rules).length > 0
+    )
     .map((o) => ({
       id: o.id,
       name: o.name,
@@ -1275,6 +1303,7 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     success: true,
     data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
     offers: featured,
+    cartFreeGiftOffers,
     catalogChannel,
     location: { id: locationId, slug: locationSlug, name: locationName },
   });
@@ -2331,6 +2360,8 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         comboSelections?: ShopComboSelectionInput[];
         loyaltyReward?: boolean;
         cateringGuestCount?: number;
+        cartFreeGiftOfferId?: string;
+        cartFreeGiftTierIndex?: number;
       }>;
       customerEmail?: string;
       customerPhone?: string;
@@ -2603,6 +2634,15 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         selectedExtras?: Array<{ id: string; name: string; price: number }>;
       }>;
       cateringGuestCount?: number | null;
+      cartFreeGiftOfferId?: string | null;
+      cartFreeGiftTierIndex?: number | null;
+    }> = [];
+
+    const pendingCartFreeGifts: Array<{
+      productId: string;
+      offerId: string;
+      tierIndex: number;
+      quantity: number;
     }> = [];
 
     for (const item of items) {
@@ -2645,6 +2685,18 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
           rewardPointsCost: cost,
           selectedExtras: flatExtras,
           comboSelections: [],
+        });
+        continue;
+      }
+
+      const giftOfferId = String(item.cartFreeGiftOfferId || "").trim();
+      const giftTierRaw = item.cartFreeGiftTierIndex;
+      if (giftOfferId && giftTierRaw != null && Number.isFinite(Number(giftTierRaw))) {
+        pendingCartFreeGifts.push({
+          productId: product.id,
+          offerId: giftOfferId,
+          tierIndex: Math.floor(Number(giftTierRaw)),
+          quantity: qty,
         });
         continue;
       }
@@ -2745,13 +2797,83 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       });
     }
 
+    if (!lineItems.length && !pendingCartFreeGifts.length) {
+      return res.status(400).json({ error: "No valid items" });
+    }
+
+    const offerAt = scheduledFor ? new Date(scheduledFor as string) : new Date();
+    const activeOffers = await OffersService.list(merchant.id);
+    const paidSubtotalForGifts = cartPaidSubtotal(
+      lineItems.map((l) => ({
+        unitPrice: l.unitPrice,
+        quantity: l.quantity,
+        loyaltyReward: l.loyaltyReward,
+      }))
+    );
+
+    const giftTierCounts = new Map<string, number>();
+    for (const g of pendingCartFreeGifts) {
+      if (g.quantity !== 1) {
+        return res.status(400).json({ error: "Free gift lines must have quantity 1" });
+      }
+      const tierKey = `${g.offerId}:${g.tierIndex}`;
+      giftTierCounts.set(tierKey, (giftTierCounts.get(tierKey) || 0) + 1);
+      if ((giftTierCounts.get(tierKey) || 0) > 1) {
+        return res.status(400).json({ error: "Only one free gift per tier is allowed" });
+      }
+      const offer = activeOffers.find((o) => o.id === g.offerId);
+      if (!offer || offer.offerType !== "cart_free_gift") {
+        return res.status(400).json({ error: "Invalid free gift offer" });
+      }
+      if (!OffersService.isOfferActiveAt(offer, Number.isNaN(offerAt.getTime()) ? new Date() : offerAt, channel)) {
+        return res.status(400).json({ error: "Free gift offer is not active" });
+      }
+      const tiers = normalizeCartGiftTiers(offer.rules);
+      const err = validateCartFreeGiftLine({
+        offerId: g.offerId,
+        tierIndex: g.tierIndex,
+        productId: g.productId,
+        tiers,
+        paidSubtotal: paidSubtotalForGifts,
+      });
+      if (err) return res.status(400).json({ error: err });
+      const giftProduct = await db.query.products.findFirst({
+        where: and(eq(schema.products.id, g.productId), eq(schema.products.merchantId, merchant.id)),
+      });
+      if (!giftProduct) {
+        return res.status(400).json({ error: "Free gift product not found" });
+      }
+      const tier = tiers[g.tierIndex];
+      lineItems.push({
+        productId: giftProduct.id,
+        categoryId: giftProduct.categoryId,
+        productName: giftProduct.name,
+        quantity: 1,
+        unitPrice: 0,
+        totalPrice: 0,
+        taxAmount: 0,
+        loyaltyReward: false,
+        rewardPointsCost: 0,
+        selectedExtras: [
+          {
+            id: `free_gift:${g.offerId}:${g.tierIndex}`,
+            name: tier?.label
+              ? `Free: ${tier.label}`
+              : `Free gift (≥ CHF ${(tier?.minCartTotal || 0).toFixed(2)})`,
+            price: 0,
+          },
+        ],
+        comboSelections: [],
+        cartFreeGiftOfferId: g.offerId,
+        cartFreeGiftTierIndex: g.tierIndex,
+      });
+    }
+
     if (!lineItems.length) {
       return res.status(400).json({ error: "No valid items" });
     }
 
     // Promotional offers (before loyalty points)
-    const offerAt = scheduledFor ? new Date(scheduledFor as string) : new Date();
-    const activeOffers = await OffersService.list(merchant.id);
     const offerEval = OffersService.evaluateCart(
       activeOffers,
       lineItems.map((l) => ({

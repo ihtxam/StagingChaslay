@@ -110,6 +110,10 @@ function defaultBadge(type: string, rules: OfferRules): string {
     if (price > 0) return `${buy}+${get} · CHF ${price.toFixed(0)}`;
     return `${buy}+${get}`;
   }
+  if (type === "cart_free_gift") {
+    const tiers = (rules.cartGiftTiers || []).length;
+    return tiers > 0 ? `Free gift · ${tiers} tier${tiers === 1 ? "" : "s"}` : "Free gift";
+  }
   return "Offer";
 }
 
@@ -477,6 +481,10 @@ export class OffersService {
 
     if (type === "package_deal") {
       return this.computePackageDealDiscount(rules, lines);
+    }
+
+    if (type === "cart_free_gift") {
+      return 0;
     }
 
     return 0;

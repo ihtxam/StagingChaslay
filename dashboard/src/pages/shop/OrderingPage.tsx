@@ -67,6 +67,15 @@ import {
 } from '@/lib/shop-hours';
 import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-offers';
 import {
+  activeCartFreeGiftOffers,
+  cartPaidSubtotal,
+  evaluateCartGiftTiers,
+  normalizeCartGiftTiers,
+  type LiveCartFreeGiftOffer,
+} from '@/lib/cart-free-gift';
+import ShopCartFreeGiftPanel from '@/components/shop/ShopCartFreeGiftPanel';
+import ShopFreeGiftPickerModal from '@/components/shop/ShopFreeGiftPickerModal';
+import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from '@/lib/shop-delivery-pricing';
@@ -146,6 +155,11 @@ export default function OrderingPage() {
   const [merchant, setMerchant] = useState<any>(null);
   const [menu, setMenu] = useState<Category[]>([]);
   const [shopOffers, setShopOffers] = useState<ShopOfferForPicker[]>([]);
+  const [cartFreeGiftOffers, setCartFreeGiftOffers] = useState<LiveCartFreeGiftOffer[]>([]);
+  const [freeGiftPicker, setFreeGiftPicker] = useState<{
+    offerId: string;
+    tierIndex: number;
+  } | null>(null);
   const [draft, setDraft] = useState<ShopCheckoutDraft>(emptyDraft());
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -242,6 +256,7 @@ export default function OrderingPage() {
         setMerchant(data);
         setMenu(menuRes.data.data || []);
         setShopOffers(menuRes.data.offers || []);
+        setCartFreeGiftOffers(menuRes.data.cartFreeGiftOffers || []);
         setSelectedCategory('all');
 
         try {
@@ -357,6 +372,57 @@ export default function OrderingPage() {
 
   const channel = draft.channel;
   const cart = draft.items;
+
+  const cartFreeGiftOffer = useMemo(
+    () => activeCartFreeGiftOffers(cartFreeGiftOffers, channel)[0] ?? null,
+    [cartFreeGiftOffers, channel]
+  );
+
+  const paidCartSubtotal = useMemo(() => cartPaidSubtotal(cart), [cart]);
+
+  const cartFreeGiftTierStatus = useMemo(() => {
+    if (!cartFreeGiftOffer) return [];
+    const tiers = normalizeCartGiftTiers(cartFreeGiftOffer.rules);
+    const claimed = new Map<number, string>();
+    for (const item of cart) {
+      if (
+        item.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
+        item.cartFreeGiftTierIndex != null
+      ) {
+        claimed.set(item.cartFreeGiftTierIndex, item.id);
+      }
+    }
+    return evaluateCartGiftTiers({
+      tiers,
+      subtotal: paidCartSubtotal,
+      claimedByTier: claimed,
+    });
+  }, [cart, cartFreeGiftOffer, paidCartSubtotal]);
+
+  useEffect(() => {
+    if (!cartFreeGiftOffer) return;
+    const tiers = normalizeCartGiftTiers(cartFreeGiftOffer.rules);
+    const paid = cartPaidSubtotal(cart);
+    const hasInvalid = cart.some(
+      (i) =>
+        i.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
+        i.cartFreeGiftTierIndex != null &&
+        tiers[i.cartFreeGiftTierIndex] &&
+        paid + 0.001 < tiers[i.cartFreeGiftTierIndex].minCartTotal
+    );
+    if (!hasInvalid) return;
+    setDraft((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => {
+        if (i.cartFreeGiftOfferId !== cartFreeGiftOffer.id || i.cartFreeGiftTierIndex == null) {
+          return true;
+        }
+        const tier = tiers[i.cartFreeGiftTierIndex];
+        return tier && paid + 0.001 >= tier.minCartTotal;
+      }),
+    }));
+  }, [cart, cartFreeGiftOffer, paidCartSubtotal]);
+
   const categoryPricingEnabled = merchant?.categoryPricingEnabled === true;
   const deliveryMenuMarkup = useMemo(() => {
     const n = Number(merchant?.deliveryMenuMarkup ?? 0);
@@ -737,6 +803,48 @@ export default function OrderingPage() {
       if (p) return { ...p, categoryId: p.categoryId ?? cat.id };
     }
     return null;
+  };
+
+  const productNameById = (id: string) => findMenuProduct(id);
+
+  const addCartFreeGift = (tierIndex: number, productId: string) => {
+    if (!cartFreeGiftOffer) return;
+    const product = findMenuProduct(productId);
+    if (!product) return;
+    setDraft((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items.filter(
+          (i) =>
+            !(
+              i.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
+              i.cartFreeGiftTierIndex === tierIndex
+            )
+        ),
+        {
+          lineId: newCartLineId(),
+          id: product.id,
+          name: product.name,
+          categoryId: product.categoryId ?? null,
+          price: 0,
+          basePrice: product.price,
+          quantity: 1,
+          description: product.description,
+          image: product.image,
+          cartFreeGiftOfferId: cartFreeGiftOffer.id,
+          cartFreeGiftTierIndex: tierIndex,
+          offerId: cartFreeGiftOffer.id,
+          offerBadge: t('shopFree'),
+          offerName: cartFreeGiftOffer.name,
+        },
+      ],
+    }));
+    setFreeGiftPicker(null);
+  };
+
+  const openFreeGiftPicker = (tierIndex: number) => {
+    if (!cartFreeGiftOffer) return;
+    setFreeGiftPicker({ offerId: cartFreeGiftOffer.id, tierIndex });
   };
 
   const cartSimilarProducts = useMemo(() => {
@@ -1361,6 +1469,20 @@ export default function OrderingPage() {
       ) : null}
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
+        {cartFreeGiftOffer && cartFreeGiftTierStatus.length > 0 ? (
+          <div className="mb-4">
+            <ShopCartFreeGiftPanel
+              offerName={cartFreeGiftOffer.name}
+              offerDescription={cartFreeGiftOffer.description}
+              tiers={cartFreeGiftTierStatus}
+              productName={(id) => {
+                const p = productNameById(id);
+                return p ? { name: p.name } : null;
+              }}
+              onChooseTier={openFreeGiftPicker}
+            />
+          </div>
+        ) : null}
         {cart.length === 0 ? (
           <p className="text-stone-500 text-sm py-8 text-center">{t('shopNoItems')}</p>
         ) : (
@@ -1733,6 +1855,22 @@ export default function OrderingPage() {
                   <p className="w-full text-[12px] text-stone-500">{t('shopChannelAtCheckoutHint')}</p>
                 ) : null}
               </div>
+
+              {cartFreeGiftOffer && cartFreeGiftTierStatus.length > 0 ? (
+                <div className="mt-3">
+                  <ShopCartFreeGiftPanel
+                    compact
+                    offerName={cartFreeGiftOffer.name}
+                    offerDescription={cartFreeGiftOffer.description}
+                    tiers={cartFreeGiftTierStatus}
+                    productName={(id) => {
+                      const p = productNameById(id);
+                      return p ? { name: p.name } : null;
+                    }}
+                    onChooseTier={() => setCartSlideOpen(true)}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1852,6 +1990,7 @@ export default function OrderingPage() {
             <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('shopOffers')}</h2>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {shopOffers.map((o) => {
+                if (o.offerType === 'cart_free_gift') return null;
                 const clickable = isPickableDeal(o.offerType);
                 const pct =
                   o.offerType === 'percent_category' || o.offerType === 'percent_order'
@@ -2150,6 +2289,22 @@ export default function OrderingPage() {
           }}
         />
       )}
+
+      {freeGiftPicker && cartFreeGiftOffer ? (
+        <ShopFreeGiftPickerModal
+          title={t('shopChooseFreeProduct')}
+          subtitle={t('shopCartFreeGiftHint')}
+          options={(
+            cartFreeGiftTierStatus.find((x) => x.tierIndex === freeGiftPicker.tierIndex)
+              ?.productIds || []
+          ).map((id) => {
+            const p = findMenuProduct(id);
+            return { id, name: p?.name || id };
+          })}
+          onClose={() => setFreeGiftPicker(null)}
+          onConfirm={(productId) => addCartFreeGift(freeGiftPicker.tierIndex, productId)}
+        />
+      ) : null}
 
       {pendingOffer && (
         <ShopOfferPicker

@@ -1182,6 +1182,12 @@ export default function CheckoutPage() {
             ...(typeof i.cateringGuestCount === 'number' && i.cateringGuestCount >= 1
               ? { cateringGuestCount: i.cateringGuestCount }
               : {}),
+            ...(i.cartFreeGiftOfferId && i.cartFreeGiftTierIndex != null
+              ? {
+                  cartFreeGiftOfferId: i.cartFreeGiftOfferId,
+                  cartFreeGiftTierIndex: i.cartFreeGiftTierIndex,
+                }
+              : {}),
             loyaltyReward: !!i.loyaltyReward,
           })),
           fulfillmentChannel: draft.channel,
