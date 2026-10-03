@@ -7,6 +7,8 @@ import {
   missingTableColumnFromDbError,
 } from "@/lib/db-schema-errors";
 import { repairAllChaslayHomepages } from "@/lib/chaslay-homepage-heal";
+import { SHOP_CATALOG_EXTRA_PATCHES, shopProductHealColumnNames } from "@/lib/product-column-patches";
+import { isShopCatalogSchemaError } from "@/lib/public-shop-error";
 
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool: Pool | null = null;
@@ -316,6 +318,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
   products_catering_config:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS catering_config jsonb NOT NULL DEFAULT '{}'::jsonb",
+  ...SHOP_CATALOG_EXTRA_PATCHES,
   modifier_groups_price_scope:
     "ALTER TABLE modifier_groups ADD COLUMN IF NOT EXISTS price_scope varchar(20) NOT NULL DEFAULT 'fixed'",
   categories_visibility:
@@ -1694,6 +1697,36 @@ function isOrderItemsColumnSchemaError(raw: string): boolean {
   );
 }
 
+/** Idempotent products/categories columns used by the public shop menu and loyalty rewards query. */
+export async function ensureShopCatalogColumnsSchema(): Promise<void> {
+  for (const column of shopProductHealColumnNames()) {
+    await runPatch(column, "products");
+  }
+  await runPatch("client_id", "categories");
+  await runPatch("visibility", "categories");
+  await runPatch("shop_schedule", "categories");
+}
+
+/**
+ * Run a shop catalog query, and on a missing products/categories column (or a Drizzle
+ * "Failed query" against those tables) apply the heal and retry once.
+ */
+export async function withShopCatalogSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (!isShopCatalogSchemaError(error)) throw error;
+    console.error("[schema] shop catalog query failed; healing columns and retrying once:", error);
+    try {
+      await ensureShopCatalogColumnsSchema();
+    } catch (healError) {
+      console.error("[schema] shop catalog column heal failed:", healError);
+      throw error;
+    }
+    return fn();
+  }
+}
+
 const REQUIRED_MERCHANT_COLUMNS = Object.keys(MERCHANT_COLUMN_PATCHES);
 
 const REQUIRED_ORDERS_COLUMNS = Object.entries(EXTRA_COLUMN_PATCHES)
@@ -1807,6 +1840,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
   await runAlterTablePatches();
+  await ensureShopCatalogColumnsSchema();
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (column.startsWith("orders_")) {
       await runPatch(column.slice("orders_".length), "orders");
@@ -1860,29 +1894,19 @@ export async function ensureAllMerchantSchema(): Promise<{
     "order_items",
     REQUIRED_ORDER_ITEMS_COLUMNS
   ).catch(() => [] as string[]);
-  const stillProducts = await listMissingTableColumns("products", [
-    "visibility",
-    "recipe_yield",
-    "barcode",
-    "brand",
-    "extra_barcodes",
-  ]).catch(() => [] as string[]);
+  const requiredProductColumns = shopProductHealColumnNames();
+  const stillProducts = await listMissingTableColumns("products", requiredProductColumns).catch(
+    () => [] as string[]
+  );
   for (const col of stillProducts) {
     patchedColumns.delete(col);
     patchedColumns.delete(`products_${col}`);
-    if (col === "visibility") await runPatch("products_visibility");
-    else if (col === "barcode") await runPatch("products_barcode");
-    else if (col === "brand") await runPatch("products_brand");
-    else if (col === "extra_barcodes") await runPatch("products_extra_barcodes");
-    else await runPatch("recipe_yield");
+    patchedColumns.delete(`products.${col}`);
+    await runPatch(col, "products");
   }
-  const productsMissing = await listMissingTableColumns("products", [
-    "visibility",
-    "recipe_yield",
-    "barcode",
-    "brand",
-    "extra_barcodes",
-  ]).catch(() => [] as string[]);
+  const productsMissing = await listMissingTableColumns("products", requiredProductColumns).catch(
+    () => [] as string[]
+  );
   const editionsExists = await tableExists("editions").catch(() => false);
   const editionsMissing = editionsExists
     ? await listMissingTableColumns("editions", REQUIRED_EDITIONS_COLUMNS).catch(() => [] as string[])
@@ -2015,6 +2039,7 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const subscriptionMissing = isSubscriptionSchemaError(raw);
       const posSessionsMissing = isPosSessionsSchemaError(raw);
       const chaslayPagebuilderMissing = isChaslayPagebuilderSchemaError(raw);
+      const catalogMissing = isShopCatalogSchemaError(error) && isMissingSchemaError(raw);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();
@@ -2035,6 +2060,8 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         await ensureOrdersColumnsSchema();
         await ensureOrderItemsColumnsSchema();
         await runAlterTablePatches();
+      } else if (catalogMissing) {
+        await ensureShopCatalogColumnsSchema();
       } else if (chaslayPagebuilderMissing || inventoryTableMissing) {
         patchedTables = false;
         await ensureMerchantTables();
@@ -2046,6 +2073,7 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         !locationsMissing &&
         !merchantsColumnMissing &&
         !ordersColumnMissing &&
+        !catalogMissing &&
         !subscriptionMissing &&
         !posSessionsMissing
       ) {
@@ -2088,6 +2116,10 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
     await ensureOrdersColumnsSchema();
     await ensureOrderItemsColumnsSchema();
     await runAlterTablePatches();
+    return true;
+  }
+  if (isShopCatalogSchemaError(error)) {
+    await ensureShopCatalogColumnsSchema();
     return true;
   }
   const { table, column } = missingTableColumnFromDbError(error);

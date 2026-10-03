@@ -4,6 +4,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { customerShopError } from '@/lib/shop-public-error';
 import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug, shopBasePath, shopCustomerAuthConfig } from '@/lib/shop-cart';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
@@ -116,7 +117,7 @@ export default function TableOrderPage() {
         await loadSession();
       } catch (e: unknown) {
         const err = e as { response?: { data?: { error?: string } } };
-        toast.error(err.response?.data?.error || t('tableOrderLoadFailed'));
+        toast.error(customerShopError(err.response?.data?.error, t('tableOrderLoadFailed')));
       } finally {
         setLoading(false);
       }

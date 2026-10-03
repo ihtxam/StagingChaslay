@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, isNotNull, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 
 /**
  * Shop fidelity formula (defaults):
@@ -318,15 +319,17 @@ export class ShopLoyaltyService {
   }
 
   static async listRewardProducts(merchantId: string, balance: number): Promise<LoyaltyRewardProduct[]> {
-    const db = getDb();
-    const products = await db.query.products.findMany({
-      where: and(
-        eq(schema.products.merchantId, merchantId),
-        eq(schema.products.isActive, true),
-        isNotNull(schema.products.loyaltyRewardPoints),
-        gt(schema.products.loyaltyRewardPoints, 0)
-      ),
-      orderBy: [asc(schema.products.loyaltyRewardPoints), asc(schema.products.name)],
+    const products = await withShopCatalogSchemaRetry(async () => {
+      const db = getDb();
+      return db.query.products.findMany({
+        where: and(
+          eq(schema.products.merchantId, merchantId),
+          eq(schema.products.isActive, true),
+          isNotNull(schema.products.loyaltyRewardPoints),
+          gt(schema.products.loyaltyRewardPoints, 0)
+        ),
+        orderBy: [asc(schema.products.loyaltyRewardPoints), asc(schema.products.name)],
+      });
     });
 
     return products.map((p) => {
@@ -346,7 +349,7 @@ export class ShopLoyaltyService {
     const program = await this.getProgram(merchantId);
     // Always sync/show balance on account — earn/redeem still gated by program.enabled
     const balance = await this.getBalance(merchantId, customerId);
-    const rewards = program.enabled ? await this.listRewardProducts(merchantId, balance) : [];
+    const rewards = program.enabled ? await this.rewardProductsOrEmpty(merchantId, balance) : [];
     const unlocked = rewards.filter((r) => r.unlocked);
     const next = rewards.find((r) => !r.unlocked) || null;
     const nextCost = next?.loyaltyRewardPoints ?? null;
@@ -393,7 +396,17 @@ export class ShopLoyaltyService {
   /** Public program + rewards (no customer) for menu bar when logged out. */
   static async getPublicLoyalty(merchantId: string) {
     const program = await this.getProgram(merchantId);
-    const rewards = program.enabled ? await this.listRewardProducts(merchantId, 0) : [];
+    const rewards = program.enabled ? await this.rewardProductsOrEmpty(merchantId, 0) : [];
     return { program, rewards };
+  }
+
+  /** Loyalty rewards are optional. A catalog schema error must not fail the shop menu. */
+  private static async rewardProductsOrEmpty(merchantId: string, balance: number) {
+    try {
+      return await this.listRewardProducts(merchantId, balance);
+    } catch (error) {
+      console.error("[shop] loyalty reward products failed:", error);
+      return [];
+    }
   }
 }

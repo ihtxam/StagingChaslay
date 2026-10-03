@@ -73,6 +73,8 @@ import {
   SHOP_PRIVACY_POLICY_SLUG,
   buildDefaultPrivacyPolicyHtml,
 } from "@/lib/shop-privacy-policy";
+import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { publicShopDbError } from "@/lib/public-shop-error";
 
 const router = Router();
 
@@ -1071,7 +1073,19 @@ router.get("/:slug/loyalty", async (req: Request, res: Response) => {
     const pub = await ShopLoyaltyService.getPublicLoyalty(merchant.id);
     res.json({ success: true, ...pub });
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load loyalty" });
+    // Rewards are optional. Log the real error and keep the shop menu usable.
+    console.error("[shop] loyalty failed:", error);
+    res.json({
+      success: true,
+      program: { enabled: false, earnPointsPerChf: 1, redeemPointsPerChf: 100, expiryDays: 30 },
+      rewards: [],
+      balance: 0,
+      unlockedRewards: [],
+      nextReward: null,
+      progress: 0,
+      progressPercent: 0,
+      expiringSoon: null,
+    });
   }
 });
 
@@ -1148,15 +1162,17 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
     const { LocationsService } = await import("@/services/locations.service");
     const locations = await LocationsService.listPublicForShop(merchant.id);
     const db = getDb();
-    const cateringProducts = await db.query.products.findMany({
-      where: and(
-        eq(schema.products.merchantId, merchant.id),
-        eq(schema.products.productType, "combo"),
-        eq(schema.products.isActive, true)
-      ),
-      columns: { cateringConfig: true },
-      limit: 100,
-    });
+    const cateringProducts = await withShopCatalogSchemaRetry(() =>
+      db.query.products.findMany({
+        where: and(
+          eq(schema.products.merchantId, merchant.id),
+          eq(schema.products.productType, "combo"),
+          eq(schema.products.isActive, true)
+        ),
+        columns: { cateringConfig: true },
+        limit: 100,
+      })
+    );
     const hasCatering = cateringProducts.some((p) => {
       const c = p.cateringConfig as { enabled?: boolean } | null;
       return c?.enabled === true;
@@ -1167,7 +1183,8 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
       locations: locations.map((loc) => ({ ...loc, hasCatering })),
     });
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load locations" });
+    console.error("[shop] locations failed:", error);
+    res.status(500).json({ error: publicShopDbError(error, "Failed to load locations") });
   }
 });
 
@@ -1188,16 +1205,18 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
     typeof req.query.location === "string" ? req.query.location : null
   );
 
-  const [categories, products] = await Promise.all([
-    db.query.categories.findMany({
-      where: eq(schema.categories.merchantId, merchant.id),
-      orderBy: [asc(schema.categories.sortOrder)],
-    }),
-    db.query.products.findMany({
-      where: and(eq(schema.products.merchantId, merchant.id), eq(schema.products.isActive, true)),
-      orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
-    }),
-  ]);
+  const [categories, products] = await withShopCatalogSchemaRetry(() =>
+    Promise.all([
+      db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchant.id),
+        orderBy: [asc(schema.categories.sortOrder)],
+      }),
+      db.query.products.findMany({
+        where: and(eq(schema.products.merchantId, merchant.id), eq(schema.products.isActive, true)),
+        orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
+      }),
+    ])
+  );
 
   const { CatalogLocationService } = await import("@/services/catalog-location.service");
   const { HqMenuService } = await import("@/services/hq-menu.service");
@@ -1339,7 +1358,10 @@ router.get("/:slug/l/:locationSlug/menu", async (req: Request, res: Response) =>
   try {
     await handleShopMenu(req, res, req.params.locationSlug);
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+    console.error("[shop] menu failed:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: publicShopDbError(error, "Failed to load menu") });
+    }
   }
 });
 
@@ -1350,7 +1372,10 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
   try {
     await handleShopMenu(req, res);
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+    console.error("[shop] menu failed:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: publicShopDbError(error, "Failed to load menu") });
+    }
   }
 });
 

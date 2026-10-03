@@ -23,6 +23,7 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
+import { customerShopError } from '@/lib/shop-public-error';
 import { roundMoney2 } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -270,10 +271,9 @@ export default function OrderingPage() {
     const load = async () => {
       try {
         const token = loadCustomerToken(shopKey);
-        const [shopRes, menuRes, loyaltyRes] = await Promise.all([
+        const [shopRes, menuRes] = await Promise.all([
           axios.get(`/api/shop/${shopKey}`),
           axios.get(shopMenuApiPath(shopKey, locSlug)),
-          axios.get(`/api/shop/${shopKey}/loyalty`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
         ]);
         const data = shopRes.data.data;
         setMerchant(data);
@@ -294,7 +294,16 @@ export default function OrderingPage() {
           setDeliveryZones([]);
         }
 
-        const loyaltyData = loyaltyRes.data || {};
+        let loyaltyData: { rewards?: LoyaltyReward[]; balance?: number } = {};
+        try {
+          const loyaltyRes = await axios.get(
+            `/api/shop/${shopKey}/loyalty`,
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          );
+          loyaltyData = loyaltyRes.data || {};
+        } catch {
+          console.error('Shop loyalty rewards unavailable');
+        }
         setLoyaltyRewards(loyaltyData.rewards || []);
         if (token && loyaltyData.balance != null) {
           setLoyaltyBalance(Number(loyaltyData.balance) || 0);
@@ -365,7 +374,7 @@ export default function OrderingPage() {
           }
         }
       } catch (e: any) {
-        setError(e.response?.data?.error || t('shopFailedLoad'));
+        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
       } finally {
         setLoading(false);
       }

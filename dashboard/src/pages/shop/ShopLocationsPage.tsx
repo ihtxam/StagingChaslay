@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
+import { customerShopError } from '@/lib/shop-public-error';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopLocationHubWizard from '@/components/shop/ShopLocationHubWizard';
 import type { ShopPublicLocation } from '@/lib/shop-location-session';
@@ -38,7 +39,7 @@ export default function ShopLocationsPage() {
           /* still show wizard for fulfillment + order type */
         }
       } catch (e: any) {
-        if (!cancelled) setError(e.response?.data?.error || t('shopFailedLoad'));
+        if (!cancelled) setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
       } finally {
         if (!cancelled) setLoading(false);
       }
