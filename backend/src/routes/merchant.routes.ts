@@ -9,6 +9,7 @@ import {
 } from "@/middleware/auth.middleware";
 import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { normalizeCatalogVisibility } from "@/lib/catalog-visibility";
+import { normalizeDietaryTags } from "@/lib/product-dietary";
 import { ProductService } from "@/services/product.service";
 import { CategoryService } from "@/services/category.service";
 import { isValidHexColor, normalizeHexColor } from "@/lib/category-colors";
@@ -605,6 +606,7 @@ router.post("/products", async (req: Request, res: Response) => {
       brand,
       extraBarcodes,
       cateringConfig,
+      dietaryTags,
     } = req.body;
 
     if (!merchantId) {
@@ -716,7 +718,7 @@ router.post("/products", async (req: Request, res: Response) => {
       );
     }
 
-    if (visibility !== undefined || similarProductIds !== undefined) {
+    if (visibility !== undefined || similarProductIds !== undefined || dietaryTags !== undefined) {
       const patch: Partial<typeof schema.products.$inferInsert> = {};
       if (visibility !== undefined) {
         patch.visibility = normalizeCatalogVisibility(visibility);
@@ -728,6 +730,9 @@ router.post("/products", async (req: Request, res: Response) => {
               .map((id: string) => String(id).trim())
               .slice(0, 12)
           : [];
+      }
+      if (dietaryTags !== undefined) {
+        patch.dietaryTags = normalizeDietaryTags(dietaryTags);
       }
       await ProductService.updateProduct(merchantId, product.id, patch);
     }
@@ -835,6 +840,10 @@ router.put("/products/:productId", async (req: Request, res: Response) => {
             .map((id: string) => String(id).trim())
             .slice(0, 12)
         : [];
+    }
+
+    if (updates.dietaryTags !== undefined) {
+      updates.dietaryTags = normalizeDietaryTags(updates.dietaryTags);
     }
 
     if (updates.brand !== undefined) {

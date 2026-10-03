@@ -1188,6 +1188,8 @@ export const products = pgTable(
       .notNull(),
     /** Product IDs suggested in online shop cart upsell slider */
     similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
+    /** Shop dietary filters: individual_packaging | gluten_free | vegan | vegetarian */
+    dietaryTags: json("dietary_tags").$type<string[]>().default([]),
     /** Retail catalog brand (optional). */
     brand: varchar("brand", { length: 255 }),
     /** Additional EAN/UPC codes that scan to this product. */
